@@ -80,3 +80,22 @@ jobs:
         with:
           name: checktick-deployment-${{ github.ref_name }}
           path: deployment-artifacts/
+
+      - name: Trigger Northflank deployment
+        if: github.ref == 'refs/heads/main'
+        env:
+          NF_API_TOKEN: ${{ secrets.NORTHFLANKAPIKEY }}
+          NF_PROJECT_ID: ${{ secrets.NORTHFLANK_PROJECT_ID }}
+          NF_SERVICE_ID: ${{ secrets.NORTHFLANK_SERVICE_ID }}
+        run: |
+          if [ -n "$NF_API_TOKEN" ] && [ -n "$NF_PROJECT_ID" ] && [ -n "$NF_SERVICE_ID" ]; then
+            echo "Triggering Northflank service restart..."
+            curl -X POST "https://api.northflank.com/v1/projects/${NF_PROJECT_ID}/services/${NF_SERVICE_ID}/restart" \
+              -H "Authorization: Bearer ${NF_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              && echo "✓ Service restart triggered - will pull latest image from GHCR" \
+              || echo "⚠️ Restart request failed but continuing..."
+          else
+            echo "⊘ Northflank credentials not configured, skipping deployment trigger"
+            echo "   Required secrets: NORTHFLANK_API_TOKEN, NORTHFLANK_PROJECT_ID, NORTHFLANK_SERVICE_ID"
+          fi
