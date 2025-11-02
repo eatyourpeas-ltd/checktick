@@ -36,12 +36,8 @@ COPY locale ./locale
 COPY docs ./docs
 COPY CONTRIBUTING.md ./
 
-# Install the current project and build static assets
+# Install the current project
 RUN poetry install --only main --no-interaction --no-ansi
-
-# Cache busting for CSS build - change this comment to force rebuild
-# Build: 2025-11-02-15:00
-RUN npm run build:css
 
 # Create non-root user for security
 RUN groupadd -r checktick && useradd -r -g checktick checktick && \
@@ -56,5 +52,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/api/health || exit 1
 
-# Default command
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput --clear && gunicorn checktick_app.wsgi:application --bind 0.0.0.0:8000 --workers 4"]
+# Default command - build CSS at runtime to avoid Docker cache issues
+CMD ["sh", "-c", "npm run build:css && python manage.py migrate --noinput && python manage.py collectstatic --noinput --clear && gunicorn checktick_app.wsgi:application --bind 0.0.0.0:8000 --workers 4"]
