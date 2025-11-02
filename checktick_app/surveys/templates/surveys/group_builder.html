@@ -63,7 +63,7 @@
             <form id="create-question-form" hx-post="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/create" hx-target="#questions-list" hx-swap="outerHTML" data-create-url="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/create" data-create-target="#questions-list" data-create-swap="outerHTML" data-edit-url-base="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/" data-template-url="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/templates/add">
               {% csrf_token %}
 
-              <div role="tablist" class="tabs tabs-lifted">
+              <div role="tablist" class="tabs tabs-lift">
                 <input type="radio" name="add_question_tabs" role="tab" class="tab" aria-label="Build question" checked hidden/>
                 <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">
                   Select a question type
