@@ -52,5 +52,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/api/health || exit 1
 
-# Default command - build CSS at runtime to avoid Docker cache issues
-CMD ["sh", "-c", "npm run build:css && python manage.py migrate --noinput && python manage.py collectstatic --noinput --clear && gunicorn checktick_app.wsgi:application --bind 0.0.0.0:8000 --workers 4"]
+# Default command - build CSS at runtime to ensure fresh styles
+CMD ["sh", "-c", "npm run build:css && python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn checktick_app.wsgi:application --bind 0.0.0.0:8000 --workers 4"]
