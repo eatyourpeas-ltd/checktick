@@ -29,6 +29,11 @@ COPY CONTRIBUTING.md ./
 RUN poetry install --only main --no-interaction --no-ansi
 RUN npm run build:css
 
+# Create a versioned copy of the CSS file with hash in filename
+RUN CSS_HASH=$(md5sum checktick_app/static/build/styles.css | cut -d' ' -f1 | cut -c1-8) && \
+    cp checktick_app/static/build/styles.css checktick_app/static/build/styles.$CSS_HASH.css && \
+    echo $CSS_HASH > /tmp/css_hash.txt
+
 RUN adduser --disabled-login --gecos "" appuser
 RUN mkdir -p /app/staticfiles /app/media && \
     chown -R appuser:appuser /app/staticfiles /app/media

@@ -11,7 +11,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   {% if brand.font_css_url %}<link href="{{ brand.font_css_url }}" rel="stylesheet">{% endif %}
   {% block head_fonts %}{% endblock %}
-    <link rel="stylesheet" href="{% static 'build/styles.css' %}?v={{ build.commit|default:build.timestamp|default:'20251102' }}">
+    {% if build.css_hash and build.css_hash != 'dev' %}
+    <link rel="stylesheet" href="{% static 'build/styles.' %}{{ build.css_hash }}.css">
+    {% else %}
+    <link rel="stylesheet" href="{% static 'build/styles.css' %}">
+    {% endif %}
     {% if brand.theme_css_light or brand.theme_css_dark %}
     <style>
       {% if brand.theme_css_light %}

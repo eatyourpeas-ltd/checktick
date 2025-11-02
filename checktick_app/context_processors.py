@@ -1,5 +1,6 @@
 import os
 import subprocess
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
@@ -198,6 +199,17 @@ def branding(request):
             version_val = _importlib_metadata.version("checktick")
         except Exception:
             version_val = None
+
+    # Get CSS hash from file or environment for cache-busting
+    css_hash = os.environ.get("CSS_HASH")
+    if not css_hash:
+        try:
+            hash_file = Path("/tmp/css_hash.txt")
+            if hash_file.exists():
+                css_hash = hash_file.read_text().strip()
+        except Exception:
+            pass
+
     build = {
         "version": version_val or "dev",
         "timestamp": os.environ.get("BUILD_TIMESTAMP")
@@ -205,6 +217,7 @@ def branding(request):
         "commit": git.get("commit"),
         "branch": git.get("branch"),
         "commit_date": git.get("commit_date"),
+        "css_hash": css_hash or "dev",
     }
 
     return {
