@@ -63,7 +63,7 @@
             <form id="create-question-form" hx-post="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/create" hx-target="#questions-list" hx-swap="outerHTML" data-create-url="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/create" data-create-target="#questions-list" data-create-swap="outerHTML" data-edit-url-base="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/" data-template-url="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/templates/add">
               {% csrf_token %}
 
-              <div role="tablist" class="tabs tabs-lift">
+              <div role="tablist" class="tabs tabs-lifted">
                 <input type="radio" name="add_question_tabs" role="tab" class="tab" aria-label="Build question" checked hidden/>
                 <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">
                   Select a question type
@@ -130,8 +130,8 @@ Option B" data-options-textarea></textarea>
                     <fieldset>
                       <legend class="label">Likert mode</legend>
                       <div class="flex gap-3">
-                        <label class="label cursor-pointer gap-2"><input type="radio" name="likert_mode" value="categories" class="radio" checked> <span>Categories</span></label>
-                        <label class="label cursor-pointer gap-2"><input type="radio" name="likert_mode" value="number" class="radio"> <span>Number scale</span></label>
+                        <label class="label cursor-pointer gap-2"><input type="radio" name="likert_mode" value="categories" class="radio radio-primary" checked> <span>Categories</span></label>
+                        <label class="label cursor-pointer gap-2"><input type="radio" name="likert_mode" value="number" class="radio radio-primary"> <span>Number scale</span></label>
                       </div>
                     </fieldset>
                     <div data-likert="categories" class="mt-3">
