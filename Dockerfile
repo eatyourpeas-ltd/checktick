@@ -39,4 +39,4 @@ ENV PORT=8000
 
 EXPOSE 8000
 
-CMD ["sh", "-lc", "python manage.py migrate --noinput && python manage.py collectstatic --noinput --clear && gunicorn checktick_app.wsgi:application --bind 0.0.0.0:${PORT} --workers 3"]
+CMD ["sh", "-lc", "python manage.py migrate --noinput && find /app/staticfiles -name 'staticfiles.json' -delete && python manage.py collectstatic --noinput && gunicorn checktick_app.wsgi:application --bind 0.0.0.0:${PORT} --workers 3"]
