@@ -188,7 +188,7 @@ Option B" data-options-textarea></textarea>
                   </div>
                 </div>
 
-                {% if user.is_authenticated and user == survey.owner %}
+                {% if can_edit %}
                 <input type="radio" name="add_question_tabs" role="tab" class="tab" aria-label="Special Templates" />
                 <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">
                   <div class="space-y-4">

@@ -4216,10 +4216,12 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
         "font_body": style.get("font_body"),
         "primary": style.get("primary_color"),
     }
+    can_edit = can_edit_survey(request.user, survey)
     ctx = {
         "survey": survey,
         "group": group,
         "questions": questions,
+        "can_edit": can_edit,
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
         "demographic_defs": DEMOGRAPHIC_FIELD_DEFS,
