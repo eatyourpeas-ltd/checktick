@@ -15,7 +15,7 @@ services:
   web:
     image: ghcr.io/eatyourpeas/checktick:latest
     ports:
-      - "8000:8000"
+      - "${HOST_PORT:-8000}:8000"
     volumes:
       # Persist uploaded files and user-generated content
       - media_data:/app/media
