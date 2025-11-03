@@ -20,27 +20,27 @@
   [data-theme="checktick-light"] {
     color-scheme: light;
 
-    /* Colors (sRGB fallbacks) */
-    --p: #6d5aa5;
-    --pc: #ffffff;
-    --s: #5c7ad6;
-    --sc: #ffffff;
-    --a: #49a5e5;
-    --ac: #ffffff;
-    --n: #3f4263;
-    --nc: #ffffff;
-    --b1: #ffffff;
-    --b2: #f5f6ff;
-    --b3: #e7ebff;
-    --bc: #2a2a3d;
-    --in: #3a9ddc;
-    --inc: #ffffff;
-    --su: #2f8f58;
-    --suc: #f0fff4;
-    --wa: #d79a32;
-    --wac: #fff6da;
-    --er: #c0443b;
-    --erc: #fff2f0;
+  /* Colors (fallback sRGB) */
+  --p: #6d5aa5;
+  --pc: #ffffff;
+  --s: #5c7ad6;
+  --sc: #ffffff;
+  --a: #49a5e5;
+  --ac: #ffffff;
+  --n: #3f4263;
+  --nc: #ffffff;
+  --b1: #ffffff;
+  --b2: #f5f6ff;
+  --b3: #e7ebff;
+  --bc: #2a2a3d;
+  --in: #3a9ddc;
+  --inc: #ffffff;
+  --su: #2f8f58;
+  --suc: #f0fff4;
+  --wa: #d79a32;
+  --wac: #fff6da;
+  --er: #c0443b;
+  --erc: #fff2f0;
 
     /* Spacing & Radii */
     --rounded-selector: 0.25rem;
@@ -80,27 +80,27 @@
   [data-theme="checktick-dark"] {
     color-scheme: dark;
 
-    /* Colors (sRGB fallbacks) */
-    --color-base-100: #a5adcf;
-    --color-base-200: #3a3f5f;
-    --color-base-300: #343651;
-    --color-base-content: #f3f6ff;
-    --color-primary: #6d5aa5;
-    --color-primary-content: #f3f6ff;
-    --color-secondary: #5c7ad6;
-    --color-secondary-content: #ffffff;
-    --color-accent: #49a5e5;
-    --color-accent-content: #ffffff;
-    --color-neutral: #4b5d8c;
-    --color-neutral-content: #ffffff;
-    --color-info: #3a9ddc;
-    --color-info-content: #f0f8ff;
-    --color-success: #2f8f58;
-    --color-success-content: #f0fff4;
-    --color-warning: #d79a32;
-    --color-warning-content: #fff6da;
-    --color-error: #c0443b;
-    --color-error-content: #fff2f0;
+  /* Colors (fallback sRGB) */
+  --color-base-100: #a5adcf;
+  --color-base-200: #3a3f5f;
+  --color-base-300: #343651;
+  --color-base-content: #f3f6ff;
+  --color-primary: #6d5aa5;
+  --color-primary-content: #f3f6ff;
+  --color-secondary: #5c7ad6;
+  --color-secondary-content: #ffffff;
+  --color-accent: #49a5e5;
+  --color-accent-content: #ffffff;
+  --color-neutral: #4b5d8c;
+  --color-neutral-content: #ffffff;
+  --color-info: #3a9ddc;
+  --color-info-content: #f0f8ff;
+  --color-success: #2f8f58;
+  --color-success-content: #f0fff4;
+  --color-warning: #d79a32;
+  --color-warning-content: #fff6da;
+  --color-error: #c0443b;
+  --color-error-content: #fff2f0;
 
     /* Spacing & Radii */
     --radius-selector: 0.25rem;
@@ -112,11 +112,12 @@
     --depth: 0;
     --noise: 0;
   }
+}
 
+@layer base {
   @supports (color: oklch(0% 0 0)) {
     [data-theme="checktick"],
     [data-theme="checktick-light"] {
-      /* Colors (OKLCH upgrade) */
       --pc: oklch(98% 0.002 247.839);
       --s: oklch(59% 0.145 163.225);
       --sc: oklch(98% 0.003 247.858);
@@ -139,7 +140,6 @@
     }
 
     [data-theme="checktick-dark"] {
-      /* Colors from your DaisyUI builder output */
       --color-base-100: oklch(70% 0.04 256.788);
       --color-base-200: oklch(37% 0.034 259.733);
       --color-base-300: oklch(37% 0.013 285.805);
