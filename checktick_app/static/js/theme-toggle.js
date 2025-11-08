@@ -9,10 +9,10 @@
   // Get actual daisyUI preset names from meta tag
   const presetsMeta = document.querySelector('meta[name="theme-presets"]');
   const presets = presetsMeta
-    ? presetsMeta.content.split(',')
-    : ['wireframe', 'business'];
-  const LIGHT_PRESET = presets[0] || 'wireframe';
-  const DARK_PRESET = presets[1] || 'business';
+    ? presetsMeta.content.split(",")
+    : ["wireframe", "business"];
+  const LIGHT_PRESET = presets[0] || "wireframe";
+  const DARK_PRESET = presets[1] || "business";
 
   function normalize(pref) {
     switch (pref) {

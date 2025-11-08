@@ -11,10 +11,10 @@
     // Get actual daisyUI preset names from meta tag
     var presetsMeta = document.querySelector('meta[name="theme-presets"]');
     var presets = presetsMeta
-      ? presetsMeta.content.split(',')
-      : ['wireframe', 'business'];
-    var LIGHT_PRESET = presets[0] || 'wireframe';
-    var DARK_PRESET = presets[1] || 'business';
+      ? presetsMeta.content.split(",")
+      : ["wireframe", "business"];
+    var LIGHT_PRESET = presets[0] || "wireframe";
+    var DARK_PRESET = presets[1] || "business";
 
     function themeToPreset(t) {
       // Map logical theme names to actual daisyUI presets
