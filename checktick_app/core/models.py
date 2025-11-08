@@ -28,7 +28,22 @@ class SiteBranding(models.Model):
     font_body = models.CharField(max_length=512, blank=True, default="")
     font_css_url = models.URLField(blank=True, default="")
 
+    # DaisyUI preset theme selections (generates CSS from these)
+    theme_preset_light = models.CharField(
+        max_length=64,
+        blank=True,
+        default="wireframe",
+        help_text="DaisyUI preset theme for light mode (e.g., 'wireframe', 'cupcake', 'light')",
+    )
+    theme_preset_dark = models.CharField(
+        max_length=64,
+        blank=True,
+        default="business",
+        help_text="DaisyUI preset theme for dark mode (e.g., 'business', 'dark', 'synthwave')",
+    )
+
     # Raw CSS variable declarations for themes, after normalization to DaisyUI runtime vars
+    # These are generated from theme_preset_* or can be custom CSS from daisyUI theme builder
     theme_light_css = models.TextField(blank=True, default="")
     theme_dark_css = models.TextField(blank=True, default="")
 

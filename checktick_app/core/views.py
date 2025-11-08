@@ -41,6 +41,13 @@ except ImportError:
         """No-op fallback if theme utils or migrations are unavailable."""
         return s
 
+try:
+    from .themes import LIGHT_THEMES, DARK_THEMES, generate_theme_css_for_brand
+except ImportError:
+    LIGHT_THEMES = []
+    DARK_THEMES = []
+    generate_theme_css_for_brand = None
+
 
 # Django's session key for storing language preference
 LANGUAGE_SESSION_KEY = "_language"
@@ -134,10 +141,36 @@ def profile(request):
             sb.font_heading = (request.POST.get("font_heading") or "").strip()
             sb.font_body = (request.POST.get("font_body") or "").strip()
             sb.font_css_url = (request.POST.get("font_css_url") or "").strip()
+
+            # Save theme presets
+            sb.theme_preset_light = (request.POST.get("theme_preset_light") or "wireframe").strip()
+            sb.theme_preset_dark = (request.POST.get("theme_preset_dark") or "business").strip()
+
+            # Get custom CSS (optional - overrides preset if provided)
             raw_light = request.POST.get("theme_light_css") or ""
             raw_dark = request.POST.get("theme_dark_css") or ""
-            sb.theme_light_css = normalize_daisyui_builder_css(raw_light)
-            sb.theme_dark_css = normalize_daisyui_builder_css(raw_dark)
+
+            # Generate theme CSS from presets and custom overrides
+            if generate_theme_css_for_brand:
+                try:
+                    generated_light, generated_dark = generate_theme_css_for_brand(
+                        sb.theme_preset_light,
+                        sb.theme_preset_dark,
+                        raw_light,
+                        raw_dark
+                    )
+                    sb.theme_light_css = generated_light
+                    sb.theme_dark_css = generated_dark
+                except Exception as e:
+                    logger.error(f"Failed to generate theme CSS: {e}")
+                    # Fall back to normalizing raw CSS
+                    sb.theme_light_css = normalize_daisyui_builder_css(raw_light)
+                    sb.theme_dark_css = normalize_daisyui_builder_css(raw_dark)
+            else:
+                # Fallback if theme generation not available
+                sb.theme_light_css = normalize_daisyui_builder_css(raw_light)
+                sb.theme_dark_css = normalize_daisyui_builder_css(raw_dark)
+
             sb.save()
             messages.success(request, _("Project theme saved."))
         return redirect("core:profile")
@@ -204,6 +237,11 @@ def profile(request):
     if UserEmailPreferences is not None:
         prefs = UserEmailPreferences.get_or_create_for_user(user)
         email_prefs_form = UserEmailPreferencesForm(instance=prefs)
+
+    # Prepare theme choices for template
+    light_theme_choices = [(theme, theme) for theme in LIGHT_THEMES] if LIGHT_THEMES else []
+    dark_theme_choices = [(theme, theme) for theme in DARK_THEMES] if DARK_THEMES else []
+
     return render(
         request,
         "core/profile.html",
@@ -214,6 +252,8 @@ def profile(request):
             "language_form": language_form,
             "email_prefs_form": email_prefs_form,
             "can_safely_delete_account": can_user_safely_delete_own_account(user),
+            "light_theme_choices": light_theme_choices,
+            "dark_theme_choices": dark_theme_choices,
         },
     )
 

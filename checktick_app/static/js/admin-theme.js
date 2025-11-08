@@ -8,8 +8,25 @@
     var statusNode = null;
     var toggleNode = null;
 
+    // Get actual daisyUI preset names from meta tag
+    var presetsMeta = document.querySelector('meta[name="theme-presets"]');
+    var presets = presetsMeta
+      ? presetsMeta.content.split(',')
+      : ['wireframe', 'business'];
+    var LIGHT_PRESET = presets[0] || 'wireframe';
+    var DARK_PRESET = presets[1] || 'business';
+
+    function themeToPreset(t) {
+      // Map logical theme names to actual daisyUI presets
+      if (t === "checktick-dark") {
+        return DARK_PRESET;
+      }
+      return LIGHT_PRESET; // checktick-light or default
+    }
+
     function applyTheme(t) {
-      document.documentElement.setAttribute("data-theme", t);
+      var preset = themeToPreset(t);
+      document.documentElement.setAttribute("data-theme", preset);
       try {
         localStorage.setItem(storageKey, t);
       } catch (e) {}

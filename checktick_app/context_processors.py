@@ -15,6 +15,10 @@ try:
     from checktick_app.core.models import SiteBranding
 except Exception:  # pragma: no cover - tolerate missing model during migrations
     SiteBranding = None
+try:
+    from checktick_app.core.themes import generate_theme_css_for_brand
+except Exception:  # pragma: no cover - tolerate missing module during migrations
+    generate_theme_css_for_brand = None
 
 
 _GIT_CACHE = None
@@ -171,17 +175,50 @@ def branding(request):
                         dark_icon_href = f"{_s2.MEDIA_URL}{sb.icon_file_dark.name}"
                 except Exception:
                     pass
+
+                # Get theme presets
+                preset_light = getattr(sb, "theme_preset_light", None) or getattr(
+                    settings, "BRAND_THEME_PRESET_LIGHT", "wireframe"
+                )
+                preset_dark = getattr(sb, "theme_preset_dark", None) or getattr(
+                    settings, "BRAND_THEME_PRESET_DARK", "business"
+                )
+
+                # Generate theme CSS from presets or use custom CSS
+                theme_css_light = brand["theme_css_light"]
+                theme_css_dark = brand["theme_css_dark"]
+
+                if generate_theme_css_for_brand:
+                    try:
+                        custom_css_light = getattr(sb, "theme_light_css", "")
+                        custom_css_dark = getattr(sb, "theme_dark_css", "")
+
+                        generated_light, generated_dark = generate_theme_css_for_brand(
+                            preset_light, preset_dark, custom_css_light, custom_css_dark
+                        )
+                        theme_css_light = generated_light
+                        theme_css_dark = generated_dark
+                    except Exception:
+                        # Fall back to raw CSS if generation fails
+                        theme_css_light = sb.theme_light_css or brand["theme_css_light"]
+                        theme_css_dark = sb.theme_dark_css or brand["theme_css_dark"]
+                else:
+                    # Fallback if themes module not available
+                    theme_css_light = sb.theme_light_css or brand["theme_css_light"]
+                    theme_css_dark = sb.theme_dark_css or brand["theme_css_dark"]
+
                 brand.update(
                     {
                         "icon_url": (sb.icon_url or icon_href) or None,
                         "icon_url_dark": (sb.icon_url_dark or dark_icon_href) or None,
                         "theme_name": sb.default_theme or brand["theme_name"],
+                        "theme_preset_light": preset_light,  # Actual daisyUI preset name
+                        "theme_preset_dark": preset_dark,    # Actual daisyUI preset name
                         "font_heading": sb.font_heading or brand["font_heading"],
                         "font_body": sb.font_body or brand["font_body"],
                         "font_css_url": sb.font_css_url or brand["font_css_url"],
-                        "theme_css_light": sb.theme_light_css
-                        or brand["theme_css_light"],
-                        "theme_css_dark": sb.theme_dark_css or brand["theme_css_dark"],
+                        "theme_css_light": theme_css_light,
+                        "theme_css_dark": theme_css_dark,
                     }
                 )
         except Exception:

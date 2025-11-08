@@ -6,6 +6,14 @@
   const ddLabel = document.getElementById("theme-current-label");
   const media = window.matchMedia("(prefers-color-scheme: dark)");
 
+  // Get actual daisyUI preset names from meta tag
+  const presetsMeta = document.querySelector('meta[name="theme-presets"]');
+  const presets = presetsMeta
+    ? presetsMeta.content.split(',')
+    : ['wireframe', 'business'];
+  const LIGHT_PRESET = presets[0] || 'wireframe';
+  const DARK_PRESET = presets[1] || 'business';
+
   function normalize(pref) {
     switch (pref) {
       case "checktick":
@@ -29,9 +37,18 @@
     return pref || "checktick-light";
   }
 
+  function themeToPreset(theme) {
+    // Map logical theme names to actual daisyUI presets
+    if (theme === "checktick-dark") {
+      return DARK_PRESET;
+    }
+    return LIGHT_PRESET; // checktick-light or default
+  }
+
   function applyTheme(pref) {
     const theme = effectiveTheme(normalize(pref) || pref);
-    htmlEl.setAttribute("data-theme", theme);
+    const preset = themeToPreset(theme);
+    htmlEl.setAttribute("data-theme", preset);
   }
 
   function readSaved() {
