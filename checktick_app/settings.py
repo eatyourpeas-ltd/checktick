@@ -13,6 +13,11 @@ env = environ.Env(
     CSRF_TRUSTED_ORIGINS=(list, []),
     BRAND_TITLE=(str, "CheckTick"),
     BRAND_ICON_URL=(str, ""),  # Empty string falls back to checktick.html component
+    BRAND_ICON_URL_DARK=(str, ""),  # Optional dark mode icon
+    BRAND_ICON_ALT=(str, ""),  # Alt text for icon (defaults to BRAND_TITLE)
+    BRAND_ICON_TITLE=(str, ""),  # Title/tooltip for icon (defaults to BRAND_TITLE)
+    BRAND_ICON_SIZE_CLASS=(str, ""),  # Tailwind size classes (e.g., "w-8 h-8")
+    BRAND_ICON_SIZE=(str, ""),  # Numeric size (e.g., "6" -> "w-6 h-6")
     BRAND_THEME=(str, "checktick-light"),
     BRAND_THEME_PRESET_LIGHT=(
         str,
@@ -34,6 +39,8 @@ env = environ.Env(
         str,
         "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=Merriweather:wght@300;400;700&display=swap",
     ),
+    BRAND_THEME_CSS_LIGHT=(str, ""),  # Custom CSS for light theme
+    BRAND_THEME_CSS_DARK=(str, ""),  # Custom CSS for dark theme
     HCAPTCHA_SITEKEY=(str, ""),
     HCAPTCHA_SECRET=(str, ""),
     # OIDC Configuration
@@ -62,13 +69,20 @@ DATABASES = {
 
 # Branding and theming settings
 BRAND_TITLE = env("BRAND_TITLE")
-BRAND_ICON_URL = env("BRAND_ICON_URL")
+BRAND_ICON_URL = env("BRAND_ICON_URL") or None
+BRAND_ICON_URL_DARK = env("BRAND_ICON_URL_DARK") or None
+BRAND_ICON_ALT = env("BRAND_ICON_ALT") or None
+BRAND_ICON_TITLE = env("BRAND_ICON_TITLE") or None
+BRAND_ICON_SIZE_CLASS = env("BRAND_ICON_SIZE_CLASS") or None
+BRAND_ICON_SIZE = env("BRAND_ICON_SIZE") or None
 BRAND_THEME = env("BRAND_THEME")
 BRAND_THEME_PRESET_LIGHT = env("BRAND_THEME_PRESET_LIGHT")
 BRAND_THEME_PRESET_DARK = env("BRAND_THEME_PRESET_DARK")
 BRAND_FONT_HEADING = env("BRAND_FONT_HEADING")
 BRAND_FONT_BODY = env("BRAND_FONT_BODY")
 BRAND_FONT_CSS_URL = env("BRAND_FONT_CSS_URL")
+BRAND_THEME_CSS_LIGHT = env("BRAND_THEME_CSS_LIGHT") or None
+BRAND_THEME_CSS_DARK = env("BRAND_THEME_CSS_DARK") or None
 
 INSTALLED_APPS = [
     # Use custom AdminConfig to enforce superuser-only access
