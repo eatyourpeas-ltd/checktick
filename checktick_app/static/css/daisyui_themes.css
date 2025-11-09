@@ -1,6 +1,13 @@
 @import "tailwindcss";
 @plugin "daisyui" {
   themes: all;
+  /* Excluding properties to avoid Tailwind CSS v4 build warning about @property --radialprogress
+   * See: https://github.com/saadeghi/daisyui/issues/3882
+   * WARNING: Remove this exclusion if:
+   *   - The issue is fixed in future versions of Tailwind/daisyUI
+   *   - You need to use the radial-progress component
+   */
+  exclude: properties;
 }
 @plugin "@tailwindcss/typography";
 
