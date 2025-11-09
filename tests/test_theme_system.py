@@ -560,3 +560,297 @@ def test_all_dark_theme_presets_valid():
 
         assert sb.theme_preset_dark == theme
         assert get_theme_color_scheme(theme) == "dark"
+
+
+# =============================================================================
+# Organization-Level Theme Tests (3-Tier Hierarchy)
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_org_owner_can_set_organization_theme():
+    """Test that organization owners can set their organization's theme."""
+    from checktick_app.surveys.models import Organization
+
+    owner = User.objects.create_user(
+        username="orgowner", email="owner@test.com", password=TEST_PASSWORD
+    )
+    org = Organization.objects.create(owner=owner, name="Test Org")
+
+    # Platform theme is wireframe/business
+    SiteBranding.objects.create(
+        theme_preset_light="wireframe", theme_preset_dark="business"
+    )
+
+    client = Client()
+    client.force_login(owner)
+
+    # Owner updates org theme (note: fields have org_ prefix in view handler)
+    response = client.post(
+        "/profile",
+        {
+            "action": "update_org_theme",
+            "org_theme_preset_light": "cupcake",
+            "org_theme_preset_dark": "forest",
+        },
+    )
+
+    assert response.status_code == 302  # Redirect after successful update
+
+    # Verify org theme was updated
+    org.refresh_from_db()
+    assert org.theme_preset_light == "cupcake"
+    assert org.theme_preset_dark == "forest"
+
+
+@pytest.mark.django_db
+def test_non_owner_cannot_set_organization_theme():
+    """Test that non-owners cannot change organization theme."""
+    from checktick_app.surveys.models import Organization
+
+    owner = User.objects.create_user(
+        username="orgowner", email="owner@test.com", password=TEST_PASSWORD
+    )
+    non_owner = User.objects.create_user(
+        username="member", email="member@test.com", password=TEST_PASSWORD
+    )
+    org = Organization.objects.create(owner=owner, name="Test Org")
+
+    SiteBranding.objects.create()
+
+    client = Client()
+    client.force_login(non_owner)
+
+    # Non-owner attempts to update org theme
+    response = client.post(
+        "/profile",
+        {
+            "action": "update_org_theme",
+            "org_theme_preset_light": "cupcake",
+            "org_theme_preset_dark": "forest",
+        },
+    )
+
+    # Should either redirect without changes or return error
+    org.refresh_from_db()
+    assert org.theme_preset_light != "cupcake"
+    assert org.theme_preset_dark != "forest"
+
+
+@pytest.mark.django_db
+def test_organization_theme_cascades_to_members():
+    """Test that organization theme overrides platform theme for all org members."""
+    from checktick_app.surveys.models import Organization, OrganizationMembership
+
+    owner = User.objects.create_user(
+        username="orgowner", email="owner@test.com", password=TEST_PASSWORD
+    )
+    member = User.objects.create_user(
+        username="member", email="member@test.com", password=TEST_PASSWORD
+    )
+
+    org = Organization.objects.create(
+        owner=owner,
+        name="Test Org",
+        theme_preset_light="cupcake",
+        theme_preset_dark="forest",
+    )
+    # Add member via OrganizationMembership
+    OrganizationMembership.objects.create(
+        organization=org, user=member, role=OrganizationMembership.Role.VIEWER
+    )
+
+    # Platform theme is different
+    SiteBranding.objects.create(
+        theme_preset_light="wireframe", theme_preset_dark="business"
+    )
+
+    client = Client()
+    client.force_login(member)
+
+    response = client.get("/home")
+    content = response.content.decode()
+
+    # Member should see org theme (cupcake), not platform theme (wireframe)
+    assert 'data-theme="cupcake"' in content
+    assert "cupcake,forest" in content
+
+
+@pytest.mark.django_db
+def test_platform_theme_used_when_no_org_theme():
+    """Test that platform theme is used when organization has no custom theme."""
+    from checktick_app.surveys.models import Organization, OrganizationMembership
+
+    owner = User.objects.create_user(
+        username="orgowner", email="owner@test.com", password=TEST_PASSWORD
+    )
+    org = Organization.objects.create(owner=owner, name="Test Org")
+    # Add owner as member via OrganizationMembership
+    OrganizationMembership.objects.create(
+        organization=org, user=owner, role=OrganizationMembership.Role.ADMIN
+    )
+
+    # Platform theme set, org theme not set
+    SiteBranding.objects.create(
+        theme_preset_light="corporate", theme_preset_dark="luxury"
+    )
+
+    client = Client()
+    client.force_login(owner)
+
+    response = client.get("/home")
+    content = response.content.decode()
+
+    # Should use platform theme since org has no custom theme
+    assert 'data-theme="corporate"' in content
+    assert "corporate,luxury" in content
+
+
+@pytest.mark.django_db
+def test_org_owner_can_reset_organization_theme():
+    """Test that organization owners can reset their organization's theme to platform defaults."""
+    from checktick_app.surveys.models import Organization
+
+    owner = User.objects.create_user(
+        username="orgowner", email="owner@test.com", password=TEST_PASSWORD
+    )
+    org = Organization.objects.create(
+        owner=owner,
+        name="Test Org",
+        theme_preset_light="cupcake",
+        theme_preset_dark="forest",
+    )
+
+    SiteBranding.objects.create(
+        theme_preset_light="wireframe", theme_preset_dark="business"
+    )
+
+    client = Client()
+    client.force_login(owner)
+
+    # Reset org theme to platform defaults
+    response = client.post("/profile", {"action": "reset_org_theme"})
+
+    assert response.status_code == 302  # Redirect after successful reset
+
+    # Verify org theme was cleared
+    org.refresh_from_db()
+    assert org.theme_preset_light == ""
+    assert org.theme_preset_dark == ""
+    assert org.default_theme == ""
+
+
+@pytest.mark.django_db
+def test_non_owner_cannot_reset_organization_theme():
+    """Test that non-owners cannot reset organization theme."""
+    from checktick_app.surveys.models import Organization
+
+    owner = User.objects.create_user(
+        username="orgowner", email="owner@test.com", password=TEST_PASSWORD
+    )
+    non_owner = User.objects.create_user(
+        username="member", email="member@test.com", password=TEST_PASSWORD
+    )
+    org = Organization.objects.create(
+        owner=owner,
+        name="Test Org",
+        theme_preset_light="cupcake",
+        theme_preset_dark="forest",
+    )
+
+    SiteBranding.objects.create()
+
+    client = Client()
+    client.force_login(non_owner)
+
+    # Non-owner attempts to reset org theme
+    response = client.post("/profile", {"action": "reset_org_theme"})
+
+    # Verify org theme was NOT cleared
+    org.refresh_from_db()
+    assert org.theme_preset_light == "cupcake"
+    assert org.theme_preset_dark == "forest"
+
+
+@pytest.mark.django_db
+def test_only_superuser_can_change_platform_theme():
+    """Test that only superusers can change platform-level SiteBranding theme."""
+    superuser = User.objects.create_superuser(
+        username="admin", email="admin@test.com", password=TEST_PASSWORD
+    )
+    regular_user = User.objects.create_user(
+        username="user", email="user@test.com", password=TEST_PASSWORD
+    )
+
+    SiteBranding.objects.create(
+        theme_preset_light="wireframe", theme_preset_dark="business"
+    )
+
+    # Regular user cannot access admin interface
+    client = Client()
+    client.force_login(regular_user)
+    response = client.get(reverse("admin:core_sitebranding_changelist"))
+    assert response.status_code == 302  # Redirect to login
+
+    # Superuser can access admin interface
+    client.force_login(superuser)
+    response = client.get(reverse("admin:core_sitebranding_changelist"))
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_organization_custom_css_overrides():
+    """Test that organization can set custom CSS for advanced theming."""
+    from checktick_app.surveys.models import Organization, OrganizationMembership
+
+    owner = User.objects.create_user(
+        username="orgowner", email="owner@test.com", password=TEST_PASSWORD
+    )
+    org = Organization.objects.create(
+        owner=owner,
+        name="Test Org",
+        theme_preset_light="cupcake",  # Need a preset for cascade to trigger
+        theme_preset_dark="forest",
+        theme_light_css=":root { --color-primary: oklch(60% 0.2 180); }",
+        theme_dark_css=":root { --color-primary: oklch(40% 0.15 180); }",
+    )
+    # Add owner as member via OrganizationMembership
+    OrganizationMembership.objects.create(
+        organization=org, user=owner, role=OrganizationMembership.Role.ADMIN
+    )
+
+    SiteBranding.objects.create()
+
+    client = Client()
+    client.force_login(owner)
+
+    response = client.get("/home")
+    content = response.content.decode()
+
+    # Should include custom CSS from organization
+    # (The CSS will be generated/normalized, so check for the general pattern)
+    assert "--color-primary" in content or "oklch(60%" in content
+
+
+@pytest.mark.django_db
+def test_profile_shows_platform_default_label():
+    """Test that profile page shows 'Platform Default' when org has no custom theme."""
+    from checktick_app.surveys.models import Organization
+
+    owner = User.objects.create_user(
+        username="orgowner", email="owner@test.com", password=TEST_PASSWORD
+    )
+    org = Organization.objects.create(owner=owner, name="Test Org")
+
+    SiteBranding.objects.create(
+        theme_preset_light="wireframe", theme_preset_dark="business"
+    )
+
+    client = Client()
+    client.force_login(owner)
+
+    response = client.get("/profile")
+    content = response.content.decode()
+
+    # Should show "Platform Default" label (not the theme name in parentheses)
+    assert "Platform Default" in content
