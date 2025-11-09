@@ -32,7 +32,7 @@
         <div class="form-control">
           <div class="flex items-center justify-between">
             <span class="label-text font-semibold">{% trans "Choose Account Type" %}</span>
-            <a href="{% url 'core:docs_page' slug='getting-started-account-types' %}"
+            <a href="{% url 'core:docs_page' slug='getting-started' %}#account-types"
                target="_blank"
                class="link link-primary text-sm flex items-center gap-1">
               {% trans "Learn more" %}
@@ -72,7 +72,7 @@
             <strong>{% trans "Not sure which to choose?" %}</strong>
             <p class="mt-1">
               {% trans "Individual accounts are great for personal use, while organization accounts are perfect for teams and healthcare institutions." %}
-              <a href="{% url 'core:docs_page' slug='getting-started-account-types' %}"
+              <a href="{% url 'core:docs_page' slug='getting-started' %}#account-types"
                  target="_blank"
                  class="link link-primary font-medium">
                 {% trans "Read our detailed comparison guide" %}

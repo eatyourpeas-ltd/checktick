@@ -32,14 +32,14 @@ class SiteBranding(models.Model):
     theme_preset_light = models.CharField(
         max_length=64,
         blank=True,
-        default="wireframe",
-        help_text="DaisyUI preset theme for light mode (e.g., 'wireframe', 'cupcake', 'light')",
+        default="",
+        help_text="DaisyUI preset theme for light mode (e.g., 'nord', 'cupcake', 'light'). Defaults to BRAND_THEME_PRESET_LIGHT setting.",
     )
     theme_preset_dark = models.CharField(
         max_length=64,
         blank=True,
-        default="business",
-        help_text="DaisyUI preset theme for dark mode (e.g., 'business', 'dark', 'synthwave')",
+        default="",
+        help_text="DaisyUI preset theme for dark mode (e.g., 'business', 'dark', 'synthwave'). Defaults to BRAND_THEME_PRESET_DARK setting.",
     )
 
     # Raw CSS variable declarations for themes, after normalization to DaisyUI runtime vars

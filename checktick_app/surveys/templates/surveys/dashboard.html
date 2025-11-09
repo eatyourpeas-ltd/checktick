@@ -31,8 +31,8 @@
   {% trans "Surveys" as bc_surveys %}
   {% trans "Survey Dashboard" as bc_survey_dashboard %}
   {% include 'components/breadcrumbs.html' with crumb1_label=bc_surveys crumb1_href="/surveys/" crumb2_label=bc_survey_dashboard crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" %}
-  <h2>{{ survey.name }}</h2>
 </div>
+<h2 class="text-2xl font-bold mt-2"><a class="link link-accent" href="/surveys/{{ survey.slug }}/groups/">{{ survey.name }}</a></h2>
 
 <div class="flex flex-wrap gap-2 items-center mb-2">
   <span class="badge badge-primary badge-outline">{% trans "Status" %}: {{ survey.status }}</span>
@@ -57,7 +57,6 @@
     </a>
   {% endif %}
   <a class="btn btn-primary btn-sm flex-shrink-0" href="/surveys/{{ survey.slug }}/preview/">{% trans "Survey Preview (read-only)" %}</a>
-  <a class="btn btn-primary btn-sm flex-shrink-0" href="/surveys/{{ survey.slug }}/groups/">{% trans "Manage question groups" %}</a>
   {% if can_manage_users %}
   <a class="btn btn-primary btn-sm flex-shrink-0" href="/surveys/{{ survey.slug }}/users/">{% trans "Manage collaborators" %}</a>
   {% endif %}
@@ -128,7 +127,7 @@
   <div class="card-body">
     <h2 class="card-title">
       {% trans "Data Governance" %}
-      <a href="/docs/data-governance-export" class="btn btn-ghost btn-xs ml-auto" target="_blank">
+      <a href="/docs/data-governance#data-export" class="btn btn-ghost btn-xs ml-auto" target="_blank">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
@@ -141,7 +140,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
       </svg>
       <div class="text-sm">
-        <p>{% blocktrans %}This survey is closed and data retention is active. See the {% endblocktrans %}<a href="/docs/data-governance-export" class="link" target="_blank">{% trans "data governance policy" %}</a>{% blocktrans %} for download procedures and retention guidelines.{% endblocktrans %}</p>
+        <p>{% blocktrans %}This survey is closed and data retention is active. See the {% endblocktrans %}<a href="/docs/data-governance#data-export" class="link" target="_blank">{% trans "data governance policy" %}</a>{% blocktrans %} for download procedures and retention guidelines.{% endblocktrans %}</p>
       </div>
     </div>
 

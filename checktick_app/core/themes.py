@@ -26,13 +26,13 @@ LIGHT_THEMES = [
     "lofi",
     "pastel",
     "fantasy",
-    "wireframe",
+    "nord",
     "cmyk",
     "autumn",
     "acid",
     "lemonade",
     "winter",
-    "nord",
+    "wireframe",
     "sunset",
 ]
 
@@ -151,20 +151,21 @@ def theme_vars_to_css(
 def get_preset_theme_reference(preset_name: str) -> str:
     """
     Generate CSS to reference a daisyUI preset theme.
-
-    Instead of copying all variables, we can use CSS custom property inheritance
-    by applying the preset theme as a base and overriding as needed.
+    Since we're using daisyUI's preset themes, we just need to set the color-scheme.
+    The actual theme variables are inherited from the preset.
 
     Args:
-        preset_name: Name of the daisyUI preset theme
+        preset_name: The daisyUI preset theme name (e.g., 'nord', 'business')
 
     Returns:
-        CSS comment referencing the preset theme
+        CSS string that references the preset theme
     """
     color_scheme = get_theme_color_scheme(preset_name)
-    return f"""color-scheme: {color_scheme};
-    /* Base theme: {preset_name} */
-    /* Variables inherited from [data-theme="{preset_name}"] */"""
+    return f"""
+        color-scheme: {color_scheme};
+        /* Base theme: {preset_name} */
+        /* Variables inherited from [data-theme="{preset_name}"] */
+    """
 
 
 def generate_theme_css_for_brand(
@@ -177,7 +178,7 @@ def generate_theme_css_for_brand(
     Generate CSS for checktick-light and checktick-dark themes based on brand settings.
 
     Args:
-        preset_light: daisyUI preset name for light theme (default: "wireframe")
+        preset_light: daisyUI preset name for light theme (default: "nord")
         preset_dark: daisyUI preset name for dark theme (default: "business")
         custom_css_light: Custom CSS overrides for light theme
         custom_css_dark: Custom CSS overrides for dark theme
@@ -185,7 +186,7 @@ def generate_theme_css_for_brand(
     Returns:
         Tuple of (light_css, dark_css) ready to inject in <style> tags
     """
-    preset_light = preset_light or "wireframe"
+    preset_light = preset_light or "nord"
     preset_dark = preset_dark or "business"
 
     # For light theme

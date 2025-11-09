@@ -1,12 +1,19 @@
 @import "tailwindcss";
 @plugin "daisyui" {
   themes: all;
+  /* Excluding properties to avoid Tailwind CSS v4 build warning about @property --radialprogress
+   * See: https://github.com/saadeghi/daisyui/issues/3882
+   * WARNING: Remove this exclusion if:
+   *   - The issue is fixed in future versions of Tailwind/daisyUI
+   *   - You need to use the radial-progress component
+   */
+  exclude: properties;
 }
 @plugin "@tailwindcss/typography";
 
 /*
  * Custom checktick-light and checktick-dark themes are now dynamically generated
- * from environment variables (default: wireframe for light, business for dark)
+ * from environment variables (default: nord for light, business for dark)
  * or from Brand model settings in the database.
  *
  * These theme definitions are injected via inline <style> blocks in templates.

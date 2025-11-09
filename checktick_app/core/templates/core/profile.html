@@ -326,6 +326,117 @@
   </div>
   {% endif %}
 
+  {% if org and org.owner == request.user %}
+  <div class="card bg-base-100 shadow mb-6">
+    <div class="card-body">
+      <h2 class="card-title inline-flex items-center gap-2 text-base-content">
+        {% include "components/icons/users.html" with classes="w-5 h-5 text-base-content" %}
+        <span>{% trans "Organization Theme Settings" %}</span>
+      </h2>
+      <p class="opacity-80">{% trans "Customize the theme for your organization. These settings override platform defaults and apply to all organization members." %}</p>
+      
+      <!-- Current theme display -->
+      <div class="grid md:grid-cols-2 gap-4 my-4">
+        <div class="flex flex-col gap-1">
+          <span class="text-sm font-semibold">{% trans "Light Theme" %}</span>
+          <span class="text-base opacity-80">
+            {% if org.theme_preset_light %}
+              {{ org.theme_preset_light|title }}
+            {% else %}
+              {% trans "Platform Default" %}
+            {% endif %}
+          </span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-sm font-semibold">{% trans "Dark Theme" %}</span>
+          <span class="text-base opacity-80">
+            {% if org.theme_preset_dark %}
+              {{ org.theme_preset_dark|title }}
+            {% else %}
+              {% trans "Platform Default" %}
+            {% endif %}
+          </span>
+        </div>
+      </div>
+
+      <div class="flex gap-3 flex-wrap">
+        <button type="button" id="edit-theme-btn" class="btn btn-primary">
+          {% trans "Edit Theme" %}
+        </button>
+        {% if org.theme_preset_light or org.theme_preset_dark or org.theme_light_css or org.theme_dark_css %}
+        <form method="post" class="inline">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="reset_org_theme" />
+          <button type="submit" class="btn btn-outline">{% trans "Reset to Defaults" %}</button>
+        </form>
+        {% endif %}
+      </div>
+
+      <!-- Edit form (hidden by default) -->
+      <div id="org-theme-edit-form" class="hidden">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="update_org_theme" />
+          <div class="divider text-sm opacity-60 mt-6">{% trans "Theme Presets" %}</div>
+          <div class="grid md:grid-cols-2 gap-3">
+            <label class="form-control">
+              <span class="label">
+                <span class="label-text">{% trans "Light theme preset" %}</span>
+              </span>
+              <select class="select select-bordered" name="org_theme_preset_light">
+                <option value="" {% if not org.theme_preset_light %}selected{% endif %}>{% trans "Use platform default" %} - {{ brand.theme_preset_light|title }}</option>
+                {% for value, label in light_theme_choices %}
+                  <option value="{{ value }}" {% if org.theme_preset_light == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="form-control">
+              <span class="label">
+                <span class="label-text">{% trans "Dark theme preset" %}</span>
+              </span>
+              <select class="select select-bordered" name="org_theme_preset_dark">
+                <option value="" {% if not org.theme_preset_dark %}selected{% endif %}>{% trans "Use platform default" %} - {{ brand.theme_preset_dark|title }}</option>
+                {% for value, label in dark_theme_choices %}
+                  <option value="{{ value }}" {% if org.theme_preset_dark == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+          
+          <!-- Advanced CSS section (collapsible) -->
+          <details class="collapse collapse-arrow bg-base-200 mt-4">
+            <summary class="collapse-title text-sm font-medium">
+              {% trans "Advanced: Custom Theme CSS (Optional)" %}
+            </summary>
+            <div class="collapse-content">
+              <p class="text-sm opacity-70 mb-3">
+                {% trans "Paste custom CSS from the" %}
+                <a href="https://daisyui.com/theme-generator/" target="_blank" rel="noopener" class="link">daisyUI Theme Generator</a>
+                {% trans "to override the preset themes." %}
+              </p>
+              <div class="grid gap-3">
+                <label class="form-control">
+                  <span class="label"><span class="label-text">{% trans "Custom light theme CSS" %}</span></span>
+                  <textarea class="textarea textarea-bordered font-mono text-xs" name="org_theme_light_css" rows="4" placeholder="Paste from daisyUI Theme Generator (light)...">{{ org.theme_light_css }}</textarea>
+                </label>
+                <label class="form-control">
+                  <span class="label"><span class="label-text">{% trans "Custom dark theme CSS" %}</span></span>
+                  <textarea class="textarea textarea-bordered font-mono text-xs" name="org_theme_dark_css" rows="4" placeholder="Paste from daisyUI Theme Generator (dark)...">{{ org.theme_dark_css }}</textarea>
+                </label>
+              </div>
+            </div>
+          </details>
+
+          <div class="mt-6 flex gap-3">
+            <button type="submit" class="btn btn-primary">{% trans "Save Theme" %}</button>
+            <button type="button" id="cancel-theme-btn" class="btn btn-ghost">{% trans "Cancel" %}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   {% if request.user.is_superuser %}
   <div class="card bg-base-100 shadow mb-6">
     <div class="card-body">
@@ -586,6 +697,23 @@ document.addEventListener('DOMContentLoaded', function() {
   const deleteBtn = document.getElementById('delete-account-btn');
   if (deleteBtn) {
     deleteBtn.addEventListener('click', confirmAccountDeletion);
+  }
+
+  // Theme edit toggle
+  const editThemeBtn = document.getElementById('edit-theme-btn');
+  const cancelThemeBtn = document.getElementById('cancel-theme-btn');
+  const themeEditForm = document.getElementById('org-theme-edit-form');
+
+  if (editThemeBtn && themeEditForm) {
+    editThemeBtn.addEventListener('click', function() {
+      themeEditForm.classList.toggle('hidden');
+    });
+  }
+
+  if (cancelThemeBtn && themeEditForm) {
+    cancelThemeBtn.addEventListener('click', function() {
+      themeEditForm.classList.add('hidden');
+    });
   }
 });
 

@@ -1,8 +1,15 @@
-# Theming and UI Components
+# Theming and UI Components (Developer Guide)
 
-This project uses **Tailwind CSS v4.1.17** with **daisyUI v5.4.7** for components and `@tailwindcss/typography` for rich text. This guide covers theming and the shared form rendering helpers.
+This guide covers the technical implementation of CheckTick's theming system for developers. For user-facing theme configuration, see [Branding and Theme Settings](branding-and-theme-settings.md). For platform deployment configuration, see [Self-Hosting: Platform Theme Configuration](self-hosting-themes.md).
 
-## Tailwind CSS v4 configuration
+## Technology Stack
+
+- **Tailwind CSS v4.1.17** - Utility-first CSS framework with CSS-based configuration
+- **daisyUI v5.4.7** - Component library with 32 built-in theme presets
+- **@tailwindcss/typography** - Rich text styling for prose content
+- **@tailwindcss/cli v4.1.17** - Separate build tool package for Tailwind v4
+
+## Tailwind CSS v4 Configuration
 
 Tailwind CSS v4 uses **CSS-based configuration** instead of JavaScript config files:
 
@@ -19,36 +26,272 @@ Example configuration structure:
 @plugin "@tailwindcss/typography";
 ```
 
-## daisyUI v5 themes
+### Key Differences from Tailwind v3
 
-All 39 daisyUI themes are loaded:
+1. **CSS-first configuration** - No JavaScript config file required
+2. **Separate CLI package** - `@tailwindcss/cli` instead of `tailwindcss` CLI
+3. **New `@` directives** - `@import`, `@plugin`, `@theme`, `@source`
+4. **Native CSS features** - Better integration with modern CSS
 
-- **20 light themes**: light, cupcake, bumblebee, emerald, corporate, retro, cyberpunk, valentine, garden, lofi, pastel, fantasy, wireframe, cmyk, autumn, acid, lemonade, winter, nord, sunset
-- **12 dark themes**: dark, synthwave, halloween, forest, aqua, black, luxury, dracula, business, night, coffee, dim
+## daisyUI v5 Themes
+
+All 32 daisyUI themes are loaded in CheckTick:
+
+**20 Light Themes:**
+
+- light, cupcake, bumblebee, emerald, corporate, retro, cyberpunk, valentine, garden, lofi, pastel, fantasy, nord, cmyk, autumn, acid, lemonade, winter, nord, sunset
+
+**12 Dark Themes:**
+
+- dark, synthwave, halloween, forest, aqua, black, luxury, dracula, business, night, coffee, dim
 
 Themes are applied via the `data-theme` attribute on `<html>` or `<body>`:
 
 ```html
-<html data-theme="wireframe">
+<html data-theme="nord">
 ```
 
-The application uses a **logical naming system**:
+### Logical Naming System
 
-- **checktick-light** (logical name) → maps to selected light preset (default: "wireframe")
+CheckTick uses a **logical naming system** to separate user preferences from actual daisyUI presets:
+
+- **checktick-light** (logical name) → maps to selected light preset (default: "nord")
 - **checktick-dark** (logical name) → maps to selected dark preset (default: "business")
-- JavaScript automatically applies the correct daisyUI preset based on SiteBranding configuration
+- JavaScript automatically applies the correct daisyUI preset based on configuration
 
-## Project-level vs Survey-level theming
+**Why?** This allows changing platform default themes without breaking user preferences. A user who selected "light mode" will automatically get the new light preset if the platform admin changes it.
 
-There are two layers of theming you can use together:
+## Theme Architecture
 
-1. Project-level (global) theming — organization branding
+### File Structure
+
+```console
+checktick_app/
+├── static/
+│   ├── css/
+│   │   └── daisyui_themes.css      # Tailwind v4 entry point
+│   ├── build/
+│   │   └── styles.css               # Built output (minified)
+│   └── js/
+│       ├── theme-toggle.js          # User theme switcher
+│       └── admin-theme.js           # Admin theme switcher
+├── core/
+│   ├── themes.py                    # Theme utilities (presets, parsing)
+│   ├── models.py                    # SiteBranding model
+│   └── views.py                     # Theme update handlers
+├── surveys/
+│   └── models.py                    # Organization, Survey models
+├── context_processors.py            # Theme cascade logic
+└── templates/
+    ├── base.html                    # Main template with theme
+    ├── base_minimal.html            # Minimal template
+    └── admin/
+        └── base_site.html           # Admin template override
+```
+
+### Theme Cascade Logic
+
+The context processor (`checktick_app/context_processors.py`) implements the 3-tier hierarchy:
+
+```python
+# 1. Start with platform defaults (environment vars + SiteBranding)
+preset_light = settings.BRAND_THEME_PRESET_LIGHT or "nord"
+preset_dark = settings.BRAND_THEME_PRESET_DARK or "business"
+
+if SiteBranding:
+    sb = SiteBranding.objects.first()
+    if sb:
+        preset_light = sb.theme_preset_light or preset_light
+        preset_dark = sb.theme_preset_dark or preset_dark
+
+# 2. Check for organization-level override
+user_org = None
+if user and user.is_authenticated:
+    # Get user's primary organization
+    user_org = Organization.objects.filter(owner=user).first()
+    if not user_org:
+        membership = OrganizationMembership.objects.filter(user=user).first()
+        if membership:
+            user_org = membership.organization
+
+# 3. Apply organization theme if set
+if user_org and (user_org.theme_preset_light or user_org.theme_preset_dark):
+    preset_light = user_org.theme_preset_light or preset_light
+    preset_dark = user_org.theme_preset_dark or preset_dark
+    # Also apply custom CSS if provided
+    if user_org.theme_light_css:
+        theme_css_light = user_org.theme_light_css
+    if user_org.theme_dark_css:
+        theme_css_dark = user_org.theme_dark_css
+
+# 4. Survey-level overrides handled per-template (not in context processor)
+```
+
+### Database Models
+
+**SiteBranding** (platform-level):
+
+```python
+class SiteBranding(models.Model):
+    default_theme = models.CharField(max_length=64)  # checktick-light/dark
+    theme_preset_light = models.CharField(max_length=64)  # nord, etc.
+    theme_preset_dark = models.CharField(max_length=64)   # business, etc.
+    theme_light_css = models.TextField()  # Custom CSS variables
+    theme_dark_css = models.TextField()   # Custom CSS variables
+    icon_file = models.FileField()        # Uploaded icon
+    icon_url = models.URLField()          # Or icon URL
+    # ... font fields, dark mode icon fields
+```
+
+**Organization** (organization-level):
+
+```python
+class Organization(models.Model):
+    name = models.CharField(max_length=255)
+    owner = models.ForeignKey(User)
+    default_theme = models.CharField(max_length=64, blank=True)
+    theme_preset_light = models.CharField(max_length=64, blank=True)
+    theme_preset_dark = models.CharField(max_length=64, blank=True)
+    theme_light_css = models.TextField(blank=True)
+    theme_dark_css = models.TextField(blank=True)
+```
+
+**Survey** (survey-level):
+
+```python
+class Survey(models.Model):
+    owner = models.ForeignKey(User)
+    organization = models.ForeignKey(Organization, null=True, blank=True)
+    style = models.JSONField(default=dict)  # Flexible styling
+    # style structure:
+    # {
+    #   "custom_css": "...",
+    #   "theme_light": "cupcake",
+    #   "theme_dark": "forest",
+    #   "fonts": {...}
+    # }
+```
+
+## CSS Build Process
+
+### Build Configuration
+
+**package.json** script:
+```json
+{
+  "scripts": {
+    "build:css": "tailwindcss --input checktick_app/static/css/daisyui_themes.css --output checktick_app/static/build/styles.css --minify"
+  }
+}
+```
+
+### Build Details
+
+- **Input**: `checktick_app/static/css/daisyui_themes.css`
+- **Output**: `checktick_app/static/build/styles.css` (minified)
+- **Build time**: ~250ms
+- **Output size**: ~192KB (includes all 39 daisyUI themes)
+- **Watch mode**: `npm run build:css -- --watch`
+
+### When to Rebuild
+
+Rebuild CSS when:
+
+- Changing Tailwind/daisyUI configuration in CSS files
+- Adding new templates with utility classes
+- Modifying component styles in CSS
+- Updating `@plugin` or `@theme` directives
+
+**Development (Docker):**
+
+```bash
+docker compose exec web npm run build:css
+```
+
+**Production:**
+
+```bash
+npm run build:css
+python manage.py collectstatic --noinput
+```
+
+## Theme Utilities
+
+### themes.py Module
+
+Location: `checktick_app/core/themes.py`
+
+**Constants:**
+
+```python
+LIGHT_THEMES = [
+    "light", "cupcake", "bumblebee", "emerald", "corporate", "retro",
+    "cyberpunk", "valentine", "garden", "lofi", "pastel", "fantasy",
+    "nord", "cmyk", "autumn", "acid", "lemonade", "winter", "nord", "sunset"
+]
+
+DARK_THEMES = [
+    "dark", "synthwave", "halloween", "forest", "aqua", "black",
+    "luxury", "dracula", "business", "night", "coffee", "dim"
+]
+```
+
+**Functions:**
+
+`get_theme_color_scheme(theme_name: str) -> str`
+
+- Returns "light" or "dark" for a given theme preset name
+- Used to determine appropriate meta tags and prefers-color-scheme
+
+`normalize_daisyui_builder_css(raw_css: str) -> str`
+
+- Normalizes CSS from daisyUI Theme Generator
+- Strips selectors, extracts variables only
+- Maps builder variables to daisyUI runtime variables
+
+`generate_theme_css_for_brand(preset_light, preset_dark, custom_light_css, custom_dark_css) -> tuple`
+
+- Generates complete theme CSS for both modes
+- Merges preset with custom CSS overrides
+- Returns `(light_css, dark_css)` tuple
+- Used by SiteBranding and Organization models
+
+`parse_custom_theme_config(config: dict) -> dict`
+
+- Parses survey `style` JSONField
+- Extracts theme presets, custom CSS, fonts
+- Returns normalized configuration dict
+
+### Example Usage
+
+```python
+from checktick_app.core.themes import (
+    LIGHT_THEMES, 
+    get_theme_color_scheme,
+    generate_theme_css_for_brand
+)
+
+# Check theme color scheme
+scheme = get_theme_color_scheme("nord")  # "light"
+
+# Generate theme CSS
+light_css, dark_css = generate_theme_css_for_brand(
+    preset_light="nord",
+    preset_dark="business",
+    custom_light_css="--color-primary: oklch(65% 0.21 25);",
+    custom_dark_css="--color-primary: oklch(45% 0.18 25);"
+)
+```
+
+## Project-Level vs Organization-Level vs Survey-Level Theming
+
+### 1. Platform-Level (Global)
 
 - Who: Organization admin (superuser) in the Profile page
 - Applies to: Entire site by default
 - What you can configure:
   - **Theme presets**: Choose from 20 light themes and 12 dark themes (daisyUI v5.4.7 presets)
-    - Default light: `wireframe` (clean, minimal design)
+    - Default light: `nord` (clean, minimal design)
     - Default dark: `business` (professional dark theme)
     - Can be changed via dropdown selectors in Profile page
   - **Advanced custom CSS**: Optional custom theme CSS from the [daisyUI Theme Generator](https://daisyui.com/theme-generator/) that overrides the selected presets
@@ -58,7 +301,7 @@ There are two layers of theming you can use together:
 - Where it's stored: `SiteBranding` model in the database (`theme_preset_light`, `theme_preset_dark`, `theme_css_light`, `theme_css_dark`)
 - How it's applied:
   - The base template (`base.html`) uses the configured presets in the `data-theme` attribute
-  - The logical theme names `checktick-light` and `checktick-dark` are mapped to the actual preset names (e.g., `wireframe` or `business`)
+  - The logical theme names `checktick-light` and `checktick-dark` are mapped to the actual preset names (e.g., `nord` or `business`)
   - Custom CSS from the theme generator is injected as CSS variables under the `checktick-light` and `checktick-dark` theme selectors
   - Theme switching happens via JavaScript that maps the logical names to the actual presets
   - Environment variables `BRAND_THEME_PRESET_LIGHT` and `BRAND_THEME_PRESET_DARK` provide deployment-level defaults
@@ -77,7 +320,7 @@ There are two layers of theming you can use together:
 
 ### Precedence and merge behavior
 
-- Base daisyUI presets (e.g., `wireframe`, `business`) provide the foundation
+- Base daisyUI presets (e.g., `nord`, `business`) provide the foundation
 - Project-level custom CSS from Theme Generator refines the preset across the entire site
 - Survey-level overrides win on survey pages where they're included
 - Avoid mixing heavy global CSS with inline colors; prefer daisyUI variables so all layers compose cleanly
@@ -88,7 +331,7 @@ There are two layers of theming you can use together:
 
 2. Choose theme presets:
 
-   - Light theme preset: Select from 20 options (default: `wireframe`)
+   - Light theme preset: Select from 20 options (default: `nord`)
    - Dark theme preset: Select from 12 options (default: `business`)
    - The logical names `checktick-light` and `checktick-dark` are preserved for compatibility
 
@@ -183,7 +426,6 @@ Context:
 - `classes` (optional): override default classes
 
 Defaults when `classes` isn’t provided:
-
 
 - Text-like inputs: `input input-bordered w-full`
 - Textarea: `textarea textarea-bordered w-full`

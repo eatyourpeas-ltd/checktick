@@ -226,8 +226,8 @@ def test_editor_role_dashboard_buttons(client, users, org, surveys):
     assert res.status_code == 200
 
     content = res.content.decode()
-    # EDITOR should see the manage groups button
-    assert "Manage question groups" in content
+    # EDITOR should see the clickable survey title that links to groups
+    assert f'<a class="link link-accent" href="/surveys/{s1.slug}/groups/"' in content
     # EDITOR should NOT see the manage collaborators button
     assert "Manage collaborators" not in content
 
@@ -243,8 +243,9 @@ def test_creator_role_dashboard_buttons(client, users, org, surveys):
     assert res.status_code == 200
 
     content = res.content.decode()
-    # CREATOR should see both buttons
-    assert "Manage question groups" in content
+    # CREATOR should see the clickable survey title that links to groups
+    assert f'<a class="link link-accent" href="/surveys/{s1.slug}/groups/"' in content
+    # CREATOR should also see the manage collaborators button
     assert "Manage collaborators" in content
 
 

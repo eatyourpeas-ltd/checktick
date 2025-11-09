@@ -1,26 +1,56 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Documentation · {{ block.super }}{% endblock %}
 {% block content %}
 <div class="grid grid-cols-12 gap-6">
   <aside class="col-span-12 lg:col-span-3">
     <div class="card bg-base-100 shadow sticky top-4">
-      <div class="card-body">
-        <h2 class="card-title">Documentation</h2>
-        <ul class="menu menu-sm">
-          {% for category in pages %}
-            <li class="menu-title mt-2">
-              {% if category.icon %}{{ category.icon }} {% endif %}{{ category.title }}
-            </li>
-            {% for page in category.pages %}
-              <li>
-                <a class="{% if active_slug == page.slug %}active{% endif %}"
-                   href="{% url 'core:docs_page' slug=page.slug %}">
-                  {{ page.title }}
+      <div class="card-body p-4">
+        <h2 class="card-title text-lg mb-2">Documentation</h2>
+        <nav class="docs-nav" style="max-height: calc(100vh - 12rem); overflow-y: auto;">
+          {% for item in pages %}
+            {% if item.standalone %}
+              {# Standalone link item #}
+              <div class="mb-2">
+                <a href="{% url 'core:docs_page' slug=item.slug %}"
+                   class="flex items-center text-sm px-2 py-1 rounded hover:bg-base-200 transition-colors {% if active_slug == item.slug %}bg-base-200 font-semibold{% endif %}">
+                  {% if item.icon %}<span class="mr-2">{{ item.icon }}</span>{% endif %}
+                  {{ item.title }}
                 </a>
-              </li>
-            {% endfor %}
+              </div>
+            {% else %}
+              {# Category with collapsible items #}
+              <div class="docs-category mb-3" data-category="{{ item.title|slugify }}">
+                <button class="docs-category-toggle w-full flex items-center justify-between text-left font-semibold text-sm px-2 py-1 rounded hover:bg-base-200 transition-colors"
+                        aria-expanded="true"
+                        aria-controls="category-{{ item.title|slugify }}">
+                  <span>
+                    {% if item.icon %}<span class="mr-1">{{ item.icon }}</span>{% endif %}
+                    {{ item.title }}
+                  </span>
+                  <svg class="docs-chevron w-4 h-4 transition-transform duration-200" 
+                       fill="none" 
+                       stroke="currentColor" 
+                       viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </button>
+                <ul class="docs-category-items menu menu-sm pl-2 mt-1" 
+                    id="category-{{ item.title|slugify }}"
+                    style="display: block;">
+                  {% for page in item.pages %}
+                    <li>
+                      <a class="text-sm {% if active_slug == page.slug %}active font-semibold{% endif %}"
+                         href="{% url 'core:docs_page' slug=page.slug %}">
+                        {{ page.title }}
+                      </a>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
+            {% endif %}
           {% endfor %}
-        </ul>
+        </nav>
       </div>
     </div>
   </aside>
@@ -29,5 +59,39 @@
       {{ html|safe }}
     </article>
   </section>
-  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/docs-navigation.js' %}" nonce="{{ request.csp_nonce }}"></script>
+{% endblock %}
+
+{% block extra_css %}
+<style nonce="{{ request.csp_nonce }}">
+.docs-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.docs-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.docs-nav::-webkit-scrollbar-thumb {
+  background: oklch(var(--bc) / 0.2);
+  border-radius: 3px;
+}
+
+.docs-nav::-webkit-scrollbar-thumb:hover {
+  background: oklch(var(--bc) / 0.3);
+}
+
+.docs-category-toggle:focus {
+  outline: 2px solid oklch(var(--p));
+  outline-offset: 2px;
+}
+
+.docs-category-items {
+  transition: display 0.2s ease-in-out;
+}
+</style>
 {% endblock %}

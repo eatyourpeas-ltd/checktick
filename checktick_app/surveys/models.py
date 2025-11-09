@@ -20,6 +20,11 @@ def get_default_retention_months():
 
 
 class Organization(models.Model):
+    DEFAULT_THEME_CHOICES = [
+        ("checktick-light", "CheckTick Light"),
+        ("checktick-dark", "CheckTick Dark"),
+    ]
+
     name = models.CharField(max_length=255)
     owner = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="organizations"
@@ -32,6 +37,37 @@ class Organization(models.Model):
         null=True,
         editable=False,
         help_text="Organization master key for administrative recovery of member surveys",
+    )
+
+    # Organization-level theme settings (overrides platform defaults)
+    default_theme = models.CharField(
+        max_length=64,
+        choices=DEFAULT_THEME_CHOICES,
+        blank=True,
+        default="",
+        help_text="Default theme for organization (empty = use platform default)",
+    )
+    theme_preset_light = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="DaisyUI preset for light mode (empty = use platform default)",
+    )
+    theme_preset_dark = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="DaisyUI preset for dark mode (empty = use platform default)",
+    )
+    theme_light_css = models.TextField(
+        blank=True,
+        default="",
+        help_text="Custom CSS for light theme (overrides preset if provided)",
+    )
+    theme_dark_css = models.TextField(
+        blank=True,
+        default="",
+        help_text="Custom CSS for dark theme (overrides preset if provided)",
     )
 
     def __str__(self) -> str:  # pragma: no cover

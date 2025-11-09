@@ -12,11 +12,11 @@ env = environ.Env(
     SECURE_SSL_REDIRECT=(bool, False),
     CSRF_TRUSTED_ORIGINS=(list, []),
     BRAND_TITLE=(str, "CheckTick"),
-    BRAND_ICON_URL=(str, "/static/icons/checktick-default.svg"),
+    BRAND_ICON_URL=(str, ""),  # Empty string falls back to checktick.html component
     BRAND_THEME=(str, "checktick-light"),
     BRAND_THEME_PRESET_LIGHT=(
         str,
-        "wireframe",
+        "nord",
     ),  # Default daisyUI preset for checktick-light
     BRAND_THEME_PRESET_DARK=(
         str,
@@ -59,6 +59,16 @@ ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 DATABASES = {
     "default": env.db("DATABASE_URL"),
 }
+
+# Branding and theming settings
+BRAND_TITLE = env("BRAND_TITLE")
+BRAND_ICON_URL = env("BRAND_ICON_URL")
+BRAND_THEME = env("BRAND_THEME")
+BRAND_THEME_PRESET_LIGHT = env("BRAND_THEME_PRESET_LIGHT")
+BRAND_THEME_PRESET_DARK = env("BRAND_THEME_PRESET_DARK")
+BRAND_FONT_HEADING = env("BRAND_FONT_HEADING")
+BRAND_FONT_BODY = env("BRAND_FONT_BODY")
+BRAND_FONT_CSS_URL = env("BRAND_FONT_CSS_URL")
 
 INSTALLED_APPS = [
     # Use custom AdminConfig to enforce superuser-only access

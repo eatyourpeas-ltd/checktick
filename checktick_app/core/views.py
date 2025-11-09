@@ -58,6 +58,10 @@ def home(request):
     return render(request, "core/home.html")
 
 
+def hosting(request):
+    return render(request, "core/hosting.html")
+
+
 def healthz(request):
     """Lightweight health endpoint for load balancers and readiness probes.
     Returns 200 OK without auth or redirects.
@@ -126,6 +130,68 @@ def profile(request):
             ),
         )
         return redirect("surveys:org_users", org_id=org.id)
+    if request.method == "POST" and request.POST.get("action") == "reset_org_theme":
+        # Handle organization theme reset (org owners only)
+        primary_owned_org = Organization.objects.filter(owner=request.user).first()
+        if primary_owned_org:
+            org = primary_owned_org
+            org.default_theme = ""
+            org.theme_preset_light = ""
+            org.theme_preset_dark = ""
+            org.theme_light_css = ""
+            org.theme_dark_css = ""
+            org.save()
+            logger.info(
+                f"Organization theme reset to defaults by {request.user.username} (org_id={org.id})"
+            )
+            messages.success(
+                request, _("Organization theme reset to platform defaults.")
+            )
+        return redirect("core:profile")
+    if request.method == "POST" and request.POST.get("action") == "update_org_theme":
+        # Handle organization theme update (org owners only)
+        primary_owned_org = Organization.objects.filter(owner=request.user).first()
+        if primary_owned_org:
+            org = primary_owned_org
+            org.theme_preset_light = (
+                request.POST.get("org_theme_preset_light") or ""
+            ).strip()
+            org.theme_preset_dark = (
+                request.POST.get("org_theme_preset_dark") or ""
+            ).strip()
+
+            # Get custom CSS (optional - overrides preset if provided)
+            raw_light = request.POST.get("org_theme_light_css") or ""
+            raw_dark = request.POST.get("org_theme_dark_css") or ""
+
+            # Generate theme CSS from presets and custom overrides
+            if generate_theme_css_for_brand:
+                try:
+                    generated_light, generated_dark = generate_theme_css_for_brand(
+                        org.theme_preset_light or settings.BRAND_THEME_PRESET_LIGHT,
+                        org.theme_preset_dark or settings.BRAND_THEME_PRESET_DARK,
+                        raw_light,
+                        raw_dark,
+                    )
+                    org.theme_light_css = generated_light
+                    org.theme_dark_css = generated_dark
+                except Exception as e:
+                    logger.error(f"Failed to generate org theme CSS: {e}")
+                    # Fall back to normalizing raw CSS
+                    org.theme_light_css = normalize_daisyui_builder_css(raw_light)
+                    org.theme_dark_css = normalize_daisyui_builder_css(raw_dark)
+            else:
+                # Fallback if theme generation not available
+                org.theme_light_css = normalize_daisyui_builder_css(raw_light)
+                org.theme_dark_css = normalize_daisyui_builder_css(raw_dark)
+
+            org.save()
+            logger.info(
+                f"Organization theme updated by {request.user.username} (org_id={org.id}, "
+                f"light={org.theme_preset_light}, dark={org.theme_preset_dark})"
+            )
+            messages.success(request, _("Organization theme saved."))
+        return redirect("core:profile")
     if request.method == "POST" and request.POST.get("action") == "update_branding":
         if not request.user.is_superuser:
             return redirect("core:profile")
@@ -145,10 +211,12 @@ def profile(request):
 
             # Save theme presets
             sb.theme_preset_light = (
-                request.POST.get("theme_preset_light") or "wireframe"
+                request.POST.get("theme_preset_light")
+                or settings.BRAND_THEME_PRESET_LIGHT
             ).strip()
             sb.theme_preset_dark = (
-                request.POST.get("theme_preset_dark") or "business"
+                request.POST.get("theme_preset_dark")
+                or settings.BRAND_THEME_PRESET_DARK
             ).strip()
 
             # Get custom CSS (optional - overrides preset if provided)
@@ -174,6 +242,10 @@ def profile(request):
                 sb.theme_dark_css = normalize_daisyui_builder_css(raw_dark)
 
             sb.save()
+            logger.info(
+                f"Platform theme updated by {request.user.username} (superuser, "
+                f"theme={sb.default_theme}, light={sb.theme_preset_light}, dark={sb.theme_preset_dark})"
+            )
             messages.success(request, _("Project theme saved."))
         return redirect("core:profile")
     if SiteBranding is not None and sb is None:
@@ -416,45 +488,45 @@ DOC_CATEGORIES = {
         "order": 2,
         "icon": "✨",
     },
+    "self-hosting": {
+        "title": "Self-Hosting",
+        "order": 3,
+        "icon": "🖥️",
+    },
     "configuration": {
         "title": "Configuration",
-        "order": 3,
+        "order": 4,
         "icon": "⚙️",
     },
     "security": {
         "title": "Security",
-        "order": 4,
+        "order": 5,
         "icon": "🔒",
     },
     "data-governance": {
         "title": "Data Governance",
-        "order": 5,
+        "order": 6,
         "icon": "🗂️",
     },
     "api": {
         "title": "API & Development",
-        "order": 6,
+        "order": 7,
         "icon": "🔧",
     },
     "testing": {
         "title": "Testing",
-        "order": 7,
+        "order": 8,
         "icon": "🧪",
     },
     "internationalization": {
         "title": "Internationalization",
-        "order": 8,
+        "order": 9,
         "icon": "🌍",
     },
-    "advanced": {
-        "title": "Advanced Topics",
-        "order": 9,
-        "icon": "🚀",
-    },
-    "other": {
-        "title": "Other",
-        "order": 99,
-        "icon": "📄",
+    "getting-involved": {
+        "title": "Getting Involved",
+        "order": 10,
+        "icon": "🤝",
     },
 }
 
@@ -462,8 +534,43 @@ DOC_CATEGORIES = {
 # If a file isn't listed here, it will be auto-discovered
 # Format: "slug": {"file": "filename.md", "category": "category-key", "title": "Custom Title"}
 DOC_PAGE_OVERRIDES = {
-    "index": {"file": "README.md", "category": None},  # Special: index page
-    "contributing": {"file": REPO_ROOT / "CONTRIBUTING.md", "category": "other"},
+    "index": {
+        "file": "README.md",
+        "category": None,
+        "standalone": True,
+        "icon": "🏠",
+        "order": 0,
+        "title": "Welcome",
+    },  # Landing page
+    "getting-help": {
+        "file": "getting-help.md",
+        "category": None,
+        "standalone": True,
+        "icon": "💬",
+        "order": 0.5,
+        "title": "Getting Help",
+    },  # Standalone item
+    "contributing": {
+        "file": REPO_ROOT / "CONTRIBUTING.md",
+        "category": "getting-involved",
+    },
+    "themes": {
+        "file": "themes.md",
+        "category": "api",
+    },  # Developer guide for theme implementation
+    "FOLLOWUP_FEATURE_SUMMARY": {
+        "file": "FOLLOWUP_FEATURE_SUMMARY.md",
+        "category": "features",
+        "title": "Follow-up Questions & Bulk Import",
+    },
+    "documentation-system": {
+        "file": "documentation-system.md",
+        "category": "getting-involved",
+    },
+    "issues-vs-discussions": {
+        "file": "issues-vs-discussions.md",
+        "category": "getting-involved",
+    },
 }
 
 
@@ -524,6 +631,8 @@ def _discover_doc_pages():
             )
 
     # Auto-discover translation files in docs/languages/
+    # These are added to pages (accessible via URL) but NOT added to categorized (hidden from sidebar)
+    # i18n.md provides links to these pages
     languages_dir = DOCS_DIR / "languages"
     if languages_dir.exists():
         for md_file in sorted(languages_dir.glob("*.md")):
@@ -534,17 +643,47 @@ def _discover_doc_pages():
             if slug in pages:
                 continue
 
-            # Extract title from file (first H1) or use slug
-            title = _extract_title_from_file(md_file) or _doc_title(md_file.stem)
-
+            # Make page accessible via URL but don't add to sidebar navigation
             pages[slug] = md_file
-            categorized["internationalization"].append(
-                {
-                    "slug": slug,
-                    "title": title,
-                    "file": md_file,
-                }
-            )
+
+    # Hide old consolidated files from sidebar (accessible via URL only)
+    # These have been consolidated into comprehensive guides but remain accessible for backward compatibility
+    hidden_files = [
+        # Old data governance files (consolidated into data-governance.md)
+        "data-governance-overview",
+        "data-governance-policy",
+        "data-governance-implementation",
+        "data-governance-export",
+        "data-governance-retention",
+        "data-governance-security",
+        "data-governance-special-cases",
+        # Old encryption files (consolidated into encryption.md)
+        "encryption-quick-reference",
+        "encryption-individual-users",
+        "encryption-organisation-users",
+        # Old getting-started files (consolidated into getting-started.md)
+        "getting-started-account-types",
+        "getting-started-api",
+        # Old self-hosting files (consolidated into self-hosting.md)
+        "self-hosting-quickstart",
+        "self-hosting-production",
+        "self-hosting-database",
+        "self-hosting-configuration",
+        "self-hosting-scheduled-tasks",
+        "self-hosting-backup",
+        "self-hosting-themes",
+    ]
+
+    for hidden_slug in hidden_files:
+        hidden_path = DOCS_DIR / f"{hidden_slug}.md"
+        if hidden_path.exists() and hidden_slug not in pages:
+            # Make accessible via URL but don't add to sidebar
+            pages[hidden_slug] = hidden_path
+        # Remove from all categories if it was auto-discovered
+        for category_name in categorized.keys():
+            categorized[category_name] = [
+                p for p in categorized[category_name] if p.get("slug") != hidden_slug
+            ]
 
     return pages, categorized
 
@@ -554,8 +693,22 @@ def _infer_category(slug: str) -> str:
     slug_lower = slug.lower()
 
     # Getting Started
-    if any(x in slug_lower for x in ["getting-started", "quickstart", "setup"]):
+    if any(x in slug_lower for x in ["getting-started", "quickstart"]):
         return "getting-started"
+
+    # Self-Hosting (check before Configuration since some keywords overlap)
+    if any(
+        x in slug_lower
+        for x in [
+            "self-hosting",
+            "deployment",
+            "production",
+            "backup",
+            "database",
+            "scheduled-tasks",
+        ]
+    ):
+        return "self-hosting"
 
     # Features
     if any(
@@ -574,6 +727,7 @@ def _infer_category(slug: str) -> str:
             "prefilled-datasets-setup",
             "email",
             "notifications",
+            "oidc",
         ]
     ):
         return "configuration"
@@ -620,12 +774,22 @@ def _infer_category(slug: str) -> str:
     ):
         return "internationalization"
 
-    # Advanced
-    if any(x in slug_lower for x in ["advanced", "custom", "extend"]):
-        return "advanced"
+    # Getting Involved (contributing, documentation, etc.)
+    if any(
+        x in slug_lower
+        for x in [
+            "advanced",
+            "custom",
+            "extend",
+            "contributing",
+            "documentation-system",
+            "issues",
+        ]
+    ):
+        return "getting-involved"
 
-    # Default
-    return "other"
+    # Default to features for uncategorized docs
+    return "features"
 
 
 def _extract_title_from_file(file_path: Path) -> str | None:
@@ -649,10 +813,28 @@ def _nav_pages():
     """
     Return categorized navigation structure for documentation.
 
-    Returns a list of categories with their pages.
+    Returns a list of categories and standalone items with their pages.
     """
     nav = []
 
+    # Add standalone items from DOC_PAGE_OVERRIDES
+    standalone_items = []
+    for slug, config in DOC_PAGE_OVERRIDES.items():
+        if config.get("standalone"):
+            file_path = config["file"]
+            if isinstance(file_path, str):
+                file_path = DOCS_DIR / file_path
+            standalone_items.append(
+                {
+                    "slug": slug,
+                    "title": config.get("title") or _doc_title(slug),
+                    "icon": config.get("icon", ""),
+                    "order": config.get("order", 99),
+                    "standalone": True,
+                }
+            )
+
+    # Add categories with pages
     for cat_key, pages_list in DOC_CATEGORIES_WITH_PAGES.items():
         if not pages_list:  # Skip empty categories
             continue
@@ -666,10 +848,14 @@ def _nav_pages():
                 "icon": cat_info.get("icon", ""),
                 "order": cat_info.get("order", 99),
                 "pages": sorted(pages_list, key=lambda p: p["title"]),
+                "standalone": False,
             }
         )
 
-    # Sort categories by order
+    # Add standalone items to nav
+    nav.extend(standalone_items)
+
+    # Sort all items by order
     nav.sort(key=lambda c: c["order"])
 
     return nav

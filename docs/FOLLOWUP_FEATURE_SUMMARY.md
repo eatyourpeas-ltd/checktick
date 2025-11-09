@@ -1,10 +1,20 @@
-# Follow-up Question Feature - Markdown Import Implementation
+# Follow-up Questions & Bulk Import
 
-## Summary
+Complete guide to creating surveys with follow-up text inputs using markdown bulk import.
 
-Extended the markdown bulk import feature to support follow-up text inputs on question options. This completes the third method of creating questions with follow-up text, alongside the API and webapp builder.
+## Overview
 
-## Syntax
+CheckTick supports follow-up text inputs on question options through three methods:
+
+1. **API** - Programmatically create surveys with follow-ups
+2. **Web Builder** - Use the visual survey builder interface
+3. **Markdown Import** - Bulk import surveys from markdown files (this guide)
+
+This guide focuses on the markdown import syntax for adding follow-up questions to your surveys.
+
+## Quick Start
+
+For a complete guide to bulk importing surveys, see the [Import Documentation](import.md).
 
 Follow-up text inputs are added using indented lines starting with `+` immediately after an option:
 

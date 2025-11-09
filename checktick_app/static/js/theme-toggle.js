@@ -10,8 +10,8 @@
   const presetsMeta = document.querySelector('meta[name="theme-presets"]');
   const presets = presetsMeta
     ? presetsMeta.content.split(",")
-    : ["wireframe", "business"];
-  const LIGHT_PRESET = presets[0] || "wireframe";
+    : ["nord", "business"];
+  const LIGHT_PRESET = presets[0] || "nord";
   const DARK_PRESET = presets[1] || "business";
 
   function normalize(pref) {

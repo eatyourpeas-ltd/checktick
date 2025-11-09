@@ -12,8 +12,8 @@
     var presetsMeta = document.querySelector('meta[name="theme-presets"]');
     var presets = presetsMeta
       ? presetsMeta.content.split(",")
-      : ["wireframe", "business"];
-    var LIGHT_PRESET = presets[0] || "wireframe";
+      : ["nord", "business"];
+    var LIGHT_PRESET = presets[0] || "nord";
     var DARK_PRESET = presets[1] || "business";
 
     function themeToPreset(t) {
@@ -25,8 +25,7 @@
     }
 
     function applyTheme(t) {
-      var preset = themeToPreset(t);
-      document.documentElement.setAttribute("data-theme", preset);
+      document.documentElement.setAttribute("data-theme", t);
       try {
         localStorage.setItem(storageKey, t);
       } catch (e) {}

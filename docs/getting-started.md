@@ -1,421 +1,790 @@
-# Getting started
+# Getting Started with CheckTick
 
-This guide gives you a quick tour of the project, how to run it with Docker, and where to go next.
+Welcome to CheckTick! This guide will help you get started with creating surveys, understanding account types, and using the API.
+
+## Table of Contents
+
+- [What is CheckTick?](#what-is-checktick)
+- [Account Types](#account-types) - Individual vs Organization
+- [Quick Start](#quick-start) - Create your first survey
+- [Using the API](#using-the-api) - Programmatic access
+- [Next Steps](#next-steps)
+
+---
 
 ## What is CheckTick?
 
-CheckTick is a secure, server-rendered survey platform built with Django and DRF. It focuses on:
+CheckTick is a secure, privacy-focused survey platform designed for:
+- Healthcare research
+- Clinical audits
+- Patient feedback
+- Quality improvement projects
+- Educational assessments
 
-- Strong security by default (CSP, CSRF, HSTS, rate limits, audit logs)
-- Simple SSR UI with Tailwind + DaisyUI
-- Fine-grained permissions for organizations, surveys, and memberships
-- A drag-and-drop survey builder and API for programmatic seeding
+### Key Features
 
-## Prerequisites
+- **Secure**: Optional encryption, audit trails, GDPR-compliant
+- **Flexible**: Custom questions, conditional logic, multi-language
+- **Data governance**: Automatic retention policies, access controls
+- **API access**: Programmatic survey creation and data export
+- **Self-hosted**: Run on your own infrastructure (optional)
 
-- Docker and Docker Compose
+---
 
-## Clone and run
+## Account Types
 
-### Quick Start (Docker Compose)
+CheckTick offers two account types, each suited to different use cases.
+
+### Individual Accounts
+
+**What is it?**
+A personal account for solo users.
+
+**Best for**:
+- Individual researchers
+- Solo practitioners
+- Personal projects
+- Students
+- Small-scale surveys
+
+**Features**:
+- Create unlimited surveys
+- Collect unlimited responses (subject to server limits)
+- Optional encryption (personal passphrase)
+- Full API access
+- Export data (CSV, JSON, Excel)
+
+**Limitations**:
+- No team collaboration (can't assign other users)
+- Single owner per survey
+- No organization-level encryption
+- No shared survey groups
+
+**Pricing**: Free (for self-hosted) or see hosted pricing
+
+---
+
+### Organization Accounts
+
+**What is it?**
+A team account for groups, organizations, or institutions.
+
+**Best for**:
+- Healthcare organizations
+- Research teams
+- Educational institutions
+- Clinical departments
+- Multi-user projects
+
+**Features**:
+- Everything in Individual accounts, plus:
+- **Team collaboration**: Multiple users with different roles
+- **Organization-level encryption**: Centralized data protection
+- **Shared survey groups**: Organize surveys by project/department
+- **User management**: Assign owners, editors, viewers, data custodians
+- **Centralized audit logs**: Track all team activity
+- **Group ownership**: Surveys can be owned by organization
+
+**User roles in organizations**:
+
+| Role | Create Surveys | View Data | Download Data | Manage Users |
+|------|---------------|-----------|---------------|--------------|
+| **Organization Owner** | ✅ | ✅ | ✅ | ✅ |
+| **Survey Owner** | ✅ | ✅ (own surveys) | ✅ (own surveys) | ✅ (own surveys) |
+| **Editor** | ✅ (if permitted) | ❌ | ❌ | ❌ |
+| **Viewer** | ❌ | ❌ | ❌ | ❌ |
+| **Data Custodian** | ❌ | ❌ | ✅ (assigned surveys) | ❌ |
+
+**Pricing**: Contact for organization pricing
+
+---
+
+### Choosing Between Individual and Organization
+
+| Factor | Individual | Organization |
+|--------|-----------|-------------|
+| **Team size** | Just you | 2+ people |
+| **Data sharing** | Manual export/sharing | Built-in collaboration |
+| **Access control** | Single owner | Role-based permissions |
+| **Encryption** | Personal passphrase | Organization-wide passphrase |
+| **Audit requirements** | Basic logs | Comprehensive audit trails |
+| **Cost** | Free (self-hosted) | Organization pricing |
+
+**Can I upgrade later?**
+Yes, you can convert an individual account to an organization account. Your existing surveys will be migrated.
+
+---
+
+## Quick Start
+
+### Step 1: Create an Account
+
+1. Go to your CheckTick instance (e.g., `https://checktick.example.com`)
+2. Click "Sign Up"
+3. Choose account type:
+   - **Individual**: Just fill in your details
+   - **Organization**: Provide organization name and details
+4. Verify your email
+5. Log in
+
+### Step 2: Create Your First Survey
+
+1. Click "Create Survey" button
+2. Enter survey details:
+   - **Name**: E.g., "Patient Satisfaction Survey"
+   - **Description**: Brief overview of purpose
+   - **Survey Type**: Choose template or start from scratch
+
+3. Add questions:
+   - Click "Add Question"
+   - Choose question type:
+     - Text (short answer)
+     - Text Area (long answer)
+     - Multiple Choice
+     - Checkboxes
+     - Dropdown
+     - Number
+     - Date
+     - Scale (1-5, 1-10, etc.)
+     - File Upload
+   - Set question options:
+     - Required vs. optional
+     - Help text
+     - Conditional logic (show if...)
+
+4. Organize questions:
+   - Drag and drop to reorder
+   - Group related questions into sections
+   - Add page breaks for multi-page surveys
+
+5. Configure settings:
+   - **Access**: Public, private, or link-only
+   - **Timing**: Start and end dates
+   - **Responses**: Allow multiple submissions or one per user
+   - **Thank you message**: Custom completion message
+
+6. Preview your survey:
+   - Click "Preview" to test
+   - Submit test responses
+   - Verify logic and flow
+
+7. Publish:
+   - Click "Publish Survey"
+   - Copy the survey link
+   - Share with participants
+
+### Step 3: Collect Responses
+
+**Sharing your survey**:
+
+- **Public link**: Share URL directly
+- **Email invitation**: Send personalized invitations
+- **QR code**: Generate QR code for print materials
+- **Embed**: Embed in website or portal
+
+**Monitoring progress**:
+
+- View response count on dashboard
+- Check completion rate
+- Monitor daily submissions
+- Set up email notifications for new responses
+
+### Step 4: View and Analyze Data
+
+1. Go to survey dashboard
+2. Click "View Responses"
+3. See response summary:
+   - Total responses
+   - Completion rate
+   - Average time to complete
+   - Response timeline chart
+
+4. Individual responses:
+   - Browse responses one by one
+   - Filter and search
+   - Delete individual responses (if needed)
+
+5. Aggregate data:
+   - View charts and graphs
+   - See response distribution
+   - Calculate averages and totals
+
+### Step 5: Export Data
+
+1. Close survey (required before export):
+   - Click "Close Survey"
+   - Confirm closure (responses locked)
+
+2. Click "Export Data"
+3. Choose format:
+   - **CSV**: For Excel, R, Python, SPSS
+   - **JSON**: For programmatic processing
+   - **Excel**: Formatted workbook with multiple sheets
+
+4. Enter purpose (data governance requirement):
+   - E.g., "Annual report analysis"
+
+5. If encryption enabled:
+   - Enter passphrase to decrypt
+
+6. Download file
+7. Store securely (see Data Governance guide)
+
+---
+
+## Using the API
+
+CheckTick provides a comprehensive REST API for programmatic access.
+
+### Why Use the API?
+
+- **Automation**: Create surveys programmatically
+- **Integration**: Connect to other systems
+- **Batch operations**: Create multiple surveys at once
+- **Custom workflows**: Build custom data collection tools
+- **Data export**: Automate data downloads
+- **Analysis pipelines**: Feed data directly to analysis tools
+
+### API Authentication
+
+CheckTick uses **API tokens** for authentication.
+
+#### Creating an API Token
+
+1. Log in to CheckTick
+2. Go to Account Settings → API
+3. Click "Create API Token"
+4. Name your token (e.g., "Python script", "R analysis")
+5. Copy token (shown only once!)
+6. Store securely (password manager, environment variable)
+
+**Example token**: `ct_1234567890abcdef1234567890abcdef`
+
+**Security notes**:
+- Never commit tokens to git
+- Don't share tokens
+- Rotate tokens periodically
+- Revoke tokens when no longer needed
+
+#### Using Your Token
+
+Include token in `Authorization` header:
 
 ```bash
-git clone <your-repo-url>
-cd checktick
-docker compose up --build
+curl -H "Authorization: Token ct_your_token_here" \
+     https://checktick.example.com/api/v1/surveys/
 ```
 
-### Development Environment Script
+Or in Python:
 
-For a better development experience, use the provided startup script:
+```python
+import requests
+
+headers = {
+    'Authorization': 'Token ct_your_token_here'
+}
+
+response = requests.get(
+    'https://checktick.example.com/api/v1/surveys/',
+    headers=headers
+)
+```
+
+### API Endpoints
+
+#### List Surveys
 
 ```bash
-./s/dev
+GET /api/v1/surveys/
 ```
 
-This enhanced script will:
-
-- Build the Docker image (Python + Poetry + Node for CSS build)
-- Start Postgres and the Django app in detached mode
-- Run migrations and Tailwind build automatically
-- Serve the app on <http://localhost:8000>
-- Provide helpful status updates and tips
-
-## Environment Variables
-
-CheckTick uses environment variables for configuration. For local development with Docker Compose, most variables are pre-configured in `docker-compose.yml` with sensible defaults.
-
-### External Dataset API (Optional)
-
-For features that fetch external datasets (e.g., hospitals, NHS trusts), configure these optional variables:
-
-**In `docker-compose.yml`** (already configured for local development):
-
-```yaml
-environment:
-  EXTERNAL_DATASET_API_URL: ${EXTERNAL_DATASET_API_URL:-https://api.rcpch.ac.uk/nhs-organisations/v1}
-  EXTERNAL_DATASET_API_KEY: ${EXTERNAL_DATASET_API_KEY:-}
+**Response**:
+```json
+{
+  "count": 5,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "uuid-1234",
+      "name": "Patient Satisfaction Survey",
+      "slug": "patient-satisfaction-survey",
+      "status": "published",
+      "created_at": "2025-01-15T10:00:00Z",
+      "response_count": 23
+    }
+  ]
+}
 ```
 
-**For production deployment** (e.g., Northflank, Heroku), set these environment variables:
-
-- `EXTERNAL_DATASET_API_URL=https://api.rcpch.ac.uk/nhs-organisations/v1`
-- `EXTERNAL_DATASET_API_KEY=` (leave empty for public API)
-
-The RCPCH NHS Organisations API is a public API and doesn't require an API key. If you're using a different API provider, you can set your custom URL and API key.
-
-### Other Environment Variables
-
-For local development, all other variables (database, secrets, etc.) are pre-configured in `docker-compose.yml`. For production deployment, you'll need to set:
-
-- `DATABASE_URL` - PostgreSQL connection string
-- `SECRET_KEY` - Django secret key (generate with `python -c "import secrets; print(secrets.token_urlsafe(50))"`)
-- `ALLOWED_HOSTS` - Comma-separated list of allowed hostnames
-- `DEBUG` - Set to `False` in production
-
-See `.env.example` for a complete list of available environment variables.
-
-## Development Environment Options
-
-````
-
-### For VS Code Users
-
-You have three options for VS Code integration:
-
-#### Option 1: Local Virtual Environment (Best IntelliSense)
-
-Develop with a local Python environment for the best IDE experience:
-
-1. **Prerequisites:**
-   - pyenv (for Python version management)
-   - Poetry will be installed automatically
-
-2. **Setup:**
-
-   ```bash
-   # Set up local virtual environment with all dependencies
-   ./s/setup-local
-
-   # Configure VS Code to use the local environment
-   ./s/configure-vscode-local
-   ```
-
-3. **Reload VS Code window** (`Cmd+Shift+P` → "Developer: Reload Window")
-
-**Benefits:**
-
-- **Full IntelliSense support** - Complete import resolution, type hints, and autocomplete
-- All Python packages directly accessible to VS Code language server
-- Keep your host Git setup and credentials
-- Native VS Code performance
-- Best debugging experience
-
-**Trade-offs:**
-
-- Requires local Python environment setup
-- Need to keep local dependencies in sync with Docker
-- Slightly more complex initial setup
-
-**When to use:** When you want the best possible IDE experience with full IntelliSense support.
-
-#### Option 2: Dev Containers (Full Container Development)
-
-Use the provided Dev Container configuration to develop entirely within the container:
-
-1. **Prerequisites:**
-   - Install the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
-
-2. **Usage:**
-
-   ```bash
-   # Start containers
-   ./s/dev
-
-   # In VS Code: Cmd+Shift+P → "Dev Containers: Reopen in Container"
-   ```
-
-**Benefits:**
-
-- Complete development environment in container
-- All Python dependencies pre-installed
-- Consistent environment across team members
-- No local Python setup required
-
-**When to use:** When you prefer complete container isolation and don't mind container setup complexity.
-
-#### Option 3: Docker Python Integration (Hybrid Development)
-
-Develop on your host machine while using the Docker container's Python environment:
-
-1. **Start your development environment:**
-
-   ```bash
-   ./s/dev
-   ```
-
-2. **Configure VS Code Python interpreter:**
-   - Open Command Palette (`Cmd+Shift+P`)
-   - Run `Python: Select Interpreter`
-   - Choose `./docker-python` from the list
-   - If not visible, select "Enter interpreter path..." and browse to `./docker-python`
-
-3. **Install required VS Code extensions:**
-
-   ```bash
-   # Install these extensions if not already installed:
-   # - Python (ms-python.python)
-   # - Pylance (ms-python.vscode-pylance)
-   # - Black Formatter (ms-python.black-formatter)
-   # - Ruff (charliermarsh.ruff)
-   ```
-
-4. **Create VS Code settings** (if not already present):
-
-   Create or update `.vscode/settings.json` in your project root:
-
-   ```json
-   {
-     "python.pythonPath": "./docker-python",
-     "python.defaultInterpreterPath": "./docker-python",
-     "python.linting.enabled": false,
-     "python.terminal.activateEnvironment": false,
-     "python.analysis.extraPaths": ["./"],
-     "python.analysis.autoSearchPaths": true,
-     "python.analysis.useLibraryCodeForTypes": true,
-     "python.analysis.autoImportCompletions": true,
-     "pylance.insidersChannel": "off",
-     "ruff.path": ["./docker-ruff"],
-     "ruff.interpreter": ["./docker-python"],
-     "isort.path": ["./docker-isort"],
-     "isort.interpreter": ["./docker-python"],
-     "black-formatter.path": ["./docker-black"],
-     "black-formatter.interpreter": ["./docker-python"],
-     "[python]": {
-       "editor.defaultFormatter": "ms-python.black-formatter",
-       "editor.formatOnSave": true,
-       "editor.codeActionsOnSave": {
-         "source.organizeImports": "explicit",
-         "source.fixAll.ruff": "explicit"
-       }
-     },
-     "[django-html]": {
-       "editor.defaultFormatter": null,
-       "editor.formatOnSave": false
-     },
-     "[html]": {
-       "editor.defaultFormatter": null,
-       "editor.formatOnSave": false
-     }
-   }
-   ```
-
-5. **Optional: Reload VS Code window** (`Cmd+Shift+P` → "Developer: Reload Window")
-
-**Benefits:**
-
-- Keep your host Git setup and credentials
-- Native VS Code performance
-- All your extensions work normally
-- Python execution uses container environment
-
-**How it works:**
-
-- VS Code runs on your host (fast, native experience)
-- Python/linting/formatting execute in Docker (consistent environment)
-- File editing happens on host with instant sync via volume mounts
-
-**Technical Details:**
-
-This approach uses Docker wrapper scripts (`docker-python`, `docker-black`, `docker-ruff`, etc.) that VS Code calls instead of local Python tools. The project includes:
-
-- **Docker wrapper scripts**: Executable files that forward commands to the container
-- **Pre-configured VS Code settings**: Located in `.vscode/settings.json` (see step 4 above)
-
-The settings configure VS Code to:
-
-- Point Python interpreter to `./docker-python`
-- Configure Black formatter to use `./docker-black`
-- Configure Ruff linting to use `./docker-ruff`
-- Configure import sorting to use `./docker-isort`
-- Enable format-on-save and organize imports
-
-These wrappers automatically execute commands inside your running Docker container, so you get the benefits of the containerized environment without the complexity of dev containers.
-
-**Note:** If you're setting up a fresh clone, the `.vscode/settings.json` file should already be included in the repository. If it's missing or you want to customize it, use the configuration shown in step 4 above.
-
-### Switching Between Development Approaches
-
-You can easily switch between different development approaches using the provided configuration scripts:
+#### Get Survey Details
 
 ```bash
-# Switch to local virtual environment (best IntelliSense)
-./s/configure-vscode-local
-
-# Switch to Docker wrapper approach (hybrid)
-./s/configure-vscode-docker
-
-# Start/restart the Docker environment
-./s/dev
+GET /api/v1/surveys/{survey_slug}/
 ```
 
-After switching approaches:
+**Response**:
+```json
+{
+  "id": "uuid-1234",
+  "name": "Patient Satisfaction Survey",
+  "description": "Collecting patient feedback",
+  "status": "published",
+  "created_at": "2025-01-15T10:00:00Z",
+  "questions": [
+    {
+      "id": "q1",
+      "text": "How satisfied are you?",
+      "type": "scale",
+      "required": true,
+      "options": {
+        "min": 1,
+        "max": 5
+      }
+    }
+  ]
+}
+```
 
-1. Reload your VS Code window (`Cmd+Shift+P` → "Developer: Reload Window")
-2. Verify the Python interpreter is correct (`Cmd+Shift+P` → "Python: Select Interpreter")
-3. Test that imports and formatting work as expected
-
-**Configuration Backups:** The configuration scripts automatically backup your existing `.vscode/settings.json` to `.vscode/settings.json.backup` before making changes, so you can always revert if needed.
-
-### Which VS Code Approach Should You Choose?
-
-**Choose Local Virtual Environment if you:**
-
-- Want the **best possible IntelliSense** with full import resolution and type hints
-- Do lots of exploratory coding or refactoring where autocomplete is crucial
-- Prefer immediate IDE feedback without any Docker overhead
-- Don't mind managing a local Python environment alongside Docker
-
-**Choose Dev Containers if you:**
-
-- Want a completely isolated development environment
-- Are on a team where everyone should have identical setups
-- Don't mind setting up Git credentials in the container
-- Prefer everything contained within Docker
-
-**Choose Docker Python Integration if you:**
-
-- Want a good balance between IDE features and environment consistency
-- Prefer to keep your existing host Git setup and credentials
-- Want to use all your existing VS Code extensions without reconfiguration
-- Are okay with slightly limited IntelliSense compared to local virtual environment
-
-#### Quick VS Code Startup
-
-For either approach, you can automatically open VS Code after starting containers:
+#### Create Survey
 
 ```bash
-# Option 1: Using the --code flag
-./s/dev --code
+POST /api/v1/surveys/
+Content-Type: application/json
 
-# Option 2: Using environment variable
-OPEN_VSCODE=true ./s/dev
+{
+  "name": "New Survey",
+  "description": "Survey description",
+  "questions": [
+    {
+      "text": "What is your name?",
+      "type": "text",
+      "required": true
+    },
+    {
+      "text": "How satisfied are you?",
+      "type": "scale",
+      "required": true,
+      "options": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Very dissatisfied",
+          "5": "Very satisfied"
+        }
+      }
+    }
+  ]
+}
 ```
 
-### For Non-VS Code Users
+**Response**: Created survey object
 
-Simply use the standard startup command:
+#### Submit Response
 
 ```bash
-./s/dev
+POST /api/v1/surveys/{survey_slug}/responses/
+Content-Type: application/json
+
+{
+  "data": {
+    "q1_name": "John Smith",
+    "q2_satisfaction": 5
+  }
+}
 ```
 
-This will start all containers without opening any editor, giving you full control over your development environment.
+**Response**: Created response object
 
-### Script Help
-
-View all available options:
+#### Export Data
 
 ```bash
-./s/dev --help
+GET /api/v1/surveys/{survey_slug}/export/?format=csv
 ```
 
-Both approaches will:
+**Parameters**:
+- `format`: `csv`, `json`, or `xlsx`
+- `purpose`: Required - reason for export
 
-- Build the Docker image (Python + Poetry + Node for CSS build)
-- Start Postgres and the Django app
-- Run migrations and Tailwind build automatically
-- Serve the app on <http://localhost:8000>
+**Response**: File download (CSV, JSON, or Excel)
 
-## Login and create an account
+**Note**: Survey must be closed before export.
 
-- Visit <http://localhost:8000>
-- Click Sign up to create a user
-- From Profile, you can “Upgrade to organization” to create an organization you own.
+### API Examples
 
-## Development workflow
+#### Python: Create and Publish Survey
 
-- CSS: Tailwind/DaisyUI builds at startup. If you edit CSS or templates frequently, you can run a local Node watcher or re-run `npm run build:css` inside the container.
-- Tests: Run the test suite inside the container:
+```python
+import requests
+
+API_BASE = 'https://checktick.example.com/api/v1'
+TOKEN = 'ct_your_token_here'
+
+headers = {
+    'Authorization': f'Token {TOKEN}',
+    'Content-Type': 'application/json'
+}
+
+# Create survey
+survey_data = {
+    'name': 'Diabetes Patient Feedback',
+    'description': 'Collecting feedback from diabetes clinic',
+    'questions': [
+        {
+            'text': 'What is your age?',
+            'type': 'number',
+            'required': True
+        },
+        {
+            'text': 'How long have you had diabetes?',
+            'type': 'text',
+            'required': True
+        },
+        {
+            'text': 'Rate your clinic experience (1-5)',
+            'type': 'scale',
+            'required': True,
+            'options': {
+                'min': 1,
+                'max': 5
+            }
+        }
+    ]
+}
+
+response = requests.post(
+    f'{API_BASE}/surveys/',
+    json=survey_data,
+    headers=headers
+)
+
+survey = response.json()
+print(f"Survey created: {survey['slug']}")
+
+# Publish survey
+requests.post(
+    f'{API_BASE}/surveys/{survey["slug"]}/publish/',
+    headers=headers
+)
+
+print(f"Survey URL: https://checktick.example.com/s/{survey['slug']}")
+```
+
+#### Python: Export Survey Data
+
+```python
+import requests
+import pandas as pd
+from io import StringIO
+
+API_BASE = 'https://checktick.example.com/api/v1'
+TOKEN = 'ct_your_token_here'
+
+headers = {
+    'Authorization': f'Token {TOKEN}'
+}
+
+# Close survey first
+survey_slug = 'patient-satisfaction-survey'
+
+requests.post(
+    f'{API_BASE}/surveys/{survey_slug}/close/',
+    headers=headers
+)
+
+# Export data
+params = {
+    'format': 'csv',
+    'purpose': 'Data analysis for quality improvement report'
+}
+
+response = requests.get(
+    f'{API_BASE}/surveys/{survey_slug}/export/',
+    params=params,
+    headers=headers
+)
+
+# Load into pandas
+df = pd.read_csv(StringIO(response.text))
+print(df.head())
+print(f"Total responses: {len(df)}")
+```
+
+#### R: Fetch and Analyze Data
+
+```r
+library(httr)
+library(jsonlite)
+library(dplyr)
+
+API_BASE <- 'https://checktick.example.com/api/v1'
+TOKEN <- 'ct_your_token_here'
+
+# Export data
+response <- GET(
+  paste0(API_BASE, '/surveys/patient-satisfaction-survey/export/'),
+  query = list(
+    format = 'json',
+    purpose = 'Statistical analysis'
+  ),
+  add_headers(Authorization = paste('Token', TOKEN))
+)
+
+data <- content(response, as = 'parsed')
+
+# Convert to dataframe
+df <- data$responses %>%
+  lapply(function(r) as.data.frame(r$data)) %>%
+  bind_rows()
+
+# Analyze
+summary(df)
+mean(df$satisfaction_rating)
+```
+
+#### Bash: Automated Survey Creation
 
 ```bash
-docker compose exec web python -m pytest -q
+#!/bin/bash
+
+API_BASE="https://checktick.example.com/api/v1"
+TOKEN="ct_your_token_here"
+
+# Create survey
+curl -X POST "$API_BASE/surveys/" \
+  -H "Authorization: Token $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Weekly Audit Survey",
+    "questions": [
+      {
+        "text": "Number of patients seen",
+        "type": "number",
+        "required": true
+      },
+      {
+        "text": "Any incidents?",
+        "type": "boolean",
+        "required": true
+      }
+    ]
+  }' | jq '.'
 ```
 
-## Next steps
+### API Rate Limits
 
-- Read Surveys to create an organization, survey, and content.
-- Read Branding and Theme Settings to customize the look and feel.
-- See Getting Started with the API for API usage and authentication.
+To prevent abuse, the API has rate limits:
 
-## Troubleshooting
+- **Individual accounts**: 100 requests/hour
+- **Organization accounts**: 1,000 requests/hour
 
-### Container Issues
-
-If the web service fails on first run, try rebuilding:
-
-```bash
-docker compose down
-docker compose up --build
+Rate limit headers in response:
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1642589400
 ```
 
-Or using the development script:
-
-```bash
-docker compose down
-./s/dev
+If rate limit exceeded:
+```json
+{
+  "error": "Rate limit exceeded",
+  "retry_after": 3600
+}
 ```
 
-### Docker Python Integration Issues
+### API Versioning
 
-If you're using the Docker Python integration and encounter issues:
+CheckTick uses URL versioning:
+- Current version: `/api/v1/`
+- Future versions will use `/api/v2/`, etc.
 
-1. **Python interpreter not found**: Ensure containers are running:
+Old API versions are supported for at least 12 months after new version release.
 
-   ```bash
-   docker ps  # Should show checktick-web-1 and checktick-db-1 running
-   ./s/dev    # Restart if needed
-   ```
+### API Documentation
 
-2. **Import errors or linting issues**: Reload VS Code window:
-   - `Cmd+Shift+P` → "Developer: Reload Window"
-   - Or restart VS Code completely
+Full API documentation available at:
+- **Interactive docs**: `https://checktick.example.com/api/docs/`
+- **OpenAPI spec**: `https://checktick.example.com/api/schema/`
+- **PDF guide**: See [API Documentation](api.md)
 
-3. **"ENOENT" errors**: Usually means VS Code is trying to use host Python instead of Docker:
-   - Check that Python interpreter is set to `./docker-python`
-   - Verify `.vscode/settings.json` exists with correct configuration
-   - Reload VS Code window after changes
+---
 
-4. **Wrapper scripts not executable**: Make them executable:
+## Next Steps
 
-   ```bash
-   chmod +x docker-python docker-black docker-ruff docker-isort
-   ```
+### Tutorials
 
-### VS Code Not Opening
+- [Creating Surveys](surveys.md) - Detailed survey creation guide
+- [Data Governance](data-governance.md) - Understanding data protection
+- [Encryption](encryption.md) - Setting up data encryption
+- [Collections](collections.md) - Organizing surveys into groups
+- [API Guide](using-the-api.md) - Comprehensive API tutorial
 
-If you use `./s/dev --code` but VS Code doesn't open:
+### Advanced Features
 
-1. **Check VS Code installation**: Ensure VS Code is installed and the `code` command is available:
+- **Conditional Logic**: Show questions based on previous answers
+- **Prefilled Data**: Import datasets for prepopulated surveys
+- **Multi-language**: Create surveys in multiple languages
+- **Email Notifications**: Get notified of new responses
+- **Custom Themes**: Customize survey appearance
+- **OIDC SSO**: Single sign-on integration
+- **Webhooks**: Real-time response notifications
 
-   ```bash
-   code --version
-   ```
+### Self-Hosting
 
-2. **Install VS Code CLI**: If the `code` command isn't available, install it:
-   - **macOS/Linux**: Open VS Code → Command Palette (Cmd/Ctrl+Shift+P) → "Shell Command: Install 'code' command in PATH"
-   - **Windows**: Usually installed automatically with VS Code
+Want to run CheckTick on your own infrastructure?
 
-3. **Alternative**: Start containers without VS Code integration:
+- [Self-Hosting Quickstart](self-hosting-quickstart.md)
+- [Production Deployment](self-hosting-production.md)
+- [Database Configuration](self-hosting-database.md)
+- [Backup and Restore](self-hosting-backup.md)
 
-   ```bash
-   ./s/dev
-   ```
+### Getting Help
 
-### Development Script Help
+- **Documentation**: [docs.checktick.example.com](https://github.com/eatyourpeas/checktick/tree/main/docs)
+- **GitHub Issues**: [Report bugs or request features](https://github.com/eatyourpeas/checktick/issues)
+- **Discussions**: [Ask questions](https://github.com/eatyourpeas/checktick/discussions)
+- **Email**: support@checktick.example.com (for hosted instances)
 
-For all available options and troubleshooting:
+---
 
-```bash
-./s/dev --help
-```
+## Common Workflows
+
+### Workflow 1: Simple Patient Feedback Survey
+
+1. Create individual account
+2. Create survey with 5-10 questions
+3. Generate QR code
+4. Print QR code on posters in clinic
+5. Patients scan and complete survey
+6. After 1 month, close survey
+7. Export CSV data
+8. Analyze in Excel/SPSS
+9. Delete survey after analysis complete
+
+**Time**: 30 minutes setup, 5 minutes export
+
+---
+
+### Workflow 2: Multi-Site Research Study
+
+1. Create organization account
+2. Add team members (researchers at each site)
+3. Create survey with research questions
+4. Enable organization encryption
+5. Share survey link with each site
+6. Sites collect responses
+7. Principal investigator exports data monthly
+8. Data manager analyzes centrally
+9. After study completion, extend retention for 2 years
+
+**Time**: 2 hours setup, 30 minutes monthly export
+
+---
+
+### Workflow 3: Automated Weekly Audit
+
+1. Create API token
+2. Write Python script to create survey weekly
+3. Schedule script with cron
+4. Clinicians receive email with survey link
+5. Complete audit survey each week
+6. Script exports data Friday night
+7. Automated report generated and emailed
+8. Old surveys deleted after 6 months
+
+**Time**: 4 hours initial setup, fully automated thereafter
+
+---
+
+## Frequently Asked Questions
+
+### Is CheckTick free?
+
+- **Self-hosted**: Yes, completely free and open-source
+- **Hosted**: Contact for pricing
+
+### How many responses can I collect?
+
+- No hard limit
+- Depends on server capacity
+- Typical installations handle 100,000+ responses without issues
+
+### Is my data secure?
+
+- Optional encryption (AES-256)
+- Audit trails for all data access
+- Automatic data retention policies
+- GDPR and NHS compliance features
+- Regular security updates
+
+### Can I use CheckTick for clinical data?
+
+Yes, CheckTick is designed for healthcare:
+- Meets NHS Data Security and Protection Toolkit requirements
+- Supports Caldicott Principles
+- GDPR-compliant
+- Optional encryption for sensitive data
+- Research ethics committee approved (at many institutions)
+
+**Important**: You are responsible for ensuring your specific use case complies with applicable regulations.
+
+### Can I migrate from SurveyMonkey/Google Forms/etc.?
+
+Yes! While there's no automatic migration tool:
+1. Export your old survey questions
+2. Recreate survey structure in CheckTick
+3. Import historical data via API (if needed)
+
+### Can I customize the look of surveys?
+
+Yes:
+- Custom themes (colors, fonts, logos)
+- Custom CSS (for self-hosted instances)
+- White-label options
+- Embedding in your own website
+
+See [Themes Guide](themes.md)
+
+### Does CheckTick work on mobile?
+
+Yes, fully responsive:
+- Surveys work on any device
+- Touch-friendly interfaces
+- QR code scanning
+- Mobile-optimized forms
+
+### Can I schedule survey availability?
+
+Yes:
+- Set start and end dates
+- Schedule automatic publication
+- Automatic closure after end date
+- Timezone support
+
+### What languages are supported?
+
+CheckTick supports 13 languages:
+- English, Arabic, Chinese, Welsh, German, Spanish, French, Hindi, Italian, Polish, Portuguese, Urdu
+
+See [Internationalization Guide](i18n.md)
+
+---
+
+## Summary
+
+You now know:
+- ✅ The difference between Individual and Organization accounts
+- ✅ How to create your first survey
+- ✅ How to collect and export data
+- ✅ How to use the API for automation
+- ✅ Where to find more help
+
+**Ready to get started?**
+
+1. Create an account
+2. Build your first survey
+3. Share with participants
+4. Analyze your data
+
+Welcome to CheckTick! 🎉

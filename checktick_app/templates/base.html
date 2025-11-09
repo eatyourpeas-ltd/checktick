@@ -1,7 +1,7 @@
 {% load static %}
 {% load i18n %}
 <!doctype html>
-<html lang="en" data-theme="{{ brand.theme_preset_light|default:'wireframe' }}">
+<html lang="en" data-theme="{{ brand.theme_name }}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -19,24 +19,24 @@
     {% if brand.theme_css_light or brand.theme_css_dark %}
     <style>
       {% if brand.theme_css_light %}
-      [data-theme="{{ brand.theme_preset_light|default:'wireframe' }}"] {
+      [data-theme="checktick-light"] {
         {{ brand.theme_css_light|safe }}
       }
       {% endif %}
       {% if brand.theme_css_dark %}
-      [data-theme="{{ brand.theme_preset_dark|default:'business' }}"] {
+      [data-theme="checktick-dark"] {
         {{ brand.theme_css_dark|safe }}
       }
       {% endif %}
     </style>
     {% endif %}
-    <meta name="theme-presets" content="{{ brand.theme_preset_light|default:'wireframe' }},{{ brand.theme_preset_dark|default:'business' }}">
+    <meta name="theme-presets" content="{{ brand.theme_preset_light }},{{ brand.theme_preset_dark }}">
     <meta name="checktick-theme" content="{{ brand.theme_name|default:'checktick-light' }}">
     <style>
       /* Show the appropriate brand icon depending on active theme */
       .theme-dark-icon { display: none; }
-      [data-theme="{{ brand.theme_preset_dark|default:'business' }}"] .theme-dark-icon { display: inline-block; }
-      [data-theme="{{ brand.theme_preset_dark|default:'business' }}"] .theme-light-icon { display: none; }
+      [data-theme="checktick-dark"] .theme-dark-icon { display: inline-block; }
+      [data-theme="checktick-dark"] .theme-light-icon { display: none; }
     </style>
     {% block head_theme_overrides %}{% endblock %}
     <style>
@@ -70,8 +70,10 @@
                 <li><a href="{% url 'surveys:user_management_hub' %}">{% trans "User management" %}</a></li>
               {% endif %}
               <li><a href="{% url 'core:docs_index' %}">{% trans "Documentation" %}</a></li>
+              <li><a href="{% url 'core:hosting' %}">{% trans "Hosting" %}</a></li>
             {% else %}
               <li><a href="{% url 'core:docs_index' %}">{% trans "Documentation" %}</a></li>
+              <li><a href="{% url 'core:hosting' %}">{% trans "Hosting" %}</a></li>
               <li><a href="/accounts/login/">{% trans "Login" %}</a></li>
               <li><a href="/signup/">{% trans "Sign up" %}</a></li>
             {% endif %}
@@ -109,8 +111,10 @@
               <li><a href="{% url 'surveys:user_management_hub' %}">{% trans "User management" %}</a></li>
             {% endif %}
             <li><a href="{% url 'core:docs_index' %}">{% trans "Documentation" %}</a></li>
+            <li><a href="{% url 'core:hosting' %}">{% trans "Hosting" %}</a></li>
           {% else %}
             <li><a href="{% url 'core:docs_index' %}">{% trans "Documentation" %}</a></li>
+            <li><a href="{% url 'core:hosting' %}">{% trans "Hosting" %}</a></li>
           {% endif %}
         </ul>
       </div>

@@ -57,7 +57,7 @@
               {% endif %}
               <div class="q-number badge badge-primary badge-sm shrink-0">{{ forloop.counter }}</div>
               <div class="flex-1 min-w-0 flex items-center gap-2">
-                <a class="font-medium link" href="/surveys/{{ survey.slug }}/builder/groups/{{ g.id }}/">{{ g.name }}</a>
+                <a class="font-medium link link-accent" href="/surveys/{{ survey.slug }}/builder/groups/{{ g.id }}/">{{ g.name }}</a>
                 <span class="sel-repeat-icon hidden tooltip" data-tip="{% trans "Selected for repeat" %}">
                   {% include "components/icons/repeat.html" with classes="w-4 h-4 opacity-70" %}
                 </span>
