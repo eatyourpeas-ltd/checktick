@@ -63,10 +63,10 @@
             <form id="create-question-form" hx-post="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/create" hx-target="#questions-list" hx-swap="outerHTML" data-create-url="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/create" data-create-target="#questions-list" data-create-swap="outerHTML" data-edit-url-base="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/" data-template-url="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/templates/add">
               {% csrf_token %}
 
-              <div role="tablist" class="tabs tabs-lift">
-                <input type="radio" name="add_question_tabs" role="tab" class="tab" aria-label="Build question" checked hidden/>
-                <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">
-                  Select a question type
+              <div role="tablist" class="tabs tabs-lifted">
+                <input type="radio" name="add_question_tabs" role="tab" class="tab" aria-label="Build question" checked/>
+                <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
+                  <h3 class="text-lg font-semibold mb-4">Build a Question</h3>
                   <fieldset>
                     <legend class="label">Type</legend>
                     <div class="flex flex-wrap gap-3">
@@ -190,7 +190,8 @@ Option B" data-options-textarea></textarea>
 
                 {% if can_edit %}
                 <input type="radio" name="add_question_tabs" role="tab" class="tab" aria-label="Special Templates" />
-                <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">
+                <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
+                  <h3 class="text-lg font-semibold mb-4">Special Templates</h3>
                   <div class="space-y-4">
                     <p class="text-sm opacity-60 leading-snug">
                       Templates are predefined sets of questions for common use cases. They can form part of question groups or be used on their own.
