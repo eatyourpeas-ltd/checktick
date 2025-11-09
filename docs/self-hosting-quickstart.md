@@ -59,10 +59,10 @@ BRAND_TITLE=Your Survey Platform
 
 # Theme Configuration (OPTIONAL - has sensible defaults)
 # Set deployment-level default themes - org admins can override in Profile
-# Light theme: choose from 20 options (wireframe, cupcake, emerald, corporate, etc.)
+# Light theme: choose from 20 options (nord, cupcake, emerald, corporate, etc.)
 # Dark theme: choose from 12 options (business, dark, night, forest, etc.)
 # See docs/themes.md for full list and customization options
-BRAND_THEME_PRESET_LIGHT=wireframe
+BRAND_THEME_PRESET_LIGHT=nord
 BRAND_THEME_PRESET_DARK=business
 
 # Email Provider (REQUIRED for functionality)

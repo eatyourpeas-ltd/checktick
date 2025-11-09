@@ -13,7 +13,7 @@
 
 /*
  * Custom checktick-light and checktick-dark themes are now dynamically generated
- * from environment variables (default: wireframe for light, business for dark)
+ * from environment variables (default: nord for light, business for dark)
  * or from Brand model settings in the database.
  *
  * These theme definitions are injected via inline <style> blocks in templates.

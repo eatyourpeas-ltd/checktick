@@ -10,6 +10,7 @@ Tests cover:
 - Environment variable defaults
 """
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.test import Client, override_settings
 from django.urls import reverse
@@ -118,8 +119,9 @@ def test_generate_theme_css_for_brand_custom_css():
 def test_sitebranding_default_presets():
     """Test that SiteBranding model has correct default theme presets."""
     sb = SiteBranding.objects.create()
-    assert sb.theme_preset_light == "wireframe"
-    assert sb.theme_preset_dark == "business"
+    # Model defaults to empty string, which falls back to settings
+    assert sb.theme_preset_light == ""
+    assert sb.theme_preset_dark == ""
 
 
 @pytest.mark.django_db
@@ -159,7 +161,7 @@ def test_sitebranding_custom_css_fields():
 
 @pytest.mark.django_db
 def test_home_page_default_theme_preset():
-    """Test that home page renders with default theme preset in data-theme."""
+    """Test that home page renders with logical theme name in data-theme."""
     # Create default SiteBranding
     SiteBranding.objects.create()
 
@@ -169,21 +171,21 @@ def test_home_page_default_theme_preset():
     assert response.status_code == 200
     content = response.content.decode()
 
-    # Should have data-theme attribute with the light preset
-    assert 'data-theme="wireframe"' in content
+    # Should have data-theme attribute with the logical theme name
+    assert 'data-theme="checktick-light"' in content
 
 
 @pytest.mark.django_db
 def test_home_page_custom_theme_preset():
-    """Test that home page renders with custom theme preset."""
+    """Test that home page renders with logical theme name regardless of preset."""
     SiteBranding.objects.create(theme_preset_light="emerald", theme_preset_dark="night")
 
     client = Client()
     response = client.get("/home")
 
     content = response.content.decode()
-    # Should use the custom light preset
-    assert 'data-theme="emerald"' in content
+    # Should use the logical theme name, not the preset
+    assert 'data-theme="checktick-light"' in content
 
 
 @pytest.mark.django_db
@@ -204,9 +206,12 @@ def test_theme_preset_meta_tag():
 @pytest.mark.django_db
 def test_custom_theme_css_injection():
     """Test that custom CSS is injected into the page."""
+    SiteBranding.objects.all().delete()
     custom_css = "--color-primary: oklch(65% 0.21 25);"
     SiteBranding.objects.create(
-        theme_preset_light="wireframe", theme_light_css=custom_css
+        theme_preset_light="wireframe",
+        theme_preset_dark="business",
+        theme_light_css=custom_css
     )
 
     client = Client()
@@ -231,9 +236,12 @@ def test_theme_css_for_both_light_and_dark():
     response = client.get("/home")
 
     content = response.content.decode()
-    # Should include both wireframe and business theme CSS
-    assert 'data-theme="wireframe"' in content
-    assert "business" in content  # In meta tag
+    # Should use logical theme name in data-theme
+    assert 'data-theme="checktick-light"' in content
+    # Should include preset names in meta tag
+    assert "wireframe" in content
+    assert "business" in content
+    # Should include custom CSS
     assert "--color-primary" in content
 
 
@@ -497,7 +505,7 @@ def test_missing_sitebranding_uses_defaults():
     assert response.status_code == 200
     content = response.content.decode()
 
-    # Should fall back to default wireframe/business
+    # Should fall back to default theme from settings (BRAND_THEME_PRESET_LIGHT)
     assert "data-theme=" in content
 
 
@@ -538,17 +546,23 @@ def test_empty_custom_css_fields():
 
 @pytest.mark.django_db
 def test_all_light_theme_presets_valid():
-    """Test that all 20 light theme presets can be set and rendered."""
+    """Test that all 20 light theme presets can be set (but data-theme shows logical name)."""
     for theme in LIGHT_THEMES[:5]:  # Test first 5 to keep test fast
         SiteBranding.objects.all().delete()
-        SiteBranding.objects.create(theme_preset_light=theme)
+        SiteBranding.objects.create(
+            theme_preset_light=theme,
+            theme_preset_dark="business"
+        )
 
         client = Client()
         response = client.get("/home")
 
         assert response.status_code == 200
         content = response.content.decode()
-        assert f'data-theme="{theme}"' in content
+        # data-theme should always be the logical name
+        assert 'data-theme="checktick-light"' in content
+        # The preset should appear in the meta tag
+        assert f'{theme}' in content
 
 
 @pytest.mark.django_db

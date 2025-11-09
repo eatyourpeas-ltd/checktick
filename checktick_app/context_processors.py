@@ -148,6 +148,9 @@ def branding(request):
         # Optional CSS overrides injected into head to support DaisyUI builder pastes
         "theme_css_light": getattr(settings, "BRAND_THEME_CSS_LIGHT", ""),
         "theme_css_dark": getattr(settings, "BRAND_THEME_CSS_DARK", ""),
+        # DaisyUI preset theme names
+        "theme_preset_light": getattr(settings, "BRAND_THEME_PRESET_LIGHT", "nord"),
+        "theme_preset_dark": getattr(settings, "BRAND_THEME_PRESET_DARK", "business"),
     }
     # Compute icon_size_class from settings
     try:
@@ -184,11 +187,13 @@ def branding(request):
                     pass
 
                 # Get theme presets
-                preset_light = getattr(sb, "theme_preset_light", None) or getattr(
-                    settings, "BRAND_THEME_PRESET_LIGHT", "wireframe"
+                preset_light = (
+                    getattr(sb, "theme_preset_light", "")
+                    or settings.BRAND_THEME_PRESET_LIGHT
                 )
-                preset_dark = getattr(sb, "theme_preset_dark", None) or getattr(
-                    settings, "BRAND_THEME_PRESET_DARK", "business"
+                preset_dark = (
+                    getattr(sb, "theme_preset_dark", "")
+                    or settings.BRAND_THEME_PRESET_DARK
                 )
 
                 # Generate theme CSS from presets or use custom CSS
@@ -258,10 +263,10 @@ def branding(request):
         # Organization has custom theme settings - apply cascade
         # Use org theme if set, otherwise fall back to platform default
         preset_light = user_org.theme_preset_light or brand.get(
-            "theme_preset_light", "wireframe"
+            "theme_preset_light", settings.BRAND_THEME_PRESET_LIGHT
         )
         preset_dark = user_org.theme_preset_dark or brand.get(
-            "theme_preset_dark", "business"
+            "theme_preset_dark", settings.BRAND_THEME_PRESET_DARK
         )
 
         logger.debug(

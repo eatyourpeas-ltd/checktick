@@ -44,11 +44,11 @@ CheckTick uses **daisyUI v5.4.7** with 32 built-in theme presets:
 # Default logical theme (checktick-light or checktick-dark)
 BRAND_THEME="checktick-light"
 
-# Light mode preset (default: wireframe)
+# Light mode preset (default: nord)
 # Available: light, cupcake, bumblebee, emerald, corporate, retro, 
-# cyberpunk, valentine, garden, lofi, pastel, fantasy, wireframe, 
+# cyberpunk, valentine, garden, lofi, pastel, fantasy, nord, 
 # cmyk, autumn, acid, lemonade, winter, nord, sunset
-BRAND_THEME_PRESET_LIGHT="wireframe"
+BRAND_THEME_PRESET_LIGHT="nord"
 
 # Dark mode preset (default: business)
 # Available: dark, synthwave, halloween, forest, aqua, black, 
@@ -186,8 +186,8 @@ CheckTick uses a **logical naming system** to separate user preferences from act
 - `system` - Follow OS preference
 
 **Physical names** (actual daisyUI presets applied to DOM):
-- `wireframe`, `business`, `cupcake`, etc.
-- Applied via `<html data-theme="wireframe">`
+- `nord`, `business`, `cupcake`, etc.
+- Applied via `<html data-theme="nord">`
 
 **Why?** This allows changing the platform's default light/dark themes without breaking user preferences. Users who selected "light mode" will automatically get the new light preset.
 
@@ -196,7 +196,7 @@ CheckTick uses a **logical naming system** to separate user preferences from act
 1. **User preference** stored in browser localStorage (`checktick-theme`)
 2. **JavaScript** (`theme-toggle.js`) maps logical name to physical preset
 3. **Platform config** determines which preset each logical name maps to
-4. **DOM updated** with `<html data-theme="wireframe">` (physical name)
+4. **DOM updated** with `<html data-theme="nord">` (physical name)
 
 ### Theme Cascade Logic
 

@@ -168,8 +168,8 @@ def profile(request):
             if generate_theme_css_for_brand:
                 try:
                     generated_light, generated_dark = generate_theme_css_for_brand(
-                        org.theme_preset_light or "wireframe",
-                        org.theme_preset_dark or "business",
+                        org.theme_preset_light or settings.BRAND_THEME_PRESET_LIGHT,
+                        org.theme_preset_dark or settings.BRAND_THEME_PRESET_DARK,
                         raw_light,
                         raw_dark,
                     )
@@ -211,10 +211,10 @@ def profile(request):
 
             # Save theme presets
             sb.theme_preset_light = (
-                request.POST.get("theme_preset_light") or "wireframe"
+                request.POST.get("theme_preset_light") or settings.BRAND_THEME_PRESET_LIGHT
             ).strip()
             sb.theme_preset_dark = (
-                request.POST.get("theme_preset_dark") or "business"
+                request.POST.get("theme_preset_dark") or settings.BRAND_THEME_PRESET_DARK
             ).strip()
 
             # Get custom CSS (optional - overrides preset if provided)

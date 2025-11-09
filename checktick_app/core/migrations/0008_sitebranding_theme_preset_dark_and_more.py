@@ -25,8 +25,8 @@ class Migration(migrations.Migration):
             name="theme_preset_light",
             field=models.CharField(
                 blank=True,
-                default="wireframe",
-                help_text="DaisyUI preset theme for light mode (e.g., 'wireframe', 'cupcake', 'light')",
+                default="nord",
+                help_text="DaisyUI preset theme for light mode (e.g., 'nord', 'cupcake', 'light')",
                 max_length=64,
             ),
         ),

@@ -1,7 +1,7 @@
 {% load static %}
 {% load i18n %}
 <!doctype html>
-<html lang="en" data-theme="{{ brand.theme_preset_light|default:'wireframe' }}">
+<html lang="en" data-theme="{{ brand.theme_name }}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -15,18 +15,18 @@
     {% if brand.theme_css_light or brand.theme_css_dark %}
     <style>
       {% if brand.theme_css_light %}
-      [data-theme="{{ brand.theme_preset_light|default:'wireframe' }}"] {
+      [data-theme="checktick-light"] {
         {{ brand.theme_css_light|safe }}
       }
       {% endif %}
       {% if brand.theme_css_dark %}
-      [data-theme="{{ brand.theme_preset_dark|default:'business' }}"] {
+      [data-theme="checktick-dark"] {
         {{ brand.theme_css_dark|safe }}
       }
       {% endif %}
     </style>
     {% endif %}
-    <meta name="theme-presets" content="{{ brand.theme_preset_light|default:'wireframe' }},{{ brand.theme_preset_dark|default:'business' }}">
+    <meta name="theme-presets" content="{{ brand.theme_preset_light }},{{ brand.theme_preset_dark }}">
     <meta name="checktick-theme" content="{{ brand.theme_name|default:'checktick-light' }}">
     {% block head_theme_overrides %}{% endblock %}
     <style>

@@ -30,7 +30,7 @@ CheckTick uses a **cascading theme system** with three levels:
 
               ↓ Overrides- BRAND_THEME (str) — Default logical theme name. Values: "checktick-light" or "checktick-dark". Default: "checktick-light".
 
-┌─────────────────────────────────────┐- BRAND_THEME_PRESET_LIGHT (str) — daisyUI preset for light mode. Default: "wireframe". Available: light, cupcake, bumblebee, emerald, corporate, retro, cyberpunk, valentine, garden, lofi, pastel, fantasy, wireframe, cmyk, autumn, acid, lemonade, winter, nord, sunset.
+┌─────────────────────────────────────┐- BRAND_THEME_PRESET_LIGHT (str) — daisyUI preset for light mode. Default: "nord". Available: light, cupcake, bumblebee, emerald, corporate, retro, cyberpunk, valentine, garden, lofi, pastel, fantasy, nord, cmyk, autumn, acid, lemonade, winter, nord, sunset.
 
 │  3. Survey Theme                    │  ← Survey creator sets (affects survey pages)- BRAND_THEME_PRESET_DARK (str) — daisyUI preset for dark mode. Default: "business". Available: dark, synthwave, halloween, forest, aqua, black, luxury, dracula, business, night, coffee, dim.
 
@@ -88,9 +88,9 @@ Platform administrators set the default theme for the entire CheckTick deploymen
 
 - **Superusers only** - Users with Django admin access
 
-- Regular users and organization owners cannot change platform defaults2. **Actual daisyUI preset names** (wireframe, business, etc.) are applied to the DOM:
+- Regular users and organization owners cannot change platform defaults2. **Actual daisyUI preset names** (nord, business, etc.) are applied to the DOM:
 
-   - `<html data-theme="wireframe">` for light mode
+   - `<html data-theme="nord">` for light mode
 
 ### Where to Configure   - `<html data-theme="business">` for dark mode
 
@@ -140,7 +140,7 @@ Platform administrators set the default theme for the entire CheckTick deploymen
 
 **20 Light Themes:**- **Profile UI**: `checktick_app/core/templates/core/profile.html` (theme preset dropdowns)
 
-wireframe (default), light, cupcake, bumblebee, emerald, corporate, retro, cyberpunk, valentine, garden, lofi, pastel, fantasy, cmyk, autumn, acid, lemonade, winter, nord, sunset- **Theme switcher JS**: `checktick_app/static/js/theme-toggle.js`, `admin-theme.js`
+nord (default), nord, light, cupcake, bumblebee, emerald, corporate, retro, cyberpunk, valentine, garden, lofi, pastel, fantasy, cmyk, autumn, acid, lemonade, winter, sunset- **Theme switcher JS**: `checktick_app/static/js/theme-toggle.js`, `admin-theme.js`
 
 - **Survey dashboard style form**: `checktick_app/surveys/templates/surveys/dashboard.html`
 
@@ -360,13 +360,13 @@ When multiple theme levels are configured, CheckTick uses this precedence:
 
 **Scenario 1: Platform + Organization**
 
-- Platform set to: wireframe (light), business (dark)
+- Platform set to: nord (light), business (dark)
 - Organization set to: corporate (light), luxury (dark)
-- **Result:** Organization members see corporate/luxury, non-members see wireframe/business
+- **Result:** Organization members see corporate/luxury, non-members see nord/business
 
 **Scenario 2: All Three Levels**
 
-- Platform: wireframe/business
+- Platform: nord/business
 - Organization: corporate/luxury
 - Survey: cupcake/forest
 - **Result:** Survey pages show cupcake/forest, other pages show corporate/luxury
@@ -375,7 +375,7 @@ When multiple theme levels are configured, CheckTick uses this precedence:
 
 - Organization previously had custom theme
 - Owner clicks "Reset to Defaults"
-- **Result:** Organization members now see platform theme (wireframe/business)
+- **Result:** Organization members now see platform theme (nord/business)
 
 ## Troubleshooting
 
