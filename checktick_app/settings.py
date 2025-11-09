@@ -60,6 +60,16 @@ DATABASES = {
     "default": env.db("DATABASE_URL"),
 }
 
+# Branding and theming settings
+BRAND_TITLE = env("BRAND_TITLE")
+BRAND_ICON_URL = env("BRAND_ICON_URL")
+BRAND_THEME = env("BRAND_THEME")
+BRAND_THEME_PRESET_LIGHT = env("BRAND_THEME_PRESET_LIGHT")
+BRAND_THEME_PRESET_DARK = env("BRAND_THEME_PRESET_DARK")
+BRAND_FONT_HEADING = env("BRAND_FONT_HEADING")
+BRAND_FONT_BODY = env("BRAND_FONT_BODY")
+BRAND_FONT_CSS_URL = env("BRAND_FONT_CSS_URL")
+
 INSTALLED_APPS = [
     # Use custom AdminConfig to enforce superuser-only access
     "checktick_app.admin.CheckTickAdminConfig",
