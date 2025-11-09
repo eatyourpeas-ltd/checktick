@@ -58,6 +58,10 @@ def home(request):
     return render(request, "core/home.html")
 
 
+def hosting(request):
+    return render(request, "core/hosting.html")
+
+
 def healthz(request):
     """Lightweight health endpoint for load balancers and readiness probes.
     Returns 200 OK without auth or redirects.

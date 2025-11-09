@@ -28,52 +28,19 @@
       {% endif %}
     </div>
 
-    <!-- Right: Title, subtitle, tech icons, CTAs -->
+    <!-- Right: Title, subtitle, CTAs -->
     <div class="w-full lg:flex-1 min-w-0 text-center lg:text-left lg:pl-8">
       <h1 class="text-5xl md:text-6xl font-bold font-heading">{% trans "CheckTick" %}</h1>
       <p class="mt-3 text-xl md:text-2xl opacity-80">{% trans "Surveys for health care" %}</p>
 
-      <!-- Tech icons inside hero, below subtitle -->
-      <div class="mt-4 flex flex-wrap items-center gap-4 justify-center lg:justify-start">
-        <span class="inline-flex items-center gap-1 text-[#38BDF8]">{% include 'components/icons/tailwind.html' with classes='w-6 h-6' %} <span class="sr-only">Tailwind</span></span>
-        <span class="inline-flex items-center gap-2">
-          <img src="{% static 'icons/daisyui.jpeg' %}" alt="DaisyUI" class="h-6 w-auto object-contain rounded ring-neutral/20 bg-base-100 p-0.5" />
-          <span class="sr-only">DaisyUI</span>
-        </span>
-        <span class="inline-flex items-center gap-2">
-          <img src="{% static 'icons/openapi.png' %}" alt="OpenAPI" class="h-6 w-auto object-contain rounded ring-neutral/20 bg-base-100 p-0.5" />
-          <span class="sr-only">OpenAPI</span>
-        </span>
-        <span class="inline-flex items-center gap-2">
-          <img src="{% static 'icons/htmx.png' %}" alt="HTMX" class="h-6 w-auto object-contain rounded ring-neutral/20 bg-base-100 p-0.5" />
-          <span class="sr-only">HTMX</span>
-        </span>
-        <span class="inline-flex items-center gap-2">
-          <img src="{% static 'icons/django.svg' %}" alt="Django" class="h-6 w-auto object-contain rounded ring-neutral/20 bg-base-100 p-0.5" />
-          <span class="sr-only">Django</span>
-        </span>
-      </div>
-
-      <!-- API badges inside hero -->
-      <div class="mt-4 flex flex-wrap items-center gap-3 justify-center lg:justify-start">
-        <a href="/api/docs" class="inline-flex items-center" aria-label="Swagger UI">
-          <img src="{% static 'docs/swagger-badge.svg' %}" alt="Swagger UI" class="h-8 w-auto" />
-        </a>
-        <a href="/api/redoc" class="inline-flex items-center" aria-label="ReDoc">
-          <img src="{% static 'docs/redoc-badge.svg' %}" alt="ReDoc" class="h-8 w-auto" />
-        </a>
-        <a href="/api/schema?format=openapi-json" class="inline-flex items-center" aria-label="OpenAPI JSON">
-          <img src="{% static 'docs/openapi-badge.svg' %}" alt="OpenAPI JSON" class="h-8 w-auto" />
-        </a>
-      </div>
       <div class="mt-8 flex flex-wrap items-center gap-3 justify-center lg:justify-start">
         {% if user.is_authenticated %}
           <a class="btn btn-primary" href="/surveys/">{% trans "Go to Surveys" %}</a>
-          <a class="btn btn-ghost" href="{% url 'core:docs_index' %}">{% trans "Read documentation" %}</a>
+          <a class="btn btn-outline" href="{% url 'core:docs_index' %}">{% trans "Read documentation" %}</a>
         {% else %}
           <a class="btn btn-primary" href="/accounts/login/">{% trans "Login" %}</a>
-          <a class="btn btn-ghost" href="/signup/">{% trans "Sign up" %}</a>
-          <a class="btn btn-ghost" href="{% url 'core:docs_index' %}">{% trans "Read documentation" %}</a>
+          <a class="btn btn-outline" href="/signup/">{% trans "Sign up" %}</a>
+          <a class="btn btn-outline" href="{% url 'core:docs_index' %}">{% trans "Read documentation" %}</a>
         {% endif %}
       </div>
     </div>
@@ -91,7 +58,10 @@
           <span class="text-base-content/80">{% include "components/icons/hammer_wrench.html" with classes="w-8 h-8" %}</span>
           <h3 class="card-title text-base-content">{% trans "Build" %}</h3>
         </div>
-        <p>{% trans "Drag-and-drop groups and questions, apply DaisyUI themes per survey, and control access with roles." %}</p>
+        <div class="h5 text-secondary">{% trans "Drag-and-drop question blocks" %}</div>
+        <div class="h5 text-secondary">{% trans "custom designs for each survey " %}</div>
+        <div class="h5 text-secondary">{% trans "Conditional branching logic" %}</div>
+        <div class="h5 text-secondary">{% trans "select from a range of pre-built question templates optimized for the NHS." %}</div>
         <div class="card-actions justify-start mt-2">
           {% if user.is_authenticated %}
             <a class="btn btn-sm btn-primary" href="{% url 'surveys:create' %}">{% trans "Create a survey" %}</a>
@@ -108,7 +78,8 @@
           <span class="text-base-content/80">{% include "components/icons/documents.html" with classes="w-8 h-8" %}</span>
           <h3 class="card-title text-base-content">{% trans "Distribute" %}</h3>
         </div>
-        <p>{% trans "Invite your team, scope visibility by organisation and survey membership, and manage participation securely." %}</p>
+        <div class="h5 text-secondary">{% trans "Publish surveys via email, SMS, or web links." %}</div>
+        <div class="h5 text-secondary">{% trans "Track responses in real-time." %}</div>
         <div class="card-actions justify-start mt-2">
           {% if user.is_authenticated %}
             <a class="btn btn-sm btn-primary" href="/surveys/">{% trans "Manage surveys" %}</a>
@@ -122,15 +93,20 @@
   <div class="card bg-secondary/10 border border-secondary/20 hover:bg-secondary/20 transition-colors">
     <div class="card-body">
         <div class="flex items-center gap-3">
-          <span class="text-base-content/80">{% include "components/icons/document.html" with classes="w-8 h-8" %}</span>
-          <h3 class="card-title text-base-content">{% trans "Analyze" %}</h3>
+          <span class="text-base-content/80">{% include "components/icons/shield-check.html" with classes="w-8 h-8" %}</span>
+          <h3 class="card-title text-base-content">{% trans "Secure" %}</h3>
         </div>
-        <p>{% trans "Monitor dashboards, export CSV, and audit changes. Everything runs on a secure SSR stack." %}</p>
+        <div class="h5 text-secondary">{% trans "End-to-end encryption for patient data" %}</div>
+        <div class="h5 text-secondary">{% trans "Role-based access control (RBAC)" %}</div>
+        <div class="h5 text-secondary">{% trans "GDPR, NHS DSPT, and Caldicott compliance" %}</div>
+        <div class="h5 text-secondary">{% trans "Audit logs for compliance and data governance" %}</div>
         <div class="card-actions justify-start mt-2">
           {% if user.is_authenticated %}
-            <a class="btn btn-sm btn-primary" href="/surveys/">{% trans "View dashboards" %}</a>
+            <a class="btn btn-sm btn-primary" href="{% url 'core:docs_page' slug='data-governance-security' %}">{% trans "Security documentation" %}</a>
+            <a class="btn btn-sm btn-ghost" href="{% url 'core:docs_page' slug='data-governance-policy' %}">{% trans "Data policy" %}</a>
           {% else %}
-            <a class="btn btn-sm btn-ghost" href="{% url 'core:docs_page' slug='surveys' %}">{% trans "See capabilities" %}</a>
+            <a class="btn btn-sm btn-ghost" href="{% url 'core:docs_page' slug='data-governance-security' %}">{% trans "Learn about security" %}</a>
+            <a class="btn btn-sm btn-ghost" href="{% url 'core:docs_page' slug='data-governance-policy' %}">{% trans "Data policy" %}</a>
           {% endif %}
         </div>
       </div>

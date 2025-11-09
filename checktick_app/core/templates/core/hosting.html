@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% block title %}{% trans "Hosting" %} - {{ brand.title }}{% endblock %}
+{% block content %}
+
+<div class="prose max-w-6xl mx-auto px-6 py-8">
+  <h1 class="inline-flex items-center gap-3 text-base-content">
+    {% include "components/icons/building.html" with classes="w-8 h-8 text-primary" %}
+    <span>{% trans "Self-Hosting CheckTick" %}</span>
+  </h1>
+  
+  <p class="lead text-xl opacity-90">
+    {% trans "CheckTick is designed to be self-hosted on your own infrastructure, giving you full control over your data and deployments." %}
+  </p>
+
+  <div class="not-prose mt-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="card bg-base-100 border border-base-300 shadow-sm">
+        <div class="card-body">
+          <h3 class="card-title text-base-content">
+            {% include "components/icons/documents.html" with classes="w-6 h-6 text-primary" %}
+            {% trans "Getting Started" %}
+          </h3>
+          <p class="opacity-80">{% trans "Quick start guides to get CheckTick running in minutes using Docker." %}</p>
+          <div class="card-actions mt-4">
+            <a href="{% url 'core:docs_page' slug='self-hosting-quickstart' %}" class="btn btn-primary btn-sm">
+              {% trans "Quickstart Guide" %}
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card bg-base-100 border border-base-300 shadow-sm">
+        <div class="card-body">
+          <h3 class="card-title text-base-content">
+            {% include "components/icons/hammer_wrench.html" with classes="w-6 h-6 text-accent" %}
+            {% trans "Production Setup" %}
+          </h3>
+          <p class="opacity-80">{% trans "Deploy CheckTick to production with best practices for security and performance." %}</p>
+          <div class="card-actions mt-4">
+            <a href="{% url 'core:docs_page' slug='self-hosting-production' %}" class="btn btn-accent btn-sm">
+              {% trans "Production Guide" %}
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card bg-base-100 border border-base-300 shadow-sm">
+        <div class="card-body">
+          <h3 class="card-title text-base-content">
+            {% include "components/icons/document.html" with classes="w-6 h-6 text-secondary" %}
+            {% trans "Configuration" %}
+          </h3>
+          <p class="opacity-80">{% trans "Configure environment variables, database settings, and customize your installation." %}</p>
+          <div class="card-actions mt-4">
+            <a href="{% url 'core:docs_page' slug='self-hosting-configuration' %}" class="btn btn-secondary btn-sm">
+              {% trans "Configuration Docs" %}
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card bg-base-100 border border-base-300 shadow-sm">
+        <div class="card-body">
+          <h3 class="card-title text-base-content">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-info">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+            </svg>
+            {% trans "Database & Backups" %}
+          </h3>
+          <p class="opacity-80">{% trans "Set up PostgreSQL, manage migrations, and configure automated backups." %}</p>
+          <div class="card-actions mt-4">
+            <a href="{% url 'core:docs_page' slug='self-hosting-database' %}" class="btn btn-ghost btn-sm">
+              {% trans "Database Guide" %}
+            </a>
+            <a href="{% url 'core:docs_page' slug='self-hosting-backup' %}" class="btn btn-ghost btn-sm">
+              {% trans "Backup Guide" %}
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="text-base-content mt-12">{% trans "Technology Stack" %}</h2>
+  <p class="opacity-80">
+    {% trans "CheckTick is built with modern, production-ready technologies that are trusted by healthcare organizations worldwide." %}
+  </p>
+
+  <div class="not-prose mt-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <!-- Django -->
+      <div class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+          <div class="flex items-center gap-3 mb-2">
+            <img src="{% static 'icons/django.svg' %}" alt="Django" class="h-8 w-auto object-contain" />
+            <h3 class="text-lg font-semibold text-base-content">Django</h3>
+          </div>
+          <p class="text-sm opacity-80">{% trans "Robust Python web framework with excellent security and ORM for healthcare data." %}</p>
+        </div>
+      </div>
+
+      <!-- PostgreSQL -->
+      <div class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+          <div class="flex items-center gap-3 mb-2">
+            <svg class="h-8 w-8 text-[#336791]" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17.128 0c-.316.026-.613.09-.872.19-3.157 1.197-2.795 3.29-2.795 3.29l.01 1.266h2.861v.405H10.48s-3.656-.415-3.656 3.566c0 3.98 3.188 3.843 3.188 3.843h1.903v-2.676s-.102-3.188 3.137-3.188h2.834s3.052.05 3.052-2.954V2.483S21.282.026 17.128 0zm-1.585 1.464c.36 0 .653.292.653.653 0 .36-.293.653-.653.653-.36 0-.653-.293-.653-.653 0-.36.293-.653.653-.653z"/>
+              <path d="M6.872 6.482s-3.188-.137-3.188 3.843c0 3.98 3.656 3.566 3.656 3.566h5.852v-.405H10.33l-.01 1.266s-.362 2.093 2.795 3.29c3.157 1.197 3.013-.768 3.013-.768l-.01-1.266h-2.861v-.405h5.852s3.656.415 3.656-3.566c0-3.98-3.188-3.843-3.188-3.843h-1.903v2.676s.102 3.188-3.137 3.188H11.7s-3.052-.05-3.052 2.954v2.26s-.345 3.057 3.809 3.083c.316-.026.613-.09.872-.19 3.157-1.197 2.795-3.29 2.795-3.29l-.01-1.266H13.253v-.405h5.852s3.656.415 3.656-3.566c0-3.98-3.188-3.843-3.188-3.843h-1.903v2.676s.102 3.188-3.137 3.188H11.7s-3.052-.05-3.052 2.954v2.26s-.345 3.057 3.809 3.083c.316-.026.613-.09.872-.19 3.157-1.197 2.795-3.29 2.795-3.29l-.01-1.266H13.253v-.405h5.852s3.656.415 3.656-3.566c0-3.98-3.188-3.843-3.188-3.843h-1.903v2.676s.102 3.188-3.137 3.188H11.7s-3.052-.05-3.052 2.954v2.26s-.345 3.057 3.809 3.083c.316-.026.613-.09.872-.19 3.157-1.197 2.795-3.29 2.795-3.29l-.01-1.266H13.253v-.405h5.852s3.656.415 3.656-3.566c0-3.98-3.188-3.843-3.188-3.843h-1.903v2.676s.102 3.188-3.137 3.188H11.7s-3.052-.05-3.052 2.954v2.26s-.345 3.057 3.809 3.083c.316-.026.613-.09.872-.19 3.157-1.197 2.795-3.29 2.795-3.29l-.01-1.266H13.253v-.405h5.852s3.656.415 3.656-3.566c0-3.98-3.188-3.843-3.188-3.843h-1.903z"/>
+            </svg>
+            <h3 class="text-lg font-semibold text-base-content">PostgreSQL</h3>
+          </div>
+          <p class="text-sm opacity-80">{% trans "Enterprise-grade relational database with full ACID compliance and encryption support." %}</p>
+        </div>
+      </div>
+
+      <!-- Tailwind CSS -->
+      <div class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+          <div class="flex items-center gap-3 mb-2">
+            {% include 'components/icons/tailwind.html' with classes='h-8 w-8 text-[#38BDF8]' %}
+            <h3 class="text-lg font-semibold text-base-content">Tailwind CSS</h3>
+          </div>
+          <p class="text-sm opacity-80">{% trans "Utility-first CSS framework for fast, responsive UI development." %}</p>
+        </div>
+      </div>
+
+      <!-- daisyUI -->
+      <div class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+          <div class="flex items-center gap-3 mb-2">
+            <img src="{% static 'icons/daisyui.jpeg' %}" alt="DaisyUI" class="h-8 w-auto object-contain rounded" />
+            <h3 class="text-lg font-semibold text-base-content">daisyUI</h3>
+          </div>
+          <p class="text-sm opacity-80">{% trans "Component library with themeable, accessible UI components built on Tailwind." %}</p>
+        </div>
+      </div>
+
+      <!-- HTMX -->
+      <div class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+          <div class="flex items-center gap-3 mb-2">
+            <img src="{% static 'icons/htmx.png' %}" alt="HTMX" class="h-8 w-auto object-contain rounded" />
+            <h3 class="text-lg font-semibold text-base-content">HTMX</h3>
+          </div>
+          <p class="text-sm opacity-80">{% trans "Modern interactivity with AJAX, WebSockets, and server-sent events via HTML attributes." %}</p>
+        </div>
+      </div>
+
+      <!-- OpenAPI -->
+      <div class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+          <div class="flex items-center gap-3 mb-2">
+            <img src="{% static 'icons/openapi.png' %}" alt="OpenAPI" class="h-8 w-auto object-contain rounded" />
+            <h3 class="text-lg font-semibold text-base-content">OpenAPI</h3>
+          </div>
+          <p class="text-sm opacity-80">{% trans "RESTful API with auto-generated documentation and client SDKs." %}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="text-base-content mt-12">{% trans "API Documentation" %}</h2>
+  <p class="opacity-80">
+    {% trans "CheckTick provides a comprehensive RESTful API with interactive documentation for integration with your existing systems." %}
+  </p>
+
+  <div class="not-prose mt-6 flex flex-wrap items-center gap-3">
+    <a href="/api/docs" class="btn btn-primary btn-sm" aria-label="Swagger UI">
+      {% trans "Swagger UI" %}
+    </a>
+    <a href="/api/redoc" class="btn btn-primary btn-sm" aria-label="ReDoc">
+      {% trans "ReDoc" %}
+    </a>
+    <a href="/api/schema?format=openapi-json" class="btn btn-primary btn-sm" aria-label="OpenAPI JSON">
+      {% trans "OpenAPI Schema" %}
+    </a>
+  </div>
+
+  <div class="not-prose mt-8 p-6 bg-base-200 rounded-lg border border-base-300">
+    <h3 class="text-lg font-semibold text-base-content mb-3">{% trans "Need Help?" %}</h3>
+    <p class="opacity-80 mb-4">
+      {% trans "Our documentation covers everything from initial setup to advanced configurations. If you run into issues or have questions, check out our getting help guide." %}
+    </p>
+    <a href="{% url 'core:docs_page' slug='getting-help' %}" class="btn btn-primary">
+      {% trans "Get Support" %}
+    </a>
+  </div>
+</div>
+
+{% endblock %}
