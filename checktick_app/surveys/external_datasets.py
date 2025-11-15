@@ -21,6 +21,7 @@ from typing import Any
 
 from django.conf import settings
 from django.core.cache import cache
+from django.db.models import Q
 import requests
 
 logger = logging.getLogger(__name__)
@@ -57,9 +58,45 @@ class DatasetFetchError(Exception):
     pass
 
 
-def get_available_datasets() -> dict[str, str]:
-    """Return dictionary of available dataset keys and display names."""
-    return AVAILABLE_DATASETS.copy()
+def get_available_datasets(organization=None) -> dict[str, str]:
+    """
+    Return dictionary of available dataset keys and display names.
+
+    Queries database first for both standard and custom datasets,
+    then adds any hardcoded datasets not yet in DB.
+
+    Args:
+        organization: Optional organization to filter custom datasets
+
+    Returns:
+        Dict of {key: name} for available datasets
+    """
+    from .models import DataSet
+
+    datasets = {}
+
+    # Get datasets from database
+    # Include: global datasets + org-specific datasets (if org provided)
+    qs = DataSet.objects.filter(is_active=True)
+
+    if organization:
+        # Global datasets OR org-specific datasets
+        qs = qs.filter(
+            Q(is_global=True) | Q(organization=organization)
+        )
+    else:
+        # Only global datasets if no org context
+        qs = qs.filter(is_global=True)
+
+    for dataset in qs:
+        datasets[dataset.key] = dataset.name
+
+    # Add hardcoded datasets that aren't in DB yet (backward compatibility)
+    for key, name in AVAILABLE_DATASETS.items():
+        if key not in datasets:
+            datasets[key] = name
+
+    return datasets
 
 
 def _get_api_url() -> str:
@@ -241,7 +278,12 @@ def _transform_response_to_options(dataset_key: str, data: Any) -> list[str]:
 
 def fetch_dataset(dataset_key: str) -> list[str]:
     """
-    Fetch dataset options from external API with caching.
+    Fetch dataset options from database or external API with caching.
+
+    Priority order:
+    1. Database (for custom and stored datasets)
+    2. Django cache (for external API datasets)
+    3. External API (if not cached)
 
     Args:
         dataset_key: The key identifying which dataset to fetch
@@ -252,6 +294,25 @@ def fetch_dataset(dataset_key: str) -> list[str]:
     Raises:
         DatasetFetchError: If dataset key is invalid or fetch fails
     """
+    from .models import DataSet
+
+    # Try database first
+    try:
+        dataset = DataSet.objects.get(key=dataset_key, is_active=True)
+
+        # If it's an API dataset that needs syncing, trigger async sync (don't wait)
+        if dataset.source_type == "api" and dataset.needs_sync:
+            # TODO: Trigger async sync task here when Celery is set up
+            # sync_dataset.delay(dataset.id)
+            logger.info(f"Dataset {dataset_key} needs sync (will implement async sync)")
+
+        return dataset.options
+
+    except DataSet.DoesNotExist:
+        # Fall back to legacy behavior for datasets not yet in DB
+        pass
+
+    # Legacy path for hardcoded datasets
     if dataset_key not in AVAILABLE_DATASETS:
         raise DatasetFetchError(f"Unknown dataset key: {dataset_key}")
 

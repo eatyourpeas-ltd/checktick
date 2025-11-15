@@ -2,7 +2,46 @@
 
 ## Overview
 
-The prefilled datasets feature allows users to load dropdown options from the RCPCH NHS Organisations API when creating survey questions.
+The prefilled datasets feature allows users to load dropdown options from multiple sources when creating survey questions:
+
+1. **NHS Data Dictionary** - Standardized medical codes stored in the database
+2. **RCPCH NHS Organisations API** - Live data from external API with caching
+3. **Custom Lists** - User-created and organization-specific datasets
+
+All datasets are stored in the `DataSet` model for consistency and fast access.
+
+## Database Storage
+
+### DataSet Model
+
+All datasets are stored in `surveys_dataset` table with these key fields:
+
+- `key` - Unique identifier (e.g., `main_specialty_code`)
+- `name` - Display name shown in UI
+- `category` - `nhs_dd`, `external_api`, `rcpch`, or `user_created`
+- `source_type` - `manual`, `api`, or `import`
+- `is_custom` - Whether dataset is user-created/modified
+- `is_global` - Whether available to all organizations
+- `parent` - Reference to NHS DD original if customized
+- `organization` - Organization that owns this dataset (if not global)
+- `options` - JSON array of option strings
+- `last_synced_at` - When API dataset was last updated
+
+### Seeding NHS DD Datasets
+
+Pre-populate NHS Data Dictionary standards:
+
+```bash
+docker compose exec web python manage.py seed_nhs_datasets
+
+# Or clear existing and re-seed
+docker compose exec web python manage.py seed_nhs_datasets --clear
+```
+
+This creates read-only NHS DD datasets:
+- Main Specialty Code (75 options)
+- Treatment Function Code (73 options)
+- Ethnic Category (17 options)
 
 ## External API Integration
 
