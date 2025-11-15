@@ -7,6 +7,7 @@ Usage:
 """
 
 from django.core.management.base import BaseCommand
+
 from checktick_app.surveys.models import DataSet
 
 

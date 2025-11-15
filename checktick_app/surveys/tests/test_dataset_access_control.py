@@ -9,9 +9,10 @@ Ensures that:
 - Proper error handling for invalid dataset access
 """
 
-import pytest
 from django.contrib.auth import get_user_model
+import pytest
 
+from checktick_app.surveys.external_datasets import get_available_datasets
 from checktick_app.surveys.models import (
     DataSet,
     Organization,
@@ -19,7 +20,6 @@ from checktick_app.surveys.models import (
     Survey,
     SurveyQuestion,
 )
-from checktick_app.surveys.external_datasets import get_available_datasets
 
 User = get_user_model()
 TEST_PASSWORD = "x"
@@ -135,9 +135,7 @@ class TestDatasetAccessControl:
         assert "global_specialty" in org2_datasets
         assert org1_datasets["global_specialty"] == "Global Specialty Codes"
 
-    def test_org_specific_datasets_only_visible_to_owner(
-        self, datasets, organizations
-    ):
+    def test_org_specific_datasets_only_visible_to_owner(self, datasets, organizations):
         """Organization-specific datasets should only be visible to their owner."""
         org1_datasets = get_available_datasets(organization=organizations["org1"])
         org2_datasets = get_available_datasets(organization=organizations["org2"])
@@ -172,9 +170,7 @@ class TestDatasetAccessControl:
         assert "org1_custom" not in datasets_list
         assert "org2_custom" not in datasets_list
 
-    def test_question_can_link_to_global_dataset(
-        self, datasets, users, organizations
-    ):
+    def test_question_can_link_to_global_dataset(self, datasets, users, organizations):
         """Questions should be able to link to global datasets."""
         survey = Survey.objects.create(
             owner=users["user1"],

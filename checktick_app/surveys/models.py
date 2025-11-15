@@ -1775,7 +1775,9 @@ class DataSet(models.Model):
         )
         return timezone.now() >= next_sync
 
-    def create_custom_version(self, user: User, organization: Organization) -> "DataSet":
+    def create_custom_version(
+        self, user: User, organization: Organization
+    ) -> "DataSet":
         """
         Create a customized version of this dataset.
 

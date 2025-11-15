@@ -4467,12 +4467,14 @@ def builder_question_create(request: HttpRequest, slug: str) -> HttpResponse:
     # Look up dataset if provided (with access control)
     dataset = None
     if dataset_key:
-        from .models import DataSet
         from django.db.models import Q
+
+        from .models import DataSet
+
         dataset = DataSet.objects.filter(
             Q(is_global=True) | Q(organization=survey.organization),
             key=dataset_key,
-            is_active=True
+            is_active=True,
         ).first()
 
     SurveyQuestion.objects.create(
@@ -4651,12 +4653,14 @@ def builder_group_question_create(
     # Look up dataset if provided (with access control)
     dataset = None
     if dataset_key:
-        from .models import DataSet
         from django.db.models import Q
+
+        from .models import DataSet
+
         dataset = DataSet.objects.filter(
             Q(is_global=True) | Q(organization=survey.organization),
             key=dataset_key,
-            is_active=True
+            is_active=True,
         ).first()
 
     SurveyQuestion.objects.create(
@@ -5012,12 +5016,14 @@ def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResp
 
     # Look up dataset if provided (with access control)
     if dataset_key:
-        from .models import DataSet
         from django.db.models import Q
+
+        from .models import DataSet
+
         q.dataset = DataSet.objects.filter(
             Q(is_global=True) | Q(organization=survey.organization),
             key=dataset_key,
-            is_active=True
+            is_active=True,
         ).first()
     else:
         q.dataset = None
@@ -5049,12 +5055,14 @@ def builder_group_question_edit(
 
     # Look up dataset if provided (with access control)
     if dataset_key:
-        from .models import DataSet
         from django.db.models import Q
+
+        from .models import DataSet
+
         q.dataset = DataSet.objects.filter(
             Q(is_global=True) | Q(organization=survey.organization),
             key=dataset_key,
-            is_active=True
+            is_active=True,
         ).first()
     else:
         q.dataset = None

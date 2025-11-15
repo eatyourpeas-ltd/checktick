@@ -790,7 +790,7 @@ def list_datasets(request):
     organization = None
     if request.user.is_authenticated:
         # Get first organization from user's surveys
-        user_survey = request.user.surveys.select_related('organization').first()
+        user_survey = request.user.surveys.select_related("organization").first()
         if user_survey:
             organization = user_survey.organization
 
@@ -816,20 +816,24 @@ def get_dataset(request, dataset_key):
         # Get user's organization if authenticated
         organization = None
         if request.user.is_authenticated:
-            user_survey = request.user.surveys.select_related('organization').first()
+            user_survey = request.user.surveys.select_related("organization").first()
             if user_survey:
                 organization = user_survey.organization
 
         # Verify user has access to this dataset
-        from checktick_app.surveys.models import DataSet
         from django.db.models import Q
 
-        dataset_obj = DataSet.objects.filter(
-            key=dataset_key,
-            is_active=True
-        ).filter(
-            Q(is_global=True) | Q(organization=organization) if organization else Q(is_global=True)
-        ).first()
+        from checktick_app.surveys.models import DataSet
+
+        dataset_obj = (
+            DataSet.objects.filter(key=dataset_key, is_active=True)
+            .filter(
+                Q(is_global=True) | Q(organization=organization)
+                if organization
+                else Q(is_global=True)
+            )
+            .first()
+        )
 
         if dataset_obj:
             # Return from database

@@ -10,17 +10,18 @@ Covers:
 - Version tracking and sync scheduling
 """
 
-import pytest
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 from django.utils import timezone
-from datetime import timedelta
+import pytest
 
-from checktick_app.surveys.models import DataSet, Organization
 from checktick_app.surveys.external_datasets import (
-    get_available_datasets,
     fetch_dataset,
+    get_available_datasets,
 )
+from checktick_app.surveys.models import DataSet, Organization
 
 User = get_user_model()
 
@@ -187,7 +188,9 @@ class TestDataSetModel:
 class TestCustomVersionCreation:
     """Tests for creating custom versions of NHS DD datasets."""
 
-    def test_create_custom_version_from_nhs_dd(self, user, organization, nhs_dd_dataset):
+    def test_create_custom_version_from_nhs_dd(
+        self, user, organization, nhs_dd_dataset
+    ):
         """Test creating a custom version from NHS DD dataset."""
         custom = nhs_dd_dataset.create_custom_version(
             user=user,
@@ -226,7 +229,9 @@ class TestCustomVersionCreation:
         assert len(custom_dataset.options) == 2
         assert custom_dataset.description == "Modified description"
 
-    def test_parent_unchanged_when_custom_modified(self, nhs_dd_dataset, custom_dataset):
+    def test_parent_unchanged_when_custom_modified(
+        self, nhs_dd_dataset, custom_dataset
+    ):
         """Test that modifying custom version doesn't affect parent."""
         original_parent_options = nhs_dd_dataset.options.copy()
 
@@ -289,7 +294,7 @@ class TestGetAvailableDatasets:
 
     def test_excludes_inactive_datasets(self, db):
         """Test that inactive datasets are not returned."""
-        inactive = DataSet.objects.create(
+        DataSet.objects.create(
             key="inactive_dataset",
             name="Inactive Dataset",
             category="user_created",
@@ -315,7 +320,7 @@ class TestGetAvailableDatasets:
     def test_database_datasets_override_hardcoded(self, db):
         """Test that database datasets override hardcoded ones with same key."""
         # Create database version of hardcoded dataset
-        db_dataset = DataSet.objects.create(
+        DataSet.objects.create(
             key="nhs_trusts",
             name="NHS Trusts (Database Version)",
             category="external_api",
@@ -364,7 +369,7 @@ class TestFetchDataset:
 
     def test_fetch_inactive_dataset_raises_error(self, db):
         """Test that fetching inactive dataset raises error."""
-        inactive = DataSet.objects.create(
+        DataSet.objects.create(
             key="inactive_test",
             name="Inactive Test",
             category="user_created",
@@ -393,7 +398,9 @@ class TestFetchDataset:
 class TestDataSetQuerysets:
     """Tests for common DataSet querysets and filtering."""
 
-    def test_filter_by_category(self, nhs_dd_dataset, api_dataset, db, user, organization):
+    def test_filter_by_category(
+        self, nhs_dd_dataset, api_dataset, db, user, organization
+    ):
         """Test filtering datasets by category."""
         # Create user-created dataset
         user_dataset = DataSet.objects.create(
@@ -421,7 +428,9 @@ class TestDataSetQuerysets:
         user2 = User.objects.create_user(username="user2", password="pass")
         org2 = Organization.objects.create(name="Hospital 2", owner=user2)
 
-        custom1 = nhs_dd_dataset.create_custom_version(user=user, organization=organization)
+        custom1 = nhs_dd_dataset.create_custom_version(
+            user=user, organization=organization
+        )
         custom2 = nhs_dd_dataset.create_custom_version(user=user, organization=org2)
 
         org1_datasets = DataSet.objects.filter(organization=organization)

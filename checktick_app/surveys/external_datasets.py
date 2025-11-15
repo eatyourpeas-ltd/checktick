@@ -81,9 +81,7 @@ def get_available_datasets(organization=None) -> dict[str, str]:
 
     if organization:
         # Global datasets OR org-specific datasets
-        qs = qs.filter(
-            Q(is_global=True) | Q(organization=organization)
-        )
+        qs = qs.filter(Q(is_global=True) | Q(organization=organization))
     else:
         # Only global datasets if no org context
         qs = qs.filter(is_global=True)
