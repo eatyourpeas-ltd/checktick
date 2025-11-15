@@ -28,6 +28,7 @@ else:
 
 router = DefaultRouter()
 router.register(r"surveys", views.SurveyViewSet, basename="survey")
+router.register(r"datasets-v2", views.DataSetViewSet, basename="dataset-v2")
 router.register(r"users", views.UserViewSet, basename="user")
 router.register(
     r"org-memberships", views.OrganizationMembershipViewSet, basename="org-membership"

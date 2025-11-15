@@ -476,3 +476,187 @@ POST /api/surveys/{survey_id}/seed/
 
 - [Getting Started with the API](getting-started-api.md) - Authentication and basic API usage
 - [Surveys](surveys.md) - Creating surveys via the web interface
+
+## Managing Datasets via the API
+
+The DataSet API allows you to create, manage, and share reusable dropdown option lists across your organization. This is useful for standardized lists like NHS specialty codes, trust names, or custom organizational lists.
+
+### Endpoints
+
+- `GET /api/datasets-v2/` - List available datasets
+- `GET /api/datasets-v2/{key}/` - Retrieve specific dataset
+- `POST /api/datasets-v2/` - Create new dataset
+- `PATCH /api/datasets-v2/{key}/` - Update dataset
+- `DELETE /api/datasets-v2/{key}/` - Delete dataset (soft delete)
+
+### Permissions
+
+- **VIEWER**: Can list and retrieve datasets (read-only)
+- **CREATOR/ADMIN**: Can create, update, and delete organization datasets
+- **NHS DD datasets**: Read-only for all users (cannot be modified)
+
+### List Datasets
+
+Get all datasets you have access to (global + organization-specific):
+
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://your-domain.com/api/datasets-v2/
+```
+
+Response:
+
+```json
+[
+  {
+    "key": "nhs_specialty",
+    "name": "NHS Specialty Codes",
+    "category": "nhs_dd",
+    "is_global": true,
+    "is_editable": false,
+    "options": ["100", "101", "102", "..."],
+    "organization": null
+  },
+  {
+    "key": "my_custom_list",
+    "name": "My Custom List",
+    "category": "user_created",
+    "is_global": false,
+    "is_editable": true,
+    "organization": 1,
+    "organization_name": "My Organization"
+  }
+]
+```
+
+### Retrieve Dataset
+
+Get details of a specific dataset:
+
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://your-domain.com/api/datasets-v2/nhs_specialty/
+```
+
+### Create Dataset
+
+Create a new dataset for your organization (requires ADMIN or CREATOR role):
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "key": "hospital_departments",
+    "name": "Hospital Departments",
+    "description": "List of departments in our hospital",
+    "options": [
+      "Emergency Department",
+      "Cardiology",
+      "Orthopedics",
+      "Pediatrics"
+    ],
+    "organization": 1
+  }' \
+  https://your-domain.com/api/datasets-v2/
+```
+
+**Required fields:**
+
+- `key`: Unique identifier (lowercase, hyphens/underscores only)
+- `name`: Display name
+- `options`: Array of option strings
+- `organization`: Your organization ID
+
+**Optional fields:**
+
+- `description`: Additional details about the dataset
+- `format_pattern`: Display format (e.g., "CODE - NAME")
+- `reference_url`: Source reference URL
+
+Response:
+
+```json
+{
+  "key": "hospital_departments",
+  "name": "Hospital Departments",
+  "category": "user_created",
+  "source_type": "manual",
+  "is_custom": true,
+  "is_global": false,
+  "organization": 1,
+  "organization_name": "My Organization",
+  "options": ["Emergency Department", "Cardiology", "Orthopedics", "Pediatrics"],
+  "created_by": 5,
+  "created_by_username": "admin_user",
+  "version": 1,
+  "is_active": true,
+  "is_editable": true
+}
+```
+
+### Update Dataset
+
+Update options or metadata (requires ADMIN or CREATOR role in the dataset's organization):
+
+```bash
+curl -X PATCH \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Hospital Departments (Updated)",
+    "options": [
+      "Emergency Department",
+      "Cardiology",
+      "Orthopedics",
+      "Pediatrics",
+      "Neurology"
+    ]
+  }' \
+  https://your-domain.com/api/datasets-v2/hospital_departments/
+```
+
+**Note:** The version field is automatically incremented on each update.
+
+### Delete Dataset
+
+Soft-delete a dataset (sets `is_active=False`):
+
+```bash
+curl -X DELETE \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  https://your-domain.com/api/datasets-v2/hospital_departments/
+```
+
+**Important:** NHS DD datasets cannot be deleted.
+
+### Using Datasets in Questions
+
+Once you've created a dataset, reference it in dropdown questions using the `prefilled_dataset` field:
+
+```json
+{
+  "text": "Select your department",
+  "type": "dropdown",
+  "prefilled_dataset": "hospital_departments",
+  "order": 1
+}
+```
+
+The question will automatically use the options from the dataset. If you customize the options in the question, the link to the dataset is preserved but the question uses its local options.
+
+### Access Control
+
+- **Global datasets** (`is_global=true`): Visible to all users and organizations
+- **Organization datasets** (`is_global=false`): Only visible to members of that organization
+- **NHS DD datasets** (`category=nhs_dd`): Read-only, cannot be modified or deleted
+- Cross-organization access is blocked - users cannot see or modify other organizations' datasets
+
+### Dataset Best Practices
+
+1. **Use clear, descriptive keys** like `nhs_specialty_codes` instead of `list1`
+2. **Keep options up to date** - update datasets rather than hardcoding options in questions
+3. **Create organization-wide lists** for commonly used options across multiple surveys
+4. **Don't modify NHS DD datasets** - create custom versions if you need variations
+5. **Use the `description` field** to document the purpose and source of custom lists
+6. **Version control** is automatic - the API increments the version number on each update

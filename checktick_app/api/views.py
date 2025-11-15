@@ -24,6 +24,7 @@ from checktick_app.surveys.external_datasets import (
 )
 from checktick_app.surveys.models import (
     AuditLog,
+    DataSet,
     Organization,
     OrganizationMembership,
     QuestionGroup,
@@ -99,6 +100,166 @@ class OrgOwnerOrAdminPermission(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return can_view_survey(request.user, obj)
         return can_edit_survey(request.user, obj)
+
+
+class DataSetSerializer(serializers.ModelSerializer):
+    """Serializer for DataSet model with read/write support."""
+
+    organization_name = serializers.CharField(
+        source="organization.name", read_only=True
+    )
+    created_by_username = serializers.CharField(
+        source="created_by.username", read_only=True
+    )
+    is_editable = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DataSet
+        fields = [
+            "key",
+            "name",
+            "description",
+            "category",
+            "source_type",
+            "reference_url",
+            "is_custom",
+            "is_global",
+            "organization",
+            "organization_name",
+            "options",
+            "format_pattern",
+            "created_by",
+            "created_by_username",
+            "created_at",
+            "updated_at",
+            "version",
+            "is_active",
+            "is_editable",
+        ]
+        read_only_fields = [
+            "created_by",
+            "created_at",
+            "updated_at",
+            "version",
+            "created_by_username",
+            "organization_name",
+            "is_editable",
+        ]
+
+    def get_is_editable(self, obj):
+        """Determine if current user can edit this dataset."""
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+
+        # NHS DD datasets are never editable
+        if obj.category == "nhs_dd":
+            return False
+
+        # Global datasets without organization can only be edited by superusers
+        if obj.is_global and not obj.organization:
+            return request.user.is_superuser
+
+        # Organization datasets: check if user is admin or creator in that org
+        if obj.organization:
+            membership = OrganizationMembership.objects.filter(
+                organization=obj.organization, user=request.user
+            ).first()
+            if membership and membership.role in [
+                OrganizationMembership.Role.ADMIN,
+                OrganizationMembership.Role.CREATOR,
+            ]:
+                return True
+
+        return False
+
+    def validate(self, attrs):
+        """Validate dataset creation/update."""
+        # Prevent editing NHS DD datasets
+        if self.instance and self.instance.category == "nhs_dd":
+            raise serializers.ValidationError(
+                "NHS Data Dictionary datasets cannot be modified"
+            )
+
+        # Ensure options is a list
+        if "options" in attrs and not isinstance(attrs["options"], list):
+            raise serializers.ValidationError({"options": "Must be a list of strings"})
+
+        # Validate key format (slug-like)
+        if "key" in attrs:
+            import re
+
+            if not re.match(r"^[a-z0-9_-]+$", attrs["key"]):
+                raise serializers.ValidationError(
+                    {
+                        "key": "Key must contain only lowercase letters, numbers, hyphens, and underscores"
+                    }
+                )
+
+        return attrs
+
+
+class IsOrgAdminOrCreator(permissions.BasePermission):
+    """
+    Permission for dataset management.
+
+    - GET: Authenticated users can list/retrieve datasets they have access to
+    - POST: User must be ADMIN or CREATOR in an organization
+    - PUT/PATCH/DELETE: User must be ADMIN or CREATOR in the dataset's organization
+    - NHS DD datasets cannot be modified
+    """
+
+    def has_permission(self, request, view):
+        """Check if user can access the dataset API at all."""
+        if not request.user.is_authenticated:
+            # Allow anonymous GET for public datasets (filtered in viewset)
+            return request.method in permissions.SAFE_METHODS
+
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        # For POST, user must be ADMIN or CREATOR in at least one organization
+        if request.method == "POST":
+            has_role = OrganizationMembership.objects.filter(
+                user=request.user,
+                role__in=[
+                    OrganizationMembership.Role.ADMIN,
+                    OrganizationMembership.Role.CREATOR,
+                ],
+            ).exists()
+            return has_role
+
+        return True
+
+    def has_object_permission(self, request, view, obj):
+        """Check if user can modify this specific dataset."""
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        # Superusers can do anything
+        if request.user.is_superuser:
+            return True
+
+        # Cannot modify NHS DD datasets
+        if obj.category == "nhs_dd":
+            return False
+
+        # Cannot modify global datasets without organization (platform-wide)
+        if obj.is_global and not obj.organization:
+            return False
+
+        # Check organization membership
+        if obj.organization:
+            membership = OrganizationMembership.objects.filter(
+                organization=obj.organization, user=request.user
+            ).first()
+            if membership and membership.role in [
+                OrganizationMembership.Role.ADMIN,
+                OrganizationMembership.Role.CREATOR,
+            ]:
+                return True
+
+        return False
 
 
 class SurveyViewSet(viewsets.ModelViewSet):
@@ -775,6 +936,120 @@ else:
     @permission_classes([permissions.AllowAny])
     def healthcheck(request):
         return Response({"status": "ok"})
+
+
+class DataSetViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing DataSet objects.
+
+    GET /api/datasets/ - List all accessible datasets
+    GET /api/datasets/{key}/ - Retrieve specific dataset
+    POST /api/datasets/ - Create new dataset (ADMIN/CREATOR only)
+    PATCH /api/datasets/{key}/ - Update dataset (ADMIN/CREATOR of org only)
+    DELETE /api/datasets/{key}/ - Delete dataset (ADMIN/CREATOR of org only)
+
+    Access control:
+    - List/Retrieve: Shows global datasets + user's organization datasets
+    - Create: Requires ADMIN or CREATOR role in an organization
+    - Update/Delete: Requires ADMIN or CREATOR role in dataset's organization
+    - NHS DD datasets cannot be modified or deleted
+    """
+
+    serializer_class = DataSetSerializer
+    permission_classes = [IsOrgAdminOrCreator]
+    lookup_field = "key"
+
+    def get_queryset(self):
+        """
+        Filter datasets based on user's organization access.
+
+        Returns:
+        - Global datasets (is_global=True)
+        - Datasets belonging to user's organizations
+        - Active datasets only by default
+        """
+        from django.db.models import Q
+
+        user = self.request.user
+        queryset = DataSet.objects.filter(is_active=True)
+
+        # Anonymous users see only global datasets
+        if not user.is_authenticated:
+            return queryset.filter(is_global=True)
+
+        # Get user's organizations
+        user_orgs = Organization.objects.filter(memberships__user=user)
+
+        # Filter: global OR in user's organizations
+        queryset = queryset.filter(Q(is_global=True) | Q(organization__in=user_orgs))
+
+        return queryset.order_by("category", "name")
+
+    def perform_create(self, serializer):
+        """Set created_by to current user and assign to organization."""
+        user = self.request.user
+
+        # Determine organization from request or user's first org
+        org_id = self.request.data.get("organization")
+
+        if org_id:
+            # Verify user has ADMIN/CREATOR role in specified org
+            org = Organization.objects.get(id=org_id)
+            membership = OrganizationMembership.objects.filter(
+                organization=org,
+                user=user,
+                role__in=[
+                    OrganizationMembership.Role.ADMIN,
+                    OrganizationMembership.Role.CREATOR,
+                ],
+            ).first()
+            if not membership:
+                raise PermissionDenied(
+                    "You must be an ADMIN or CREATOR in this organization"
+                )
+        else:
+            # Use first organization where user is ADMIN/CREATOR
+            membership = OrganizationMembership.objects.filter(
+                user=user,
+                role__in=[
+                    OrganizationMembership.Role.ADMIN,
+                    OrganizationMembership.Role.CREATOR,
+                ],
+            ).first()
+            if not membership:
+                raise PermissionDenied(
+                    "You must be an ADMIN or CREATOR in an organization to create datasets"
+                )
+            org = membership.organization
+
+        # Set defaults for user-created datasets
+        serializer.save(
+            created_by=user,
+            organization=org,
+            category="user_created",
+            source_type="manual",
+            is_custom=True,
+            is_global=False,  # Organization datasets are not global by default
+        )
+
+    def perform_update(self, serializer):
+        """Increment version on update."""
+        instance = self.get_object()
+        serializer.save(version=instance.version + 1)
+
+    def destroy(self, request, *args, **kwargs):
+        """Soft delete by setting is_active=False."""
+        instance = self.get_object()
+
+        # Prevent deletion of NHS DD datasets
+        if instance.category == "nhs_dd":
+            raise PermissionDenied("NHS Data Dictionary datasets cannot be deleted")
+
+        # Soft delete
+        instance.is_active = False
+        instance.save()
+
+        return Response(status=204)
 
 
 @api_view(["GET"])
