@@ -44,6 +44,7 @@ from .models import (
     Survey,
     SurveyAccessToken,
     SurveyMembership,
+    SurveyProgress,
     SurveyQuestion,
     SurveyQuestionCondition,
     SurveyResponse,
@@ -2848,7 +2849,14 @@ def _handle_participant_submission(
         )
         raise Http404()
 
+    # Get or create progress record
+    progress, _ = _get_or_create_progress(request, survey, token_obj)
+
     if request.method == "POST":
+        # Check if this is a draft save (AJAX request)
+        is_draft = request.POST.get("action") == "save_draft"
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
         # Prevent duplicate submission for tokenized link
         if token_obj and SurveyResponse.objects.filter(access_token=token_obj).exists():
             return redirect(f"/surveys/{survey.slug}/closed/?reason=token_used")
@@ -2861,7 +2869,23 @@ def _handle_participant_submission(
                 if q.type in {"mc_multi", "orderable"}
                 else request.POST.get(key)
             )
-            answers[str(q.id)] = value
+            # Only save non-empty answers for draft
+            if value or not is_draft:
+                answers[str(q.id)] = value
+
+        # If this is a draft save, update progress and return JSON
+        if is_draft and is_ajax:
+            progress.update_progress(answers)
+            return JsonResponse(
+                {
+                    "success": True,
+                    "progress": {
+                        "percentage": progress.calculate_progress_percentage(),
+                        "answered": progress.answered_count,
+                        "total": progress.total_questions,
+                    },
+                }
+            )
 
         # Professional details (non-encrypted)
         _, professional_fields, professional_ods = _get_professional_group_and_fields(
@@ -2916,6 +2940,10 @@ def _handle_participant_submission(
                 token_obj.used_by = request.user
             token_obj.save(update_fields=["used_at", "used_by"])
 
+        # Delete progress record after successful submission
+        if progress:
+            progress.delete()
+
         messages.success(request, "Thank you for your response.")
         # Redirect to thank-you page
         return redirect("surveys:thank_you", slug=survey.slug)
@@ -2951,6 +2979,13 @@ def _handle_participant_submission(
         "professional_ods": professional_ods,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
         "is_preview": False,  # Flag to indicate this is public submission
+        # Progress tracking
+        "show_progress": True,
+        "progress_percentage": progress.calculate_progress_percentage(),
+        "answered_count": progress.answered_count,
+        "total_questions": progress.total_questions,
+        "saved_answers": progress.partial_answers,
+        "last_saved": progress.updated_at if progress.answered_count > 0 else None,
     }
     return render(request, "surveys/detail.html", ctx)
 
@@ -3782,6 +3817,55 @@ def get_survey_key_from_session(request: HttpRequest, survey_slug: str) -> bytes
         request.session.pop("unlock_verified_at", None)
         request.session.pop("unlock_survey_slug", None)
         return None
+
+
+def _get_or_create_progress(
+    request: HttpRequest, survey: Survey, token_obj: SurveyAccessToken | None
+):
+    """
+    Get or create progress record for current user/session.
+    Returns tuple of (SurveyProgress, created: bool)
+    """
+    from datetime import timedelta
+
+    from .models import SurveyProgress
+
+    total_questions = survey.questions.count()
+    expires_at = timezone.now() + timedelta(days=30)
+
+    if request.user.is_authenticated:
+        # Authenticated user
+        progress, created = SurveyProgress.objects.get_or_create(
+            survey=survey,
+            user=request.user,
+            defaults={
+                "total_questions": total_questions,
+                "expires_at": expires_at,
+                "access_token": token_obj,
+            },
+        )
+    else:
+        # Anonymous user - use session
+        if not request.session.session_key:
+            request.session.create()
+
+        progress, created = SurveyProgress.objects.get_or_create(
+            survey=survey,
+            session_key=request.session.session_key,
+            defaults={
+                "total_questions": total_questions,
+                "expires_at": expires_at,
+                "access_token": token_obj,
+            },
+        )
+
+    if not created:
+        # Update expiry on access and total questions if survey changed
+        progress.expires_at = expires_at
+        progress.total_questions = total_questions
+        progress.save(update_fields=["expires_at", "total_questions"])
+
+    return progress, created
 
 
 @login_required

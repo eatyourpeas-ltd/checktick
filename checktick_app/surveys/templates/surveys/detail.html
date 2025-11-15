@@ -60,9 +60,30 @@
 </div>
 {% endif %}
 
+{% if show_progress and not is_preview %}
+{# Progress bar - show at top of survey for participants #}
+<div class="card bg-base-200 shadow-sm mb-6">
+    <div class="card-body py-3 px-4">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-medium">{% trans "Survey Progress" %}</span>
+            <span class="text-sm font-semibold text-primary" data-progress-percentage>{{ progress_percentage }}%</span>
+        </div>
+        <progress class="progress progress-primary w-full" value="{{ progress_percentage }}" max="100" data-progress-bar></progress>
+        <div class="flex justify-between text-xs opacity-70 mt-1">
+            <span data-progress-count>{{ answered_count }} {% trans "of" %} {{ total_questions }} {% trans "questions answered" %}</span>
+            {% if last_saved %}
+                <span data-save-status>{% trans "Last saved" %}: {{ last_saved|timesince }} {% trans "ago" %}</span>
+            {% else %}
+                <span data-save-status></span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {# Template dropdown moved below with HR and label per UX #}
 
-<form method="post" class="space-y-4 mt-6">
+<form method="post" class="space-y-4 mt-6" data-survey-form data-survey-slug="{{ survey.slug }}">
   {% csrf_token %}
 
   {% for q in questions %}
@@ -393,6 +414,125 @@
         });
       }
     });
+
+    {% if show_progress and not is_preview and saved_answers %}
+    // Restore saved answers
+    const savedAnswers = {{ saved_answers|safe }};
+    Object.entries(savedAnswers).forEach(([questionId, value]) => {
+      if (!value) return; // Skip empty values
+
+      const inputs = document.querySelectorAll(`[name="q_${questionId}"]`);
+      if (inputs.length === 0) return;
+
+      const firstInput = inputs[0];
+
+      if (firstInput.type === 'checkbox') {
+        // Handle multiple choice (multiple selections)
+        if (Array.isArray(value)) {
+          value.forEach(v => {
+            const checkbox = document.querySelector(`[name="q_${questionId}"][value="${v}"]`);
+            if (checkbox) checkbox.checked = true;
+          });
+        }
+      } else if (firstInput.type === 'radio') {
+        // Handle single choice radio buttons
+        const radio = document.querySelector(`[name="q_${questionId}"][value="${value}"]`);
+        if (radio) radio.checked = true;
+      } else if (firstInput.tagName === 'SELECT') {
+        // Handle dropdowns
+        firstInput.value = value;
+      } else if (firstInput.type === 'range') {
+        // Handle Likert scales
+        firstInput.value = value;
+        const questionIdNum = questionId;
+        const valueDisplay = document.getElementById('range_value_q_' + questionIdNum);
+        if (valueDisplay) valueDisplay.textContent = value;
+      } else {
+        // Handle text/number inputs
+        firstInput.value = value;
+      }
+    });
+    {% endif %}
+
+    {% if show_progress and not is_preview %}
+    // Auto-save survey progress
+    (function() {
+      const form = document.querySelector('form[data-survey-form]');
+      if (!form) return;
+
+      let saveTimeout;
+      const AUTOSAVE_DELAY = 3000; // 3 seconds after last change
+      let isSaving = false;
+
+      function getCsrfToken() {
+        const csrfInput = form.querySelector('[name="csrfmiddlewaretoken"]');
+        return csrfInput ? csrfInput.value : '';
+      }
+
+      function saveDraft() {
+        if (isSaving) return;
+        isSaving = true;
+
+        const formData = new FormData(form);
+        formData.append('action', 'save_draft');
+
+        fetch(form.action, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': getCsrfToken()
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success && data.progress) {
+            updateProgressBar(data.progress);
+            showSaveIndicator('saved');
+          }
+        })
+        .catch(() => {
+          showSaveIndicator('error');
+        })
+        .finally(() => {
+          isSaving = false;
+        });
+      }
+
+      function debouncedSave() {
+        clearTimeout(saveTimeout);
+        showSaveIndicator('saving');
+        saveTimeout = setTimeout(saveDraft, AUTOSAVE_DELAY);
+      }
+
+      // Attach listeners to form inputs
+      form.addEventListener('input', debouncedSave);
+      form.addEventListener('change', debouncedSave);
+
+      function updateProgressBar(progress) {
+        const bar = document.querySelector('[data-progress-bar]');
+        const percentage = document.querySelector('[data-progress-percentage]');
+        const count = document.querySelector('[data-progress-count]');
+
+        if (bar) bar.value = progress.percentage;
+        if (percentage) percentage.textContent = progress.percentage + '%';
+        if (count) count.textContent = `${progress.answered} {% trans "of" %} ${progress.total} {% trans "questions answered" %}`;
+      }
+
+      function showSaveIndicator(status) {
+        const indicator = document.querySelector('[data-save-status]');
+        if (!indicator) return;
+
+        if (status === 'saved') {
+          indicator.innerHTML = '<span class="text-success">✓ {% trans "Saved" %}</span>';
+        } else if (status === 'saving') {
+          indicator.innerHTML = '<span class="text-base-content opacity-70">⟳ {% trans "Saving..." %}</span>';
+        } else if (status === 'error') {
+          indicator.innerHTML = '<span class="text-error">⚠ {% trans "Save failed" %}</span>';
+        }
+      }
+    })();
+    {% endif %}
   });
 </script>
 

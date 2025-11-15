@@ -986,6 +986,86 @@ class SurveyAccessToken(models.Model):
         return True
 
 
+class SurveyProgress(models.Model):
+    """
+    Tracks partial survey progress for logged-in users and anonymous sessions.
+    Allows users to resume incomplete surveys.
+    """
+
+    survey = models.ForeignKey(
+        Survey, on_delete=models.CASCADE, related_name="progress_records"
+    )
+
+    # For authenticated users
+    user = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="survey_progress",
+    )
+
+    # For anonymous users (token/unlisted/public)
+    session_key = models.CharField(max_length=40, null=True, blank=True, db_index=True)
+
+    # Optional link to access token for token-based surveys
+    access_token = models.ForeignKey(
+        SurveyAccessToken,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="progress",
+    )
+
+    # Progress data
+    partial_answers = models.JSONField(default=dict)
+    current_question_id = models.IntegerField(null=True, blank=True)
+    total_questions = models.IntegerField(default=0)
+    answered_count = models.IntegerField(default=0)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_question_answered_at = models.DateTimeField(null=True, blank=True)
+
+    # Auto-cleanup: delete old progress after 30 days
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["survey", "user"],
+                condition=Q(user__isnull=False),
+                name="one_progress_per_user_per_survey",
+            ),
+            models.UniqueConstraint(
+                fields=["survey", "session_key"],
+                condition=Q(session_key__isnull=False),
+                name="one_progress_per_session_per_survey",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["survey", "user"]),
+            models.Index(fields=["survey", "session_key"]),
+            models.Index(fields=["expires_at"]),
+        ]
+
+    def calculate_progress_percentage(self) -> int:
+        """Calculate progress as percentage (0-100)"""
+        if self.total_questions == 0:
+            return 0
+        return int((self.answered_count / self.total_questions) * 100)
+
+    def update_progress(self, answers: dict, current_q_id: int | None = None):
+        """Update progress with new answers"""
+        self.partial_answers.update(answers)
+        self.answered_count = len([v for v in self.partial_answers.values() if v])
+        if current_q_id:
+            self.current_question_id = current_q_id
+        self.last_question_answered_at = timezone.now()
+        self.save()
+
+
 def validate_markdown_survey(md_text: str) -> list[dict]:
     if not md_text or not md_text.strip():
         raise ValidationError("Empty markdown")

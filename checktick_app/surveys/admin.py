@@ -7,6 +7,7 @@ from .models import (
     Organization,
     QuestionGroup,
     Survey,
+    SurveyProgress,
     SurveyQuestion,
     SurveyResponse,
 )
@@ -36,6 +37,22 @@ class SurveyAdmin(admin.ModelAdmin):
 @admin.register(SurveyResponse)
 class SurveyResponseAdmin(admin.ModelAdmin):
     list_display = ("survey", "submitted_at")
+
+
+@admin.register(SurveyProgress)
+class SurveyProgressAdmin(admin.ModelAdmin):
+    list_display = (
+        "survey",
+        "user",
+        "session_key",
+        "answered_count",
+        "total_questions",
+        "updated_at",
+        "expires_at",
+    )
+    list_filter = ("survey", "updated_at", "expires_at")
+    search_fields = ("survey__name", "survey__slug", "user__username", "session_key")
+    readonly_fields = ("created_at", "updated_at", "last_question_answered_at")
 
 
 class CollectionItemInline(admin.TabularInline):
