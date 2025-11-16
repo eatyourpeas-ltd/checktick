@@ -13,9 +13,20 @@
     <span>{% trans "Datasets" %}</span>
   </h1>
 
-  {% if can_create %}
-    <p><a class="btn btn-primary not-prose" href="{% url 'surveys:dataset_create' %}">{% trans "Create Dataset" %}</a></p>
-  {% endif %}
+  <div class="not-prose flex flex-wrap gap-2 mb-4">
+    {% if can_create %}
+      <a class="btn btn-primary" href="{% url 'surveys:dataset_create' %}">{% trans "Create Dataset" %}</a>
+    {% endif %}
+    <a class="btn btn-secondary btn-outline"
+       href="https://github.com/eatyourpeas/checktick/issues/new?template=nhs_dd_dataset_request.yml&title=%5BNHS+DD+Dataset%5D%3A+"
+       target="_blank"
+       rel="noopener noreferrer">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+      </svg>
+      {% trans "Request NHS DD List" %}
+    </a>
+  </div>
 
   <!-- Filters -->
   <div class="not-prose mb-6">
