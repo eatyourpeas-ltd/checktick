@@ -28,6 +28,7 @@ else:
 
 router = DefaultRouter()
 router.register(r"surveys", views.SurveyViewSet, basename="survey")
+router.register(r"datasets", views.DataSetViewSet, basename="dataset")
 router.register(r"users", views.UserViewSet, basename="user")
 router.register(
     r"org-memberships", views.OrganizationMembershipViewSet, basename="org-membership"
@@ -39,8 +40,6 @@ router.register(r"scoped-users", views.ScopedUserViewSet, basename="scoped-user"
 
 urlpatterns = [
     path("health", views.healthcheck, name="healthcheck"),
-    path("datasets/", views.list_datasets, name="list_datasets"),
-    path("datasets/<str:dataset_key>/", views.get_dataset, name="get_dataset"),
     path("token", TokenObtainView.as_view(), name="token_obtain_pair"),
     path("token/refresh", TokenRefView.as_view(), name="token_refresh"),
     # OpenAPI schema (JSON)

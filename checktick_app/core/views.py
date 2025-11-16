@@ -575,6 +575,27 @@ DOC_PAGE_OVERRIDES = {
         "file": "issues-vs-discussions.md",
         "category": "getting-involved",
     },
+    # Dataset documentation organization
+    "api-datasets": {
+        "file": "api-datasets.md",
+        "category": "api",
+        "title": "Dataset API Reference",
+    },
+    "nhs-data-dictionary-datasets": {
+        "file": "nhs-data-dictionary-datasets.md",
+        "category": None,  # Accessible via URL but hidden from sidebar navigation
+        "title": "NHS DD Dataset Reference",
+    },
+    "datasets-and-dropdowns": {
+        "file": "datasets-and-dropdowns.md",
+        "category": "features",
+        "title": "Datasets and Dropdowns",
+    },
+    "datasets": {
+        "file": "datasets.md",
+        "category": None,  # Hidden - replaced by datasets-and-dropdowns
+        "title": "Using Datasets (Legacy)",
+    },
 }
 
 
@@ -717,7 +738,7 @@ def _infer_category(slug: str) -> str:
     # Features
     if any(
         x in slug_lower
-        for x in ["surveys", "collections", "groups", "import", "publish"]
+        for x in ["surveys", "collections", "groups", "import", "publish", "dataset"]
     ):
         return "features"
 

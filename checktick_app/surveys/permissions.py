@@ -86,6 +86,83 @@ def user_has_org_membership(user) -> bool:
     return OrganizationMembership.objects.filter(user=user).exists()
 
 
+def can_create_datasets(user) -> bool:
+    """Check if user can create datasets.
+
+    Allowed:
+    - Individual users (not part of any organization)
+    - Organization members with ADMIN or CREATOR roles
+
+    Not allowed:
+    - VIEWER role members (read-only, cannot create anything)
+    - Unauthenticated users
+
+    Future: Will restrict individual users to pro accounts only.
+    """
+    if not user.is_authenticated:
+        return False
+
+    from .models import OrganizationMembership
+
+    # Check user's organization memberships
+    memberships = OrganizationMembership.objects.filter(user=user)
+
+    # If user has no org memberships, they're an individual user - allow
+    if not memberships.exists():
+        return True
+
+    # If user has ADMIN or CREATOR role in any org, allow
+    if memberships.filter(
+        role__in=[
+            OrganizationMembership.Role.ADMIN,
+            OrganizationMembership.Role.CREATOR,
+        ]
+    ).exists():
+        return True
+
+    # User only has VIEWER or EDITOR roles - deny
+    return False
+
+
+def can_edit_dataset(user, dataset) -> bool:
+    """Check if user can edit a specific dataset."""
+    if not user.is_authenticated:
+        return False
+
+    # NHS DD datasets are read-only
+    if dataset.category == "nhs_dd" and not dataset.is_custom:
+        return False
+
+    # Global datasets can only be edited by superusers
+    if dataset.is_global and not user.is_superuser:
+        return False
+
+    # Individual user datasets - check if user is the creator
+    if dataset.organization is None:
+        return dataset.created_by == user
+
+    # Organization datasets - user must be ADMIN or CREATOR in the dataset's organization
+    return OrganizationMembership.objects.filter(
+        user=user,
+        organization=dataset.organization,
+        role__in=[
+            OrganizationMembership.Role.ADMIN,
+            OrganizationMembership.Role.CREATOR,
+        ],
+    ).exists()
+
+
+def require_can_create_datasets(user) -> None:
+    if not can_create_datasets(user):
+        # TODO: Update message when pro accounts are implemented
+        raise PermissionDenied("You must be authenticated to create datasets.")
+
+
+def require_can_edit_dataset(user, dataset) -> None:
+    if not can_edit_dataset(user, dataset):
+        raise PermissionDenied("You do not have permission to edit this dataset.")
+
+
 # ============================================================================
 # Data Governance Permissions
 # ============================================================================

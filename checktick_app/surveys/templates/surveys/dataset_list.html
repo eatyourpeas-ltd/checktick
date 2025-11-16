@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% block title %}{% trans "Datasets" %} - CheckTick{% endblock %}
+{% block content %}
+<div class="prose max-w-none">
+  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Datasets' crumb2_href='/surveys/datasets/' %}
+
+  <h1 class="inline-flex items-center gap-2">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+    </svg>
+    <span>{% trans "Datasets" %}</span>
+  </h1>
+
+  <div class="not-prose flex flex-wrap gap-2 mb-4">
+    {% if can_create %}
+      <a class="btn btn-primary" href="{% url 'surveys:dataset_create' %}">{% trans "Create Dataset" %}</a>
+    {% endif %}
+    <a class="btn btn-secondary btn-outline"
+       href="https://github.com/eatyourpeas/checktick/issues/new?template=nhs_dd_dataset_request.yml&title=%5BNHS+DD+Dataset%5D%3A+"
+       target="_blank"
+       rel="noopener noreferrer">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+      </svg>
+      {% trans "Request NHS DD List" %}
+    </a>
+  </div>
+
+  <!-- Filters -->
+  <div class="not-prose mb-6">
+    <form method="get" id="filter-form">
+      <div class="flex flex-wrap gap-3 items-center mb-4">
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Filter by category:" %}</span>
+          </label>
+          <select name="category" class="select select-bordered select-sm" data-auto-submit="true">
+            <option value="">{% trans "All categories" %}</option>
+            {% for value, label in categories %}
+              <option value="{{ value }}" {% if selected_category == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% if selected_category or selected_tags %}
+          <a href="{% url 'surveys:dataset_list' %}" class="btn btn-sm btn-ghost mt-8">{% trans "Clear All" %}</a>
+        {% endif %}
+      </div>
+
+      <!-- Tag Facets -->
+      {% if available_tags %}
+        <div>
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Filter by tags:" %}</span>
+            {% if selected_tags %}
+              <span class="label-text-alt text-info">{% trans "Showing datasets with:" %} {{ selected_tags|join:", " }}</span>
+            {% endif %}
+          </label>
+          <div class="flex flex-wrap gap-2">
+            {% for tag, count in available_tags %}
+              {% if tag in selected_tags %}
+                {# Selected tag - click to remove #}
+                {% with new_tags=selected_tags|join:"," %}
+                  <a href="?{% if selected_category %}category={{ selected_category }}&{% endif %}tags={% for t in selected_tags %}{% if t != tag %}{{ t }}{% if not forloop.last %},{% endif %}{% endif %}{% endfor %}"
+                     class="badge badge-lg badge-primary gap-2">
+                    {{ tag }}
+                    <span class="badge badge-sm badge-neutral">{{ count }}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-4 h-4 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                  </a>
+                {% endwith %}
+              {% else %}
+                {# Unselected tag - click to add #}
+                <a href="?{% if selected_category %}category={{ selected_category }}&{% endif %}tags={% if selected_tags %}{{ selected_tags|join:"," }},{% endif %}{{ tag }}"
+                   class="badge badge-lg badge-outline hover:badge-primary gap-2">
+                  {{ tag }}
+                  <span class="badge badge-sm">{{ count }}</span>
+                </a>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    </form>
+  </div>
+
+  {% if page_obj %}
+    <div class="not-prose">
+      <div class="text-sm text-gray-600 mb-3">
+        {% trans "Showing" %} {{ page_obj.start_index }}-{{ page_obj.end_index }} {% trans "of" %} {{ page_obj.paginator.count }} {% trans "datasets" %}
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-zebra w-full">
+          <thead>
+            <tr>
+              <th>{% trans "Name" %}</th>
+              <th>{% trans "Category" %}</th>
+              <th>{% trans "Tags" %}</th>
+              <th>{% trans "Options" %}</th>
+              <th>{% trans "Actions" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for dataset in page_obj %}
+            <tr>
+              <td>
+                <a href="{% url 'surveys:dataset_detail' dataset_id=dataset.id %}" class="link link-accent font-medium">
+                  {{ dataset.name }}
+                </a>
+                {% if dataset.organization %}
+                  <div class="text-xs text-gray-500 mt-1">{{ dataset.organization.name }}</div>
+                {% elif dataset.created_by and not dataset.is_global %}
+                  <div class="text-xs text-gray-500 mt-1">{% trans "Personal" %} ({{ dataset.created_by.username }})</div>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge badge-outline badge-sm">
+                  {{ dataset.get_category_display }}
+                </span>
+              </td>
+              <td>
+                {% if dataset.tags %}
+                  <div class="flex flex-wrap gap-1">
+                    {% for tag in dataset.tags %}
+                      <a href="?tags={{ tag }}{% if selected_category %}&category={{ selected_category }}{% endif %}"
+                         class="badge badge-sm badge-primary {% if tag in selected_tags %}badge-primary{% else %}badge-outline{% endif %} hover:badge-primary">
+                        {{ tag }}
+                      </a>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <span class="text-gray-400 text-xs">—</span>
+                {% endif %}
+              </td>
+              <td class="text-sm text-gray-600">
+                {{ dataset.options|length }} {% trans "item" %}{{ dataset.options|length|pluralize }}
+              </td>
+              <td>
+                <div class="flex gap-1">
+                  <a href="{% url 'surveys:dataset_detail' dataset_id=dataset.id %}" class="btn btn-xs btn-ghost">
+                    {% trans "View" %}
+                  </a>
+                  {% if dataset.is_editable %}
+                    <a href="{% url 'surveys:dataset_edit' dataset_id=dataset.id %}" class="btn btn-xs btn-secondary">
+                      {% trans "Edit" %}
+                    </a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+      <div class="flex justify-center mt-6">
+        <div class="join">
+          {% if page_obj.has_previous %}
+            <a href="?page=1{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_tags %}&tags={{ selected_tags|join:"," }}{% endif %}" class="join-item btn btn-sm">«</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_tags %}&tags={{ selected_tags|join:"," }}{% endif %}" class="join-item btn btn-sm">‹</a>
+          {% else %}
+            <button class="join-item btn btn-sm btn-disabled">«</button>
+            <button class="join-item btn btn-sm btn-disabled">‹</button>
+          {% endif %}
+
+          {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+              <button class="join-item btn btn-sm btn-active">{{ num }}</button>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+              <a href="?page={{ num }}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_tags %}&tags={{ selected_tags|join:"," }}{% endif %}" class="join-item btn btn-sm">{{ num }}</a>
+            {% endif %}
+          {% endfor %}
+
+          {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_tags %}&tags={{ selected_tags|join:"," }}{% endif %}" class="join-item btn btn-sm">›</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_tags %}&tags={{ selected_tags|join:"," }}{% endif %}" class="join-item btn btn-sm">»</a>
+          {% else %}
+            <button class="join-item btn btn-sm btn-disabled">›</button>
+            <button class="join-item btn btn-sm btn-disabled">»</button>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="alert alert-info">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      <div>
+        <div class="font-bold">{% trans "No datasets found" %}</div>
+        {% if can_create %}
+          <div class="text-sm">{% trans "Create your first dataset to get started." %}</div>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ request.csp_nonce }}">
+  // Auto-submit form when category dropdown changes
+  document.addEventListener('DOMContentLoaded', function() {
+    const categorySelect = document.querySelector('[data-auto-submit]');
+    if (categorySelect) {
+      categorySelect.addEventListener('change', function() {
+        this.form.submit();
+      });
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% block title %}{% if is_create %}{% trans "Create Dataset" %}{% else %}{% trans "Edit Dataset" %} - {{ dataset.name }}{% endif %} - CheckTick{% endblock %}
+{% block content %}
+<div class="prose max-w-none">
+  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Datasets' crumb2_href='/surveys/datasets/' crumb3_label=is_create|yesno:'Create,Edit' %}
+
+  <h1>{% if is_create %}{% trans "Create Dataset" %}{% else %}{% trans "Edit Dataset" %}{% endif %}</h1>
+
+  {% if clone_source %}
+    <div class="alert alert-info not-prose">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      <span>
+        {% trans "Creating a custom version based on" %} <strong>{{ clone_source.name }}</strong>.
+        {% trans "You can modify the options below. The original dataset will remain unchanged." %}
+      </span>
+    </div>
+  {% endif %}
+
+  <form method="post" class="not-prose max-w-2xl" id="datasetForm">
+    {% csrf_token %}
+
+    <div class="form-control w-full">
+      <label class="label">
+        <span class="label-text">{% trans "Name" %} *</span>
+      </label>
+      <input
+        type="text"
+        name="name"
+        id="datasetName"
+        value="{{ form_data.name }}"
+        placeholder="My Custom List"
+        class="input input-bordered w-full"
+        required
+      >
+    </div>
+
+    <!-- Hidden key field - auto-generated from name -->
+    <input type="hidden" name="key" id="datasetKey" value="{{ form_data.key }}">
+
+    <div class="form-control w-full">
+      <label class="label">
+        <span class="label-text">{% trans "Description" %}</span>
+      </label>
+      <textarea
+        name="description"
+        placeholder="Describe the purpose of this dataset..."
+        class="textarea textarea-bordered w-full h-24"
+      >{{ form_data.description }}</textarea>
+    </div>
+
+    <div class="form-control w-full">
+      <label class="label">
+        <span class="label-text">{% trans "Tags" %}</span>
+      </label>
+      <input
+        type="text"
+        name="tags"
+        value="{{ form_data.tags }}"
+        placeholder="demographic, organisation, specialty, equipment"
+        class="input input-bordered w-full"
+      >
+      <label class="label">
+        <span class="label-text-alt">{% trans "Optional: Comma-separated tags for filtering and discovery" %}</span>
+      </label>
+    </div>
+
+    {% if organizations|length > 1 %}
+    <div class="form-control w-full">
+      <label class="label">
+        <span class="label-text">{% trans "Organization" %}</span>
+      </label>
+      <select name="organization" class="select select-bordered w-full" {% if not is_create %}disabled{% endif %}>
+        <option value="">{% trans "Personal (Individual Account)" %}</option>
+        {% for org in organizations %}
+          <option value="{{ org.id }}" {% if form_data.organization|stringformat:"s" == org.id|stringformat:"s" %}selected{% endif %}>{{ org.name }}</option>
+        {% endfor %}
+      </select>
+      <label class="label">
+        <span class="label-text-alt">{% trans "Leave as 'Personal' for an individual dataset, or select an organization" %}</span>
+      </label>
+    </div>
+    {% elif organizations|length == 1 %}
+    <!-- Auto-select single organization -->
+    <input type="hidden" name="organization" value="{{ organizations.0.id }}">
+    {% else %}
+    <!-- No organization - individual user -->
+    <input type="hidden" name="organization" value="">
+    {% endif %}
+
+    <div class="form-control w-full">
+      <label class="label">
+        <span class="label-text">{% trans "Options" %} *</span>
+      </label>
+      <textarea
+        name="options"
+        placeholder="Simple format (auto-generates numeric keys):&#10;Option 1&#10;Option 2&#10;Option 3&#10;&#10;OR Key-value format (for custom codes):&#10;ABC - Option 1&#10;DEF - Option 2&#10;GHI - Option 3"
+        class="textarea textarea-bordered w-full font-mono text-sm h-64"
+        required
+      >{{ form_data.options }}</textarea>
+      <label class="label">
+        <span class="label-text-alt">{% trans "Enter one per line. Simple values get auto-numbered keys (001, 002, etc). For custom keys, use 'key - value' format." %}</span>
+      </label>
+    </div>
+
+    <div class="flex gap-2 mt-6">
+      <button type="submit" class="btn btn-primary">
+        {% if is_create %}{% trans "Create Dataset" %}{% else %}{% trans "Save Changes" %}{% endif %}
+      </button>
+      <a href="{% if not is_create %}{% url 'surveys:dataset_detail' dataset_id=dataset.id %}{% else %}{% url 'surveys:dataset_list' %}{% endif %}" class="btn btn-ghost">
+        {% trans "Cancel" %}
+      </a>
+    </div>
+  </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const nameInput = document.getElementById('datasetName');
+  const keyInput = document.getElementById('datasetKey');
+  const form = document.getElementById('datasetForm');
+
+  // Only auto-generate key on create, not edit
+  const isCreate = {{ is_create|yesno:"true,false" }};
+
+  if (isCreate && nameInput && keyInput) {
+    nameInput.addEventListener('input', function() {
+      // Generate key from name: lowercase, replace spaces/special chars with underscores
+      const generatedKey = this.value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '_')  // Replace non-alphanumeric with underscore
+        .replace(/^_+|_+$/g, '')       // Remove leading/trailing underscores
+        .replace(/_+/g, '_');          // Collapse multiple underscores
+
+      keyInput.value = generatedKey;
+    });
+  }
+});
+</script>
+{% endblock %}

@@ -1,10 +1,10 @@
 # Self-Hosting: Scheduled Tasks
 
-CheckTick requires scheduled tasks for data governance operations and housekeeping. This guide explains how to set up these tasks on different hosting platforms.
+CheckTick requires scheduled tasks for data governance operations, housekeeping, and external data syncing. This guide explains how to set up these tasks on different hosting platforms.
 
 ## Overview
 
-CheckTick uses two scheduled tasks:
+CheckTick uses four scheduled tasks:
 
 ### 1. Data Governance (Required for GDPR)
 
@@ -24,6 +24,53 @@ The `cleanup_survey_progress` management command runs daily to:
 2. **Free up database storage** - Keeps the database lean by removing stale session data
 
 **Recommended**: While not legally required, this prevents database bloat and improves performance. Progress records are only needed while users are actively completing surveys.
+
+### 3. External Dataset Sync (Recommended)
+
+The `sync_external_datasets` management command runs daily to:
+
+1. **Update hospital lists** - Syncs hospitals, NHS trusts, and other organizational data from RCPCH API
+2. **Maintain accuracy** - Ensures dropdown options reflect current NHS organizational structure
+3. **Enable offline use** - Stores data locally so surveys work without API dependency
+
+**Recommended**: Run this daily to keep external datasets fresh. Datasets are used in prefilled dropdown fields. Without periodic sync, data may become stale (hospitals close, trusts merge, etc.).
+
+**Initial Setup**: Just run the sync command once to populate datasets (creates records automatically):
+
+```bash
+# One-time: Create datasets and populate data (takes 2-3 minutes)
+python manage.py sync_external_datasets
+```
+
+### 4. NHS Data Dictionary Sync (Recommended)
+
+The `sync_nhs_dd_datasets` management command runs weekly to:
+
+1. **Scrape standardized lists** - Fetches codes and values from NHS Data Dictionary website
+2. **Update existing datasets** - Keeps NHS DD datasets current with official sources
+3. **Maintain accuracy** - Ensures dropdown options match authoritative NHS standards
+
+**Recommended**: Run this weekly to keep NHS DD datasets fresh. See [NHS Data Dictionary Datasets](nhs-data-dictionary-datasets.md) for the full list of scraped datasets.
+
+**Initial Setup**: Just run the sync command once to populate datasets (creates records automatically):
+
+```bash
+# One-time: Create datasets and scrape data (takes 1-2 minutes)
+python manage.py sync_nhs_dd_datasets
+```
+
+**Maintenance**:
+
+```bash
+# Check which datasets would be synced
+python manage.py sync_nhs_dd_datasets --dry-run
+
+# Force re-scrape all datasets (even if recently scraped)
+python manage.py sync_nhs_dd_datasets --force
+
+# Sync a single dataset
+python manage.py sync_nhs_dd_datasets --dataset smoking_status_code
+```
 
 ## Prerequisites
 
@@ -58,9 +105,27 @@ Northflank provides native cron job support, making this the simplest option.
    - **Schedule**: `0 3 * * *` (runs at 3 AM UTC daily, after data governance)
    - **Command**: `python manage.py cleanup_survey_progress`
 
-#### 3. Copy Environment Variables
+#### 3. Create External Dataset Sync Cron Job
 
-Both cron jobs need the same environment variables as your web service:
+1. Click **"Add Service"** → **"Cron Job"** again
+2. Configure the job:
+   - **Name**: `checktick-dataset-sync`
+   - **Docker Image**: Use the same image as your web service
+   - **Schedule**: `0 4 * * *` (runs at 4 AM UTC daily)
+   - **Command**: `python manage.py sync_external_datasets`
+
+#### 4. Create NHS DD Sync Cron Job
+
+1. Click **"Add Service"** → **"Cron Job"** again
+2. Configure the job:
+   - **Name**: `checktick-nhs-dd-sync`
+   - **Docker Image**: Use the same image as your web service
+   - **Schedule**: `0 5 * * 0` (runs at 5 AM UTC every Sunday - weekly)
+   - **Command**: `python manage.py sync_nhs_dd_datasets`
+
+#### 5. Copy Environment Variables
+
+All cron jobs need the same environment variables as your web service:
 
 1. In Northflank, go to your web service → **Environment**
 2. Copy all environment variables
@@ -74,20 +139,28 @@ Both cron jobs need the same environment variables as your web service:
 - `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` (for data governance)
 - `DEFAULT_FROM_EMAIL` (for data governance)
 - `SITE_URL` (for email links in data governance)
+- `EXTERNAL_DATASET_API_URL`, `EXTERNAL_DATASET_API_KEY` (for dataset sync - optional, defaults to RCPCH API)
 
-#### 4. Deploy and Test
+#### 5. Deploy and Test
 
-1. Deploy both cron job services
+1. Deploy all cron job services
 2. Test them manually via Northflank dashboard: **Jobs** → **Run Now**
 3. Check logs to verify successful execution
 4. Monitor the **History** tab for scheduled runs
+
+**Important**: For external dataset sync, run the initial setup command once:
+
+```bash
+# In your web service terminal (via Northflank shell or kubectl exec)
+python manage.py sync_external_datasets
+```
 
 **Northflank Advantages:**
 
 - ✅ No extra containers running 24/7
 - ✅ Easy manual testing via UI
 - ✅ Built-in logging and monitoring
-- ✅ No additional cost (same compute as web service, but only active for ~1-2 minutes daily)
+- ✅ No additional cost (same compute as web service, but only active for ~1-5 minutes daily)
 
 ---
 
@@ -131,11 +204,29 @@ docker compose exec -T web python manage.py cleanup_survey_progress >> /var/log/
 exit $?
 ```
 
+Create `/usr/local/bin/checktick-dataset-sync.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick External Dataset Sync Cron Job
+# Runs daily at 4 AM UTC
+
+# Set working directory
+cd /path/to/your/checktick-app
+
+# Run the sync command
+docker compose exec -T web python manage.py sync_external_datasets >> /var/log/checktick/dataset-sync.log 2>&1
+
+# Exit with the command's exit code
+exit $?
+```
+
 Make them executable:
 
 ```bash
 chmod +x /usr/local/bin/checktick-data-governance.sh
 chmod +x /usr/local/bin/checktick-progress-cleanup.sh
+chmod +x /usr/local/bin/checktick-dataset-sync.sh
 ```
 
 #### 2. Add to System Crontab
@@ -152,6 +243,9 @@ Add these lines:
 
 # CheckTick Survey Progress Cleanup - Daily at 3 AM UTC
 0 3 * * * /usr/local/bin/checktick-progress-cleanup.sh
+
+# CheckTick External Dataset Sync - Daily at 4 AM UTC
+0 4 * * * /usr/local/bin/checktick-dataset-sync.sh
 ```
 
 #### 3. Create Log Directory
@@ -171,6 +265,17 @@ tail -f /var/log/checktick/data-governance.log
 # Test progress cleanup
 /usr/local/bin/checktick-progress-cleanup.sh
 tail -f /var/log/checktick/progress-cleanup.log
+
+# Test dataset sync
+/usr/local/bin/checktick-dataset-sync.sh
+tail -f /var/log/checktick/dataset-sync.log
+```
+
+**Important**: For external dataset sync, run the initial setup once:
+
+```bash
+cd /path/to/your/checktick-app
+docker compose exec web python manage.py sync_external_datasets
 ```
 
 ---

@@ -107,6 +107,7 @@ def branding(request):
     # Compute a lightweight flag to show/hide the User management link
     user = getattr(request, "user", AnonymousUser())
     can_manage_any_users = False
+    can_create_datasets_flag = False
     if user and user.is_authenticated:
         can_manage_any_users = (
             OrganizationMembership.objects.filter(
@@ -116,6 +117,9 @@ def branding(request):
                 user=user, role=SurveyMembership.Role.CREATOR
             ).exists()
         )
+        # TODO: In future, restrict dataset creation to pro individual accounts
+        # All authenticated users can create datasets (individual or organization-based)
+        can_create_datasets_flag = True
 
     # Defaults from settings
     brand = {
@@ -343,6 +347,7 @@ def branding(request):
     return {
         "brand": brand,
         "can_manage_any_users": can_manage_any_users,
+        "can_create_datasets": can_create_datasets_flag,
         "build": build,
         "settings": {
             "HCAPTCHA_SITEKEY": getattr(settings, "HCAPTCHA_SITEKEY", ""),

@@ -146,6 +146,78 @@ Error behavior:
 - 401 Unauthorized: missing/invalid/expired JWT
 - 403 Forbidden: logged in but insufficient permissions on the object (including individual users attempting to share surveys)
 
+## Dataset Permissions
+
+Datasets (prefilled dropdown options) have different permission models depending on their type:
+
+### Dataset Types and Ownership
+
+- **NHS Data Dictionary (NHS DD)**: Global, read-only datasets managed by the platform. Cannot be edited or deleted.
+- **External API datasets**: Global datasets synced from external sources. Read-only for all users.
+- **User-created datasets**: Created by individual users or organization members, can be personal or organization-owned, and optionally published globally.
+
+### Individual User Dataset Permissions
+
+Individual users (without organization membership) can:
+
+- **Create datasets**: Create personal datasets
+- **Edit own datasets**: Modify datasets they created
+- **Delete own datasets**: Remove their datasets (unless published with dependents)
+- **Publish globally**: Share their datasets with all users
+- **Create custom versions**: Customize any global dataset
+
+> **Note**: In future, dataset creation and publishing for individual users will require a pro account.
+
+### Organization Dataset Roles
+
+For organization-owned datasets:
+
+| Role | View | Create | Edit | Delete | Publish Globally | Create Custom Version |
+|------|------|--------|------|--------|------------------|----------------------|
+| **ADMIN** | Yes | Yes | Yes | Yes* | Yes | Yes |
+| **CREATOR** | Yes | Yes | Yes | Yes* | Yes | Yes |
+| **VIEWER** | Yes | No | No | No | No | No |
+
+*Cannot delete if published globally and other organizations have created custom versions from it
+
+### Global Dataset Operations
+
+Any authenticated user can:
+
+- View all global datasets (NHS DD, external API, and published user datasets)
+- Create custom versions from any global dataset
+
+### Publishing Datasets
+
+Individual users, ADMINs and CREATORs can publish their datasets globally:
+
+1. **Publish action**: Makes a dataset available to all users
+2. **Attribution preserved**: Creator/organization ownership is retained after publishing
+3. **Protection**: Published datasets with dependents (custom versions from others) cannot be deleted
+4. **Editability**: Original creator/organization can still edit published datasets
+
+### Custom Versions
+
+Authenticated users can create custom versions from any global dataset:
+
+- **Source flexibility**: Can customize NHS DD datasets, external API datasets, or other users' published datasets
+- **Independence**: Custom versions are independent - changes don't affect the parent
+- **Personal or org-owned**: Custom versions belong to the creating user (individual) or their organization
+- **Full control**: Custom versions can be edited, deleted, and even published globally
+
+### Enforcement in the API
+
+Dataset API (`/api/datasets-v2/`) enforces these rules:
+
+- **Listing**: Returns global datasets plus user's organization datasets (if in an org) plus user's personal datasets
+- **Retrieve**: Allowed if user can view the dataset
+- **Create**: Allowed for all authenticated users (will require pro account in future)
+- **Update/Delete**: Requires being the creator (individual) or ADMIN/CREATOR in dataset's organization
+- **Publish**: Requires being the creator (individual) or ADMIN/CREATOR in dataset's organization
+- **Create custom version**: Allowed for all authenticated users (will require pro account in future)
+
+For detailed usage and examples, see [Dataset Sharing and Customization](dataset-sharing-and-customization.md).
+
 Additional protections:
 
 - Object-level permissions are enforced for detail endpoints (retrieve/update/delete) and custom actions like `seed`. Authenticated users will receive 403 (Forbidden) if they don't have rights on an existing object, rather than 404.

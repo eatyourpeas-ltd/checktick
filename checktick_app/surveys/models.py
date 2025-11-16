@@ -775,6 +775,14 @@ class SurveyQuestion(models.Model):
     options = models.JSONField(default=list, blank=True)
     required = models.BooleanField(default=False)
     order = models.PositiveIntegerField(default=0)
+    dataset = models.ForeignKey(
+        "DataSet",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="questions",
+        help_text="Optional link to a shared dataset for dropdown options",
+    )
 
     class Meta:
         ordering = ["order", "id"]
@@ -1563,3 +1571,345 @@ class DataRetentionExtension(models.Model):
         """Calculate the number of days extended."""
         delta = self.new_deletion_date - self.previous_deletion_date
         return delta.days
+
+
+# ============================================================================
+# DataSet Models - Dropdown List Management
+# ============================================================================
+
+
+class DataSet(models.Model):
+    """
+    Unified model for all dropdown datasets.
+
+    Supports:
+    - NHS Data Dictionary standardized lists (read-only)
+    - External API datasets (synced periodically)
+    - User-created custom lists
+    - Customized versions of NHS DD lists (based on parent)
+
+    NHS DD lists are the gold standard - they cannot be edited directly.
+    Users can create custom versions based on NHS DD lists as templates.
+    """
+
+    CATEGORY_CHOICES = [
+        ("nhs_dd", "NHS Data Dictionary"),
+        ("external_api", "External API"),
+        ("user_created", "User Created"),
+        ("rcpch", "RCPCH API"),
+    ]
+
+    SOURCE_TYPE_CHOICES = [
+        ("api", "External API"),
+        ("manual", "Manual Entry"),
+        ("imported", "Imported from File"),
+        ("scrape", "Web Scraping"),
+    ]
+
+    # Identity
+    key = models.SlugField(
+        max_length=100,
+        unique=True,
+        db_index=True,
+        help_text="Unique identifier for this dataset (e.g., 'main_specialty_codes')",
+    )
+    name = models.CharField(
+        max_length=255, help_text="Display name (e.g., 'Main Specialty Codes')"
+    )
+    description = models.TextField(blank=True)
+
+    # Categorization
+    category = models.CharField(
+        max_length=50,
+        choices=CATEGORY_CHOICES,
+        default="user_created",
+        db_index=True,
+        help_text="Category of this dataset",
+    )
+
+    # Source tracking
+    source_type = models.CharField(
+        max_length=20,
+        choices=SOURCE_TYPE_CHOICES,
+        default="manual",
+        help_text="How this dataset was created",
+    )
+
+    # NHS DD / Reference information
+    reference_url = models.URLField(
+        blank=True,
+        help_text="Source reference URL (e.g., NHS Data Dictionary page)",
+    )
+    nhs_dd_page_id = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="NHS DD page identifier for tracking updates",
+    )
+
+    # Custom vs Standard flag
+    is_custom = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="False for standard NHS DD lists (read-only), True for user-created/customized",
+    )
+
+    # Parent relationship - for customized versions of NHS DD lists
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="customizations",
+        help_text="Parent dataset if this is a customized version",
+    )
+
+    # For API-sourced datasets
+    external_api_endpoint = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="API endpoint path for external datasets",
+    )
+    external_api_url = models.URLField(
+        blank=True, help_text="Full API URL if different from default"
+    )
+    sync_frequency_hours = models.IntegerField(
+        default=24,
+        null=True,
+        blank=True,
+        help_text="How often to sync from external API (hours)",
+    )
+    last_synced_at = models.DateTimeField(
+        null=True, blank=True, help_text="Last successful sync from API"
+    )
+
+    # For web scraping
+    last_scraped = models.DateTimeField(
+        null=True, blank=True, help_text="Last successful scrape from source URL"
+    )
+    nhs_dd_published_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date the NHS DD list was published (if available)",
+    )
+
+    # Sharing and ownership
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="datasets",
+        help_text="Organization that owns this dataset (null = global/platform-wide)",
+    )
+    is_global = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True for platform-wide datasets available to all users",
+    )
+
+    # Data storage
+    options = models.JSONField(
+        default=list,
+        help_text="List of option strings for dropdown display",
+    )
+
+    # Format specification (for display and parsing)
+    format_pattern = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Format pattern: 'CODE - NAME', 'NAME (CODE)', 'CODE | NAME', etc.",
+    )
+
+    # Metadata
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_datasets",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    version = models.IntegerField(
+        default=1, help_text="Version number, incremented on updates"
+    )
+
+    # Publishing tracking
+    published_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this dataset was published globally (if applicable)",
+    )
+
+    # Tags for discovery and filtering
+    tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of tags for categorization and filtering (e.g., ['medical', 'NHS', 'England'])",
+    )
+
+    # Active flag for soft deletion
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="False to hide dataset without deleting",
+    )
+
+    class Meta:
+        ordering = ["category", "name"]
+        indexes = [
+            models.Index(fields=["category", "is_active"]),
+            models.Index(fields=["organization", "is_active"]),
+            models.Index(fields=["is_global", "is_active"]),
+            models.Index(fields=["last_synced_at"]),
+            models.Index(fields=["is_custom"]),
+            models.Index(fields=["published_at"]),
+        ]
+        constraints = [
+            # NHS DD lists must be global and not have an organization
+            models.CheckConstraint(
+                check=~models.Q(category="nhs_dd", organization__isnull=False),
+                name="nhs_dd_must_be_global",
+            ),
+            # Platform global datasets (not published) cannot have an organization
+            # Published datasets CAN have organization for attribution
+            models.CheckConstraint(
+                check=~models.Q(
+                    is_global=True,
+                    organization__isnull=False,
+                    published_at__isnull=True,
+                ),
+                name="platform_global_datasets_no_org",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.key})"
+
+    @property
+    def is_editable(self) -> bool:
+        """NHS DD standard lists are read-only, custom lists are editable."""
+        return self.is_custom
+
+    @property
+    def needs_sync(self) -> bool:
+        """Check if this API-sourced dataset needs syncing."""
+        if self.source_type != "api" or not self.sync_frequency_hours:
+            return False
+
+        if not self.last_synced_at:
+            return True
+
+        from django.utils import timezone
+
+        next_sync = self.last_synced_at + timezone.timedelta(
+            hours=self.sync_frequency_hours
+        )
+        return timezone.now() >= next_sync
+
+    def create_custom_version(
+        self, user: User, organization: Organization, custom_name: str = None
+    ) -> "DataSet":
+        """
+        Create a customized version of this dataset.
+
+        Allowed for any global dataset. Creates a copy that user can edit.
+
+        Args:
+            user: User creating the custom version
+            organization: Organization to own the custom version (can be None for individual users)
+            custom_name: Optional custom name (defaults to "{name} (Custom)")
+
+        Returns:
+            New DataSet instance as a custom version
+
+        Raises:
+            ValueError: If this dataset is not global
+        """
+        if not self.is_global:
+            raise ValueError("Can only create custom versions of global datasets")
+
+        # Generate unique key for custom version
+        import time
+
+        if organization:
+            custom_key = f"{self.key}_custom_{organization.id}_{int(time.time())}"
+        else:
+            # Individual user custom version
+            custom_key = f"{self.key}_custom_u{user.id}_{int(time.time())}"
+
+        return DataSet.objects.create(
+            key=custom_key,
+            name=custom_name or f"{self.name} (Custom)",
+            description=f"Customized version of {self.name}\n\n{self.description}",
+            category="user_created",  # Custom versions are always user_created
+            source_type="manual",
+            is_custom=True,
+            parent=self,
+            organization=organization,  # Can be None for individual users
+            is_global=False,
+            options=self.options.copy(),  # Start with parent's options
+            format_pattern=self.format_pattern,
+            tags=self.tags.copy() if self.tags else [],  # Inherit tags
+            created_by=user,
+        )
+
+    def publish(self) -> None:
+        """
+        Publish this dataset globally.
+
+        Makes a dataset available to all users.
+        Can be called on organization-owned or individual user datasets.
+        Sets published_at timestamp and makes dataset global.
+
+        Raises:
+            ValueError: If dataset is already global or is NHS DD
+        """
+        from django.utils import timezone
+
+        if self.is_global:
+            raise ValueError("Dataset is already published globally")
+
+        if self.category == "nhs_dd":
+            raise ValueError("NHS Data Dictionary datasets cannot be published")
+
+        # Make global and track when published
+        self.is_global = True
+        self.published_at = timezone.now()
+        # Keep organization reference for attribution (can be None for individual users)
+        self.save(update_fields=["is_global", "published_at", "updated_at"])
+
+    def has_dependents(self) -> bool:
+        """
+        Check if other users/organizations have created custom versions from this dataset.
+
+        Returns True if there are any custom versions created by different users/organizations,
+        indicating that others depend on this dataset.
+
+        Returns:
+            bool: True if dependents exist, False otherwise
+        """
+        if not self.is_global:
+            return False
+
+        # Get all custom versions
+        dependents = DataSet.objects.filter(
+            parent=self,
+            is_active=True,
+        )
+
+        # Exclude dependents from the same organization (if org-owned)
+        # or created by the same user (if individual)
+        if self.organization:
+            dependents = dependents.exclude(organization=self.organization)
+        else:
+            # Individual user dataset - exclude versions by same user
+            dependents = dependents.exclude(
+                created_by=self.created_by, organization__isnull=True
+            )
+
+        return dependents.count() > 0
+
+    def increment_version(self) -> None:
+        """Increment version number when dataset is updated."""
+        self.version += 1
+        self.save(update_fields=["version", "updated_at"])

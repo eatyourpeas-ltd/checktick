@@ -8,6 +8,16 @@ urlpatterns = [
     path("", views.survey_list, name="list"),
     # User management hub (must be before slug routes)
     path("manage/users/", views.user_management_hub, name="user_management_hub"),
+    # Dataset management routes (must be before slug routes)
+    path("datasets/", views.dataset_list, name="dataset_list"),
+    path("datasets/create/", views.dataset_create, name="dataset_create"),
+    path("datasets/<int:dataset_id>/", views.dataset_detail, name="dataset_detail"),
+    path("datasets/<int:dataset_id>/edit/", views.dataset_edit, name="dataset_edit"),
+    path(
+        "datasets/<int:dataset_id>/delete/",
+        views.dataset_delete,
+        name="dataset_delete",
+    ),
     path("<slug:slug>/bulk-upload/", views.bulk_upload, name="bulk_upload"),
     path("create/", views.survey_create, name="create"),
     # Repeats (collections) integrated with groups

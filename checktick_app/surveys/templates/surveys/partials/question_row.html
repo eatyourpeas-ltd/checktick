@@ -24,7 +24,7 @@
             {% if q.type == 'template_patient' or q.type == 'template_professional' %}
               <div class="text-xs opacity-70">Template • {{ q.get_type_display }}{% if q.required %} • <span class="text-error font-medium">(required)</span>{% endif %}</div>
             {% else %}
-              <div class="text-xs opacity-70">{{ q.get_type_display }}{% if q.group %} • Group: {{ q.group.name }}{% endif %}{% if q.required %} • <span class="text-error font-medium">(required)</span>{% endif %}</div>
+              <div class="text-xs opacity-70">{{ q.get_type_display }}{% if q.group %} • Group: {{ q.group.name }}{% endif %}{% if q.dataset %} • Dataset: {{ q.dataset.name }}{% endif %}{% if q.required %} • <span class="text-error font-medium">(required)</span>{% endif %}</div>
             {% endif %}
             {% with q|has_followup as followup_list %}
               {% if followup_list %}

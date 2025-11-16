@@ -1,0 +1,135 @@
+name: 🏥 NHS Data Dictionary Dataset Request
+description: Request a new NHS Data Dictionary standardized list to be added to CheckTick
+title: "[NHS DD Dataset]: "
+labels: ["dataset", "NHS", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Request a standardized NHS Data Dictionary list**
+
+        CheckTick maintains a curated collection of commonly-used NHS Data Dictionary standardized lists as global datasets. These are scraped from the official NHS Data Dictionary and made available to all users.
+
+        Before requesting a new dataset, please:
+        1. Check the [existing NHS DD datasets](https://github.com/eatyourpeas/checktick/blob/main/checktick_app/surveys/management/commands/seed_nhs_datasets.py) to see if it's already available
+        2. Search existing issues to avoid duplicates
+        3. Consider if this is a commonly-needed list that would benefit multiple users
+
+        **Note**: After approval, datasets are added to the seed command and will be available after the next deployment.
+
+  - type: input
+    id: dataset-name
+    attributes:
+      label: Dataset Name
+      description: The name of the NHS DD data element
+      placeholder: "e.g., Accommodation Status Code"
+    validations:
+      required: true
+
+  - type: input
+    id: nhs-dd-url
+    attributes:
+      label: NHS Data Dictionary URL
+      description: Link to the official NHS DD page for this data element
+      placeholder: "https://www.datadictionary.nhs.uk/data_elements/..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: usage-frequency
+    attributes:
+      label: Expected Usage Frequency
+      description: How often do you expect this dataset to be used in surveys?
+      options:
+        - Very Common (daily/weekly across multiple surveys)
+        - Common (used regularly in specific specialty areas)
+        - Occasional (used in specific scenarios)
+        - Rare (niche use case but NHS standard)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: suggested-tags
+    attributes:
+      label: Suggested Tags
+      description: Select all tags that apply to help users discover this dataset
+      options:
+        - label: clinic
+        - label: administrative
+        - label: demographic
+        - label: procedural
+        - label: surgical
+        - label: medical
+        - label: neonatal
+        - label: paediatric
+        - label: mental health
+        - label: maternity
+
+  - type: dropdown
+    id: specialty-area
+    attributes:
+      label: Primary Specialty Area
+      description: Which clinical specialty is this most relevant to?
+      options:
+        - General/Cross-specialty
+        - Paediatrics
+        - Maternity/Obstetrics
+        - Mental Health
+        - Surgery
+        - Emergency Care
+        - Primary Care
+        - Neonatology
+        - Oncology
+        - Radiology
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case Description
+      description: Describe how you plan to use this dataset in your surveys
+      placeholder: |
+        - What surveys or workflows need this?
+        - Why is the NHS standard important for your use case?
+        - Who else might benefit from having this available?
+    validations:
+      required: true
+
+  - type: textarea
+    id: organization-context
+    attributes:
+      label: Organization Context (Optional)
+      description: Context about your organization's needs (helps us prioritize)
+      placeholder: |
+        - Type of healthcare organization
+        - Scale of usage (number of surveys/users)
+        - Whether this is part of a standardization initiative
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I've checked the URL is valid and points to the correct NHS DD page
+          required: true
+        - label: I've searched existing datasets and issues for duplicates
+          required: true
+        - label: This dataset would benefit multiple users, not just my specific use case
+          required: false
+        - label: I'm willing to help test the dataset once it's added
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **What happens next?**
+
+        1. Maintainers review the request and verify the NHS DD page
+        2. If approved, the dataset is added to the seed command with appropriate tags
+        3. Dataset becomes available globally on next deployment
+        4. You'll be notified when it's live
+
+        **Alternative**: If you need this urgently, you can create a custom dataset in your organization and we can help you populate it. Once the NHS DD version is added, you can switch to using that instead.

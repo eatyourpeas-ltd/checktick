@@ -52,17 +52,20 @@ document.addEventListener("DOMContentLoaded", function () {
       } --`;
       select.appendChild(defaultOption);
 
-      // Add fetched options
-      if (data.options && Array.isArray(data.options)) {
-        data.options.forEach(function (optionText) {
+      // Add fetched options (all datasets use dict format: code -> name)
+      if (data.options && typeof data.options === "object") {
+        let optionCount = 0;
+
+        Object.entries(data.options).forEach(function ([code, name]) {
           const option = document.createElement("option");
-          option.value = optionText;
-          option.textContent = optionText;
+          option.value = code;
+          option.textContent = `${code}: ${name}`;
           select.appendChild(option);
+          optionCount++;
         });
 
         console.log(
-          `Loaded ${data.options.length} options for ${fieldKey} from ${datasetKey}`
+          `Loaded ${optionCount} options for ${fieldKey} from ${datasetKey}`
         );
       } else {
         console.warn(`No options returned for ${datasetKey}`);

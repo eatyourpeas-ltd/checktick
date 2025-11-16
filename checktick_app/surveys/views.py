@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import logging
+import re
 import secrets
 from typing import Any, Iterable, Union
 
@@ -16,7 +17,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, models, transaction
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.http import (
     Http404,
     HttpRequest,
@@ -38,6 +39,7 @@ from .models import (
     AuditLog,
     CollectionDefinition,
     CollectionItem,
+    DataSet,
     Organization,
     OrganizationMembership,
     QuestionGroup,
@@ -50,12 +52,16 @@ from .models import (
     SurveyResponse,
 )
 from .permissions import (
+    can_create_datasets,
+    can_edit_dataset,
     can_edit_survey,
     can_export_survey_data,
     can_manage_org_users,
     can_manage_survey_users,
     can_view_survey,
+    require_can_create_datasets,
     require_can_edit,
+    require_can_edit_dataset,
     require_can_view,
 )
 from .utils import verify_key
@@ -1164,16 +1170,8 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
 
             options.append(opt_dict)
 
-        # Check if this is a prefilled dataset (only for dropdown type)
-        prefilled_dataset = (data.get("prefilled_dataset") or "").strip()
-        if qtype == SurveyQuestion.Types.DROPDOWN and prefilled_dataset and options:
-            # Store prefilled metadata alongside the options
-            # This allows us to restore the dataset selection when editing
-            options = {
-                "type": "prefilled",
-                "dataset_key": prefilled_dataset,
-                "values": options,
-            }
+        # Prefilled dataset handling is now done via dataset_key return value
+        # Options remain as list for compatibility
     elif qtype == SurveyQuestion.Types.YESNO:
         # For Yes/No questions, check if either option should have follow-up text
         options = [{"label": "Yes", "value": "yes"}, {"label": "No", "value": "no"}]
@@ -1218,11 +1216,17 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
     else:
         options = []
 
+    # Extract dataset key for dropdown questions
+    dataset_key = None
+    if qtype == SurveyQuestion.Types.DROPDOWN:
+        dataset_key = (data.get("prefilled_dataset") or "").strip() or None
+
     return {
         "text": text,
         "type": qtype,
         "required": required,
         "options": options,
+        "dataset_key": dataset_key,
     }
 
 
@@ -1424,7 +1428,11 @@ def _serialize_question_for_builder(
         payload["options"] = values
         if option_followup_config:
             payload["followup_config"] = option_followup_config
-        if prefilled_dataset:
+        # Include dataset key if linked to a dataset
+        if question.dataset:
+            payload["prefilled_dataset"] = question.dataset.key
+        elif prefilled_dataset:
+            # Backward compatibility for old metadata format
             payload["prefilled_dataset"] = prefilled_dataset
     elif question.type == SurveyQuestion.Types.YESNO:
         # For Yes/No questions, check for follow-up text config
@@ -4318,7 +4326,7 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
         "professional_ods_on": professional_ods_on,
         "professional_ods_pairs": professional_ods_pairs,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
-        "available_datasets": get_available_datasets(),
+        "available_datasets": get_available_datasets(organization=survey.organization),
     }
     if any(brand_overrides.values()):
         ctx["brand"] = {
@@ -4453,6 +4461,7 @@ def builder_question_create(request: HttpRequest, slug: str) -> HttpResponse:
     qtype = form_data["type"]
     required = form_data["required"]
     options = form_data["options"]
+    dataset_key = form_data.get("dataset_key")
     group_id = request.POST.get("group_id")
     group = (
         QuestionGroup.objects.filter(id=group_id, owner=request.user).first()
@@ -4460,6 +4469,20 @@ def builder_question_create(request: HttpRequest, slug: str) -> HttpResponse:
         else None
     )
     order = (survey.questions.aggregate(models.Max("order")).get("order__max") or 0) + 1
+
+    # Look up dataset if provided (with access control)
+    dataset = None
+    if dataset_key:
+        from django.db.models import Q
+
+        from .models import DataSet
+
+        dataset = DataSet.objects.filter(
+            Q(is_global=True) | Q(organization=survey.organization),
+            key=dataset_key,
+            is_active=True,
+        ).first()
+
     SurveyQuestion.objects.create(
         survey=survey,
         group=group,
@@ -4468,6 +4491,7 @@ def builder_question_create(request: HttpRequest, slug: str) -> HttpResponse:
         options=options,
         required=required,
         order=order,
+        dataset=dataset,
     )
     questions_qs = survey.questions.select_related("group").all()
     questions = _prepare_question_rendering(survey, questions_qs)
@@ -4629,7 +4653,22 @@ def builder_group_question_create(
     qtype = form_data["type"]
     required = form_data["required"]
     options = form_data["options"]
+    dataset_key = form_data.get("dataset_key")
     order = (survey.questions.aggregate(models.Max("order")).get("order__max") or 0) + 1
+
+    # Look up dataset if provided (with access control)
+    dataset = None
+    if dataset_key:
+        from django.db.models import Q
+
+        from .models import DataSet
+
+        dataset = DataSet.objects.filter(
+            Q(is_global=True) | Q(organization=survey.organization),
+            key=dataset_key,
+            is_active=True,
+        ).first()
+
     SurveyQuestion.objects.create(
         survey=survey,
         group=group,
@@ -4638,6 +4677,7 @@ def builder_group_question_create(
         options=options,
         required=required,
         order=order,
+        dataset=dataset,
     )
     questions_qs = survey.questions.select_related("group").filter(group=group)
     questions = _prepare_question_rendering(survey, questions_qs)
@@ -4972,12 +5012,28 @@ def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResp
     q.type = form_data["type"]
     q.required = form_data["required"]
     q.options = form_data["options"]
+    dataset_key = form_data.get("dataset_key")
     group_id = request.POST.get("group_id")
     q.group = (
         QuestionGroup.objects.filter(id=group_id, owner=request.user).first()
         if group_id
         else None
     )
+
+    # Look up dataset if provided (with access control)
+    if dataset_key:
+        from django.db.models import Q
+
+        from .models import DataSet
+
+        q.dataset = DataSet.objects.filter(
+            Q(is_global=True) | Q(organization=survey.organization),
+            key=dataset_key,
+            is_active=True,
+        ).first()
+    else:
+        q.dataset = None
+
     q.save()
     return _render_template_question_row(
         request,
@@ -5001,6 +5057,22 @@ def builder_group_question_edit(
     q.type = form_data["type"]
     q.required = form_data["required"]
     q.options = form_data["options"]
+    dataset_key = form_data.get("dataset_key")
+
+    # Look up dataset if provided (with access control)
+    if dataset_key:
+        from django.db.models import Q
+
+        from .models import DataSet
+
+        q.dataset = DataSet.objects.filter(
+            Q(is_global=True) | Q(organization=survey.organization),
+            key=dataset_key,
+            is_active=True,
+        ).first()
+    else:
+        q.dataset = None
+
     q.save()
     return _render_template_question_row(
         request,
@@ -5455,3 +5527,529 @@ def _send_survey_closure_notification(survey: Survey, user: User) -> None:
         markdown_content=markdown_content,
         branding=branding,
     )
+
+
+# ==============================================================================
+# Dataset Management Views
+# ==============================================================================
+
+
+@login_required
+def dataset_list(request: HttpRequest) -> HttpResponse:
+    """List all datasets available to the user (global + their org datasets)."""
+    from django.core.paginator import Paginator
+
+    user = request.user
+
+    # Get organizations where user is a member
+    user_orgs = Organization.objects.filter(memberships__user=user)
+
+    # Build base queryset: global datasets + datasets from user's organizations + individual user datasets
+    base_datasets = DataSet.objects.filter(
+        Q(is_global=True)
+        | Q(organization__in=user_orgs)
+        | Q(created_by=user, organization__isnull=True),
+        is_active=True,
+    ).select_related("organization", "created_by", "parent")
+
+    # Get all unique tags from base datasets (before filtering) for facets
+    all_tags = {}
+    for dataset in base_datasets:
+        for tag in dataset.tags:
+            all_tags[tag] = all_tags.get(tag, 0) + 1
+
+    # Sort tags by count (descending) then alphabetically
+    available_tags = sorted(
+        [(tag, count) for tag, count in all_tags.items()],
+        key=lambda x: (-x[1], x[0]),
+    )
+
+    # Now apply filters
+    datasets = base_datasets
+
+    # Apply category filter if provided
+    category_filter = request.GET.get("category")
+    if category_filter:
+        datasets = datasets.filter(category=category_filter)
+
+    # Apply tag filter if provided (AND logic for multiple tags)
+    tag_filter = request.GET.get("tags")
+    selected_tags = []
+    if tag_filter:
+        selected_tags = [t.strip() for t in tag_filter.split(",") if t.strip()]
+        for tag in selected_tags:
+            datasets = datasets.filter(tags__contains=[tag])
+
+    # Order datasets
+    datasets = datasets.order_by("-created_at")
+
+    # Pagination (20 per page)
+    paginator = Paginator(datasets, 20)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    # Get user's organizations for create permission check
+    can_create = can_create_datasets(user)
+
+    # Get unique categories for filter dropdown
+    categories = DataSet.CATEGORY_CHOICES
+
+    return render(
+        request,
+        "surveys/dataset_list.html",
+        {
+            "page_obj": page_obj,
+            "can_create": can_create,
+            "categories": categories,
+            "available_tags": available_tags,
+            "selected_category": category_filter,
+            "selected_tags": selected_tags,
+        },
+    )
+
+
+@login_required
+def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
+    """View details of a specific dataset."""
+    user = request.user
+
+    # Get user's organizations
+    user_orgs = Organization.objects.filter(memberships__user=user)
+
+    # Get dataset and check access
+    dataset = get_object_or_404(
+        DataSet.objects.filter(
+            Q(is_global=True) | Q(organization__in=user_orgs), is_active=True
+        ).select_related("organization", "created_by", "parent"),
+        id=dataset_id,
+    )
+
+    # Check if user can edit this dataset
+    user_can_edit = can_edit_dataset(user, dataset)
+
+    # Get questions using this dataset
+    questions_using = SurveyQuestion.objects.filter(dataset=dataset).select_related(
+        "survey", "group"
+    )
+
+    return render(
+        request,
+        "surveys/dataset_detail.html",
+        {
+            "dataset": dataset,
+            "can_edit": user_can_edit,
+            "questions_using": questions_using,
+        },
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def dataset_create(request: HttpRequest) -> HttpResponse:
+    """Create a new dataset."""
+    require_can_create_datasets(request.user)
+
+    # Get organizations where user is ADMIN or CREATOR
+    user_orgs = Organization.objects.filter(
+        memberships__user=request.user,
+        memberships__role__in=[
+            OrganizationMembership.Role.ADMIN,
+            OrganizationMembership.Role.CREATOR,
+        ],
+    )
+
+    if request.method == "POST":
+        # Extract form data
+        key = request.POST.get("key", "").strip()
+        name = request.POST.get("name", "").strip()
+        description = request.POST.get("description", "").strip()
+        tags_text = request.POST.get("tags", "").strip()
+        organization_id = request.POST.get("organization", "").strip()
+        options_text = request.POST.get("options", "").strip()
+
+        # All user-created datasets have these defaults
+        category = "user_created"
+        source_type = "manual"
+
+        # Validate
+        errors = []
+
+        if not name:
+            errors.append("Name is required")
+
+        # Parse tags
+        tags = []
+        if tags_text:
+            tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
+
+        # Auto-generate key from name if not provided or invalid
+        if not key:
+            # Generate key from name
+            key = (
+                name.lower()
+                .strip()
+                .replace(" ", "_")
+                # Replace any non-alphanumeric chars with underscore
+                .translate(
+                    str.maketrans({c: "_" for c in "!@#$%^&*()+=[]{}|\\:;\"'<>,.?/"})
+                )
+            )
+            key = re.sub(r"_+", "_", key)  # Collapse multiple underscores
+            key = key.strip("_")  # Remove leading/trailing underscores
+
+        if not re.match(r"^[a-z0-9_-]+$", key):
+            errors.append(
+                "Generated key is invalid. Please use a simpler name with only letters, numbers, and spaces."
+            )
+
+        # Check for duplicate keys and make unique if needed
+        if DataSet.objects.filter(key=key).exists():
+            # For individual users, append user ID; for org users, append timestamp
+            if not organization_id:
+                key = f"{key}_u{request.user.id}"
+                # If still duplicate, add timestamp
+                if DataSet.objects.filter(key=key).exists():
+                    import time
+
+                    key = f"{key}_{int(time.time())}"
+            else:
+                import time
+
+                key = f"{key}_{int(time.time())}"
+
+        # Handle organization - optional for individual users
+        org = None
+        if organization_id:
+            try:
+                org = Organization.objects.get(id=organization_id)
+                # Verify user has permission in this org
+                if not user_orgs.filter(id=org.id).exists():
+                    errors.append(
+                        "You don't have permission in the selected organization"
+                    )
+            except Organization.DoesNotExist:
+                errors.append("Invalid organization selected")
+
+        # Parse options intelligently
+        options = []
+        options_dict = {}
+        has_keyed_options = False
+        line_errors = []
+
+        if options_text:
+            lines = [line.strip() for line in options_text.split("\n") if line.strip()]
+
+            for idx, line in enumerate(lines, 1):
+                # Check if line contains " - " separator (key-value format)
+                if " - " in line:
+                    has_keyed_options = True
+                    parts = line.split(" - ", 1)
+                    if len(parts) == 2:
+                        option_key = parts[0].strip()
+                        option_value = parts[1].strip()
+                        if option_key and option_value:
+                            options_dict[option_key] = option_value
+                        else:
+                            line_errors.append(f"Line {idx}: Empty key or value")
+                    else:
+                        line_errors.append(f"Line {idx}: Invalid format")
+                else:
+                    # Simple option - store for auto-key generation
+                    options.append(line)
+
+            # Convert to dict format (always use dict for consistency)
+            if has_keyed_options:
+                if options:
+                    # Mixed format detected
+                    errors.append(
+                        "Mixed format detected. Use either simple format (one value per line) "
+                        "OR key-value format (key - value) for all options, not both."
+                    )
+                elif not options_dict:
+                    errors.append(
+                        "Key-value format detected but no valid entries found. "
+                        "Ensure format is 'key - value' with space-dash-space separator."
+                    )
+                else:
+                    # Use the manually entered key-value pairs
+                    options = options_dict
+            elif options:
+                # Auto-generate keys for simple list format
+                # Use sequential numbers as keys for simplicity and reliability
+                options_dict = {}
+                for idx, value in enumerate(options, 1):
+                    # Use zero-padded numbers as keys (e.g., "001", "002")
+                    auto_key = f"{idx:03d}"
+                    options_dict[auto_key] = value
+                options = options_dict
+            else:
+                errors.append("At least one option is required")
+
+        if line_errors:
+            errors.extend(line_errors)
+
+        if not options:
+            errors.append("At least one option is required")
+
+        if errors:
+            messages.error(request, " | ".join(errors))
+            return render(
+                request,
+                "surveys/dataset_form.html",
+                {
+                    "organizations": user_orgs,
+                    "form_data": request.POST,
+                    "is_create": True,
+                },
+            )
+
+        # Create dataset
+        dataset = DataSet.objects.create(
+            key=key,
+            name=name,
+            description=description,
+            category=category,
+            source_type=source_type,
+            organization=org,  # Can be None for individual users
+            is_global=False,  # Regular users cannot create global datasets
+            options=options,
+            tags=tags,
+            created_by=request.user,
+        )
+
+        messages.success(request, f"Dataset '{dataset.name}' created successfully")
+        return redirect("surveys:dataset_detail", dataset_id=dataset.id)
+
+    # Check if cloning from existing dataset
+    clone_from_id = request.GET.get("clone_from")
+    clone_source = None
+    initial_data = {}
+
+    if clone_from_id:
+        try:
+            # Get the source dataset to clone from
+            all_user_orgs = Organization.objects.filter(memberships__user=request.user)
+            clone_source = DataSet.objects.filter(
+                Q(is_global=True)
+                | Q(organization__in=all_user_orgs)
+                | Q(created_by=request.user, organization__isnull=True),
+                is_active=True,
+                id=clone_from_id,
+            ).first()
+
+            if clone_source:
+                # Pre-fill form with source dataset data
+                options_text = "\n".join(
+                    [f"{key} - {value}" for key, value in clone_source.options.items()]
+                )
+                tags_text = ", ".join(clone_source.tags) if clone_source.tags else ""
+
+                initial_data = {
+                    "name": f"{clone_source.name} (Custom)",
+                    "description": clone_source.description,
+                    "options": options_text,
+                    "tags": tags_text,
+                }
+        except (ValueError, DataSet.DoesNotExist):
+            pass
+
+    return render(
+        request,
+        "surveys/dataset_form.html",
+        {
+            "organizations": user_orgs,
+            "is_create": True,
+            "clone_source": clone_source,
+            "form_data": initial_data,
+        },
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def dataset_edit(request: HttpRequest, dataset_id: int) -> HttpResponse:
+    """Edit an existing dataset."""
+    user = request.user
+
+    # Get user's organizations
+    user_orgs = Organization.objects.filter(
+        memberships__user=user,
+        memberships__role__in=[
+            OrganizationMembership.Role.ADMIN,
+            OrganizationMembership.Role.CREATOR,
+        ],
+    )
+
+    # Get dataset - check if accessible first
+    all_user_orgs = Organization.objects.filter(memberships__user=user)
+    dataset = get_object_or_404(
+        DataSet.objects.filter(
+            Q(is_global=True)
+            | Q(organization__in=all_user_orgs)
+            | Q(created_by=user, organization__isnull=True),
+            is_active=True,
+        ),
+        id=dataset_id,
+    )
+
+    require_can_edit_dataset(user, dataset)
+
+    if request.method == "POST":
+        # Extract form data
+        name = request.POST.get("name", "").strip()
+        description = request.POST.get("description", "").strip()
+        tags_text = request.POST.get("tags", "").strip()
+        options_text = request.POST.get("options", "").strip()
+
+        # Validate
+        errors = []
+
+        if not name:
+            errors.append("Name is required")
+
+        # Parse tags
+        tags = []
+        if tags_text:
+            tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
+
+        # Parse options intelligently (same logic as create)
+        options = []
+        options_dict = {}
+        has_keyed_options = False
+        line_errors = []
+
+        if options_text:
+            lines = [line.strip() for line in options_text.split("\n") if line.strip()]
+
+            for idx, line in enumerate(lines, 1):
+                # Check if line contains " - " separator (key-value format)
+                if " - " in line:
+                    has_keyed_options = True
+                    parts = line.split(" - ", 1)
+                    if len(parts) == 2:
+                        option_key = parts[0].strip()
+                        option_value = parts[1].strip()
+                        if option_key and option_value:
+                            options_dict[option_key] = option_value
+                        else:
+                            line_errors.append(f"Line {idx}: Empty key or value")
+                    else:
+                        line_errors.append(f"Line {idx}: Invalid format")
+                else:
+                    # Simple option - store for auto-key generation
+                    options.append(line)
+
+            # Convert to dict format (always use dict for consistency)
+            if has_keyed_options:
+                if options:
+                    # Mixed format detected
+                    errors.append(
+                        "Mixed format detected. Use either simple format (one value per line) "
+                        "OR key-value format (key - value) for all options, not both."
+                    )
+                elif not options_dict:
+                    errors.append(
+                        "Key-value format detected but no valid entries found. "
+                        "Ensure format is 'key - value' with space-dash-space separator."
+                    )
+                else:
+                    # Use the manually entered key-value pairs
+                    options = options_dict
+            elif options:
+                # Auto-generate keys for simple list format
+                options_dict = {}
+                for idx, value in enumerate(options, 1):
+                    auto_key = f"{idx:03d}"
+                    options_dict[auto_key] = value
+                options = options_dict
+            else:
+                errors.append("At least one option is required")
+
+        if line_errors:
+            errors.extend(line_errors)
+
+        if not options:
+            errors.append("At least one option is required")
+
+        if errors:
+            messages.error(request, " | ".join(errors))
+            return render(
+                request,
+                "surveys/dataset_form.html",
+                {
+                    "dataset": dataset,
+                    "organizations": user_orgs,
+                    "form_data": request.POST,
+                    "is_create": False,
+                },
+            )
+
+        # Update dataset
+        dataset.name = name
+        dataset.description = description
+        dataset.options = options
+        dataset.tags = tags
+        dataset.increment_version()
+        dataset.save()
+
+        messages.success(request, f"Dataset '{dataset.name}' updated successfully")
+        return redirect("surveys:dataset_detail", dataset_id=dataset.id)
+
+    # Prepare initial form data
+    # Convert options dict to text format for textarea (all datasets use dict now)
+    options_text = "\n".join(
+        [f"{key} - {value}" for key, value in dataset.options.items()]
+    )
+
+    # Convert tags list to comma-separated string
+    tags_text = ", ".join(dataset.tags) if dataset.tags else ""
+
+    form_data = {
+        "key": dataset.key,
+        "name": dataset.name,
+        "description": dataset.description,
+        "category": dataset.category,
+        "source_type": dataset.source_type,
+        "organization": dataset.organization_id,
+        "options": options_text,
+        "tags": tags_text,
+    }
+
+    return render(
+        request,
+        "surveys/dataset_form.html",
+        {
+            "dataset": dataset,
+            "organizations": user_orgs,
+            "form_data": form_data,
+            "is_create": False,
+        },
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def dataset_delete(request: HttpRequest, dataset_id: int) -> HttpResponse:
+    """Soft delete a dataset (set is_active=False)."""
+    user = request.user
+
+    # Get dataset - check if accessible first
+    all_user_orgs = Organization.objects.filter(memberships__user=user)
+    dataset = get_object_or_404(
+        DataSet.objects.filter(
+            Q(is_global=True)
+            | Q(organization__in=all_user_orgs)
+            | Q(created_by=user, organization__isnull=True),
+            is_active=True,
+        ),
+        id=dataset_id,
+    )
+
+    require_can_edit_dataset(user, dataset)
+
+    # Soft delete
+    dataset.is_active = False
+    dataset.save(update_fields=["is_active"])
+
+    messages.success(request, f"Dataset '{dataset.name}' deleted successfully")
+    return redirect("surveys:dataset_list")

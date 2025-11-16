@@ -33,6 +33,28 @@ Notes:
   - List: empty array
   - Retrieve/Update/Delete: not allowed
 
+### Dataset permissions
+
+The DataSet API (`/api/datasets-v2/`) manages shared dropdown option lists for surveys. See the [Dataset API Reference](api-datasets.md) for detailed endpoint documentation.
+
+- **Anonymous users**
+  - List/Retrieve: only global datasets (is_global=True)
+  - Create/Update/Delete: not allowed
+- **Authenticated users (any role)**
+  - List/Retrieve: global datasets + their organization's datasets
+- **Org ADMIN and CREATOR**
+  - Create: can create datasets for their organization
+  - Update: can update their organization's datasets (except NHS DD datasets)
+  - Delete: can soft-delete their organization's datasets (except NHS DD datasets)
+- **Org VIEWER**
+  - Create/Update/Delete: not allowed (read-only access)
+- **NHS Data Dictionary datasets**
+  - Category `nhs_dd` datasets are read-only for all users
+  - Cannot be modified or deleted via the API
+  - Provide standardized NHS terminology and codes
+
+**Note:** The `/api/datasets/` and `/api/datasets/{key}/` endpoints (without `-v2`) are legacy function-based views for fetching dropdown options. Use `/api/datasets-v2/` for full CRUD operations.
+
 ## Error codes
 
 - 401 Unauthorized — not authenticated for unsafe requests
