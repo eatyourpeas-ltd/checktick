@@ -39,15 +39,12 @@ This creates 48 NHS DD datasets including:
 
 See the [NHS DD Dataset Reference](nhs-data-dictionary-datasets.md) for the complete list.
 
-### 2. Seed External API Datasets
+### 2. Sync External API Datasets
 
-Create RCPCH dataset records and fetch initial data:
+Fetch organizational data from RCPCH API (creates datasets on first run):
 
 ```bash
-# Create dataset records
-docker compose exec web python manage.py seed_external_datasets
-
-# Fetch data from RCPCH API (takes 2-3 minutes)
+# Fetch data from RCPCH API (takes 2-3 minutes, creates datasets automatically)
 docker compose exec web python manage.py sync_external_datasets
 ```
 
@@ -68,7 +65,7 @@ CheckTick uses **two automated cron jobs** to keep datasets up-to-date:
 1. **NHS Data Dictionary Scraping** - Scrapes NHS DD website for standardized codes
 2. **External API Sync** - Syncs organizational data from RCPCH API
 
-You do **not** need to run `seed_nhs_datasets` or `seed_external_datasets` in cron - these are one-time setup commands. The scrape and sync commands handle everything after initial setup.
+Both commands automatically create dataset records on first run, then update them on subsequent runs. No separate seeding commands needed.
 
 ### NHS Data Dictionary Scraping
 
@@ -211,29 +208,9 @@ python manage.py scrape_nhs_dd_datasets --dry-run
 - After NHS DD publishes updates
 - Manual refresh of specific dataset
 
-### seed_external_datasets
-
-Create External API dataset records.
-
-```bash
-# Create all external dataset records
-python manage.py seed_external_datasets
-```
-
-**What it does:**
-
-- Creates 7 RCPCH dataset records with metadata
-- Sets `source_type="api"` and API endpoint configuration
-- Options initially empty (requires sync)
-
-**When to use:**
-
-- Initial setup
-- After database reset
-
 ### sync_external_datasets
 
-Sync external datasets from RCPCH API.
+Sync external datasets from RCPCH API. **Automatically creates dataset records** if they don't exist.
 
 ```bash
 # Sync all external datasets
@@ -257,10 +234,17 @@ python manage.py sync_external_datasets --dry-run
 
 **What it does:**
 
-- Fetches data from RCPCH API
-- Transforms into CheckTick format
-- Updates dataset options in database
-- Records `last_synced_at` timestamp and increments `version`
+1. Creates dataset records if they don't exist (first run)
+2. Fetches data from RCPCH API
+3. Transforms into CheckTick format
+4. Updates dataset options in database
+5. Records `last_synced_at` timestamp and increments `version`
+
+**When to use:**
+
+- Initial setup (creates and populates datasets)
+- Scheduled daily sync
+- Manual refresh when RCPCH API updates
 
 **Example output:**
 
@@ -281,7 +265,7 @@ Summary:
 
 **When to use:**
 
-- Initial setup (after `seed_external_datasets`)
+- Initial setup (creates and populates datasets)
 - Scheduled daily sync
 - Manual refresh when API data changes
 

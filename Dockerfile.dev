@@ -32,4 +32,4 @@ ENV PORT=8000
 
 # Do not EXPOSE or run collectstatic; dev serves via runserver
 
-CMD ["sh", "-lc", "npm install && npm run build:css && python manage.py migrate && python manage.py seed_nhs_datasets && python manage.py seed_external_datasets && python manage.py runserver 0.0.0.0:${PORT}"]
+CMD ["sh", "-lc", "npm install && npm run build:css && python manage.py migrate && python manage.py seed_nhs_datasets && python manage.py runserver 0.0.0.0:${PORT}"]

@@ -35,13 +35,10 @@ The `sync_external_datasets` management command runs daily to:
 
 **Recommended**: Run this daily to keep external datasets fresh. Datasets are used in prefilled dropdown fields. Without periodic sync, data may become stale (hospitals close, trusts merge, etc.).
 
-**Initial Setup Required**:
+**Initial Setup**: Just run the sync command once to populate datasets (creates records automatically):
 
 ```bash
-# One-time: Create dataset records
-python manage.py seed_external_datasets
-
-# One-time: Initial data population (can take 2-3 minutes)
+# One-time: Create datasets and populate data (takes 2-3 minutes)
 python manage.py sync_external_datasets
 ```
 
@@ -154,11 +151,10 @@ All cron jobs need the same environment variables as your web service:
 3. Check logs to verify successful execution
 4. Monitor the **History** tab for scheduled runs
 
-**Important**: For external dataset sync, run the initial setup commands first:
+**Important**: For external dataset sync, run the initial setup command once:
 
 ```bash
 # In your web service terminal (via Northflank shell or kubectl exec)
-python manage.py seed_external_datasets
 python manage.py sync_external_datasets
 ```
 
@@ -278,11 +274,10 @@ tail -f /var/log/checktick/progress-cleanup.log
 tail -f /var/log/checktick/dataset-sync.log
 ```
 
-**Important**: For external dataset sync, run the initial setup first:
+**Important**: For external dataset sync, run the initial setup once:
 
 ```bash
 cd /path/to/your/checktick-app
-docker compose exec web python manage.py seed_external_datasets
 docker compose exec web python manage.py sync_external_datasets
 ```
 

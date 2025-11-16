@@ -39,4 +39,4 @@ ENV PORT=8000
 
 EXPOSE 8000
 
-CMD ["sh", "-lc", "python manage.py migrate --noinput && python manage.py seed_nhs_datasets && python manage.py seed_external_datasets && python manage.py collectstatic --noinput --clear && CSS_HASH=$(md5sum /app/staticfiles/build/styles.css | cut -d' ' -f1) && cp /app/staticfiles/build/styles.css /app/staticfiles/build/styles.$CSS_HASH.css && echo $CSS_HASH > /tmp/css_hash.txt && gunicorn checktick_app.wsgi:application --bind 0.0.0.0:${PORT} --workers 4"]
+CMD ["sh", "-lc", "python manage.py migrate --noinput && python manage.py seed_nhs_datasets && python manage.py collectstatic --noinput --clear && CSS_HASH=$(md5sum /app/staticfiles/build/styles.css | cut -d' ' -f1) && cp /app/staticfiles/build/styles.css /app/staticfiles/build/styles.$CSS_HASH.css && echo $CSS_HASH > /tmp/css_hash.txt && gunicorn checktick_app.wsgi:application --bind 0.0.0.0:${PORT} --workers 4"]

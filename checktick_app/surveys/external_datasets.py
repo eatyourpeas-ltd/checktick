@@ -9,18 +9,15 @@ via the sync_external_datasets management command.
 
 Datasets are stored in the DataSet model and synced periodically:
 - fetch_dataset() reads from database
-- sync_external_datasets command updates from external APIs
+- sync_external_datasets command creates and updates from external APIs
 - No more session/cache storage - database is the single source of truth
 
 ## Setup
 
-1. Seed external dataset records:
-   python manage.py seed_external_datasets
-
-2. Populate with data from APIs:
+1. Run sync command to create datasets and populate data:
    python manage.py sync_external_datasets
 
-3. Schedule periodic sync (e.g., daily cron):
+2. Schedule periodic sync (e.g., daily cron):
    0 2 * * * cd /app && python manage.py sync_external_datasets
 
 ## Adding New Datasets
@@ -30,8 +27,7 @@ To add a new external API dataset:
 1. Add entry to AVAILABLE_DATASETS with key and display name
 2. Add endpoint mapping in _get_endpoint_for_dataset()
 3. Add transformer function in _transform_response_to_options()
-4. Run seed_external_datasets to create DB record
-5. Run sync_external_datasets to populate data
+4. Run sync_external_datasets to create record and populate data
 
 See docs/prefilled-datasets-setup.md for detailed examples.
 """
@@ -333,7 +329,7 @@ def fetch_dataset(dataset_key: str) -> dict[str, str]:
         logger.error(f"Dataset '{dataset_key}' not found in database")
         raise DatasetFetchError(
             f"Dataset '{dataset_key}' not found. "
-            f"Run 'python manage.py seed_external_datasets' to initialize external datasets."
+            f"Run 'python manage.py sync_external_datasets' to initialize external datasets."
         )
 
 
