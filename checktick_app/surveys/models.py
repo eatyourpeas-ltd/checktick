@@ -1112,6 +1112,63 @@ class AuditLog(models.Model):
         ]
 
 
+class LLMConversationSession(models.Model):
+    """
+    Stores LLM conversation sessions for AI-assisted survey generation.
+    Allows users to continue conversations across requests.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    survey = models.ForeignKey(
+        Survey, on_delete=models.CASCADE, related_name="llm_conversations"
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="llm_conversations"
+    )
+
+    # Conversation state
+    conversation_history = models.JSONField(
+        default=list, help_text="List of {role, content, timestamp} message dictionaries"
+    )
+    current_markdown = models.TextField(
+        blank=True, help_text="Latest generated markdown"
+    )
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Only one active session per user-survey pair",
+    )
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["survey", "user", "-updated_at"]),
+            models.Index(fields=["is_active", "-updated_at"]),
+        ]
+        verbose_name = "LLM Conversation Session"
+        verbose_name_plural = "LLM Conversation Sessions"
+
+    def __str__(self):
+        return f"LLM Session for {self.survey.name} by {self.user.username}"
+
+    def add_message(self, role: str, content: str):
+        """Add message to conversation history."""
+        self.conversation_history.append(
+            {"role": role, "content": content, "timestamp": timezone.now().isoformat()}
+        )
+        self.save()
+
+    def get_conversation_for_llm(self) -> list:
+        """Get conversation history in LLM format (without timestamps)."""
+        return [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in self.conversation_history
+        ]
+
+
 # -------------------- Collections (definitions) --------------------
 
 

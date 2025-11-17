@@ -342,6 +342,14 @@ EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 # Email timeout
 EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=10)
 
+# LLM Configuration for AI Survey Generator
+RCPCH_OLLAMA_API_KEY = env("RCPCH_OLLAMA_API_KEY", default="")
+RCPCH_OLLAMA_API_URL = env("RCPCH_OLLAMA_API_URL", default="")
+LLM_ENABLED = bool(RCPCH_OLLAMA_API_KEY and RCPCH_OLLAMA_API_URL)
+LLM_TIMEOUT = env.int("LLM_TIMEOUT", default=30)  # seconds
+LLM_MAX_RETRIES = env.int("LLM_MAX_RETRIES", default=2)
+LLM_TEMPERATURE = env.float("LLM_TEMPERATURE", default=0.2)  # Low for consistency
+
 # External Dataset API Configuration
 EXTERNAL_DATASET_API_URL = os.environ.get(
     "EXTERNAL_DATASET_API_URL", "https://api.rcpch.ac.uk"
