@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% block title %}{{ template.name }} - {% trans "Template" %} - CheckTick{% endblock %}
+{% block content %}
+<div class="prose max-w-none">
+  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Templates' crumb2_href='/surveys/templates/' crumb3_label=template.name %}
+
+  <div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+      <h1 class="card-title text-3xl inline-flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <span>{{ template.name }}</span>
+      </h1>
+
+      {% if template.description %}
+        <p class="text-lg">{{ template.description }}</p>
+      {% endif %}
+
+      <!-- Metadata -->
+      <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
+        <div class="stat bg-base-200 rounded-lg">
+          <div class="stat-title">{% trans "Published by" %}</div>
+          <div class="stat-value text-2xl">{{ template.publisher.username }}</div>
+          {% if template.organization %}
+            <div class="stat-desc">{{ template.organization.name }}</div>
+          {% endif %}
+        </div>
+        <div class="stat bg-base-200 rounded-lg">
+          <div class="stat-title">{% trans "Publication Level" %}</div>
+          <div class="stat-value text-2xl">
+            {% if template.publication_level == 'organization' %}
+              <span class="badge badge-info badge-lg">{% trans "Organization" %}</span>
+            {% else %}
+              <span class="badge badge-success badge-lg">{% trans "Global" %}</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="stat bg-base-200 rounded-lg">
+          <div class="stat-title">{% trans "Times Imported" %}</div>
+          <div class="stat-value text-2xl">{{ template.import_count }}</div>
+        </div>
+        <div class="stat bg-base-200 rounded-lg">
+          <div class="stat-title">{% trans "Published" %}</div>
+          <div class="stat-value text-2xl">{{ template.created_at|date:"M d, Y" }}</div>
+          <div class="stat-desc">{{ template.created_at|timesince }} {% trans "ago" %}</div>
+        </div>
+      </div>
+
+      <!-- Tags -->
+      {% if template.tags %}
+        <div class="not-prose">
+          <h3 class="text-sm font-semibold mb-2">{% trans "Tags:" %}</h3>
+          <div class="flex flex-wrap gap-2">
+            {% for tag in template.tags %}
+              <a href="{% url 'surveys:published_templates_list' %}?tags={{ tag }}" class="badge badge-lg badge-outline">{{ tag }}</a>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Attribution Section -->
+      {% if template.attribution %}
+        <div class="divider"></div>
+        <div class="not-prose">
+          <div class="alert alert-info">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div class="w-full">
+              <h3 class="font-bold">{% trans "Attribution Information" %}</h3>
+
+              {% if template.attribution.authors %}
+                <p class="text-sm mt-2">
+                  <strong>{% trans "Authors:" %}</strong>
+                  {% for author in template.attribution.authors %}
+                    {{ author.name }}{% if author.orcid %} (<a href="https://orcid.org/{{ author.orcid }}" target="_blank" rel="noopener noreferrer" class="link">ORCID: {{ author.orcid }}</a>){% endif %}{% if not forloop.last %}, {% endif %}
+                  {% endfor %}
+                </p>
+              {% endif %}
+
+              {% if template.attribution.citation %}
+                <p class="text-sm mt-2">
+                  <strong>{% trans "Citation:" %}</strong> {{ template.attribution.citation }}
+                </p>
+              {% endif %}
+
+              {% if template.attribution.pmid %}
+                <p class="text-sm mt-2">
+                  <strong>{% trans "PubMed ID:" %}</strong>
+                  <a href="https://pubmed.ncbi.nlm.nih.gov/{{ template.attribution.pmid }}/" target="_blank" rel="noopener noreferrer" class="link">{{ template.attribution.pmid }}</a>
+                </p>
+              {% endif %}
+
+              {% if template.attribution.doi %}
+                <p class="text-sm mt-2">
+                  <strong>{% trans "DOI:" %}</strong>
+                  <a href="https://doi.org/{{ template.attribution.doi }}" target="_blank" rel="noopener noreferrer" class="link">{{ template.attribution.doi }}</a>
+                </p>
+              {% endif %}
+
+              {% if template.attribution.license %}
+                <p class="text-sm mt-2">
+                  <strong>{% trans "License:" %}</strong> {{ template.attribution.license }}
+                </p>
+              {% endif %}
+
+              {% if template.attribution.year %}
+                <p class="text-sm mt-2">
+                  <strong>{% trans "Year:" %}</strong> {{ template.attribution.year }}
+                </p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Actions -->
+      <div class="divider"></div>
+      <div class="not-prose card-actions justify-end">
+        <a href="{% url 'surveys:published_template_preview' template_id=template.id %}" class="btn btn-outline" target="_blank">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          {% trans "Preview Markdown" %}
+        </a>
+
+        <a href="{% url 'surveys:published_template_import' template_id=template.id slug='import' %}" class="btn btn-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          {% trans "Import Template" %}
+        </a>
+
+        {% if can_delete %}
+          <a href="{% url 'surveys:published_template_delete' template_id=template.id %}" class="btn btn-error btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            {% trans "Delete" %}
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% block title %}{{ template.name }} - {% trans "Preview" %} - CheckTick{% endblock %}
+{% block content %}
+<div class="prose max-w-none">
+  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Templates' crumb2_href='/surveys/templates/' crumb3_label=template.name crumb3_href=template_detail_url crumb4_label='Preview' %}
+
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="inline-flex items-center gap-2 m-0">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+      </svg>
+      <span>{% trans "Markdown Preview" %}</span>
+    </h1>
+    <div class="not-prose">
+      <a href="{% url 'surveys:published_template_detail' template_id=template.id %}" class="btn btn-sm btn-outline">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        {% trans "Back to Details" %}
+      </a>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title">{{ template.name }}</h2>
+
+      <div class="not-prose mb-4">
+        <div class="flex gap-2 items-center text-sm text-base-content/70">
+          <span>{% trans "Published by" %} <strong>{{ template.publisher.username }}</strong></span>
+          {% if template.organization %}
+            <span class="badge badge-xs badge-outline">{{ template.organization.name }}</span>
+          {% endif %}
+          <span>•</span>
+          <span>{{ template.created_at|date:"F j, Y" }}</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Markdown Content -->
+      <div class="not-prose">
+        <div class="mockup-code bg-base-200">
+          <pre><code class="language-markdown">{{ template.markdown }}</code></pre>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Action Buttons -->
+      <div class="not-prose card-actions justify-end">
+        <a href="{% url 'surveys:published_template_detail' template_id=template.id %}" class="btn btn-outline">
+          {% trans "Back to Details" %}
+        </a>
+        <a href="{% url 'surveys:published_template_import' template_id=template.id slug='import' %}" class="btn btn-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          {% trans "Import This Template" %}
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Publish Question Group" %} - CheckTick{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Question Groups' crumb2_href='/surveys/groups/' crumb3_label=question_group.name crumb4_label='Publish' %}
+
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h1 class="card-title text-2xl">{% trans "Publish Question Group as Template" %}</h1>
+
+      <div role="alert" class="alert alert-info">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current h-6 w-6 shrink-0">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <div class="text-sm">
+          <p class="font-semibold">{% trans "Publishing this question group will:" %}</p>
+          <ul class="list-disc list-inside mt-2">
+            <li>{% trans "Make it available for other users to import" %}</li>
+            <li>{% trans "Export questions as markdown format" %}</li>
+            <li>{% trans "Track how many times it's imported" %}</li>
+            <li>{% trans "Allow users to customize questions after importing" %}</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div role="alert" class="alert alert-error">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              {{ form.non_field_errors }}
+            </div>
+          </div>
+        {% endif %}
+
+        <!-- Basic Info -->
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Template Name" %}</span>
+          </label>
+          {{ form.name }}
+          {% if form.name.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.name.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Description" %}</span>
+          </label>
+          {{ form.description }}
+          {% if form.description.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.description.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <!-- Publication Level -->
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Publication Level" %}</span>
+          </label>
+          <div class="space-y-2">
+            {% for choice in form.publication_level %}
+              <label class="label cursor-pointer justify-start gap-3 border rounded-lg p-3 hover:bg-base-200">
+                {{ choice.tag }}
+                <div class="flex-1">
+                  <span class="label-text font-medium">{{ choice.choice_label }}</span>
+                  {% if choice.data.value == 'organization' %}
+                    <span class="label-text-alt block">{% trans "Visible only to members of your organization" %}</span>
+                  {% elif choice.data.value == 'global' %}
+                    <span class="label-text-alt block">{% trans "Visible to all CheckTick users" %}</span>
+                  {% endif %}
+                </div>
+              </label>
+            {% endfor %}
+          </div>
+          {% if form.publication_level.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.publication_level.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <!-- Tags -->
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Tags" %}</span>
+            <span class="label-text-alt">{% trans "Comma-separated, max 10 tags" %}</span>
+          </label>
+          {{ form.tags }}
+          <label class="label">
+            <span class="label-text-alt">{% trans "Example: depression, phq-9, mental-health" %}</span>
+          </label>
+          {% if form.tags.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.tags.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <div class="divider">{% trans "Attribution (Optional)" %}</div>
+
+        <div role="alert" class="alert alert-warning">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div class="text-sm">
+            <p>{% trans "If this question group includes copyrighted content (e.g., PHQ-9, GAD-7), please provide attribution information. This ensures proper credit and compliance with licensing requirements." %}</p>
+          </div>
+        </div>
+
+        <!-- Attribution Fields -->
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Authors (JSON format)" %}</span>
+            <span class="label-text-alt">{% trans "Optional" %}</span>
+          </label>
+          {{ form.authors_json }}
+          <label class="label">
+            <span class="label-text-alt">{% trans 'Format: [{"name": "Author Name", "orcid": "0000-0000-0000-0000"}]' %}</span>
+          </label>
+          {% if form.authors_json.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.authors_json.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
+            <label class="label">
+              <span class="label-text font-semibold">{% trans "PubMed ID (PMID)" %}</span>
+            </label>
+            {{ form.pmid }}
+            {% if form.pmid.errors %}
+              <label class="label">
+                <span class="label-text-alt text-error">{{ form.pmid.errors.0 }}</span>
+              </label>
+            {% endif %}
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label">
+              <span class="label-text font-semibold">{% trans "DOI" %}</span>
+            </label>
+            {{ form.doi }}
+            {% if form.doi.errors %}
+              <label class="label">
+                <span class="label-text-alt text-error">{{ form.doi.errors.0 }}</span>
+              </label>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Citation" %}</span>
+          </label>
+          {{ form.citation }}
+          {% if form.citation.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.citation.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
+            <label class="label">
+              <span class="label-text font-semibold">{% trans "License" %}</span>
+            </label>
+            {{ form.license }}
+            {% if form.license.errors %}
+              <label class="label">
+                <span class="label-text-alt text-error">{{ form.license.errors.0 }}</span>
+              </label>
+            {% endif %}
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label">
+              <span class="label-text font-semibold">{% trans "Year" %}</span>
+            </label>
+            {{ form.year }}
+            {% if form.year.errors %}
+              <label class="label">
+                <span class="label-text-alt text-error">{{ form.year.errors.0 }}</span>
+              </label>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Actions -->
+        <div class="flex gap-3 justify-end">
+          <a href="{% url 'surveys:group_detail' group_id=question_group.id %}" class="btn btn-outline">
+            {% trans "Cancel" %}
+          </a>
+          <button type="submit" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            {% trans "Publish Template" %}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Style form inputs to match DaisyUI */
+form input[type="text"],
+form input[type="number"],
+form textarea,
+form select {
+  @apply input input-bordered w-full;
+}
+form textarea {
+  @apply textarea textarea-bordered min-h-24;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% block title %}{% trans "Delete Template" %} - {{ template.name }} - CheckTick{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Templates' crumb2_href='/surveys/templates/' crumb3_label=template.name crumb3_href=template_detail_url crumb4_label='Delete' %}
+
+  <div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+      <h1 class="card-title text-2xl inline-flex items-center gap-2 text-error">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span>{% trans "Delete Template" %}</span>
+      </h1>
+
+      <div role="alert" class="alert alert-error">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+          <h3 class="font-bold">{% trans "Warning: This action cannot be undone" %}</h3>
+          <div class="text-sm">{% trans "Deleting this template will remove it from the template library. Existing question groups imported from this template will not be affected." %}</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Template Info -->
+      <div class="bg-base-200 rounded-lg p-4 space-y-3">
+        <div>
+          <h2 class="text-xl font-bold">{{ template.name }}</h2>
+          {% if template.description %}
+            <p class="text-sm text-base-content/70 mt-1">{{ template.description }}</p>
+          {% endif %}
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <span class="text-sm font-semibold">{% trans "Published by:" %}</span>
+            <p class="text-sm">{{ template.publisher.username }}</p>
+          </div>
+          <div>
+            <span class="text-sm font-semibold">{% trans "Publication Level:" %}</span>
+            <p class="text-sm">
+              {% if template.publication_level == 'organization' %}
+                <span class="badge badge-info badge-sm">{% trans "Organization" %}</span>
+              {% else %}
+                <span class="badge badge-success badge-sm">{% trans "Global" %}</span>
+              {% endif %}
+            </p>
+          </div>
+          <div>
+            <span class="text-sm font-semibold">{% trans "Times Imported:" %}</span>
+            <p class="text-sm">{{ template.import_count }}</p>
+          </div>
+          <div>
+            <span class="text-sm font-semibold">{% trans "Published:" %}</span>
+            <p class="text-sm">{{ template.created_at|date:"M d, Y" }}</p>
+          </div>
+        </div>
+
+        {% if template.tags %}
+          <div>
+            <span class="text-sm font-semibold">{% trans "Tags:" %}</span>
+            <div class="flex flex-wrap gap-1 mt-1">
+              {% for tag in template.tags %}
+                <span class="badge badge-xs badge-outline">{{ tag }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+
+      {% if template.import_count > 0 %}
+        <div role="alert" class="alert alert-warning">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div class="text-sm">
+            <p class="font-semibold">{% trans "This template has been imported" %} {{ template.import_count }} {% trans "time(s)" %}</p>
+            <p class="mt-1">{% trans "Users who imported this template will still have access to their question groups, but they won't be able to see this template in the library anymore." %}</p>
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="divider"></div>
+
+      <!-- Confirmation -->
+      <div class="form-control">
+        <label class="label cursor-pointer justify-start gap-3">
+          <input type="checkbox" id="confirm-delete" class="checkbox checkbox-error" />
+          <span class="label-text">{% trans "I understand that deleting this template is permanent and cannot be undone" %}</span>
+        </label>
+      </div>
+
+      <!-- Actions -->
+      <form method="post" id="delete-form">
+        {% csrf_token %}
+        <div class="flex gap-3 justify-end">
+          <a href="{% url 'surveys:published_template_detail' template_id=template.id %}" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            {% trans "Cancel" %}
+          </a>
+          <button type="submit" id="delete-button" class="btn btn-error" disabled>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            {% trans "Delete Template" %}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+// Enable delete button only when checkbox is checked
+document.getElementById('confirm-delete').addEventListener('change', function() {
+  document.getElementById('delete-button').disabled = !this.checked;
+});
+
+// Confirm before submitting
+document.getElementById('delete-form').addEventListener('submit', function(e) {
+  if (!confirm('{% trans "Are you absolutely sure you want to delete this template? This action cannot be undone." %}')) {
+    e.preventDefault();
+  }
+});
+</script>
+{% endblock %}

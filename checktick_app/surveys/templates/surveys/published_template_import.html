@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% block title %}{% trans "Import Template" %} - {{ template.name }} - CheckTick{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Templates' crumb2_href='/surveys/templates/' crumb3_label=template.name crumb3_href=template_detail_url crumb4_label='Import' %}
+
+  <div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+      <h1 class="card-title text-2xl inline-flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        <span>{% trans "Import Question Group Template" %}</span>
+      </h1>
+
+      <p class="text-base-content/70">{% trans "You are about to import the following question group template:" %}</p>
+
+      <div class="divider"></div>
+
+      <!-- Template Info -->
+      <div class="bg-base-200 rounded-lg p-4 space-y-3">
+        <div>
+          <h2 class="text-xl font-bold">{{ template.name }}</h2>
+          {% if template.description %}
+            <p class="text-sm text-base-content/70 mt-1">{{ template.description }}</p>
+          {% endif %}
+        </div>
+
+        <div class="flex flex-wrap gap-2 items-center text-sm">
+          <span class="badge badge-outline">
+            {% trans "by" %} {{ template.publisher.username }}
+          </span>
+          {% if template.organization %}
+            <span class="badge badge-info badge-outline">{{ template.organization.name }}</span>
+          {% endif %}
+          {% if template.publication_level == 'organization' %}
+            <span class="badge badge-info">{% trans "Organization" %}</span>
+          {% else %}
+            <span class="badge badge-success">{% trans "Global" %}</span>
+          {% endif %}
+        </div>
+
+        {% if template.tags %}
+          <div class="flex flex-wrap gap-2">
+            {% for tag in template.tags %}
+              <span class="badge badge-sm badge-outline">{{ tag }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Attribution Warning -->
+      {% if template.attribution %}
+        <div role="alert" class="alert alert-warning">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div class="text-sm">
+            <p class="font-semibold">{% trans "This template includes attribution information" %}</p>
+            <p class="mt-1">{% trans "This content may be copyrighted. Please review the attribution details and ensure compliance with any licensing requirements." %}</p>
+            {% if template.attribution.citation %}
+              <p class="mt-2"><strong>{% trans "Citation:" %}</strong> {{ template.attribution.citation }}</p>
+            {% endif %}
+            {% if template.attribution.license %}
+              <p class="mt-1"><strong>{% trans "License:" %}</strong> {{ template.attribution.license }}</p>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Import Info -->
+      <div role="alert" class="alert alert-info">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current h-6 w-6 shrink-0">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <div class="text-sm">
+          <p class="font-semibold">{% trans "What happens when you import:" %}</p>
+          <ul class="list-disc list-inside mt-2 space-y-1">
+            <li>{% trans "A new question group will be created in your account" %}</li>
+            <li>{% trans "All questions from the template will be imported" %}</li>
+            <li>{% trans "You can customize and edit the questions after import" %}</li>
+            <li>{% trans "The import will be tracked (import count increases)" %}</li>
+            <li>{% trans "Attribution information will be preserved" %}</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Actions -->
+      <form method="post">
+        {% csrf_token %}
+        <div class="flex gap-3 justify-end">
+          <a href="{% url 'surveys:published_template_detail' template_id=template.id %}" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            {% trans "Cancel" %}
+          </a>
+          <button type="submit" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            {% trans "Confirm Import" %}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

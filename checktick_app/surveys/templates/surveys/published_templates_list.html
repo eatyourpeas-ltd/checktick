@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% block title %}{% trans "Question Group Templates" %} - CheckTick{% endblock %}
+{% block content %}
+<div class="prose max-w-none">
+  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Templates' crumb2_href='/surveys/templates/' %}
+
+  <h1 class="inline-flex items-center gap-2">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+    <span>{% trans "Question Group Templates" %}</span>
+  </h1>
+
+  <p class="lead">{% trans "Browse and import reusable question groups published by other users and organizations." %}</p>
+
+  <!-- Search and Filters -->
+  <div class="not-prose mb-6">
+    <form method="get" id="filter-form" class="space-y-4">
+      <!-- Search Bar -->
+      <div class="form-control w-full max-w-lg">
+        <label class="label">
+          <span class="label-text font-semibold">{% trans "Search templates:" %}</span>
+        </label>
+        <div class="join w-full">
+          <input type="text" name="search" value="{{ search_query }}" placeholder="{% trans 'Search by name or description...' %}" class="input input-bordered join-item w-full" />
+          <button type="submit" class="btn btn-primary join-item">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {% trans "Search" %}
+          </button>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-3 items-end">
+        <!-- Publication Level Filter -->
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Level:" %}</span>
+          </label>
+          <select name="level" class="select select-bordered select-sm" data-auto-submit="true">
+            <option value="">{% trans "All levels" %}</option>
+            <option value="organization" {% if selected_level == 'organization' %}selected{% endif %}>{% trans "Organization" %}</option>
+            <option value="global" {% if selected_level == 'global' %}selected{% endif %}>{% trans "Global" %}</option>
+          </select>
+        </div>
+
+        <!-- Language Filter -->
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Language:" %}</span>
+          </label>
+          <select name="language" class="select select-bordered select-sm" data-auto-submit="true">
+            <option value="">{% trans "All languages" %}</option>
+            {% for code, name in available_languages %}
+              <option value="{{ code }}" {% if selected_language == code %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Sort Order -->
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Sort by:" %}</span>
+          </label>
+          <select name="order" class="select select-bordered select-sm" data-auto-submit="true">
+            <option value="-created_at" {% if selected_order == '-created_at' %}selected{% endif %}>{% trans "Newest first" %}</option>
+            <option value="created_at" {% if selected_order == 'created_at' %}selected{% endif %}>{% trans "Oldest first" %}</option>
+            <option value="-import_count" {% if selected_order == '-import_count' %}selected{% endif %}>{% trans "Most imported" %}</option>
+            <option value="name" {% if selected_order == 'name' %}selected{% endif %}>{% trans "Name A-Z" %}</option>
+          </select>
+        </div>
+
+        {% if search_query or selected_level or selected_language or selected_tags or selected_order != '-created_at' %}
+          <a href="{% url 'surveys:published_templates_list' %}" class="btn btn-sm btn-ghost">{% trans "Clear All" %}</a>
+        {% endif %}
+      </div>
+
+      <!-- Tag Facets -->
+      {% if available_tags %}
+        <div>
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Filter by tags:" %}</span>
+            {% if selected_tags %}
+              <span class="label-text-alt text-info">{% trans "Showing templates with:" %} {{ selected_tags|join:", " }}</span>
+            {% endif %}
+          </label>
+          <div class="flex flex-wrap gap-2">
+            {% for tag, count in available_tags %}
+              {% if tag in selected_tags %}
+                {# Selected tag - click to remove #}
+                <a href="?{% if search_query %}search={{ search_query }}&{% endif %}{% if selected_level %}level={{ selected_level }}&{% endif %}{% if selected_language %}language={{ selected_language }}&{% endif %}{% if selected_order %}order={{ selected_order }}&{% endif %}tags={% for t in selected_tags %}{% if t != tag %}{{ t }}{% if not forloop.last %},{% endif %}{% endif %}{% endfor %}"
+                   class="badge badge-lg badge-primary gap-2">
+                  {{ tag }}
+                  <span class="badge badge-sm badge-neutral">{{ count }}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-4 h-4 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </a>
+              {% else %}
+                {# Unselected tag - click to add #}
+                <a href="?{% if search_query %}search={{ search_query }}&{% endif %}{% if selected_level %}level={{ selected_level }}&{% endif %}{% if selected_language %}language={{ selected_language }}&{% endif %}{% if selected_order %}order={{ selected_order }}&{% endif %}tags={% if selected_tags %}{{ selected_tags|join:"," }},{% endif %}{{ tag }}"
+                   class="badge badge-lg badge-outline hover:badge-primary gap-2">
+                  {{ tag }}
+                  <span class="badge badge-sm">{{ count }}</span>
+                </a>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    </form>
+  </div>
+
+  {% if page_obj %}
+    <div class="not-prose">
+      <div class="text-sm text-base-content/70 mb-3">
+        {% trans "Showing" %} {{ page_obj.start_index }}-{{ page_obj.end_index }} {% trans "of" %} {{ page_obj.paginator.count }} {% trans "templates" %}
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-zebra w-full">
+          <thead>
+            <tr>
+              <th>{% trans "Name" %}</th>
+              <th>{% trans "Description" %}</th>
+              <th>{% trans "Level" %}</th>
+              <th>{% trans "Tags" %}</th>
+              <th>{% trans "Imports" %}</th>
+              <th>{% trans "Attribution" %}</th>
+              <th>{% trans "Actions" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for template in page_obj %}
+            <tr>
+              <td>
+                <a href="{% url 'surveys:published_template_detail' template_id=template.id %}" class="link link-accent font-medium">
+                  {{ template.name }}
+                </a>
+                <div class="text-xs text-base-content/60 mt-1">
+                  {% trans "by" %} {{ template.publisher.username }}
+                  {% if template.organization %}
+                    <span class="badge badge-xs badge-outline">{{ template.organization.name }}</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                <div class="text-sm max-w-xs truncate">{{ template.description|default:"—" }}</div>
+              </td>
+              <td>
+                {% if template.publication_level == 'organization' %}
+                  <span class="badge badge-info badge-sm">{% trans "Organization" %}</span>
+                {% else %}
+                  <span class="badge badge-success badge-sm">{% trans "Global" %}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if template.tags %}
+                  <div class="flex flex-wrap gap-1">
+                    {% for tag in template.tags %}
+                      <span class="badge badge-xs badge-outline">{{ tag }}</span>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <span class="text-base-content/40">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="text-sm">{{ template.import_count }}</span>
+              </td>
+              <td>
+                {% if template.attribution %}
+                  <div class="tooltip" data-tip="{% if template.attribution.authors %}{% trans "Authors:" %} {{ template.attribution.authors|join:', ' }}{% endif %}{% if template.attribution.citation %} | {{ template.attribution.citation }}{% endif %}">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                {% else %}
+                  <span class="text-base-content/40">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="flex gap-2">
+                  <a href="{% url 'surveys:published_template_detail' template_id=template.id %}" class="btn btn-xs btn-outline">
+                    {% trans "View" %}
+                  </a>
+                  <a href="{% url 'surveys:published_template_import' template_id=template.id slug='import' %}" class="btn btn-xs btn-primary">
+                    {% trans "Import" %}
+                  </a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      {% if page_obj.has_other_pages %}
+        <div class="flex justify-center mt-6">
+          <div class="join">
+            {% if page_obj.has_previous %}
+              <a href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_level %}&level={{ selected_level }}{% endif %}{% if selected_language %}&language={{ selected_language }}{% endif %}{% if selected_tags %}&tags={{ selected_tags|join:',' }}{% endif %}{% if selected_order %}&order={{ selected_order }}{% endif %}" class="join-item btn btn-sm">«</a>
+              <a href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_level %}&level={{ selected_level }}{% endif %}{% if selected_language %}&language={{ selected_language }}{% endif %}{% if selected_tags %}&tags={{ selected_tags|join:',' }}{% endif %}{% if selected_order %}&order={{ selected_order }}{% endif %}" class="join-item btn btn-sm">‹</a>
+            {% endif %}
+            <button class="join-item btn btn-sm btn-active">{% trans "Page" %} {{ page_obj.number }}</button>
+            {% if page_obj.has_next %}
+              <a href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_level %}&level={{ selected_level }}{% endif %}{% if selected_language %}&language={{ selected_language }}{% endif %}{% if selected_tags %}&tags={{ selected_tags|join:',' }}{% endif %}{% if selected_order %}&order={{ selected_order }}{% endif %}" class="join-item btn btn-sm">›</a>
+              <a href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_level %}&level={{ selected_level }}{% endif %}{% if selected_language %}&language={{ selected_language }}{% endif %}{% if selected_tags %}&tags={{ selected_tags|join:',' }}{% endif %}{% if selected_order %}&order={{ selected_order }}{% endif %}" class="join-item btn btn-sm">»</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="not-prose">
+      <div role="alert" class="alert">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-info h-6 w-6 shrink-0">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span>{% trans "No templates found matching your criteria." %}</span>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<script>
+// Auto-submit form when select dropdowns change
+document.querySelectorAll('[data-auto-submit]').forEach(el => {
+  el.addEventListener('change', () => {
+    document.getElementById('filter-form').submit();
+  });
+});
+</script>
+{% endblock %}
