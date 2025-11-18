@@ -403,15 +403,15 @@ class TestLLMSessionIsolation:
 # =============================================================================
 
 
-@override_settings(
-    LLM_ENABLED=True,
-    LLM_URL="http://test",
-    LLM_API_KEY="test",
-    LLM_AUTH_TYPE="bearer",
-)
 class TestMarkdownSanitization:
     """Test that LLM-generated markdown is properly sanitized."""
 
+    @override_settings(
+        LLM_ENABLED=True,
+        LLM_URL="http://test",
+        LLM_API_KEY="test",
+        LLM_AUTH_TYPE="bearer",
+    )
     def test_sanitize_removes_urls(self):
         """Sanitization removes URLs from markdown."""
         llm = ConversationalSurveyLLM()
@@ -426,6 +426,12 @@ Check out http://phishing.site"""
         assert "http://" not in sanitized
         assert "malicious.com" not in sanitized
 
+    @override_settings(
+        LLM_ENABLED=True,
+        LLM_URL="http://test",
+        LLM_API_KEY="test",
+        LLM_AUTH_TYPE="bearer",
+    )
     def test_sanitize_removes_html_tags(self):
         """Sanitization removes HTML/script tags."""
         llm = ConversationalSurveyLLM()
@@ -440,6 +446,12 @@ Check out http://phishing.site"""
         assert "<img" not in sanitized
         assert "onerror" not in sanitized
 
+    @override_settings(
+        LLM_ENABLED=True,
+        LLM_URL="http://test",
+        LLM_API_KEY="test",
+        LLM_AUTH_TYPE="bearer",
+    )
     def test_sanitize_removes_code_execution_patterns(self):
         """Sanitization removes potential code execution patterns."""
         llm = ConversationalSurveyLLM()
@@ -458,6 +470,12 @@ window.location='evil.com'
         assert "$(" not in sanitized
         assert "window." not in sanitized
 
+    @override_settings(
+        LLM_ENABLED=True,
+        LLM_URL="http://test",
+        LLM_API_KEY="test",
+        LLM_AUTH_TYPE="bearer",
+    )
     def test_extract_markdown_from_code_block(self):
         """LLM client correctly extracts markdown from code blocks."""
         llm = ConversationalSurveyLLM()
@@ -478,6 +496,12 @@ Let me know if you need changes!"""
         assert "Here's your survey" not in markdown
         assert "Let me know" not in markdown
 
+    @override_settings(
+        LLM_ENABLED=True,
+        LLM_URL="http://test",
+        LLM_API_KEY="test",
+        LLM_AUTH_TYPE="bearer",
+    )
     def test_extract_markdown_handles_pure_markdown(self):
         """LLM client handles responses that are pure markdown."""
         llm = ConversationalSurveyLLM()
