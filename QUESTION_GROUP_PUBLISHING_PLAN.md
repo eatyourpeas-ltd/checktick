@@ -1021,7 +1021,7 @@ class PublicationWorkflowTests(TestCase):
 - [x] Create documentation (publish-question-groups.md, templates index)
 - [x] Add publisher credit system with privacy controls
 
-### Phase 5: API ⏳ IN PROGRESS
+### Phase 5: API ⏳ NOT STARTED
 - [ ] Implement API endpoints
 - [ ] Add API documentation
 - [ ] Add API rate limiting
@@ -1034,13 +1034,16 @@ class PublicationWorkflowTests(TestCase):
 - [ ] Add loading states and error handling
 - [ ] i18n for all new strings (partially done)
 
-### Phase 7: Testing ⏳ NEXT
-- [ ] Write unit tests for models and permissions
-- [ ] Write integration tests for publication workflow
+### Phase 7: Testing ✅ SUBSTANTIAL COVERAGE
+- [x] Write unit tests for models and permissions
+- [x] Write integration tests for publication workflow
+- [x] Test markdown export
+- [x] Test template discovery and filtering
+- [x] Test attribution display
+- [x] Test global template sync command
+- [x] Test republishing prevention (copyright protection)
 - [ ] Write UI tests for template library and import
-- [ ] Test markdown round-trip integrity
 - [ ] Test rate limiting enforcement
-- [ ] Test attribution display across views
 - [ ] Manual QA testing
 - [ ] Accessibility testing
 
@@ -1050,8 +1053,18 @@ class PublicationWorkflowTests(TestCase):
 - [ ] Update self-hosting guide
 - [ ] Create video tutorials (optional)
 
-### Phase 9: Migration & Deployment
-- [ ] Convert Patient/Professional templates to published
+### Phase 9: Specialist Template Conversion ⏳ NEXT PRIORITY
+- [ ] Convert Patient Demographics template to published format
+- [ ] Convert Professional Details template to published format
+- [ ] Write tests for converted templates
+- [ ] Update documentation for specialist templates
+- [ ] Verify backward compatibility
+
+### Phase 10: GitHub Issue Templates
+- [ ] Ensure issue templates include dataset options
+- [ ] Ensure issue templates include question group options
+
+### Phase 11: Deployment
 - [ ] Deploy to staging
 - [ ] Beta test with pilot organizations
 - [ ] Deploy to production
