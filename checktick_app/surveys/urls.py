@@ -279,4 +279,35 @@ urlpatterns = [
         gov_views.survey_custodian_revoke,
         name="survey_custodian_revoke",
     ),
+    # Published question group templates
+    path(
+        "templates/",
+        views.published_templates_list,
+        name="published_templates_list",
+    ),
+    path(
+        "templates/<int:template_id>/",
+        views.published_template_detail,
+        name="published_template_detail",
+    ),
+    path(
+        "templates/<int:template_id>/preview/",
+        views.published_template_preview,
+        name="published_template_preview",
+    ),
+    path(
+        "<slug:slug>/groups/<int:gid>/publish/",
+        views.question_group_publish,
+        name="question_group_publish",
+    ),
+    path(
+        "templates/<int:template_id>/import/<slug:survey_slug>/",
+        views.published_template_import,
+        name="published_template_import",
+    ),
+    path(
+        "templates/<int:template_id>/delete/",
+        views.published_template_delete,
+        name="published_template_delete",
+    ),
 ]

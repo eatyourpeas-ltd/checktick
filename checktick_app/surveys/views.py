@@ -15,7 +15,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import DatabaseError, models, transaction
 from django.db.models import Q, QuerySet
 from django.http import (
@@ -44,6 +44,7 @@ from .models import (
     LLMConversationSession,
     Organization,
     OrganizationMembership,
+    PublishedQuestionGroup,
     QuestionGroup,
     Survey,
     SurveyAccessToken,
@@ -6764,3 +6765,397 @@ def dataset_delete(request: HttpRequest, dataset_id: int) -> HttpResponse:
 
     messages.success(request, f"Dataset '{dataset.name}' deleted successfully")
     return redirect("surveys:dataset_list")
+
+
+# Published Question Group Templates
+
+
+@login_required
+def published_templates_list(request):
+    """Browse published question group templates."""
+    from django.db.models import Q
+
+    user = request.user
+
+    # Get user's organizations
+    user_org_ids = list(
+        OrganizationMembership.objects.filter(user=user).values_list(
+            "organization_id", flat=True
+        )
+    )
+
+    # Base queryset: active templates
+    templates = PublishedQuestionGroup.objects.filter(
+        status=PublishedQuestionGroup.Status.ACTIVE
+    ).select_related("publisher", "organization")
+
+    # Filter by visibility
+    templates = templates.filter(
+        Q(publication_level=PublishedQuestionGroup.PublicationLevel.GLOBAL)
+        | Q(
+            publication_level=PublishedQuestionGroup.PublicationLevel.ORGANIZATION,
+            organization_id__in=user_org_ids,
+        )
+    )
+
+    # Search filter
+    search = request.GET.get("search", "").strip()
+    if search:
+        templates = templates.filter(
+            Q(name__icontains=search)
+            | Q(description__icontains=search)
+            | Q(tags__icontains=search)
+        )
+
+    # Level filter
+    level = request.GET.get("level", "").strip()
+    if level in ["global", "organization"]:
+        templates = templates.filter(publication_level=level)
+
+    # Tag filter
+    tag = request.GET.get("tag", "").strip()
+    if tag:
+        templates = templates.filter(tags__contains=[tag])
+
+    # Language filter
+    language = request.GET.get("language", "").strip()
+    if language:
+        templates = templates.filter(language=language)
+
+    # Ordering
+    order = request.GET.get("order", "-created_at")
+    if order in ["name", "-name", "-created_at", "-import_count"]:
+        templates = templates.order_by(order)
+
+    # Get all tags for filter dropdown
+    all_tags = set()
+    for template in PublishedQuestionGroup.objects.filter(
+        status=PublishedQuestionGroup.Status.ACTIVE
+    ):
+        all_tags.update(template.tags or [])
+
+    return render(
+        request,
+        "surveys/published_templates_list.html",
+        {
+            "templates": templates,
+            "search": search,
+            "level": level,
+            "tag": tag,
+            "language": language,
+            "order": order,
+            "all_tags": sorted(all_tags),
+        },
+    )
+
+
+@login_required
+def published_template_detail(request, template_id):
+    """View details of a published template."""
+    from .permissions import can_import_published_template
+
+    template = get_object_or_404(PublishedQuestionGroup, pk=template_id)
+
+    # Check access
+    if not can_import_published_template(request.user, template):
+        raise PermissionDenied("You do not have access to this template.")
+
+    return render(
+        request,
+        "surveys/published_template_detail.html",
+        {
+            "template": template,
+        },
+    )
+
+
+@login_required
+def published_template_preview(request, template_id):
+    """Preview markdown for a published template."""
+    from .permissions import can_import_published_template
+
+    template = get_object_or_404(PublishedQuestionGroup, pk=template_id)
+
+    # Check access
+    if not can_import_published_template(request.user, template):
+        raise PermissionDenied("You do not have access to this template.")
+
+    return render(
+        request,
+        "surveys/published_template_preview.html",
+        {
+            "template": template,
+            "markdown": template.markdown,
+        },
+    )
+
+
+@login_required
+@ratelimit(key="user", rate="10/d", block=True)
+def question_group_publish(request, slug, gid):
+    """Publish a QuestionGroup as a template."""
+    from .forms import PublishQuestionGroupForm
+    from .permissions import require_can_edit
+
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+
+    group = get_object_or_404(QuestionGroup, pk=gid, owner=request.user)
+
+    # Check if group has questions
+    questions = SurveyQuestion.objects.filter(survey=survey, group=group)
+    if not questions.exists():
+        messages.error(request, "Cannot publish an empty question group.")
+        return redirect("surveys:group_builder", slug=slug, gid=gid)
+
+    if request.method == "POST":
+        form = PublishQuestionGroupForm(
+            request.POST, user=request.user, question_group=group
+        )
+        if form.is_valid():
+            # Generate markdown from group
+            markdown = _export_question_group_to_markdown(group, survey)
+
+            # Create publication
+            publication = form.save(commit=False)
+            publication.source_group = group
+            publication.publisher = request.user
+            publication.markdown = markdown
+
+            # Set organization if org-level
+            if (
+                publication.publication_level
+                == PublishedQuestionGroup.PublicationLevel.ORGANIZATION
+            ):
+                publication.organization = group.organization or survey.organization
+
+            publication.save()
+
+            messages.success(
+                request,
+                f"Question group '{publication.name}' published successfully!",
+            )
+            return redirect(
+                "surveys:published_template_detail", template_id=publication.pk
+            )
+    else:
+        form = PublishQuestionGroupForm(user=request.user, question_group=group)
+
+    return render(
+        request,
+        "surveys/question_group_publish.html",
+        {
+            "survey": survey,
+            "group": group,
+            "form": form,
+            "questions": questions,
+        },
+    )
+
+
+@login_required
+@ratelimit(key="user", rate="50/h", block=True)
+def published_template_import(request, template_id, survey_slug):
+    """Import a published template into a survey."""
+    from .markdown_import import parse_bulk_markdown
+    from .permissions import require_can_edit, require_can_import_published_template
+
+    template = get_object_or_404(PublishedQuestionGroup, pk=template_id)
+    survey = get_object_or_404(Survey, slug=survey_slug)
+
+    require_can_edit(request.user, survey)
+    require_can_import_published_template(request.user, template)
+
+    if request.method == "POST":
+        try:
+            # Parse markdown
+            groups = parse_bulk_markdown(template.markdown)
+
+            if not groups:
+                messages.error(request, "Template has no valid groups to import.")
+                return redirect("surveys:published_templates_list")
+
+            # Import first group (templates typically have one group)
+            group_data = groups[0]
+
+            # Create QuestionGroup
+            new_group = QuestionGroup.objects.create(
+                name=group_data.get("name", template.name),
+                description=group_data.get("description", ""),
+                owner=request.user,
+                imported_from=template,
+            )
+
+            # Add to survey
+            survey.question_groups.add(new_group)
+
+            # Create questions
+            for q_data in group_data.get("questions", []):
+                SurveyQuestion.objects.create(
+                    survey=survey,
+                    group=new_group,
+                    text=q_data.get("text", ""),
+                    type=q_data.get("type", "short_text"),
+                    options=q_data.get("options"),
+                    required=q_data.get("required", False),
+                    order=q_data.get("order", 0),
+                )
+
+            # Increment import count
+            template.increment_import_count()
+
+            messages.success(
+                request,
+                f"Template '{template.name}' imported successfully!",
+            )
+            return redirect("surveys:group_builder", slug=survey_slug, gid=new_group.pk)
+
+        except Exception as e:
+            messages.error(request, f"Error importing template: {str(e)}")
+            return redirect(
+                "surveys:published_template_detail", template_id=template_id
+            )
+
+    return render(
+        request,
+        "surveys/published_template_import.html",
+        {
+            "template": template,
+            "survey": survey,
+        },
+    )
+
+
+@login_required
+def published_template_delete(request, template_id):
+    """Soft delete a published template."""
+    from .permissions import require_can_delete_published_template
+
+    template = get_object_or_404(PublishedQuestionGroup, pk=template_id)
+    require_can_delete_published_template(request.user, template)
+
+    if request.method == "POST":
+        # Soft delete
+        template.status = PublishedQuestionGroup.Status.DELETED
+        template.save(update_fields=["status"])
+
+        messages.success(request, f"Template '{template.name}' deleted successfully.")
+        return redirect("surveys:published_templates_list")
+
+    return render(
+        request,
+        "surveys/published_template_delete.html",
+        {
+            "template": template,
+        },
+    )
+
+
+def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> str:
+    """Export a single QuestionGroup to markdown format with attribution."""
+    lines = []
+
+    # Add attribution as HTML comment if it exists
+    if hasattr(group, "attribution") and group.attribution:
+        import json
+
+        attribution = group.attribution
+        # Human-readable line
+        parts = []
+        if "authors" in attribution and attribution["authors"]:
+            authors = attribution["authors"]
+            if len(authors) == 1:
+                parts.append(authors[0].get("name", ""))
+            elif len(authors) > 1:
+                parts.append(f"{authors[0].get('name', '')} et al.")
+        if "year" in attribution:
+            parts.append(f"({attribution['year']})")
+        if "pmid" in attribution:
+            parts.append(f"PMID: {attribution['pmid']}")
+
+        human_line = ", ".join(p for p in parts if p)
+
+        # Add comment
+        if human_line:
+            lines.append(f"<!-- Attribution: {human_line}")
+            lines.append(f"     {json.dumps(attribution)} -->")
+            lines.append("")
+
+    # Add group heading
+    group_ref = group.name.lower().replace(" ", "-")
+    lines.append(f"# {group.name} {{{group_ref}}}")
+    if group.description:
+        lines.append(group.description)
+    lines.append("")
+
+    # Get questions for this group
+    questions = SurveyQuestion.objects.filter(survey=survey, group=group).order_by(
+        "order"
+    )
+
+    # Add questions
+    for question in questions:
+        required = "*" if question.required else ""
+        question_ref = question.text.lower()[:30].replace(" ", "-").strip("-")
+        lines.append(f"## {question.text}{required} {{{question_ref}}}")
+
+        # Question type
+        lines.append(f"({question.type})")
+
+        # Options for question types that need them
+        if question.type in [
+            "mc_single",
+            "mc_multi",
+            "dropdown",
+            "orderable",
+            "yesno",
+            "image",
+            "likert categories",
+        ]:
+            if question.options:
+                for option in question.options:
+                    option_text = option.get("text", "")
+                    lines.append(f"- {option_text}")
+                    # Check for follow-up text
+                    if option.get("has_followup_text"):
+                        followup_label = option.get(
+                            "followup_text_label", "Please specify"
+                        )
+                        lines.append(f"  + {followup_label}")
+
+        # Likert number settings
+        elif question.type == "likert number":
+            if question.options:
+                min_val = question.options.get("min")
+                max_val = question.options.get("max")
+                left_label = question.options.get("left_label", "")
+                right_label = question.options.get("right_label", "")
+
+                if min_val is not None:
+                    lines.append(f"min: {min_val}")
+                if max_val is not None:
+                    lines.append(f"max: {max_val}")
+                if left_label:
+                    lines.append(f"left: {left_label}")
+                if right_label:
+                    lines.append(f"right: {right_label}")
+
+        # Branching rules
+        conditions = SurveyQuestionCondition.objects.filter(question=question)
+        for condition in conditions:
+            operator = condition.operator
+            value = condition.value or ""
+            if condition.target_question:
+                target_ref = (
+                    condition.target_question.text.lower()[:30]
+                    .replace(" ", "-")
+                    .strip("-")
+                )
+                lines.append(f"? when {operator} {value} -> {{{target_ref}}}")
+            elif condition.target_group:
+                target_ref = condition.target_group.name.lower().replace(" ", "-")
+                lines.append(f"? when {operator} {value} -> {{{target_ref}}}")
+
+        lines.append("")
+
+    return "\n".join(lines)
