@@ -16,12 +16,19 @@ class PublishQuestionGroupForm(forms.ModelForm):
             "language",
             "version",
             "attribution",
+            "show_publisher_credit",
         ]
         widgets = {
             "publication_level": forms.RadioSelect,
             "description": forms.Textarea(attrs={"rows": 3}),
             "tags": forms.HiddenInput(),  # Will use custom JS tag input
             "attribution": forms.HiddenInput(),  # Will use custom JS form
+        }
+        labels = {
+            "show_publisher_credit": "Show my name in template listings",
+        }
+        help_texts = {
+            "show_publisher_credit": "If checked, your name and organization (if applicable) will be shown as the publisher. Uncheck for anonymous publication.",
         }
 
     # Attribution fields (not in model, used for UI)

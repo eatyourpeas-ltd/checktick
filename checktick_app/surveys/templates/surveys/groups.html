@@ -66,6 +66,14 @@
                 </span>
                 {% if g.description %}<div class="text-sm opacity-70">{{ g.description }}</div>{% endif %}
               </div>
+              {% if can_edit %}
+              <a href="{% url 'surveys:question_group_publish' slug=survey.slug gid=g.id %}" class="btn btn-xs btn-outline" title="{% trans 'Publish as template' %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                {% trans "Publish" %}
+              </a>
+              {% endif %}
               {% if info.is_repeated %}
                 <div class="tooltip" data-tip="{{ info.tooltip }}">
                   <div class="badge badge-info shrink-0 self-center inline-flex items-center gap-1">
@@ -111,6 +119,12 @@
       {% endif %}
       <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/dashboard/">{% trans "Back to dashboard" %}</a>
       <a class="btn btn-ghost btn-sm" href="/docs/groups-view/" target="_blank" rel="noopener noreferrer">{% trans "Help" %}</a>
+      <a class="btn btn-sm btn-outline" href="{% url 'surveys:published_templates_list' %}">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        {% trans "Browse & Import Templates" %}
+      </a>
     </div>
   </div>
 </div>

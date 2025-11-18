@@ -138,9 +138,22 @@
                   {{ template.name }}
                 </a>
                 <div class="text-xs text-base-content/60 mt-1">
-                  {% trans "by" %} {{ template.publisher.username }}
-                  {% if template.organization %}
-                    <span class="badge badge-xs badge-outline">{{ template.organization.name }}</span>
+                  {% if template.attribution.authors %}
+                    {# Show attribution authors if present #}
+                    {{ template.attribution.authors }}
+                  {% elif template.show_publisher_credit %}
+                    {# Show publisher credit if enabled #}
+                    {% trans "by" %} {{ template.publisher.first_name }} {{ template.publisher.last_name }}
+                    {% if template.organization %}
+                      <span class="badge badge-xs badge-outline">{{ template.organization.name }}</span>
+                    {% endif %}
+                  {% else %}
+                    {# Anonymous publication #}
+                    {% if template.organization %}
+                      <span class="badge badge-xs badge-outline">{{ template.organization.name }}</span>
+                    {% else %}
+                      <span class="text-base-content/40">{% trans "Anonymous" %}</span>
+                    {% endif %}
                   {% endif %}
                 </div>
               </td>
@@ -170,7 +183,7 @@
               </td>
               <td>
                 {% if template.attribution %}
-                  <div class="tooltip" data-tip="{% if template.attribution.authors %}{% trans "Authors:" %} {{ template.attribution.authors|join:', ' }}{% endif %}{% if template.attribution.citation %} | {{ template.attribution.citation }}{% endif %}">
+                  <div class="tooltip tooltip-left" data-tip="{% if template.attribution.authors %}{{ template.attribution.authors }}{% endif %}{% if template.attribution.title %} | {{ template.attribution.title }}{% endif %}">
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>

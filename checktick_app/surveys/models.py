@@ -178,6 +178,10 @@ class PublishedQuestionGroup(models.Model):
         blank=True,
         help_text="Attribution metadata (authors, citation, PMID, DOI, license)",
     )
+    show_publisher_credit = models.BooleanField(
+        default=True,
+        help_text="Whether to show publisher name/organization in public listings",
+    )
 
     # Metadata
     tags = models.JSONField(
