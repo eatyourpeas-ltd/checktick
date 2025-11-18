@@ -403,6 +403,12 @@ class TestLLMSessionIsolation:
 # =============================================================================
 
 
+@override_settings(
+    LLM_ENABLED=True,
+    LLM_URL="http://test",
+    LLM_API_KEY="test",
+    LLM_AUTH_TYPE="bearer",
+)
 class TestMarkdownSanitization:
     """Test that LLM-generated markdown is properly sanitized."""
 
