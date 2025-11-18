@@ -16,7 +16,6 @@ Options:
 import yaml
 from pathlib import Path
 from django.core.management.base import BaseCommand
-from django.db import transaction
 from checktick_app.surveys.models import PublishedQuestionGroup
 from checktick_app.surveys.views import parse_bulk_markdown_with_collections
 
@@ -95,14 +94,14 @@ class Command(BaseCommand):
 
         # Check for YAML frontmatter
         if not content.startswith('---\n'):
-            self.stdout.write(self.style.WARNING(f'  Skipping: No YAML frontmatter found'))
+            self.stdout.write(self.style.WARNING('  Skipping: No YAML frontmatter found'))
             return 'skipped'
 
         # Extract YAML frontmatter
         try:
             parts = content.split('---\n', 2)
             if len(parts) < 3:
-                self.stdout.write(self.style.WARNING(f'  Skipping: Invalid frontmatter format'))
+                self.stdout.write(self.style.WARNING('  Skipping: Invalid frontmatter format'))
                 return 'skipped'
 
             yaml_content = parts[1]
@@ -110,7 +109,7 @@ class Command(BaseCommand):
 
             metadata = yaml.safe_load(yaml_content)
             if not isinstance(metadata, dict):
-                self.stdout.write(self.style.WARNING(f'  Skipping: Invalid YAML metadata'))
+                self.stdout.write(self.style.WARNING('  Skipping: Invalid YAML metadata'))
                 return 'skipped'
 
         except yaml.YAMLError as e:
@@ -129,7 +128,7 @@ class Command(BaseCommand):
             # Test parsing without actually saving
             parsed = parse_bulk_markdown_with_collections(markdown_content)
             if not parsed or 'groups' not in parsed:
-                self.stdout.write(self.style.ERROR(f'  Error: Failed to parse markdown content'))
+                self.stdout.write(self.style.ERROR('  Error: Failed to parse markdown content'))
                 return 'error'
 
             question_count = sum(len(g.get('questions', [])) for g in parsed['groups'])
@@ -155,7 +154,7 @@ class Command(BaseCommand):
             )
 
             if not force and not content_changed and not metadata_changed:
-                self.stdout.write(self.style.WARNING(f'  Skipping: Template unchanged'))
+                self.stdout.write(self.style.WARNING('  Skipping: Template unchanged'))
                 return 'skipped'
 
             if dry_run:
@@ -184,7 +183,7 @@ class Command(BaseCommand):
                 admin_user = User.objects.filter(is_superuser=True).first()
 
                 if not admin_user:
-                    self.stdout.write(self.style.WARNING(f'  No superuser found, creating system user'))
+                    self.stdout.write(self.style.WARNING('  No superuser found, creating system user'))
                     admin_user, created = User.objects.get_or_create(
                         email='system@checktick.local',
                         defaults={
