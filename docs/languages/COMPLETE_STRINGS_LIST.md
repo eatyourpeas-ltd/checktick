@@ -227,7 +227,7 @@ Form fields, inputs, validation, slugs, and configuration options.
 15. Importing from Markdown will delete all existing question groups, questions, \nbranching rules, and repeats. This action cannot be undone.
 16. Optional: Follow-up text inputs (dropdown, mc_single, mc_multi, yesno)
 17. For <code>yesno</code>, provide exactly 2 options (Yes/No) with optional \nfollow-ups
-18. Operators mirror the survey builder: <code>equals</code>, <code>not_equals<\n/code>, <code>contains</code>, <code>not_contains</code>, <code>greater_than</\ncode>, <code>less_than</code>
+18. Operators mirror the survey builder: <code>equals</code>, <code>not_equals</code>, <code>contains</code>, <code>not_contains</code>, <code>greater_than</code>, <code>less_than</code>
 19. Point to a group ID to jump to that group, or a question ID to jump directly \nto that question
 20. Assign stable IDs by placing them in curly braces at the end of group or \nquestion titles
 21. IDs are normalised to lowercase slugs; keep them unique within your document.
@@ -276,7 +276,7 @@ Long-form help text, documentation, and explanatory content.
 
 ## Category 6: General UI Text (89 strings)
 
-Labels, headings, status messages, badges, settings, and general interface text.
+Labels, headings, status messages, badges, settings, and general interface text
 
 1. Your Profile
 2. Your badges
@@ -359,7 +359,7 @@ Labels, headings, status messages, badges, settings, and general interface text.
 79. Draft
 80. Published
 81. For options that should have follow-up text input, add an indented line \nstarting with <code>+</code> followed by the label text
-82. Works with <code>mc_single</code>, <code>mc_multi</code>, <code>dropdown</\ncode>, and <code>yesno</code> question types
+82. Works with <code>mc_single</code>, <code>mc_multi</code>, <code>dropdown</code>, and <code>yesno</code> question types
 83. Published: ready to accept responses.
 84. Open the survey in a new window to invite participants.
 85. What's this?
