@@ -743,7 +743,9 @@ def _discover_doc_pages():
 
     # Sort items within each category by priority (lower priority = earlier in list)
     for category_name in categorized.keys():
-        categorized[category_name].sort(key=lambda x: (x.get("priority", 999), x.get("title", "")))
+        categorized[category_name].sort(
+            key=lambda x: (x.get("priority", 999), x.get("title", ""))
+        )
 
     return pages, categorized
 
@@ -900,7 +902,7 @@ def docs_page(request, slug: str):
         for i, line in enumerate(lines[1:], 1):
             if line.strip() == "---":
                 # Skip frontmatter and join remaining content
-                content = "\n".join(lines[i + 1:])
+                content = "\n".join(lines[i + 1 :])
                 break
 
     html = mdlib.markdown(

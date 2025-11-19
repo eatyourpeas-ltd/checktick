@@ -1,0 +1,236 @@
+name: 🎨 Custom Template Request
+description: Request a new custom question template (specialized question format) to be added to CheckTick
+title: "[Custom Template]: "
+labels: ["custom-template", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Request a new custom question template**
+
+        Custom templates are specialized question formats with unique functionality beyond standard question types. Examples include:
+        - Patient Demographics (encrypted identifier collection)
+        - Professional Details (staff identifier collection with ODS codes)
+        - Specialized data collection formats with custom validation or display logic
+
+        **This is different from Question Group Templates**, which are reusable sets of standard questions (like PHQ-9, GAD-7). For those, use the [Question Group Template Request](https://github.com/eatyourpeas/checktick/issues/new?template=question_group_template_request.yml) instead.
+
+        Before requesting a new custom template:
+        1. Check if an existing question type or template meets your needs
+        2. Search existing issues to avoid duplicates
+        3. Consider if this is a specialized format that would benefit multiple users
+        4. Ensure the functionality can't be achieved with standard question types
+
+        **Note**: Custom templates require backend development and are evaluated based on general usefulness and technical feasibility.
+
+  - type: input
+    id: template-name
+    attributes:
+      label: Template Name
+      description: A clear, descriptive name for this custom template
+      placeholder: "e.g., Research Participant Details, Clinical Trial Identifiers"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe what this custom template would collect and how it would work
+      placeholder: |
+        - What data does it collect?
+        - What makes it different from standard question types?
+        - What special functionality does it need?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: template-type
+    attributes:
+      label: Primary Purpose
+      description: What is the main purpose of this custom template?
+      options:
+        - Identifier collection (personal/professional details)
+        - Specialized data entry format
+        - Custom validation or calculation logic
+        - Unique display or interaction pattern
+        - Integration with external data source
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: fields
+    attributes:
+      label: Fields/Data to Collect
+      description: List the specific fields or data points this template should collect
+      placeholder: |
+        - Field 1: [type/format]
+        - Field 2: [type/format]
+        - Field 3: [type/format]
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: special-requirements
+    attributes:
+      label: Special Requirements
+      description: Describe any special functionality, validation, or behavior needed
+      placeholder: |
+        - Encryption requirements
+        - Data validation rules
+        - Display logic
+        - Integration with datasets or external sources
+        - Custom UI elements
+        - Export format requirements
+
+  - type: checkboxes
+    id: features
+    attributes:
+      label: Required Features
+      description: Select all features this template needs
+      options:
+        - label: Data encryption (like Patient Demographics)
+        - label: Integration with datasets/dropdowns
+        - label: ODS code lookup/validation
+        - label: Custom validation rules
+        - label: Conditional field display
+        - label: Special export format
+        - label: Read-only or computed fields
+        - label: Multi-step data entry
+
+  - type: textarea
+    id: similar-to
+    attributes:
+      label: Similar Existing Templates
+      description: Is this similar to any existing templates? How is it different?
+      placeholder: |
+        - Patient Demographics template, but for...
+        - Professional Details template, but with...
+        - Completely new format for...
+
+  - type: dropdown
+    id: data-sensitivity
+    attributes:
+      label: Data Sensitivity
+      description: What level of data sensitivity does this template handle?
+      options:
+        - High (patient identifiable information, requires encryption)
+        - Medium (professional details, organization data)
+        - Low (non-identifiable, statistical data)
+        - None (public information)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: usage-frequency
+    attributes:
+      label: Expected Usage Frequency
+      description: How commonly would this template be used?
+      options:
+        - Very Common (needed by most healthcare surveys)
+        - Common (needed in specific specialties/contexts)
+        - Moderate (useful but specialized use case)
+        - Rare (niche but valuable for specific scenarios)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: specialty-area
+    attributes:
+      label: Primary Specialty Areas
+      description: Select all specialty areas that would benefit from this template
+      options:
+        - label: General/Cross-specialty
+        - label: Clinical research
+        - label: Paediatrics
+        - label: Mental health
+        - label: Primary care
+        - label: Hospital services
+        - label: Public health
+        - label: Quality improvement
+        - label: Academic research
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case Description
+      description: Describe specific scenarios where this template would be used
+      placeholder: |
+        - What surveys or workflows need this?
+        - Who would use it? (researchers, clinicians, administrators)
+        - What problem does it solve?
+        - Why can't existing question types or templates achieve this?
+    validations:
+      required: true
+
+  - type: textarea
+    id: mockup
+    attributes:
+      label: UI Mockup or Example (Optional)
+      description: Provide a sketch, screenshot, or description of how this should look/work
+      placeholder: |
+        You can attach images by dragging and dropping, or describe the UI:
+        - Field layout
+        - Interaction flow
+        - Special UI elements
+
+  - type: textarea
+    id: technical-considerations
+    attributes:
+      label: Technical Considerations
+      description: Any technical constraints, standards, or requirements to consider?
+      placeholder: |
+        - Must comply with specific standards (e.g., NHS DD, FHIR)
+        - Integration with existing systems
+        - Performance considerations
+        - Browser/device compatibility needs
+
+  - type: textarea
+    id: organization-context
+    attributes:
+      label: Organization Context (Optional)
+      description: Context about your organization's needs (helps us prioritize)
+      placeholder: |
+        - Type of organization
+        - Scale of usage (number of surveys/users)
+        - Urgency or timeline
+        - Whether this is part of a larger initiative
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I've checked that existing question types can't achieve this functionality
+          required: true
+        - label: I've checked that existing templates (Patient/Professional) don't meet this need
+          required: true
+        - label: I've searched existing issues for duplicates
+          required: true
+        - label: This template would benefit multiple users, not just my specific use case
+          required: false
+        - label: I'm willing to help test and validate the template once developed
+          required: false
+        - label: I can provide additional requirements or feedback during development
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **What happens next?**
+
+        1. Maintainers review the request for feasibility and general usefulness
+        2. Technical assessment of development effort and complexity
+        3. If approved, the template is added to the development roadmap
+        4. You'll be notified of progress and can provide feedback during development
+        5. Once developed, you'll be invited to test the new template
+
+        **Development timeline**: Custom templates require backend development and typically take longer to implement than standard features. Priority is given to templates with broad applicability.
+
+        **Alternative workarounds**: While waiting for a custom template, consider:
+        - Using standard question types with custom validation
+        - Creating a question group with detailed instructions
+        - Using markdown in question text for special formatting
