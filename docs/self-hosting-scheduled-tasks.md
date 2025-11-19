@@ -4,7 +4,7 @@ CheckTick requires scheduled tasks for data governance operations, housekeeping,
 
 ## Overview
 
-CheckTick uses four scheduled tasks:
+CheckTick uses five scheduled tasks:
 
 ### 1. Data Governance (Required for GDPR)
 
@@ -72,6 +72,33 @@ python manage.py sync_nhs_dd_datasets --force
 python manage.py sync_nhs_dd_datasets --dataset smoking_status_code
 ```
 
+### 5. Global Question Group Templates Sync (Recommended)
+
+The `sync_global_question_group_templates` management command runs daily to:
+
+1. **Import global templates** - Syncs question group templates from the `docs/question-group-templates/` folder
+2. **Update existing templates** - Keeps templates current with repository changes
+3. **Enable template library** - Makes reusable question groups available for import
+
+**Recommended**: Run this daily if you maintain custom global templates in your repository. If you're using the standard CheckTick distribution without custom templates, this task is optional.
+
+**Initial Setup**: Run the sync command once to populate templates (creates records automatically):
+
+```bash
+# One-time: Create templates from markdown files
+python manage.py sync_global_question_group_templates
+```
+
+**Maintenance**:
+
+```bash
+# Check which templates would be synced
+python manage.py sync_global_question_group_templates --dry-run
+
+# Force update all templates (even if unchanged)
+python manage.py sync_global_question_group_templates --force
+```
+
 ## Prerequisites
 
 - CheckTick deployed and running
@@ -123,7 +150,16 @@ Northflank provides native cron job support, making this the simplest option.
    - **Schedule**: `0 5 * * 0` (runs at 5 AM UTC every Sunday - weekly)
    - **Command**: `python manage.py sync_nhs_dd_datasets`
 
-#### 5. Copy Environment Variables
+#### 5. Create Global Templates Sync Cron Job
+
+1. Click **"Add Service"** → **"Cron Job"** again
+2. Configure the job:
+   - **Name**: `checktick-templates-sync`
+   - **Docker Image**: Use the same image as your web service
+   - **Schedule**: `0 6 * * *` (runs at 6 AM UTC daily)
+   - **Command**: `python manage.py sync_global_question_group_templates`
+
+#### 6. Copy Environment Variables
 
 All cron jobs need the same environment variables as your web service:
 
@@ -141,7 +177,7 @@ All cron jobs need the same environment variables as your web service:
 - `SITE_URL` (for email links in data governance)
 - `EXTERNAL_DATASET_API_URL`, `EXTERNAL_DATASET_API_KEY` (for dataset sync - optional, defaults to RCPCH API)
 
-#### 5. Deploy and Test
+#### 7. Deploy and Test
 
 1. Deploy all cron job services
 2. Test them manually via Northflank dashboard: **Jobs** → **Run Now**
@@ -221,12 +257,30 @@ docker compose exec -T web python manage.py sync_external_datasets >> /var/log/c
 exit $?
 ```
 
+Create `/usr/local/bin/checktick-templates-sync.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick Global Templates Sync Cron Job
+# Runs daily at 6 AM UTC
+
+# Set working directory
+cd /path/to/your/checktick-app
+
+# Run the sync command
+docker compose exec -T web python manage.py sync_global_question_group_templates >> /var/log/checktick/templates-sync.log 2>&1
+
+# Exit with the command's exit code
+exit $?
+```
+
 Make them executable:
 
 ```bash
 chmod +x /usr/local/bin/checktick-data-governance.sh
 chmod +x /usr/local/bin/checktick-progress-cleanup.sh
 chmod +x /usr/local/bin/checktick-dataset-sync.sh
+chmod +x /usr/local/bin/checktick-templates-sync.sh
 ```
 
 #### 2. Add to System Crontab
@@ -246,6 +300,9 @@ Add these lines:
 
 # CheckTick External Dataset Sync - Daily at 4 AM UTC
 0 4 * * * /usr/local/bin/checktick-dataset-sync.sh
+
+# CheckTick Global Templates Sync - Daily at 6 AM UTC
+0 6 * * * /usr/local/bin/checktick-templates-sync.sh
 ```
 
 #### 3. Create Log Directory
@@ -269,6 +326,10 @@ tail -f /var/log/checktick/progress-cleanup.log
 # Test dataset sync
 /usr/local/bin/checktick-dataset-sync.sh
 tail -f /var/log/checktick/dataset-sync.log
+
+# Test templates sync
+/usr/local/bin/checktick-templates-sync.sh
+tail -f /var/log/checktick/templates-sync.log
 ```
 
 **Important**: For external dataset sync, run the initial setup once:

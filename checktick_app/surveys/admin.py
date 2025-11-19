@@ -6,6 +6,7 @@ from .models import (
     CollectionItem,
     DataSet,
     Organization,
+    PublishedQuestionGroup,
     QuestionGroup,
     Survey,
     SurveyProgress,
@@ -283,6 +284,94 @@ class CollectionDefinitionAdmin(admin.ModelAdmin):
     list_filter = ("survey", "cardinality")
     search_fields = ("name", "key")
     inlines = [CollectionItemInline]
+
+
+@admin.register(PublishedQuestionGroup)
+class PublishedQuestionGroupAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "publication_level",
+        "publisher",
+        "organization",
+        "status",
+        "import_count",
+        "language",
+        "created_at",
+    )
+    list_filter = (
+        "publication_level",
+        "status",
+        "language",
+        "created_at",
+        "organization",
+    )
+    search_fields = ("name", "description", "tags", "publisher__email")
+    readonly_fields = (
+        "source_group",
+        "publisher",
+        "markdown",
+        "import_count",
+        "created_at",
+        "updated_at",
+    )
+    fieldsets = (
+        (
+            "Basic Information",
+            {
+                "fields": (
+                    "name",
+                    "description",
+                    "language",
+                    "version",
+                    "tags",
+                )
+            },
+        ),
+        (
+            "Publication",
+            {
+                "fields": (
+                    "publication_level",
+                    "organization",
+                    "status",
+                    "source_group",
+                    "publisher",
+                )
+            },
+        ),
+        (
+            "Attribution",
+            {
+                "fields": (
+                    "attribution",
+                    "show_publisher_credit",
+                )
+            },
+        ),
+        (
+            "Content",
+            {
+                "fields": ("markdown",),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Statistics",
+            {
+                "fields": (
+                    "import_count",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
+    def get_queryset(self, request):
+        """Optimize queryset with related objects."""
+        return super().get_queryset(request).select_related(
+            "publisher", "organization", "source_group"
+        )
 
 
 # Configure admin site branding after admin is imported
