@@ -2,6 +2,8 @@
 
 This page lets survey editors order question groups and create "repeats" (collections) from selected groups. It replaces any previous Collections screen.
 
+For information about importing pre-built question groups from validated questionnaires, see the [Question Group Template Library](question-group-template-library.md) documentation.
+
 ## Who can access
 
 - Owner of the survey

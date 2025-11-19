@@ -6903,6 +6903,11 @@ def published_templates_list(request):
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
 
+    # Get user's surveys for import dropdown
+    user_surveys = Survey.objects.filter(owner=request.user).order_by("-created_at")[
+        :20
+    ]
+
     return render(
         request,
         "surveys/published_templates_list.html",
@@ -6913,6 +6918,7 @@ def published_templates_list(request):
             "selected_language": language,
             "selected_order": order,
             "all_tags": sorted(all_tags),
+            "user_surveys": user_surveys,
         },
     )
 
@@ -6928,11 +6934,21 @@ def published_template_detail(request, template_id):
     if not can_import_published_template(request.user, template):
         raise PermissionDenied("You do not have access to this template.")
 
+    # Get user's surveys for import dropdown
+    user_surveys = Survey.objects.filter(owner=request.user).order_by("-created_at")[
+        :20
+    ]
+
+    # Check if user can delete this template
+    can_delete = template.publisher == request.user
+
     return render(
         request,
         "surveys/published_template_detail.html",
         {
             "template": template,
+            "user_surveys": user_surveys,
+            "can_delete": can_delete,
         },
     )
 

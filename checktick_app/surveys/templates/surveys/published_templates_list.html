@@ -194,12 +194,30 @@
               </td>
               <td>
                 <div class="flex gap-2">
-                  <a href="{% url 'surveys:published_template_detail' template_id=template.id %}" class="btn btn-xs btn-outline">
-                    {% trans "View" %}
+                  <a href="{% url 'surveys:published_template_detail' template_id=template.id %}" class="btn btn-xs btn-ghost">
+                    {% trans "View Details" %}
                   </a>
-                  <a href="{% url 'surveys:published_template_import' template_id=template.id slug='import' %}" class="btn btn-xs btn-primary">
-                    {% trans "Import" %}
-                  </a>
+                  <div class="dropdown dropdown-end">
+                    <label tabindex="0" class="btn btn-xs btn-primary">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      {% trans "Import" %}
+                    </label>
+                    <ul tabindex="0" class="dropdown-content z-1000 menu p-2 shadow-lg bg-base-100 border border-base-300 rounded-box w-64 max-h-64 overflow-y-auto">
+                      {% if user_surveys %}
+                        {% for survey in user_surveys %}
+                          <li><a href="{% url 'surveys:published_template_import' template_id=template.id slug=survey.slug %}">
+                            {{ survey.name }}
+                          </a></li>
+                        {% endfor %}
+                      {% else %}
+                        <li class="disabled">
+                          <span class="text-base-content/60">{% trans "No surveys available. Create a survey first." %}</span>
+                        </li>
+                      {% endif %}
+                    </ul>
+                  </div>
                 </div>
               </td>
             </tr>

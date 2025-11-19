@@ -138,12 +138,42 @@
           {% trans "Preview Markdown" %}
         </a>
 
-        <a href="{% url 'surveys:published_template_import' template_id=template.id slug='import' %}" class="btn btn-primary">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        <div class="alert alert-info">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
-          {% trans "Import Template" %}
-        </a>
+          <div>
+            <h3 class="font-bold">{% trans "How to import this template" %}</h3>
+            <div class="text-sm">
+              {% trans "Click 'Import to Survey' below and select which survey you want to add this question group template to. All questions from the template will be imported as a new question group." %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Import Button with Survey Selector -->
+        <div class="dropdown dropdown-top dropdown-end">
+          <label tabindex="0" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            {% trans "Import to Survey" %}
+          </label>
+          <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-64 max-h-96 overflow-y-auto">
+            {% if user_surveys %}
+              {% for survey in user_surveys %}
+                <li>
+                  <a href="{% url 'surveys:published_template_import' template_id=template.id slug=survey.slug %}">
+                    {{ survey.name }}
+                  </a>
+                </li>
+              {% endfor %}
+            {% else %}
+              <li class="text-sm text-base-content/60 p-2">
+                {% trans "No surveys available. Create a survey first." %}
+              </li>
+            {% endif %}
+          </ul>
+        </div>
 
         {% if can_delete %}
           <a href="{% url 'surveys:published_template_delete' template_id=template.id %}" class="btn btn-error btn-outline">
