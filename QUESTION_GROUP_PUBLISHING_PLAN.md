@@ -6,15 +6,18 @@
 
 ## Executive Summary
 
-This document outlines the implementation plan for allowing users to publish QuestionGroups as reusable templates. Users can share validated question sets (PHQ-9, GAD-7, etc.) with proper attribution, available at two levels: organization-wide or globally (superuser approved).
+This document outlines the implementation plan for allowing users to publish Question Groups as reusable Question Group Templates. Users can share validated question sets (PHQ-9, GAD-7, etc.) with proper attribution, available at two levels: organization-wide or globally.
 
 **Key Design Decisions:**
-- Publish QuestionGroups, not full Surveys (simpler, more practical)
+- Publish Question Groups as Question Group Templates (simpler, more practical than full Surveys)
 - Two publication levels: organization and global
 - Static copies on import (no dynamic linking)
 - Attribution preserved through markdown and displayed to survey participants
 - Tag system for discoverability (base tags + user/org customizable)
-- Existing Patient/Professional templates converted to published QuestionGroups
+- All templates use consistent checkbox selection UI for choosing questions to import
+- Question Group Template Library accessible via "Browse Question Group Templates" button in builder
+- Existing Patient/Professional templates remain as quick-access buttons, also discoverable in library
+- Consistent terminology: Question Group → Question Group Template → Question Group Template Library
 
 ---
 
@@ -1054,10 +1057,21 @@ class PublicationWorkflowTests(TestCase):
 - [ ] Create video tutorials (optional)
 
 ### Phase 9: Specialist Template Conversion ⏳ NEXT PRIORITY
+
+**UI Strategy:**
+- Keep existing "Add Patient Demographics" and "Add Professional Details" buttons for quick access
+- Add "Browse Question Group Templates" button that links to existing `/templates/` page
+- Patient/Professional templates appear in Question Group Template Library for discoverability
+- All templates (including Patient/Professional) use same checkbox selection UI on import
+- Consistent terminology throughout: "Question Group Template Library"
+
+**Implementation Tasks:**
 - [ ] Convert Patient Demographics template to published format
 - [ ] Convert Professional Details template to published format
+- [ ] Add "Browse Question Group Templates" button to question builder
+- [ ] Ensure import flow redirects back to builder after import
 - [ ] Write tests for converted templates
-- [ ] Update documentation for specialist templates
+- [ ] Update documentation with consistent terminology
 - [ ] Verify backward compatibility
 
 ### Phase 10: GitHub Issue Templates
