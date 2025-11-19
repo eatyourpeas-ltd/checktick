@@ -369,8 +369,10 @@ class PublishedQuestionGroupAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         """Optimize queryset with related objects."""
-        return super().get_queryset(request).select_related(
-            "publisher", "organization", "source_group"
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("publisher", "organization", "source_group")
         )
 
 

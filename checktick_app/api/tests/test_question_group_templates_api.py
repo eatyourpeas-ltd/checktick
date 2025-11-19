@@ -8,8 +8,8 @@ Tests cover:
 - Permission checks for all operations
 """
 
-import pytest
 from django.contrib.auth import get_user_model
+import pytest
 from rest_framework.test import APIClient
 
 from checktick_app.surveys.models import (
@@ -139,9 +139,7 @@ class TestTemplateListAPI:
         response = api_client.get("/api/question-group-templates/")
         assert response.status_code == 401
 
-    def test_user_sees_global_templates(
-        self, api_client, user1, global_template
-    ):
+    def test_user_sees_global_templates(self, api_client, user1, global_template):
         """Authenticated users can see global templates."""
         api_client.force_authenticate(user=user1)
         response = api_client.get("/api/question-group-templates/")
@@ -150,9 +148,7 @@ class TestTemplateListAPI:
         assert len(response.data) == 1
         assert response.data[0]["name"] == "Global PHQ-9"
 
-    def test_user_sees_own_org_templates(
-        self, api_client, user1, org1, org1_template
-    ):
+    def test_user_sees_own_org_templates(self, api_client, user1, org1, org1_template):
         """Users see templates from their own organization."""
         api_client.force_authenticate(user=user1)
         response = api_client.get("/api/question-group-templates/")
@@ -197,9 +193,7 @@ class TestTemplateListAPI:
         assert len(response.data) == 1
         assert response.data[0]["name"] == "Global PHQ-9"
 
-    def test_filter_by_language(
-        self, api_client, user1, global_template
-    ):
+    def test_filter_by_language(self, api_client, user1, global_template):
         """Can filter templates by language."""
         # Create a Welsh template
         PublishedQuestionGroup.objects.create(
@@ -220,9 +214,7 @@ class TestTemplateListAPI:
         assert len(response.data) == 1
         assert response.data[0]["language"] == "cy"
 
-    def test_search_in_name_and_description(
-        self, api_client, user1, global_template
-    ):
+    def test_search_in_name_and_description(self, api_client, user1, global_template):
         """Can search templates by name and description."""
         api_client.force_authenticate(user=user1)
 
@@ -240,9 +232,7 @@ class TestTemplateListAPI:
         """Can filter templates by tags."""
         api_client.force_authenticate(user=user1)
 
-        response = api_client.get(
-            "/api/question-group-templates/?tags=depression"
-        )
+        response = api_client.get("/api/question-group-templates/?tags=depression")
         assert response.status_code == 200
         assert len(response.data) == 1
 
@@ -270,9 +260,7 @@ class TestTemplateListAPI:
 class TestTemplateRetrieveAPI:
     """Test retrieving individual template details."""
 
-    def test_retrieve_global_template(
-        self, api_client, user1, global_template
-    ):
+    def test_retrieve_global_template(self, api_client, user1, global_template):
         """Users can retrieve global template details."""
         api_client.force_authenticate(user=user1)
         response = api_client.get(
@@ -284,14 +272,10 @@ class TestTemplateRetrieveAPI:
         assert response.data["markdown"] is not None
         assert "publisher_username" in response.data
 
-    def test_retrieve_own_org_template(
-        self, api_client, user1, org1, org1_template
-    ):
+    def test_retrieve_own_org_template(self, api_client, user1, org1, org1_template):
         """Users can retrieve their own org templates."""
         api_client.force_authenticate(user=user1)
-        response = api_client.get(
-            f"/api/question-group-templates/{org1_template.id}/"
-        )
+        response = api_client.get(f"/api/question-group-templates/{org1_template.id}/")
 
         assert response.status_code == 200
         assert response.data["name"] == "Org1 Template"
@@ -301,15 +285,11 @@ class TestTemplateRetrieveAPI:
     ):
         """Users cannot retrieve templates from other orgs."""
         api_client.force_authenticate(user=user1)
-        response = api_client.get(
-            f"/api/question-group-templates/{org2_template.id}/"
-        )
+        response = api_client.get(f"/api/question-group-templates/{org2_template.id}/")
 
         assert response.status_code == 404
 
-    def test_can_delete_field(
-        self, api_client, user1, global_template
-    ):
+    def test_can_delete_field(self, api_client, user1, global_template):
         """Response includes can_delete field."""
         api_client.force_authenticate(user=user1)
         response = api_client.get(
@@ -319,9 +299,7 @@ class TestTemplateRetrieveAPI:
         assert response.status_code == 200
         assert response.data["can_delete"] is True
 
-    def test_can_delete_false_for_other_user(
-        self, api_client, user2, global_template
-    ):
+    def test_can_delete_false_for_other_user(self, api_client, user2, global_template):
         """can_delete is False for templates published by others."""
         api_client.force_authenticate(user=user2)
         response = api_client.get(
@@ -336,9 +314,7 @@ class TestTemplateRetrieveAPI:
 class TestPublishQuestionGroupAPI:
     """Test publishing question groups via API."""
 
-    def test_publish_org_level_template(
-        self, api_client, user1, org1
-    ):
+    def test_publish_org_level_template(self, api_client, user1, org1):
         """Organization admins can publish templates at org level."""
         # Create survey and question group
         survey = Survey.objects.create(
@@ -381,9 +357,7 @@ class TestPublishQuestionGroupAPI:
         assert template.publisher == user1
         assert template.organization == org1
 
-    def test_cannot_publish_without_permission(
-        self, api_client, user2, user1, org1
-    ):
+    def test_cannot_publish_without_permission(self, api_client, user2, user1, org1):
         """Users cannot publish templates from surveys they don't own."""
         survey = Survey.objects.create(
             owner=user1, name="Test Survey", slug="test-survey", organization=org1
@@ -432,9 +406,7 @@ class TestPublishQuestionGroupAPI:
         assert response.status_code == 400
         assert "copyright" in response.data["error"].lower()
 
-    def test_global_publication_requires_superuser(
-        self, api_client, user1, org1
-    ):
+    def test_global_publication_requires_superuser(self, api_client, user1, org1):
         """Only superusers can publish global templates."""
         survey = Survey.objects.create(
             owner=user1, name="Test Survey", slug="test-survey", organization=org1
@@ -463,9 +435,7 @@ class TestPublishQuestionGroupAPI:
         assert response.status_code == 403
         assert "administrator" in response.data["error"].lower()
 
-    def test_admin_can_publish_global(
-        self, api_client, admin_user, user1, org1
-    ):
+    def test_admin_can_publish_global(self, api_client, admin_user, user1, org1):
         """Superusers can publish global templates."""
         survey = Survey.objects.create(
             owner=admin_user, name="Test Survey", slug="test-survey", organization=org1
@@ -517,9 +487,7 @@ class TestPublishQuestionGroupAPI:
         )
         assert response.status_code == 404
 
-    def test_org_level_requires_organization_id(
-        self, api_client, user1, org1
-    ):
+    def test_org_level_requires_organization_id(self, api_client, user1, org1):
         """Organization-level publication requires organization_id."""
         survey = Survey.objects.create(
             owner=user1, name="Test Survey", slug="test-survey"
@@ -542,9 +510,7 @@ class TestPublishQuestionGroupAPI:
         assert response.status_code == 400
         assert "organization_id" in response.data["error"]
 
-    def test_must_be_org_admin_to_publish(
-        self, api_client, user1, user2, org1
-    ):
+    def test_must_be_org_admin_to_publish(self, api_client, user1, user2, org1):
         """Must be ADMIN in organization to publish at org level."""
         # user2 is not a member of org1
         survey = Survey.objects.create(

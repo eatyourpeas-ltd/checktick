@@ -1361,7 +1361,9 @@ class DataSetViewSet(viewsets.ModelViewSet):
 class PublishedQuestionGroupSerializer(serializers.ModelSerializer):
     """Serializer for PublishedQuestionGroup with read-only list/retrieve."""
 
-    publisher_username = serializers.CharField(source="publisher.username", read_only=True)
+    publisher_username = serializers.CharField(
+        source="publisher.username", read_only=True
+    )
     organization_name = serializers.CharField(
         source="organization.name", read_only=True, allow_null=True
     )
@@ -1480,7 +1482,14 @@ class PublishedQuestionGroupViewSet(viewsets.ReadOnlyModelViewSet):
         ordering = self.request.query_params.get("ordering")
         if ordering:
             # Validate ordering field
-            valid_fields = {"name", "-name", "created_at", "-created_at", "import_count", "-import_count"}
+            valid_fields = {
+                "name",
+                "-name",
+                "created_at",
+                "-created_at",
+                "import_count",
+                "-import_count",
+            }
             if ordering in valid_fields:
                 qs = qs.order_by(ordering)
 
@@ -1509,16 +1518,12 @@ class PublishedQuestionGroupViewSet(viewsets.ReadOnlyModelViewSet):
         # Validate input
         question_group_id = request.data.get("question_group_id")
         if not question_group_id:
-            return Response(
-                {"error": "question_group_id is required"}, status=400
-            )
+            return Response({"error": "question_group_id is required"}, status=400)
 
         try:
             group = QuestionGroup.objects.get(id=question_group_id)
         except QuestionGroup.DoesNotExist:
-            return Response(
-                {"error": "Question group not found"}, status=404
-            )
+            return Response({"error": "Question group not found"}, status=404)
 
         # Check if user can access this group
         survey = group.surveys.first()
@@ -1568,16 +1573,16 @@ class PublishedQuestionGroupViewSet(viewsets.ReadOnlyModelViewSet):
             org_id = request.data.get("organization_id")
             if not org_id:
                 return Response(
-                    {"error": "organization_id is required for organization-level publications"},
+                    {
+                        "error": "organization_id is required for organization-level publications"
+                    },
                     status=400,
                 )
 
             try:
                 organization = Organization.objects.get(id=org_id)
             except Organization.DoesNotExist:
-                return Response(
-                    {"error": "Organization not found"}, status=404
-                )
+                return Response({"error": "Organization not found"}, status=404)
 
             # Check if user is admin in this organization
             membership = OrganizationMembership.objects.filter(
@@ -1588,7 +1593,9 @@ class PublishedQuestionGroupViewSet(viewsets.ReadOnlyModelViewSet):
 
             if not membership:
                 return Response(
-                    {"error": "You must be an ADMIN in the organization to publish at organization level"},
+                    {
+                        "error": "You must be an ADMIN in the organization to publish at organization level"
+                    },
                     status=403,
                 )
 
