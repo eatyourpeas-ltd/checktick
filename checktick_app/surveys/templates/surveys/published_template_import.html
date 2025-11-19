@@ -90,7 +90,7 @@
       <div class="divider"></div>
 
       <!-- Actions -->
-      <form method="post">
+      <form method="post" id="import-form">
         {% csrf_token %}
         <div class="flex gap-3 justify-end">
           <a href="{% url 'surveys:published_template_detail' template_id=template.id %}" class="btn btn-outline">
@@ -99,15 +99,36 @@
             </svg>
             {% trans "Cancel" %}
           </a>
-          <button type="submit" class="btn btn-primary">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <button type="submit" class="btn btn-primary" id="import-button">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" id="import-icon">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            {% trans "Confirm Import" %}
+            <span class="loading loading-spinner loading-sm hidden" id="import-spinner"></span>
+            <span id="import-text">{% trans "Confirm Import" %}</span>
           </button>
         </div>
       </form>
     </div>
   </div>
 </div>
+
+<script>
+// Add loading state to import button on form submission
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('import-form');
+  const importButton = document.getElementById('import-button');
+  const importIcon = document.getElementById('import-icon');
+  const importSpinner = document.getElementById('import-spinner');
+  const importText = document.getElementById('import-text');
+
+  form.addEventListener('submit', function() {
+    // Disable button and show loading state
+    importButton.disabled = true;
+    importButton.classList.add('loading');
+    importIcon.classList.add('hidden');
+    importSpinner.classList.remove('hidden');
+    importText.textContent = '{% trans "Importing..." %}';
+  });
+});
+</script>
 {% endblock %}
