@@ -1,0 +1,499 @@
+"""
+Tests for survey cloning and translation functionality.
+
+Tests cover:
+- Basic survey cloning (create_clone)
+- Translation creation (create_translation)
+- Translation group management
+- Question and question group copying
+- Condition preservation across clones
+"""
+
+from django.contrib.auth import get_user_model
+import pytest
+
+from checktick_app.surveys.models import (
+    Organization,
+    QuestionGroup,
+    Survey,
+    SurveyQuestion,
+    SurveyQuestionCondition,
+)
+
+User = get_user_model()
+TEST_PASSWORD = "x"
+
+
+@pytest.fixture
+def owner(django_user_model):
+    """Create a survey owner user."""
+    return django_user_model.objects.create_user(
+        username="owner@example.com", email="owner@example.com", password=TEST_PASSWORD
+    )
+
+
+@pytest.fixture
+def organization(owner):
+    """Create a test organization."""
+    return Organization.objects.create(name="Test Org", owner=owner)
+
+
+@pytest.fixture
+def question_group(owner):
+    """Create a question group."""
+    return QuestionGroup.objects.create(
+        owner=owner,
+        name="Demographics",
+        description="Basic demographic questions",
+    )
+
+
+@pytest.fixture
+def basic_survey(owner, organization, question_group):
+    """Create a basic survey with questions."""
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=organization,
+        name="Patient Survey",
+        slug="patient-survey",
+        description="A survey about patient care",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+        language="en",
+    )
+
+    # Add question group
+    survey.question_groups.add(question_group)
+
+    # Add questions
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=question_group,
+        text="What is your age?",
+        type=SurveyQuestion.Types.TEXT,
+        required=True,
+        order=0,
+    )
+
+    q2 = SurveyQuestion.objects.create(
+        survey=survey,
+        group=question_group,
+        text="Do you have diabetes?",
+        type=SurveyQuestion.Types.YESNO,
+        required=True,
+        order=1,
+    )
+
+    q3 = SurveyQuestion.objects.create(
+        survey=survey,
+        group=question_group,
+        text="What type of diabetes?",
+        type=SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE,
+        required=False,
+        order=2,
+        options={"choices": ["Type 1", "Type 2", "Gestational", "Other"]},
+    )
+
+    # Add conditional logic: q3 only shows if q2 is "yes"
+    SurveyQuestionCondition.objects.create(
+        question=q2,
+        operator=SurveyQuestionCondition.Operator.EQUALS,
+        value="yes",
+        target_question=q3,
+        action=SurveyQuestionCondition.Action.SHOW,
+    )
+
+    return survey
+
+
+# ============================================================================
+# Basic Cloning Tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestSurveyCloning:
+    """Tests for basic survey cloning functionality."""
+
+    def test_create_clone_with_default_name(self, basic_survey):
+        """Cloning should create a copy with 'Copy of' prefix."""
+        cloned = basic_survey.create_clone()
+
+        assert cloned.name == "Copy of Patient Survey"
+        assert cloned.slug == "copy-of-patient-survey"
+        assert cloned.id != basic_survey.id
+        assert cloned.owner == basic_survey.owner
+        assert cloned.organization == basic_survey.organization
+
+    def test_create_clone_with_custom_name(self, basic_survey):
+        """Cloning should accept custom name and slug."""
+        cloned = basic_survey.create_clone(
+            new_name="Patient Survey v2", new_slug="patient-survey-v2"
+        )
+
+        assert cloned.name == "Patient Survey v2"
+        assert cloned.slug == "patient-survey-v2"
+
+    def test_clone_copies_description_and_settings(self, basic_survey):
+        """Cloning should preserve description and settings."""
+        cloned = basic_survey.create_clone()
+
+        assert cloned.description == basic_survey.description
+        assert cloned.visibility == basic_survey.visibility
+        assert cloned.captcha_required == basic_survey.captcha_required
+        assert cloned.max_responses == basic_survey.max_responses
+        assert cloned.retention_months == basic_survey.retention_months
+
+    def test_clone_resets_publishing_status(self, basic_survey):
+        """Cloned survey should start as draft with reset dates."""
+        basic_survey.status = Survey.Status.PUBLISHED
+        basic_survey.save()
+
+        cloned = basic_survey.create_clone()
+
+        assert cloned.status == Survey.Status.DRAFT
+        assert cloned.published_at is None
+        assert cloned.start_at is None
+        assert cloned.end_at is None
+        assert cloned.unlisted_key is None
+
+    def test_clone_copies_question_groups(self, basic_survey):
+        """Cloning should copy all question groups."""
+        cloned = basic_survey.create_clone()
+
+        assert cloned.question_groups.count() == basic_survey.question_groups.count()
+
+        # Question groups should be different objects
+        original_qg_ids = set(basic_survey.question_groups.values_list("id", flat=True))
+        cloned_qg_ids = set(cloned.question_groups.values_list("id", flat=True))
+        assert not original_qg_ids.intersection(cloned_qg_ids)
+
+    def test_clone_copies_questions(self, basic_survey):
+        """Cloning should copy all questions with correct content."""
+        original_questions = SurveyQuestion.objects.filter(survey=basic_survey)
+        cloned = basic_survey.create_clone()
+        cloned_questions = SurveyQuestion.objects.filter(survey=cloned)
+
+        assert cloned_questions.count() == original_questions.count()
+
+        # Check question text is preserved
+        original_texts = set(original_questions.values_list("text", flat=True))
+        cloned_texts = set(cloned_questions.values_list("text", flat=True))
+        assert original_texts == cloned_texts
+
+    def test_clone_preserves_question_order(self, basic_survey):
+        """Cloning should maintain question order."""
+        cloned = basic_survey.create_clone()
+
+        original_questions = list(
+            SurveyQuestion.objects.filter(survey=basic_survey).order_by("order")
+        )
+        cloned_questions = list(
+            SurveyQuestion.objects.filter(survey=cloned).order_by("order")
+        )
+
+        for orig, clone in zip(original_questions, cloned_questions):
+            assert orig.order == clone.order
+            assert orig.text == clone.text
+
+    def test_clone_preserves_question_types_and_options(self, basic_survey):
+        """Cloning should preserve question types and options."""
+        cloned = basic_survey.create_clone()
+
+        # Find the multiple choice question
+        original_mc = SurveyQuestion.objects.get(
+            survey=basic_survey, text="What type of diabetes?"
+        )
+        cloned_mc = SurveyQuestion.objects.get(
+            survey=cloned, text="What type of diabetes?"
+        )
+
+        assert cloned_mc.type == original_mc.type
+        assert cloned_mc.options == original_mc.options
+
+    def test_clone_copies_question_conditions(self, basic_survey):
+        """Cloning should preserve conditional logic between questions."""
+        cloned = basic_survey.create_clone()
+
+        # Original has 1 condition
+        original_conditions = SurveyQuestionCondition.objects.filter(
+            question__survey=basic_survey
+        )
+        assert original_conditions.count() == 1
+
+        # Clone should also have 1 condition
+        cloned_conditions = SurveyQuestionCondition.objects.filter(
+            question__survey=cloned
+        )
+        assert cloned_conditions.count() == 1
+
+        # Check condition details are preserved
+        orig_cond = original_conditions.first()
+        clone_cond = cloned_conditions.first()
+
+        assert clone_cond.operator == orig_cond.operator
+        assert clone_cond.value == orig_cond.value
+        assert clone_cond.action == orig_cond.action
+
+        # Questions should be different but condition should reference the cloned questions
+        assert clone_cond.question.survey == cloned
+        assert clone_cond.target_question.survey == cloned
+
+    def test_clone_handles_slug_conflicts(self, basic_survey):
+        """Cloning should auto-increment slug if conflict exists."""
+        clone1 = basic_survey.create_clone()
+        clone2 = basic_survey.create_clone()
+        clone3 = basic_survey.create_clone()
+
+        assert clone1.slug == "copy-of-patient-survey"
+        assert clone2.slug == "copy-of-patient-survey-1"
+        assert clone3.slug == "copy-of-patient-survey-2"
+
+    def test_clone_does_not_copy_translation_fields(self, basic_survey):
+        """Plain clones should not inherit translation group."""
+        cloned = basic_survey.create_clone()
+
+        assert cloned.language == basic_survey.language  # Same language
+        assert cloned.translation_group is None  # No translation group
+        assert cloned.is_original is True  # Treated as original
+        assert cloned.translated_from is None
+
+
+# ============================================================================
+# Translation Tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestSurveyTranslation:
+    """Tests for survey translation functionality."""
+
+    def test_create_translation_creates_translation_group(self, basic_survey):
+        """Creating first translation should generate translation_group UUID."""
+        assert basic_survey.translation_group is None
+
+        french = basic_survey.create_translation("fr")
+
+        basic_survey.refresh_from_db()
+        assert basic_survey.translation_group is not None
+        assert french.translation_group == basic_survey.translation_group
+
+    def test_create_translation_sets_language(self, basic_survey):
+        """Translation should have correct target language."""
+        french = basic_survey.create_translation("fr")
+
+        assert french.language == "fr"
+        assert basic_survey.language == "en"
+
+    def test_create_translation_sets_translation_flags(self, basic_survey):
+        """Translation should be marked as translated (not original)."""
+        french = basic_survey.create_translation("fr")
+
+        assert basic_survey.is_original is True
+        assert french.is_original is False
+        assert french.translated_from == basic_survey
+
+    def test_create_translation_generates_appropriate_name(self, basic_survey):
+        """Translation should have language suffix in name."""
+        french = basic_survey.create_translation("fr")
+
+        assert "FR" in french.name  # Should contain language code
+        assert "fr" in french.slug
+
+    def test_create_translation_copies_all_content(self, basic_survey):
+        """Translation should have same structure as original."""
+        french = basic_survey.create_translation("fr")
+
+        # Same number of question groups and questions
+        assert french.question_groups.count() == basic_survey.question_groups.count()
+        assert (
+            SurveyQuestion.objects.filter(survey=french).count()
+            == SurveyQuestion.objects.filter(survey=basic_survey).count()
+        )
+
+        # Same conditions
+        assert (
+            SurveyQuestionCondition.objects.filter(question__survey=french).count()
+            == SurveyQuestionCondition.objects.filter(
+                question__survey=basic_survey
+            ).count()
+        )
+
+    def test_create_multiple_translations(self, basic_survey):
+        """Should be able to create multiple translations."""
+        french = basic_survey.create_translation("fr")
+        spanish = basic_survey.create_translation("es")
+        german = basic_survey.create_translation("de")
+
+        # All should share the same translation group
+        assert (
+            french.translation_group
+            == spanish.translation_group
+            == german.translation_group
+            == basic_survey.translation_group
+        )
+
+        # All should reference the original
+        assert french.translated_from == basic_survey
+        assert spanish.translated_from == basic_survey
+        assert german.translated_from == basic_survey
+
+    def test_create_duplicate_translation_raises_error(self, basic_survey):
+        """Should not allow duplicate translations to same language."""
+        basic_survey.create_translation("fr")
+
+        with pytest.raises(ValueError, match="already exists"):
+            basic_survey.create_translation("fr")
+
+    def test_get_available_translations(self, basic_survey):
+        """Should retrieve all translations of a survey."""
+        assert basic_survey.get_available_translations().count() == 0
+
+        french = basic_survey.create_translation("fr")
+        spanish = basic_survey.create_translation("es")
+
+        translations = basic_survey.get_available_translations()
+        assert translations.count() == 2
+        assert french in translations
+        assert spanish in translations
+        assert basic_survey not in translations  # Excludes self
+
+    def test_get_available_translations_works_from_translation(self, basic_survey):
+        """Translations should see other translations in the group."""
+        french = basic_survey.create_translation("fr")
+        spanish = basic_survey.create_translation("es")
+
+        # From French, should see English and Spanish
+        translations = french.get_available_translations()
+        assert translations.count() == 2
+        assert basic_survey in translations
+        assert spanish in translations
+        assert french not in translations  # Excludes self
+
+    def test_get_translation_by_language_code(self, basic_survey):
+        """Should retrieve specific translation by language."""
+        french = basic_survey.create_translation("fr")
+        basic_survey.create_translation("es")
+
+        result = basic_survey.get_translation("fr")
+        assert result == french
+
+        result = basic_survey.get_translation("de")  # Doesn't exist
+        assert result is None
+
+    def test_translation_inherits_settings(self, basic_survey):
+        """Translations should inherit survey settings."""
+        basic_survey.captcha_required = True
+        basic_survey.max_responses = 100
+        basic_survey.retention_months = 12
+        basic_survey.save()
+
+        french = basic_survey.create_translation("fr")
+
+        assert french.captcha_required is True
+        assert french.max_responses == 100
+        assert french.retention_months == 12
+
+
+# ============================================================================
+# Edge Cases and Integration Tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestTranslationEdgeCases:
+    """Tests for edge cases and complex scenarios."""
+
+    def test_empty_survey_can_be_cloned(self, owner, organization):
+        """Survey with no question groups should clone successfully."""
+        survey = Survey.objects.create(
+            owner=owner,
+            organization=organization,
+            name="Empty Survey",
+            slug="empty-survey",
+            language="en",
+        )
+
+        cloned = survey.create_clone()
+        assert cloned.question_groups.count() == 0
+
+    def test_survey_with_complex_conditions(self, owner, organization, question_group):
+        """Survey with multiple chained conditions should clone correctly."""
+        survey = Survey.objects.create(
+            owner=owner,
+            organization=organization,
+            name="Complex Survey",
+            slug="complex-survey",
+            language="en",
+        )
+        survey.question_groups.add(question_group)
+
+        # Create chain: q1 -> q2 -> q3
+        q1 = SurveyQuestion.objects.create(
+            survey=survey,
+            group=question_group,
+            text="Question 1",
+            type=SurveyQuestion.Types.YESNO,
+            order=0,
+        )
+        q2 = SurveyQuestion.objects.create(
+            survey=survey,
+            group=question_group,
+            text="Question 2",
+            type=SurveyQuestion.Types.YESNO,
+            order=1,
+        )
+        q3 = SurveyQuestion.objects.create(
+            survey=survey,
+            group=question_group,
+            text="Question 3",
+            type=SurveyQuestion.Types.TEXT,
+            order=2,
+        )
+
+        SurveyQuestionCondition.objects.create(
+            question=q1,
+            operator=SurveyQuestionCondition.Operator.EQUALS,
+            value="yes",
+            target_question=q2,
+            action=SurveyQuestionCondition.Action.SHOW,
+        )
+        SurveyQuestionCondition.objects.create(
+            question=q2,
+            operator=SurveyQuestionCondition.Operator.EQUALS,
+            value="yes",
+            target_question=q3,
+            action=SurveyQuestionCondition.Action.SHOW,
+        )
+
+        cloned = survey.create_clone()
+
+        # Should have all conditions preserved
+        cloned_conditions = SurveyQuestionCondition.objects.filter(
+            question__survey=cloned
+        )
+        assert cloned_conditions.count() == 2
+
+    def test_translation_of_translation(self, basic_survey):
+        """Should be able to create translations from translations."""
+        french = basic_survey.create_translation("fr")
+        spanish = french.create_translation("es")
+
+        # Spanish should link to translation group, not directly to French
+        assert spanish.translation_group == basic_survey.translation_group
+        assert spanish.translated_from == french
+        assert spanish.is_original is False
+
+    def test_clone_preserves_style_json(self, basic_survey):
+        """Cloning should preserve style JSON data."""
+        basic_survey.style = {
+            "primary_color": "#FF5733",
+            "theme_name": "custom-theme",
+            "font_heading": "Arial",
+        }
+        basic_survey.save()
+
+        cloned = basic_survey.create_clone()
+
+        assert cloned.style == basic_survey.style
+        assert cloned.style is not basic_survey.style  # Different dict object

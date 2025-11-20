@@ -19,6 +19,27 @@ def get_default_retention_months():
     return getattr(settings, "CHECKTICK_DEFAULT_RETENTION_MONTHS", 6)
 
 
+# Supported languages for survey translation
+# Based on available locale directories
+SUPPORTED_SURVEY_LANGUAGES = [
+    ("en", "English"),
+    ("ar", "العربية (Arabic)"),
+    ("cy", "Cymraeg (Welsh)"),
+    ("de", "Deutsch (German)"),
+    ("es", "Español (Spanish)"),
+    ("fr", "Français (French)"),
+    ("hi", "हिन्दी (Hindi)"),
+    ("it", "Italiano (Italian)"),
+    ("pl", "Polski (Polish)"),
+    ("pt", "Português (Portuguese)"),
+    ("ur", "اردو (Urdu)"),
+    ("zh_Hans", "简体中文 (Simplified Chinese)"),
+]
+
+# Map language codes to their native names
+LANGUAGE_NAMES = {code: name for code, name in SUPPORTED_SURVEY_LANGUAGES}
+
+
 class Organization(models.Model):
     DEFAULT_THEME_CHOICES = [
         ("checktick-light", "CheckTick Light"),
@@ -324,6 +345,32 @@ class Survey(models.Model):
         help_text="Total number of recovery shares distributed (optional, for Shamir's Secret Sharing)",
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # Language and Translation fields
+    language = models.CharField(
+        max_length=10,
+        default="en",
+        help_text="Primary language code (ISO 639-1, e.g., 'en', 'fr', 'es')",
+    )
+    translation_group = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="UUID linking translated versions of the same survey",
+    )
+    is_original = models.BooleanField(
+        default=True,
+        help_text="True if this is the original survey, False if it's a translation",
+    )
+    translated_from = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="translations",
+        help_text="Reference to the survey this was translated from",
+    )
 
     # Data Governance fields
     # Survey closure
@@ -697,6 +744,220 @@ class Survey(models.Model):
             return kek
         except (InvalidTag, Exception):
             return None
+
+    # Translation and Cloning Methods
+
+    def get_available_translations(self):
+        """
+        Get all translations of this survey.
+
+        Returns:
+            QuerySet of Survey objects that are translations of this survey,
+            excluding this survey itself.
+        """
+        if not self.translation_group:
+            return Survey.objects.none()
+        return Survey.objects.filter(translation_group=self.translation_group).exclude(
+            id=self.id
+        )
+
+    def get_translation(self, language_code: str):
+        """
+        Get a specific translation by language code.
+
+        Args:
+            language_code: Language code (e.g., 'fr', 'es', 'de')
+
+        Returns:
+            Survey object if translation exists, None otherwise
+        """
+        if not self.translation_group:
+            return None
+        return (
+            Survey.objects.filter(
+                translation_group=self.translation_group, language=language_code
+            )
+            .exclude(id=self.id)
+            .first()
+        )
+
+    def create_clone(
+        self, new_name: str | None = None, new_slug: str | None = None
+    ) -> "Survey":
+        """
+        Create a complete clone of this survey.
+
+        This creates a new survey with:
+        - All question groups (as copies, not references)
+        - All questions with their conditions
+        - Same settings and configuration
+        - New name and slug
+
+        Args:
+            new_name: Name for the cloned survey (defaults to "Copy of [original]")
+            new_slug: Slug for the cloned survey (auto-generated if not provided)
+
+        Returns:
+            New Survey object (unsaved, in DRAFT status)
+        """
+        from django.utils.text import slugify as django_slugify
+
+        # Generate name and slug
+        if new_name is None:
+            new_name = f"Copy of {self.name}"
+        if new_slug is None:
+            base_slug = django_slugify(new_name)
+            new_slug = base_slug
+            counter = 1
+            while Survey.objects.filter(slug=new_slug).exists():
+                new_slug = f"{base_slug}-{counter}"
+                counter += 1
+
+        # Create new survey with same settings
+        cloned_survey = Survey(
+            owner=self.owner,
+            organization=self.organization,
+            name=new_name,
+            slug=new_slug,
+            description=self.description,
+            style=self.style.copy() if self.style else {},
+            # Reset dates and publishing status
+            status=Survey.Status.DRAFT,
+            visibility=self.visibility,
+            start_at=None,
+            end_at=None,
+            published_at=None,
+            unlisted_key=None,
+            max_responses=self.max_responses,
+            captcha_required=self.captcha_required,
+            no_patient_data_ack=self.no_patient_data_ack,
+            allow_any_authenticated=self.allow_any_authenticated,
+            # Copy encryption settings (but not the actual keys - those are survey-specific)
+            recovery_threshold=self.recovery_threshold,
+            recovery_shares_count=self.recovery_shares_count,
+            # Copy retention settings
+            retention_months=self.retention_months,
+            # Language settings - same language as original
+            language=self.language,
+            is_original=True,
+            # No translation linking for plain clones
+            translation_group=None,
+            translated_from=None,
+        )
+        cloned_survey.save()
+
+        # Clone question groups and questions
+        for qg in self.question_groups.all():
+            # Create a copy of the question group
+            cloned_qg = QuestionGroup.objects.create(
+                owner=qg.owner,
+                name=qg.name,
+                description=qg.description,
+            )
+
+            # Copy all questions from this group
+            questions_map = {}  # Maps old question ID to new question
+            for question in self.questions.filter(group=qg):
+                cloned_question = SurveyQuestion.objects.create(
+                    survey=cloned_survey,
+                    group=cloned_qg,
+                    text=question.text,
+                    type=question.type,
+                    required=question.required,
+                    order=question.order,
+                    options=question.options.copy() if question.options else {},
+                    dataset=question.dataset,
+                )
+                questions_map[question.id] = cloned_question
+
+            # Copy question conditions (after all questions are created)
+            for question in self.questions.filter(group=qg):
+                for condition in question.conditions.all():
+                    # Map old question IDs to new ones for target_question
+                    target = None
+                    if (
+                        condition.target_question_id
+                        and condition.target_question_id in questions_map
+                    ):
+                        target = questions_map[condition.target_question_id]
+
+                    SurveyQuestionCondition.objects.create(
+                        question=questions_map[question.id],
+                        operator=condition.operator,
+                        value=condition.value,
+                        target_question=target,
+                        target_group=condition.target_group,
+                        action=condition.action,
+                        order=condition.order,
+                        description=condition.description,
+                    )
+
+            # Add question group to survey
+            cloned_survey.question_groups.add(cloned_qg)
+
+        return cloned_survey
+
+    def create_translation(
+        self, target_language: str, translator_name: str | None = None
+    ) -> "Survey":
+        """
+        Create a translation clone of this survey.
+
+        This creates a clone and sets up translation linking:
+        - Creates or reuses a translation_group UUID
+        - Sets the target language
+        - Marks as translated (is_original=False)
+        - Links back to source survey
+
+        Note: This only creates the structure. The actual translation
+        of question text is done separately (typically via LLM).
+
+        Args:
+            target_language: Target language code (e.g., 'fr', 'es', 'de')
+            translator_name: Optional name/identifier for translator
+
+        Returns:
+            New Survey object (saved, in DRAFT status, ready for translation)
+
+        Raises:
+            ValueError: If translation already exists for this language
+        """
+        import uuid
+
+        # Check if translation already exists
+        if self.translation_group:
+            existing = self.get_translation(target_language)
+            if existing:
+                raise ValueError(
+                    f"Translation to {target_language} already exists (ID: {existing.id})"
+                )
+
+        # Ensure original has a translation group
+        if not self.translation_group:
+            self.translation_group = str(uuid.uuid4())
+            self.save(update_fields=["translation_group"])
+
+        # Create the clone
+        translated_name = f"{self.name} ({target_language.upper()})"
+        cloned_survey = self.create_clone(
+            new_name=translated_name, new_slug=f"{self.slug}-{target_language}"
+        )
+
+        # Update translation-specific fields
+        cloned_survey.language = target_language
+        cloned_survey.translation_group = self.translation_group
+        cloned_survey.is_original = False
+        cloned_survey.translated_from = self
+        cloned_survey.save(
+            update_fields=[
+                "language",
+                "translation_group",
+                "is_original",
+                "translated_from",
+            ]
+        )
+
+        return cloned_survey
 
     # Data Governance Methods
 
