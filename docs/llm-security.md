@@ -80,6 +80,19 @@ You can view the exact instructions given to the LLM:
 
 Last updated: 2025-11-17
 
+## Survey Generation System Prompt
+
+For complete transparency, the full system prompt for the AI Survey Generator is published in the [AI Survey Generator documentation](/docs/ai-survey-generator/#transparency--system-prompt).
+
+The prompt specifies:
+- Core responsibilities (clarifying questions, generating markdown, refining based on feedback)
+- Exact markdown format and syntax rules
+- Allowed question types (text, multiple choice, dropdown, likert scales, etc.)
+- Healthcare best practices (8th grade reading level, avoid jargon, validated scales)
+- Conversation approach and limitations
+
+**The prompt is loaded directly from that documentation file**, so any updates are automatically reflected in the system.
+
 ## Survey Translation System
 
 CheckTick also uses LLMs to translate surveys into multiple languages. **The same security principles apply:**
