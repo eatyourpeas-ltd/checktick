@@ -230,3 +230,32 @@ def has_followup(question):
         return followups
     except Exception:
         return []
+
+
+@register.filter(name="language_flag")
+def language_flag(language_code):
+    """Return flag emoji for language code."""
+    flags = {
+        "en": "🇬🇧",
+        "es": "🇪🇸",
+        "fr": "🇫🇷",
+        "de": "🇩🇪",
+        "it": "🇮🇹",
+        "pt": "🇵🇹",
+        "ar": "🇸🇦",
+        "zh-hans": "🇨🇳",
+        "hi": "🇮🇳",
+        "ur": "🇵🇰",
+        "cy": "🏴󠁧󠁢󠁷󠁬󠁳󠁿",
+        "pl": "🇵🇱",
+    }
+    return flags.get(language_code, "🌐")
+
+
+@register.filter(name="language_name")
+def language_name(language_code):
+    """Return language name for language code."""
+    from checktick_app.surveys.models import Survey
+
+    lang_dict = dict(Survey.SUPPORTED_SURVEY_LANGUAGES)
+    return lang_dict.get(language_code, language_code)

@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load i18n %}
 {% load static %}
+{% load survey_extras %}
 
 {% block content %}
 <div class="container mx-auto max-w-5xl px-4 py-6">
@@ -84,7 +85,59 @@
           </div>
         </div>
 
-        <div class="form-control mb-6" id="invite-emails-section" style="display: none;">
+        <div class="divider"></div>
+
+        <!-- Translation Management Section -->
+        <div class="mb-6">
+          <h3 class="font-semibold text-lg mb-3">{% trans "Survey Translations" %}</h3>
+
+          {% if available_translations %}
+            <div class="space-y-2 mb-4">
+              <p class="text-sm opacity-70">{% trans "Available translations:" %}</p>
+              {% for translation in available_translations %}
+                <div class="flex items-center justify-between p-3 bg-base-200 rounded-lg">
+                  <div class="flex items-center gap-3">
+                    <span class="text-2xl">{{ translation.language|language_flag }}</span>
+                    <div>
+                      <span class="font-medium">{{ translation.language|language_name }}</span>
+                      <span class="badge badge-sm ml-2 {% if translation.status == 'published' %}badge-success{% else %}badge-warning{% endif %}">
+                        {{ translation.get_status_display }}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="flex gap-2">
+                    <a href="{% url 'surveys:dashboard' slug=translation.slug %}" class="btn btn-sm btn-outline">
+                      {% trans "Edit" %}
+                    </a>
+                    {% if translation.status == 'draft' %}
+                      <label class="flex items-center gap-2">
+                        <input type="checkbox" class="checkbox checkbox-sm" name="publish_translations" value="{{ translation.slug }}" />
+                        <span class="text-sm">{% trans "Publish together" %}</span>
+                      </label>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+              <div class="alert alert-info mt-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="text-sm">{% trans "Translations were AI-generated. Please review them carefully before publishing." %}</span>
+              </div>
+            </div>
+          {% else %}
+            <p class="text-sm opacity-70 mb-3">{% trans "No translations yet. Create translations to make your survey available in multiple languages." %}</p>
+          {% endif %}
+
+          <button type="button" class="btn btn-outline btn-sm" onclick="translationModal.showModal()">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+            </svg>
+            {% trans "Create Translation" %}
+          </button>
+        </div>
+
+        <div class="divider"></div>
           <label class="label">
             <span class="label-text font-semibold">{% trans "Send invite emails" %}</span>
           </label>
@@ -244,6 +297,176 @@
         publishForm.submit();
       }
     }
+  });
+})();
+</script>
+
+<!-- Translation Creation Modal -->
+<dialog id="translationModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg mb-4">{% trans "Create Translation" %}</h3>
+
+    <div id="translation-form">
+      <label class="label">
+        <span class="label-text font-semibold">{% trans "Select Language" %}</span>
+      </label>
+      <select id="target-language" class="select select-bordered w-full mb-4">
+        <option value="">{% trans "Choose a language..." %}</option>
+        {% for lang in supported_languages %}
+          <option value="{{ lang.code }}">{{ lang.code|language_flag }} {{ lang.name }}</option>
+        {% endfor %}
+      </select>
+
+      <div class="alert alert-warning mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span class="text-sm">{% trans "Translation will be AI-generated. You'll be able to review and edit it before publishing." %}</span>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" onclick="translationModal.close()">{% trans "Cancel" %}</button>
+        <button type="button" id="create-translation-btn" class="btn btn-primary">
+          {% trans "Create Translation" %}
+        </button>
+      </div>
+    </div>
+
+    <div id="translation-progress" class="hidden">
+      <div class="flex flex-col items-center gap-4 py-8">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+        <p class="text-center" id="progress-message">{% trans "Creating translation..." %}</p>
+        <progress class="progress progress-primary w-full" id="progress-bar" value="0" max="100"></progress>
+      </div>
+    </div>
+
+    <div id="translation-complete" class="hidden">
+      <div class="alert alert-success mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{% trans "Translation created successfully!" %}</span>
+      </div>
+      <p class="text-sm opacity-70 mb-4">{% trans "You can now review and edit the translation before publishing." %}</p>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" onclick="window.location.reload()">{% trans "Stay Here" %}</button>
+        <button type="button" id="edit-translation-btn" class="btn btn-primary">
+          {% trans "Review Translation" %}
+        </button>
+      </div>
+    </div>
+
+    <div id="translation-error" class="hidden">
+      <div class="alert alert-error mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span id="error-message">{% trans "Failed to create translation" %}</span>
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-primary" onclick="translationModal.close()">{% trans "Close" %}</button>
+      </div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
+<script nonce="{{ request.csp_nonce }}">
+(function() {
+  const createBtn = document.getElementById('create-translation-btn');
+  const targetLanguageSelect = document.getElementById('target-language');
+  const translationForm = document.getElementById('translation-form');
+  const translationProgress = document.getElementById('translation-progress');
+  const translationComplete = document.getElementById('translation-complete');
+  const translationError = document.getElementById('translation-error');
+  const progressMessage = document.getElementById('progress-message');
+  const progressBar = document.getElementById('progress-bar');
+  const editTranslationBtn = document.getElementById('edit-translation-btn');
+  const errorMessage = document.getElementById('error-message');
+
+  let pollingInterval;
+  let translationSlug;
+
+  createBtn.addEventListener('click', async function() {
+    const language = targetLanguageSelect.value;
+    if (!language) {
+      alert('{% trans "Please select a language" %}');
+      return;
+    }
+
+    // Show progress
+    translationForm.classList.add('hidden');
+    translationProgress.classList.remove('hidden');
+
+    try {
+      // Start translation
+      const response = await fetch('{% url "surveys:create_translation" slug=survey.slug %}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: new URLSearchParams({
+          language: language
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || '{% trans "Failed to create translation" %}');
+      }
+
+      // Poll for status
+      const taskId = data.task_id;
+      pollingInterval = setInterval(async () => {
+        const statusResponse = await fetch(`{% url "surveys:translation_status" slug=survey.slug task_id="TASK_ID" %}`.replace('TASK_ID', taskId));
+        const statusData = await statusResponse.json();
+
+        // Update progress
+        progressBar.value = statusData.progress || 0;
+        progressMessage.textContent = statusData.message || '{% trans "Processing..." %}';
+
+        if (statusData.status === 'completed') {
+          clearInterval(pollingInterval);
+          translationSlug = statusData.translation_slug;
+
+          // Show success
+          translationProgress.classList.add('hidden');
+          translationComplete.classList.remove('hidden');
+        } else if (statusData.status === 'error') {
+          clearInterval(pollingInterval);
+          throw new Error(statusData.message || '{% trans "Translation failed" %}');
+        }
+      }, 1000);
+
+    } catch (error) {
+      if (pollingInterval) clearInterval(pollingInterval);
+
+      // Show error
+      translationProgress.classList.add('hidden');
+      translationError.classList.remove('hidden');
+      errorMessage.textContent = error.message;
+    }
+  });
+
+  editTranslationBtn.addEventListener('click', function() {
+    if (translationSlug) {
+      window.location.href = `/surveys/${translationSlug}/dashboard/`;
+    }
+  });
+
+  // Reset modal when closed
+  window.translationModal.addEventListener('close', function() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    translationForm.classList.remove('hidden');
+    translationProgress.classList.add('hidden');
+    translationComplete.classList.add('hidden');
+    translationError.classList.add('hidden');
+    targetLanguageSelect.value = '';
+    progressBar.value = 0;
   });
 })();
 </script>

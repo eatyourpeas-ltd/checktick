@@ -2305,7 +2305,158 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             return redirect("surveys:dashboard", slug=slug)
 
     # GET request - show the form
-    return render(request, "surveys/publish_settings.html", {"survey": survey})
+    # Get available translations
+    available_translations = survey.get_available_translations()
+
+    # Get supported languages for dropdown
+    supported_languages = [
+        {"code": code, "name": name}
+        for code, name in Survey.SUPPORTED_SURVEY_LANGUAGES
+        if code != survey.language
+    ]
+
+    context = {
+        "survey": survey,
+        "available_translations": available_translations,
+        "supported_languages": supported_languages,
+    }
+
+    return render(request, "surveys/publish_settings.html", context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def create_translation_async(request: HttpRequest, slug: str) -> JsonResponse:
+    """
+    Create a translation of a survey asynchronously.
+    Returns a task_id for polling status.
+    """
+    import threading
+    import uuid
+
+    from django.core.cache import cache
+
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+
+    target_language = request.POST.get("language")
+    if not target_language:
+        return JsonResponse({"error": "Language parameter required"}, status=400)
+
+    # Validate language code
+    if target_language not in dict(Survey.SUPPORTED_SURVEY_LANGUAGES):
+        return JsonResponse({"error": "Invalid language code"}, status=400)
+
+    # Check if translation already exists
+    existing = survey.get_translation(target_language)
+    if existing:
+        return JsonResponse(
+            {
+                "error": f"Translation to {target_language} already exists",
+                "translation_slug": existing.slug,
+            },
+            status=400,
+        )
+
+    # Generate task ID
+    task_id = str(uuid.uuid4())
+
+    # Set initial status
+    cache.set(
+        f"translation_task_{task_id}",
+        {
+            "status": "processing",
+            "progress": 0,
+            "message": "Creating translation...",
+        },
+        timeout=3600,  # 1 hour
+    )
+
+    def translate_in_background():
+        try:
+            # Create translation survey
+            cache.set(
+                f"translation_task_{task_id}",
+                {
+                    "status": "processing",
+                    "progress": 25,
+                    "message": "Creating survey structure...",
+                },
+                timeout=3600,
+            )
+
+            translation = survey.create_translation(target_language=target_language)
+
+            # Run LLM translation
+            cache.set(
+                f"translation_task_{task_id}",
+                {
+                    "status": "processing",
+                    "progress": 50,
+                    "message": "Translating content with AI...",
+                },
+                timeout=3600,
+            )
+
+            results = survey.translate_survey_content(translation, use_llm=True)
+
+            # Update final status
+            if results["success"]:
+                cache.set(
+                    f"translation_task_{task_id}",
+                    {
+                        "status": "completed",
+                        "progress": 100,
+                        "message": "Translation completed successfully",
+                        "translation_slug": translation.slug,
+                        "translated_fields": results["translated_fields"],
+                    },
+                    timeout=3600,
+                )
+            else:
+                cache.set(
+                    f"translation_task_{task_id}",
+                    {
+                        "status": "error",
+                        "progress": 100,
+                        "message": "Translation failed",
+                        "errors": results["errors"],
+                    },
+                    timeout=3600,
+                )
+
+        except Exception as e:
+            cache.set(
+                f"translation_task_{task_id}",
+                {"status": "error", "progress": 100, "message": str(e)},
+                timeout=3600,
+            )
+
+    # Start background thread
+    thread = threading.Thread(target=translate_in_background)
+    thread.daemon = True
+    thread.start()
+
+    return JsonResponse({"task_id": task_id})
+
+
+@login_required
+@require_http_methods(["GET"])
+def translation_status(request: HttpRequest, slug: str, task_id: str) -> JsonResponse:
+    """Poll status of an async translation task."""
+    from django.core.cache import cache
+
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_view(request.user, survey)
+
+    status_data = cache.get(f"translation_task_{task_id}")
+
+    if not status_data:
+        return JsonResponse(
+            {"status": "error", "message": "Task not found or expired"}, status=404
+        )
+
+    return JsonResponse(status_data)
 
 
 @login_required

@@ -91,6 +91,16 @@ urlpatterns = [
         name="publish_settings",
     ),
     path(
+        "<slug:slug>/translations/create/",
+        views.create_translation_async,
+        name="create_translation",
+    ),
+    path(
+        "<slug:slug>/translations/status/<str:task_id>/",
+        views.translation_status,
+        name="translation_status",
+    ),
+    path(
         "<slug:slug>/dashboard/publish",
         views.survey_publish_update,
         name="publish_update",
