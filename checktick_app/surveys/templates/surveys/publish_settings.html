@@ -172,7 +172,10 @@
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span class="text-sm">{% trans "Translations were AI-generated. Please review them carefully before publishing." %}</span>
+              <div>
+                <span class="text-sm font-semibold">{% trans "Translations were AI-generated." %}</span>
+                <p class="text-sm mt-1">{% trans "Please review them carefully before publishing. Check the boxes above to publish translations together with this survey." %}</p>
+              </div>
             </div>
           {% else %}
             <p class="text-sm opacity-70 mb-3">{% trans "No translations yet. Create translations to make your survey available in multiple languages." %}</p>

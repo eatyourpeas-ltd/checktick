@@ -1064,6 +1064,31 @@ class Survey(models.Model):
                         if "choices" in source_q.options:
                             question_data["choices"] = source_q.options["choices"]
 
+                    # Include likert scale labels
+                    if source_q.type == "likert" and source_q.options:
+                        if isinstance(source_q.options, list) and source_q.options:
+                            # Check if it's categories (list of labels) or number scale (dict)
+                            first_option = source_q.options[0]
+                            if isinstance(first_option, dict):
+                                # Number scale format with min/max/left/right labels
+                                if first_option.get("type") in ["number-scale", "number"]:
+                                    scale_data = {}
+                                    if "left" in first_option and first_option["left"]:
+                                        scale_data["left_label"] = first_option["left"]
+                                    if "right" in first_option and first_option["right"]:
+                                        scale_data["right_label"] = first_option["right"]
+                                    if scale_data:
+                                        question_data["likert_scale"] = scale_data
+                                # Categories format with labels list
+                                elif "labels" in first_option:
+                                    question_data["likert_categories"] = first_option["labels"]
+                            elif isinstance(first_option, str):
+                                # Simple list of category strings
+                                question_data["likert_categories"] = source_q.options
+                        elif isinstance(source_q.options, list):
+                            # List of strings (categories)
+                            question_data["likert_categories"] = source_q.options
+
                     group_data["questions"].append(question_data)
 
                 survey_structure["question_groups"].append(group_data)
@@ -1100,12 +1125,19 @@ Return ONLY valid JSON in this EXACT structure:
       "questions": [
         {{
           "text": "translated question text",
-          "choices": ["choice 1", "choice 2", ...]
+          "choices": ["choice 1", "choice 2", ...],
+          "likert_categories": ["category 1", "category 2", ...],
+          "likert_scale": {{"left_label": "...", "right_label": "..."}}
         }}
       ]
     }}
   ]
 }}
+
+NOTE:
+- Only include 'choices' if the source question has multiple choice options
+- Only include 'likert_categories' if the source has likert scale categories (list of labels)
+- Only include 'likert_scale' if the source has number scale with left/right labels
 
 Context: This is for a clinical healthcare platform. Accuracy is CRITICAL for patient safety."""
 
@@ -1241,6 +1273,32 @@ Return the translation as JSON following the exact structure specified in the sy
                                 "choices": trans_q["choices"],
                             }
                             results["translated_fields"] += 1
+
+                    # Apply translated likert categories if present
+                    if trans_q.get("likert_categories"):
+                        if isinstance(target_q.options, list):
+                            # Simple list format
+                            target_q.options = trans_q["likert_categories"]
+                            results["translated_fields"] += 1
+                        elif isinstance(target_q.options, list) and target_q.options:
+                            first_opt = target_q.options[0]
+                            if isinstance(first_opt, dict) and "labels" in first_opt:
+                                # Categories format with labels dict
+                                first_opt["labels"] = trans_q["likert_categories"]
+                                results["translated_fields"] += 1
+
+                    # Apply translated likert number scale labels if present
+                    if trans_q.get("likert_scale"):
+                        scale_data = trans_q["likert_scale"]
+                        if isinstance(target_q.options, list) and target_q.options:
+                            first_opt = target_q.options[0]
+                            if isinstance(first_opt, dict):
+                                if "left_label" in scale_data:
+                                    first_opt["left"] = scale_data["left_label"]
+                                    results["translated_fields"] += 1
+                                if "right_label" in scale_data:
+                                    first_opt["right"] = scale_data["right_label"]
+                                    results["translated_fields"] += 1
 
                     target_q.save(update_fields=["text", "options"])
 

@@ -2207,6 +2207,41 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
 
             survey.save()
 
+            # Publish selected translations if any are checked
+            publish_translations = request.POST.getlist("publish_translations")
+            if publish_translations:
+                published_count = 0
+                for translation_slug in publish_translations:
+                    try:
+                        translation = Survey.objects.get(
+                            slug=translation_slug,
+                            translated_from=survey
+                        )
+                        if translation.status != Survey.Status.PUBLISHED:
+                            translation.status = Survey.Status.PUBLISHED
+                            translation.published_at = timezone.now()
+                            # Copy relevant publish settings from parent
+                            translation.visibility = survey.visibility
+                            translation.start_at = survey.start_at
+                            translation.end_at = survey.end_at
+                            translation.max_responses = survey.max_responses
+                            translation.captcha_required = survey.captcha_required
+                            translation.no_patient_data_ack = survey.no_patient_data_ack
+                            translation.allow_any_authenticated = survey.allow_any_authenticated
+                            if survey.visibility == Survey.Visibility.UNLISTED:
+                                # Share the same unlisted key as parent
+                                translation.unlisted_key = survey.unlisted_key
+                            translation.save()
+                            published_count += 1
+                    except Survey.DoesNotExist:
+                        continue
+
+                if published_count > 0:
+                    messages.success(
+                        request,
+                        f"Survey published with {published_count} translation(s)!"
+                    )
+
             # Process invite emails if provided - start async sending
             if invite_emails and visibility in [
                 Survey.Visibility.TOKEN,
@@ -2258,11 +2293,21 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
                     "email_count": len(email_list),
                 }
 
-                messages.success(
-                    request, "Survey has been published! Sending invitations..."
-                )
+                if published_count > 0:
+                    messages.success(
+                        request, f"Survey published with {published_count} translation(s)! Sending invitations..."
+                    )
+                else:
+                    messages.success(
+                        request, "Survey has been published! Sending invitations..."
+                    )
             else:
-                messages.success(request, "Survey has been published successfully!")
+                if published_count > 0:
+                    messages.success(
+                        request, f"Survey published with {published_count} translation(s)!"
+                    )
+                else:
+                    messages.success(request, "Survey has been published successfully!")
 
             return redirect("surveys:dashboard", slug=slug)
 
@@ -2295,6 +2340,35 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
 
             survey.save()
 
+            # Publish selected translations if any are checked
+            publish_translations = request.POST.getlist("publish_translations")
+            published_count = 0
+            if publish_translations:
+                for translation_slug in publish_translations:
+                    try:
+                        translation = Survey.objects.get(
+                            slug=translation_slug,
+                            translated_from=survey
+                        )
+                        if translation.status != Survey.Status.PUBLISHED:
+                            translation.status = Survey.Status.PUBLISHED
+                            translation.published_at = timezone.now()
+                            # Copy relevant publish settings from parent
+                            translation.visibility = survey.visibility
+                            translation.start_at = survey.start_at
+                            translation.end_at = survey.end_at
+                            translation.max_responses = survey.max_responses
+                            translation.captcha_required = survey.captcha_required
+                            translation.no_patient_data_ack = survey.no_patient_data_ack
+                            translation.allow_any_authenticated = survey.allow_any_authenticated
+                            if survey.visibility == Survey.Visibility.UNLISTED:
+                                # Share the same unlisted key as parent
+                                translation.unlisted_key = survey.unlisted_key
+                            translation.save()
+                            published_count += 1
+                    except Survey.DoesNotExist:
+                        continue
+
             # Process invite emails if provided - use async sending
             if invite_emails and visibility in [
                 Survey.Visibility.TOKEN,
@@ -2308,13 +2382,24 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
 
                 messages.success(request, "Settings updated! Sending invitations...")
             else:
-                messages.success(request, "Publication settings updated.")
+                if published_count > 0:
+                    messages.success(
+                        request, f"Settings updated! Published {published_count} translation(s)."
+                    )
+                else:
+                    messages.success(request, "Publication settings updated.")
 
             return redirect("surveys:dashboard", slug=slug)
 
     # GET request - show the form
     # Get available translations
     available_translations = survey.get_available_translations()
+
+    # Check if there are any draft translations
+    has_draft_translations = any(
+        t.status == Survey.Status.DRAFT
+        for t in available_translations
+    )
 
     # Get supported languages for dropdown
     supported_languages = [
@@ -2326,6 +2411,7 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
     context = {
         "survey": survey,
         "available_translations": available_translations,
+        "has_draft_translations": has_draft_translations,
         "supported_languages": supported_languages,
     }
 
