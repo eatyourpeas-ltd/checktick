@@ -1120,7 +1120,7 @@ CONFIDENCE LEVELS:
 - "medium": Most translations accurate but some terms may need review
 - "low": Significant uncertainty - professional medical translator should review
 
-Return ONLY valid JSON in this EXACT structure:
+Return ONLY valid JSON in this EXACT structure (INCLUDE ALL SECTIONS):
 {{
   "confidence": "high|medium|low",
   "confidence_notes": "explanation of any uncertainties or terms needing review",
@@ -1145,6 +1145,7 @@ Return ONLY valid JSON in this EXACT structure:
 }}
 
 NOTE:
+- ALWAYS include the 'metadata' section with translated name and description
 - Only include 'choices' if the source question has multiple choice options
 - Only include 'likert_categories' if the source has likert scale categories (list of labels)
 - Only include 'likert_scale' if the source has number scale with left/right labels
