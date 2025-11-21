@@ -221,6 +221,14 @@ CONFIDENCE LEVELS:
 - "medium": Most translations accurate but some terms may need review
 - "low": Significant uncertainty - professional medical translator should review
 
+⚠️ JSON OUTPUT REQUIREMENTS - CRITICAL:
+- Return ONLY valid, parseable JSON - no trailing commas
+- No comments or explanations outside the JSON structure
+- Use proper JSON escaping for quotes within strings (use \\" for quotes in text)
+- Ensure all brackets and braces are properly closed
+- No extra commas after the last item in arrays or objects
+- Test your JSON is valid before returning
+
 Return ONLY valid JSON in this EXACT structure (INCLUDE ALL SECTIONS):
 {
   "confidence": "high|medium|low",
@@ -236,8 +244,8 @@ Return ONLY valid JSON in this EXACT structure (INCLUDE ALL SECTIONS):
       "questions": [
         {
           "text": "translated question text",
-          "choices": ["choice 1", "choice 2", ...],
-          "likert_categories": ["category 1", "category 2", ...],
+          "choices": ["choice 1", "choice 2"],
+          "likert_categories": ["category 1", "category 2"],
           "likert_scale": {"left_label": "...", "right_label": "..."}
         }
       ]
@@ -250,6 +258,7 @@ NOTE:
 - Only include 'choices' if the source question has multiple choice options
 - Only include 'likert_categories' if the source has likert scale categories (list of labels)
 - Only include 'likert_scale' if the source has number scale with left/right labels
+- NO trailing commas after last items in arrays or objects
 
 Context: This is for a clinical healthcare platform. Accuracy is CRITICAL for patient safety."""
 

@@ -2502,6 +2502,7 @@ def create_translation_async(request: HttpRequest, slug: str) -> JsonResponse:
 
         logger = logging.getLogger(__name__)
         translation = None
+        is_retranslate = False  # Track if we're re-translating an existing survey
 
         try:
             # Create or get existing translation survey
@@ -2518,6 +2519,7 @@ def create_translation_async(request: HttpRequest, slug: str) -> JsonResponse:
             if existing and force_retranslate:
                 # Re-use existing translation survey
                 translation = existing
+                is_retranslate = True  # Mark as re-translate to preserve on failure
                 logger.info(
                     f"Re-translating existing survey {translation.slug} for {survey.slug} in {target_language}"
                 )
@@ -2566,12 +2568,16 @@ def create_translation_async(request: HttpRequest, slug: str) -> JsonResponse:
                 )
                 logger.error(f"Translation failed for {translation.slug}: {error_msg}")
 
-                # Delete the failed translation survey
-                if translation:
+                # Only delete if this was a new translation, not a re-translate
+                if translation and not is_retranslate:
                     logger.info(
                         f"Deleting failed translation survey {translation.slug}"
                     )
                     translation.delete()
+                elif is_retranslate:
+                    logger.info(
+                        f"Preserving existing translation survey {translation.slug} after failed re-translate"
+                    )
 
                 cache.set(
                     f"translation_task_{task_id}",
@@ -2588,8 +2594,8 @@ def create_translation_async(request: HttpRequest, slug: str) -> JsonResponse:
             error_details = traceback.format_exc()
             logger.error(f"Translation exception for {survey.slug}: {error_details}")
 
-            # Delete the failed translation survey if it was created
-            if translation:
+            # Only delete the failed translation if it was just created, not if re-translating
+            if translation and not is_retranslate:
                 try:
                     logger.info(
                         f"Deleting failed translation survey {translation.slug} after exception"
@@ -2597,6 +2603,10 @@ def create_translation_async(request: HttpRequest, slug: str) -> JsonResponse:
                     translation.delete()
                 except Exception as delete_error:
                     logger.error(f"Failed to delete translation survey: {delete_error}")
+            elif translation and is_retranslate:
+                logger.info(
+                    f"Preserving existing translation survey {translation.slug} after exception"
+                )
 
             cache.set(
                 f"translation_task_{task_id}",

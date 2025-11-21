@@ -1165,13 +1165,38 @@ Return the translation as JSON following the exact structure specified in the sy
             try:
                 translation = json.loads(json_text)
             except json.JSONDecodeError as e:
+                # Log the problematic JSON for debugging
                 logger.error(
-                    f"Failed to parse JSON. Extracted text: {json_text[:1000]}"
+                    f"JSON decode error at position {e.pos}: {str(e)}"
                 )
-                results["errors"].append(
-                    f"Failed to parse translation response: {str(e)}"
+                logger.error(
+                    f"Context around error (chars {max(0, e.pos-100)}:{e.pos+100}): {json_text[max(0, e.pos-100):e.pos+100]}"
                 )
-                return results
+
+                # Try to salvage the JSON by fixing common issues
+                try:
+                    import re
+                    fixed_json = json_text
+
+                    # Remove trailing commas before closing braces/brackets (multiple passes)
+                    prev_json = None
+                    while prev_json != fixed_json:
+                        prev_json = fixed_json
+                        fixed_json = re.sub(r',(\s*[}\]])', r'\1', fixed_json)
+
+                    # Remove any comments (// or /* */)
+                    fixed_json = re.sub(r'//.*?$', '', fixed_json, flags=re.MULTILINE)
+                    fixed_json = re.sub(r'/\*.*?\*/', '', fixed_json, flags=re.DOTALL)
+
+                    translation = json.loads(fixed_json)
+                    logger.info("Successfully parsed JSON after automatic fixes")
+                except Exception as fix_error:
+                    logger.error(f"Failed to fix JSON: {str(fix_error)}")
+                    logger.error(f"Full response for debugging:\n{response}")
+                    results["errors"].append(
+                        f"Failed to parse translation response: {str(e)}"
+                    )
+                    return results
 
             # Check confidence level
             confidence = translation.get("confidence", "low")

@@ -107,17 +107,45 @@ CheckTick also uses LLMs to translate surveys into multiple languages. **The sam
 
 ### Translation workflow
 
+**Initial translation:**
+
 1. User selects a target language from the dashboard
 2. System sends entire survey structure to LLM
 3. LLM returns JSON translation
 4. User reviews and edits translation
 5. User publishes when ready
 
+**Re-translating existing surveys:**
+
+Users can update existing translations using "Translate Again":
+
+1. Open the translated survey's dashboard
+2. Click "Translate Again" button
+3. Confirm overwrite of existing translations
+4. System re-translates while preserving:
+   - Survey structure and IDs
+   - Collected responses
+   - Settings and permissions
+5. If re-translation fails, existing translation is preserved unchanged
+
 **Critical safeguard:** AI-generated translations should **always be reviewed by a native speaker**, preferably a healthcare professional who speaks the target language.
 
 ### Translation system prompt
 
 For full transparency, here is the complete system prompt used for survey translation. **This prompt is loaded directly from this documentation file** to ensure consistency between what users see and what the LLM receives.
+
+The prompt includes:
+- Medical translation best practices
+- Instructions to output plain text (no markdown or language codes)
+- Strict JSON output requirements with validation rules
+- Confidence level guidelines
+- Context about the clinical healthcare platform
+
+**Template variables** (substituted at runtime):
+- `{target_language_name}`: Full language name (e.g., "Arabic")
+- `{target_language_code}`: ISO language code (e.g., "ar")
+
+These variables are defined in this document's frontmatter and automatically replaced when the prompt is loaded.
 
 <!-- TRANSLATION_PROMPT_START -->
 ```text
@@ -145,6 +173,14 @@ CONFIDENCE LEVELS:
 - "medium": Most translations accurate but some terms may need review
 - "low": Significant uncertainty - professional medical translator should review
 
+⚠️ JSON OUTPUT REQUIREMENTS - CRITICAL:
+- Return ONLY valid, parseable JSON - no trailing commas
+- No comments or explanations outside the JSON structure
+- Use proper JSON escaping for quotes within strings (use \" for quotes in text)
+- Ensure all brackets and braces are properly closed
+- No extra commas after the last item in arrays or objects
+- Test your JSON is valid before returning
+
 Return ONLY valid JSON in this EXACT structure (INCLUDE ALL SECTIONS):
 {
   "confidence": "high|medium|low",
@@ -160,8 +196,8 @@ Return ONLY valid JSON in this EXACT structure (INCLUDE ALL SECTIONS):
       "questions": [
         {
           "text": "translated question text",
-          "choices": ["choice 1", "choice 2", ...],
-          "likert_categories": ["category 1", "category 2", ...],
+          "choices": ["choice 1", "choice 2"],
+          "likert_categories": ["category 1", "category 2"],
           "likert_scale": {"left_label": "...", "right_label": "..."}
         }
       ]
@@ -174,6 +210,7 @@ NOTE:
 - Only include 'choices' if the source question has multiple choice options
 - Only include 'likert_categories' if the source has likert scale categories (list of labels)
 - Only include 'likert_scale' if the source has number scale with left/right labels
+- NO trailing commas after last items in arrays or objects
 
 Context: This is for a clinical healthcare platform. Accuracy is CRITICAL for patient safety.
 ```

@@ -188,6 +188,34 @@ You can create translations in two ways:
 2. Go to the translation's Question Builder
 3. Manually edit all text content
 
+### Re-translating existing surveys
+
+If you need to update an existing translation (for example, after changing the source survey or improving terminology):
+
+1. Open the **translated** survey's dashboard (not the original)
+2. Click the "Translate Again" button
+3. Confirm you want to overwrite existing translations
+4. The system will:
+   - Re-translate all content using the current source survey
+   - Preserve the survey structure and settings
+   - Keep the same URL and slug
+   - Maintain any responses already collected
+
+**Important:** "Translate Again" overwrites the translated text but preserves:
+- Survey settings and permissions
+- Question structure and IDs
+- Conditional logic
+- All collected responses
+- Publication status
+
+**Use cases for Translate Again:**
+- Source survey was updated after initial translation
+- You want to try a different translation approach
+- Medical terminology needs updating
+- LLM produced better translations with improved prompts
+
+**Note:** If the re-translation fails, your existing translation is preserved unchanged. The system only updates the translation if the process completes successfully.
+
 ### Important notes about AI translations
 
 **AI translations should always be reviewed by a native speaker before publication**, especially for:
