@@ -540,6 +540,14 @@ class TestLLMTranslation:
         """Test translate_survey_content with mocked LLM."""
         source_survey = basic_survey
 
+        # Mock LLM initialization to avoid requiring real credentials
+        def mock_llm_init(self):
+            self.endpoint = "http://mock-llm"
+            self.api_key = "mock-key"
+            self.auth_type = "bearer"
+            self.timeout = 30
+            self.system_prompt = "Mock system prompt"
+
         # Mock LLM to return JSON translations
         def mock_chat_with_custom_system_prompt(
             self,
@@ -575,6 +583,7 @@ class TestLLMTranslation:
             }
             return json.dumps(translation_data, ensure_ascii=False)
 
+        monkeypatch.setattr(ConversationalSurveyLLM, "__init__", mock_llm_init)
         monkeypatch.setattr(
             ConversationalSurveyLLM,
             "chat_with_custom_system_prompt",
@@ -679,6 +688,14 @@ class TestAsyncTranslation:
     def test_translation_handles_llm_failure(self, basic_survey, monkeypatch):
         """Translation should handle LLM failures gracefully."""
 
+        # Mock LLM initialization to avoid requiring real credentials
+        def mock_llm_init(self):
+            self.endpoint = "http://mock-llm"
+            self.api_key = "mock-key"
+            self.auth_type = "bearer"
+            self.timeout = 30
+            self.system_prompt = "Mock system prompt"
+
         def mock_chat_with_custom_system_prompt(
             self,
             system_prompt=None,
@@ -713,6 +730,7 @@ class TestAsyncTranslation:
             }
             return json.dumps(translation_data, ensure_ascii=False)
 
+        monkeypatch.setattr(ConversationalSurveyLLM, "__init__", mock_llm_init)
         monkeypatch.setattr(
             ConversationalSurveyLLM,
             "chat_with_custom_system_prompt",
