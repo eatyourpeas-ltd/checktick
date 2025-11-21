@@ -54,23 +54,20 @@
                   {% endif %}
 
                   <!-- Draft translations badge if any exist -->
-                  {% if item.translations %}
-                    {% for trans in item.translations %}
-                      {% if trans.status == 'draft' %}
-                        {% if forloop.first %}
-                          <span class="badge badge-warning badge-outline whitespace-nowrap flex items-center gap-1">
-                            <span>{% trans "Draft" %}</span>
-                        {% endif %}
-                        <a href="/surveys/{{ trans.survey.slug }}/dashboard/"
-                           class="text-base hover:scale-110 transition-transform"
-                           title="{{ trans.language_name }}"
-                           aria-label="{% trans 'View' %} {{ trans.language_name }} {% trans 'translation' %}">{{ trans.flag }}</a>
-                        {% if forloop.last %}
-                          </span>
-                        {% endif %}
-                      {% endif %}
-                    {% endfor %}
-                  {% endif %}
+                  {% regroup item.translations by status as translations_by_status %}
+                  {% for status_group in translations_by_status %}
+                    {% if status_group.grouper == 'draft' %}
+                      <span class="badge badge-warning badge-outline whitespace-nowrap flex items-center gap-1">
+                        <span>{% trans "Draft translations" %}</span>
+                        {% for trans in status_group.list %}
+                          <a href="/surveys/{{ trans.survey.slug }}/dashboard/"
+                             class="text-base hover:scale-110 transition-transform"
+                             title="{{ trans.language_name }}"
+                             aria-label="{% trans 'View' %} {{ trans.language_name }} {% trans 'translation' %}">{{ trans.flag }}</a>
+                        {% endfor %}
+                      </span>
+                    {% endif %}
+                  {% endfor %}
                   {% if s.status == 'published' %}
                     {% with days=s.days_remaining %}
                       {% if days is None %}

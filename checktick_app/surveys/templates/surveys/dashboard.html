@@ -123,12 +123,26 @@
     {% trans "Create Copy" %}
   </a>
 
-  {# Translation button - only show for translated surveys (not base language) #}
-  {% if survey.parent_survey %}
+  {# Create translation button - only show for original surveys #}
+  {% if survey.is_original %}
     <button class="btn btn-outline btn-sm flex-shrink-0 create-translation-btn"
-            data-survey-slug="{{ survey.parent_survey.slug }}"
-            data-survey-id="{{ survey.parent_survey.id }}"
-            data-existing-languages="{{ survey.parent_survey.language }}{% for trans in survey.parent_survey.get_available_translations %},{{ trans.language }}{% endfor %}"
+            data-survey-slug="{{ survey.slug }}"
+            data-survey-id="{{ survey.id }}"
+            data-existing-languages="{{ survey.language }}{% for trans in available_translations %},{{ trans.language }}{% endfor %}"
+            title="{% trans 'Create a translation of this survey' %}">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+      </svg>
+      {% trans "Create Translation" %}
+    </button>
+  {% endif %}
+
+  {# Translate Again button - only show for translated surveys (not base language) #}
+  {% if survey.translated_from %}
+    <button class="btn btn-outline btn-sm flex-shrink-0 create-translation-btn"
+            data-survey-slug="{{ survey.translated_from.slug }}"
+            data-survey-id="{{ survey.translated_from.id }}"
+            data-existing-languages="{{ survey.translated_from.language }}{% for trans in survey.translated_from.get_available_translations %},{{ trans.language }}{% endfor %}"
             title="{% trans 'Create another translation of the original survey' %}">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
