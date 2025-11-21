@@ -552,6 +552,8 @@ class TestLLMTranslation:
             import json
 
             translation_data = {
+                "confidence": "high",
+                "confidence_notes": "All translations are accurate",
                 "metadata": {
                     "name": "Encuesta del Paciente",
                     "description": "una encuesta sobre atención al paciente",
@@ -562,7 +564,7 @@ class TestLLMTranslation:
                         "description": "Preguntas demográficas básicas",
                         "questions": [
                             {"text": "¿Cuál es tu edad?"},
-                            {"text": "¿Tienes diabetes?", "choices": ["Sí", "No"]},
+                            {"text": "¿Tienes diabetes?"},
                             {
                                 "text": "¿Qué tipo de diabetes?",
                                 "choices": ["Tipo 1", "Tipo 2", "Gestacional", "Otro"],
@@ -585,7 +587,13 @@ class TestLLMTranslation:
         # Translate content
         results = source_survey.translate_survey_content(target_survey)
 
-        # Should succeed
+        # Should succeed - provide detailed error info if it fails
+        if not results["success"]:
+            import json
+
+            error_details = json.dumps(results, indent=2)
+            pytest.fail(f"Translation failed: {error_details}")
+
         assert results["success"] is True
         assert results["translated_fields"] > 0
         assert len(results["errors"]) == 0
@@ -682,6 +690,8 @@ class TestAsyncTranslation:
             import json
 
             translation_data = {
+                "confidence": "high",
+                "confidence_notes": "All translations are accurate",
                 "metadata": {
                     "name": "Encuesta Traducida",
                     "description": "descripción traducida",
@@ -692,10 +702,7 @@ class TestAsyncTranslation:
                         "description": "descripción del grupo",
                         "questions": [
                             {"text": "pregunta traducida 1"},
-                            {
-                                "text": "pregunta traducida 2",
-                                "choices": ["opción 1", "opción 2"],
-                            },
+                            {"text": "pregunta traducida 2"},
                             {
                                 "text": "pregunta traducida 3",
                                 "choices": ["a", "b", "c", "d"],
@@ -716,6 +723,13 @@ class TestAsyncTranslation:
 
         # Should complete successfully with mocked LLM
         result = basic_survey.translate_survey_content(translation, use_llm=True)
+
+        # Provide detailed error info if it fails
+        if not result["success"]:
+            import json
+
+            error_details = json.dumps(result, indent=2)
+            pytest.fail(f"Translation failed: {error_details}")
 
         assert result["success"] is True
         assert result["translated_fields"] > 0
