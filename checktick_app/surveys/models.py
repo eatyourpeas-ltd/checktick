@@ -1003,7 +1003,7 @@ class Survey(models.Model):
         Note: Target survey must already exist (created via create_translation).
         This method updates the target survey in place.
         """
-        from .llm_client import ConversationalSurveyLLM
+        from .llm_client import ConversationalSurveyLLM, load_translation_prompt_from_docs
 
         results = {
             "success": False,
@@ -1103,54 +1103,12 @@ class Survey(models.Model):
 
                 survey_structure["question_groups"].append(group_data)
 
-            # Create comprehensive translation prompt
-            system_msg = f"""You are a professional medical translator specializing in healthcare surveys and clinical questionnaires.
-
-CRITICAL INSTRUCTIONS:
-1. Translate the ENTIRE survey to {target_lang_name} ({target_lang}) maintaining medical accuracy
-2. Preserve technical/medical terminology precision - do NOT guess or approximate medical terms
-3. Maintain consistency across all questions and answers
-4. Keep formal, professional clinical tone throughout
-5. Preserve any placeholders like {{variable_name}}
-6. Use context from the full survey to ensure accurate, consistent translations
-7. If you encounter medical terms where accurate translation is uncertain, note this in the confidence field
-
-CONFIDENCE LEVELS:
-- "high": All translations are medically accurate and appropriate
-- "medium": Most translations accurate but some terms may need review
-- "low": Significant uncertainty - professional medical translator should review
-
-Return ONLY valid JSON in this EXACT structure (INCLUDE ALL SECTIONS):
-{{
-  "confidence": "high|medium|low",
-  "confidence_notes": "explanation of any uncertainties or terms needing review",
-  "metadata": {{
-    "name": "translated survey name",
-    "description": "translated survey description"
-  }},
-  "question_groups": [
-    {{
-      "name": "translated group name",
-      "description": "translated group description",
-      "questions": [
-        {{
-          "text": "translated question text",
-          "choices": ["choice 1", "choice 2", ...],
-          "likert_categories": ["category 1", "category 2", ...],
-          "likert_scale": {{"left_label": "...", "right_label": "..."}}
-        }}
-      ]
-    }}
-  ]
-}}
-
-NOTE:
-- ALWAYS include the 'metadata' section with translated name and description
-- Only include 'choices' if the source question has multiple choice options
-- Only include 'likert_categories' if the source has likert scale categories (list of labels)
-- Only include 'likert_scale' if the source has number scale with left/right labels
-
-Context: This is for a clinical healthcare platform. Accuracy is CRITICAL for patient safety."""
+            # Load system prompt from documentation for transparency
+            # Template variables are substituted automatically
+            system_msg = load_translation_prompt_from_docs(
+                target_language_name=target_lang_name,
+                target_language_code=target_lang
+            )
 
             # Send entire survey for translation
             conversation = [

@@ -26,48 +26,46 @@
                 <div class="flex items-center gap-2 min-w-0">
                   <a href="/surveys/{{ s.slug }}/dashboard/" class="font-medium leading-tight truncate link link-accent">{{ s.name }}</a>
 
-                  <!-- Status badges with languages -->
+                  <!-- Status badge (always primary) with language flags of that status -->
                   {% if s.status == 'published' %}
-                    <span class="badge badge-success badge-outline whitespace-nowrap flex items-center gap-1">
+                    {# Base is published - show published languages #}
+                    <span class="badge badge-primary badge-outline whitespace-nowrap flex items-center gap-1">
                       <span>{% trans "Published" %}</span>
-                      <a href="/surveys/{{ s.slug }}/dashboard/"
-                         class="text-base hover:scale-110 transition-transform"
-                         title="{{ item.language_name }}"
-                         aria-label="{% trans 'View' %} {{ item.language_name }} {% trans 'version' %}">{{ item.flag }}</a>
+                      <span class="text-base" title="{{ item.language_name }}">{{ item.flag }}</span>
                       {% for trans in item.translations %}
                         {% if trans.status == 'published' %}
-                          <a href="/surveys/{{ trans.survey.slug }}/dashboard/"
-                             class="text-base hover:scale-110 transition-transform"
-                             title="{{ trans.language_name }}"
-                             aria-label="{% trans 'View' %} {{ trans.language_name }} {% trans 'translation' %}">{{ trans.flag }}</a>
+                          <span class="text-base" title="{{ trans.language_name }}">{{ trans.flag }}</span>
                         {% endif %}
                       {% endfor %}
                     </span>
                   {% else %}
-                    <span class="badge badge-warning badge-outline whitespace-nowrap flex items-center gap-1">
+                    {# Base is draft - show base language and any other draft translations #}
+                    <span class="badge badge-primary badge-outline whitespace-nowrap flex items-center gap-1">
                       <span>{% trans "Draft" %}</span>
-                      <a href="/surveys/{{ s.slug }}/dashboard/"
-                         class="text-base hover:scale-110 transition-transform"
-                         title="{{ item.language_name }}"
-                         aria-label="{% trans 'View' %} {{ item.language_name }} {% trans 'version' %}">{{ item.flag }}</a>
+                      <span class="text-base" title="{{ item.language_name }}">{{ item.flag }}</span>
+                      {% for trans in item.translations %}
+                        {% if trans.status == 'draft' %}
+                          <span class="text-base" title="{{ trans.language_name }}">{{ trans.flag }}</span>
+                        {% endif %}
+                      {% endfor %}
                     </span>
                   {% endif %}
 
-                  <!-- Draft translations badge if any exist -->
-                  {% regroup item.translations by status as translations_by_status %}
-                  {% for status_group in translations_by_status %}
-                    {% if status_group.grouper == 'draft' %}
-                      <span class="badge badge-warning badge-outline whitespace-nowrap flex items-center gap-1">
-                        <span>{% trans "Draft translations" %}</span>
-                        {% for trans in status_group.list %}
-                          <a href="/surveys/{{ trans.survey.slug }}/dashboard/"
-                             class="text-base hover:scale-110 transition-transform"
-                             title="{{ trans.language_name }}"
-                             aria-label="{% trans 'View' %} {{ trans.language_name }} {% trans 'translation' %}">{{ trans.flag }}</a>
-                        {% endfor %}
-                      </span>
-                    {% endif %}
-                  {% endfor %}
+                  <!-- Draft translations badge - only show if base is published but translations are draft -->
+                  {% if s.status == 'published' %}
+                    {% regroup item.translations by status as translations_by_status %}
+                    {% for status_group in translations_by_status %}
+                      {% if status_group.grouper == 'draft' %}
+                        <span class="badge badge-warning badge-outline whitespace-nowrap flex items-center gap-1">
+                          <span>{% trans "Draft translations" %}</span>
+                          {% for trans in status_group.list %}
+                            <span class="text-base" title="{{ trans.language_name }}">{{ trans.flag }}</span>
+                          {% endfor %}
+                        </span>
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
+
                   {% if s.status == 'published' %}
                     {% with days=s.days_remaining %}
                       {% if days is None %}

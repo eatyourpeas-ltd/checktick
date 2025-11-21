@@ -33,6 +33,32 @@
   {% trans "Survey Dashboard" as bc_survey_dashboard %}
   {% include 'components/breadcrumbs.html' with crumb1_label=bc_surveys crumb1_href="/surveys/" crumb2_label=bc_survey_dashboard crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" %}
 </div>
+
+{# Language switcher - button group above title #}
+<div class="mb-4">
+  <div class="join">
+    {# Current language - active/selected with accent color #}
+    <button class="btn join-item btn-accent btn-sm btn-active">
+      <span class="text-base mr-1">{{ survey.language|default:'en'|language_flag }}</span>
+      <span>{{ survey.language|language_name }}</span>
+      <span class="ml-1 text-xs opacity-70">({% if survey.status == 'published' %}{% trans "Published" %}{% else %}{% trans "Draft" %}{% endif %})</span>
+    </button>
+
+    {# Other translations - clickable with primary color #}
+    {% for trans in available_translations %}
+      <a href="/surveys/{{ trans.slug }}/dashboard/"
+         class="btn join-item btn-sm"
+         title="{{ trans.language|language_name }} - {% if trans.status == 'published' %}{% trans 'Published' %}{% else %}{% trans 'Draft' %}{% endif %}">
+        <span class="text-base mr-1">{{ trans.language|language_flag }}</span>
+        <span>{{ trans.language|language_name }}</span>
+        {% if trans.status == 'draft' %}
+          <span class="ml-1 text-xs opacity-70">({% trans "Draft" %})</span>
+        {% endif %}
+      </a>
+    {% endfor %}
+  </div>
+</div>
+
 <div class="flex items-center gap-3 mt-2">
   <h2 class="text-2xl font-bold">
     <a class="link link-accent" href="/surveys/{{ survey.slug }}/groups/" id="survey-title-display">{{ survey.name }}</a>
@@ -43,60 +69,6 @@
 </div>
 
 <div class="flex flex-wrap gap-2 items-center mb-2">
-  <!-- Status with languages -->
-  {% if survey.status == 'published' %}
-    <span class="badge badge-success badge-outline flex items-center gap-1">
-      <span>{% trans "Published" %}:</span>
-      <a href="/surveys/{{ survey.slug }}/dashboard/"
-         class="text-base hover:scale-110 transition-transform"
-         title="{{ survey.language|language_name }}"
-         aria-label="{% trans 'View' %} {{ survey.language|language_name }} {% trans 'version' %}">
-        {{ survey.language|default:'en'|language_flag }}
-      </a>
-      {% for trans in available_translations %}
-        {% if trans.status == 'published' %}
-          <a href="/surveys/{{ trans.slug }}/dashboard/"
-             class="text-base hover:scale-110 transition-transform"
-             title="{{ trans.language|language_name }}"
-             aria-label="{% trans 'View' %} {{ trans.language|language_name }} {% trans 'translation' %}">
-            {{ trans.language|language_flag }}
-          </a>
-        {% endif %}
-      {% endfor %}
-    </span>
-  {% else %}
-    <span class="badge badge-warning badge-outline flex items-center gap-1">
-      <span>{% trans "Draft" %}:</span>
-      <a href="/surveys/{{ survey.slug }}/dashboard/"
-         class="text-base hover:scale-110 transition-transform"
-         title="{{ survey.language|language_name }}"
-         aria-label="{% trans 'View' %} {{ survey.language|language_name }} {% trans 'version' %}">
-        {{ survey.language|default:'en'|language_flag }}
-      </a>
-    </span>
-  {% endif %}
-
-  <!-- Draft translations if any -->
-  {% if available_translations %}
-    {% for trans in available_translations %}
-      {% if trans.status == 'draft' %}
-        {% if forloop.first %}
-          <span class="badge badge-warning badge-outline flex items-center gap-1">
-            <span>{% trans "Draft translations" %}:</span>
-        {% endif %}
-        <a href="/surveys/{{ trans.slug }}/dashboard/"
-           class="text-base hover:scale-110 transition-transform"
-           title="{{ trans.language|language_name }}"
-           aria-label="{% trans 'View' %} {{ trans.language|language_name }} {% trans 'translation' %}">
-          {{ trans.language|language_flag }}
-        </a>
-        {% if forloop.last %}
-          </span>
-        {% endif %}
-      {% endif %}
-    {% endfor %}
-  {% endif %}
-
   <span class="badge badge-primary badge-outline">{% trans "Visibility" %}: {{ visible }}</span>
   <span class="badge badge-primary badge-outline">{% trans "Window" %}: {{ survey.start_at|default:'—' }} → {{ survey.end_at|default:'—' }}</span>
   <span class="badge badge-primary badge-outline">{% trans "Total responses" %}: {{ total }}{% if survey.max_responses %} / {{ survey.max_responses }}{% endif %}</span>
@@ -118,10 +90,14 @@
     </a>
   {% endif %}
   <a class="btn btn-primary btn-sm flex-shrink-0{% if survey.questions.count == 0 %} btn-disabled{% endif %}" href="{% if survey.questions.count > 0 %}/surveys/{{ survey.slug }}/preview/{% else %}#{% endif %}"{% if survey.questions.count == 0 %} aria-disabled="true" title="{% trans 'Add questions before previewing' %}"{% endif %}>{% trans "Survey Preview (read-only)" %}</a>
+
+  {# Create Copy button - only show for original surveys #}
+  {% if survey.is_original %}
   <a class="btn btn-outline btn-sm flex-shrink-0" href="{% url 'surveys:clone' slug=survey.slug %}" title="{% trans 'Create a copy of this survey' %}">
     {% include "components/icons/documents.html" with classes="w-4 h-4 mr-1" %}
     {% trans "Create Copy" %}
   </a>
+  {% endif %}
 
   {# Create translation button - only show for original surveys #}
   {% if survey.is_original %}
@@ -138,12 +114,13 @@
   {% endif %}
 
   {# Translate Again button - only show for translated surveys (not base language) #}
+  {# Re-translates base survey content into current language without modal #}
   {% if survey.translated_from %}
-    <button class="btn btn-outline btn-sm flex-shrink-0 create-translation-btn"
+    <button class="btn btn-outline btn-sm flex-shrink-0 retranslate-btn"
             data-survey-slug="{{ survey.translated_from.slug }}"
             data-survey-id="{{ survey.translated_from.id }}"
-            data-existing-languages="{{ survey.translated_from.language }}{% for trans in survey.translated_from.get_available_translations %},{{ trans.language }}{% endfor %}"
-            title="{% trans 'Create another translation of the original survey' %}">
+            data-target-language="{{ survey.language }}"
+            title="{% trans 'Re-translate from base language if content has changed' %}">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
       </svg>
@@ -428,11 +405,16 @@ document.addEventListener('DOMContentLoaded', function() {
   // Edit title functionality
   const editTitleBtn = document.getElementById('edit-title-btn');
   const titleModal = document.getElementById('edit_title_modal');
+  const cancelEditTitleBtn = document.getElementById('cancel_edit_title_btn');
 
   editTitleBtn.addEventListener('click', function() {
     const currentTitle = '{{ survey.name|escapejs }}';
     document.getElementById('survey_title_input').value = currentTitle;
     titleModal.showModal();
+  });
+
+  cancelEditTitleBtn.addEventListener('click', function() {
+    titleModal.close();
   });
 
   document.getElementById('save_title_btn').addEventListener('click', function() {
@@ -473,6 +455,14 @@ document.addEventListener('DOMContentLoaded', function() {
   let currentSurveySlug = null;
   let currentSurveyId = null;
   let existingLanguages = [];
+
+  const translation_modal = document.getElementById('translation_modal');
+  const translation_progress_modal = document.getElementById('translation_progress_modal');
+  const cancelTranslationBtn = document.getElementById('cancel_translation_btn');
+
+  cancelTranslationBtn.addEventListener('click', function() {
+    translation_modal.close();
+  });
 
   // Create Translation button functionality
   const createTranslationButtons = document.querySelectorAll('.create-translation-btn');
@@ -544,6 +534,51 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  // Handle re-translation (Translate Again button)
+  const retranslateButtons = document.querySelectorAll('.retranslate-btn');
+  retranslateButtons.forEach(button => {
+    button.addEventListener('click', function() {
+      const surveySlug = this.dataset.surveySlug;
+      const surveyId = this.dataset.surveyId;
+      const targetLanguage = this.dataset.targetLanguage;
+
+      if (!confirm('{% trans "This will re-translate the survey content from the base language. Any manual edits will be overwritten. Continue?" %}')) {
+        return;
+      }
+
+      // Show progress modal
+      translation_progress_modal.showModal();
+
+      // Send translation request
+      fetch(`/surveys/${surveySlug}/translations/create/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+          survey_id: surveyId,
+          target_language: targetLanguage,
+          force_retranslate: true
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.task_id) {
+          pollTranslationStatus(data.task_id, surveySlug);
+        } else if (data.error) {
+          translation_progress_modal.close();
+          alert(data.error);
+        }
+      })
+      .catch(error => {
+        translation_progress_modal.close();
+        alert('{% trans "Failed to re-translate. Please try again." %}');
+        console.error('Re-translation error:', error);
+      });
+    });
+  });
+
   function pollTranslationStatus(taskId, slug) {
     const interval = setInterval(() => {
       fetch(`/surveys/${slug}/translations/status/${taskId}/`)
@@ -586,7 +621,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 
     <div class="modal-action">
-      <button class="btn" onclick="edit_title_modal.close()">{% trans "Cancel" %}</button>
+      <button id="cancel_edit_title_btn" class="btn">{% trans "Cancel" %}</button>
       <button id="save_title_btn" class="btn btn-primary">
         {% include "components/icons/pencil.html" with classes="w-4 h-4 mr-1" %}
         {% trans "Save" %}
@@ -621,7 +656,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 
     <div class="modal-action">
-      <button class="btn" onclick="translation_modal.close()">{% trans "Cancel" %}</button>
+      <button id="cancel_translation_btn" class="btn">{% trans "Cancel" %}</button>
       <button id="create_translation_btn" class="btn btn-primary">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />

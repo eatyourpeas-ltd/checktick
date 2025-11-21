@@ -2455,12 +2455,14 @@ def create_translation_async(request: HttpRequest, slug: str) -> JsonResponse:
         try:
             data = json.loads(request.body)
             target_language = data.get("target_language") or data.get("language")
+            force_retranslate = data.get("force_retranslate", False)
         except json.JSONDecodeError:
             return JsonResponse({"error": "Invalid JSON"}, status=400)
     else:
         target_language = request.POST.get("language") or request.POST.get(
             "target_language"
         )
+        force_retranslate = request.POST.get("force_retranslate") == "true"
 
     if not target_language:
         return JsonResponse({"error": "Language parameter required"}, status=400)
@@ -2471,7 +2473,7 @@ def create_translation_async(request: HttpRequest, slug: str) -> JsonResponse:
 
     # Check if translation already exists
     existing = survey.get_translation(target_language)
-    if existing:
+    if existing and not force_retranslate:
         return JsonResponse(
             {
                 "error": f"Translation to {target_language} already exists",
@@ -2502,21 +2504,29 @@ def create_translation_async(request: HttpRequest, slug: str) -> JsonResponse:
         translation = None
 
         try:
-            # Create translation survey
+            # Create or get existing translation survey
             cache.set(
                 f"translation_task_{task_id}",
                 {
                     "status": "processing",
                     "progress": 25,
-                    "message": "Creating survey structure...",
+                    "message": "Creating survey structure..." if not existing else "Preparing to re-translate...",
                 },
                 timeout=3600,
             )
 
-            translation = survey.create_translation(target_language=target_language)
-            logger.info(
-                f"Created translation survey {translation.slug} for {survey.slug} in {target_language}"
-            )
+            if existing and force_retranslate:
+                # Re-use existing translation survey
+                translation = existing
+                logger.info(
+                    f"Re-translating existing survey {translation.slug} for {survey.slug} in {target_language}"
+                )
+            else:
+                # Create new translation survey
+                translation = survey.create_translation(target_language=target_language)
+                logger.info(
+                    f"Created translation survey {translation.slug} for {survey.slug} in {target_language}"
+                )
 
             # Run LLM translation
             cache.set(
