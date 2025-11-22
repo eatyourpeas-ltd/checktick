@@ -8047,6 +8047,30 @@ def branching_data_api(request: HttpRequest, slug: str) -> JsonResponse:
     )
     ordered_questions = _order_questions_by_group(survey, list(questions_qs))
 
+    # Get repeat information for groups
+    group_repeat_map: dict[int, list[CollectionDefinition]] = {}
+    for item in CollectionItem.objects.select_related("collection", "group").filter(
+        collection__survey=survey, group__isnull=False
+    ):
+        group_repeat_map.setdefault(item.group_id, []).append(item.collection)
+
+    # Build group repeat info with max counts
+    group_repeats: dict[str, dict] = {}
+    for group_id, collections in group_repeat_map.items():
+        max_counts = []
+        for c in collections:
+            if c.max_count and int(c.max_count) > 0:
+                max_counts.append(int(c.max_count))
+
+        if max_counts:
+            # Use the first max_count if there are multiple collections
+            group_repeats[str(group_id)] = {"is_repeated": True, "count": max_counts[0]}
+        else:
+            group_repeats[str(group_id)] = {
+                "is_repeated": True,
+                "count": None,  # Unlimited
+            }
+
     questions_data = []
     conditions_data = {}
 
@@ -8056,6 +8080,7 @@ def branching_data_api(request: HttpRequest, slug: str) -> JsonResponse:
             "text": q.text,
             "order": index,
             "group_name": q.group.name if q.group else None,
+            "group_id": str(q.group.id) if q.group else None,
         }
         questions_data.append(question_data)
 
@@ -8075,4 +8100,10 @@ def branching_data_api(request: HttpRequest, slug: str) -> JsonResponse:
                 }
                 conditions_data[str(q.id)].append(cond_data)
 
-    return JsonResponse({"questions": questions_data, "conditions": conditions_data})
+    return JsonResponse(
+        {
+            "questions": questions_data,
+            "conditions": conditions_data,
+            "group_repeats": group_repeats,
+        }
+    )

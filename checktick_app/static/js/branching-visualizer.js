@@ -16,6 +16,7 @@
 
     let questions = [];
     let conditions = {};
+    let groupRepeats = {};
 
     // Function to resize canvas to container width
     function resizeCanvas() {
@@ -130,6 +131,7 @@
           const data = await response.json();
           questions = data.questions;
           conditions = data.conditions;
+          groupRepeats = data.group_repeats || {};
         } else {
           console.error("Failed to load branching data:", response.status);
           extractFromPage();
@@ -199,6 +201,7 @@
       const groupRegions = [];
       let currentY = startY;
       let currentGroup = null;
+      let currentGroupId = null;
       let groupStartY = null;
 
       // Calculate positions for each question and track group regions
@@ -209,12 +212,14 @@
           if (currentGroup !== null) {
             groupRegions.push({
               name: currentGroup,
+              groupId: currentGroupId,
               startY: groupStartY,
               endY: currentY - rowHeight / 2,
             });
             currentY += groupSpacing;
           }
           currentGroup = q.group_name;
+          currentGroupId = q.group_id;
           groupStartY = currentY - groupPadding;
         }
 
@@ -228,6 +233,7 @@
         if (index === questions.length - 1) {
           groupRegions.push({
             name: currentGroup,
+            groupId: currentGroupId,
             startY: groupStartY,
             endY: currentY - rowHeight / 2 + groupPadding,
           });
@@ -251,13 +257,65 @@
             : "rgba(128, 128, 128, 0.06)";
         ctx.fillRect(0, group.startY, canvas.width, group.endY - group.startY);
 
-        // Draw group label
+        // Draw group label and repeat badge if applicable
         if (group.name) {
+          let rightX = canvas.width - 10;
+
+          // Draw repeat badge if group has repeats
+          if (group.groupId && groupRepeats[group.groupId]) {
+            const repeatInfo = groupRepeats[group.groupId];
+            const countText = repeatInfo.count !== null ? String(repeatInfo.count) : "∞";
+
+            // Measure count text
+            ctx.font = "bold 11px sans-serif";
+            const textWidth = ctx.measureText(countText).width;
+            const iconSize = 14;
+            const badgeWidth = iconSize + textWidth + 18; // icon + text + padding
+            const badgeHeight = 20;
+            const badgeX = rightX - badgeWidth;
+            const badgeY = group.startY + 5;
+
+            // Draw badge background
+            ctx.fillStyle = "rgba(59, 130, 246, 0.15)";
+            ctx.strokeStyle = "rgba(59, 130, 246, 0.4)";
+            ctx.lineWidth = 1;
+            const radius = 4;
+            ctx.beginPath();
+            ctx.moveTo(badgeX + radius, badgeY);
+            ctx.lineTo(badgeX + badgeWidth - radius, badgeY);
+            ctx.quadraticCurveTo(badgeX + badgeWidth, badgeY, badgeX + badgeWidth, badgeY + radius);
+            ctx.lineTo(badgeX + badgeWidth, badgeY + badgeHeight - radius);
+            ctx.quadraticCurveTo(badgeX + badgeWidth, badgeY + badgeHeight, badgeX + badgeWidth - radius, badgeY + badgeHeight);
+            ctx.lineTo(badgeX + radius, badgeY + badgeHeight);
+            ctx.quadraticCurveTo(badgeX, badgeY + badgeHeight, badgeX, badgeY + badgeHeight - radius);
+            ctx.lineTo(badgeX, badgeY + radius);
+            ctx.quadraticCurveTo(badgeX, badgeY, badgeX + radius, badgeY);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Draw repeat icon
+            const iconX = badgeX + 8;
+            const iconY = badgeY + badgeHeight / 2;
+            drawRepeatIcon(iconX, iconY, iconSize, "rgba(59, 130, 246, 0.9)");
+
+            // Draw count text
+            ctx.fillStyle = "rgba(59, 130, 246, 0.9)";
+            ctx.font = "bold 11px sans-serif";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "middle";
+            ctx.fillText(countText, iconX + iconSize + 3, badgeY + badgeHeight / 2);
+
+            // Adjust rightX for group label
+            rightX = badgeX - 8;
+          }
+
+          // Draw group label
           ctx.fillStyle = "rgba(128, 128, 128, 0.5)";
           ctx.font = "bold 11px sans-serif";
           ctx.textAlign = "right";
           ctx.textBaseline = "top";
-          ctx.fillText(group.name, canvas.width - 10, group.startY + 5);
+          ctx.fillText(group.name, rightX, group.startY + 5);
         }
       });
 
@@ -318,6 +376,35 @@
         : colors.accentFocus;
       ctx.lineWidth = 2;
       ctx.stroke();
+    }
+
+    function drawRepeatIcon(x, y, size, color) {
+      // Draw a circular arrow repeat icon
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 1.2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      const scale = size / 16;
+      const cx = x;
+      const cy = y;
+
+      // Draw curved arrow path (simplified repeat symbol)
+      ctx.beginPath();
+      ctx.arc(cx, cy, 4 * scale, -Math.PI * 0.3, Math.PI * 1.3, false);
+      ctx.stroke();
+
+      // Arrow head
+      ctx.beginPath();
+      ctx.moveTo(cx - 3 * scale, cy - 4.5 * scale);
+      ctx.lineTo(cx + 1 * scale, cy - 4.5 * scale);
+      ctx.lineTo(cx - 1 * scale, cy - 1.5 * scale);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
     }
 
     function drawLabel(x, y, text, hasConditions, nodeConditions, groupName) {

@@ -50,7 +50,9 @@ def test_parse_bulk_markdown_supports_ids_and_branches():
     assert len(branches) >= 1
 
     # Check the question branch
-    to_question = next((b for b in branches if b["target_ref"] == "intro-decline"), None)
+    to_question = next(
+        (b for b in branches if b["target_ref"] == "intro-decline"), None
+    )
     if to_question:
         assert to_question["target_type"] == "question"
         assert to_question["operator"] == SurveyQuestionCondition.Operator.EQUALS
