@@ -97,6 +97,8 @@
       const operatorSelect = form.querySelector("[data-condition-operator]");
       const valueWrapper = form.querySelector("[data-condition-value]");
       const valueInput = form.querySelector('input[name="value"]');
+      const actionSelect = form.querySelector('select[name="action"]');
+      const targetFieldset = form.querySelector('[data-target-fieldset]');
       const targetRadios = form.querySelectorAll(
         'input[name="target_selector"]'
       );
@@ -124,6 +126,21 @@
       };
 
       const toggleTargetFields = () => {
+        // Check if END_SURVEY is selected - hide all target fields
+        const isEndSurvey = actionSelect && actionSelect.value === "end_survey";
+
+        if (targetFieldset) {
+          targetFieldset.classList.toggle("hidden", isEndSurvey);
+        }
+
+        if (isEndSurvey) {
+          // Disable all target fields
+          if (questionSelect) questionSelect.disabled = true;
+          if (groupSelect) groupSelect.disabled = true;
+          return;
+        }
+
+        // Normal target selection logic
         let selected = "question";
         targetRadios.forEach((radio) => {
           if (radio.checked) selected = radio.value;
@@ -148,6 +165,9 @@
 
       if (operatorSelect) {
         operatorSelect.addEventListener("change", toggleValueField);
+      }
+      if (actionSelect) {
+        actionSelect.addEventListener("change", toggleTargetFields);
       }
       targetRadios.forEach((radio) => {
         radio.addEventListener("change", toggleTargetFields);

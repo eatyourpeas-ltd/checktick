@@ -909,9 +909,14 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "primary_hex": style.get("primary_color"),
         "font_css_url": style.get("font_css_url"),
     }
+
+    # Build branching configuration for client-side logic
+    branching_config = _build_branching_config(qs)
+
     ctx = {
         "survey": survey,
         "questions": qs,
+        "branching_config": json.dumps(branching_config),
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
         "demographic_defs": DEMOGRAPHIC_FIELD_DEFS,
@@ -1074,6 +1079,69 @@ def _load_conditions(question: SurveyQuestion) -> list[SurveyQuestionCondition]:
             exc,
         )
         return []
+
+
+def _build_branching_config(questions: list[SurveyQuestion]) -> dict[str, Any]:
+    """
+    Build JavaScript-friendly configuration for client-side branching logic.
+
+    Returns a dictionary that will be JSON-serialized for the frontend:
+    {
+        "questions": [question_ids in order],
+        "conditions": {question_id: [conditions]},
+        "show_conditions": {question_id: [incoming SHOW conditions]}
+    }
+    """
+    config: dict[str, Any] = {
+        "questions": [],
+        "conditions": {},
+        "show_conditions": {}
+    }
+
+    for q in questions:
+        q_id = str(q.id)
+        config["questions"].append(q_id)
+
+        # Get outgoing conditions from this question
+        try:
+            conditions = list(q.conditions.all())
+        except Exception:
+            conditions = []
+
+        if conditions:
+            config["conditions"][q_id] = []
+            for cond in conditions:
+                cond_data = {
+                    "operator": cond.operator,
+                    "value": cond.value or "",
+                    "action": cond.action,
+                    "target_question": str(cond.target_question.id) if cond.target_question else None,
+                    "target_group": str(cond.target_group.id) if cond.target_group else None,
+                }
+                config["conditions"][q_id].append(cond_data)
+
+    # Build show_conditions map (incoming SHOW conditions)
+    for q in questions:
+        q_id = str(q.id)
+        try:
+            show_conditions = SurveyQuestionCondition.objects.filter(
+                target_question=q,
+                action=SurveyQuestionCondition.Action.SHOW
+            ).select_related('question')
+
+            if show_conditions.exists():
+                config["show_conditions"][q_id] = []
+                for cond in show_conditions:
+                    cond_data = {
+                        "source_question": str(cond.question.id),
+                        "operator": cond.operator,
+                        "value": cond.value or "",
+                    }
+                    config["show_conditions"][q_id].append(cond_data)
+        except Exception:
+            pass
+
+    return config
 
 
 def _prepare_question_rendering(

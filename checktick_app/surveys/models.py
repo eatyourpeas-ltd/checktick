@@ -1546,6 +1546,7 @@ class SurveyQuestionCondition(models.Model):
         JUMP_TO = "jump_to", "Jump to target"
         SHOW = "show", "Show target"
         SKIP = "skip", "Skip target"
+        END_SURVEY = "end_survey", "End survey"
 
     question = models.ForeignKey(
         SurveyQuestion, on_delete=models.CASCADE, related_name="conditions"
@@ -1587,6 +1588,7 @@ class SurveyQuestionCondition(models.Model):
                 condition=(
                     Q(target_question__isnull=False, target_group__isnull=True)
                     | Q(target_question__isnull=True, target_group__isnull=False)
+                    | Q(action="end_survey", target_question__isnull=True, target_group__isnull=True)
                 ),
                 name="surveyquestioncondition_single_target",
             )
@@ -1594,6 +1596,10 @@ class SurveyQuestionCondition(models.Model):
 
     def clean(self):  # pragma: no cover - validated via tests
         super().clean()
+
+        # END_SURVEY doesn't require a target
+        if self.action == self.Action.END_SURVEY:
+            return
 
         if bool(self.target_question) == bool(self.target_group):
             raise ValidationError(

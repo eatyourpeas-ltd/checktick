@@ -83,7 +83,7 @@
 
 {# Template dropdown moved below with HR and label per UX #}
 
-<form method="post" class="space-y-4 mt-6" data-survey-form data-survey-slug="{{ survey.slug }}">
+<form method="post" class="space-y-4 mt-6" data-survey-form data-survey-slug="{{ survey.slug }}" data-branching-config="{{ branching_config|escapejs }}">
   {% csrf_token %}
 
   {% for q in questions %}
@@ -102,8 +102,8 @@
         <div class="card-body pt-0">
     {% endif %}
 
-    {# Render question inside the group card #}
-    <div class="mb-4">
+    {# Render question inside the group card - wrapped for branching #}
+    <div class="mb-4" data-question-id="{{ q.id }}">
       <h2 class="font-semibold inline-flex items-center gap-2">
         {% include "components/icons/document.html" with classes="w-4 h-4 opacity-70" %}
         <span><span class="text-sm opacity-70 mr-2 select-none">{{ q.idx }}.</span> {{ q.text }} {% if q.required %}<span class="text-error">*</span>{% endif %}</span>
@@ -398,6 +398,8 @@
 {# Load professional fields script if we have group-level OR question-level professional details #}
 <script src="{% static 'js/professional-fields.js' %}"></script>
 <script src="{% static 'js/followup-fields.js' %}"></script>
+{# Load branching logic script #}
+<script src="{% static 'js/branching.js' %}"></script>
 
 <script nonce="{{ request.csp_nonce }}">
   // Update displayed value for Likert scale range sliders
