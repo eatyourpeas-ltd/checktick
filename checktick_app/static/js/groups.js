@@ -55,7 +55,7 @@
             window.showToast("Order saved", "success");
           }
           // Dispatch event to notify visualizer of group reordering
-          document.dispatchEvent(new CustomEvent('groupsReordered'));
+          document.dispatchEvent(new CustomEvent("groupsReordered"));
           return true;
         } else {
           console.error("Failed to save order");

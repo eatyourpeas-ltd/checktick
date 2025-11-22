@@ -5,9 +5,7 @@ from typing import Any
 from .models import SurveyQuestion, SurveyQuestionCondition
 
 
-def evaluate_condition(
-    condition: SurveyQuestionCondition, answer: Any
-) -> bool:
+def evaluate_condition(condition: SurveyQuestionCondition, answer: Any) -> bool:
     """
     Evaluate whether a condition is met based on the user's answer.
 
@@ -107,7 +105,7 @@ def get_visible_questions(
 
         # Load conditions for this question (should be prefetched)
         try:
-            conditions = list(question.conditions.all().order_by('order'))
+            conditions = list(question.conditions.all().order_by("order"))
         except Exception:
             conditions = []
 
@@ -128,7 +126,8 @@ def get_visible_questions(
                     if condition.target_question:
                         try:
                             target_idx = next(
-                                i for i, q in enumerate(all_questions)
+                                i
+                                for i, q in enumerate(all_questions)
                                 if q.id == condition.target_question.id
                             )
                             skip_until_idx = target_idx
@@ -163,7 +162,7 @@ def get_visible_questions(
 def should_show_question(
     question: SurveyQuestion,
     all_questions: list[SurveyQuestion],
-    answers: dict[str, Any]
+    answers: dict[str, Any],
 ) -> bool:
     """
     Determine if a specific question should be shown based on branching logic.
@@ -182,8 +181,7 @@ def should_show_question(
     # Check if there are any incoming SHOW conditions
     try:
         show_conditions = SurveyQuestionCondition.objects.filter(
-            target_question=question,
-            action=SurveyQuestionCondition.Action.SHOW
+            target_question=question, action=SurveyQuestionCondition.Action.SHOW
         )
 
         if not show_conditions.exists():

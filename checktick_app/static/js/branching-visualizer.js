@@ -45,18 +45,27 @@
     function resolveColors() {
       try {
         // Get the actual theme being used
-        const currentTheme = document.documentElement.getAttribute('data-theme') ||
-                           document.body.getAttribute('data-theme');
+        const currentTheme =
+          document.documentElement.getAttribute("data-theme") ||
+          document.body.getAttribute("data-theme");
 
         // Try to get colors from actual themed elements on the page
         // Look for alert-primary or other primary-colored elements
-        const primaryElement = document.querySelector('.alert-primary, .btn-primary, .bg-primary, [class*="primary"]');
-        const accentElement = document.querySelector('.alert-accent, .btn-accent, .bg-accent, [class*="accent"]');
+        const primaryElement = document.querySelector(
+          '.alert-primary, .btn-primary, .bg-primary, [class*="primary"]'
+        );
+        const accentElement = document.querySelector(
+          '.alert-accent, .btn-accent, .bg-accent, [class*="accent"]'
+        );
 
         if (primaryElement) {
           const primaryStyle = getComputedStyle(primaryElement);
           const bgColor = primaryStyle.backgroundColor;
-          if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+          if (
+            bgColor &&
+            bgColor !== "rgba(0, 0, 0, 0)" &&
+            bgColor !== "transparent"
+          ) {
             colors.primary = bgColor;
           }
         }
@@ -64,7 +73,11 @@
         if (accentElement) {
           const accentStyle = getComputedStyle(accentElement);
           const bgColor = accentStyle.backgroundColor;
-          if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+          if (
+            bgColor &&
+            bgColor !== "rgba(0, 0, 0, 0)" &&
+            bgColor !== "transparent"
+          ) {
             colors.accent = bgColor;
           }
         }
@@ -232,15 +245,18 @@
       // Draw group background regions
       groupRegions.forEach((group, index) => {
         // Alternate background shading
-        ctx.fillStyle = index % 2 === 0 ? 'rgba(128, 128, 128, 0.03)' : 'rgba(128, 128, 128, 0.06)';
+        ctx.fillStyle =
+          index % 2 === 0
+            ? "rgba(128, 128, 128, 0.03)"
+            : "rgba(128, 128, 128, 0.06)";
         ctx.fillRect(0, group.startY, canvas.width, group.endY - group.startY);
 
         // Draw group label
         if (group.name) {
-          ctx.fillStyle = 'rgba(128, 128, 128, 0.5)';
-          ctx.font = 'bold 11px sans-serif';
-          ctx.textAlign = 'right';
-          ctx.textBaseline = 'top';
+          ctx.fillStyle = "rgba(128, 128, 128, 0.5)";
+          ctx.font = "bold 11px sans-serif";
+          ctx.textAlign = "right";
+          ctx.textBaseline = "top";
           ctx.fillText(group.name, canvas.width - 10, group.startY + 5);
         }
       });
@@ -280,7 +296,14 @@
         const hasConditions = qConditions.length > 0;
 
         drawCircleNode(pos.x, pos.y, nodeRadius, hasConditions);
-        drawLabel(labelStartX, pos.y, q.text, hasConditions, qConditions, q.group_name);
+        drawLabel(
+          labelStartX,
+          pos.y,
+          q.text,
+          hasConditions,
+          qConditions,
+          q.group_name
+        );
       });
     }
 
@@ -299,9 +322,7 @@
 
     function drawLabel(x, y, text, hasConditions, nodeConditions, groupName) {
       // Draw text label to the right of the node
-      ctx.fillStyle = hasConditions
-        ? colors.primary
-        : colors.accent;
+      ctx.fillStyle = hasConditions ? colors.primary : colors.accent;
       ctx.font = hasConditions ? "bold 13px sans-serif" : "13px sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
@@ -339,7 +360,13 @@
         ctx.fillStyle = "rgba(128, 128, 128, 0.15)";
         ctx.beginPath();
         const radius = 3;
-        ctx.roundRect(x, badgeY - badgeHeight / 2, badgeWidth, badgeHeight, radius);
+        ctx.roundRect(
+          x,
+          badgeY - badgeHeight / 2,
+          badgeWidth,
+          badgeHeight,
+          radius
+        );
         ctx.fill();
 
         // Draw badge text
@@ -419,16 +446,16 @@
     loadData();
 
     // Listen for window resize to keep canvas responsive
-    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener("resize", resizeCanvas);
 
     // Listen for group reordering events to refresh the visualizer
-    document.addEventListener('groupsReordered', function() {
+    document.addEventListener("groupsReordered", function () {
       loadData();
     });
 
     // Also listen for htmx afterSwap events in case groups are added/removed
-    document.body.addEventListener('htmx:afterSwap', function(evt) {
-      if (evt.detail.target && evt.detail.target.id === 'groups-draggable') {
+    document.body.addEventListener("htmx:afterSwap", function (evt) {
+      if (evt.detail.target && evt.detail.target.id === "groups-draggable") {
         loadData();
       }
     });

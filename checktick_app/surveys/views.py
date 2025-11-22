@@ -887,9 +887,8 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
     # Mark questions that have SHOW conditions (should be hidden by default)
     questions_with_show_conditions = set(
         SurveyQuestionCondition.objects.filter(
-            target_question__survey=survey,
-            action=SurveyQuestionCondition.Action.SHOW
-        ).values_list('target_question_id', flat=True)
+            target_question__survey=survey, action=SurveyQuestionCondition.Action.SHOW
+        ).values_list("target_question_id", flat=True)
     )
 
     for i, q in enumerate(qs, start=1):
@@ -996,9 +995,8 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
     # Mark questions that have SHOW conditions (should be hidden by default)
     questions_with_show_conditions = set(
         SurveyQuestionCondition.objects.filter(
-            target_question__survey=survey,
-            action=SurveyQuestionCondition.Action.SHOW
-        ).values_list('target_question_id', flat=True)
+            target_question__survey=survey, action=SurveyQuestionCondition.Action.SHOW
+        ).values_list("target_question_id", flat=True)
     )
 
     for i, q in enumerate(qs, start=1):
@@ -1118,11 +1116,7 @@ def _build_branching_config(questions: list[SurveyQuestion]) -> dict[str, Any]:
         "show_conditions": {question_id: [incoming SHOW conditions]}
     }
     """
-    config: dict[str, Any] = {
-        "questions": [],
-        "conditions": {},
-        "show_conditions": {}
-    }
+    config: dict[str, Any] = {"questions": [], "conditions": {}, "show_conditions": {}}
 
     for q in questions:
         q_id = str(q.id)
@@ -1141,7 +1135,9 @@ def _build_branching_config(questions: list[SurveyQuestion]) -> dict[str, Any]:
                     "operator": cond.operator,
                     "value": cond.value or "",
                     "action": cond.action,
-                    "target_question": str(cond.target_question.id) if cond.target_question else None,
+                    "target_question": (
+                        str(cond.target_question.id) if cond.target_question else None
+                    ),
                 }
                 config["conditions"][q_id].append(cond_data)
 
@@ -1150,9 +1146,8 @@ def _build_branching_config(questions: list[SurveyQuestion]) -> dict[str, Any]:
         q_id = str(q.id)
         try:
             show_conditions = SurveyQuestionCondition.objects.filter(
-                target_question=q,
-                action=SurveyQuestionCondition.Action.SHOW
-            ).select_related('question')
+                target_question=q, action=SurveyQuestionCondition.Action.SHOW
+            ).select_related("question")
 
             if show_conditions.exists():
                 config["show_conditions"][q_id] = []
@@ -1169,7 +1164,9 @@ def _build_branching_config(questions: list[SurveyQuestion]) -> dict[str, Any]:
     return config
 
 
-def _order_questions_by_group(survey: Survey, questions: list[SurveyQuestion]) -> list[SurveyQuestion]:
+def _order_questions_by_group(
+    survey: Survey, questions: list[SurveyQuestion]
+) -> list[SurveyQuestion]:
     """Order questions by group position (from survey.style['group_order']), then by question.order within each group.
 
     This ensures that when groups are reordered via drag-and-drop, questions appear in the correct sequence
@@ -8109,13 +8106,11 @@ def branching_data_api(request: HttpRequest, slug: str) -> JsonResponse:
                     "operator": cond.operator,
                     "value": cond.value or "",
                     "action": cond.action,
-                    "target_question": str(cond.target_question.id)
-                    if cond.target_question
-                    else None,
+                    "target_question": (
+                        str(cond.target_question.id) if cond.target_question else None
+                    ),
                     "description": cond.description or "",
                 }
                 conditions_data[str(q.id)].append(cond_data)
 
-    return JsonResponse(
-        {"questions": questions_data, "conditions": conditions_data}
-    )
+    return JsonResponse({"questions": questions_data, "conditions": conditions_data})
