@@ -1712,52 +1712,27 @@ def _serialize_question_for_builder(
             if default_question_id is None and entry.get("id") is not None:
                 default_question_id = int(entry["id"])
 
-    target_groups: list[dict[str, Any]] = []
-    default_group_id: int | None = None
-    if all_groups:
-        for meta in all_groups:
-            entry = {
-                "id": meta.get("id"),
-                "label": meta.get("label") or f"Group {meta.get('id')}",
-            }
-            target_groups.append(entry)
-            if default_group_id is None and entry.get("id") is not None:
-                default_group_id = int(entry["id"])
-
     has_question_targets = bool(target_questions)
-    has_group_targets = bool(target_groups)
-    default_target_type = "question" if has_question_targets else "group"
-    if default_target_type == "group" and not has_group_targets:
-        default_target_type = "question"
 
     payload["condition_options"] = {
         "operators": operators_meta,
         "actions": actions_meta,
         "target_questions": target_questions,
-        "target_groups": target_groups,
         "has_question_targets": has_question_targets,
-        "has_group_targets": has_group_targets,
-        "default_target_type": default_target_type,
         "default_question_id": default_question_id,
-        "default_group_id": default_group_id,
-        "can_create": has_question_targets or has_group_targets,
+        "can_create": has_question_targets,
     }
 
     conditions_payload: list[dict[str, Any]] = []
     for cond in _load_conditions(question):
-        target_type = "group"
+        target_type = "question"
         target_label = ""
         target_id: int | None = None
         if cond.target_question is not None:
-            target_type = "question"
             target_id = cond.target_question.id
             target_label = (
                 cond.target_question.text or f"Question {target_id}"
             ).strip()
-        elif cond.target_group is not None:
-            target_type = "group"
-            target_id = cond.target_group.id
-            target_label = cond.target_group.name or f"Group {target_id}"
 
         if cond.operator in CONDITION_OPERATORS_REQUIRING_VALUE:
             comparison = cond.value or ""
@@ -5357,7 +5332,6 @@ def builder_question_condition_update(
             "value",
             "order",
             "target_question",
-            "target_group",
             "updated_at",
         ]
     )
@@ -6603,15 +6577,12 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                     branches = payload.get("branches") or []
                     for branch in branches:
                         target_question = None
-                        target_group = None
                         target_ref = branch.get("target_ref")
                         target_type = branch.get("target_type")
                         if target_type == "question":
                             target_question = question_ref_map.get(target_ref)
-                        elif target_type == "group":
-                            target_group = group_ref_map.get(target_ref)
 
-                        if not target_question and not target_group:
+                        if not target_question:
                             raise BulkParseError(
                                 f"Unable to resolve branch target '{target_ref}' for question '{question.text}'"
                             )
@@ -6621,7 +6592,6 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                             operator=branch.get("operator"),
                             value=branch.get("value", ""),
                             target_question=target_question,
-                            target_group=target_group,
                             action=SurveyQuestionCondition.Action.JUMP_TO,
                             order=branch.get("order", 0),
                             description=branch.get("description", ""),
@@ -6943,11 +6913,6 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                     lines.append(
                         f"{indent}? when {operator} {value} -> {{{target_ref}}}"
                     )
-                elif condition.target_group:
-                    target_ref = condition.target_group.name.lower().replace(" ", "-")
-                    lines.append(
-                        f"{indent}? when {operator} {value} -> {{{target_ref}}}"
-                    )
 
             lines.append("")
 
@@ -6962,7 +6927,7 @@ def _bulk_upload_example_md() -> str:
         "## Age* {patient-age}\n"
         "Age in years\n"
         "(text number)\n\n"
-        "? when greater_than 17 -> {follow-up}\n\n"
+        "? when greater_than 17 -> {follow-up-overall}\n\n"
         "## Gender* {patient-gender}\n"
         "Self-described gender\n"
         "(mc_single)\n"
@@ -8060,9 +8025,6 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                     .replace(" ", "-")
                     .strip("-")
                 )
-                lines.append(f"? when {operator} {value} -> {{{target_ref}}}")
-            elif condition.target_group:
-                target_ref = condition.target_group.name.lower().replace(" ", "-")
                 lines.append(f"? when {operator} {value} -> {{{target_ref}}}")
 
         lines.append("")
