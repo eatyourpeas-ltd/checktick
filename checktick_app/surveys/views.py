@@ -1178,9 +1178,6 @@ def _order_questions_by_group(survey: Survey, questions: list[SurveyQuestion]) -
     style = survey.style or {}
     group_order = style.get("group_order", [])
 
-    # Create group position lookup
-    group_position = {int(gid): idx for idx, gid in enumerate(group_order) if str(gid).isdigit()}
-
     # Separate questions by group
     grouped_questions: dict[int | None, list[SurveyQuestion]] = {}
     ungrouped_questions: list[SurveyQuestion] = []
