@@ -8,17 +8,9 @@
 document.addEventListener("DOMContentLoaded", function () {
   const datasetFields = document.querySelectorAll("[data-dataset-field]");
 
-  console.log(
-    `[Professional Fields] Found ${datasetFields.length} fields with dataset mapping`
-  );
-
   datasetFields.forEach(async function (select) {
     const datasetKey = select.dataset.datasetKey;
     const fieldKey = select.dataset.datasetField;
-
-    console.log(
-      `[Professional Fields] Processing field: ${fieldKey}, dataset: ${datasetKey}`
-    );
 
     if (!datasetKey) {
       console.warn(`No dataset key for field: ${fieldKey}`);
@@ -27,9 +19,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     try {
       // Fetch dataset options from API
-      console.log(
-        `[Professional Fields] Fetching /api/datasets/${datasetKey}/`
-      );
       const response = await fetch(`/api/datasets/${datasetKey}/`, {
         credentials: "same-origin",
       });
@@ -63,10 +52,6 @@ document.addEventListener("DOMContentLoaded", function () {
           select.appendChild(option);
           optionCount++;
         });
-
-        console.log(
-          `Loaded ${optionCount} options for ${fieldKey} from ${datasetKey}`
-        );
       } else {
         console.warn(`No options returned for ${datasetKey}`);
       }

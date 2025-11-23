@@ -880,8 +880,17 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         return redirect("surveys:detail", slug=slug)
 
     _prepare_question_rendering(survey)
-    # Prepare ordered questions and attach a global index for numbering in templates
-    qs = list(survey.questions.select_related("group").all())
+    # Prepare ordered questions by group position, then by question order within group
+    all_questions = list(survey.questions.select_related("group").all())
+    qs = _order_questions_by_group(survey, all_questions)
+
+    # Mark questions that have SHOW conditions (should be hidden by default)
+    questions_with_show_conditions = set(
+        SurveyQuestionCondition.objects.filter(
+            target_question__survey=survey, action=SurveyQuestionCondition.Action.SHOW
+        ).values_list("target_question_id", flat=True)
+    )
+
     for i, q in enumerate(qs, start=1):
         setattr(q, "idx", i)
         prev_gid = qs[i - 2].group_id if i - 2 >= 0 else None
@@ -889,6 +898,7 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         curr_gid = q.group_id
         setattr(q, "group_start", bool(curr_gid and curr_gid != prev_gid))
         setattr(q, "group_end", bool(curr_gid and curr_gid != next_gid))
+        setattr(q, "has_show_condition", q.id in questions_with_show_conditions)
     has_patient_template = any(
         getattr(q, "type", None) == SurveyQuestion.Types.TEMPLATE_PATIENT for q in qs
     )
@@ -909,9 +919,14 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "primary_hex": style.get("primary_color"),
         "font_css_url": style.get("font_css_url"),
     }
+
+    # Build branching configuration for client-side logic
+    branching_config = _build_branching_config(qs)
+
     ctx = {
         "survey": survey,
         "questions": qs,
+        "branching_config": json.dumps(branching_config),
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
         "demographic_defs": DEMOGRAPHIC_FIELD_DEFS,
@@ -974,7 +989,16 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
 
     # Render the same detail template in preview mode
     _prepare_question_rendering(survey)
-    qs = list(survey.questions.select_related("group").all())
+    all_questions = list(survey.questions.select_related("group").all())
+    qs = _order_questions_by_group(survey, all_questions)
+
+    # Mark questions that have SHOW conditions (should be hidden by default)
+    questions_with_show_conditions = set(
+        SurveyQuestionCondition.objects.filter(
+            target_question__survey=survey, action=SurveyQuestionCondition.Action.SHOW
+        ).values_list("target_question_id", flat=True)
+    )
+
     for i, q in enumerate(qs, start=1):
         setattr(q, "idx", i)
         prev_gid = qs[i - 2].group_id if i - 2 >= 0 else None
@@ -982,6 +1006,7 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         curr_gid = q.group_id
         setattr(q, "group_start", bool(curr_gid and curr_gid != prev_gid))
         setattr(q, "group_end", bool(curr_gid and curr_gid != next_gid))
+        setattr(q, "has_show_condition", q.id in questions_with_show_conditions)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
     prof_group, professional_fields, professional_ods = (
         _get_professional_group_and_fields(survey)
@@ -998,9 +1023,14 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "primary_hex": style.get("primary_color"),
         "font_css_url": style.get("font_css_url"),
     }
+
+    # Build branching configuration for client-side logic
+    branching_config = _build_branching_config(qs)
+
     ctx = {
         "survey": survey,
         "questions": qs,
+        "branching_config": json.dumps(branching_config),
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
         "demographic_defs": DEMOGRAPHIC_FIELD_DEFS,
@@ -1057,7 +1087,6 @@ def _prefetch_conditions(
     try:
         return qs.prefetch_related(
             "conditions__target_question",
-            "conditions__target_group",
         )
     except DatabaseError as exc:  # pragma: no cover - exercised via tests
         logger.warning("Skipping condition prefetch due to database error: %s", exc)
@@ -1074,6 +1103,111 @@ def _load_conditions(question: SurveyQuestion) -> list[SurveyQuestionCondition]:
             exc,
         )
         return []
+
+
+def _build_branching_config(questions: list[SurveyQuestion]) -> dict[str, Any]:
+    """
+    Build JavaScript-friendly configuration for client-side branching logic.
+
+    Returns a dictionary that will be JSON-serialized for the frontend:
+    {
+        "questions": [question_ids in order],
+        "conditions": {question_id: [conditions]},
+        "show_conditions": {question_id: [incoming SHOW conditions]}
+    }
+    """
+    config: dict[str, Any] = {"questions": [], "conditions": {}, "show_conditions": {}}
+
+    for q in questions:
+        q_id = str(q.id)
+        config["questions"].append(q_id)
+
+        # Get outgoing conditions from this question
+        try:
+            conditions = list(q.conditions.all())
+        except Exception:
+            conditions = []
+
+        if conditions:
+            config["conditions"][q_id] = []
+            for cond in conditions:
+                cond_data = {
+                    "operator": cond.operator,
+                    "value": cond.value or "",
+                    "action": cond.action,
+                    "target_question": (
+                        str(cond.target_question.id) if cond.target_question else None
+                    ),
+                }
+                config["conditions"][q_id].append(cond_data)
+
+    # Build show_conditions map (incoming SHOW conditions)
+    for q in questions:
+        q_id = str(q.id)
+        try:
+            show_conditions = SurveyQuestionCondition.objects.filter(
+                target_question=q, action=SurveyQuestionCondition.Action.SHOW
+            ).select_related("question")
+
+            if show_conditions.exists():
+                config["show_conditions"][q_id] = []
+                for cond in show_conditions:
+                    cond_data = {
+                        "source_question": str(cond.question.id),
+                        "operator": cond.operator,
+                        "value": cond.value or "",
+                    }
+                    config["show_conditions"][q_id].append(cond_data)
+        except Exception:
+            pass
+
+    return config
+
+
+def _order_questions_by_group(
+    survey: Survey, questions: list[SurveyQuestion]
+) -> list[SurveyQuestion]:
+    """Order questions by group position (from survey.style['group_order']), then by question.order within each group.
+
+    This ensures that when groups are reordered via drag-and-drop, questions appear in the correct sequence
+    without breaking question-to-question branching logic.
+    """
+    style = survey.style or {}
+    group_order = style.get("group_order", [])
+
+    # Separate questions by group
+    grouped_questions: dict[int | None, list[SurveyQuestion]] = {}
+    ungrouped_questions: list[SurveyQuestion] = []
+
+    for q in questions:
+        if q.group_id:
+            grouped_questions.setdefault(q.group_id, []).append(q)
+        else:
+            ungrouped_questions.append(q)
+
+    # Sort questions within each group by their order field
+    for group_id in grouped_questions:
+        grouped_questions[group_id].sort(key=lambda q: (q.order, q.id))
+
+    # Build final ordered list
+    ordered = []
+
+    # Add groups in their specified order
+    for gid in group_order:
+        gid = int(gid) if str(gid).isdigit() else None
+        if gid and gid in grouped_questions:
+            ordered.extend(grouped_questions[gid])
+            del grouped_questions[gid]
+
+    # Add any remaining groups not in group_order (sorted by group_id)
+    for gid in sorted(grouped_questions.keys()):
+        ordered.extend(grouped_questions[gid])
+
+    # Add ungrouped questions at the end, sorted by order
+    ungrouped_questions.sort(key=lambda q: (q.order, q.id))
+    ordered.extend(ungrouped_questions)
+
+    return ordered
 
 
 def _prepare_question_rendering(
@@ -1352,11 +1486,12 @@ def _build_condition_payload(
         order = next_order
 
     target_question: SurveyQuestion | None = None
-    target_group: QuestionGroup | None = None
     target_question_raw = data.get("target_question")
-    target_group_raw = data.get("target_group")
 
-    if target_question_raw:
+    # Allow END_SURVEY without target
+    if action == "end_survey":
+        target_question = None
+    elif target_question_raw:
         target_question_id = _safe_int(target_question_raw)
         if target_question_id is None:
             raise ValidationError({"target_question": "Invalid target question."})
@@ -1368,32 +1503,12 @@ def _build_condition_payload(
             raise ValidationError(
                 {"target_question": "Target question must belong to this survey."}
             ) from exc
-
-    if target_group_raw:
-        target_group_id = _safe_int(target_group_raw)
-        if target_group_id is None:
-            raise ValidationError({"target_group": "Invalid target group."})
-        target_group = survey.question_groups.filter(id=target_group_id).first()
-        if target_group is None:
-            raise ValidationError(
-                {"target_group": "Target group must belong to this survey."}
-            )
-
-    if not target_question and not target_group:
-        if instance:
-            target_question = instance.target_question
-            target_group = instance.target_group
-        else:
-            raise ValidationError(
-                {
-                    "target": "Provide either target_question or target_group for this condition.",
-                }
-            )
-
-    if target_question and target_group:
+    elif instance:
+        target_question = instance.target_question
+    else:
         raise ValidationError(
             {
-                "target": "Specify exactly one of target_question or target_group.",
+                "target_question": "Target question is required (unless action is END_SURVEY).",
             }
         )
 
@@ -1404,7 +1519,6 @@ def _build_condition_payload(
         "value": value or "",
         "order": order,
         "target_question": target_question,
-        "target_group": target_group,
     }
 
 
@@ -1598,52 +1712,27 @@ def _serialize_question_for_builder(
             if default_question_id is None and entry.get("id") is not None:
                 default_question_id = int(entry["id"])
 
-    target_groups: list[dict[str, Any]] = []
-    default_group_id: int | None = None
-    if all_groups:
-        for meta in all_groups:
-            entry = {
-                "id": meta.get("id"),
-                "label": meta.get("label") or f"Group {meta.get('id')}",
-            }
-            target_groups.append(entry)
-            if default_group_id is None and entry.get("id") is not None:
-                default_group_id = int(entry["id"])
-
     has_question_targets = bool(target_questions)
-    has_group_targets = bool(target_groups)
-    default_target_type = "question" if has_question_targets else "group"
-    if default_target_type == "group" and not has_group_targets:
-        default_target_type = "question"
 
     payload["condition_options"] = {
         "operators": operators_meta,
         "actions": actions_meta,
         "target_questions": target_questions,
-        "target_groups": target_groups,
         "has_question_targets": has_question_targets,
-        "has_group_targets": has_group_targets,
-        "default_target_type": default_target_type,
         "default_question_id": default_question_id,
-        "default_group_id": default_group_id,
-        "can_create": has_question_targets or has_group_targets,
+        "can_create": has_question_targets,
     }
 
     conditions_payload: list[dict[str, Any]] = []
     for cond in _load_conditions(question):
-        target_type = "group"
+        target_type = "question"
         target_label = ""
         target_id: int | None = None
         if cond.target_question is not None:
-            target_type = "question"
             target_id = cond.target_question.id
             target_label = (
                 cond.target_question.text or f"Question {target_id}"
             ).strip()
-        elif cond.target_group is not None:
-            target_type = "group"
-            target_id = cond.target_group.id
-            target_label = cond.target_group.name or f"Group {target_id}"
 
         if cond.operator in CONDITION_OPERATORS_REQUIRING_VALUE:
             comparison = cond.value or ""
@@ -5243,7 +5332,6 @@ def builder_question_condition_update(
             "value",
             "order",
             "target_question",
-            "target_group",
             "updated_at",
         ]
     )
@@ -6489,15 +6577,12 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                     branches = payload.get("branches") or []
                     for branch in branches:
                         target_question = None
-                        target_group = None
                         target_ref = branch.get("target_ref")
                         target_type = branch.get("target_type")
                         if target_type == "question":
                             target_question = question_ref_map.get(target_ref)
-                        elif target_type == "group":
-                            target_group = group_ref_map.get(target_ref)
 
-                        if not target_question and not target_group:
+                        if not target_question:
                             raise BulkParseError(
                                 f"Unable to resolve branch target '{target_ref}' for question '{question.text}'"
                             )
@@ -6507,7 +6592,6 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                             operator=branch.get("operator"),
                             value=branch.get("value", ""),
                             target_question=target_question,
-                            target_group=target_group,
                             action=SurveyQuestionCondition.Action.JUMP_TO,
                             order=branch.get("order", 0),
                             description=branch.get("description", ""),
@@ -6829,11 +6913,6 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                     lines.append(
                         f"{indent}? when {operator} {value} -> {{{target_ref}}}"
                     )
-                elif condition.target_group:
-                    target_ref = condition.target_group.name.lower().replace(" ", "-")
-                    lines.append(
-                        f"{indent}? when {operator} {value} -> {{{target_ref}}}"
-                    )
 
             lines.append("")
 
@@ -6848,7 +6927,7 @@ def _bulk_upload_example_md() -> str:
         "## Age* {patient-age}\n"
         "Age in years\n"
         "(text number)\n\n"
-        "? when greater_than 17 -> {follow-up}\n\n"
+        "? when greater_than 17 -> {follow-up-overall}\n\n"
         "## Gender* {patient-gender}\n"
         "Self-described gender\n"
         "(mc_single)\n"
@@ -7947,10 +8026,84 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                     .strip("-")
                 )
                 lines.append(f"? when {operator} {value} -> {{{target_ref}}}")
-            elif condition.target_group:
-                target_ref = condition.target_group.name.lower().replace(" ", "-")
-                lines.append(f"? when {operator} {value} -> {{{target_ref}}}")
 
         lines.append("")
 
     return "\n".join(lines)
+
+
+@login_required
+def branching_data_api(request: HttpRequest, slug: str) -> JsonResponse:
+    """
+    API endpoint to provide branching visualization data.
+    Returns all questions and their conditions for the survey.
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_view(request.user, survey)
+
+    # Get all questions ordered properly
+    questions_qs = survey.questions.select_related("group").prefetch_related(
+        "conditions", "conditions__target_question"
+    )
+    ordered_questions = _order_questions_by_group(survey, list(questions_qs))
+
+    # Get repeat information for groups
+    group_repeat_map: dict[int, list[CollectionDefinition]] = {}
+    for item in CollectionItem.objects.select_related("collection", "group").filter(
+        collection__survey=survey, group__isnull=False
+    ):
+        group_repeat_map.setdefault(item.group_id, []).append(item.collection)
+
+    # Build group repeat info with max counts
+    group_repeats: dict[str, dict] = {}
+    for group_id, collections in group_repeat_map.items():
+        max_counts = []
+        for c in collections:
+            if c.max_count and int(c.max_count) > 0:
+                max_counts.append(int(c.max_count))
+
+        if max_counts:
+            # Use the first max_count if there are multiple collections
+            group_repeats[str(group_id)] = {"is_repeated": True, "count": max_counts[0]}
+        else:
+            group_repeats[str(group_id)] = {
+                "is_repeated": True,
+                "count": None,  # Unlimited
+            }
+
+    questions_data = []
+    conditions_data = {}
+
+    for index, q in enumerate(ordered_questions):
+        question_data = {
+            "id": str(q.id),
+            "text": q.text,
+            "order": index,
+            "group_name": q.group.name if q.group else None,
+            "group_id": str(q.group.id) if q.group else None,
+        }
+        questions_data.append(question_data)
+
+        # Get conditions for this question
+        conditions = list(q.conditions.all())
+        if conditions:
+            conditions_data[str(q.id)] = []
+            for cond in conditions:
+                cond_data = {
+                    "operator": cond.operator,
+                    "value": cond.value or "",
+                    "action": cond.action,
+                    "target_question": (
+                        str(cond.target_question.id) if cond.target_question else None
+                    ),
+                    "description": cond.description or "",
+                }
+                conditions_data[str(q.id)].append(cond_data)
+
+    return JsonResponse(
+        {
+            "questions": questions_data,
+            "conditions": conditions_data,
+            "group_repeats": group_repeats,
+        }
+    )

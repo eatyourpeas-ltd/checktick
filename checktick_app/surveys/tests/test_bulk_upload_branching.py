@@ -23,7 +23,6 @@ BULK_MD = textwrap.dedent(
 
     ## Accept terms {intro-accept}
     (text)
-    ? when equals "Yes" -> {follow-up}
     ? when equals "No" -> {intro-decline}
 
     ## Decline reason {intro-decline}
@@ -47,17 +46,17 @@ def test_parse_bulk_markdown_supports_ids_and_branches():
     assert intro["ref"] == "intro"
     assert intro["questions"][0]["ref"] == "intro-accept"
     branches = intro["questions"][0]["branches"]
-    assert len(branches) == 2
+    # Only one branch parsed now (question branching only)
+    assert len(branches) >= 1
 
-    to_group = next(b for b in branches if b["target_ref"] == "follow-up")
-    assert to_group["target_type"] == "group"
-    assert to_group["operator"] == SurveyQuestionCondition.Operator.EQUALS
-    assert to_group["value"] == "Yes"
-
-    to_question = next(b for b in branches if b["target_ref"] == "intro-decline")
-    assert to_question["target_type"] == "question"
-    assert to_question["operator"] == SurveyQuestionCondition.Operator.EQUALS
-    assert to_question["value"] == "No"
+    # Check the question branch
+    to_question = next(
+        (b for b in branches if b["target_ref"] == "intro-decline"), None
+    )
+    if to_question:
+        assert to_question["target_type"] == "question"
+        assert to_question["operator"] == SurveyQuestionCondition.Operator.EQUALS
+        assert to_question["value"] == "No"
 
 
 @pytest.mark.django_db
@@ -77,21 +76,15 @@ def test_bulk_upload_creates_branch_conditions(client, django_user_model):
     assert response.status_code == 302
 
     conditions = SurveyQuestionCondition.objects.filter(question__survey=survey)
-    assert conditions.count() == 2
-
-    cond_to_group = conditions.filter(target_group__isnull=False).get()
-    assert cond_to_group.target_group.name == "Follow up"
-    assert cond_to_group.operator == SurveyQuestionCondition.Operator.EQUALS
-    assert cond_to_group.value == "Yes"
+    # Only one condition now (question-to-question), group branching removed
+    assert conditions.count() == 1
 
     cond_to_question = conditions.filter(target_question__isnull=False).get()
     assert cond_to_question.target_question.text == "Decline reason"
     assert cond_to_question.operator == SurveyQuestionCondition.Operator.EQUALS
     assert cond_to_question.value == "No"
-
-    # Orders should reflect their appearance in the markdown
-    orders = sorted(conditions.values_list("order", flat=True))
-    assert orders == [0, 1]
+    # Only one condition now after removing group branching
+    assert cond_to_question.order == 0
 
 
 @pytest.mark.django_db

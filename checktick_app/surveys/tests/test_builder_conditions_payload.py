@@ -83,14 +83,12 @@ def test_prepare_question_rendering_includes_condition_metadata(
     assert condition_payload["target"]["id"] == target.id
     assert condition_payload["target"]["type"] == "question"
     assert condition_payload["requires_value"] is True
-    assert "Jump to" in condition_payload["summary"]
+    assert "Skip ahead to question" in condition_payload["summary"]
 
     options = payload["condition_options"]
     assert options["has_question_targets"] is True
     question_ids = {entry["id"] for entry in options["target_questions"]}
     assert target.id in question_ids
-    assert options["has_group_targets"] is True
-    assert options["default_target_type"] == "question"
 
 
 @pytest.mark.django_db
@@ -108,10 +106,7 @@ def test_condition_options_default_to_group_when_no_other_questions(
     options = payload["condition_options"]
 
     assert options["has_question_targets"] is False
-    assert options["has_group_targets"] is True
-    assert options["default_target_type"] == "group"
-    group_ids = {entry["id"] for entry in options["target_groups"]}
-    assert group_secondary.id in group_ids
+    assert options["can_create"] is False
 
 
 @pytest.mark.django_db

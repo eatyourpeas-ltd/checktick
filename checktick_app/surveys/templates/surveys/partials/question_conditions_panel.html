@@ -39,29 +39,37 @@
                 </div>
 
                 <label class="label text-xs mt-3">Action</label>
-                <select name="action" class="select select-bordered w-full">
+                <select name="action" class="select select-bordered w-full condition-action-select" data-condition-action>
                   {% for action in opts.actions %}
                     <option value="{{ action.value }}">{{ action.label }}</option>
                   {% endfor %}
                 </select>
 
-                <fieldset class="mt-3">
-                  <legend class="label text-xs">Target</legend>
-                  <div class="flex flex-wrap gap-3">
-                    <label class="flex items-center gap-2 text-xs">
-                      <input type="radio" name="target_selector" value="question" class="radio radio-primary" {% if not opts.has_question_targets %}disabled{% endif %} {% if opts.default_target_type == 'question' %}checked{% endif %} />
-                      <span>Question</span>
-                    </label>
-                    <label class="flex items-center gap-2 text-xs">
-                      <input type="radio" name="target_selector" value="group" class="radio radio-primary" {% if not opts.has_group_targets %}disabled{% endif %} {% if opts.default_target_type == 'group' %}checked{% endif %} />
-                      <span>Group</span>
-                    </label>
+                <!-- Dynamic help text that changes based on selected action -->
+                <div class="action-help alert alert-info text-xs mt-2 p-3">
+                  <div data-action="show" class="hidden">
+                    <strong>▶ Show:</strong> The target question will be <strong>hidden by default</strong>
+                    and only appear when this condition is true.
+                    <br><em class="text-gray-600">Use for: "Show follow-up question when..."</em>
                   </div>
-                </fieldset>
+                  <div data-action="jump_to" class="hidden">
+                    <strong>⏩ Skip ahead:</strong> When condition is true, skip all questions between
+                    this one and the target.
+                    <br><em class="text-gray-600">Use for: "If answered No, jump to end"</em>
+                  </div>
+                  <div data-action="skip" class="hidden">
+                    <strong>✕ Hide:</strong> When condition is true, the target question will be hidden.
+                    <br><em class="text-gray-600">Use for: "Don't show Q5 if Q3 = Yes"</em>
+                  </div>
+                  <div data-action="end_survey" class="hidden">
+                    <strong>■ End survey:</strong> Stop the survey immediately when condition is true.
+                    <br><em class="text-gray-600">Use for: "End survey if not applicable"</em>
+                  </div>
+                </div>
 
-                <div class="mt-2{% if opts.default_target_type != 'question' %} hidden{% endif %}" data-target-wrapper="question">
+                <div class="mt-3" data-target-fieldset>
                   <label class="label text-xs">Target question</label>
-                  <select name="target_question" class="select select-bordered w-full" data-target-select="question" {% if opts.default_target_type != 'question' %}disabled{% endif %}>
+                  <select name="target_question" class="select select-bordered w-full" data-target-select="question" data-condition-target>
                     {% if not opts.has_question_targets %}
                       <option value="">No available questions</option>
                     {% else %}
@@ -70,20 +78,15 @@
                       {% endfor %}
                     {% endif %}
                   </select>
+                  <div class="text-xs text-gray-500 mt-1">
+                    Note: END_SURVEY action does not require a target question
+                  </div>
                 </div>
 
-                <div class="mt-2{% if opts.default_target_type != 'group' %} hidden{% endif %}" data-target-wrapper="group">
-                  <label class="label text-xs">Target group</label>
-                  <select name="target_group" class="select select-bordered w-full" data-target-select="group" {% if opts.default_target_type != 'group' %}disabled{% endif %}>
-                    {% if not opts.has_group_targets %}
-                      <option value="">No available groups</option>
-                    {% else %}
-                      <option value="">Choose a group…</option>
-                      {% for tg in opts.target_groups %}
-                        <option value="{{ tg.id }}"{% if tg.id == opts.default_group_id %} selected{% endif %}>{{ tg.label }}</option>
-                      {% endfor %}
-                    {% endif %}
-                  </select>
+                <!-- Live preview showing what the condition will do -->
+                <div class="bg-base-200 p-3 rounded mt-3 condition-preview">
+                  <strong class="text-xs">This condition will:</strong>
+                  <p class="text-sm mt-1 condition-preview-text"></p>
                 </div>
 
                 <div class="mt-3 flex justify-end">
@@ -130,56 +133,62 @@
                           </div>
 
                           <label class="label text-xs mt-3">Action</label>
-                          <select name="action" class="select select-bordered w-full">
+                          <select name="action" class="select select-bordered w-full condition-action-select" data-condition-action>
                             {% for action in opts.actions %}
                               <option value="{{ action.value }}"{% if action.value == cond.action %} selected{% endif %}>{{ action.label }}</option>
                             {% endfor %}
                           </select>
 
-                          <fieldset class="mt-3">
-                            <legend class="label text-xs">Target</legend>
-                            <div class="flex flex-wrap gap-3">
-                              <label class="flex items-center gap-2 text-xs">
-                                <input type="radio" name="target_selector" value="question" class="radio radio-primary" {% if cond.target.type == 'question' %}checked{% endif %} {% if not opts.has_question_targets %}disabled{% endif %} />
-                                <span>Question</span>
-                              </label>
-                              <label class="flex items-center gap-2 text-xs">
-                                <input type="radio" name="target_selector" value="group" class="radio radio-primary" {% if cond.target.type == 'group' %}checked{% endif %} {% if not opts.has_group_targets %}disabled{% endif %} />
-                                <span>Group</span>
-                              </label>
+                          <!-- Dynamic help text that changes based on selected action -->
+                          <div class="action-help alert alert-info text-xs mt-2 p-3">
+                            <div data-action="show" class="hidden">
+                              <strong>▶ Show:</strong> The target question will be <strong>hidden by default</strong>
+                              and only appear when this condition is true.
+                              <br><em class="text-gray-600">Use for: "Show follow-up question when..."</em>
                             </div>
-                          </fieldset>
+                            <div data-action="jump_to" class="hidden">
+                              <strong>⏩ Skip ahead:</strong> When condition is true, skip all questions between
+                              this one and the target.
+                              <br><em class="text-gray-600">Use for: "If answered No, jump to end"</em>
+                            </div>
+                            <div data-action="skip" class="hidden">
+                              <strong>✕ Hide:</strong> When condition is true, the target question will be hidden.
+                              <br><em class="text-gray-600">Use for: "Don't show Q5 if Q3 = Yes"</em>
+                            </div>
+                            <div data-action="end_survey" class="hidden">
+                              <strong>■ End survey:</strong> Stop the survey immediately when condition is true.
+                              <br><em class="text-gray-600">Use for: "End survey if not applicable"</em>
+                            </div>
+                          </div>
 
-                          <div class="mt-2{% if cond.target.type != 'question' %} hidden{% endif %}" data-target-wrapper="question">
+                          <div class="mt-3" data-target-fieldset>
                             <label class="label text-xs">Target question</label>
-                            <select name="target_question" class="select select-bordered w-full" data-target-select="question" {% if cond.target.type != 'question' %}disabled{% endif %}>
+                            <select name="target_question" class="select select-bordered w-full" data-target-select="question" data-condition-target>
                               {% if not opts.has_question_targets %}
                                 <option value="">No available questions</option>
                               {% else %}
                                 {% for tq in opts.target_questions %}
-                                  <option value="{{ tq.id }}"{% if cond.target.type == 'question' and tq.id == cond.target.id %} selected{% endif %}>{{ tq.label }}</option>
+                                  <option value="{{ tq.id }}"{% if cond.target_question_id == tq.id %} selected{% endif %}>{{ tq.label }}</option>
                                 {% endfor %}
                               {% endif %}
                             </select>
+                            <div class="text-xs text-gray-500 mt-1">
+                              Note: END_SURVEY action does not require a target question
+                            </div>
                           </div>
 
-                          <div class="mt-2{% if cond.target.type != 'group' %} hidden{% endif %}" data-target-wrapper="group">
-                            <label class="label text-xs">Target group</label>
-                            <select name="target_group" class="select select-bordered w-full" data-target-select="group" {% if cond.target.type != 'group' %}disabled{% endif %}>
-                              {% if not opts.has_group_targets %}
-                                <option value="">No available groups</option>
-                              {% else %}
-                                <option value="">Choose a group…</option>
-                                {% for tg in opts.target_groups %}
-                                  <option value="{{ tg.id }}"{% if cond.target.type == 'group' and tg.id == cond.target.id %} selected{% endif %}>{{ tg.label }}</option>
-                                {% endfor %}
-                              {% endif %}
-                            </select>
+                          <!-- Live preview showing what the condition will do -->
+                          <div class="bg-base-200 p-3 rounded mt-3 condition-preview">
+                            <strong class="text-xs">This condition will:</strong>
+                            <p class="text-sm mt-1 condition-preview-text"></p>
                           </div>
 
                           <div class="mt-2">
-                            <label class="label text-xs">Order</label>
+                            <label class="label text-xs whitespace-nowrap">Evaluation order</label>
                             <input type="number" name="order" class="input input-bordered w-full" value="{{ cond.order }}" min="0" />
+                            <div class="text-xs text-gray-500 mt-1">
+                              When multiple conditions exist, lower numbers are evaluated first
+                            </div>
                           </div>
 
                           <div class="mt-3 flex justify-end gap-2">
@@ -207,3 +216,74 @@
     {% endwith %}
   {% endif %}
 {% endwith %}
+
+<script>
+// Show contextual help for selected action and update preview
+function setupConditionForm(form) {
+  const actionSelect = form.querySelector('[data-condition-action]');
+  const operatorSelect = form.querySelector('[data-condition-operator]');
+  const valueInput = form.querySelector('[name="value"]');
+  const targetSelect = form.querySelector('[data-condition-target]');
+  const helpContainer = form.querySelector('.action-help');
+  const previewText = form.querySelector('.condition-preview-text');
+
+  if (!actionSelect || !helpContainer) return;
+
+  function updateHelp() {
+    const selectedAction = actionSelect.value;
+    helpContainer.querySelectorAll('[data-action]').forEach(el => {
+      el.classList.add('hidden');
+    });
+    const helpDiv = helpContainer.querySelector('[data-action="' + selectedAction + '"]');
+    if (helpDiv) {
+      helpDiv.classList.remove('hidden');
+    }
+  }
+
+  function updatePreview() {
+    if (!previewText) return;
+
+    const operatorText = operatorSelect?.selectedOptions[0]?.text || '';
+    const value = valueInput?.value || '';
+    const action = actionSelect.value;
+    const targetText = targetSelect?.selectedOptions[0]?.text || '';
+
+    let preview = '';
+    if (action === 'show') {
+      preview = 'Hide "' + targetText + '" by default. Only show it when this question ' + operatorText.toLowerCase() + (value ? ' "' + value + '"' : '');
+    } else if (action === 'jump_to') {
+      preview = 'When this question ' + operatorText.toLowerCase() + (value ? ' "' + value + '"' : '') + ', skip ahead to "' + targetText + '"';
+    } else if (action === 'skip') {
+      preview = 'When this question ' + operatorText.toLowerCase() + (value ? ' "' + value + '"' : '') + ', hide "' + targetText + '"';
+    } else if (action === 'end_survey') {
+      preview = 'When this question ' + operatorText.toLowerCase() + (value ? ' "' + value + '"' : '') + ', end the survey';
+    }
+
+    previewText.textContent = preview;
+  }
+
+  actionSelect.addEventListener('change', function() {
+    updateHelp();
+    updatePreview();
+  });
+
+  // Update preview on any field change
+  if (operatorSelect) operatorSelect.addEventListener('change', updatePreview);
+  if (valueInput) valueInput.addEventListener('input', updatePreview);
+  if (targetSelect) targetSelect.addEventListener('change', updatePreview);
+
+  // Show initial state
+  updateHelp();
+  updatePreview();
+}
+
+// Setup all condition forms on page load
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('[data-condition-form]').forEach(setupConditionForm);
+});
+
+// Setup newly added forms (after HTMX updates)
+document.body.addEventListener('htmx:afterSettle', function(event) {
+  event.detail.elt.querySelectorAll('[data-condition-form]').forEach(setupConditionForm);
+});
+</script>

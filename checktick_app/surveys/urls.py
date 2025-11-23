@@ -172,6 +172,12 @@ urlpatterns = [
         name="organization_key_recovery",
     ),
     path("<slug:slug>/export.csv", views.survey_export_csv, name="export_csv"),
+    # Branching visualization API
+    path(
+        "<slug:slug>/builder/api/branching-data/",
+        views.branching_data_api,
+        name="branching_data_api",
+    ),
     # Group question management (per-group)
     path(
         "<slug:slug>/builder/groups/<int:gid>/",

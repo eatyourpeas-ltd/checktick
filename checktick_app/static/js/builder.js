@@ -97,17 +97,11 @@
       const operatorSelect = form.querySelector("[data-condition-operator]");
       const valueWrapper = form.querySelector("[data-condition-value]");
       const valueInput = form.querySelector('input[name="value"]');
-      const targetRadios = form.querySelectorAll(
-        'input[name="target_selector"]'
-      );
-      const questionWrapper = form.querySelector(
-        '[data-target-wrapper="question"]'
-      );
-      const groupWrapper = form.querySelector('[data-target-wrapper="group"]');
+      const actionSelect = form.querySelector('select[name="action"]');
+      const targetFieldset = form.querySelector("[data-target-fieldset]");
       const questionSelect = form.querySelector(
         '[data-target-select="question"]'
       );
-      const groupSelect = form.querySelector('[data-target-select="group"]');
 
       const toggleValueField = () => {
         if (!operatorSelect) return;
@@ -124,34 +118,24 @@
       };
 
       const toggleTargetFields = () => {
-        let selected = "question";
-        targetRadios.forEach((radio) => {
-          if (radio.checked) selected = radio.value;
-        });
+        // Check if END_SURVEY is selected - hide target field
+        const isEndSurvey = actionSelect && actionSelect.value === "end_survey";
 
-        const enableQuestion = selected === "question";
-        const enableGroup = selected === "group";
+        if (targetFieldset) {
+          targetFieldset.classList.toggle("hidden", isEndSurvey);
+        }
 
-        if (questionWrapper) {
-          questionWrapper.classList.toggle("hidden", !enableQuestion);
-        }
-        if (groupWrapper) {
-          groupWrapper.classList.toggle("hidden", !enableGroup);
-        }
         if (questionSelect) {
-          questionSelect.disabled = !enableQuestion;
-        }
-        if (groupSelect) {
-          groupSelect.disabled = !enableGroup;
+          questionSelect.disabled = isEndSurvey;
         }
       };
 
       if (operatorSelect) {
         operatorSelect.addEventListener("change", toggleValueField);
       }
-      targetRadios.forEach((radio) => {
-        radio.addEventListener("change", toggleTargetFields);
-      });
+      if (actionSelect) {
+        actionSelect.addEventListener("change", toggleTargetFields);
+      }
 
       toggleValueField();
       toggleTargetFields();

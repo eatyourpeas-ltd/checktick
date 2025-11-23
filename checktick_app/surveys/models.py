@@ -903,7 +903,6 @@ class Survey(models.Model):
                         operator=condition.operator,
                         value=condition.value,
                         target_question=target,
-                        target_group=condition.target_group,
                         action=condition.action,
                         order=condition.order,
                         description=condition.description,
@@ -1543,9 +1542,10 @@ class SurveyQuestionCondition(models.Model):
         NOT_EXISTS = "not_exists", "Answer missing"
 
     class Action(models.TextChoices):
-        JUMP_TO = "jump_to", "Jump to target"
-        SHOW = "show", "Show target"
-        SKIP = "skip", "Skip target"
+        SHOW = "show", "Show when condition met (hidden by default)"
+        JUMP_TO = "jump_to", "Skip ahead to question"
+        SKIP = "skip", "Hide when condition met"
+        END_SURVEY = "end_survey", "End survey"
 
     question = models.ForeignKey(
         SurveyQuestion, on_delete=models.CASCADE, related_name="conditions"
@@ -1565,13 +1565,6 @@ class SurveyQuestionCondition(models.Model):
         on_delete=models.CASCADE,
         related_name="incoming_conditions",
     )
-    target_group = models.ForeignKey(
-        QuestionGroup,
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE,
-        related_name="incoming_conditions",
-    )
     action = models.CharField(
         max_length=32, choices=Action.choices, default=Action.JUMP_TO
     )
@@ -1585,8 +1578,8 @@ class SurveyQuestionCondition(models.Model):
         constraints = [
             models.CheckConstraint(
                 condition=(
-                    Q(target_question__isnull=False, target_group__isnull=True)
-                    | Q(target_question__isnull=True, target_group__isnull=False)
+                    Q(target_question__isnull=False)
+                    | Q(action="end_survey", target_question__isnull=True)
                 ),
                 name="surveyquestioncondition_single_target",
             )
@@ -1595,32 +1588,21 @@ class SurveyQuestionCondition(models.Model):
     def clean(self):  # pragma: no cover - validated via tests
         super().clean()
 
-        if bool(self.target_question) == bool(self.target_group):
+        # END_SURVEY doesn't require a target
+        if self.action == self.Action.END_SURVEY:
+            return
+
+        if not self.target_question:
             raise ValidationError(
                 {
-                    "target_question": "Specify exactly one of target_question or target_group.",
-                    "target_group": "Specify exactly one of target_question or target_group.",
+                    "target_question": "Target question is required (unless action is END_SURVEY).",
                 }
             )
 
-        if self.target_question and (
-            self.target_question.survey_id != self.question.survey_id
-        ):
+        if self.target_question.survey_id != self.question.survey_id:
             raise ValidationError(
                 {
                     "target_question": "Target question must belong to the same survey as the triggering question.",
-                }
-            )
-
-        if (
-            self.target_group
-            and not self.target_group.surveys.filter(
-                id=self.question.survey_id
-            ).exists()
-        ):
-            raise ValidationError(
-                {
-                    "target_group": "Target group must be attached to the same survey as the triggering question.",
                 }
             )
 

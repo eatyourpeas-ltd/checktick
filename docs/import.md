@@ -153,7 +153,7 @@ Options with follow-up text are stored as:
 }
 ```
 
-For complete implementation details and examples, see [Follow-up Questions & Text Entry](/docs/FOLLOWUP_FEATURE_SUMMARY/).
+For complete implementation details and examples, see [Branching Logic & Repeating Questions](/docs/branching-and-repeats/).
 
 ## Required questions
 

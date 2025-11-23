@@ -568,10 +568,15 @@ DOC_PAGE_OVERRIDES = {
         "file": "themes.md",
         "category": "api",
     },  # Developer guide for theme implementation
-    "FOLLOWUP_FEATURE_SUMMARY": {
-        "file": "FOLLOWUP_FEATURE_SUMMARY.md",
+    "branching-and-repeats": {
+        "file": "branching-and-repeats.md",
         "category": "features",
-        "title": "Follow-up Questions & Bulk Import",
+        "title": "Branching Logic & Repeating Questions",
+    },
+    "branching-technical": {
+        "file": "branching-technical.md",
+        "category": "api",
+        "title": "Branching Logic - Technical Guide",
     },
     "documentation-system": {
         "file": "documentation-system.md",

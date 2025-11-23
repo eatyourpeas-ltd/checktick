@@ -33,6 +33,11 @@
   <p class="mt-2 text-sm opacity-80 w-full">{% blocktrans %}Question Groups are reusable sets of questions. Arrange them here to control the order in which participants see question sets. You can also mark a set of groups as a repeating entity (e.g. People or Visits) directly here—no separate collections screen required.{% endblocktrans %}</p>
 </div>
 
+<!-- Branching Visualizer -->
+<div class="mt-6">
+  {% include "surveys/partials/branching_visualizer.html" with survey=survey %}
+</div>
+
 <div class="mt-4">
 
   <div class="space-y-3">
