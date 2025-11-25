@@ -10,6 +10,19 @@ Get CheckTick running on your own infrastructure in minutes using pre-built Dock
 
 CheckTick can be self-hosted using Docker, similar to platforms like Discourse. You don't need to clone the repository or build anything - just pull the pre-built image and configure your deployment.
 
+**Self-hosted deployments automatically include all Enterprise tier features:**
+- Custom branding (logos, themes, fonts)
+- No survey limits
+- Full collaboration features
+- SSO/OIDC integration support
+
+**Branding Configuration:** Superusers can configure platform branding via:
+- Web UI at `/branding/` (requires superuser account)
+- CLI command: `python manage.py configure_branding`
+- Django admin at `/admin/core/sitebranding/`
+
+See [Configuration Guide](/docs/self-hosting-configuration/) for full setup details.
+
 ## Prerequisites
 
 - **Docker** 24.0+ and **Docker Compose** 2.0+
@@ -104,14 +117,53 @@ docker compose ps
 docker compose logs -f web
 ```
 
-### 4. Create Admin User
+### 4. Create Superuser Account
+
+**Important:** Superuser accounts have full administrative access including:
+- Access to Django admin interface at `/admin/`
+- Ability to configure platform branding at `/branding/`
+- User management and system configuration
+- Access to all surveys and data
 
 ```bash
-# Access the running container
+# Create your first superuser account
 docker compose exec web python manage.py createsuperuser
 
-# Follow prompts to create your admin account
+# Follow the prompts:
+# - Username: (your admin username)
+# - Email: (your admin email)
+# - Password: (strong password)
 ```
+
+**Creating Additional Superusers:**
+
+After initial setup, you can create additional superuser accounts in two ways:
+
+1. **Via Django Admin** (Recommended):
+   - Log in to `/admin/` with your superuser account
+   - Navigate to "Users" under "Authentication and Authorization"
+   - Select a user and check "Superuser status"
+   - Or create a new user and grant superuser status
+
+2. **Via Command Line**:
+   ```bash
+   # Create a new superuser
+   docker compose exec web python manage.py createsuperuser
+
+   # Or promote an existing user to superuser
+   docker compose exec web python manage.py shell
+   >>> from django.contrib.auth import get_user_model
+   >>> User = get_user_model()
+   >>> user = User.objects.get(username='existing_username')
+   >>> user.is_superuser = True
+   >>> user.is_staff = True
+   >>> user.save()
+   >>> exit()
+   ```
+
+**Regular User Registration:**
+
+Regular users (non-superusers) can sign up through the web interface at `/signup/` once your instance is running. They don't need command-line access.
 
 ### 5. Access Your Instance
 

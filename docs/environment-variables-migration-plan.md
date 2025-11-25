@@ -1,4 +1,14 @@
+---
+title: Environment Variables Migration Plan
+category: api
+priority: 101
+---
+
 # Environment Variables Migration Plan
+
+**Status**: ✅ Implemented (Branding configuration migrated to SiteBranding model)
+
+**Developer Note**: This document describes the migration of branding settings from environment variables to database-backed configuration. The platform-level branding is now managed via the `SiteBranding` model.
 
 ## Overview
 

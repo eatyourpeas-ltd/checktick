@@ -10,17 +10,110 @@ This guide covers platform-level theme configuration for self-hosted CheckTick d
 
 CheckTick uses a **3-tier theme hierarchy**:
 
-1. **Platform defaults** (this guide) - Set by deployment admin via environment variables and Django admin
+1. **Platform defaults** (this guide) - Set by superusers via Branding Configuration UI (`/branding/`)
 2. **Organization themes** - Set by organization owners via Profile page (see [Branding and Theme Settings](branding-and-theme-settings.md))
 3. **Survey themes** - Set by survey creators for individual surveys
 
 This guide focuses on **platform-level configuration** for deployment administrators.
 
-## Platform Theme Environment Variables
+## Recommended Configuration Method
 
-Set these environment variables in your deployment configuration (e.g., `.env` file, Docker Compose, Kubernetes secrets).
+**✅ Use the Branding Configuration UI** (Recommended for self-hosted deployments):
 
-### Branding Variables
+1. Log in as a superuser
+2. Navigate to your Profile page and click "Configure Branding"
+3. Or go directly to `/branding/`
+4. Configure themes, logos, and fonts through the web interface
+5. Changes apply instantly without container restarts
+
+**Alternative methods:**
+- CLI: `python manage.py configure_branding --show` (see command options below)
+- Django Admin: `/admin/core/sitebranding/` (still available)
+- Environment variables: Optional fallbacks only (not recommended for active configuration)
+
+## Enterprise Features in Self-Hosted Mode
+
+All self-hosted CheckTick deployments automatically include **Enterprise tier features**:
+
+- **Custom Branding**: Superusers can configure platform branding via:
+  - Web UI: Navigate to `/branding/` from your profile page
+  - CLI: `python manage.py configure_branding --theme nord --logo path/to/logo.png`
+- **No Limits**: All users get unlimited surveys and full collaboration features
+- **Full Control**: Complete control over data and infrastructure
+
+See [Branding and Theme Settings](branding-and-theme-settings.md) for details on using the branding configuration UI.
+
+## Configuration Options
+
+### Option 1: Branding Configuration UI (Recommended)
+
+The web interface at `/branding/` provides the easiest way to configure platform branding:
+
+**Features:**
+- Visual theme preview
+- Logo upload (light and dark modes)
+- Font selection
+- Instant changes (no container restart)
+- Form validation
+
+**CLI Alternative:**
+
+```bash
+# Show current configuration
+python manage.py configure_branding --show
+
+# Set theme presets
+python manage.py configure_branding --theme-light nord --theme-dark business
+
+# Upload logos
+python manage.py configure_branding --logo path/to/logo.png --logo-dark path/to/logo-dark.png
+
+# Configure fonts
+python manage.py configure_branding --font-heading "Inter, sans-serif" --font-body "Open Sans, sans-serif"
+
+# Reset to defaults
+python manage.py configure_branding --reset
+```
+
+### Option 2: Environment Variables (Optional Fallbacks)
+
+**Note:** Environment variables are **fallback values only**. The Branding Configuration UI (or Django admin) values take precedence. These are useful for setting initial defaults on first deployment but are not recommended for ongoing configuration changes.
+
+Set these in your deployment configuration (e.g., `.env` file, Docker Compose, Kubernetes secrets) **only if you want fallback defaults**:
+
+#### Required Environment Variables (Infrastructure)
+
+These are **always required** for any deployment:
+
+```bash
+# Django settings (required)
+DEBUG=False
+SECRET_KEY=your-secret-key-here
+ALLOWED_HOSTS=checktick.example.com,www.checktick.example.com
+CSRF_TRUSTED_ORIGINS=https://checktick.example.com,https://www.checktick.example.com
+
+# Database (required)
+DATABASE_URL=postgres://user:password@db:5432/checktick
+
+# Email (required for user registration/notifications)
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=noreply@example.com
+EMAIL_HOST_PASSWORD=your-smtp-password
+EMAIL_USE_TLS=True
+DEFAULT_FROM_EMAIL=noreply@example.com
+
+# Media/Static files (required for production)
+AWS_STORAGE_BUCKET_NAME=your-bucket-name  # If using S3
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+```
+
+See [Self-Hosting Configuration](self-hosting-configuration.md) for full list of required variables.
+
+#### Optional Branding Variables (Fallbacks Only)
+
+These are **optional** and only used if not configured via UI:
 
 ```bash
 # Site title (shown in navbar and browser tab)
@@ -87,11 +180,11 @@ BRAND_THEME_CSS_DARK="--color-primary: oklch(45% 0.18 25); --radius-selector: 1r
 
 **Note**: Most deployments should use preset themes only. Custom CSS requires understanding of [daisyUI Theme Generator](https://daisyui.com/theme-generator/) variables.
 
-## Django Admin Configuration
+### Option 3: Django Admin (Alternative)
 
-Platform administrators (superusers) can also configure themes via the Django admin interface, which overrides environment variables.
+The Django admin interface is still available as an alternative to the Branding Configuration UI. Both interfaces manage the same `SiteBranding` database model.
 
-### Accessing SiteBranding Admin
+**Accessing SiteBranding Admin:**
 
 1. Log in as a superuser
 2. Navigate to `/admin/`
@@ -121,15 +214,19 @@ The admin interface provides access to all platform theme settings:
 - `theme_light_css` - Custom CSS variables for light theme
 - `theme_dark_css` - Custom CSS variables for dark theme
 
-### Field Precedence
+### Configuration Precedence
 
-When both environment variables and database values exist:
+The system checks configuration sources in this order:
 
-1. **Database values** (SiteBranding model) - highest priority
-2. **Environment variables** - fallback
-3. **Built-in defaults** - last resort
+1. **Database values** (SiteBranding model via UI/CLI/Admin) - **Highest priority**
+2. **Environment variables** (`.env` file) - **Fallback only**
+3. **Built-in defaults** (hardcoded in settings) - **Last resort**
 
-This allows deployments to set sensible defaults via environment while allowing runtime customization through the admin.
+**Recommended workflow:**
+1. Set environment variables only for initial deployment defaults (optional)
+2. Use Branding Configuration UI (`/branding/`) for all ongoing changes
+3. Changes via UI/CLI take precedence and persist across container restarts
+4. No need to modify environment variables after initial setup
 
 ## CSS Build Process
 

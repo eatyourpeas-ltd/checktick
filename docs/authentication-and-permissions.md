@@ -68,12 +68,16 @@ There are four key models in `checktick_app.surveys.models`:
 - SurveyMembership: links a user to a specific survey with a role.
   - Roles: CREATOR, EDITOR, VIEWER
 
-### Account Types
+### Account Tiers
 
-There are two types of users in the system:
+CheckTick uses a four-tier account system:
 
-- **Individual users**: Users who create surveys without an organization. Individual users can only create and manage their own surveys and **cannot share surveys or invite collaborators**.
-- **Organization users**: Users who belong to an organization. Organization users can collaborate on surveys within their organization, with permissions managed by organization admins.
+- **FREE tier**: Individual users with up to 3 active surveys. Cannot share surveys or invite collaborators.
+- **PRO tier**: Individual users with unlimited surveys. Can add editors (up to 10 collaborators per survey) but no viewer role.
+- **ORGANIZATION tier**: Team collaboration with unlimited collaborators and full role-based access (Admin, Creator, Viewer).
+- **ENTERPRISE tier**: All ORGANIZATION features plus custom branding, SSO/OIDC, and self-hosted options.
+
+For detailed tier features, see [Account Types & Organizations](getting-started-account-types.md).
 
 ### Organization Roles
 
@@ -106,15 +110,24 @@ Single-organisation admin model:
 
 ### Survey Collaboration Features
 
-**Note**: These features are only available for organization surveys. Individual users cannot share their surveys or invite collaborators.
+Collaboration features are tier-dependent:
 
-Survey creators within organizations can invite collaborators to work on specific surveys through the "Manage collaborators" feature:
+**FREE Tier:**
+- Cannot share surveys or invite collaborators
+- Survey management is solo only
 
-- **Adding collaborators**: Survey CREATORs can add users by email address and assign roles (organization surveys only)
-- **Role management**: CREATORs can change collaborator roles or remove access
-- **Dashboard integration**: The survey dashboard shows a "Manage collaborators" button only for organization surveys and only to users who can manage survey users (CREATORs, organization admins, and survey owners)
-- **Permission boundaries**: EDITORs can modify survey content but cannot see or access user management features
-- **Individual user restriction**: Individual users (surveys without organization) will not see the "Manage collaborators" button and cannot access user management endpoints
+**PRO Tier:**
+- Can add editors to surveys (up to 10 collaborators per survey)
+- No viewer role available
+- Limited collaboration model
+
+**ORGANIZATION & ENTERPRISE Tiers:**
+- Full collaboration features available
+- Survey CREATORs can add users by email and assign roles (CREATOR, EDITOR, VIEWER)
+- Unlimited collaborators per survey
+- Role management: CREATORs can change collaborator roles or remove access
+- Dashboard integration: "Manage collaborators" button shows for organization surveys
+- Permission boundaries: EDITORs can modify content but cannot manage users
 
 This enables teams to collaborate on survey design while maintaining clear boundaries between content editing and access control.
 
@@ -170,7 +183,7 @@ Individual users (without organization membership) can:
 - **Publish globally**: Share their datasets with all users
 - **Create custom versions**: Customize any global dataset
 
-> **Note**: In future, dataset creation and publishing for individual users will require a pro account.
+> **Note**: Dataset creation and publishing is available to all tiers. Future versions may require PRO tier for advanced dataset features.
 
 ### Organization Dataset Roles
 

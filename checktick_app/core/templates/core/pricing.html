@@ -66,10 +66,22 @@
             <span>{% trans "Create and publish datasets" %}</span>
           </li>
           <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>{% trans "AI-assisted survey generator" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
-            <span class="text-base-content/50">{% trans "No team collaboration" %}</span>
+            <span class="text-base-content/50">{% trans "No collaboration" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+            <span class="text-base-content/50">{% trans "3 survey limit enforced" %}</span>
           </li>
         </ul>
 
@@ -96,49 +108,37 @@
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span class="font-semibold">{% trans "Unlimited surveys" %}</span>
+            <span class="font-semibold">{% trans "Unlimited active surveys" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span>{% trans "Unlimited responses" %}</span>
+            <span>{% trans "Everything in Individual" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span>{% trans "Personal encryption" %}</span>
+            <span class="font-semibold">{% trans "Add editors to surveys" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span>{% trans "Full API access" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Export to CSV, JSON, Excel" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Create and publish datasets" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "AI-assisted survey generator" %}</span>
+            <span>{% trans "Up to 10 collaborators per survey" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
-            <span class="text-base-content/50">{% trans "No team collaboration" %}</span>
+            <span class="text-base-content/50">{% trans "Editors only (no viewer role)" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+            <span class="text-base-content/50">{% trans "No custom branding" %}</span>
           </li>
         </ul>
 
@@ -170,13 +170,25 @@
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span class="font-semibold">{% trans "Team collaboration" %}</span>
+            <span class="font-semibold">{% trans "Full team collaboration" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span>{% trans "Role-based permissions" %}</span>
+            <span>{% trans "Viewer role (read-only access)" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span class="font-semibold">{% trans "Unlimited collaborators per survey" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>{% trans "Role-based permissions (Admin, Creator, Viewer)" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -238,7 +250,13 @@
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span>{% trans "Custom branding & themes" %}</span>
+            <span class="font-semibold">{% trans "Custom branding (logo, themes, fonts)" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>{% trans "Web UI + CLI branding configuration" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -330,6 +348,20 @@
             <tr>
               <td class="font-semibold">{% trans "Team Collaboration" %}</td>
               <td class="text-center">—</td>
+              <td class="text-center">Editors only</td>
+              <td class="text-center">✓ Full</td>
+              <td class="text-center">✓ Full</td>
+            </tr>
+            <tr>
+              <td class="font-semibold">{% trans "Collaborators per Survey" %}</td>
+              <td class="text-center">—</td>
+              <td class="text-center">10</td>
+              <td class="text-center">∞</td>
+              <td class="text-center">∞</td>
+            </tr>
+            <tr>
+              <td class="font-semibold">{% trans "Viewer Role (Read-Only)" %}</td>
+              <td class="text-center">—</td>
               <td class="text-center">—</td>
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
@@ -366,8 +398,15 @@
               <td class="font-semibold">{% trans "Custom Branding" %}</td>
               <td class="text-center">—</td>
               <td class="text-center">—</td>
-              <td class="text-center">Org Level</td>
-              <td class="text-center">Platform Level</td>
+              <td class="text-center">—</td>
+              <td class="text-center">✓ Platform Level</td>
+            </tr>
+            <tr>
+              <td class="font-semibold">{% trans "Branding Options" %}</td>
+              <td class="text-center">—</td>
+              <td class="text-center">—</td>
+              <td class="text-center">—</td>
+              <td class="text-center">Logo, Themes, Fonts</td>
             </tr>
             <tr>
               <td class="font-semibold">{% trans "SSO/OIDC" %}</td>

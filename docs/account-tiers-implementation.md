@@ -1,4 +1,14 @@
+---
+title: Account Tiers Implementation
+category: api
+priority: 100
+---
+
 # Account Tiers Implementation Plan
+
+**Status**: ✅ Implemented
+
+**Developer Note**: This document describes the design and implementation of the account tiers system. For user-facing documentation, see [Account Types & Organizations](getting-started-account-types.md).
 
 ## Overview
 
