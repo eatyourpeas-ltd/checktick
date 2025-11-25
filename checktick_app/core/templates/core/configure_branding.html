@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Configure Branding" %}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold mb-2">{% trans "Configure Site Branding" %}</h1>
+    <p class="text-base-content/70">
+      {% trans "Customize the appearance of your CheckTick instance with custom themes, logos, and typography." %}
+    </p>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="space-y-6">
+    {% csrf_token %}
+
+    {% if messages %}
+      <div class="space-y-2">
+        {% for message in messages %}
+          <div class="alert {% if message.tags == 'error' %}alert-error{% elif message.tags == 'success' %}alert-success{% else %}alert-info{% endif %}">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{{ message }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <!-- Theme Configuration -->
+    <div class="card bg-base-200">
+      <div class="card-body">
+        <h2 class="card-title">{% trans "Theme Configuration" %}</h2>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Default Theme" %}</span>
+          </label>
+          {{ form.default_theme }}
+          {% if form.default_theme.help_text %}
+            <label class="label">
+              <span class="label-text-alt">{{ form.default_theme.help_text }}</span>
+            </label>
+          {% endif %}
+          {% if form.default_theme.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.default_theme.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Light Mode Preset" %}</span>
+            <span class="label-text-alt">{% trans "Examples: nord, cupcake, light" %}</span>
+          </label>
+          {{ form.theme_preset_light }}
+          {% if form.theme_preset_light.help_text %}
+            <label class="label">
+              <span class="label-text-alt">{{ form.theme_preset_light.help_text }}</span>
+            </label>
+          {% endif %}
+          {% if form.theme_preset_light.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.theme_preset_light.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Dark Mode Preset" %}</span>
+            <span class="label-text-alt">{% trans "Examples: business, dark, synthwave" %}</span>
+          </label>
+          {{ form.theme_preset_dark }}
+          {% if form.theme_preset_dark.help_text %}
+            <label class="label">
+              <span class="label-text-alt">{{ form.theme_preset_dark.help_text }}</span>
+            </label>
+          {% endif %}
+          {% if form.theme_preset_dark.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.theme_preset_dark.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Logo & Icons -->
+    <div class="card bg-base-200">
+      <div class="card-body">
+        <h2 class="card-title">{% trans "Logo & Icons" %}</h2>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Logo File (Light Mode)" %}</span>
+          </label>
+          {{ form.icon_file }}
+          {% if branding.icon_file %}
+            <div class="mt-2 p-4 bg-base-100 rounded-lg">
+              <p class="text-sm mb-2">{% trans "Current logo:" %}</p>
+              <img src="{{ branding.icon_file.url }}" alt="Current logo" class="h-12">
+            </div>
+          {% endif %}
+          {% if form.icon_file.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.icon_file.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Logo File (Dark Mode)" %}</span>
+          </label>
+          {{ form.icon_file_dark }}
+          {% if branding.icon_file_dark %}
+            <div class="mt-2 p-4 bg-base-100 rounded-lg">
+              <p class="text-sm mb-2">{% trans "Current dark logo:" %}</p>
+              <img src="{{ branding.icon_file_dark.url }}" alt="Current dark logo" class="h-12">
+            </div>
+          {% endif %}
+          {% if form.icon_file_dark.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.icon_file_dark.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Logo URL (Light Mode)" %}</span>
+            <span class="label-text-alt">{% trans "Alternative to file upload" %}</span>
+          </label>
+          {{ form.icon_url }}
+          {% if form.icon_url.help_text %}
+            <label class="label">
+              <span class="label-text-alt">{{ form.icon_url.help_text }}</span>
+            </label>
+          {% endif %}
+          {% if form.icon_url.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.icon_url.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Logo URL (Dark Mode)" %}</span>
+          </label>
+          {{ form.icon_url_dark }}
+          {% if form.icon_url_dark.help_text %}
+            <label class="label">
+              <span class="label-text-alt">{{ form.icon_url_dark.help_text }}</span>
+            </label>
+          {% endif %}
+          {% if form.icon_url_dark.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.icon_url_dark.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Typography -->
+    <div class="card bg-base-200">
+      <div class="card-body">
+        <h2 class="card-title">{% trans "Typography" %}</h2>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Heading Font" %}</span>
+            <span class="label-text-alt">{% trans "e.g., 'Roboto', sans-serif" %}</span>
+          </label>
+          {{ form.font_heading }}
+          {% if form.font_heading.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.font_heading.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Body Font" %}</span>
+            <span class="label-text-alt">{% trans "e.g., 'Open Sans', sans-serif" %}</span>
+          </label>
+          {{ form.font_body }}
+          {% if form.font_body.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.font_body.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Font CSS URL" %}</span>
+            <span class="label-text-alt">{% trans "Google Fonts or custom CSS" %}</span>
+          </label>
+          {{ form.font_css_url }}
+          {% if form.font_css_url.help_text %}
+            <label class="label">
+              <span class="label-text-alt">{{ form.font_css_url.help_text }}</span>
+            </label>
+          {% endif %}
+          {% if form.font_css_url.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.font_css_url.errors.0 }}</span>
+            </label>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex gap-4">
+      <button type="submit" class="btn btn-primary">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+        {% trans "Save Changes" %}
+      </button>
+      <a href="{% url 'core:profile' %}" class="btn btn-ghost">
+        {% trans "Cancel" %}
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

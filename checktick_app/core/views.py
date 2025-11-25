@@ -22,7 +22,12 @@ from checktick_app.surveys.models import (
     SurveyResponse,
 )
 
-from .forms import SignupForm, UserEmailPreferencesForm, UserLanguagePreferenceForm
+from .forms import (
+    BrandingConfigForm,
+    SignupForm,
+    UserEmailPreferencesForm,
+    UserLanguagePreferenceForm,
+)
 from .models import UserLanguagePreference
 
 logger = logging.getLogger(__name__)
@@ -1052,3 +1057,75 @@ def delete_account(request):
         )
         logger.error(f"Error deleting user account {user.id}: {e}")
         return redirect("core:profile")
+
+
+def can_configure_branding(user):
+    """Check if user can access branding configuration.
+
+    Returns:
+        bool: True if user can configure branding
+    """
+    if not user.is_authenticated:
+        return False
+
+    # Self-hosted: superusers can configure
+    if getattr(settings, "SELF_HOSTED", False):
+        return user.is_superuser
+
+    # Hosted: Enterprise tier users can configure
+    if hasattr(user, "profile"):
+        can_customize, _ = user.profile.can_customize_branding()
+        return can_customize
+
+    return False
+
+
+@login_required
+def configure_branding(request):
+    """View to configure site branding.
+
+    Available to:
+    - Self-hosted: Superusers
+    - Hosted SaaS: Enterprise tier users
+
+    Allows customization of themes, logos, and typography.
+    """
+    # Check permission
+    if not can_configure_branding(request.user):
+        messages.error(
+            request,
+            _(
+                "You don't have permission to configure branding. "
+                "This feature requires Enterprise tier."
+            ),
+        )
+        return redirect("core:profile")
+
+    # Get or create singleton SiteBranding instance
+    branding, created = SiteBranding.objects.get_or_create(pk=1)
+
+    if request.method == "POST":
+        form = BrandingConfigForm(request.POST, request.FILES, instance=branding)
+        if form.is_valid():
+            form.save()
+            messages.success(request, _("Branding configuration updated successfully!"))
+            logger.info(
+                f"Branding configuration updated by {request.user.username} "
+                f"(theme={branding.default_theme})"
+            )
+            return redirect("core:configure_branding")
+        else:
+            messages.error(
+                request, _("There was an error updating the branding configuration.")
+            )
+    else:
+        form = BrandingConfigForm(instance=branding)
+
+    return render(
+        request,
+        "core/configure_branding.html",
+        {
+            "form": form,
+            "branding": branding,
+        },
+    )
