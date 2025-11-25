@@ -64,6 +64,9 @@ DEBUG = env("DEBUG")
 SECRET_KEY = env("SECRET_KEY") or os.urandom(32)
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 
+# Self-hosted mode - gives all users Enterprise features
+SELF_HOSTED = env.bool("SELF_HOSTED", default=False)
+
 DATABASES = {
     "default": env.db("DATABASE_URL"),
 }
