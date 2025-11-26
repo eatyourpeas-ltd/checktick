@@ -64,6 +64,13 @@ class TestUserAPI:
 
     def test_survey_creator_can_manage_survey_memberships(self, client):
         creator = User.objects.create_user(username="creatorx", password=TEST_PASSWORD)
+        # Set creator to ORGANIZATION tier to enable collaboration
+        from checktick_app.core.models import UserProfile
+
+        profile = UserProfile.objects.get(user=creator)
+        profile.account_tier = UserProfile.AccountTier.ORGANIZATION
+        profile.save()
+
         viewer = User.objects.create_user(username="viewerx", password=TEST_PASSWORD)
         org = Organization.objects.create(name="OrgAPI3", owner=creator)
         OrganizationMembership.objects.create(
