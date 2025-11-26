@@ -1,7 +1,7 @@
 """Tests for tier enforcement in API endpoints."""
 
-import pytest
 from django.contrib.auth import get_user_model
+import pytest
 from rest_framework.test import APIClient
 
 from checktick_app.core.models import UserProfile
@@ -188,7 +188,9 @@ class TestCollaborationAPI:
 
         # Add 10 editors (PRO limit)
         for i in range(10):
-            user = User.objects.create_user(username=f"editor{i}", password=TEST_PASSWORD)
+            user = User.objects.create_user(
+                username=f"editor{i}", password=TEST_PASSWORD
+            )
             response = api_client.post(
                 "/api/survey-memberships/",
                 {"survey": survey.id, "user": user.id, "role": "editor"},
@@ -215,7 +217,9 @@ class TestCollaborationAPI:
 
         # Add 15 collaborators (more than PRO limit)
         for i in range(15):
-            user = User.objects.create_user(username=f"collab{i}", password=TEST_PASSWORD)
+            user = User.objects.create_user(
+                username=f"collab{i}", password=TEST_PASSWORD
+            )
             response = api_client.post(
                 "/api/survey-memberships/",
                 {"survey": survey.id, "user": user.id, "role": "viewer"},
