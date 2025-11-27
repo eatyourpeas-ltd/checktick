@@ -18,6 +18,59 @@ Notes:
 
 - JWT (Bearer) authentication via SimpleJWT. Obtain tokens at `/api/token` and `/api/token/refresh` and pass the access token in `Authorization: Bearer <token>`.
 
+## Account Tier Limits
+
+The API enforces the same tier-based limits as the web interface:
+
+### Survey Creation Limits
+
+- **FREE tier**: Maximum 3 surveys
+- **PRO tier**: Unlimited surveys
+- **ORGANIZATION tier**: Unlimited surveys
+- **ENTERPRISE tier**: Unlimited surveys
+
+Attempting to create a survey beyond your tier limit will return a `403 Forbidden` error with a message indicating the upgrade path.
+
+**Example error response:**
+```json
+{
+  "detail": "You've reached the limit of 3 surveys for your Free tier. Upgrade to Pro for unlimited surveys."
+}
+```
+
+### Collaboration Limits
+
+Adding collaborators via `POST /api/survey-memberships/` enforces tier-based restrictions:
+
+- **FREE tier**: Cannot add any collaborators
+- **PRO tier**:
+  - Can add EDITOR role (up to 10 collaborators per survey)
+  - Cannot add VIEWER role
+- **ORGANIZATION tier**:
+  - Can add both EDITOR and VIEWER roles
+  - Unlimited collaborators per survey
+- **ENTERPRISE tier**: Same as ORGANIZATION
+
+Attempting to add collaborators beyond your tier permissions will return a `403 Forbidden` error with upgrade guidance.
+
+**Example error responses:**
+```json
+// FREE user trying to add collaborators
+{
+  "detail": "Adding collaborators requires Pro tier. Upgrade to add editors to your surveys."
+}
+
+// PRO user trying to add viewers
+{
+  "detail": "Adding viewers requires Organization tier. Pro tier supports editors only."
+}
+
+// PRO user exceeding 10 collaborators
+{
+  "detail": "You've reached the limit of 10 collaborators for this survey on Pro tier. Upgrade to Organization for unlimited collaborators."
+}
+```
+
 ## Permissions matrix (summary)
 
 - Owner
@@ -28,7 +81,7 @@ Notes:
   - Retrieve/Update/Delete: allowed for surveys in their organization(s)
 - Org CREATOR/VIEWER
   - List: sees only own surveys
-  - Retrieve: allowed for surveys they’re a member of
+  - Retrieve: allowed for surveys they're a member of
   - Update/Delete: only creators can update; viewers are read-only
   - Publish GET: allowed for creators and viewers (view permission)
   - Publish PUT: allowed for creators (and owner/org ADMIN)

@@ -38,6 +38,13 @@ def test_non_admin_cannot_access_org_users(client):
 @pytest.mark.django_db
 def test_org_survey_creator_can_manage_survey_users(client):
     creator = User.objects.create_user(username="creator1", password=TEST_PASSWORD)
+    # Set user to ORGANIZATION tier to enable collaboration features
+    from checktick_app.core.models import UserProfile
+
+    profile = UserProfile.objects.get(user=creator)
+    profile.account_tier = UserProfile.AccountTier.ORGANIZATION
+    profile.save()
+
     org = Organization.objects.create(name="OrgZ", owner=creator)
     OrganizationMembership.objects.create(
         organization=org, user=creator, role=OrganizationMembership.Role.CREATOR
@@ -97,3 +104,36 @@ def test_viewer_cannot_manage_survey_users(client):
         url, data={"action": "add", "user_id": owner.id, "role": "viewer"}
     )
     assert resp.status_code == 404  # View raises 404 for unauthorized users
+
+
+@pytest.mark.django_db
+def test_editor_cannot_manage_survey_users(client):
+    """Editors can edit survey content but cannot manage collaborators."""
+    from checktick_app.core.models import UserProfile
+
+    owner = User.objects.create_user(username="owner3", password=TEST_PASSWORD)
+    # Set owner to ORGANIZATION tier to enable collaboration
+    profile = UserProfile.objects.get(user=owner)
+    profile.account_tier = UserProfile.AccountTier.ORGANIZATION
+    profile.save()
+
+    editor = User.objects.create_user(username="editor3", password=TEST_PASSWORD)
+    org = Organization.objects.create(name="OrgB", owner=owner)
+    survey = Survey.objects.create(owner=owner, organization=org, name="S3", slug="s3")
+    SurveyMembership.objects.create(
+        survey=survey, user=editor, role=SurveyMembership.Role.EDITOR
+    )
+    client.login(username="editor3", password=TEST_PASSWORD)
+    url = reverse("surveys:survey_users", args=[survey.slug])
+
+    # Editor should not be able to access survey users page
+    resp = client.get(url)
+    assert resp.status_code == 404
+
+    # Try to add a viewer - should fail
+    viewer = User.objects.create_user(username="viewer3", password=TEST_PASSWORD)
+    resp = client.post(
+        url, data={"action": "add", "user_id": viewer.id, "role": "viewer"}
+    )
+    assert resp.status_code == 404
+    assert not SurveyMembership.objects.filter(survey=survey, user=viewer).exists()

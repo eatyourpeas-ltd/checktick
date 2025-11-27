@@ -606,6 +606,13 @@ def survey_create(request: HttpRequest) -> HttpResponse:
     Supports traditional dual-path encryption for all users.
     OIDC integration will be re-added after UserOIDC model integration is complete.
     """
+    # Check tier limits for survey creation
+    from checktick_app.core.tier_limits import check_survey_creation_limit
+
+    can_create, reason = check_survey_creation_limit(request.user)
+    if not can_create:
+        messages.error(request, reason)
+        return redirect("surveys:list")
     if request.method == "POST":
         form = SurveyCreateForm(request.POST)
         if form.is_valid():
@@ -4252,6 +4259,35 @@ def survey_users(request: HttpRequest, slug: str) -> HttpResponse:
         role = request.POST.get("role")
         if role and role not in dict(SurveyMembership.Role.choices):
             return HttpResponse(status=400)
+
+        # Check tier limits for collaboration
+        if action == "add" and target_user:
+            from checktick_app.core.tier_limits import (
+                check_collaboration_limit,
+                check_collaborators_per_survey_limit,
+            )
+
+            # Determine collaboration type from role
+            collaboration_type = (
+                "editor"
+                if role in [SurveyMembership.Role.CREATOR, SurveyMembership.Role.EDITOR]
+                else "viewer"
+            )
+            can_add, limit_reason = check_collaboration_limit(
+                request.user, collaboration_type
+            )
+            if not can_add:
+                messages.error(request, limit_reason)
+                return redirect("surveys:survey_users", slug=survey.slug)
+
+            # Check per-survey collaborator limit
+            can_add_to_survey, survey_reason = check_collaborators_per_survey_limit(
+                survey
+            )
+            if not can_add_to_survey:
+                messages.error(request, survey_reason)
+                return redirect("surveys:survey_users", slug=survey.slug)
+
         if action == "add" and target_user:
             smem, created = SurveyMembership.objects.update_or_create(
                 survey=survey,

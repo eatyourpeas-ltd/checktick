@@ -14,5 +14,6 @@ urlpatterns = [
     path("complete-signup/", views.complete_signup, name="complete_signup"),
     path("docs/", views.docs_index, name="docs_index"),
     path("docs/<slug:slug>/", views.docs_page, name="docs_page"),
+    path("branding/", views.configure_branding, name="configure_branding"),
     path("delete-account/", views.delete_account, name="delete_account"),
 ]

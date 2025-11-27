@@ -46,6 +46,35 @@
 </table>
 
 {% if can_manage %}
+<!-- Tier limit warnings for collaboration -->
+{% if tier_features %}
+  {% if not tier_features.can_add_editors %}
+    <div class="alert alert-warning mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+      <div>
+        <div class="font-bold">{% trans "Collaboration requires Pro tier or higher" %}</div>
+        {% if not is_self_hosted %}
+          <div class="text-sm">{% trans "Upgrade to add collaborators to your surveys" %}</div>
+        {% endif %}
+      </div>
+    </div>
+  {% elif not tier_features.can_add_viewers %}
+    <div class="alert alert-info mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      <div>
+        <div class="font-bold">{% trans "Pro tier supports editors only" %}</div>
+        <div class="text-sm">{% trans "Upgrade to Organization tier to add viewers" %}</div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if tier_limits.max_collaborators_per_survey %}
+    <div class="text-sm opacity-70 mb-4">
+      {{ memberships|length }}/{{ tier_limits.max_collaborators_per_survey }} {% trans "collaborators on this survey" %}
+    </div>
+  {% endif %}
+{% endif %}
+
 <h2 class="text-xl font-semibold mb-2 inline-flex items-center gap-2 text-base-content">
   {% include "components/icons/users.html" with classes="w-5 h-5 text-base-content" %}
   <span>{% trans "Add or update user" %}</span>
@@ -53,16 +82,17 @@
 <form method="post" class="space-y-2">
   {% csrf_token %}
   <input type="hidden" name="action" value="add" />
-  <label class="block">{% trans "Email (preferred)" %} <input type="email" name="email" class="input input-bordered" /></label>
+  <label class="block">{% trans "Email (preferred)" %} <input type="email" name="email" class="input input-bordered" {% if tier_features and not tier_features.can_add_editors %}disabled{% endif %} /></label>
   <div class="text-sm opacity-70">{% trans "Or specify User ID if email not found:" %}</div>
-  <label class="block">{% trans "User ID" %} <input name="user_id" class="input input-bordered" /></label>
+  <label class="block">{% trans "User ID" %} <input name="user_id" class="input input-bordered" {% if tier_features and not tier_features.can_add_editors %}disabled{% endif %} /></label>
   <label class="block">{% trans "Role" %}
-    <select name="role" class="select select-bordered">
+    <select name="role" class="select select-bordered" {% if tier_features and not tier_features.can_add_editors %}disabled{% endif %}>
       <option value="creator">{% trans "Creator" %}</option>
-      <option value="viewer">{% trans "Viewer" %}</option>
+      <option value="editor">{% trans "Editor" %}</option>
+      <option value="viewer" {% if tier_features and not tier_features.can_add_viewers %}disabled{% endif %}>{% trans "Viewer" %}</option>
     </select>
   </label>
-  <button class="btn">{% trans "Save" %}</button>
+  <button class="btn" {% if tier_features and not tier_features.can_add_editors %}disabled{% endif %}>{% trans "Save" %}</button>
 </form>
 {% endif %}
 {% endblock %}

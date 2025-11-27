@@ -187,6 +187,25 @@
     </div>
   </div>
 
+  {% if user.is_superuser and is_self_hosted or user_tier == 'enterprise' %}
+  <div class="card bg-base-100 shadow mb-6">
+    <div class="card-body">
+      <h2 class="card-title inline-flex items-center gap-2 text-base-content">
+        {% include "components/icons/bolt.html" with classes="w-5 h-5 text-base-content" %}
+        <span>{% trans "Site Branding" %}</span>
+        <span class="badge badge-primary">{% if is_self_hosted %}{% trans "Self-Hosted" %}{% else %}{% trans "Enterprise" %}{% endif %}</span>
+      </h2>
+      <p class="opacity-80">{% trans "Customize the look and feel of your CheckTick instance with custom themes, logos, and fonts." %}</p>
+      <div class="mt-4">
+        <a href="{% url 'core:configure_branding' %}" class="btn btn-primary">
+          {% include "components/icons/bolt.html" with classes="w-4 h-4 mr-2" %}
+          {% trans "Configure Branding" %}
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="card bg-base-100 shadow mb-6">
     <div class="card-body">
       <h2 class="card-title inline-flex items-center gap-2 text-base-content">

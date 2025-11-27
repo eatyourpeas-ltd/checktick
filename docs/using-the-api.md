@@ -6,6 +6,18 @@ priority: 2
 
 This guide provides comprehensive documentation for creating and managing surveys via the API, including all supported question types, JSON structure, and advanced features.
 
+## Account Tier Limits
+
+**Important:** The API enforces tier-based limits for survey creation and collaboration. See the [API Reference](api.md#account-tier-limits) for complete details.
+
+**Quick summary:**
+- **FREE tier**: 3 surveys max, no collaborators
+- **PRO tier**: Unlimited surveys, up to 10 editors per survey (no viewers)
+- **ORGANIZATION tier**: Unlimited surveys and collaborators, viewer role available
+- **ENTERPRISE tier**: All ORGANIZATION features plus custom branding and SSO
+
+API requests that exceed tier limits will return `403 Forbidden` errors with upgrade guidance.
+
 ## Question Types
 
 CheckTick supports the following question types when creating surveys via the API:

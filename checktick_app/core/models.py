@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -218,3 +219,215 @@ class UserOIDC(models.Model):
             },
         )
         return oidc_record, created
+
+
+class UserProfile(models.Model):
+    """User account tier and payment information.
+
+    Manages account tiers, payment tracking, and enterprise branding features.
+    Every user has one profile (created automatically on signup).
+    """
+
+    # Account tiers
+    class AccountTier(models.TextChoices):
+        FREE = "free", "Free"
+        PRO = "pro", "Professional"
+        ORGANIZATION = "organization", "Organization"
+        ENTERPRISE = "enterprise", "Enterprise"
+
+    # Payment subscription status
+    class SubscriptionStatus(models.TextChoices):
+        ACTIVE = "active", "Active"
+        PAST_DUE = "past_due", "Past Due"
+        CANCELED = "canceled", "Canceled"
+        TRIALING = "trialing", "Trialing"
+        INCOMPLETE = "incomplete", "Incomplete"
+        INCOMPLETE_EXPIRED = "incomplete_expired", "Incomplete Expired"
+        UNPAID = "unpaid", "Unpaid"
+        NONE = "none", "None"  # For FREE tier or self-hosted
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+
+    # Account tier and limits
+    account_tier = models.CharField(
+        max_length=20,
+        choices=AccountTier.choices,
+        default=AccountTier.FREE,
+        help_text="Current account tier determining feature access",
+    )
+
+    # Payment tracking (generic provider-agnostic)
+    payment_provider = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text="Payment provider name (e.g., 'ryft', 'stripe')",
+    )
+    payment_customer_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Customer ID from payment provider",
+    )
+    payment_subscription_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Subscription ID from payment provider",
+    )
+    subscription_status = models.CharField(
+        max_length=30,
+        choices=SubscriptionStatus.choices,
+        default=SubscriptionStatus.NONE,
+        help_text="Current subscription status",
+    )
+    subscription_current_period_end = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the current subscription period ends",
+    )
+
+    # Enterprise branding (UI-based, only for Enterprise tier or self-hosted)
+    custom_branding_enabled = models.BooleanField(
+        default=False,
+        help_text="Whether user can customize platform branding (Enterprise only)",
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    tier_changed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the account tier was last changed",
+    )
+
+    class Meta:
+        verbose_name = "User Profile"
+        verbose_name_plural = "User Profiles"
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.user.username} - {self.get_account_tier_display()}"
+
+    @classmethod
+    def get_or_create_for_user(cls, user):
+        """Get or create profile for a user with defaults."""
+        profile, created = cls.objects.get_or_create(user=user)
+        return profile
+
+    def get_effective_tier(self) -> str:
+        """Get the effective account tier considering self-hosted mode.
+
+        In self-hosted mode (SELF_HOSTED=true), all users get Enterprise features.
+        Otherwise, returns the actual account tier.
+        """
+        if getattr(settings, "SELF_HOSTED", False):
+            return self.AccountTier.ENTERPRISE
+        return self.account_tier
+
+    def is_tier_at_least(self, tier: str) -> bool:
+        """Check if user's effective tier is at least the specified tier.
+
+        Tier hierarchy: FREE < PRO < ORGANIZATION < ENTERPRISE
+        """
+        tier_order = {
+            self.AccountTier.FREE: 0,
+            self.AccountTier.PRO: 1,
+            self.AccountTier.ORGANIZATION: 2,
+            self.AccountTier.ENTERPRISE: 3,
+        }
+        effective = self.get_effective_tier()
+        return tier_order.get(effective, 0) >= tier_order.get(tier, 0)
+
+    def can_create_survey(self) -> tuple[bool, str]:
+        """Check if user can create a new survey.
+
+        Returns:
+            (can_create, reason) - tuple with boolean and error message
+        """
+        from .tier_limits import check_survey_creation_limit
+
+        return check_survey_creation_limit(self.user)
+
+    def can_add_collaborators(
+        self, collaboration_type: str = "editor"
+    ) -> tuple[bool, str]:
+        """Check if user can add collaborators to surveys.
+
+        Args:
+            collaboration_type: 'editor' or 'viewer'
+
+        Returns:
+            (can_add, reason) - tuple with boolean and error message
+        """
+        from .tier_limits import check_collaboration_limit
+
+        return check_collaboration_limit(self.user, collaboration_type)
+
+    def can_customize_branding(self) -> tuple[bool, str]:
+        """Check if user can customize platform branding.
+
+        Returns:
+            (can_customize, reason) - tuple with boolean and error message
+        """
+        from .tier_limits import check_branding_permission
+
+        return check_branding_permission(self.user)
+
+    def can_create_sub_organizations(self) -> tuple[bool, str]:
+        """Check if user can create sub-organizations.
+
+        Returns:
+            (can_create, reason) - tuple with boolean and error message
+        """
+        from .tier_limits import check_sub_organization_permission
+
+        return check_sub_organization_permission(self.user)
+
+    def upgrade_tier(self, new_tier: str) -> None:
+        """Upgrade user to a new tier.
+
+        Args:
+            new_tier: The new tier to upgrade to
+        """
+        if new_tier in self.AccountTier.values:
+            self.account_tier = new_tier
+            self.tier_changed_at = timezone.now()
+            self.save(update_fields=["account_tier", "tier_changed_at", "updated_at"])
+
+    def downgrade_tier(self, new_tier: str) -> None:
+        """Downgrade user to a lower tier.
+
+        Args:
+            new_tier: The new tier to downgrade to
+        """
+        if new_tier in self.AccountTier.values:
+            self.account_tier = new_tier
+            self.tier_changed_at = timezone.now()
+            self.save(update_fields=["account_tier", "tier_changed_at", "updated_at"])
+
+    def update_subscription(
+        self,
+        subscription_id: str,
+        status: str,
+        current_period_end: timezone.datetime = None,
+    ) -> None:
+        """Update subscription information from payment provider webhook.
+
+        Args:
+            subscription_id: Subscription ID from provider
+            status: Subscription status
+            current_period_end: When the current period ends
+        """
+        self.payment_subscription_id = subscription_id
+        self.subscription_status = status
+        if current_period_end:
+            self.subscription_current_period_end = current_period_end
+        self.save(
+            update_fields=[
+                "payment_subscription_id",
+                "subscription_status",
+                "subscription_current_period_end",
+                "updated_at",
+            ]
+        )

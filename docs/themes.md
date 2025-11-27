@@ -6,6 +6,10 @@ priority: 2
 
 This guide covers the technical implementation of CheckTick's theming system for developers. For user-facing theme configuration, see [Branding and Theme Settings](branding-and-theme-settings.md). For platform deployment configuration, see [Self-Hosting: Platform Theme Configuration](self-hosting-themes.md).
 
+**Note:** Platform-level branding configuration (logos, themes, fonts) is available to:
+- Enterprise tier users on hosted CheckTick (via `/branding/` web UI)
+- Superusers on self-hosted deployments (via web UI or `manage.py configure_branding` CLI)
+
 ## Technology Stack
 
 - **Tailwind CSS v4.1.17** - Utility-first CSS framework with CSS-based configuration

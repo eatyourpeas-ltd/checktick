@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from .models import SiteBranding, UserEmailPreferences, UserLanguagePreference
+from .models import (
+    SiteBranding,
+    UserEmailPreferences,
+    UserLanguagePreference,
+    UserProfile,
+)
 
 
 @admin.register(SiteBranding)
@@ -88,3 +93,71 @@ class UserLanguagePreferenceAdmin(admin.ModelAdmin):
     list_display = ("user", "language")
     list_filter = ("language",)
     search_fields = ("user__username", "user__email")
+
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    """Admin interface for user account tiers and profiles."""
+
+    list_display = (
+        "user",
+        "account_tier",
+        "subscription_status",
+        "payment_provider",
+        "tier_changed_at",
+    )
+    list_filter = (
+        "account_tier",
+        "subscription_status",
+        "payment_provider",
+        "custom_branding_enabled",
+    )
+    search_fields = (
+        "user__username",
+        "user__email",
+        "payment_customer_id",
+        "payment_subscription_id",
+    )
+    readonly_fields = ("created_at", "updated_at", "tier_changed_at")
+    fieldsets = (
+        (
+            "User Information",
+            {
+                "fields": ("user",),
+            },
+        ),
+        (
+            "Account Tier",
+            {
+                "fields": (
+                    "account_tier",
+                    "tier_changed_at",
+                ),
+            },
+        ),
+        (
+            "Payment Information",
+            {
+                "fields": (
+                    "payment_provider",
+                    "payment_customer_id",
+                    "payment_subscription_id",
+                    "subscription_status",
+                    "subscription_current_period_end",
+                ),
+            },
+        ),
+        (
+            "Enterprise Features",
+            {
+                "fields": ("custom_branding_enabled",),
+            },
+        ),
+        (
+            "Timestamps",
+            {
+                "fields": ("created_at", "updated_at"),
+                "classes": ("collapse",),
+            },
+        ),
+    )

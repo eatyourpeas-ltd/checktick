@@ -340,7 +340,7 @@ curl https://checktick.example.com/api/datasets/available-tags/
 - **Org VIEWER**: Read-only access to organization datasets
 - **Org CREATOR/ADMIN**: Full dataset management for their organization
 
-*Individual users can create custom versions. This will require a pro account in future releases.
+**Note:** Dataset creation and management is not subject to tier limits. All authenticated users can create custom datasets for their own use.
 
 ## Error Responses
 

@@ -361,6 +361,13 @@ class SurveyViewSet(viewsets.ModelViewSet):
         return obj
 
     def perform_create(self, serializer):
+        # Check tier limits for survey creation
+        from checktick_app.core.tier_limits import check_survey_creation_limit
+
+        can_create, reason = check_survey_creation_limit(self.request.user)
+        if not can_create:
+            raise PermissionDenied(reason)
+
         obj = serializer.save(owner=self.request.user)
         import os
 
@@ -829,8 +836,36 @@ class SurveyMembershipViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         survey = serializer.validated_data.get("survey")
+        role = serializer.validated_data.get("role")
+
         if not self._can_manage(survey):
             raise PermissionDenied("Not allowed to manage users for this survey")
+
+        # Check tier limits for collaboration
+        from checktick_app.core.tier_limits import (
+            check_collaboration_limit,
+            check_collaborators_per_survey_limit,
+        )
+
+        # Determine collaboration type from role
+        collaboration_type = (
+            "editor"
+            if role in [SurveyMembership.Role.CREATOR, SurveyMembership.Role.EDITOR]
+            else "viewer"
+        )
+
+        # Check if user can add this type of collaborator
+        can_add, limit_reason = check_collaboration_limit(
+            self.request.user, collaboration_type
+        )
+        if not can_add:
+            raise PermissionDenied(limit_reason)
+
+        # Check per-survey collaborator limit
+        can_add_to_survey, survey_reason = check_collaborators_per_survey_limit(survey)
+        if not can_add_to_survey:
+            raise PermissionDenied(survey_reason)
+
         instance = serializer.save()
         AuditLog.objects.create(
             actor=self.request.user,

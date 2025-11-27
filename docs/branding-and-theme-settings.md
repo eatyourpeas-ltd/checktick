@@ -4,7 +4,7 @@ category: configuration
 priority: 1
 ---
 
-This guide explains CheckTick's 3-tier theme system and how to customize the appearance at different levels. Whether you're a platform admin, organization owner, or survey creator, you can control the look and feel of your CheckTick instance.
+This guide explains CheckTick's 3-tier theme system and how to customize the appearance at different levels. Whether you're a platform admin (Enterprise tier), organization owner, or survey creator, you can control the look and feel of your CheckTick instance.
 
 ## Overview: 3-Tier Theme Hierarchy
 
@@ -74,19 +74,73 @@ Different users can control different levels:- **theme_preset_dark** — daisyUI
 
 | **Organization** | Organization owners | Profile page | All organization members |
 
-| **Survey** | Survey creators | Survey dashboard | Survey pages only |**Precedence**: Database values → Environment variables → Built-in defaults
+| **Survey** | Survey creators | Survey dashboard | Survey pages only |
 
+## Platform Branding Configuration (Enterprise Tier)
 
+**New in CheckTick:** Enterprise tier users and self-hosted superusers can now configure platform-level branding through a web interface.
 
-## 1. Platform-Level Themes (Superusers)## How theming works
+### Who Can Access
 
+- **Enterprise tier users** (on hosted CheckTick)
+- **Superusers on self-hosted deployments** (with `SELF_HOSTED=true`)
 
+### How to Configure Branding
 
-Platform administrators set the default theme for the entire CheckTick deployment.1. **Logical theme names** (checktick-light, checktick-dark) are used for:
+**Web Interface** (Recommended):
 
-   - User preference storage (localStorage)
+1. Navigate to your Profile page
+2. Click on "Configure Branding" (visible only to Enterprise/superuser users)
+3. Or go directly to `/branding/`
+4. Configure the following:
+   - **Default Theme**: checktick-light or checktick-dark
+   - **Light Mode Preset**: Choose from 20+ daisyUI themes (nord, cupcake, etc.)
+   - **Dark Mode Preset**: Choose from 12+ dark daisyUI themes (business, dracula, etc.)
+   - **Logo & Icons**: Upload light/dark mode logos or provide URLs
+   - **Typography**: Set custom fonts for headings and body text
+5. Click "Save" to apply changes instantly
 
-### Who Can Configure   - Theme toggle UI
+**Command Line** (For self-hosted deployments):
+
+```bash
+# Show current branding configuration
+python manage.py configure_branding --show
+
+# Set theme presets
+python manage.py configure_branding --theme-light nord --theme-dark business
+
+# Upload logo files
+python manage.py configure_branding --logo path/to/logo.png --logo-dark path/to/logo-dark.png
+
+# Set logo URLs
+python manage.py configure_branding --logo-url https://example.com/logo.png
+
+# Configure fonts
+python manage.py configure_branding --font-heading "Inter, sans-serif" --font-body "Open Sans, sans-serif"
+
+# Reset to defaults
+python manage.py configure_branding --reset
+```
+
+### Configuration Storage
+
+All branding settings are stored in the `SiteBranding` database model (singleton pattern):
+
+- **default_theme** — Logical theme name (checktick-light or checktick-dark)
+- **theme_preset_light** — daisyUI preset for light mode (20 options)
+- **theme_preset_dark** — daisyUI preset for dark mode (12 options)
+- **icon_file** / **icon_url** — Light mode icon (uploaded file takes precedence over URL)
+- **icon_file_dark** / **icon_url_dark** — Dark mode icon
+- **font_heading** / **font_body** / **font_css_url** — Font configuration
+- **theme_light_css** / **theme_dark_css** — Custom CSS from daisyUI Theme Generator (optional, overrides presets)
+
+**Precedence**: Database values → Environment variables → Built-in defaults
+
+## 1. Platform-Level Themes (Superusers)
+
+Platform administrators set the default theme for the entire CheckTick deployment.
+
+### Who Can Configure
 
    - Database field values
 

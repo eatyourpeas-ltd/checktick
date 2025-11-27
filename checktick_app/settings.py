@@ -64,6 +64,9 @@ DEBUG = env("DEBUG")
 SECRET_KEY = env("SECRET_KEY") or os.urandom(32)
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 
+# Self-hosted mode - gives all users Enterprise features
+SELF_HOSTED = env.bool("SELF_HOSTED", default=False)
+
 DATABASES = {
     "default": env.db("DATABASE_URL"),
 }
@@ -137,6 +140,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "checktick_app.context_processors.branding",
+                "checktick_app.core.context_processors.tier_info",
             ],
         },
     }
@@ -232,6 +236,10 @@ SECURE_SSL_REDIRECT = env("SECURE_SSL_REDIRECT")
 X_FRAME_OPTIONS = "DENY"
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# Forms configuration
+# Set default URL scheme to HTTPS for Django 6.0+ compatibility
+FORMS_URLFIELD_ASSUME_HTTPS = True
 
 # When running behind a reverse proxy (e.g., Northflank), trust forwarded proto/host
 # so Django correctly detects HTTPS and constructs absolute URLs without redirect loops.
