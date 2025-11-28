@@ -74,10 +74,11 @@ When you cancel:
 
 When downgrading from a paid tier to FREE:
 
-* You are limited to 3 surveys maximum
+* You **must have 3 or fewer surveys** before downgrading is allowed
+* If you have more than 3 surveys, you must delete the excess surveys first
+* After downgrading, you are limited to 3 surveys maximum
 * Collaboration features are disabled
-* Existing surveys above the limit remain accessible but read-only
-* You can delete surveys to get below the limit and create new ones
+* You cannot create new surveys until you are below the 3-survey limit
 
 ## 4. Refund Policy
 

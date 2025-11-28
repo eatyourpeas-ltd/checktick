@@ -395,16 +395,43 @@ class UserProfile(models.Model):
             self.tier_changed_at = timezone.now()
             self.save(update_fields=["account_tier", "tier_changed_at", "updated_at"])
 
-    def downgrade_tier(self, new_tier: str) -> None:
+    def downgrade_tier(self, new_tier: str) -> tuple[bool, str]:
         """Downgrade user to a lower tier.
+
+        Validates that user meets requirements for the target tier before downgrading.
+        For example, FREE tier users cannot have more than 3 surveys.
 
         Args:
             new_tier: The new tier to downgrade to
+
+        Returns:
+            (success, message) - Boolean indicating success and message explaining result
         """
-        if new_tier in self.AccountTier.values:
-            self.account_tier = new_tier
-            self.tier_changed_at = timezone.now()
-            self.save(update_fields=["account_tier", "tier_changed_at", "updated_at"])
+        if new_tier not in self.AccountTier.values:
+            return False, f"Invalid tier: {new_tier}"
+
+        # Check if downgrade is allowed based on current usage
+        from checktick_app.core.tier_limits import get_tier_limits
+        from checktick_app.surveys.models import Survey
+
+        target_limits = get_tier_limits(new_tier)
+
+        # Check survey count if target tier has a limit
+        if target_limits.max_surveys is not None:
+            survey_count = Survey.objects.filter(owner=self.user, is_original=True).count()
+            if survey_count > target_limits.max_surveys:
+                return False, (
+                    f"Cannot downgrade to {new_tier.title()} tier: You currently have "
+                    f"{survey_count} surveys, but {new_tier.title()} tier allows a maximum of "
+                    f"{target_limits.max_surveys}. Please delete or archive "
+                    f"{survey_count - target_limits.max_surveys} survey(s) before downgrading."
+                )
+
+        # Downgrade is allowed
+        self.account_tier = new_tier
+        self.tier_changed_at = timezone.now()
+        self.save(update_fields=["account_tier", "tier_changed_at", "updated_at"])
+        return True, f"Successfully downgraded to {new_tier.title()} tier"
 
     def update_subscription(
         self,
