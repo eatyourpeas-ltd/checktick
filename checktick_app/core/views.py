@@ -669,8 +669,8 @@ def _discover_doc_pages():
             # Get category from frontmatter (required)
             category = frontmatter.get("category")
 
-            # Skip if no category specified
-            if not category:
+            # Skip if no category specified (must be explicit, even if None)
+            if "category" not in frontmatter:
                 continue
 
             # Handle category: None (hide from menu but keep accessible via URL)
@@ -925,6 +925,16 @@ def docs_page(request, slug: str):
         content,
         extensions=["fenced_code", "tables", "toc"],
     )
+
+    # Rewrite internal .md links to proper /docs/slug/ URLs
+    # Convert patterns like href="filename.md" or href="path/filename.md" to href="/docs/filename/"
+    import re
+    html = re.sub(
+        r'href="([^"]*?)\.md(#[^"]*)?(")',
+        lambda m: f'href="/docs/{m.group(1).split("/")[-1]}/{m.group(2) or ""}{m.group(3)}',
+        html
+    )
+
     return render(
         request,
         "core/docs.html",

@@ -151,6 +151,19 @@
               {% include "components/render_form_fields.html" with form=form %}
             </div>
 
+            {# Terms and Privacy acceptance #}
+            <div class="form-control">
+              <label class="label cursor-pointer justify-start gap-3">
+                <input type="checkbox" name="accept_terms" class="checkbox checkbox-primary shrink-0" required />
+                <span class="label-text text-sm">
+                  {% trans "I agree to the" %}
+                  <a href="{% url 'core:docs_page' slug='terms-of-service' %}" target="_blank" class="link link-primary">{% trans "Terms of Service" %}</a>
+                  {% trans "and" %}
+                  <a href="{% url 'core:docs_page' slug='privacy-notice' %}" target="_blank" class="link link-primary">{% trans "Privacy Notice" %}</a>
+                </span>
+              </label>
+            </div>
+
             <button type="submit" class="btn btn-primary w-full">{% trans "Create account" %}</button>
           </form>
         </div>
