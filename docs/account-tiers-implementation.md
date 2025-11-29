@@ -182,11 +182,13 @@ SELF_HOSTED=true
 
 When `SELF_HOSTED=true`:
 - All users automatically get Enterprise tier capabilities
+- **Billing UI is completely hidden** - no payment pages, upgrade prompts, or subscription management
 - No payment integration required
 - No survey limits enforced
 - Full branding customization available
 - All collaboration features enabled
 - No tier restrictions applied
+- Pricing page still visible but marked as reference for hosted version
 
 ### Branding Management for Self-Hosted
 Self-hosted administrators can configure branding via:

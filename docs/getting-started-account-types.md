@@ -98,7 +98,7 @@ Teams provide collaboration features for groups of 5-20 users. Teams can be stan
 - Shared survey access within team
 - Team-level encryption key management
 
-***Cost:*** £25/month
+***Cost:*** £20/month
 
 ### Team Medium (10 users)
 
@@ -111,7 +111,7 @@ Teams provide collaboration features for groups of 5-20 users. Teams can be stan
 - Everything in Team Small
 - Larger team capacity
 
-***Cost:*** £50/month
+***Cost:*** £35/month
 
 ### Team Large (20 users)
 
@@ -124,11 +124,11 @@ Teams provide collaboration features for groups of 5-20 users. Teams can be stan
 - Everything in Team Medium
 - Larger team capacity
 
-***Cost:*** £100/month
+***Cost:*** £60/month
 
 ### Team Custom (>20 users)
 
-For teams requiring more than 20 members, contact us for a custom quote at approximately £5/user/month.
+For teams requiring more than 20 members, contact us for a custom quote.
 
 ***Team Roles:***
 
@@ -146,7 +146,7 @@ Teams support three roles:
 - **Collaboration:** Full role-based access within the team
 - **Upgrade path:** Teams can convert to Organisations as they grow
 - **Survey access hierarchy:** Organisation admin (if team is in an org) > Team admin > Survey owner
-- **Cost:** £25-100/month depending on size
+- **Cost:** £20-60/month depending on size
 
 ## 🏢 - ORGANISATION Tier
 
@@ -263,10 +263,10 @@ When running CheckTick in self-hosted mode (with `SELF_HOSTED=true` in settings)
 
 **Which Team size?**
 
-- **Small (5 users, £25/mo)**: Small departments, pilot projects
-- **Medium (10 users, £50/mo)**: Medium-sized teams, research groups
-- **Large (20 users, £100/mo)**: Larger departments, multi-site projects
-- **Custom (>20 users)**: Contact for quote (£5/user/mo)
+- **Small (5 users, £20/mo)**: Small departments, pilot projects
+- **Medium (10 users, £35/mo)**: Medium-sized teams, research groups
+- **Large (20 users, £60/mo)**: Larger departments, multi-site projects
+- **Custom (>20 users)**: Contact for quote
 
 **Example use cases:**
 
