@@ -294,6 +294,42 @@ class PaymentClient:
         )
         return response.get("data", {})
 
+    def generate_customer_portal_url(
+        self, customer_id: str, return_url: Optional[str] = None
+    ) -> str:
+        """Generate a customer portal session URL for managing subscription.
+
+        The customer portal allows users to:
+        - View payment history and invoices
+        - Update payment methods
+        - View upcoming charges
+        - Manage subscription (if enabled)
+
+        Args:
+            customer_id: Paddle customer ID
+            return_url: Optional URL to return to after portal session
+
+        Returns:
+            Customer portal URL
+
+        Reference: https://developer.paddle.com/api-reference/overview
+        """
+        # For Paddle, we generate a simple customer portal URL
+        # The portal is at: https://vendors.paddle.com/subscriptions/customers/{customer_id}
+        # For sandbox: https://sandbox-vendors.paddle.com/subscriptions/customers/{customer_id}
+
+        logger.info(
+            f"Generating customer portal URL ({self.environment}) for customer: {customer_id}"
+        )
+
+        # Paddle's customer portal is accessed directly via URL
+        if self.environment == "sandbox":
+            portal_url = f"https://sandbox-vendors.paddle.com/subscriptions/customers/{customer_id}"
+        else:
+            portal_url = f"https://vendors.paddle.com/subscriptions/customers/{customer_id}"
+
+        return portal_url
+
 
 # Global client instance
 # Currently configured to use Paddle as the payment processor

@@ -72,7 +72,7 @@ def pricing(request):
     from django.conf import settings
 
     context = {
-        "price_ids": settings.PAYMENT_PRODUCT_IDS,
+        "price_ids": settings.PAYMENT_PRICE_IDS,
         "self_hosted": getattr(settings, "SELF_HOSTED", False),
     }
     return render(request, "core/pricing.html", context)
@@ -341,6 +341,16 @@ def profile(request):
         user.is_staff or stats["orgs_owned"] > 0 or stats["org_admin_count"] > 0
     )
 
+    # Get subscription information
+    profile = user.profile
+    subscription_info = {
+        "tier": profile.account_tier,
+        "tier_display": profile.get_account_tier_display(),
+        "subscription_status": profile.subscription_status,
+        "created_at": profile.created_at,
+        "payment_provider": profile.payment_provider,
+    }
+
     return render(
         request,
         "core/profile.html",
@@ -354,6 +364,7 @@ def profile(request):
             "can_manage_any_users": can_manage_any_users,
             "light_theme_choices": light_theme_choices,
             "dark_theme_choices": dark_theme_choices,
+            "subscription_info": subscription_info,
         },
     )
 

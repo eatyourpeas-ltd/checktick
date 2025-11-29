@@ -25,6 +25,11 @@ urlpatterns = [
         views_billing.cancel_subscription,
         name="cancel_subscription",
     ),
+    path(
+        "subscription/payment-history/",
+        views_billing.payment_history,
+        name="payment_history",
+    ),
     path("billing/success/", views_billing.checkout_success, name="checkout_success"),
     path("webhooks/payment/", views_billing.payment_webhook, name="payment_webhook"),
 ]
