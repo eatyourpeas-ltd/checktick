@@ -461,10 +461,13 @@ class UserProfile(models.Model):
         surveys_closed = 0
         if target_limits.max_surveys is not None:
             # Get all active/draft surveys ordered by created_at (oldest first)
-            active_surveys = Survey.objects.filter(
-                owner=self.user,
-                status__in=["draft", "active", "published"],
-            ).order_by("created_at")
+            active_surveys = (
+                Survey.objects.filter(
+                    owner=self.user,
+                )
+                .exclude(status=Survey.Status.CLOSED)
+                .order_by("created_at")
+            )
 
             survey_count = active_surveys.count()
             if survey_count > target_limits.max_surveys:
@@ -473,8 +476,8 @@ class UserProfile(models.Model):
                 surveys_to_close = active_surveys[:excess_count]
 
                 for survey in surveys_to_close:
-                    survey.status = "closed"
-                    survey.save(update_fields=["status", "updated_at"])
+                    survey.status = Survey.Status.CLOSED
+                    survey.save(update_fields=["status"])
                     surveys_closed += 1
 
         # Perform the downgrade

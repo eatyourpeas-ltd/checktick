@@ -15,7 +15,7 @@
   </div>
 
   <!-- Pricing Cards -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-12">
 
     <!-- Individual Free (3 Surveys) -->
     <div class="card bg-base-100 shadow-xl border border-base-300">
@@ -172,13 +172,14 @@
       </div>
     </div>
 
-    <!-- Organisation -->
+    <!-- Team Small (5 members) -->
     <div class="card bg-base-100 shadow-xl border border-base-300">
       <div class="card-body">
-        <h2 class="card-title text-2xl mb-2">{% trans "Organisation" %}</h2>
+        <h2 class="card-title text-2xl mb-2">{% trans "Team Small" %}</h2>
         <div class="mb-4">
-          <span class="text-3xl font-bold">{% trans "Contact Us" %}</span>
-          <p class="text-sm text-base-content/70">{% trans "For teams" %}</p>
+          <span class="text-3xl font-bold">£20</span>
+          <span class="text-base-content/70">/{% trans "month" %}</span>
+          <p class="text-sm text-base-content/70">{% trans "5 team members" %}</p>
         </div>
 
         <div class="divider"></div>
@@ -189,6 +190,18 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
             <span>{% trans "Everything in Individual Pro" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span class="font-semibold">{% trans "Up to 5 team members" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>{% trans "Up to 50 active surveys" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -206,36 +219,117 @@
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span class="font-semibold">{% trans "Unlimited collaborators per survey" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Role-based permissions (Admin, Creator, Viewer)" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Organisation encryption" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Shared survey groups" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Centralized audit logs" %}</span>
+            <span>{% trans "Unlimited collaborators per survey" %}</span>
           </li>
         </ul>
 
         <div class="card-actions mt-6">
-          <a href="mailto:contact@example.com" class="btn btn-outline btn-block">{% trans "Contact Sales" %}</a>
+          {% if user.is_authenticated and not self_hosted %}
+            {% if user.profile.account_tier == 'team_small' %}
+              <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
+            {% else %}
+              <button
+                class="btn btn-primary btn-block paddle-checkout-btn"
+                data-tier="team_small"
+                data-price-id="{{ price_ids.team_small }}">
+                {% trans "Upgrade Now" %}
+              </button>
+            {% endif %}
+          {% elif not user.is_authenticated %}
+            <a href="/signup/" class="btn btn-primary btn-block">{% trans "Get Started" %}</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Team Medium (10 members) -->
+    <div class="card bg-base-100 shadow-xl border border-base-300">
+      <div class="card-body">
+        <h2 class="card-title text-2xl mb-2">{% trans "Team Medium" %}</h2>
+        <div class="mb-4">
+          <span class="text-3xl font-bold">£35</span>
+          <span class="text-base-content/70">/{% trans "month" %}</span>
+          <p class="text-sm text-base-content/70">{% trans "10 team members" %}</p>
+        </div>
+
+        <div class="divider"></div>
+
+        <ul class="space-y-3 grow">
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>{% trans "Everything in Team Small" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span class="font-semibold">{% trans "Up to 10 team members" %}</span>
+          </li>
+        </ul>
+
+        <div class="card-actions mt-6">
+          {% if user.is_authenticated and not self_hosted %}
+            {% if user.profile.account_tier == 'team_medium' %}
+              <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
+            {% else %}
+              <button
+                class="btn btn-primary btn-block paddle-checkout-btn"
+                data-tier="team_medium"
+                data-price-id="{{ price_ids.team_medium }}">
+                {% trans "Upgrade Now" %}
+              </button>
+            {% endif %}
+          {% elif not user.is_authenticated %}
+            <a href="/signup/" class="btn btn-primary btn-block">{% trans "Get Started" %}</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Team Large (20 members) -->
+    <div class="card bg-base-100 shadow-xl border border-base-300">
+      <div class="card-body">
+        <h2 class="card-title text-2xl mb-2">{% trans "Team Large" %}</h2>
+        <div class="mb-4">
+          <span class="text-3xl font-bold">£60</span>
+          <span class="text-base-content/70">/{% trans "month" %}</span>
+          <p class="text-sm text-base-content/70">{% trans "20 team members" %}</p>
+        </div>
+
+        <div class="divider"></div>
+
+        <ul class="space-y-3 grow">
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>{% trans "Everything in Team Medium" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span class="font-semibold">{% trans "Up to 20 team members" %}</span>
+          </li>
+        </ul>
+
+        <div class="card-actions mt-6">
+          {% if user.is_authenticated and not self_hosted %}
+            {% if user.profile.account_tier == 'team_large' %}
+              <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
+            {% else %}
+              <button
+                class="btn btn-primary btn-block paddle-checkout-btn"
+                data-tier="team_large"
+                data-price-id="{{ price_ids.team_large }}">
+                {% trans "Upgrade Now" %}
+              </button>
+            {% endif %}
+          {% elif not user.is_authenticated %}
+            <a href="/signup/" class="btn btn-primary btn-block">{% trans "Get Started" %}</a>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -315,7 +409,9 @@
               <th>{% trans "Feature" %}</th>
               <th class="text-center">{% trans "Individual" %}<br><span class="text-xs font-normal">(3 surveys)</span></th>
               <th class="text-center">{% trans "Individual Pro" %}<br><span class="text-xs font-normal">(Unlimited)</span></th>
-              <th class="text-center">{% trans "Organisation" %}</th>
+              <th class="text-center">{% trans "Team Small" %}<br><span class="text-xs font-normal">(5 members)</span></th>
+              <th class="text-center">{% trans "Team Medium" %}<br><span class="text-xs font-normal">(10 members)</span></th>
+              <th class="text-center">{% trans "Team Large" %}<br><span class="text-xs font-normal">(20 members)</span></th>
               <th class="text-center">{% trans "Enterprise" %}</th>
             </tr>
           </thead>
@@ -324,11 +420,15 @@
               <td class="font-semibold">{% trans "Active Surveys" %}</td>
               <td class="text-center">3</td>
               <td class="text-center">∞</td>
-              <td class="text-center">∞</td>
+              <td class="text-center">50</td>
+              <td class="text-center">50</td>
+              <td class="text-center">50</td>
               <td class="text-center">∞</td>
             </tr>
             <tr>
               <td class="font-semibold">{% trans "Responses per Survey" %}</td>
+              <td class="text-center">∞</td>
+              <td class="text-center">∞</td>
               <td class="text-center">∞</td>
               <td class="text-center">∞</td>
               <td class="text-center">∞</td>
@@ -340,9 +440,15 @@
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
             </tr>
             <tr>
               <td class="font-semibold">{% trans "API Access" %}</td>
+              <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
@@ -354,9 +460,13 @@
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
             </tr>
             <tr>
               <td class="font-semibold">{% trans "Dataset Creation & Sharing" %}</td>
+              <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
@@ -368,11 +478,24 @@
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
+            </tr>
+            <tr>
+              <td class="font-semibold">{% trans "Team Members" %}</td>
+              <td class="text-center">—</td>
+              <td class="text-center">—</td>
+              <td class="text-center">5</td>
+              <td class="text-center">10</td>
+              <td class="text-center">20</td>
+              <td class="text-center">∞</td>
             </tr>
             <tr>
               <td class="font-semibold">{% trans "Team Collaboration" %}</td>
               <td class="text-center">—</td>
               <td class="text-center">Editors only</td>
+              <td class="text-center">✓ Full</td>
+              <td class="text-center">✓ Full</td>
               <td class="text-center">✓ Full</td>
               <td class="text-center">✓ Full</td>
             </tr>
@@ -382,11 +505,15 @@
               <td class="text-center">10</td>
               <td class="text-center">∞</td>
               <td class="text-center">∞</td>
+              <td class="text-center">∞</td>
+              <td class="text-center">∞</td>
             </tr>
             <tr>
               <td class="font-semibold">{% trans "Viewer Role (Read-Only)" %}</td>
               <td class="text-center">—</td>
               <td class="text-center">—</td>
+              <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
             </tr>
@@ -396,23 +523,32 @@
               <td class="text-center">—</td>
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
+              <td class="text-center">✓</td>
             </tr>
             <tr>
               <td class="font-semibold">{% trans "Organisation Encryption" %}</td>
               <td class="text-center">—</td>
               <td class="text-center">—</td>
-              <td class="text-center">✓</td>
+              <td class="text-center">—</td>
+              <td class="text-center">—</td>
+              <td class="text-center">—</td>
               <td class="text-center">✓</td>
             </tr>
             <tr>
               <td class="font-semibold">{% trans "Audit Logs" %}</td>
               <td class="text-center">Basic</td>
               <td class="text-center">Basic</td>
-              <td class="text-center">Advanced</td>
+              <td class="text-center">Basic</td>
+              <td class="text-center">Basic</td>
+              <td class="text-center">Basic</td>
               <td class="text-center">Advanced</td>
             </tr>
             <tr>
               <td class="font-semibold">{% trans "Self-Hosted Option" %}</td>
+              <td class="text-center">—</td>
+              <td class="text-center">—</td>
+              <td class="text-center">—</td>
               <td class="text-center">—</td>
               <td class="text-center">—</td>
               <td class="text-center">—</td>
@@ -423,6 +559,8 @@
               <td class="text-center">—</td>
               <td class="text-center">—</td>
               <td class="text-center">—</td>
+              <td class="text-center">—</td>
+              <td class="text-center">—</td>
               <td class="text-center">✓ Platform Level</td>
             </tr>
             <tr>
@@ -430,10 +568,14 @@
               <td class="text-center">—</td>
               <td class="text-center">—</td>
               <td class="text-center">—</td>
+              <td class="text-center">—</td>
+              <td class="text-center">—</td>
               <td class="text-center">Logo, Themes, Fonts</td>
             </tr>
             <tr>
               <td class="font-semibold">{% trans "SSO/OIDC" %}</td>
+              <td class="text-center">—</td>
+              <td class="text-center">—</td>
               <td class="text-center">—</td>
               <td class="text-center">—</td>
               <td class="text-center">—</td>
@@ -458,22 +600,22 @@
 
       <div class="card bg-base-100 shadow">
         <div class="card-body">
-          <h3 class="font-semibold text-lg">{% trans "Is CheckTick really free?" %}</h3>
-          <p class="text-base-content/70">{% trans "Yes, for self-hosted deployments. Individual accounts are completely free with unlimited responses. Organisation pricing applies for managed hosting and team features." %}</p>
+          <h3 class="font-semibold text-lg">{% trans "Do you support NHS terminology and datasets?" %}</h3>
+          <p class="text-base-content/70">{% trans "Yes! CheckTick includes built-in support for NHS Data Dictionary datasets, including ethnicity codes, sex, gender identity, and other standardized healthcare terminology. You can also create custom datasets for your specific needs." %}</p>
         </div>
       </div>
 
       <div class="card bg-base-100 shadow">
         <div class="card-body">
           <h3 class="font-semibold text-lg">{% trans "What's the difference between Individual and Individual Pro?" %}</h3>
-          <p class="text-base-content/70">{% trans "Individual accounts can have up to 3 active surveys at a time. Individual Pro removes this limit, allowing unlimited concurrent surveys." %}</p>
+          <p class="text-base-content/70">{% trans "Individual (free) accounts can have up to 3 active surveys. Individual Pro removes this limit with unlimited surveys. For team collaboration with multiple users, choose from our Team plans (5-20 members) or Organisation tier for larger teams with advanced features." %}</p>
         </div>
       </div>
 
       <div class="card bg-base-100 shadow">
         <div class="card-body">
-          <h3 class="font-semibold text-lg">{% trans "How does data encryption work?" %}</h3>
-          <p class="text-base-content/70">{% trans "Individual accounts use personal passphrases to encrypt survey data. Organisation accounts can use centralized encryption, making it easier for teams to share encrypted data securely." %}</p>
+          <h3 class="font-semibold text-lg">{% trans "Is my data secure and safe?" %}</h3>
+          <p class="text-base-content/70">{% trans "Yes. CheckTick uses end-to-end encryption to protect patient and survey data. All sensitive information is encrypted before storage, and only you can decrypt it. The platform is designed specifically for healthcare research with privacy and security as core principles." %}</p>
         </div>
       </div>
     </div>

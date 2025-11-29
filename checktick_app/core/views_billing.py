@@ -12,13 +12,14 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django_ratelimit.decorators import ratelimit
 
 from checktick_app.core.billing import PaymentAPIError, payment_client
-from checktick_app.core.models import UserProfile
 from checktick_app.core.email_utils import (
-    send_subscription_created_email,
     send_subscription_cancelled_email,
+    send_subscription_created_email,
 )
+from checktick_app.core.models import UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -38,16 +39,21 @@ def subscription_portal(request: HttpRequest) -> HttpResponse:
     profile = user.profile
 
     # Check if user can downgrade (count active surveys)
-    from checktick_app.surveys.models import Survey
     from checktick_app.core.tier_limits import get_tier_limits
+    from checktick_app.surveys.models import Survey
 
     survey_count = Survey.objects.filter(
         owner=user, status__in=["draft", "active"]
     ).count()
 
     free_tier_limits = get_tier_limits("free")
-    can_downgrade = free_tier_limits.max_surveys is None or survey_count <= free_tier_limits.max_surveys
-    surveys_to_remove = 0 if can_downgrade else survey_count - free_tier_limits.max_surveys
+    can_downgrade = (
+        free_tier_limits.max_surveys is None
+        or survey_count <= free_tier_limits.max_surveys
+    )
+    surveys_to_remove = (
+        0 if can_downgrade else survey_count - free_tier_limits.max_surveys
+    )
 
     context = {
         "current_tier": profile.account_tier,
@@ -78,6 +84,7 @@ def subscription_portal(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_http_methods(["POST"])
+@ratelimit(key="user", rate="5/h", block=True)
 def cancel_subscription(request: HttpRequest) -> HttpResponse:
     """Cancel user's subscription.
 
@@ -102,8 +109,8 @@ def cancel_subscription(request: HttpRequest) -> HttpResponse:
         profile.save(update_fields=["subscription_status", "updated_at"])
 
         # Check if user will have surveys auto-closed
-        from checktick_app.surveys.models import Survey
         from checktick_app.core.tier_limits import get_tier_limits
+        from checktick_app.surveys.models import Survey
 
         survey_count = Survey.objects.filter(
             owner=user, status__in=["draft", "active", "published"]
@@ -117,12 +124,12 @@ def cancel_subscription(request: HttpRequest) -> HttpResponse:
                 request,
                 f"Your subscription has been cancelled. You will retain access to paid features until the end of your billing period. "
                 f"At that time, your {surveys_to_close} oldest survey(s) will be automatically closed (read-only). "
-                f"You can still view and export data from closed surveys."
+                f"You can still view and export data from closed surveys.",
             )
         else:
             messages.success(
                 request,
-                "Your subscription has been cancelled. You will retain access to paid features until the end of your billing period."
+                "Your subscription has been cancelled. You will retain access to paid features until the end of your billing period.",
             )
 
         logger.info(
@@ -165,16 +172,12 @@ def payment_history(request: HttpRequest) -> HttpResponse:
 
     try:
         # Generate customer portal URL with return URL
-        return_url = request.build_absolute_uri(
-            reverse("core:subscription_portal")
-        )
+        return_url = request.build_absolute_uri(reverse("core:subscription_portal"))
         portal_url = payment_client.generate_customer_portal_url(
             profile.payment_customer_id, return_url=return_url
         )
 
-        logger.info(
-            f"User {user.username} accessing payment history via Paddle portal"
-        )
+        logger.info(f"User {user.username} accessing payment history via Paddle portal")
         return redirect(portal_url)
 
     except PaymentAPIError as e:
@@ -188,6 +191,7 @@ def payment_history(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_http_methods(["GET"])
+@ratelimit(key="ip", rate="10/m", block=True)
 def checkout_success(request: HttpRequest) -> HttpResponse:
     """Handle successful checkout completion.
 
@@ -215,6 +219,7 @@ def checkout_success(request: HttpRequest) -> HttpResponse:
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@ratelimit(key="ip", rate="100/m", block=True)
 def payment_webhook(request: HttpRequest) -> HttpResponse:
     """Handle payment processor webhook events.
 
@@ -273,8 +278,8 @@ def verify_paddle_webhook_signature(request: HttpRequest) -> bool:
     Returns:
         bool: True if signature is valid, False otherwise
     """
-    import hmac
     import hashlib
+    import hmac
 
     # Get signature from header
     signature = request.headers.get("Paddle-Signature")
@@ -288,7 +293,9 @@ def verify_paddle_webhook_signature(request: HttpRequest) -> bool:
         logger.error("PAYMENT_WEBHOOK_SECRET not configured")
         # In development, you might want to allow webhooks without signature
         if settings.DEBUG:
-            logger.warning("DEBUG mode: Allowing webhook without signature verification")
+            logger.warning(
+                "DEBUG mode: Allowing webhook without signature verification"
+            )
             return True
         return False
 
@@ -310,9 +317,7 @@ def verify_paddle_webhook_signature(request: HttpRequest) -> bool:
 
     # Calculate expected signature
     expected_signature = hmac.new(
-        webhook_secret.encode('utf-8'),
-        signed_payload.encode('utf-8'),
-        hashlib.sha256
+        webhook_secret.encode("utf-8"), signed_payload.encode("utf-8"), hashlib.sha256
     ).hexdigest()
 
     # Compare signatures (constant-time comparison to prevent timing attacks)
@@ -323,6 +328,7 @@ def verify_paddle_webhook_signature(request: HttpRequest) -> bool:
     # Optional: Check timestamp to prevent replay attacks
     # Paddle recommends rejecting webhooks older than 5 minutes
     import time
+
     current_time = int(time.time())
     webhook_time = int(timestamp)
     if abs(current_time - webhook_time) > 300:  # 5 minutes
@@ -353,6 +359,7 @@ def handle_subscription_created(payload: dict) -> HttpResponse:
         if user_id:
             try:
                 from django.contrib.auth import get_user_model
+
                 User = get_user_model()
                 user = User.objects.get(id=user_id)
                 profile = user.profile
@@ -363,7 +370,9 @@ def handle_subscription_created(payload: dict) -> HttpResponse:
                 logger.error(f"No user found for user_id in custom_data: {user_id}")
                 return JsonResponse({"error": "User not found"}, status=404)
         else:
-            logger.error(f"No user found for customer ID: {customer_id} and no userId in custom_data")
+            logger.error(
+                f"No user found for customer ID: {customer_id} and no userId in custom_data"
+            )
             return JsonResponse({"error": "User not found"}, status=404)
 
     # Update profile
@@ -375,6 +384,7 @@ def handle_subscription_created(payload: dict) -> HttpResponse:
     ends_at = billing_period.get("ends_at")
     if ends_at:
         from django.utils.dateparse import parse_datetime
+
         profile.subscription_current_period_end = parse_datetime(ends_at)
 
     # Determine tier from price ID
@@ -397,7 +407,9 @@ def handle_subscription_created(payload: dict) -> HttpResponse:
             old_tier = profile.account_tier
             profile.account_tier = tier
             profile.tier_changed_at = timezone.now()
-            logger.info(f"Upgrading user {profile.user.username} from {old_tier} to {tier}")
+            logger.info(
+                f"Upgrading user {profile.user.username} from {old_tier} to {tier}"
+            )
         else:
             logger.warning(f"Could not determine tier from price_id: {price_id}")
     else:
@@ -411,7 +423,9 @@ def handle_subscription_created(payload: dict) -> HttpResponse:
 
     # Send welcome email
     try:
-        send_subscription_created_email(profile.user, profile.account_tier, billing_cycle)
+        send_subscription_created_email(
+            profile.user, profile.account_tier, billing_cycle
+        )
         logger.info(f"Welcome email sent to {profile.user.email}")
     except Exception as e:
         logger.error(f"Failed to send welcome email to {profile.user.email}: {e}")
@@ -479,14 +493,17 @@ def handle_subscription_canceled(payload: dict) -> HttpResponse:
     access_until = None
     if ends_at:
         from django.utils.dateparse import parse_datetime
+
         access_until = parse_datetime(ends_at)
 
     # Count surveys before downgrade
     from checktick_app.surveys.models import Survey
-    survey_count = Survey.objects.filter(
-        created_by=profile.user,
-        is_closed=False
-    ).count()
+
+    survey_count = (
+        Survey.objects.filter(owner=profile.user)
+        .exclude(status=Survey.Status.CLOSED)
+        .count()
+    )
 
     # Calculate how many surveys will be auto-closed
     free_tier_limit = 3
@@ -496,13 +513,9 @@ def handle_subscription_canceled(payload: dict) -> HttpResponse:
     success, message = profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
 
     if not success:
-        logger.error(
-            f"Failed to downgrade user {profile.user.username}: {message}"
-        )
+        logger.error(f"Failed to downgrade user {profile.user.username}: {message}")
     else:
-        logger.info(
-            f"User {profile.user.username} downgraded to FREE: {message}"
-        )
+        logger.info(f"User {profile.user.username} downgraded to FREE: {message}")
 
     profile.subscription_status = UserProfile.SubscriptionStatus.CANCELED
     profile.payment_subscription_id = ""
@@ -520,7 +533,7 @@ def handle_subscription_canceled(payload: dict) -> HttpResponse:
             access_until,
             survey_count,
             surveys_to_close,
-            free_tier_limit
+            free_tier_limit,
         )
         logger.info(f"Cancellation email sent to {profile.user.email}")
     except Exception as e:
@@ -627,7 +640,9 @@ def get_tier_from_price_id(price_id: str) -> str:
     tier = price_to_tier.get(price_id)
 
     if not tier:
-        logger.warning(f"Unknown price ID: {price_id}. Configured price IDs: {price_ids}")
+        logger.warning(
+            f"Unknown price ID: {price_id}. Configured price IDs: {price_ids}"
+        )
         return ""
 
     logger.info(f"Mapped price ID {price_id} to tier {tier}")

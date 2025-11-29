@@ -580,7 +580,9 @@ def send_authenticated_survey_invite_new_user(
     )
 
 
-def send_subscription_created_email(user, tier: str, billing_cycle: str = "Monthly") -> bool:
+def send_subscription_created_email(
+    user, tier: str, billing_cycle: str = "Monthly"
+) -> bool:
     """Send welcome email when user subscribes to a paid plan.
 
     Args:
@@ -626,7 +628,14 @@ def send_subscription_created_email(user, tier: str, billing_cycle: str = "Month
     )
 
 
-def send_subscription_cancelled_email(user, tier: str, end_date, survey_count: int = 0, surveys_to_close: int = 0, free_tier_limit: int = 3) -> bool:
+def send_subscription_cancelled_email(
+    user,
+    tier: str,
+    end_date,
+    survey_count: int = 0,
+    surveys_to_close: int = 0,
+    free_tier_limit: int = 3,
+) -> bool:
     """Send notification when user cancels subscription.
 
     Args:
@@ -652,7 +661,9 @@ def send_subscription_cancelled_email(user, tier: str, end_date, survey_count: i
     subject = f"Subscription Cancelled - {branding['title']}"
 
     # Format the end date
-    access_until_date = date_format(end_date, "F j, Y") if end_date else "your billing period ends"
+    access_until_date = (
+        date_format(end_date, "F j, Y") if end_date else "your billing period ends"
+    )
 
     markdown_content = render_to_string(
         "emails/subscription_cancelled.md",

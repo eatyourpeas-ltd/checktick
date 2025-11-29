@@ -326,7 +326,9 @@ class PaymentClient:
         if self.environment == "sandbox":
             portal_url = f"https://sandbox-vendors.paddle.com/subscriptions/customers/{customer_id}"
         else:
-            portal_url = f"https://vendors.paddle.com/subscriptions/customers/{customer_id}"
+            portal_url = (
+                f"https://vendors.paddle.com/subscriptions/customers/{customer_id}"
+            )
 
         return portal_url
 

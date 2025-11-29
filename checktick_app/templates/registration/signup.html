@@ -23,16 +23,16 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-md mx-auto">
+<div class="max-w-4xl mx-auto px-4">
   <div class="card bg-base-100 shadow">
     <div class="card-body">
-      <h1 class="card-title">{% trans "Create your account" %}</h1>
+      <h1 class="card-title text-2xl">{% trans "Create your account" %}</h1>
       <p class="opacity-80 mb-2">{% trans "Sign up to start creating surveys and collecting responses." %}</p>
 
         {# Tier selection #}
         <div class="form-control mb-6">
           <div class="flex items-center justify-between">
-            <span class="label-text font-semibold">{% trans "Choose Your Plan" %}</span>
+            <span class="label-text font-semibold text-lg">{% trans "Choose Your Plan" %}</span>
             <a href="{% url 'core:pricing' %}"
                target="_blank"
                class="link link-primary text-sm flex items-center gap-1">
@@ -40,7 +40,8 @@
             </a>
           </div>
 
-          <div class="space-y-3 mt-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+            {# Individual Free #}
             <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words bg-accent">
               <input type="radio" name="selected_tier" value="free" class="radio radio-primary shrink-0" checked />
               <div class="min-w-0 flex-1">
@@ -51,6 +52,8 @@
                 <p class="text-sm opacity-70">{% trans "Up to 3 surveys, basic features" %}</p>
               </div>
             </label>
+
+            {# Individual Pro #}
             <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words">
               <input type="radio" name="selected_tier" value="pro" class="radio radio-primary shrink-0" />
               <div class="min-w-0 flex-1">
@@ -62,6 +65,43 @@
               </div>
             </label>
 
+            {# Team Small #}
+            <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words">
+              <input type="radio" name="selected_tier" value="team_small" class="radio radio-primary shrink-0" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="label-text font-semibold">{% trans "TEAM SMALL" %}</span>
+                  <span class="badge badge-sm badge-primary">{% trans "£20/month" %}</span>
+                </div>
+                <p class="text-sm opacity-70">{% trans "5 members, 50 surveys" %}</p>
+              </div>
+            </label>
+
+            {# Team Medium #}
+            <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words">
+              <input type="radio" name="selected_tier" value="team_medium" class="radio radio-primary shrink-0" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="label-text font-semibold">{% trans "TEAM MEDIUM" %}</span>
+                  <span class="badge badge-sm badge-primary">{% trans "£35/month" %}</span>
+                </div>
+                <p class="text-sm opacity-70">{% trans "10 members, 50 surveys" %}</p>
+              </div>
+            </label>
+
+            {# Team Large #}
+            <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words">
+              <input type="radio" name="selected_tier" value="team_large" class="radio radio-primary shrink-0" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="label-text font-semibold">{% trans "TEAM LARGE" %}</span>
+                  <span class="badge badge-sm badge-primary">{% trans "£60/month" %}</span>
+                </div>
+                <p class="text-sm opacity-70">{% trans "20 members, 50 surveys" %}</p>
+              </div>
+            </label>
+
+            {# Organisation #}
             <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words">
               <input type="radio" name="selected_tier" value="organization" class="radio radio-primary shrink-0" />
               <div class="min-w-0 flex-1">
@@ -73,6 +113,7 @@
               </div>
             </label>
 
+            {# Enterprise #}
             <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words">
               <input type="radio" name="selected_tier" value="enterprise" class="radio radio-primary shrink-0" />
               <div class="min-w-0 flex-1">
@@ -80,7 +121,7 @@
                   <span class="label-text font-semibold">{% trans "ENTERPRISE" %}</span>
                   <span class="badge badge-sm badge-accent">{% trans "Contact us" %}</span>
                 </div>
-                <p class="text-sm opacity-70">{% trans "Custom branding, dedicated support, SLA - sales@checktick.uk" %}</p>
+                <p class="text-sm opacity-70">{% trans "Custom branding, dedicated support, SLA" %}</p>
               </div>
             </label>
           </div>
