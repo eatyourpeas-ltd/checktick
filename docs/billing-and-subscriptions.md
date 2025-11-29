@@ -37,20 +37,20 @@ CheckTick uses Paddle as our payment processor to handle all billing securely. W
 Teams provide shared billing and collaboration for groups of 5-20 users.
 
 **Team Small**
-- £20/month
+- £25/month
 - 5 team members
 - 50 active surveys
 - Role-based access (Admin/Creator/Viewer)
 - Team encryption management
 
 **Team Medium**
-- £35/month
+- £50/month
 - 10 team members
 - 50 active surveys
 - All Team Small features
 
 **Team Large**
-- £60/month
+- £100/month
 - 20 team members
 - 50 active surveys
 - All Team Medium features

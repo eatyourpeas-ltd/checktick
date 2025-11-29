@@ -174,7 +174,7 @@ When you upgrade from one tier to another:
 * The upgrade takes effect immediately
 * You are charged the difference for the remainder of the current billing period
 * Your next billing date remains the same
-* Example: Upgrading from PRO (£5/month) to Team Small (£20/month) on day 15 of 30 costs approximately £7.50
+* Example: Upgrading from PRO (£5/month) to Team Small (£25/month) on day 15 of 30 costs approximately £10
 
 ### 6.2 Downgrading
 
