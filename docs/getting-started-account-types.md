@@ -1,5 +1,5 @@
 ---
-title: Account Types & Organizations
+title: Account Types & Tiers
 category: getting-started
 priority: 2
 ---
@@ -8,22 +8,23 @@ This guide explains the account tier system in CheckTick, helping you choose the
 
 ## Account Tiers Overview
 
-CheckTick offers four account tiers: **FREE**, **PRO**, **ORGANIZATION**, and **ENTERPRISE**. Each tier builds on the previous one, adding more features and capacity.
+CheckTick offers seven account tiers: **FREE**, **PRO**, **TEAM** (Small/Medium/Large), **ORGANISATION**, and **ENTERPRISE**. Each tier builds on the previous one, adding more features and capacity.
 
 ## Quick Comparison
 
-| Feature | FREE | PRO | ORGANIZATION | ENTERPRISE |
-| --- | --- | --- | --- | --- |
-| **Active Surveys** | 3 | Unlimited | Unlimited | Unlimited |
-| **Survey Responses** | Unlimited | Unlimited | Unlimited | Unlimited |
-| **Team Collaboration** | ✗ | Editors only | Full (Editors + Viewers) | Full (Editors + Viewers) |
-| **Collaborators per Survey** | N/A | 10 | Unlimited | Unlimited |
-| **Encryption** | Self-managed keys | Self-managed keys | Organization-managed keys | Organization-managed keys |
-| **Role-Based Access** | ✗ | Limited | Full (Admin, Creator, Viewer) | Full (Admin, Creator, Viewer) |
-| **Custom Branding** | ✗ | ✗ | ✗ | ✓ (Logo, themes, fonts) |
-| **Self-Hosted Option** | ✗ | ✗ | ✗ | ✓ |
-| **SSO/OIDC** | ✗ | ✗ | ✗ | ✓ |
-| **Best For** | Getting started | Active users | Teams | Institutions |
+| Feature | FREE | PRO | TEAM (S/M/L) | ORGANISATION | ENTERPRISE |
+| --- | --- | --- | --- | --- | --- |
+| **Active Surveys** | 3 | Unlimited | 50 | Unlimited | Unlimited |
+| **Survey Responses** | Unlimited | Unlimited | Unlimited | Unlimited | Unlimited |
+| **Team Members** | 1 | 1 | 5/10/20 | Unlimited | Unlimited |
+| **Team Collaboration** | ✗ | ✗ | Full | Full | Full |
+| **Encryption** | Self-managed | Self-managed | Team-managed | Organisation-managed | Organisation-managed |
+| **Role-Based Access** | ✗ | ✗ | Admin/Creator/Viewer | Admin/Creator/Viewer | Full + Data Custodian |
+| **Private Datasets** | ✗ | ✗ | ✗ | ✓ | ✓ |
+| **Custom Branding** | ✗ | ✗ | ✗ | ✗ | ✓ |
+| **Self-Hosted Option** | ✗ | ✗ | ✗ | ✗ | ✓ |
+| **SSO/OIDC** | ✗ | ✗ | ✗ | Contact sales | ✓ |
+| **Best For** | Getting started | Active users | Small teams | Organisations | Institutions |
 
 ## 👤 - FREE Tier
 
@@ -66,37 +67,108 @@ CheckTick offers four account tiers: **FREE**, **PRO**, **ORGANIZATION**, and **
 
 - Everything in FREE, plus:
 - **No survey limit** - create as many surveys as you need
-- Can add editors to your surveys
-- Up to 10 collaborators per survey
 - Personal survey management
+- Full API access
 
 ***Key Characteristics***
 
 - **Data ownership:** You own all surveys and responses
 - **Key management:** You manage encryption keys yourself
-- **Recovery:** If you lose encryption keys, data cannot be recovered
-- **Collaboration:** Limited - can add editors only (not viewers)
-- **Cost:** Subscription-based
+- **Recovery:** Platform-assisted recovery available
+- **Collaboration:** Individual account (no team features)
+- **Cost:** £5/month
 
-## 🏢 - ORGANIZATION Tier
+## 👥 - TEAM Tiers
 
-**Best for:** Healthcare teams, research institutions, collaborative projects
+**Best for:** Small collaboration groups, departments, research teams
+
+Teams provide collaboration features for groups of 5-20 users. Teams can be standalone (own billing) or hosted within an Organisation (organisation manages billing).
+
+### Team Small (5 users)
+
+***Limits:***
+- **50 active surveys**
+- **5 team members maximum**
+- Unlimited responses per survey
+
+***Features:***
+- Everything in PRO, plus:
+- Team collaboration with role-based access
+- Team admin can manage members and surveys
+- Shared survey access within team
+- Team-level encryption key management
+
+***Cost:*** £25/month
+
+### Team Medium (10 users)
+
+***Limits:***
+- **50 active surveys**
+- **10 team members maximum**
+- Unlimited responses per survey
+
+***Features:***
+- Everything in Team Small
+- Larger team capacity
+
+***Cost:*** £50/month
+
+### Team Large (20 users)
+
+***Limits:***
+- **50 active surveys**
+- **20 team members maximum**
+- Unlimited responses per survey
+
+***Features:***
+- Everything in Team Medium
+- Larger team capacity
+
+***Cost:*** £100/month
+
+### Team Custom (>20 users)
+
+For teams requiring more than 20 members, contact us for a custom quote at approximately £5/user/month.
+
+***Team Roles:***
+
+Teams support three roles:
+
+- **Admin**: Can manage team members, settings, and all team surveys
+- **Creator**: Can create and edit surveys within the team
+- **Viewer**: Read-only access to team surveys
+
+***Key Characteristics***
+
+- **Data ownership:** Team owns surveys, members access based on roles
+- **Key management:** Team admins can recover lost encryption keys
+- **Recovery:** Team admin recovery + platform-assisted recovery
+- **Collaboration:** Full role-based access within the team
+- **Upgrade path:** Teams can convert to Organisations as they grow
+- **Survey access hierarchy:** Organisation admin (if team is in an org) > Team admin > Survey owner
+- **Cost:** £25-100/month depending on size
+
+## 🏢 - ORGANISATION Tier
+
+**Best for:** Healthcare organisations, research institutions, large collaborative projects
 
 ***Survey Limits:***
 
 - **Unlimited active surveys**
 - Unlimited responses per survey
 - Unlimited collaborators per survey
+- Unlimited organisation members
 
 ***Features***
 
-- Everything in PRO, plus:
-- **Full team collaboration** with viewers and editors
-- Role-based access control (Admin, Creator, Viewer)
-- Organization-level encryption key management
-- Key recovery and backup services
-- Shared survey groups
-- Centralized audit logs
+- Everything in TEAM, plus:
+- **Host multiple teams** within your organisation
+- **Private datasets and question groups**
+- Organisation-level encryption key management
+- Organisation admins have supreme access to all surveys
+- Data Custodian role for data governance
+- Centralised audit logs
+- Custom retention policies
 
 ***Key Characteristics***
 
@@ -169,10 +241,10 @@ When running CheckTick in self-hosted mode (with `SELF_HOSTED=true` in settings)
 ### Choose PRO Tier If
 
 - You need more than 3 active surveys
-- You work independently but at scale
-- You want to add editors to your surveys
+- You work independently
 - You need unlimited survey capacity
 - You're comfortable managing your own keys
+- You don't need collaboration features
 
 **Example use cases:**
 
@@ -181,22 +253,45 @@ When running CheckTick in self-hosted mode (with `SELF_HOSTED=true` in settings)
 - Personal health tracking at scale
 - Individual clinicians managing patient surveys
 
-### Choose ORGANIZATION Tier If
+### Choose TEAM Tier If
 
-- You work as part of a team
-- Multiple people need access to surveys
-- You need viewer roles (read-only access)
-- You need institutional oversight
-- Data recovery is important for compliance
-- You need audit trails for regulations
+- You work with a small group (5-20 people)
+- You need role-based access within your team
+- You want team admin recovery of encryption keys
+- You need up to 50 surveys for your team
+- You want a cost-effective collaboration solution
+
+**Which Team size?**
+
+- **Small (5 users, £25/mo)**: Small departments, pilot projects
+- **Medium (10 users, £50/mo)**: Medium-sized teams, research groups
+- **Large (20 users, £100/mo)**: Larger departments, multi-site projects
+- **Custom (>20 users)**: Contact for quote (£5/user/mo)
 
 **Example use cases:**
 
 - Hospital departments
-- Research institutions
-- Healthcare teams
-- University research groups
+- Small research teams
+- Clinical audit groups
+- University research labs
 - Multi-clinician practices
+
+### Choose ORGANISATION Tier If
+
+- You need to host multiple teams
+- You require private datasets and question groups
+- Multiple departments need separate teams within one organisation
+- You need organisation-wide oversight
+- Data governance and compliance are critical
+- You need audit trails for regulations
+
+**Example use cases:**
+
+- Large healthcare systems
+- Research institutions with multiple departments
+- NHS trusts
+- Universities
+- Multi-site organisations
 
 ### Choose ENTERPRISE Tier If
 

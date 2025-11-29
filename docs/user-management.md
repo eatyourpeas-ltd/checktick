@@ -4,63 +4,106 @@ category: configuration
 priority: 3
 ---
 
-This document explains how organization- and survey-level user management works across SSR (server-rendered UI) and the API, including roles, permissions, endpoints, and security protections. The app follows a single-organisation admin model and enforces username=email.
+This document explains how organisation, team, and survey-level user management works, including roles, permissions, endpoints, and security protections.
 
 ## Account Types
 
-There are two types of users in the system:
+There are three types of user contexts in the system:
 
-- **Individual users**: Users who create surveys without an organization. Individual users can only create and manage their own surveys and **cannot share surveys or invite collaborators**.
-- **Organization users**: Users who belong to an organization. Organization users can collaborate on surveys within their organization, with permissions managed by organization admins.
+- **Individual users**: Users who create surveys without an organisation or team. Individual users can only create and manage their own surveys and **cannot share surveys or invite collaborators**.
+- **Team members**: Users who belong to a team. Teams provide collaboration for 5-20 users with shared billing and role-based access.
+- **Organisation members**: Users who belong to an organisation. Organisations can host both individual members AND teams, with permissions managed by organisation admins.
 
-## Roles and scopes
+## Roles and Scopes
 
-There are two membership scopes with separate roles:
+There are three membership scopes with separate roles:
 
-- Organization membership (OrganizationMembership)
-  - admin: Full administrative control over the organization context, including managing org members and managing surveys within the organization.
-  - creator: Can create and manage their own surveys; read-only visibility to organization content is up to app policy, but creators do NOT manage org members.
-  - viewer: Read-only role for organization context where applicable; cannot manage org members.
+### Organisation Membership (OrganizationMembership)
 
-- Survey membership (SurveyMembership) - **Only available for organization surveys**
-  - creator: Can manage members for that specific survey and edit the survey.
-  - viewer: Can view the survey content and results according to app policy; cannot manage survey members.
+- **admin**: Full administrative control over the organisation context, including managing org members, teams, and surveys within the organisation.
+- **creator**: Can create and manage their own surveys; read-only visibility to organisation content is up to app policy, but creators do NOT manage org members or teams.
+- **viewer**: Read-only role for organisation context where applicable; cannot manage org members or teams.
+- **data_custodian**: Specialised role for data governance responsibilities.
 
-Additional implicit authorities:
+### Team Membership (TeamMembership)
 
-- Survey owner: For organization surveys, always has full control over the survey, including member management for that survey.
-- Organization admin: Has admin rights for surveys that belong to their organization, including member management.
+- **admin**: Can manage team members, settings, and all team surveys. If the team is within an organisation, organisation admins also have admin rights.
+- **creator**: Can create and edit surveys within the team.
+- **viewer**: Read-only access to team surveys.
 
-Single-organisation model:
+**Team hierarchy**: Organisation admin > Team admin > Survey owner
 
-- A user can be an ADMIN of at most one organisation. The “User management” hub focuses on that single org context.
+**Unique constraint**: Each user can only have one role per team `(team, user)`.
 
-## Permission matrix (summary)
+**Role persistence**: Team roles remain intact if a team migrates to an Organisation.
 
-- Manage org members (add/update/remove): Organization admin only
-- Manage survey members (add/update/remove): **Organization surveys only** - Survey owner, organization admin (if the survey belongs to their org), or survey creator for that survey
-- View survey: Owner, org admin (if applicable), any survey member (creator/viewer)
+### Survey Membership (SurveyMembership)
+
+**Only available for organisation surveys**
+
+- **creator**: Can manage members for that specific survey and edit the survey.
+- **viewer**: Can view the survey content and results according to app policy; cannot manage survey members.
+
+## Additional Implicit Authorities
+
+- **Survey owner**: For organisation/team surveys, always has full control over the survey, including member management for that survey.
+- **Organisation admin**: Has admin rights for all surveys that belong to their organisation, including surveys in teams hosted by the organisation. Has supreme access.
+- **Team admin**: Has admin rights for surveys within their team. Can manage team members and team surveys.
+
+## Single-Organisation Model
+
+- A user can be an ADMIN of at most one organisation. The "User management" hub focuses on that single org context.
+- A user can be an ADMIN of multiple teams.
+- A user can have multiple roles simultaneously: PRO account + team member + organisation member.
+
+## Permission Matrix (Summary)
+
+- **Manage org members** (add/update/remove): Organisation admin only
+- **Manage team members** (add/update/remove): Team admin OR organisation admin (if team is in their org)
+- **Manage survey members** (add/update/remove): **Organisation/team surveys only** - Survey owner, organisation admin (if applicable), team admin (if applicable), or survey creator for that survey
+- **View survey**: Owner, org admin (if applicable), team admin (if applicable), any survey member (creator/viewer)
 - **Individual users**: Cannot share surveys or manage survey members
 
-Guardrails:
+## Guardrails
 
-- Organization admins cannot remove themselves from their own admin role via the SSR UI or the API. Attempts are rejected.
-- Individual users (surveys without organization) cannot access user management endpoints or share their surveys.
-- SSR UI supports email-based lookup and creation for convenience. The API endpoints expect explicit user IDs for membership resources; scoped user creation endpoints exist to create a user in a given org or survey.
+- Organisation admins cannot remove themselves from their own admin role via the SSR UI or the API. Attempts are rejected.
+- Individual users (surveys without organisation or team) cannot access user management endpoints or share their surveys.
+- SSR UI supports email-based lookup and creation for convenience. The API endpoints expect explicit user IDs for membership resources; scoped user creation endpoints exist to create a user in a given org, team, or survey.
 
-## SSR management pages
+## SSR Management Pages
 
-**Note**: User management pages are only accessible for organization surveys. Individual users cannot share their surveys or access these pages.
+**Note**: User management pages are only accessible for organisation/team surveys. Individual users cannot share their surveys or access these pages.
 
-- Organisation hub: `/surveys/manage/users/`
-  - Shows the single organisation you manage, all its users, and users grouped by surveys.
-  - Quick-add forms let you add users to the organisation or to a survey by email and role.
-  - Prevents an org admin from removing themselves as an admin.
-  - Actions are audit-logged.
+### User Management Hub: `/surveys/manage/users/`
 
-- Organization users: `/surveys/org/<org_id>/users/`
-  - Admins can add or update members by email, change roles, and remove users. Non-admins receive 403.
-  - Actions are audit-logged.
+Shows:
+
+1. **Organisation section** (if you're an org admin):
+   - Your organisation and all its members
+   - Quick-add form to add users to the organisation by email and role
+   - View all teams within the organisation (read-only list)
+
+2. **Teams you manage section** (if you're a team admin):
+   - All teams where you have admin role
+   - Add/remove team members
+   - Assign roles to team members
+   - View team capacity (e.g., 5/10/20 members)
+   - Check member count vs. limit
+
+3. **Users by survey section**:
+   - Shows surveys and their members
+   - Quick-add form to assign users to surveys by email and role
+
+Actions:
+- Prevents an org admin from removing themselves as an admin
+- All actions are audit-logged
+- Shows UK spelling: "Organisation" throughout
+
+### Organisation Users: `/surveys/org/<org_id>/users/`
+
+- Admins can add or update members by email, change roles, and remove users
+- Non-admins receive 403
+- Actions are audit-logged
 
 - Survey users: `/surveys/{slug}/users/`
   - **Only available for organization surveys**. Individual users cannot access this page.

@@ -4,99 +4,169 @@ category: api
 priority: 100
 ---
 
-# Account Tiers Implementation Plan
+# Account Tiers Implementation
 
-**Status**: ✅ Implemented
+**Status**: ✅ Implemented (Teams tier in progress)
 
-**Developer Note**: This document describes the design and implementation of the account tiers system. For user-facing documentation, see [Account Types & Organizations](getting-started-account-types.md).
+**Developer Note**: This document describes the technical design and implementation of the account tiers system. For user-facing documentation, see [Account Types & Tiers](getting-started-account-types.md).
 
 ## Overview
 
-This document outlines the implementation of a four-tier account system for CheckTick, designed to work seamlessly for both self-hosted deployments and hosted SaaS offerings.
+CheckTick implements a seven-tier account system designed to work seamlessly for both self-hosted deployments and hosted SaaS offerings. The system supports individual users, collaborative teams, and organisational hierarchies.
 
 ## Account Tiers
 
-### 1. Individual (Free)
-Entry-level account for personal use with basic features and survey limits.
+### 1. FREE
+Entry-level individual account with 3 survey limit.
 
-### 2. Individual Pro
-Paid tier for power users needing unlimited surveys and basic collaboration.
+### 2. PRO
+Paid individual account with unlimited surveys.
 
-### 3. Organization
-Team collaboration with full role-based access control and organization-level features.
+### 3. TEAM (Small/Medium/Large)
+Collaborative teams of 5-20 users with shared billing and role-based access.
 
-### 4. Enterprise
-Advanced features including custom branding, sub-organizations, and white-labeling.
+### 4. ORGANISATION
+Multi-team organisations with private datasets, unlimited members, and full governance features.
+
+### 5. ENTERPRISE
+Self-hosted deployments with custom branding, SSO, and full control.
+
+---
+
+## Data Models
+
+### Team Model
+
+```python
+class Team(models.Model):
+    name = CharField(max_length=255)
+    owner = ForeignKey(User)
+    organization = ForeignKey(Organization, null=True, blank=True)  # Optional parent
+
+    SIZE_CHOICES = [
+        ('small', 'Small (5 users)'),
+        ('medium', 'Medium (10 users)'),
+        ('large', 'Large (20 users)'),
+        ('custom', 'Custom (>20 users)'),
+    ]
+    size = CharField(max_length=20, choices=SIZE_CHOICES)
+    custom_max_members = PositiveIntegerField(null=True, blank=True)
+    max_surveys = PositiveIntegerField(default=50)
+
+    subscription_id = CharField(max_length=255, blank=True)  # Generic billing reference
+    encrypted_master_key = BinaryField(null=True, blank=True)  # For Phase 2 - Vault
+```
+
+**Key Properties:**
+- `max_members` - Returns 5/10/20 based on size, or custom_max_members
+- `current_member_count()` - Count of team memberships
+- `can_add_members()` - Check if under capacity
+- `current_survey_count()` - Count of team surveys
+- `can_create_surveys()` - Check if under survey limit
+
+### TeamMembership Model
+
+```python
+class TeamMembership(models.Model):
+    team = ForeignKey(Team)
+    user = ForeignKey(User)
+    role = CharField(choices=[('admin', 'Admin'), ('creator', 'Creator'), ('viewer', 'Viewer')])
+
+    class Meta:
+        unique_together = ("team", "user")
+```
+
+**Roles:**
+- **Admin**: Manage team members, settings, and all surveys
+- **Creator**: Create and edit surveys within team
+- **Viewer**: Read-only access to team surveys
+
+**Role Persistence**: Roles remain intact if team migrates to Organisation.
+
+### Survey Model Updates
+
+```python
+class Survey(models.Model):
+    owner = ForeignKey(User)           # Required - survey creator
+    organization = ForeignKey(Organization, null=True)  # Optional - org context
+    team = ForeignKey(Team, null=True, blank=True)      # Optional - team context
+```
+
+**Access Hierarchy**: Organisation admin > Team admin > Survey owner
 
 ---
 
 ## Feature Matrix
 
-| Feature | Individual (Free) | Individual Pro | Organization | Enterprise |
-|---------|------------------|----------------|--------------|------------|
+| Feature | Individual (Free) | Individual Pro | Team Small | Team Medium | Team Large | Organization | Enterprise |
+|---------|------------------|----------------|------------|-------------|------------|--------------|------------|
+| **Team Management** |
+| Maximum Team Members | 1 | 1 | 5 | 10 | 20 | Unlimited | Unlimited |
+| Team Membership Roles | - | - | ADMIN, CREATOR, VIEWER | ADMIN, CREATOR, VIEWER | ADMIN, CREATOR, VIEWER | - | - |
+| Organization Membership | ❌ | ❌ | Optional parent | Optional parent | Optional parent | ✅ | ✅ |
+| Organization Roles | - | - | - | - | - | ADMIN, CREATOR, VIEWER | ADMIN, CREATOR, VIEWER |
 | **Survey Creation** |
-| Maximum Surveys | 3 | Unlimited | Unlimited | Unlimited |
-| Drag & Drop Builder | ✅ | ✅ | ✅ | ✅ |
-| Text Entry for Surveys | ✅ | ✅ | ✅ | ✅ |
-| Survey Templates | ✅ | ✅ | ✅ | ✅ |
-| Conditional Logic/Branching | ✅ | ✅ | ✅ | ✅ |
-| Question Groups | ✅ | ✅ | ✅ | ✅ |
-| Repeating Groups | ✅ | ✅ | ✅ | ✅ |
+| Maximum Surveys | 3 | Unlimited | 50 | 50 | 50 | Unlimited | Unlimited |
+| Drag & Drop Builder | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Text Entry for Surveys | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Survey Templates | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Conditional Logic/Branching | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Question Groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Repeating Groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **AI Features** |
-| AI Survey Assistant | ✅ | ✅ | ✅ | ✅ |
-| AI-Generated Survey Translations | ✅ | ✅ | ✅ | ✅ |
+| AI Survey Assistant | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| AI-Generated Survey Translations | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Internationalization** |
-| Multi-language Interface (i18n) | ✅ | ✅ | ✅ | ✅ |
-| Survey Translation Support | ✅ | ✅ | ✅ | ✅ |
-| All Supported Languages | ✅ | ✅ | ✅ | ✅ |
+| Multi-language Interface (i18n) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Survey Translation Support | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| All Supported Languages | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Collaboration** |
-| Survey Ownership | Single Owner | Single Owner | Team-based | Team-based |
-| Add Collaborators | ❌ | ✅ (Editors only) | ✅ (Full roles) | ✅ (Full roles) |
-| Survey Membership Roles | - | EDITOR | CREATOR, EDITOR, VIEWER | CREATOR, EDITOR, VIEWER |
-| Organization Membership | ❌ | ❌ | ✅ | ✅ |
-| Organization Roles | - | - | ADMIN, CREATOR, VIEWER | ADMIN, CREATOR, VIEWER |
-| Sub-organizations/Departments | ❌ | ❌ | ❌ | ✅ |
+| Survey Ownership | Single Owner | Single Owner | Team-based | Team-based | Team-based | Team-based | Team-based |
+| Add Collaborators | ❌ | ✅ (Editors only) | ✅ (Full roles) | ✅ (Full roles) | ✅ (Full roles) | ✅ (Full roles) | ✅ (Full roles) |
+| Survey Membership Roles | - | EDITOR | CREATOR, EDITOR, VIEWER | CREATOR, EDITOR, VIEWER | CREATOR, EDITOR, VIEWER | CREATOR, EDITOR, VIEWER | CREATOR, EDITOR, VIEWER |
+| Sub-organizations/Departments | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **Sharing & Publishing** |
-| Question Group Sharing | ✅ | ✅ | ✅ | ✅ |
-| Published Question Groups | ✅ | ✅ | ✅ | ✅ |
-| Dataset Sharing | ✅ | ✅ | ✅ | ✅ |
-| Published Datasets | ✅ | ✅ | ✅ | ✅ |
-| Import Shared Resources | ✅ | ✅ | ✅ | ✅ |
+| Question Group Sharing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Published Question Groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dataset Sharing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Published Datasets | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Import Shared Resources | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Security & Encryption** |
-| End-to-End Encryption | ✅ | ✅ | ✅ | ✅ |
-| Personal Passphrase Encryption | ✅ | ✅ | ✅ | ✅ |
-| Organization Key Management | ❌ | ❌ | ✅ | ✅ |
-| Shamir Secret Sharing (Recovery) | ✅ | ✅ | ✅ | ✅ |
-| Audit Logging | ✅ | ✅ | ✅ | ✅ |
-| Data Governance Features | ✅ | ✅ | ✅ | ✅ |
-| Legal Hold Support | ✅ | ✅ | ✅ | ✅ |
-| Data Retention Policies | ✅ | ✅ | ✅ | ✅ |
+| End-to-End Encryption | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Personal Passphrase Encryption | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Team Key Management | ❌ | ❌ | ✅ | ✅ | ✅ | - | - |
+| Organization Key Management | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Shamir Secret Sharing (Recovery) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Audit Logging | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Data Governance Features | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Legal Hold Support | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Data Retention Policies | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Authentication** |
-| Username/Password | ✅ | ✅ | ✅ | ✅ |
-| SSO (Google/Azure) | ✅ | ✅ | ✅ | ✅ |
-| SAML/Enterprise SSO | ❌ | ❌ | ❌ | ✅ (optional) |
+| Username/Password | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SSO (Google/Azure) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SAML/Enterprise SSO | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (optional) |
 | **Data & Analytics** |
-| Response Collection | Unlimited | Unlimited | Unlimited | Unlimited |
-| Data Export (CSV/JSON/Excel) | ✅ | ✅ | ✅ | ✅ |
-| Advanced Analytics Dashboard | ❌ | ❌ | ❌ | ✅ |
-| Organization-wide Reports | ❌ | ❌ | ✅ | ✅ |
+| Response Collection | Unlimited | Unlimited | Unlimited | Unlimited | Unlimited | Unlimited | Unlimited |
+| Data Export (CSV/JSON/Excel) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Advanced Analytics Dashboard | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Organization-wide Reports | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **API Access** |
-| REST API Access | ✅ | ✅ | ✅ | ✅ |
-| API Rate Limits | Standard | Standard | Standard | 10x Increased |
-| API Documentation | ✅ | ✅ | ✅ | ✅ |
+| REST API Access | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| API Rate Limits | Standard | Standard | Standard | Standard | Standard | Standard | 10x Increased |
+| API Documentation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Branding & Customization** |
-| Site Theme Selection | View Only | View Only | View Only | ✅ Configure |
-| Custom Logo Upload | ❌ | ❌ | ❌ | ✅ |
-| Custom Brand Name | ❌ | ❌ | ❌ | ✅ |
-| White-labeling | ❌ | ❌ | ❌ | ✅ |
-| Organization Themes/Colors | ❌ | ❌ | ✅ | ✅ |
-| Survey-level Styling | ✅ | ✅ | ✅ | ✅ |
+| Site Theme Selection | View Only | View Only | View Only | View Only | View Only | View Only | ✅ Configure |
+| Custom Logo Upload | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Custom Brand Name | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| White-labeling | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Organization Themes/Colors | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Survey-level Styling | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Support** |
-| Community Support | ✅ | ✅ | ✅ | ✅ |
-| Email Support | Standard | Standard | Standard | Priority |
-| SLA Guarantee | ❌ | ❌ | ❌ | ✅ |
-| Dedicated Onboarding | ❌ | ❌ | ❌ | ✅ |
-| Training Sessions | ❌ | ❌ | ❌ | ✅ |
+| Community Support | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Email Support | Standard | Standard | Standard | Standard | Standard | Standard | Priority |
+| SLA Guarantee | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Dedicated Onboarding | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Training Sessions | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ---
 
