@@ -56,6 +56,8 @@ env = environ.Env(
     # Payment Processing (Paddle)
     PAYMENT_PROCESSING_SANDBOX_API_KEY=(str, ""),
     PAYMENT_PROCESSING_PRODUCTION_API_KEY=(str, ""),
+    PAYMENT_PROCESSING_SANDBOX_CLIENT_TOKEN=(str, ""),
+    PAYMENT_PROCESSING_PRODUCTION_CLIENT_TOKEN=(str, ""),
     PAYMENT_PROCESSING_SANDBOX_BASE_URL=(
         str,
         "https://sandbox-api.paddle.com",
@@ -124,6 +126,14 @@ PAYMENT_BASE_URL = (
     else env("PAYMENT_PROCESSING_PRODUCTION_BASE_URL")
 )
 PAYMENT_ENVIRONMENT = "sandbox" if DEBUG else "production"
+
+# Paddle Client-Side Token (for Paddle.js)
+# This is different from API key - it's safe to expose in frontend
+PAYMENT_CLIENT_TOKEN = (
+    env("PAYMENT_PROCESSING_SANDBOX_CLIENT_TOKEN")
+    if DEBUG
+    else env("PAYMENT_PROCESSING_PRODUCTION_CLIENT_TOKEN")
+)
 
 # Payment Processor Product IDs (environment-specific)
 # These are automatically selected based on DEBUG setting
@@ -336,12 +346,61 @@ CSP_SCRIPT_SRC = (
     "https://cdn.jsdelivr.net",
     # hCaptcha widget script
     "https://js.hcaptcha.com",
+    # Paddle payment processing
+    "https://cdn.paddle.com",
 )
 CSP_INCLUDE_NONCE_IN = ["script-src"]
 CSP_IMG_SRC = ("'self'", "data:")
-CSP_CONNECT_SRC = ("'self'", "https://hcaptcha.com", "https://*.hcaptcha.com")
-CSPO_FRAME_SRC = ("'self'", "https://hcaptcha.com", "https://*.hcaptcha.com")
-CSP_FRAME_SRC = ("'self'", "https://hcaptcha.com", "https://*.hcaptcha.com")
+CSP_STYLE_SRC = (
+    "'self'",
+    "'unsafe-inline'",
+    "https://fonts.googleapis.com",
+    # Paddle CDN for checkout styles
+    "https://sandbox-cdn.paddle.com",
+    "https://cdn.paddle.com",
+)
+CSP_CONNECT_SRC = (
+    "'self'",
+    "https://hcaptcha.com",
+    "https://*.hcaptcha.com",
+    # Paddle API endpoints
+    "https://sandbox-api.paddle.com",
+    "https://api.paddle.com",
+    "https://checkout.paddle.com",
+    "https://sandbox-checkout.paddle.com",
+    # Paddle CDN for source maps and assets
+    "https://cdn.paddle.com",
+    "https://sandbox-cdn.paddle.com",
+)
+CSPO_FRAME_SRC = (
+    "'self'",
+    "https://hcaptcha.com",
+    "https://*.hcaptcha.com",
+    # Paddle checkout overlay
+    "https://sandbox-checkout.paddle.com",
+    "https://checkout.paddle.com",
+)
+CSP_FRAME_SRC = (
+    "'self'",
+    "https://hcaptcha.com",
+    "https://*.hcaptcha.com",
+    # Paddle checkout overlays (buy and checkout domains)
+    "https://sandbox-buy.paddle.com",
+    "https://buy.paddle.com",
+    "https://sandbox-checkout.paddle.com",
+    "https://checkout.paddle.com",
+)
+# Allow Paddle checkout to frame our site for payment processing
+CSP_FRAME_ANCESTORS = (
+    "'self'",
+    "http://localhost:8000" if DEBUG else None,  # For local development
+    "https://sandbox-buy.paddle.com",
+    "https://buy.paddle.com",
+    "https://sandbox-checkout.paddle.com",
+    "https://checkout.paddle.com",
+)
+# Remove None values from tuple
+CSP_FRAME_ANCESTORS = tuple(x for x in CSP_FRAME_ANCESTORS if x is not None)
 
 # CORS minimal
 CORS_ALLOWED_ORIGINS = []

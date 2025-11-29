@@ -54,7 +54,19 @@
       {% endif %}
     {% endblock %}
   </head>
-  <body class="min-h-screen bg-base-200">
+  <body class="min-h-screen bg-base-200"
+    {% if not self_hosted %}
+    data-paddle-environment="{{ payment_environment }}"
+    data-paddle-token="{{ payment_client_token }}"
+    {% if user.is_authenticated %}
+    data-user-id="{{ user.id }}"
+    data-user-email="{{ user.email }}"
+    {% if user.profile.payment_customer_id %}
+    data-paddle-customer-id="{{ user.profile.payment_customer_id }}"
+    {% endif %}
+    {% endif %}
+    {% endif %}
+  >
     <div class="navbar bg-base-100 shadow">
       <div class="navbar-start">
         <div class="dropdown">
@@ -236,6 +248,15 @@
     {# Global toast root for lightweight notifications #}
     <div id="toast-root" class="toast toast-top toast-end z-[1000]" aria-live="polite" aria-atomic="true"></div>
     <script src="{% static 'js/toast.js' %}?v={{ build.commit|default:build.timestamp }}"></script>
+
+    {# Paddle.js SDK - Only load if not self-hosted #}
+    {% if not self_hosted %}
+    <script src="{% static 'js/paddle.js' %}"
+            integrity="sha384-aglX2UoXZDBOAz6UEdPtOtWeOeg905NPyCh27ZRhNJv7Gi+D0cAZfJsOAPyHusOr"
+            crossorigin="anonymous"></script>
+    <script src="{% static 'js/paddle-checkout.js' %}?v={{ build.commit|default:build.timestamp }}"></script>
+    {% endif %}
+
     {% block extra_js %}{% endblock %}
   </body>
   </html>

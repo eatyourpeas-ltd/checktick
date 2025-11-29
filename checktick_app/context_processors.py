@@ -349,7 +349,9 @@ def branding(request):
         "can_manage_any_users": can_manage_any_users,
         "can_create_datasets": can_create_datasets_flag,
         "build": build,
-        "self_hosted": getattr(settings, "SELF_HOSTED", False),  # Hide billing for self-hosters
+        "self_hosted": getattr(settings, "SELF_HOSTED", False),
+        "payment_client_token": getattr(settings, "PAYMENT_CLIENT_TOKEN", ""),
+        "payment_environment": getattr(settings, "PAYMENT_ENVIRONMENT", "sandbox"),
         "settings": {
             "HCAPTCHA_SITEKEY": getattr(settings, "HCAPTCHA_SITEKEY", ""),
         },

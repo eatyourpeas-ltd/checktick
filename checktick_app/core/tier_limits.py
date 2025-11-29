@@ -178,21 +178,6 @@ TIER_LIMITS_CONFIG = {
         can_use_webhooks=True,
         support_level="priority",
     ),
-        can_add_viewers=True,
-        max_collaborators_per_survey=None,  # Unlimited
-        can_create_teams=True,
-        max_team_members=None,  # Unlimited
-        can_create_organizations=True,
-        can_create_sub_organizations=True,
-        max_organization_members=None,  # Unlimited
-        can_customize_branding=True,
-        can_use_custom_domain=True,
-        can_white_label=True,
-        can_use_api=True,
-        can_export_data=True,
-        can_use_webhooks=True,
-        support_level="priority",
-    ),
 }
 
 

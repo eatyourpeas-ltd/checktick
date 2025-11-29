@@ -68,7 +68,14 @@ def hosting(request):
 
 
 def pricing(request):
-    return render(request, "core/pricing.html")
+    """Display pricing tiers with Paddle checkout integration."""
+    from django.conf import settings
+
+    context = {
+        "price_ids": settings.PAYMENT_PRODUCT_IDS,
+        "self_hosted": getattr(settings, "SELF_HOSTED", False),
+    }
+    return render(request, "core/pricing.html", context)
 
 
 def healthz(request):

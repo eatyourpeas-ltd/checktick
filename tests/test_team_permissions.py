@@ -96,9 +96,15 @@ class TestTeamViewPermissions:
 
     def test_org_admin_can_view_team_survey(self):
         """Organization admin can view surveys in org's teams."""
-        org_owner = User.objects.create_user(username="org_owner", password=TEST_PASSWORD)
-        team_owner = User.objects.create_user(username="team_owner", password=TEST_PASSWORD)
-        org_admin = User.objects.create_user(username="org_admin", password=TEST_PASSWORD)
+        org_owner = User.objects.create_user(
+            username="org_owner", password=TEST_PASSWORD
+        )
+        team_owner = User.objects.create_user(
+            username="team_owner", password=TEST_PASSWORD
+        )
+        org_admin = User.objects.create_user(
+            username="org_admin", password=TEST_PASSWORD
+        )
 
         org = Organization.objects.create(name="Test Org", owner=org_owner)
         OrganizationMembership.objects.create(
@@ -197,9 +203,15 @@ class TestTeamManagementPermissions:
 
     def test_org_admin_can_manage_team(self):
         """Organization admin can manage teams in their org."""
-        org_owner = User.objects.create_user(username="org_owner", password=TEST_PASSWORD)
-        team_owner = User.objects.create_user(username="team_owner", password=TEST_PASSWORD)
-        org_admin = User.objects.create_user(username="org_admin", password=TEST_PASSWORD)
+        org_owner = User.objects.create_user(
+            username="org_owner", password=TEST_PASSWORD
+        )
+        team_owner = User.objects.create_user(
+            username="team_owner", password=TEST_PASSWORD
+        )
+        org_admin = User.objects.create_user(
+            username="org_admin", password=TEST_PASSWORD
+        )
 
         org = Organization.objects.create(name="Test Org", owner=org_owner)
         OrganizationMembership.objects.create(

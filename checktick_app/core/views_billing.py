@@ -44,7 +44,9 @@ def subscription_portal(request: HttpRequest) -> HttpResponse:
     # If user has a subscription, fetch current details from payment processor
     if profile.payment_subscription_id and profile.payment_provider == "paddle":
         try:
-            subscription_data = payment_client.get_subscription(profile.payment_subscription_id)
+            subscription_data = payment_client.get_subscription(
+                profile.payment_subscription_id
+            )
             context["subscription_data"] = subscription_data
         except PaymentAPIError as e:
             logger.error(f"Error fetching subscription: {e}")
@@ -70,7 +72,7 @@ def cancel_subscription(request: HttpRequest) -> HttpResponse:
 
     try:
         # Cancel at end of billing period
-        paddle.cancel_subscription(
+        payment_client.cancel_subscription(
             profile.payment_subscription_id, effective_from="next_billing_period"
         )
 
@@ -86,7 +88,7 @@ def cancel_subscription(request: HttpRequest) -> HttpResponse:
             f"User {user.username} cancelled subscription {profile.payment_subscription_id}"
         )
 
-    except PaddleAPIError as e:
+    except PaymentAPIError as e:
         logger.error(f"Error cancelling subscription: {e}")
         messages.error(
             request,
@@ -96,10 +98,37 @@ def cancel_subscription(request: HttpRequest) -> HttpResponse:
     return redirect("core:subscription_portal")
 
 
+@login_required
+@require_http_methods(["GET"])
+def checkout_success(request: HttpRequest) -> HttpResponse:
+    """Handle successful checkout completion.
+
+    This page is shown after user completes payment in Paddle checkout.
+    The webhook should have already processed the subscription, so we just
+    show a success message and refresh the user's tier info.
+    """
+    tier = request.GET.get("tier", "pro")
+
+    # Refresh user profile to get latest tier info (in case webhook already updated it)
+    request.user.profile.refresh_from_db()
+
+    context = {
+        "tier": tier,
+        "current_tier": request.user.profile.account_tier,
+    }
+
+    messages.success(
+        request,
+        "Payment successful! Your account has been upgraded. It may take a few moments for all features to activate.",
+    )
+
+    return render(request, "core/checkout_success.html", context)
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
-def paddle_webhook(request: HttpRequest) -> HttpResponse:
-    """Handle Paddle webhook events.
+def payment_webhook(request: HttpRequest) -> HttpResponse:
+    """Handle payment processor webhook events.
 
     Paddle sends webhooks for:
     - subscription.created
