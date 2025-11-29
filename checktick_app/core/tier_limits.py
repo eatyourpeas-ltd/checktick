@@ -22,6 +22,10 @@ class TierLimits:
     can_add_viewers: bool
     max_collaborators_per_survey: int | None  # None = unlimited
 
+    # Team features
+    can_create_teams: bool
+    max_team_members: int | None  # None = unlimited, only for team tiers
+
     # Organization features
     can_create_organizations: bool
     can_create_sub_organizations: bool
@@ -48,6 +52,8 @@ TIER_LIMITS_CONFIG = {
         can_add_editors=False,
         can_add_viewers=False,
         max_collaborators_per_survey=0,
+        can_create_teams=False,
+        max_team_members=None,
         can_create_organizations=False,
         can_create_sub_organizations=False,
         max_organization_members=None,
@@ -64,6 +70,62 @@ TIER_LIMITS_CONFIG = {
         can_add_editors=True,
         can_add_viewers=False,
         max_collaborators_per_survey=10,
+        can_create_teams=False,
+        max_team_members=None,
+        can_create_organizations=False,
+        can_create_sub_organizations=False,
+        max_organization_members=None,
+        can_customize_branding=False,
+        can_use_custom_domain=False,
+        can_white_label=False,
+        can_use_api=True,
+        can_export_data=True,
+        can_use_webhooks=False,
+        support_level="email",
+    ),
+    "team_small": TierLimits(
+        max_surveys=50,
+        can_add_editors=True,
+        can_add_viewers=True,
+        max_collaborators_per_survey=None,  # Unlimited within team
+        can_create_teams=True,
+        max_team_members=5,
+        can_create_organizations=False,
+        can_create_sub_organizations=False,
+        max_organization_members=None,
+        can_customize_branding=False,
+        can_use_custom_domain=False,
+        can_white_label=False,
+        can_use_api=True,
+        can_export_data=True,
+        can_use_webhooks=False,
+        support_level="email",
+    ),
+    "team_medium": TierLimits(
+        max_surveys=50,
+        can_add_editors=True,
+        can_add_viewers=True,
+        max_collaborators_per_survey=None,  # Unlimited within team
+        can_create_teams=True,
+        max_team_members=10,
+        can_create_organizations=False,
+        can_create_sub_organizations=False,
+        max_organization_members=None,
+        can_customize_branding=False,
+        can_use_custom_domain=False,
+        can_white_label=False,
+        can_use_api=True,
+        can_export_data=True,
+        can_use_webhooks=False,
+        support_level="email",
+    ),
+    "team_large": TierLimits(
+        max_surveys=50,
+        can_add_editors=True,
+        can_add_viewers=True,
+        max_collaborators_per_survey=None,  # Unlimited within team
+        can_create_teams=True,
+        max_team_members=20,
         can_create_organizations=False,
         can_create_sub_organizations=False,
         max_organization_members=None,
@@ -80,6 +142,8 @@ TIER_LIMITS_CONFIG = {
         can_add_editors=True,
         can_add_viewers=True,
         max_collaborators_per_survey=None,  # Unlimited
+        can_create_teams=True,
+        max_team_members=None,  # Unlimited for org-hosted teams
         can_create_organizations=True,
         can_create_sub_organizations=False,
         max_organization_members=None,  # Unlimited
@@ -96,6 +160,8 @@ TIER_LIMITS_CONFIG = {
         can_add_editors=True,
         can_add_viewers=True,
         max_collaborators_per_survey=None,  # Unlimited
+        can_create_teams=True,
+        max_team_members=None,  # Unlimited
         can_create_organizations=True,
         can_create_sub_organizations=True,
         max_organization_members=None,  # Unlimited
@@ -114,7 +180,7 @@ def get_tier_limits(tier: str) -> TierLimits:
     """Get limits for a specific tier.
 
     Args:
-        tier: Account tier name (free, pro, organization, enterprise)
+        tier: Account tier name (free, pro, team_small, team_medium, team_large, organization, enterprise)
 
     Returns:
         TierLimits object with all limits for the tier
@@ -154,9 +220,17 @@ def check_survey_creation_limit(user) -> tuple[bool, str]:
     survey_count = Survey.objects.filter(owner=user, is_original=True).count()
 
     if survey_count >= limits.max_surveys:
+        # Customize message based on current tier
+        if effective_tier == "free":
+            upgrade_msg = "Upgrade to Pro (£5/mo) for unlimited surveys or Team Small (£25/mo) for team collaboration."
+        elif effective_tier.startswith("team_"):
+            upgrade_msg = "Upgrade to Organization tier for unlimited surveys."
+        else:
+            upgrade_msg = "Upgrade to Pro for unlimited surveys."
+
         return False, (
             f"You've reached the limit of {limits.max_surveys} surveys for your "
-            f"{effective_tier.title()} tier. Upgrade to Pro for unlimited surveys."
+            f"{effective_tier.replace('_', ' ').title()} tier. {upgrade_msg}"
         )
 
     return True, ""
@@ -353,6 +427,11 @@ def get_feature_availability(user) -> dict[str, Any]:
             "max_per_survey": limits.max_collaborators_per_survey,
             "unlimited_per_survey": limits.max_collaborators_per_survey is None,
         },
+        "teams": {
+            "can_create": limits.can_create_teams,
+            "max_members": limits.max_team_members,
+            "unlimited_members": limits.max_team_members is None,
+        },
         "organizations": {
             "can_create": limits.can_create_organizations,
             "can_create_sub_organizations": limits.can_create_sub_organizations,
@@ -371,3 +450,101 @@ def get_feature_availability(user) -> dict[str, Any]:
             "level": limits.support_level,
         },
     }
+
+
+def check_team_creation_permission(user) -> tuple[bool, str]:
+    """Check if user can create a team.
+
+    Args:
+        user: User object with profile
+
+    Returns:
+        (can_create, reason) - Boolean and error message if not allowed
+    """
+    if not hasattr(user, "profile"):
+        return False, "User profile not found"
+
+    effective_tier = user.profile.get_effective_tier()
+    limits = get_tier_limits(effective_tier)
+
+    if not limits.can_create_teams:
+        return False, (
+            "Creating teams requires Team tier or higher. "
+            "Upgrade to Team Small (£25/mo) to enable team collaboration."
+        )
+
+    return True, ""
+
+
+def check_team_member_limit(team, additional_count: int = 1) -> tuple[bool, str]:
+    """Check if team can have more members added.
+
+    Args:
+        team: Team object
+        additional_count: Number of members to add
+
+    Returns:
+        (can_add, reason) - Boolean and error message if limit reached
+    """
+    if not hasattr(team.owner, "profile"):
+        return False, "Team owner profile not found"
+
+    # Refresh profile from database to ensure we have latest tier
+    team.owner.profile.refresh_from_db()
+
+    effective_tier = team.owner.profile.get_effective_tier()
+    limits = get_tier_limits(effective_tier)
+
+    # No limit (org-hosted teams or enterprise)
+    if limits.max_team_members is None:
+        return True, ""
+
+    # Count current members
+    from checktick_app.surveys.models import TeamMembership
+
+    current_count = TeamMembership.objects.filter(team=team).count()
+
+    if current_count + additional_count > limits.max_team_members:
+        return False, (
+            f"Team has reached the limit of {limits.max_team_members} "
+            f"members for {effective_tier.replace('_', ' ').title()} tier. "
+            f"Upgrade to a larger team size or Organization tier for unlimited members."
+        )
+
+    return True, ""
+
+
+def check_team_survey_limit(team) -> tuple[bool, str]:
+    """Check if team can create another survey.
+
+    Args:
+        team: Team object
+
+    Returns:
+        (can_create, reason) - Boolean and error message if limit reached
+    """
+    if not hasattr(team.owner, "profile"):
+        return False, "Team owner profile not found"
+
+    # Refresh profile from database to ensure we have latest tier
+    team.owner.profile.refresh_from_db()
+
+    effective_tier = team.owner.profile.get_effective_tier()
+    limits = get_tier_limits(effective_tier)
+
+    # No limit (organization or enterprise)
+    if limits.max_surveys is None:
+        return True, ""
+
+    # Count current team surveys
+    from checktick_app.surveys.models import Survey
+
+    survey_count = Survey.objects.filter(team=team, is_original=True).count()
+
+    if survey_count >= team.max_surveys:
+        return False, (
+            f"Team has reached the limit of {team.max_surveys} surveys. "
+            f"Upgrade to Organization tier for unlimited surveys."
+        )
+
+    return True, ""
