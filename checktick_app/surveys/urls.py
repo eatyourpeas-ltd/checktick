@@ -8,7 +8,7 @@ urlpatterns = [
     path("", views.survey_list, name="list"),
     # User management hub (must be before slug routes)
     path("manage/users/", views.user_management_hub, name="user_management_hub"),
-    # Recovery dashboard (must be before slug routes)
+    # Superuser Platform Recovery Console (must be before slug routes)
     path("recovery/", views.recovery_dashboard, name="recovery_dashboard"),
     path(
         "recovery/<uuid:request_id>/",
@@ -34,6 +34,32 @@ urlpatterns = [
         "recovery/<uuid:request_id>/execute/",
         views.recovery_execute,
         name="recovery_execute",
+    ),
+    # Admin Recovery Dashboard (Organization/Team Admins)
+    path(
+        "admin/recovery/",
+        views.admin_recovery_dashboard,
+        name="admin_recovery_dashboard",
+    ),
+    path(
+        "admin/recovery/<uuid:request_id>/",
+        views.admin_recovery_detail,
+        name="admin_recovery_detail",
+    ),
+    path(
+        "admin/recovery/<uuid:request_id>/approve/primary/",
+        views.admin_recovery_approve_primary,
+        name="admin_recovery_approve_primary",
+    ),
+    path(
+        "admin/recovery/<uuid:request_id>/approve/secondary/",
+        views.admin_recovery_approve_secondary,
+        name="admin_recovery_approve_secondary",
+    ),
+    path(
+        "admin/recovery/<uuid:request_id>/reject/",
+        views.admin_recovery_reject,
+        name="admin_recovery_reject",
     ),
     # Dataset management routes (must be before slug routes)
     path("datasets/", views.dataset_list, name="dataset_list"),

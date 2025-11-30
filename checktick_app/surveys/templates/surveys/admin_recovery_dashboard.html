@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ dashboard_title }} - {% trans "Recovery Management" %}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-7xl">
+    <!-- Breadcrumb -->
+    <div class="breadcrumbs text-sm mb-4">
+        <ul>
+            <li><a href="{% url 'surveys:list' %}">{% trans "Surveys" %}</a></li>
+            {% if context_type == 'organization' %}
+            <li>{{ organization.name }}</li>
+            {% elif context_type == 'team' %}
+            <li>{{ team.name }}</li>
+            {% endif %}
+            <li>{% trans "Recovery Requests" %}</li>
+        </ul>
+    </div>
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div>
+            <h1 class="text-3xl font-bold flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                {{ dashboard_title }}
+            </h1>
+            <p class="text-base-content/70 mt-1">
+                {% if context_type == 'organization' %}
+                {% trans "Manage encryption key recovery requests for your organisation members" %}
+                {% elif context_type == 'team' %}
+                {% trans "Manage encryption key recovery requests for your team members" %}
+                {% endif %}
+            </p>
+        </div>
+        <div class="badge badge-lg {{ tier_badge_class }}">
+            {{ tier_display }}
+        </div>
+    </div>
+
+    <!-- Info Alert -->
+    <div class="alert alert-info mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <div>
+            <h3 class="font-bold">{% trans "Dual Authorization Required" %}</h3>
+            <p class="text-sm">
+                {% trans "Recovery requests require approval from two different administrators, followed by a mandatory time delay before execution. This ensures data security while enabling legitimate recovery." %}
+            </p>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats stats-vertical md:stats-horizontal shadow w-full mb-8">
+        <div class="stat">
+            <div class="stat-figure text-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            </div>
+            <div class="stat-title">{% trans "Total Requests" %}</div>
+            <div class="stat-value text-primary">{{ stats.total }}</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-figure text-warning">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <div class="stat-title">{% trans "Pending Action" %}</div>
+            <div class="stat-value text-warning">{{ stats.pending }}</div>
+            <div class="stat-desc">{% trans "Awaiting your review" %}</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-figure text-info">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <div class="stat-title">{% trans "In Time Delay" %}</div>
+            <div class="stat-value text-info">{{ stats.in_delay }}</div>
+            <div class="stat-desc">{% trans "Awaiting execution window" %}</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-figure text-success">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <div class="stat-title">{% trans "Completed" %}</div>
+            <div class="stat-value text-success">{{ stats.completed }}</div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="tabs tabs-boxed mb-6">
+        <a class="tab {% if filter == 'all' or not filter %}tab-active{% endif %}"
+           href="?filter=all">{% trans "All" %} ({{ stats.total }})</a>
+        <a class="tab {% if filter == 'pending' %}tab-active{% endif %}"
+           href="?filter=pending">{% trans "Pending" %} ({{ stats.pending }})</a>
+        <a class="tab {% if filter == 'approved' %}tab-active{% endif %}"
+           href="?filter=approved">{% trans "Approved" %} ({{ stats.in_delay }})</a>
+        <a class="tab {% if filter == 'completed' %}tab-active{% endif %}"
+           href="?filter=completed">{% trans "Completed" %} ({{ stats.completed }})</a>
+        <a class="tab {% if filter == 'rejected' %}tab-active{% endif %}"
+           href="?filter=rejected">{% trans "Rejected" %} ({{ stats.rejected }})</a>
+    </div>
+
+    <!-- Request List -->
+    {% if requests %}
+    <div class="space-y-4">
+        {% for request in requests %}
+        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+            <div class="card-body">
+                <div class="flex flex-col lg:flex-row justify-between gap-4">
+                    <!-- Request Info -->
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2">
+                            <h3 class="card-title text-lg">
+                                {{ request.request_code }}
+                            </h3>
+                            {% if request.status == 'pending_verification' %}
+                            <span class="badge badge-outline">{% trans "Pending Verification" %}</span>
+                            {% elif request.status == 'verification_in_progress' %}
+                            <span class="badge badge-secondary">{% trans "Verifying" %}</span>
+                            {% elif request.status == 'awaiting_primary' %}
+                            <span class="badge badge-warning">{% trans "Awaiting Primary" %}</span>
+                            {% elif request.status == 'awaiting_secondary' %}
+                            <span class="badge badge-warning">{% trans "Awaiting Secondary" %}</span>
+                            {% elif request.status == 'in_time_delay' %}
+                            <span class="badge badge-info">{% trans "In Time Delay" %}</span>
+                            {% elif request.status == 'ready_for_execution' %}
+                            <span class="badge badge-accent">{% trans "Ready" %}</span>
+                            {% elif request.status == 'completed' %}
+                            <span class="badge badge-success">{% trans "Completed" %}</span>
+                            {% elif request.status == 'rejected' %}
+                            <span class="badge badge-error">{% trans "Rejected" %}</span>
+                            {% elif request.status == 'cancelled' %}
+                            <span class="badge badge-ghost">{% trans "Cancelled" %}</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                            <div>
+                                <span class="font-medium">{% trans "User" %}:</span>
+                                {{ request.user.email }}
+                            </div>
+                            <div>
+                                <span class="font-medium">{% trans "Survey" %}:</span>
+                                {{ request.survey.name|truncatechars:30 }}
+                            </div>
+                            <div>
+                                <span class="font-medium">{% trans "Submitted" %}:</span>
+                                {{ request.submitted_at|date:"d M Y H:i" }}
+                            </div>
+                        </div>
+
+                        {% if request.status == 'in_time_delay' and request.time_delay_until %}
+                        <div class="mt-2 text-sm text-info">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {% trans "Ready after" %}: {{ request.time_delay_until|date:"d M Y H:i" }}
+                        </div>
+                        {% endif %}
+
+                        <!-- Approval Status -->
+                        {% if request.primary_approver or request.secondary_approver %}
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            {% if request.primary_approver %}
+                            <span class="badge badge-outline badge-sm">
+                                ✓ {% trans "Primary" %}: {{ request.primary_approver.email|truncatechars:20 }}
+                            </span>
+                            {% endif %}
+                            {% if request.secondary_approver %}
+                            <span class="badge badge-outline badge-sm">
+                                ✓ {% trans "Secondary" %}: {{ request.secondary_approver.email|truncatechars:20 }}
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex flex-col gap-2 justify-center">
+                        <a href="{% url 'surveys:admin_recovery_detail' request.id %}{% if context_type == 'organization' %}?org={{ organization.id }}{% elif context_type == 'team' %}?team={{ team.id }}{% endif %}"
+                           class="btn btn-sm btn-outline">
+                            {% trans "View Details" %}
+                        </a>
+
+                        {% if request.status == 'awaiting_primary' and can_approve_primary %}
+                        <form method="post" action="{% url 'surveys:admin_recovery_approve_primary' request.id %}{% if context_type == 'organization' %}?org={{ organization.id }}{% elif context_type == 'team' %}?team={{ team.id }}{% endif %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-success w-full"
+                                    onclick="return confirm('{% trans "Approve as primary? This requires a second administrator to also approve." %}')">
+                                {% trans "Approve (Primary)" %}
+                            </button>
+                        </form>
+                        {% endif %}
+
+                        {% if request.status == 'awaiting_secondary' and can_approve_secondary and request.primary_approver != user %}
+                        <form method="post" action="{% url 'surveys:admin_recovery_approve_secondary' request.id %}{% if context_type == 'organization' %}?org={{ organization.id }}{% elif context_type == 'team' %}?team={{ team.id }}{% endif %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-success w-full"
+                                    onclick="return confirm('{% trans "Approve as secondary? This will start the time delay period." %}')">
+                                {% trans "Approve (Secondary)" %}
+                            </button>
+                        </form>
+                        {% endif %}
+
+                        {% if request.status in 'pending_verification,verification_in_progress,awaiting_primary,awaiting_secondary' and can_reject %}
+                        <button class="btn btn-sm btn-error"
+                                onclick="document.getElementById('reject-modal-{{ request.id }}').showModal()">
+                            {% trans "Reject" %}
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reject Modal -->
+        <dialog id="reject-modal-{{ request.id }}" class="modal">
+            <div class="modal-box">
+                <h3 class="font-bold text-lg">{% trans "Reject Recovery Request" %}</h3>
+                <p class="py-4">{% trans "Please provide a reason for rejecting this request." %}</p>
+                <form method="post" action="{% url 'surveys:admin_recovery_reject' request.id %}{% if context_type == 'organization' %}?org={{ organization.id }}{% elif context_type == 'team' %}?team={{ team.id }}{% endif %}">
+                    {% csrf_token %}
+                    <div class="form-control">
+                        <textarea name="reason" class="textarea textarea-bordered" rows="3"
+                                  placeholder="{% trans 'Reason for rejection...' %}" required></textarea>
+                    </div>
+                    <div class="modal-action">
+                        <button type="button" class="btn" onclick="this.closest('dialog').close()">{% trans "Cancel" %}</button>
+                        <button type="submit" class="btn btn-error">{% trans "Reject Request" %}</button>
+                    </div>
+                </form>
+            </div>
+            <form method="dialog" class="modal-backdrop">
+                <button>close</button>
+            </form>
+        </dialog>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <div class="flex justify-center mt-8">
+        <div class="join">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}{% if filter %}&filter={{ filter }}{% endif %}"
+               class="join-item btn">«</a>
+            {% endif %}
+            <span class="join-item btn btn-disabled">
+                {% trans "Page" %} {{ page_obj.number }} {% trans "of" %} {{ page_obj.paginator.num_pages }}
+            </span>
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if filter %}&filter={{ filter }}{% endif %}"
+               class="join-item btn">»</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- Empty State -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body items-center text-center py-16">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-base-content/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3 class="text-xl font-medium text-base-content/70">{% trans "No Recovery Requests" %}</h3>
+            <p class="text-base-content/50 max-w-md">
+                {% if filter and filter != 'all' %}
+                {% trans "No requests match the selected filter." %}
+                {% else %}
+                {% trans "There are no recovery requests from your members yet." %}
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
