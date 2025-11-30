@@ -191,32 +191,61 @@ Everything in Individual tier, plus:
 #### Team Key Management
 
 **When your team is created:**
+
 1. Organization owner sets up organization master key
 2. Team keys are derived from organization key
 3. All team surveys encrypted with team key
 4. Team admin manages access
 
 **For team members:**
+
 - Sign in with SSO (Google, Azure, etc.)
 - Surveys automatically unlock when signed in
 - No passwords or recovery phrases to remember!
 - Team admin can grant/revoke access
+
+#### SSO and Patient Data Surveys
+
+**Important**: When a survey collects patient data, SSO auto-unlock alone is not sufficient.
+
+Even with SSO, you'll be asked to set a **passphrase** when your survey includes patient demographics (NHS number, date of birth, names, etc.). This adds an extra layer of protection:
+
+- **Why**: Patient data requires explicit intent to access - it shouldn't unlock "automatically" when you log in
+- **How**: You set a passphrase the first time you publish a patient data survey
+- **Using**: Enter your passphrase to unlock the survey (in addition to being signed in via SSO)
+
+This ensures that even if your SSO session is compromised, patient data remains protected.
+
+#### Whole Survey Encryption
+
+When your survey collects patient data, **the entire response is encrypted**, not just the demographics:
+
+- ✅ Patient identifiers (NHS number, name, DOB)
+- ✅ Clinical observations and notes
+- ✅ Free-text answers
+- ✅ All checkbox/dropdown selections
+- ✅ Everything in that survey response
+
+This provides complete protection - you can't accidentally expose clinical context by encrypting identifiers alone.
 
 #### Recovery Options
 
 **If a team member loses access:**
 
 **Option 1: Team Admin Recovery** (Instant)
+
 - Team admin can recover member's survey immediately
 - No identity verification needed (within same organization)
 - Logged for compliance
 
 **Option 2: Organization Admin Recovery** (Instant)
+
 - Organization owner can recover any team survey
 - Used when team admin is unavailable
 - Logged for compliance
 
 **Option 3: Platform Recovery** (Rare - used if organization dissolves)
+
 - Same process as Individual tier
 - Identity verification + dual auth + time delay
 - Used only if organization no longer exists
@@ -224,12 +253,14 @@ Everything in Individual tier, plus:
 ### Best Practices for Teams
 
 **Team Admins:**
+
 - Document who has access to team surveys
 - Review access quarterly
 - Remove access when members leave
 - Monitor recovery actions in audit log
 
 **Team Members:**
+
 - Maintain access to your SSO account
 - Report lost SSO access immediately
 - Don't share SSO credentials
@@ -421,6 +452,8 @@ A: If you're collecting:
 - Data covered by GDPR special categories
 
 Then **yes**, you should use encryption. CheckTick makes it easy.
+
+**Important**: When your survey collects patient data, **the entire survey response is encrypted** - not just the patient demographics. This means all answers (clinical observations, notes, outcomes, etc.) are protected together with the patient identifiers. This approach provides complete protection for the entire clinical encounter.
 
 **Q: What if I just use strong passwords on my CheckTick account?**
 

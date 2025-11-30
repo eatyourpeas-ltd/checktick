@@ -109,6 +109,42 @@ The encryption process:
 3. Encrypts JSON data with AES-GCM
 4. Stores: `salt (16 bytes) | nonce (12 bytes) | ciphertext`
 
+#### 2b. Whole-Response Encryption (Patient Data Surveys)
+
+When a survey collects patient data (identified by a `patient_details_encrypted` question group), the **entire survey response** is encrypted - not just the demographics:
+
+```python
+# Patient data survey: encrypt ENTIRE response
+if survey.requires_whole_response_encryption():
+    # Combine all data into single encrypted blob
+    full_response = {
+        "answers": {
+            "q1_chest_pain": "mild",
+            "q2_duration": "3 days",
+            "q3_previous_history": "yes",
+            "q4_notes": "Patient describes intermittent pain..."
+        },
+        "demographics": {
+            "first_name": "John",
+            "nhs_number": "1234567890",
+            "date_of_birth": "1980-01-01"
+        }
+    }
+
+    # Store complete encrypted response
+    response.store_complete_response(survey_key, answers, demographics)
+    # response.enc_answers contains the encrypted blob
+    # response.answers is cleared (empty dict)
+    # response.enc_demographics is None (not used)
+```
+
+**Why whole-response encryption for patient data:**
+
+- Clinical observations (symptoms, notes) should be protected alongside identifiers
+- Free-text answers may contain identifying information
+- Complete protection prevents "re-identification" attacks
+- Simpler mental model: "patient data survey = everything encrypted"
+
 #### 3. Data Decryption
 
 To view encrypted data, users must "unlock" the survey:
@@ -1738,15 +1774,59 @@ Layer 3: Encryption Key Control
 | **Insider Threat** | Admin could reset password | Cannot reset OIDC identity; org recovery needed |
 | **Lost Credentials** | Manual password reset | Identity provider handles recovery |
 
+### SSO and Patient Data: Passphrase Requirement
+
+While OIDC auto-unlock is convenient, it's not appropriate for all scenarios. When surveys collect patient data, additional explicit authentication is required:
+
+```python
+# Survey checks if SSO user needs passphrase
+if survey.sso_user_needs_passphrase():
+    # User must set up password-based encryption even with SSO
+    # Auto-unlock alone is NOT sufficient for patient data
+
+    # On first publish:
+    # 1. User enters a passphrase (separate from SSO)
+    # 2. KEK is encrypted with passphrase (encrypted_kek_password)
+    # 3. Recovery phrase also generated (encrypted_kek_recovery)
+    # 4. OIDC encryption may also be set up for convenience
+    pass
+```
+
+**Why require passphrase for SSO + patient data:**
+
+1. **Explicit Intent**: Unlocking patient data should require conscious action, not happen automatically on login
+2. **Device Compromise**: If SSO session is compromised, patient data remains protected
+3. **Shared Devices**: Clinical workstations may have persistent SSO sessions
+4. **Audit Clarity**: Passphrase entry creates clear "intent to access" audit event
+5. **Regulatory Compliance**: Some frameworks require explicit authentication for PHI access
+
+**Configuration in Survey Model:**
+
+```python
+class Survey(models.Model):
+    # Default: True - SSO users need passphrase for patient data
+    require_passphrase_for_patient_data = models.BooleanField(
+        default=True,
+        help_text="Require SSO users to set a passphrase when survey collects patient data"
+    )
+
+    def sso_user_needs_passphrase(self) -> bool:
+        """Check if SSO users need to set a passphrase for this survey."""
+        return self.collects_patient_data() and self.require_passphrase_for_patient_data
+```
+
+Organizations can disable this requirement if their security policy permits auto-unlock for patient data (e.g., in controlled clinical environments).
+
 ### User Experience with OIDC
 
 #### Organization User Flow
 
 1. **Signup**: "Sign in with Microsoft" (organization SSO)
 2. **Create Survey**: Automatic encryption (no manual key management!)
-3. **View Data**: Auto-unlock when authenticated via OIDC
-4. **Recovery**: Organization admin can recover if needed
-5. **MFA**: Handled by Microsoft/Google/Okta
+3. **Patient Data Survey**: Prompted to set passphrase on first publish
+4. **View Data**: Auto-unlock for non-patient data; passphrase required for patient data
+5. **Recovery**: Organization admin can recover if needed
+6. **MFA**: Handled by Microsoft/Google/Okta
 
 #### Individual User Flow
 

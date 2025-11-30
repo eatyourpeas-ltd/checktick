@@ -16,11 +16,11 @@ Usage:
     python setup_vault.py
 """
 
-import hvac
+from datetime import datetime
 import os
 import sys
-import json
-from datetime import datetime
+
+import hvac
 
 
 def check_vault_status(client):
@@ -54,13 +54,11 @@ def enable_secrets_engine(client):
     try:
         # Check if already enabled
         secrets_engines = client.sys.list_mounted_secrets_engines()
-        if 'secret/' in secrets_engines:
+        if "secret/" in secrets_engines:
             print("  ℹ️  KV secrets engine already enabled at secret/")
         else:
             client.sys.enable_secrets_engine(
-                backend_type='kv',
-                path='secret',
-                options={'version': '2'}
+                backend_type="kv", path="secret", options={"version": "2"}
             )
             print("  ✅ Enabled KV v2 secrets engine at secret/")
     except Exception as e:
@@ -120,8 +118,7 @@ path "auth/token/lookup-self" {
 
     try:
         client.sys.create_or_update_policy(
-            name='checktick-app',
-            policy=checktick_policy
+            name="checktick-app", policy=checktick_policy
         )
         print("  ✅ Created checktick-app policy")
     except Exception as e:
@@ -150,10 +147,7 @@ path "secret/metadata/surveys/{{identity.entity.metadata.org_id}}_+/*" {
 """
 
     try:
-        client.sys.create_or_update_policy(
-            name='org-admin',
-            policy=org_admin_policy
-        )
+        client.sys.create_or_update_policy(name="org-admin", policy=org_admin_policy)
         print("  ✅ Created org-admin policy")
     except Exception as e:
         print(f"  ❌ Error creating org admin policy: {e}")
@@ -166,31 +160,32 @@ def enable_approle_auth(client):
     try:
         # Enable AppRole auth method
         auth_methods = client.sys.list_auth_methods()
-        if 'approle/' in auth_methods:
+        if "approle/" in auth_methods:
             print("  ℹ️  AppRole already enabled")
         else:
-            client.sys.enable_auth_method(
-                method_type='approle',
-                path='approle'
-            )
+            client.sys.enable_auth_method(method_type="approle", path="approle")
             print("  ✅ Enabled AppRole auth method")
 
         # Create AppRole for CheckTick
         client.auth.approle.create_or_update_approle(
-            role_name='checktick-app',
-            token_policies=['checktick-app'],
-            token_ttl='1h',
-            token_max_ttl='24h',
+            role_name="checktick-app",
+            token_policies=["checktick-app"],
+            token_ttl="1h",
+            token_max_ttl="24h",
             bind_secret_id=True,
-            secret_id_ttl='0',  # Never expires
-            token_num_uses=0,   # Unlimited uses
+            secret_id_ttl="0",  # Never expires
+            token_num_uses=0,  # Unlimited uses
         )
         print("  ✅ Created checktick-app AppRole")
 
         # Get RoleID and SecretID
-        role_id = client.auth.approle.read_role_id(role_name='checktick-app')['data']['role_id']
-        secret_id_response = client.auth.approle.generate_secret_id(role_name='checktick-app')
-        secret_id = secret_id_response['data']['secret_id']
+        role_id = client.auth.approle.read_role_id(role_name="checktick-app")["data"][
+            "role_id"
+        ]
+        secret_id_response = client.auth.approle.generate_secret_id(
+            role_name="checktick-app"
+        )
+        secret_id = secret_id_response["data"]["secret_id"]
 
         print("\n  📋 AppRole Credentials (save these in CheckTick .env):")
         print(f"  VAULT_ROLE_ID={role_id}")
@@ -211,14 +206,11 @@ def enable_audit_logging(client):
 
     try:
         audit_backends = client.sys.list_enabled_audit_devices()
-        if 'file/' in audit_backends:
+        if "file/" in audit_backends:
             print("  ℹ️  File audit already enabled")
         else:
             client.sys.enable_audit_device(
-                device_type='file',
-                options={
-                    'file_path': '/vault/logs/audit.log'
-                }
+                device_type="file", options={"file_path": "/vault/logs/audit.log"}
             )
             print("  ✅ Enabled file audit logging to /vault/logs/audit.log")
     except Exception as e:
@@ -248,14 +240,14 @@ def generate_platform_master_key(client):
     # Store vault component in Vault
     try:
         client.secrets.kv.v2.create_or_update_secret(
-            path='platform/master-key',
+            path="platform/master-key",
             secret={
-                'vault_component': vault_component.hex(),
-                'created_at': datetime.utcnow().isoformat(),
-                'algorithm': 'XOR split-knowledge',
-                'key_size': 512,
-                'note': 'Requires custodian component to reconstruct full key'
-            }
+                "vault_component": vault_component.hex(),
+                "created_at": datetime.utcnow().isoformat(),
+                "algorithm": "XOR split-knowledge",
+                "key_size": 512,
+                "note": "Requires custodian component to reconstruct full key",
+            },
         )
         print("  ✅ Stored vault component in Vault")
     except Exception as e:
@@ -280,12 +272,12 @@ def create_sample_organization_key(client):
 
     try:
         client.secrets.kv.v2.create_or_update_secret(
-            path='organizations/1/master-key',
+            path="organizations/1/master-key",
             secret={
-                'note': 'Example organization key structure',
-                'created_at': datetime.utcnow().isoformat(),
-                'org_key_vault_part': 'will_be_generated_on_org_creation',
-            }
+                "note": "Example organization key structure",
+                "created_at": datetime.utcnow().isoformat(),
+                "org_key_vault_part": "will_be_generated_on_org_creation",
+            },
         )
         print("  ✅ Created sample organization key at organizations/1/")
     except Exception as e:
@@ -300,8 +292,8 @@ def main():
     print("=" * 70)
 
     # Get Vault connection details from environment
-    vault_addr = os.getenv('VAULT_ADDR')
-    vault_token = os.getenv('VAULT_TOKEN')
+    vault_addr = os.getenv("VAULT_ADDR")
+    vault_token = os.getenv("VAULT_TOKEN")
 
     if not vault_addr:
         print("\n❌ Error: VAULT_ADDR environment variable not set")
@@ -318,10 +310,7 @@ def main():
     # Initialize Vault client with explicit HTTPS
     # Northflank routes through port 443, not 8200
     client = hvac.Client(
-        url=vault_addr,
-        token=vault_token,
-        verify=False,
-        namespace=None
+        url=vault_addr, token=vault_token, verify=False, namespace=None
     )
 
     # Check Vault status
@@ -363,5 +352,5 @@ def main():
     print("\n" + "=" * 70)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

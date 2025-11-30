@@ -17,26 +17,29 @@ Security Model:
     - Each level in hierarchy can recover keys below it
 """
 
-import hvac
-import os
 import logging
-from typing import Optional, Tuple
-from django.conf import settings
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+import os
+from typing import Optional
+
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from django.conf import settings
 from django.utils import timezone
+import hvac
 
 logger = logging.getLogger(__name__)
 
 
 class VaultConnectionError(Exception):
     """Raised when cannot connect to Vault."""
+
     pass
 
 
 class VaultKeyNotFoundError(Exception):
     """Raised when key not found in Vault."""
+
     pass
 
 
@@ -71,11 +74,10 @@ class VaultClient:
 
             # Authenticate with AppRole
             auth_response = client.auth.approle.login(
-                role_id=self.role_id,
-                secret_id=self.secret_id
+                role_id=self.role_id, secret_id=self.secret_id
             )
 
-            client.token = auth_response['auth']['client_token']
+            client.token = auth_response["auth"]["client_token"]
 
             if not client.is_authenticated():
                 raise VaultConnectionError("Failed to authenticate with Vault")
@@ -92,20 +94,16 @@ class VaultClient:
         """Check Vault health status."""
         try:
             client = self._get_client()
-            health = client.sys.read_health_status(method='GET')
+            health = client.sys.read_health_status(method="GET")
             return {
-                'initialized': health.get('initialized', False),
-                'sealed': health.get('sealed', True),
-                'standby': health.get('standby', False),
-                'version': health.get('version', 'unknown')
+                "initialized": health.get("initialized", False),
+                "sealed": health.get("sealed", True),
+                "standby": health.get("standby", False),
+                "version": health.get("version", "unknown"),
             }
         except Exception as e:
             logger.error(f"Vault health check failed: {e}")
-            return {
-                'initialized': False,
-                'sealed': True,
-                'error': str(e)
-            }
+            return {"initialized": False, "sealed": True, "error": str(e)}
 
     def get_platform_master_key(self, custodian_component: bytes) -> bytes:
         """
@@ -125,14 +123,16 @@ class VaultClient:
 
             # Read vault component from Vault
             secret = client.secrets.kv.v2.read_secret_version(
-                path='platform/master-key'
+                path="platform/master-key"
             )
 
-            vault_component_hex = secret['data']['data']['vault_component']
+            vault_component_hex = secret["data"]["data"]["vault_component"]
             vault_component = bytes.fromhex(vault_component_hex)
 
             # Reconstruct full key (XOR)
-            platform_key = bytes(a ^ b for a, b in zip(vault_component, custodian_component))
+            platform_key = bytes(
+                a ^ b for a, b in zip(vault_component, custodian_component)
+            )
 
             logger.info("Successfully reconstructed platform master key")
             return platform_key
@@ -148,7 +148,7 @@ class VaultClient:
         self,
         org_id: int,
         org_owner_passphrase: str,
-        platform_custodian_component: bytes
+        platform_custodian_component: bytes,
     ) -> bytes:
         """
         Derive organization master key from platform key + owner passphrase.
@@ -171,12 +171,12 @@ class VaultClient:
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=f"checktick-org-{org_id}".encode('utf-8'),
-            iterations=200_000
+            salt=f"checktick-org-{org_id}".encode("utf-8"),
+            iterations=200_000,
         )
 
         # Combine platform key + passphrase
-        combined_input = platform_key + org_owner_passphrase.encode('utf-8')
+        combined_input = platform_key + org_owner_passphrase.encode("utf-8")
         org_key = kdf.derive(combined_input)
 
         logger.info(f"Derived organization key for org_id={org_id}")
@@ -197,18 +197,17 @@ class VaultClient:
             client = self._get_client()
 
             secret_data = {
-                'org_id': org_id,
-                'created_at': timezone.now().isoformat(),
-                'key_derivation': 'platform_key + owner_passphrase',
-                'note': 'Key derived on-demand, not stored'
+                "org_id": org_id,
+                "created_at": timezone.now().isoformat(),
+                "key_derivation": "platform_key + owner_passphrase",
+                "note": "Key derived on-demand, not stored",
             }
 
             if metadata:
                 secret_data.update(metadata)
 
             client.secrets.kv.v2.create_or_update_secret(
-                path=f'organizations/{org_id}/master-key',
-                secret=secret_data
+                path=f"organizations/{org_id}/master-key", secret=secret_data
             )
 
             logger.info(f"Stored organization key reference for org_id={org_id}")
@@ -231,8 +230,8 @@ class VaultClient:
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=f"checktick-team-{team_id}".encode('utf-8'),
-            iterations=200_000
+            salt=f"checktick-team-{team_id}".encode("utf-8"),
+            iterations=200_000,
         )
 
         team_key = kdf.derive(org_key)
@@ -246,14 +245,14 @@ class VaultClient:
             client = self._get_client()
 
             client.secrets.kv.v2.create_or_update_secret(
-                path=f'teams/{team_id}/team-key',
+                path=f"teams/{team_id}/team-key",
                 secret={
-                    'team_id': team_id,
-                    'org_id': org_id,
-                    'created_at': timezone.now().isoformat(),
-                    'key_derivation': 'org_key + team_id',
-                    'note': 'Key derived on-demand from org key'
-                }
+                    "team_id": team_id,
+                    "org_id": org_id,
+                    "created_at": timezone.now().isoformat(),
+                    "key_derivation": "org_key + team_id",
+                    "note": "Key derived on-demand from org key",
+                },
             )
 
             logger.info(f"Stored team key reference for team_id={team_id}")
@@ -263,10 +262,7 @@ class VaultClient:
             raise
 
     def encrypt_survey_kek(
-        self,
-        survey_kek: bytes,
-        hierarchy_key: bytes,
-        vault_path: str
+        self, survey_kek: bytes, hierarchy_key: bytes, vault_path: str
     ) -> str:
         """
         Encrypt survey KEK with hierarchical key and store in Vault.
@@ -284,8 +280,8 @@ class VaultClient:
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
-                salt=vault_path.encode('utf-8'),
-                iterations=200_000
+                salt=vault_path.encode("utf-8"),
+                iterations=200_000,
             )
             encryption_key = kdf.derive(hierarchy_key)
 
@@ -299,10 +295,10 @@ class VaultClient:
             client.secrets.kv.v2.create_or_update_secret(
                 path=vault_path,
                 secret={
-                    'encrypted_kek': (nonce + encrypted_kek).hex(),
-                    'created_at': timezone.now().isoformat(),
-                    'algorithm': 'AES-256-GCM'
-                }
+                    "encrypted_kek": (nonce + encrypted_kek).hex(),
+                    "created_at": timezone.now().isoformat(),
+                    "algorithm": "AES-256-GCM",
+                },
             )
 
             logger.info(f"Stored encrypted survey KEK at {vault_path}")
@@ -312,11 +308,7 @@ class VaultClient:
             logger.error(f"Failed to encrypt and store survey KEK: {e}")
             raise
 
-    def decrypt_survey_kek(
-        self,
-        vault_path: str,
-        hierarchy_key: bytes
-    ) -> bytes:
+    def decrypt_survey_kek(self, vault_path: str, hierarchy_key: bytes) -> bytes:
         """
         Decrypt survey KEK from Vault using hierarchical key.
 
@@ -335,7 +327,7 @@ class VaultClient:
 
             # Read encrypted KEK from Vault
             secret = client.secrets.kv.v2.read_secret_version(path=vault_path)
-            encrypted_kek_hex = secret['data']['data']['encrypted_kek']
+            encrypted_kek_hex = secret["data"]["data"]["encrypted_kek"]
             encrypted_blob = bytes.fromhex(encrypted_kek_hex)
 
             # Extract nonce and ciphertext
@@ -346,8 +338,8 @@ class VaultClient:
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
-                salt=vault_path.encode('utf-8'),
-                iterations=200_000
+                salt=vault_path.encode("utf-8"),
+                iterations=200_000,
             )
             decryption_key = kdf.derive(hierarchy_key)
 
@@ -399,8 +391,8 @@ class VaultClient:
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=f"checktick-user-recovery-{user_id}".encode('utf-8'),
-            iterations=200_000
+            salt=f"checktick-user-recovery-{user_id}".encode("utf-8"),
+            iterations=200_000,
         )
 
         user_recovery_key = kdf.derive(platform_key)
@@ -414,7 +406,7 @@ class VaultClient:
         survey_id: int,
         survey_kek: bytes,
         user_email: str,
-        platform_custodian_component: bytes
+        platform_custodian_component: bytes,
     ) -> str:
         """
         Escrow user's survey KEK in Vault for ethical recovery.
@@ -444,23 +436,25 @@ class VaultClient:
             email_kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
-                salt=f"email-verification-{user_id}".encode('utf-8'),
-                iterations=100_000
+                salt=f"email-verification-{user_id}".encode("utf-8"),
+                iterations=100_000,
             )
             email_key = email_kdf.derive(platform_key[:32])  # Use first 32 bytes
 
             aesgcm_email = AESGCM(email_key)
             email_nonce = os.urandom(12)
-            encrypted_email = aesgcm_email.encrypt(email_nonce, user_email.encode('utf-8'), None)
+            encrypted_email = aesgcm_email.encrypt(
+                email_nonce, user_email.encode("utf-8"), None
+            )
 
             # Encrypt survey KEK with user recovery key
-            vault_path = f'users/{user_id}/surveys/{survey_id}/recovery-kek'
+            vault_path = f"users/{user_id}/surveys/{survey_id}/recovery-kek"
 
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
-                salt=vault_path.encode('utf-8'),
-                iterations=200_000
+                salt=vault_path.encode("utf-8"),
+                iterations=200_000,
             )
             encryption_key = kdf.derive(user_recovery_key)
 
@@ -473,21 +467,23 @@ class VaultClient:
             client.secrets.kv.v2.create_or_update_secret(
                 path=vault_path,
                 secret={
-                    'encrypted_kek': (nonce + encrypted_kek).hex(),
-                    'encrypted_email': (email_nonce + encrypted_email).hex(),
-                    'created_at': timezone.now().isoformat(),
-                    'algorithm': 'AES-256-GCM',
-                    'requires_verification': True,
-                    'purpose': 'ethical-recovery',
-                    'audit_trail': {
-                        'created_by': 'system',
-                        'accessed_by': [],
-                        'access_timestamps': []
-                    }
-                }
+                    "encrypted_kek": (nonce + encrypted_kek).hex(),
+                    "encrypted_email": (email_nonce + encrypted_email).hex(),
+                    "created_at": timezone.now().isoformat(),
+                    "algorithm": "AES-256-GCM",
+                    "requires_verification": True,
+                    "purpose": "ethical-recovery",
+                    "audit_trail": {
+                        "created_by": "system",
+                        "accessed_by": [],
+                        "access_timestamps": [],
+                    },
+                },
             )
 
-            logger.info(f"Escrowed survey KEK for user_id={user_id}, survey_id={survey_id}")
+            logger.info(
+                f"Escrowed survey KEK for user_id={user_id}, survey_id={survey_id}"
+            )
             return vault_path
 
         except Exception as e:
@@ -500,7 +496,7 @@ class VaultClient:
         survey_id: int,
         admin_id: int,
         verification_notes: str,
-        platform_custodian_component: bytes
+        platform_custodian_component: bytes,
     ) -> bytes:
         """
         Recover user's survey KEK from Vault escrow (admin operation).
@@ -522,13 +518,13 @@ class VaultClient:
             VaultKeyNotFoundError: If KEK not found in escrow
         """
         try:
-            vault_path = f'users/{user_id}/surveys/{survey_id}/recovery-kek'
+            vault_path = f"users/{user_id}/surveys/{survey_id}/recovery-kek"
             client = self._get_client()
 
             # Read escrowed KEK from Vault
             secret = client.secrets.kv.v2.read_secret_version(path=vault_path)
-            secret_data = secret['data']['data']
-            encrypted_kek_hex = secret_data['encrypted_kek']
+            secret_data = secret["data"]["data"]
+            encrypted_kek_hex = secret_data["encrypted_kek"]
             encrypted_blob = bytes.fromhex(encrypted_kek_hex)
 
             # Extract nonce and ciphertext
@@ -543,8 +539,8 @@ class VaultClient:
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
-                salt=vault_path.encode('utf-8'),
-                iterations=200_000
+                salt=vault_path.encode("utf-8"),
+                iterations=200_000,
             )
             decryption_key = kdf.derive(user_recovery_key)
 
@@ -553,16 +549,17 @@ class VaultClient:
             survey_kek = aesgcm.decrypt(nonce, ciphertext, None)
 
             # Update audit trail
-            audit_trail = secret_data.get('audit_trail', {'accessed_by': [], 'access_timestamps': []})
-            audit_trail['accessed_by'].append(admin_id)
-            audit_trail['access_timestamps'].append(timezone.now().isoformat())
-            audit_trail['last_verification_notes'] = verification_notes
+            audit_trail = secret_data.get(
+                "audit_trail", {"accessed_by": [], "access_timestamps": []}
+            )
+            audit_trail["accessed_by"].append(admin_id)
+            audit_trail["access_timestamps"].append(timezone.now().isoformat())
+            audit_trail["last_verification_notes"] = verification_notes
 
             # Write back with updated audit trail
-            secret_data['audit_trail'] = audit_trail
+            secret_data["audit_trail"] = audit_trail
             client.secrets.kv.v2.create_or_update_secret(
-                path=vault_path,
-                secret=secret_data
+                path=vault_path, secret=secret_data
             )
 
             logger.warning(
@@ -573,17 +570,18 @@ class VaultClient:
             return survey_kek
 
         except hvac.exceptions.InvalidPath:
-            logger.error(f"Escrowed KEK not found for user_id={user_id}, survey_id={survey_id}")
-            raise VaultKeyNotFoundError(f"No escrowed KEK found for user {user_id}, survey {survey_id}")
+            logger.error(
+                f"Escrowed KEK not found for user_id={user_id}, survey_id={survey_id}"
+            )
+            raise VaultKeyNotFoundError(
+                f"No escrowed KEK found for user {user_id}, survey {survey_id}"
+            )
         except Exception as e:
             logger.error(f"Failed to recover user survey KEK: {e}")
             raise
 
     def verify_user_identity_email(
-        self,
-        user_id: int,
-        claimed_email: str,
-        platform_custodian_component: bytes
+        self, user_id: int, claimed_email: str, platform_custodian_component: bytes
     ) -> bool:
         """
         Verify user's claimed email against encrypted email in Vault.
@@ -603,21 +601,22 @@ class VaultClient:
 
             # Find any survey for this user (just need email verification)
             # In production, you'd query database for user's survey IDs
-            vault_path_prefix = f'users/{user_id}/surveys/'
 
             # Read first available survey's recovery data
             # (All surveys for same user have same encrypted email)
-            list_response = client.secrets.kv.v2.list_secrets(path=f'users/{user_id}/surveys/')
+            list_response = client.secrets.kv.v2.list_secrets(
+                path=f"users/{user_id}/surveys/"
+            )
 
-            if not list_response or not list_response.get('data', {}).get('keys'):
+            if not list_response or not list_response.get("data", {}).get("keys"):
                 logger.error(f"No escrowed surveys found for user_id={user_id}")
                 return False
 
-            first_survey = list_response['data']['keys'][0]
-            vault_path = f'users/{user_id}/surveys/{first_survey}/recovery-kek'
+            first_survey = list_response["data"]["keys"][0].rstrip("/")
+            vault_path = f"users/{user_id}/surveys/{first_survey}/recovery-kek"
 
             secret = client.secrets.kv.v2.read_secret_version(path=vault_path)
-            encrypted_email_hex = secret['data']['data']['encrypted_email']
+            encrypted_email_hex = secret["data"]["data"]["encrypted_email"]
             encrypted_email_blob = bytes.fromhex(encrypted_email_hex)
 
             # Extract nonce and ciphertext
@@ -630,14 +629,16 @@ class VaultClient:
             email_kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
-                salt=f"email-verification-{user_id}".encode('utf-8'),
-                iterations=100_000
+                salt=f"email-verification-{user_id}".encode("utf-8"),
+                iterations=100_000,
             )
             email_key = email_kdf.derive(platform_key[:32])
 
             # Decrypt and compare
             aesgcm = AESGCM(email_key)
-            decrypted_email = aesgcm.decrypt(email_nonce, email_ciphertext, None).decode('utf-8')
+            decrypted_email = aesgcm.decrypt(
+                email_nonce, email_ciphertext, None
+            ).decode("utf-8")
 
             match = decrypted_email.lower() == claimed_email.lower()
 
