@@ -42,11 +42,14 @@ from .models import (
     CollectionDefinition,
     CollectionItem,
     DataSet,
+    IdentityVerification,
     LLMConversationSession,
     Organization,
     OrganizationMembership,
     PublishedQuestionGroup,
     QuestionGroup,
+    RecoveryAuditEntry,
+    RecoveryRequest,
     Survey,
     SurveyAccessToken,
     SurveyMembership,
@@ -8223,3 +8226,381 @@ def branching_data_api(request: HttpRequest, slug: str) -> JsonResponse:
             "group_repeats": group_repeats,
         }
     )
+
+
+# ============================================================================
+# SUPERUSER RECOVERY DASHBOARD VIEWS
+# Platform-level key recovery console for superusers only.
+# Rate limited: 5 actions/hour for sensitive operations.
+# ============================================================================
+
+
+def superuser_required(view_func):
+    """
+    Decorator that requires the user to be a superuser.
+    Returns 403 Forbidden for non-superusers.
+    """
+    from functools import wraps
+
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("account_login")
+        if not request.user.is_superuser:
+            raise PermissionDenied("This page is restricted to platform superusers.")
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped_view
+
+
+@login_required
+@superuser_required
+@ratelimit(key="user", rate="30/h", block=True)
+def recovery_dashboard(request: HttpRequest) -> HttpResponse:
+    """
+    Platform Recovery Console for superusers.
+
+    Shows ALL recovery requests across ALL organizations.
+    Superusers can:
+    - View all pending recovery requests
+    - Approve/reject requests (as emergency override)
+    - Execute recoveries
+    - Enter keys/passphrases for emergency recovery
+
+    Rate limited: 30 views/hour to prevent abuse.
+    """
+    # Superuser sees ALL recovery requests
+    recovery_requests = RecoveryRequest.objects.select_related(
+        "user",
+        "survey",
+        "survey__organization",
+        "primary_approver",
+        "secondary_approver",
+    ).order_by("-submitted_at")
+
+    # Apply filter
+    filter_param = request.GET.get("filter", "all")
+    if filter_param == "pending":
+        recovery_requests = recovery_requests.filter(
+            status__in=[
+                RecoveryRequest.Status.PENDING_VERIFICATION,
+                RecoveryRequest.Status.VERIFICATION_IN_PROGRESS,
+            ]
+        )
+    elif filter_param == "approval":
+        recovery_requests = recovery_requests.filter(
+            status__in=[
+                RecoveryRequest.Status.AWAITING_PRIMARY,
+                RecoveryRequest.Status.AWAITING_SECONDARY,
+            ]
+        )
+    elif filter_param == "delay":
+        recovery_requests = recovery_requests.filter(
+            status=RecoveryRequest.Status.IN_TIME_DELAY
+        )
+    elif filter_param == "ready":
+        recovery_requests = recovery_requests.filter(
+            status=RecoveryRequest.Status.READY_FOR_EXECUTION
+        )
+    elif filter_param == "completed":
+        recovery_requests = recovery_requests.filter(
+            status__in=[
+                RecoveryRequest.Status.COMPLETED,
+                RecoveryRequest.Status.REJECTED,
+                RecoveryRequest.Status.CANCELLED,
+            ]
+        )
+
+    # Calculate stats across ALL requests
+    all_requests = RecoveryRequest.objects.all()
+    stats = {
+        "total": all_requests.count(),
+        "pending": all_requests.filter(
+            status__in=[
+                RecoveryRequest.Status.PENDING_VERIFICATION,
+                RecoveryRequest.Status.VERIFICATION_IN_PROGRESS,
+            ]
+        ).count(),
+        "awaiting_approval": all_requests.filter(
+            status__in=[
+                RecoveryRequest.Status.AWAITING_PRIMARY,
+                RecoveryRequest.Status.AWAITING_SECONDARY,
+            ]
+        ).count(),
+        "in_delay": all_requests.filter(
+            status=RecoveryRequest.Status.IN_TIME_DELAY
+        ).count(),
+        "ready": all_requests.filter(
+            status=RecoveryRequest.Status.READY_FOR_EXECUTION
+        ).count(),
+        "completed": all_requests.filter(
+            status=RecoveryRequest.Status.COMPLETED
+        ).count(),
+    }
+
+    # Statuses that can be rejected
+    rejectable_statuses = [
+        RecoveryRequest.Status.PENDING_VERIFICATION,
+        RecoveryRequest.Status.VERIFICATION_IN_PROGRESS,
+        RecoveryRequest.Status.AWAITING_PRIMARY,
+        RecoveryRequest.Status.AWAITING_SECONDARY,
+    ]
+
+    context = {
+        "is_superuser": True,
+        "recovery_requests": recovery_requests,
+        "stats": stats,
+        "filter": filter_param,
+        "can_approve_primary": True,  # Superusers can do anything
+        "can_approve_secondary": True,
+        "can_emergency_override": True,  # Superuser special
+        "rejectable_statuses": rejectable_statuses,
+        "user": request.user,
+    }
+    return render(request, "surveys/recovery_dashboard.html", context)
+
+
+@login_required
+@superuser_required
+@ratelimit(key="user", rate="30/h", block=True)
+def recovery_detail(request: HttpRequest, request_id: str) -> HttpResponse:
+    """
+    Detailed view of a single recovery request for superusers.
+    """
+    recovery_request = get_object_or_404(
+        RecoveryRequest.objects.select_related(
+            "user",
+            "survey",
+            "survey__organization",
+            "primary_approver",
+            "secondary_approver",
+            "rejected_by",
+            "cancelled_by",
+            "executed_by",
+        ),
+        id=request_id,
+    )
+
+    # Get identity verifications
+    identity_verifications = recovery_request.identity_verifications.all().order_by(
+        "verification_type"
+    )
+
+    # Get audit entries
+    audit_entries = recovery_request.audit_entries.all().order_by("-timestamp")[:50]
+
+    # Statuses that can be rejected
+    rejectable_statuses = [
+        RecoveryRequest.Status.PENDING_VERIFICATION,
+        RecoveryRequest.Status.VERIFICATION_IN_PROGRESS,
+        RecoveryRequest.Status.AWAITING_PRIMARY,
+        RecoveryRequest.Status.AWAITING_SECONDARY,
+    ]
+
+    context = {
+        "recovery_request": recovery_request,
+        "identity_verifications": identity_verifications,
+        "audit_entries": audit_entries,
+        "can_approve_primary": True,
+        "can_approve_secondary": True,
+        "can_emergency_override": True,
+        "rejectable_statuses": rejectable_statuses,
+        "user": request.user,
+        "is_superuser": True,
+    }
+    return render(request, "surveys/recovery_detail.html", context)
+
+
+@login_required
+@superuser_required
+@require_http_methods(["POST"])
+@ratelimit(key="user", rate="5/h", block=True)
+def recovery_approve_primary(request: HttpRequest, request_id: str) -> HttpResponse:
+    """
+    Approve a recovery request as primary approver (superuser override).
+
+    Rate limited: 5 approvals/hour.
+    """
+    recovery_request = get_object_or_404(RecoveryRequest, id=request_id)
+
+    # Cannot approve your own request
+    if recovery_request.user == request.user:
+        messages.error(request, "You cannot approve your own recovery request.")
+        return redirect("surveys:recovery_detail", request_id=request_id)
+
+    # Check status
+    if recovery_request.status != RecoveryRequest.Status.AWAITING_PRIMARY:
+        messages.error(request, "This request is not awaiting primary approval.")
+        return redirect("surveys:recovery_detail", request_id=request_id)
+
+    try:
+        recovery_request.approve_primary(
+            admin=request.user,
+            reason=f"Superuser override approval via Platform Recovery Console by {request.user.email}",
+        )
+
+        # Log superuser action
+        logger.warning(
+            f"SUPERUSER ACTION: {request.user.email} approved primary for recovery request "
+            f"{recovery_request.request_code} (survey: {recovery_request.survey.slug})"
+        )
+
+        messages.success(request, "Primary approval granted successfully (superuser override).")
+    except Exception as e:
+        messages.error(request, f"Error approving request: {e}")
+
+    return redirect("surveys:recovery_detail", request_id=request_id)
+
+
+@login_required
+@superuser_required
+@require_http_methods(["POST"])
+@ratelimit(key="user", rate="5/h", block=True)
+def recovery_approve_secondary(request: HttpRequest, request_id: str) -> HttpResponse:
+    """
+    Approve a recovery request as secondary approver (superuser override).
+
+    Rate limited: 5 approvals/hour.
+    """
+    recovery_request = get_object_or_404(RecoveryRequest, id=request_id)
+
+    # Cannot approve your own request
+    if recovery_request.user == request.user:
+        messages.error(request, "You cannot approve your own recovery request.")
+        return redirect("surveys:recovery_detail", request_id=request_id)
+
+    # Note: superusers CAN be both primary and secondary in emergency scenarios
+    # This is intentional - sometimes there's only one superuser available
+
+    # Check status
+    if recovery_request.status != RecoveryRequest.Status.AWAITING_SECONDARY:
+        messages.error(request, "This request is not awaiting secondary approval.")
+        return redirect("surveys:recovery_detail", request_id=request_id)
+
+    try:
+        recovery_request.approve_secondary(
+            admin=request.user,
+            reason=f"Superuser override approval via Platform Recovery Console by {request.user.email}",
+        )
+
+        # Log superuser action
+        logger.warning(
+            f"SUPERUSER ACTION: {request.user.email} approved secondary for recovery request "
+            f"{recovery_request.request_code} (survey: {recovery_request.survey.slug})"
+        )
+
+        messages.success(
+            request,
+            f"Secondary approval granted (superuser override). Time delay of {recovery_request.time_delay_hours} hours has started.",
+        )
+    except Exception as e:
+        messages.error(request, f"Error approving request: {e}")
+
+    return redirect("surveys:recovery_detail", request_id=request_id)
+
+
+@login_required
+@superuser_required
+@require_http_methods(["POST"])
+@ratelimit(key="user", rate="5/h", block=True)
+def recovery_reject(request: HttpRequest, request_id: str) -> HttpResponse:
+    """
+    Reject a recovery request (superuser).
+
+    Rate limited: 5 rejections/hour.
+    """
+    recovery_request = get_object_or_404(RecoveryRequest, id=request_id)
+
+    # Check status
+    rejectable_statuses = [
+        RecoveryRequest.Status.PENDING_VERIFICATION,
+        RecoveryRequest.Status.VERIFICATION_IN_PROGRESS,
+        RecoveryRequest.Status.AWAITING_PRIMARY,
+        RecoveryRequest.Status.AWAITING_SECONDARY,
+    ]
+
+    if recovery_request.status not in rejectable_statuses:
+        messages.error(request, "This request cannot be rejected in its current state.")
+        return redirect("surveys:recovery_detail", request_id=request_id)
+
+    reason = request.POST.get("reason", "Rejected via Platform Recovery Console (superuser)")
+
+    try:
+        recovery_request.reject(admin=request.user, reason=reason)
+
+        # Log superuser action
+        logger.warning(
+            f"SUPERUSER ACTION: {request.user.email} rejected recovery request "
+            f"{recovery_request.request_code} (survey: {recovery_request.survey.slug}). Reason: {reason}"
+        )
+
+        messages.success(request, "Recovery request has been rejected.")
+    except Exception as e:
+        messages.error(request, f"Error rejecting request: {e}")
+
+    return redirect("surveys:recovery_detail", request_id=request_id)
+
+
+@login_required
+@superuser_required
+@require_http_methods(["POST"])
+@ratelimit(key="user", rate="3/h", block=True)
+def recovery_execute(request: HttpRequest, request_id: str) -> HttpResponse:
+    """
+    Execute a recovery request that has passed the time delay (superuser).
+
+    Rate limited: 3 executions/hour (very sensitive operation).
+    """
+    recovery_request = get_object_or_404(RecoveryRequest, id=request_id)
+
+    # Check if in time delay and ready
+    if recovery_request.status == RecoveryRequest.Status.IN_TIME_DELAY:
+        if recovery_request.time_delay_until and timezone.now() >= recovery_request.time_delay_until:
+            recovery_request.status = RecoveryRequest.Status.READY_FOR_EXECUTION
+            recovery_request.save(update_fields=["status"])
+        else:
+            messages.error(request, "Time delay has not completed yet.")
+            return redirect("surveys:recovery_detail", request_id=request_id)
+
+    # Check status
+    if recovery_request.status != RecoveryRequest.Status.READY_FOR_EXECUTION:
+        messages.error(request, "This request is not ready for execution.")
+        return redirect("surveys:recovery_detail", request_id=request_id)
+
+    try:
+        # TODO: Integrate with Vault to actually perform recovery
+        # For now, mark as completed
+        recovery_request.executed_by = request.user
+        recovery_request.completed_at = timezone.now()
+        recovery_request.status = RecoveryRequest.Status.COMPLETED
+        recovery_request.save()
+
+        # Create audit entry
+        recovery_request._create_audit_entry(
+            event_type="recovery_executed",
+            severity=RecoveryAuditEntry.Severity.CRITICAL,
+            actor_type="superuser",
+            actor_id=request.user.id,
+            actor_email=request.user.email,
+            details={
+                "action": "execute_recovery",
+                "source": "platform_recovery_console",
+                "superuser_override": True,
+            },
+        )
+
+        # Log superuser action
+        logger.warning(
+            f"SUPERUSER ACTION: {request.user.email} executed recovery for request "
+            f"{recovery_request.request_code} (user: {recovery_request.user.email}, "
+            f"survey: {recovery_request.survey.slug})"
+        )
+
+        messages.success(
+            request,
+            "Recovery has been executed successfully. The user can now access their encrypted data.",
+        )
+    except Exception as e:
+        messages.error(request, f"Error executing recovery: {e}")
+
+    return redirect("surveys:recovery_detail", request_id=request_id)

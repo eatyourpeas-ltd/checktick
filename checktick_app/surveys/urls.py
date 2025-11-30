@@ -8,6 +8,33 @@ urlpatterns = [
     path("", views.survey_list, name="list"),
     # User management hub (must be before slug routes)
     path("manage/users/", views.user_management_hub, name="user_management_hub"),
+    # Recovery dashboard (must be before slug routes)
+    path("recovery/", views.recovery_dashboard, name="recovery_dashboard"),
+    path(
+        "recovery/<uuid:request_id>/",
+        views.recovery_detail,
+        name="recovery_detail",
+    ),
+    path(
+        "recovery/<uuid:request_id>/approve/primary/",
+        views.recovery_approve_primary,
+        name="recovery_approve_primary",
+    ),
+    path(
+        "recovery/<uuid:request_id>/approve/secondary/",
+        views.recovery_approve_secondary,
+        name="recovery_approve_secondary",
+    ),
+    path(
+        "recovery/<uuid:request_id>/reject/",
+        views.recovery_reject,
+        name="recovery_reject",
+    ),
+    path(
+        "recovery/<uuid:request_id>/execute/",
+        views.recovery_execute,
+        name="recovery_execute",
+    ),
     # Dataset management routes (must be before slug routes)
     path("datasets/", views.dataset_list, name="dataset_list"),
     path("datasets/create/", views.dataset_create, name="dataset_create"),
