@@ -59,38 +59,58 @@ This comprehensive guide covers:
 
 ## Identity and roles
 
-There are four key models in `checktick_app.surveys.models`:
+There are six key models in `checktick_app.surveys.models`:
 
 - Organization: a container for users and surveys.
 - OrganizationMembership: links a user to an organization with a role.
   - Roles: ADMIN, CREATOR, VIEWER
-- Survey: owned by a user and optionally associated with an organization.
+- Team: a collaboration unit for small groups, optionally hosted within an organization.
+- TeamMembership: links a user to a team with a role.
+  - Roles: ADMIN, CREATOR, VIEWER
+- Survey: owned by a user and optionally associated with an organization or team.
 - SurveyMembership: links a user to a specific survey with a role.
   - Roles: CREATOR, EDITOR, VIEWER
 
 ### Account Tiers
 
-CheckTick uses a four-tier account system:
+CheckTick uses a seven-tier account system:
 
 - **FREE tier**: Individual users with up to 3 active surveys. Cannot share surveys or invite collaborators.
 - **PRO tier**: Individual users with unlimited surveys. Can add editors (up to 10 collaborators per survey) but no viewer role.
-- **ORGANIZATION tier**: Team collaboration with unlimited collaborators and full role-based access (Admin, Creator, Viewer).
+- **TEAM tiers** (Small/Medium/Large): Small group collaboration (5/10/20 members) with team-based surveys and role-based access.
+- **ORGANIZATION tier**: Large team collaboration with unlimited collaborators and full role-based access (Admin, Creator, Viewer).
 - **ENTERPRISE tier**: All ORGANIZATION features plus custom branding, SSO/OIDC, and self-hosted options.
 
-For detailed tier features, see [Account Types & Organizations](getting-started-account-types.md).
+For detailed tier features, see [Account Types & Tiers](getting-started-account-types.md).
 
 ### Organization Roles
 
 Organization-level role semantics:
 
-- **Owner**: The user who created the survey. Owners can view/edit their own surveys.
-- **Org ADMIN**: Can view/edit all surveys that belong to their organization. Can manage organization members and survey collaborators.
-- **Org CREATOR or VIEWER**: No additional rights beyond their personal ownership. They cannot access other members' surveys.
+- **Owner**: The user who created the organization. Full administrative access.
+- **Org ADMIN**: Can view/edit all surveys that belong to their organization. Can manage organization members, teams, and survey collaborators.
+- **Org CREATOR**: Can create surveys within the organization. Can view/edit their own surveys.
+- **Org VIEWER**: Read-only access to organization surveys. Cannot create or edit surveys.
 - **Participant** (no membership): Can only submit responses via public links; cannot access builder or API survey objects.
+
+### Team Roles
+
+Team-level role semantics (for Team tier accounts):
+
+- **Team Owner**: The user who created the team. Equivalent to Team ADMIN with ownership rights.
+- **Team ADMIN**: Can manage team members (add/remove, change roles). Can view/edit all team surveys. Can manage team settings.
+- **Team CREATOR**: Can create surveys within the team. Can view/edit their own surveys and collaborate on team surveys.
+- **Team VIEWER**: Read-only access to team surveys. Cannot create or edit surveys.
+
+Teams can exist:
+- **Standalone**: Independent teams (not part of an organization)
+- **Organization-hosted**: Teams within an organization (managed by org admins)
+
+**Access Hierarchy**: Organization admin > Team admin > Team creator > Team viewer
 
 ### Survey Collaboration Roles
 
-**Note**: Survey collaboration is only available for organization surveys. Individual users cannot share their surveys.
+**Note**: Survey collaboration is available for organization and team surveys. Individual users on PRO tier can add editors only (no viewer role).
 
 Individual surveys within organizations can have collaborators with specific roles through SurveyMembership:
 
@@ -113,15 +133,26 @@ Single-organisation admin model:
 Collaboration features are tier-dependent:
 
 **FREE Tier:**
+
 - Cannot share surveys or invite collaborators
 - Survey management is solo only
 
 **PRO Tier:**
+
 - Can add editors to surveys (up to 10 collaborators per survey)
 - No viewer role available
 - Limited collaboration model
 
+**TEAM Tiers (Small/Medium/Large):**
+
+- Team-based collaboration with role management
+- Team admins can manage members and assign roles (ADMIN, CREATOR, VIEWER)
+- Survey creators within teams can share surveys with team members
+- Limited to team size (5/10/20 members depending on tier)
+- Dashboard integration: Team management interface for admins
+
 **ORGANIZATION & ENTERPRISE Tiers:**
+
 - Full collaboration features available
 - Survey CREATORs can add users by email and assign roles (CREATOR, EDITOR, VIEWER)
 - Unlimited collaborators per survey
@@ -135,11 +166,30 @@ This enables teams to collaborate on survey design while maintaining clear bound
 
 The central authorization checks live in `checktick_app/surveys/permissions.py`:
 
-- `can_view_survey(user, survey)` — True if user is the survey owner, an ADMIN of the survey's organization, or has survey membership (CREATOR, EDITOR, or VIEWER)
-- `can_edit_survey(user, survey)` — True if user is the survey owner, an ADMIN of the survey's organization, or has survey membership as CREATOR or EDITOR
-- `can_manage_survey_users(user, survey)` — True if the survey belongs to an organization AND user is the survey owner, an ADMIN of the survey's organization, or has survey membership as CREATOR. Returns False for individual user surveys (surveys without organization).
+### Survey Permissions
+
+- `can_view_survey(user, survey)` — True if user is the survey owner, an ADMIN of the survey's organization, a member of the survey's team, or has survey membership (CREATOR, EDITOR, or VIEWER)
+- `can_edit_survey(user, survey)` — True if user is the survey owner, an ADMIN of the survey's organization, a team member with ADMIN or CREATOR role, or has survey membership as CREATOR or EDITOR
+- `can_manage_survey_users(user, survey)` — True if the survey belongs to an organization or team AND user is the survey owner, an ADMIN of the survey's organization, a team ADMIN, or has survey membership as CREATOR. Returns False for individual user surveys (surveys without organization or team).
 - `require_can_view(user, survey)` — Raises 403 if not allowed
 - `require_can_edit(user, survey)` — Raises 403 if not allowed
+
+### Team Permissions
+
+- `can_view_team_survey(user, survey)` — True if user can view a team survey (team membership or organization admin)
+- `can_edit_team_survey(user, survey)` — True if user can edit a team survey (team admin/creator or organization admin)
+- `can_manage_team(user, team)` — True if user is team owner, team admin, or organization admin (for org-hosted teams)
+- `can_add_team_member(user, team)` — True if user can manage team AND team is under capacity
+- `can_create_survey_in_team(user, team)` — True if user is team member with CREATOR or ADMIN role AND team is under survey limit
+- `get_user_team_role(user, team)` — Returns the user's role in the team (ADMIN, CREATOR, VIEWER, or None)
+
+### Team Decorators
+
+For view protection, use these decorators from `checktick_app/surveys/decorators.py`:
+
+- `@team_member_required(role=None)` — Requires team membership, optionally with specific role (ADMIN, CREATOR, VIEWER)
+- `@team_admin_required` — Requires team ADMIN role
+- `@team_creator_required` — Requires team CREATOR or ADMIN role
 
 All builder/dashboard/preview endpoints call these helpers before proceeding. Unauthorized requests receive HTTP 403.
 
@@ -147,16 +197,16 @@ All builder/dashboard/preview endpoints call these helpers before proceeding. Un
 
 The API mirrors the same rules using a DRF permission class and scoped querysets:
 
-- **Listing**: returns only the surveys the user can see (their own, any in orgs where they are ADMIN, plus surveys they are members of via SurveyMembership). Anonymous users see an empty list.
+- **Listing**: returns only the surveys the user can see (their own, any in orgs where they are ADMIN, any in teams they belong to, plus surveys they are members of via SurveyMembership). Anonymous users see an empty list.
 - **Retrieve**: allowed only if `can_view_survey` is true.
 - **Create**: authenticated users can create surveys. The creator becomes the owner.
-- **Update/Delete/Custom actions**: allowed only if `can_edit_survey` is true (CREATOR and EDITOR roles for survey members).
+- **Update/Delete/Custom actions**: allowed only if `can_edit_survey` is true (CREATOR and EDITOR roles for survey members, or team ADMIN/CREATOR).
 
 User management operations (adding/removing collaborators) require `can_manage_survey_users` permission, which is restricted to:
 
-- Organization surveys only (surveys with organization)
-- Survey CREATORs, organization ADMINs, and survey owners
-- **Individual users (surveys without organization) will receive 403 Forbidden when attempting to manage memberships**
+- Organization or team surveys only (surveys with organization or team)
+- Survey CREATORs, organization ADMINs, team ADMINs, and survey owners
+- **Individual users (surveys without organization or team) will receive 403 Forbidden when attempting to manage memberships**
 
 Error behavior:
 

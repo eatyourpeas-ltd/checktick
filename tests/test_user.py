@@ -10,16 +10,27 @@ TEST_PASSWORD = "ComplexTestPassword123!"
 
 @pytest.mark.django_db
 def test_signup_as_org_creates_org_and_shows_on_profile(client):
+    """Test OIDC complete_signup flow creating organization."""
     email = "orgowner@example.com"
     password = TEST_PASSWORD
 
-    # Submit signup form choosing an organisation account
+    User = get_user_model()
+    # Create user and OIDC record (simulating OIDC login)
+    user = User.objects.create_user(username=email, email=email, password=password)
+    UserOIDC.objects.create(user=user, signup_completed=False)
+
+    # Log in the user
+    client.login(username=email, password=password)
+
+    # Set session flag that complete_signup checks
+    session = client.session
+    session["needs_signup_completion"] = True
+    session.save()
+
+    # Complete signup choosing an organisation account
     resp = client.post(
-        reverse("core:signup"),
+        reverse("core:complete_signup"),
         data={
-            "email": email,
-            "password1": password,
-            "password2": password,
             "account_type": "org",
             "org_name": "Acme Health",
         },
@@ -29,8 +40,7 @@ def test_signup_as_org_creates_org_and_shows_on_profile(client):
     # Should finish with a 200 after following redirects (to org users page)
     assert resp.status_code == 200
 
-    User = get_user_model()
-    user = User.objects.get(email=email)
+    user.refresh_from_db()
 
     # Organisation created and owned by the new user
     org = Organization.objects.get(owner=user)
@@ -78,20 +88,27 @@ def test_signup_as_simple_user(client):
 @pytest.mark.django_db
 def test_multiple_users_can_create_orgs_with_same_name(client):
     """
-    Test that multiple users can create organizations with the same name.
+    Test that multiple users can create organizations with the same name via complete_signup.
     This is allowed because organizations are scoped by owner, not globally unique.
     Each user owns their own separate organization instance.
     """
     password = TEST_PASSWORD
     org_name = "Acme Health"
+    User = get_user_model()
 
-    # First user creates an org
+    # First user creates an org via complete_signup
+    user1 = User.objects.create_user(
+        username="user1@example.com", email="user1@example.com", password=password
+    )
+    UserOIDC.objects.create(user=user1, subject="user1_subject", signup_completed=False)
+    client.login(username="user1@example.com", password=password)
+    session = client.session
+    session["needs_signup_completion"] = True
+    session.save()
+
     client.post(
-        reverse("core:signup"),
+        reverse("core:complete_signup"),
         data={
-            "email": "user1@example.com",
-            "password1": password,
-            "password2": password,
             "account_type": "org",
             "org_name": org_name,
         },
@@ -101,12 +118,18 @@ def test_multiple_users_can_create_orgs_with_same_name(client):
     client.logout()
 
     # Second user creates an org with the same name
+    user2 = User.objects.create_user(
+        username="user2@example.com", email="user2@example.com", password=password
+    )
+    UserOIDC.objects.create(user=user2, subject="user2_subject", signup_completed=False)
+    client.login(username="user2@example.com", password=password)
+    session = client.session
+    session["needs_signup_completion"] = True
+    session.save()
+
     resp = client.post(
-        reverse("core:signup"),
+        reverse("core:complete_signup"),
         data={
-            "email": "user2@example.com",
-            "password1": password,
-            "password2": password,
             "account_type": "org",
             "org_name": org_name,
         },
@@ -117,9 +140,8 @@ def test_multiple_users_can_create_orgs_with_same_name(client):
     assert resp.status_code == 200
 
     # Both organizations should exist
-    User = get_user_model()
-    user1 = User.objects.get(email="user1@example.com")
-    user2 = User.objects.get(email="user2@example.com")
+    user1.refresh_from_db()
+    user2.refresh_from_db()
 
     org1 = Organization.objects.get(owner=user1)
     org2 = Organization.objects.get(owner=user2)
@@ -151,7 +173,7 @@ def test_multiple_users_can_create_orgs_with_same_name(client):
 def test_user_cannot_upgrade_to_admin_by_creating_org_with_existing_name(client):
     """
     Security test: A user cannot gain admin access to someone else's organization
-    by creating a new organization with the same name. Each org is separate.
+    by creating a new organization with the same name via complete_signup. Each org is separate.
     """
     password = TEST_PASSWORD
     org_name = "Existing Corp"
@@ -167,13 +189,19 @@ def test_user_cannot_upgrade_to_admin_by_creating_org_with_existing_name(client)
         organization=org1, user=user1, role=OrganizationMembership.Role.ADMIN
     )
 
-    # Malicious user tries to create org with same name
+    # Malicious user tries to create org with same name via complete_signup
+    attacker = User.objects.create_user(
+        username="attacker@example.com", email="attacker@example.com", password=password
+    )
+    UserOIDC.objects.create(user=attacker, signup_completed=False)
+    client.login(username="attacker@example.com", password=password)
+    session = client.session
+    session["needs_signup_completion"] = True
+    session.save()
+
     resp = client.post(
-        reverse("core:signup"),
+        reverse("core:complete_signup"),
         data={
-            "email": "attacker@example.com",
-            "password1": password,
-            "password2": password,
             "account_type": "org",
             "org_name": org_name,  # Same name as existing org
         },
@@ -239,16 +267,22 @@ def test_signup_with_duplicate_email_fails(client):
 
 @pytest.mark.django_db
 def test_org_name_defaults_to_username_when_empty(client):
-    """Test that organization name defaults to username when not provided."""
+    """Test that organization name defaults to username when not provided via complete_signup."""
     email = "testuser@example.com"
     password = TEST_PASSWORD
+    User = get_user_model()
+
+    # Create user with OIDC record
+    user = User.objects.create_user(username=email, email=email, password=password)
+    UserOIDC.objects.create(user=user, signup_completed=False)
+    client.login(username=email, password=password)
+    session = client.session
+    session["needs_signup_completion"] = True
+    session.save()
 
     resp = client.post(
-        reverse("core:signup"),
+        reverse("core:complete_signup"),
         data={
-            "email": email,
-            "password1": password,
-            "password2": password,
             "account_type": "org",
             "org_name": "",  # Empty org name
         },
@@ -257,7 +291,7 @@ def test_org_name_defaults_to_username_when_empty(client):
 
     assert resp.status_code == 200
 
-    User = get_user_model()
+    user.refresh_from_db()
     user = User.objects.get(email=email)
     org = Organization.objects.get(owner=user)
 

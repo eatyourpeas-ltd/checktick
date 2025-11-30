@@ -24,6 +24,7 @@ If you sign in with a username and password, you get **dual-path encryption**:
 If you sign in via Single Sign-On (SSO), you have **two options** when publishing an encrypted survey:
 
 **Option A: SSO-Only Encryption** (Recommended for most users)
+
 - ✅ **Fast setup** - no passwords or phrases to remember
 - ✅ **Automatic unlock** - surveys open when you're signed in
 - ✅ **Simple** - trust your SSO provider completely
@@ -31,6 +32,7 @@ If you sign in via Single Sign-On (SSO), you have **two options** when publishin
 - 👍 **Best for**: Low-to-medium sensitivity data, trusted SSO provider (e.g., your work Google/Microsoft account)
 
 **Option B: SSO + Recovery Phrase** (Belt and suspenders)
+
 - ✅ **Automatic unlock** via SSO for convenience
 - ✅ **Recovery phrase backup** - 12 words you save securely
 - ✅ **Maximum safety** - can recover even if you lose SSO access
@@ -65,12 +67,14 @@ When you publish a survey for the first time while signed in via SSO, you'll see
 5. ✅ Done! Your survey is encrypted and will auto-unlock when you sign in
 
 **What this means:**
+
 - Your survey key is encrypted using your SSO identity (e.g., your Google account)
 - No passwords or recovery phrases to remember
 - Automatic unlock whenever you're signed in via SSO
 - **If you lose access to your SSO account, your data is permanently inaccessible**
 
 **When to choose this:**
+
 - You trust your SSO provider (Google, Microsoft, etc.)
 - Your SSO account is stable (work account, primary email)
 - The data sensitivity is low-to-medium
@@ -85,12 +89,14 @@ When you publish a survey for the first time while signed in via SSO, you'll see
 5. ✅ Done! Your survey has dual protection
 
 **What this means:**
+
 - Your survey key is encrypted TWO ways: with your SSO identity AND a recovery phrase
 - Automatic unlock via SSO for convenience
 - Recovery phrase backup if you lose SSO access
 - **You must keep your recovery phrase safe and secure**
 
 **When to choose this:**
+
 - The data is highly sensitive or critical
 - You can't afford any risk of data loss
 - You're willing to securely store a recovery phrase
@@ -114,6 +120,7 @@ When publishing for the first time:
 4. ✅ Survey published with encryption enabled
 
 **Daily use:**
+
 - Unlock with your password (recommended for quick access)
 - Or use your recovery phrase if you forget your password
 

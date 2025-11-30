@@ -7,9 +7,11 @@
     <span>{% trans "User management" %}</span>
   </h1>
 
-  {% if not org %}
-    <div class="alert">{% trans "You don't have an organisation to manage yet." %}</div>
-  {% else %}
+  {% if not org and not managed_teams %}
+    <div class="alert">{% trans "You don't have an organisation or team to manage yet." %}</div>
+  {% endif %}
+
+  {% if org %}
     <div class="card bg-base-100 shadow mb-6">
       <div class="card-body">
         <h2 class="inline-flex items-center gap-2 font-semibold text-lg text-base-content">
@@ -32,7 +34,7 @@
                 <option value="admin">{% trans "Admin" %}</option>
               </select>
             </label>
-            <button type="submit" class="btn btn-primary">{% trans "Add user to org" %}</button>
+            <button type="submit" class="btn btn-primary">{% trans "Add user to organisation" %}</button>
           </form>
           <div id="org-add-result" class="text-sm mt-2 opacity-80"></div>
         </div>
@@ -50,6 +52,96 @@
       </div>
     </div>
 
+    {% if org_teams %}
+      <div class="card bg-base-100 shadow mb-6">
+        <div class="card-body">
+          <h2 class="inline-flex items-center gap-2 font-semibold text-lg text-base-content">
+            {% include "components/icons/users.html" with classes="w-5 h-5 text-base-content" %}
+            <span>{% trans "Teams in this organisation" %}</span>
+          </h2>
+          <div class="space-y-4">
+            {% for team_info in org_teams %}
+              <div class="border border-base-300 rounded-lg p-4">
+                <div class="flex justify-between items-start mb-2">
+                  <div>
+                    <h3 class="font-semibold">{{ team_info.team.name }}</h3>
+                    <span class="badge badge-sm badge-ghost">{{ team_info.team.get_size_display }}</span>
+                    <span class="badge badge-sm badge-ghost">
+                      {% blocktrans count counter=team_info.members|length %}{{ counter }} member{% plural %}{{ counter }} members{% endblocktrans %}
+                    </span>
+                  </div>
+                </div>
+                <ul class="list-disc pl-5 text-sm">
+                  {% for mem in team_info.members %}
+                    <li>{{ mem.user.username }} <span class="badge badge-xs badge-ghost">{{ mem.role }}</span></li>
+                  {% empty %}
+                    <li class="opacity-70">{% trans "No members yet" %}</li>
+                  {% endfor %}
+                </ul>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  {% endif %}
+
+  {% if managed_teams %}
+    <div class="card bg-base-100 shadow mb-6">
+      <div class="card-body">
+        <h2 class="inline-flex items-center gap-2 font-semibold text-lg text-base-content">
+          {% include "components/icons/users.html" with classes="w-5 h-5 text-base-content" %}
+          <span>{% trans "Teams you manage" %}</span>
+        </h2>
+        {% for team_data in managed_teams %}
+          <div class="border border-base-300 rounded-lg p-4 mb-4">
+            <div class="flex justify-between items-start mb-3">
+              <div>
+                <h3 class="font-semibold">{{ team_data.team.name }}</h3>
+                <span class="badge badge-sm badge-ghost">{{ team_data.team.get_size_display }}</span>
+                <span class="badge badge-sm badge-ghost">
+                  {{ team_data.team.current_member_count }}/{{ team_data.team.max_members }} {% trans "members" %}
+                </span>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <form hx-post="{% url 'surveys:user_management_hub' %}" hx-target="#team-{{ team_data.team.id }}-add-result" hx-swap="innerHTML" method="post" class="flex items-end gap-2">
+                {% csrf_token %}
+                <input type="hidden" name="scope" value="team">
+                <input type="hidden" name="team_id" value="{{ team_data.team.id }}">
+                <label class="form-control">
+                  <span class="label"><span class="label-text">{% trans "User email" %}</span></span>
+                  <input type="email" name="email" class="input input-bordered input-sm" placeholder="user@example.com" />
+                </label>
+                <label class="form-control">
+                  <span class="label"><span class="label-text">{% trans "Role" %}</span></span>
+                  <select name="role" class="select select-bordered select-sm">
+                    <option value="viewer">{% trans "Viewer" %}</option>
+                    <option value="creator">{% trans "Creator" %}</option>
+                    <option value="admin">{% trans "Admin" %}</option>
+                  </select>
+                </label>
+                <button type="submit" class="btn btn-primary btn-sm">{% trans "Add to team" %}</button>
+              </form>
+              <div id="team-{{ team_data.team.id }}-add-result" class="text-sm mt-2 opacity-80"></div>
+            </div>
+
+            <h4 class="font-semibold text-sm mb-2">{% trans "Team members" %}</h4>
+            <ul class="list-disc pl-5 text-sm">
+              {% for mem in team_data.members %}
+                <li>{{ mem.user.username }} <span class="badge badge-xs badge-ghost">{{ mem.role }}</span></li>
+              {% empty %}
+                <li class="opacity-70">{% trans "No members yet" %}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% if org %}
     <div class="card bg-base-100 shadow">
       <div class="card-body">
         <h2 class="inline-flex items-center gap-2 font-semibold text-lg text-base-content">

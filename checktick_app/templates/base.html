@@ -54,7 +54,19 @@
       {% endif %}
     {% endblock %}
   </head>
-  <body class="min-h-screen bg-base-200">
+  <body class="min-h-screen bg-base-200"
+    {% if not self_hosted %}
+    data-paddle-environment="{{ payment_environment }}"
+    data-paddle-token="{{ payment_client_token }}"
+    {% if user.is_authenticated %}
+    data-user-id="{{ user.id }}"
+    data-user-email="{{ user.email }}"
+    {% if user.profile.payment_customer_id %}
+    data-paddle-customer-id="{{ user.profile.payment_customer_id }}"
+    {% endif %}
+    {% endif %}
+    {% endif %}
+  >
     <div class="navbar bg-base-100 shadow">
       <div class="navbar-start">
         <div class="dropdown">
@@ -118,7 +130,6 @@
               <li><a href="{% url 'surveys:user_management_hub' %}">{% trans "User management" %}</a></li>
             {% endif %}
             <li><a href="{% url 'core:docs_index' %}">{% trans "Documentation" %}</a></li>
-            <li><a href="{% url 'core:hosting' %}">{% trans "Hosting" %}</a></li>
           {% else %}
             <li><a href="{% url 'core:pricing' %}">{% trans "Pricing" %}</a></li>
             <li><a href="{% url 'core:docs_index' %}">{% trans "Documentation" %}</a></li>
@@ -128,10 +139,23 @@
       </div>
       <div class="navbar-end">
         {% if user.is_authenticated %}
+          {# Upgrade button for FREE tier users - not shown for self-hosted #}
+          {% if user.profile.account_tier == 'free' and not self_hosted %}
+            <a href="{% url 'core:pricing' %}" class="btn btn-primary btn-sm mr-2 animate-pulse">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 mr-1">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+              </svg>
+              {% trans "Upgrade" %}
+            </a>
+          {% endif %}
           <div class="dropdown dropdown-end">
-            <div tabindex="0" role="button" class="btn btn-circle">
-              <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                <span class="text-lg font-semibold text-primary-content leading-none">{{ user.username|slice:":1"|upper }}</span>
+            <div tabindex="0" role="button" class="btn btn-ghost gap-2">
+              <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                <span class="text-sm font-semibold text-primary-content">{{ user.username|slice:":1"|upper }}</span>
+              </div>
+              <div class="hidden lg:flex flex-col items-start">
+                <span class="text-sm font-medium">{{ user.username }}</span>
+                <span class="badge badge-xs badge-ghost">{{ user.profile.get_account_tier_display|upper }}</span>
               </div>
             </div>
             <ul tabindex="0" class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
@@ -193,6 +217,12 @@
           <span class="hidden md:inline">•</span>
           <a href="{% url 'core:docs_page' slug='contributing' %}" class="underline">{% trans "Contributing" %}</a>
           <span class="hidden md:inline">•</span>
+          <a href="{% url 'core:docs_page' slug='terms-of-service' %}" class="underline">{% trans "Terms" %}</a>
+          <span class="hidden md:inline">•</span>
+          <a href="{% url 'core:docs_page' slug='privacy-notice' %}" class="underline">{% trans "Privacy" %}</a>
+          <span class="hidden md:inline">•</span>
+          <a href="{% url 'core:docs_page' slug='refund-policy' %}" class="underline">{% trans "Refunds" %}</a>
+          <span class="hidden md:inline">•</span>
           <span>{% trans "Version" %}: {{ build.version }}</span>
           {% if build.branch %}
             <span class="hidden md:inline">•</span>
@@ -217,6 +247,15 @@
     {# Global toast root for lightweight notifications #}
     <div id="toast-root" class="toast toast-top toast-end z-[1000]" aria-live="polite" aria-atomic="true"></div>
     <script src="{% static 'js/toast.js' %}?v={{ build.commit|default:build.timestamp }}"></script>
+
+    {# Paddle.js SDK - Only load if not self-hosted #}
+    {% if not self_hosted %}
+    <script src="{% static 'js/paddle.js' %}"
+            {% if not debug %}integrity="sha384-aglX2UoXZDBOAz6UEdPtOtWeOeg905NPyCh27ZRhNJv7Gi+D0cAZfJsOAPyHusOr"{% endif %}
+            crossorigin="anonymous"></script>
+    <script src="{% static 'js/paddle-checkout.js' %}?v={{ build.commit|default:build.timestamp }}"></script>
+    {% endif %}
+
     {% block extra_js %}{% endblock %}
   </body>
   </html>

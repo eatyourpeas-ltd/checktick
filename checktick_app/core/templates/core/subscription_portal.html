@@ -1,0 +1,242 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Subscription" %} - CheckTick{% endblock %}
+
+{% block content %}
+<div class="prose max-w-none">
+  <h1>{% trans "Subscription Management" %}</h1>
+
+  {% if self_hosted %}
+    <!-- Self-Hosted Mode: No billing needed -->
+    <div class="alert alert-success mb-6">
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      <div>
+        <h3 class="font-bold">{% trans "Self-Hosted Instance" %}</h3>
+        <div class="text-sm">{% trans "This is a self-hosted instance with all Enterprise features enabled. No subscription required." %}</div>
+      </div>
+    </div>
+
+    <div class="card bg-base-200 shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title text-2xl">{% trans "Current Plan" %}</h2>
+        <div class="flex items-center gap-4">
+          <div class="badge badge-lg badge-primary">{% trans "SELF-HOSTED ENTERPRISE" %}</div>
+        </div>
+        <p class="mt-4">{% trans "Your self-hosted instance has all Enterprise features enabled at no cost." %}</p>
+      </div>
+    </div>
+  {% else %}
+  <!-- Standard Billing Section -->
+  <div class="not-prose mb-8">
+    <!-- Current Tier Display -->
+    <div class="card bg-base-200 shadow-xl mb-6">
+      <div class="card-body">
+        <h2 class="card-title text-2xl">{% trans "Current Plan" %}</h2>
+        <div class="flex items-center gap-4">
+          <div class="badge badge-lg badge-primary">{{ current_tier|upper }}</div>
+          {% if subscription_status != 'none' %}
+            <div class="badge badge-lg {% if subscription_status == 'active' %}badge-success{% elif subscription_status == 'canceled' %}badge-warning{% else %}badge-error{% endif %}">
+              {{ subscription_status|title }}
+            </div>
+          {% endif %}
+        </div>
+
+        {% if payment_environment == 'sandbox' %}
+          <div class="alert alert-info mt-4">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span>{% trans "You are using the sandbox environment for testing. No real payments will be processed." %}</span>
+          </div>
+        {% endif %}
+
+        {% if subscription_data %}
+          <div class="mt-4">
+            <h3 class="font-bold mb-2">{% trans "Subscription Details" %}</h3>
+            <div class="text-sm space-y-1">
+              {% if subscription_data.current_billing_period %}
+                <p><strong>{% trans "Current Period:" %}</strong>
+                  {{ subscription_data.current_billing_period.starts_at|date:"d M Y" }} -
+                  {{ subscription_data.current_billing_period.ends_at|date:"d M Y" }}
+                </p>
+              {% endif %}
+              {% if subscription_data.next_billed_at %}
+                <p><strong>{% trans "Next Billing Date:" %}</strong> {{ subscription_data.next_billed_at|date:"d M Y" }}</p>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Available Actions -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      {% if current_tier == 'free' %}
+        <div class="card bg-base-100 shadow-xl">
+          <div class="card-body">
+            <h3 class="card-title">{% trans "Upgrade to Pro" %}</h3>
+            <p>{% trans "Unlock unlimited surveys and collaboration features" %}</p>
+            <div class="card-actions justify-end">
+              <a href="{% url 'core:pricing' %}" class="btn btn-primary">{% trans "View Plans" %}</a>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Payment History -->
+      {% if payment_subscription_id %}
+        {% if subscription_status == 'active' or subscription_status == 'canceled' %}
+        <div class="card bg-base-100 shadow-xl">
+          <div class="card-body">
+            <h3 class="card-title">{% trans "Payment History & Invoices" %}</h3>
+            <p>{% trans "View your complete payment history, download invoices, and manage your payment methods through Paddle's secure portal." %}</p>
+            <div class="card-actions justify-end">
+              <a href="{% url 'core:payment_history' %}" class="btn btn-outline" target="_blank" rel="noopener">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 mr-2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+                {% trans "View Payment History" %}
+              </a>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      {% endif %}
+
+      {% if payment_subscription_id and subscription_status == 'active' %}
+        <div class="card bg-base-100 shadow-xl">
+          <div class="card-body">
+            <h3 class="card-title">{% trans "Cancel Subscription" %}</h3>
+
+            {% if not can_downgrade %}
+              <div class="alert alert-warning">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                <div>
+                  <p class="font-bold">{% trans "Important: Free tier limits" %}</p>
+                  <p class="text-sm">
+                    {% blocktrans with count=survey_count limit=free_tier_limit to_close=surveys_to_remove %}
+                    You currently have {{ count }} active surveys. The Free tier allows a maximum of {{ limit }} surveys.
+                    When your subscription ends, your {{ to_close }} oldest survey(s) will be automatically closed.
+                    Closed surveys remain accessible for viewing and data export, but cannot be edited or accept new responses.
+                    {% endblocktrans %}
+                  </p>
+                </div>
+              </div>
+            {% else %}
+              <p>{% trans "Cancel your subscription. You'll retain access until the end of your billing period, then be downgraded to the Free tier." %}</p>
+            {% endif %}
+
+            <div class="card-actions justify-end">
+              <form method="post" action="{% url 'core:cancel_subscription' %}"
+                    id="cancel-subscription-form"
+                    data-confirm-message="{% if not can_downgrade %}{% trans 'You have more surveys than the Free tier allows (3 max). When your billing period ends, your oldest surveys will be automatically closed (read-only). You can still view and export their data. Are you sure you want to cancel?' %}{% else %}{% trans 'Are you sure you want to cancel your subscription? You will be downgraded to the Free tier at the end of your billing period.' %}{% endif %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-error">
+                  {% trans "Cancel Subscription" %}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if subscription_status == 'canceled' %}
+        <div class="card bg-base-100 shadow-xl">
+          <div class="card-body">
+            <h3 class="card-title">{% trans "Subscription Canceled" %}</h3>
+            <p>{% trans "Your subscription has been canceled. You can reactivate at any time." %}</p>
+            <div class="card-actions justify-end">
+              <a href="{% url 'core:pricing' %}" class="btn btn-primary">{% trans "Reactivate" %}</a>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Feature Comparison -->
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h3 class="card-title">{% trans "Your Current Features" %}</h3>
+        <ul class="space-y-2">
+          {% if current_tier == 'free' %}
+            <li class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <span>{% trans "Up to 3 surveys" %}</span>
+            </li>
+            <li class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <span>{% trans "End-to-end encryption" %}</span>
+            </li>
+            <li class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+              <span class="text-base-content/70">{% trans "No collaboration" %}</span>
+            </li>
+          {% elif current_tier == 'pro' %}
+            <li class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <span>{% trans "Unlimited surveys" %}</span>
+            </li>
+            <li class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <span>{% trans "Up to 10 editors per survey" %}</span>
+            </li>
+            <li class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <span>{% trans "End-to-end encryption" %}</span>
+            </li>
+          {% elif current_tier == 'organization' %}
+            <li class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <span>{% trans "Unlimited surveys and collaborators" %}</span>
+            </li>
+            <li class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <span>{% trans "Viewer roles available" %}</span>
+            </li>
+            <li class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <span>{% trans "Priority support" %}</span>
+            </li>
+          {% endif %}
+        </ul>
+        <div class="card-actions justify-end mt-4">
+          <a href="{% url 'core:pricing' %}" class="btn btn-outline">{% trans "Compare All Plans" %}</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Support Section -->
+    <div class="mt-8 p-4 bg-base-200 rounded-lg">
+      <h3 class="font-bold mb-2">{% trans "Need Help?" %}</h3>
+      <p class="text-sm">
+        {% trans "If you have questions about billing or need to make changes to your subscription, please" %}
+        <a href="mailto:{{ support_email|default:'support@checktick.com' }}" class="link link-primary">{% trans "contact support" %}</a>.
+      </p>
+    </div>
+  </div>
+  {% endif %}
+  <!-- End self_hosted check -->
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/subscription-portal.js' %}" defer></script>
+{% endblock %}

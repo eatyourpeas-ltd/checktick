@@ -10,7 +10,7 @@ CheckTick supports encryption of sensitive patient data at rest. This guide expl
 
 - [Quick Reference](#quick-reference) - Choose your encryption option
 - [Individual Account Encryption](#individual-account-encryption) - For personal accounts
-- [Organization Account Encryption](#organization-account-encryption) - For team accounts
+- [Organisation Account Encryption](#Organisation-account-encryption) - For team accounts
 
 ---
 
@@ -21,25 +21,26 @@ CheckTick supports encryption of sensitive patient data at rest. This guide expl
 | Your Account Type | Recommended Encryption | When to Use | Setup Difficulty |
 |------------------|----------------------|-------------|------------------|
 | **Individual** (personal account) | **Passphrase encryption** | Collecting sensitive data (e.g., patient information, medical data) | Easy - set once in account settings |
-| **Organization** (team account) | **Organization-level encryption** | All organization surveys automatically encrypted | Medium - requires org owner setup |
-| **Organization** (need individual control) | **Individual passphrase** (in addition to org encryption) | Extra security layer for specific surveys | Easy - works alongside org encryption |
+| **Organisation** (team account) | **Organisation-level encryption** | All Organisation surveys automatically encrypted | Medium - requires org owner setup |
+| **Organisation** (need individual control) | **Individual passphrase** (in addition to org encryption) | Extra security layer for specific surveys | Easy - works alongside org encryption |
 
 ### Encryption Summary Table
 
-| Feature | Individual Passphrase | Organization Encryption |
+| Feature | Individual Passphrase | Organisation Encryption |
 |---------|---------------------|------------------------|
-| **Who sets it up** | Individual user | Organization owner |
-| **Applies to** | User's own surveys only | All organization surveys |
+| **Who sets it up** | Individual user | Organisation owner |
+| **Applies to** | User's own surveys only | All Organisation surveys |
 | **Passphrase storage** | Never stored - you must remember it | Never stored - org owner must remember it |
 | **Data export** | Requires passphrase to decrypt | Requires org passphrase to decrypt |
 | **Lost passphrase** | ⚠️ Data is **permanently** unrecoverable | ⚠️ All org data **permanently** unrecoverable |
-| **Setup location** | Account Settings → Security | Organization Settings → Encryption |
+| **Setup location** | Account Settings → Security | Organisation Settings → Encryption |
 | **Can be changed** | Yes, but requires old passphrase | Yes, but requires old passphrase |
-| **Optional** | ✅ Yes | ✅ Yes |
+| **Optional** | Yes | Yes |
 
 ### Do I Need Encryption?
 
-✅ **You should enable encryption if**:
+**You should enable encryption if**:
+
 - Collecting patient names, NHS numbers, or medical identifiers
 - Storing sensitive clinical information
 - Required by your data protection impact assessment (DPIA)
@@ -48,7 +49,8 @@ CheckTick supports encryption of sensitive patient data at rest. This guide expl
 - Working with vulnerable populations
 - Required by organizational policy
 
-❌ **Encryption may not be necessary if**:
+**Encryption may not be necessary if**:
+
 - Collecting fully anonymous data
 - No identifiable information collected
 - Only aggregate/statistical data
@@ -57,18 +59,20 @@ CheckTick supports encryption of sensitive patient data at rest. This guide expl
 ### Quick Start
 
 **For individual accounts**:
+
 1. Go to Account Settings → Security
 2. Click "Enable Encryption"
 3. Create strong passphrase (min 16 characters)
 4. **Write down your passphrase** (you cannot recover it)
 5. All future surveys automatically encrypted
 
-**For organization accounts**:
-1. Organization owner goes to Organization Settings → Encryption
-2. Click "Enable Organization Encryption"
+**For Organisation accounts**:
+
+1. Organisation owner goes to Organisation Settings → Encryption
+2. Click "Enable Organisation Encryption"
 3. Create strong passphrase (min 20 characters recommended)
 4. **Securely share passphrase** with authorized data managers
-5. All organization surveys automatically encrypted
+5. All Organisation surveys automatically encrypted
 
 ---
 
@@ -77,6 +81,7 @@ CheckTick supports encryption of sensitive patient data at rest. This guide expl
 ### Overview
 
 Individual account encryption allows you to encrypt survey data using a personal passphrase. This is ideal for:
+
 - Solo researchers
 - Individual practitioners
 - Personal projects
@@ -125,17 +130,20 @@ Individual account encryption allows you to encrypt survey data using a personal
 You'll be prompted to create a passphrase:
 
 **Passphrase Requirements**:
+
 - Minimum 16 characters
 - Mix of uppercase, lowercase, numbers, symbols recommended
 - Should be memorable but not guessable
 - Not your login password
 
 **Good passphrases** (examples of pattern, not actual passphrases to use):
+
 - `CorrectHorseBatteryStaple2025!` (random words + year + symbol)
 - `MyDog$SpotLoves2Run!` (personal phrase with modifications)
 - `PurpleElephants#Dance@Midnight` (memorable sentence)
 
 **Bad passphrases**:
+
 - `password123` (too simple)
 - `admin` (too short)
 - Your actual login password (creates single point of failure)
@@ -154,11 +162,13 @@ You'll be prompted to create a passphrase:
 #### Step 4: Securely Store Passphrase
 
 **Recommended storage methods**:
+
 - Password manager (1Password, LastPass, Bitwarden)
 - Encrypted note in secure location
 - Physical written copy in locked safe
 
 **DO NOT**:
+
 - Store in plain text email
 - Store in unencrypted cloud notes (e.g., Apple Notes, Google Keep)
 - Share via unencrypted messaging
@@ -187,6 +197,7 @@ When viewing survey responses or exporting data:
 6. View or download decrypted data
 
 **Session behavior**:
+
 - Passphrase cached for current browser session
 - Automatically cleared when you log out
 - Cleared if browser closed
@@ -202,6 +213,7 @@ When you export data:
 4. Data is decrypted and downloaded
 
 **Important**: Downloaded data is **no longer encrypted**. You must:
+
 - Encrypt the downloaded file (password-protected ZIP)
 - Store in secure location
 - Follow data security best practices (see Data Governance guide)
@@ -217,6 +229,7 @@ You can change your encryption passphrase:
 5. All data re-encrypted with new passphrase
 
 **Requirements**:
+
 - Must have old passphrase
 - Cannot change if passphrase lost
 - Re-encryption happens in background (may take time for large datasets)
@@ -234,34 +247,39 @@ To disable:
 5. All data decrypted and stored unencrypted
 
 **When you might disable**:
+
 - Data is no longer sensitive (e.g., fully anonymized)
-- Moving to organization encryption instead
+- Moving to Organisation encryption instead
 - Decommissioning account
 
 **After disabling**:
+
 - Data remains in database (now unencrypted)
 - Can re-enable encryption later (will use new passphrase)
 
 ### Lost Passphrase Recovery
 
-❌ **There is no recovery mechanism.**
+**There is no recovery mechanism.**
 
 If you lose your passphrase:
+
 - Your data is **permanently** unrecoverable
 - CheckTick support **cannot** help (passphrase never stored)
 - You **cannot** decrypt existing data
 - You **cannot** change the passphrase without knowing the old one
 
 **Your only options**:
+
 1. If you have unencrypted backups/exports from before, use those
 2. Disable encryption and lose access to encrypted data
 3. Start fresh with new surveys
 
 **Prevention**:
+
 - Store passphrase in password manager
 - Keep physical backup in secure location
 - Document passphrase location in organizational procedures
-- Consider organization encryption for shared responsibility
+- Consider Organisation encryption for shared responsibility
 
 ### Encryption and Data Governance
 
@@ -287,11 +305,13 @@ Encryption works alongside data governance:
 **Decryption location**: Client-side (browser) when viewing data
 
 **What is encrypted**:
+
 - Survey response data (answers to questions)
 - Free-text fields
 - Uploaded files (if file upload questions used)
 
 **What is NOT encrypted**:
+
 - Survey structure (questions, titles, options)
 - Metadata (timestamps, user IDs)
 - Audit logs (who accessed what, when)
@@ -301,11 +321,12 @@ Encryption works alongside data governance:
 
 ---
 
-## Organization Account Encryption
+## Organisation Account Encryption
 
 ### Overview
 
-Organization-level encryption applies to **all surveys** created within an organization. This is ideal for:
+Organisation-level encryption applies to **all surveys** created within an Organisation. This is ideal for:
+
 - Healthcare organizations
 - Research teams
 - Clinical trials
@@ -315,13 +336,13 @@ Organization-level encryption applies to **all surveys** created within an organ
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. Organization owner sets org-wide passphrase              │
+│ 1. Organisation owner sets org-wide passphrase              │
 │    (never stored on server)                                  │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 2. ALL organization surveys automatically encrypted          │
+│ 2. ALL Organisation surveys automatically encrypted          │
 │    (applies to existing and future surveys)                  │
 └──────────────────────┬──────────────────────────────────────┘
                        │
@@ -338,22 +359,22 @@ Organization-level encryption applies to **all surveys** created within an organ
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Setting Up Organization Encryption
+### Setting Up Organisation Encryption
 
 #### Prerequisites
 
-- You must be the **organization owner**
-- Organization account must be active
+- You must be the **Organisation owner**
+- Organisation account must be active
 - Recommend coordinating with team before enabling (will affect all users)
 
-#### Step 1: Enable Organization Encryption
+#### Step 1: Enable Organisation Encryption
 
-1. Log in as organization owner
-2. Navigate to Organization Settings
+1. Log in as Organisation owner
+2. Navigate to Organisation Settings
 3. Select "Encryption" tab
-4. Click "Enable Organization Encryption"
+4. Click "Enable Organisation Encryption"
 
-#### Step 2: Create Organization Passphrase
+#### Step 2: Create Organisation Passphrase
 
 **Passphrase requirements** (stricter than individual):
 - Minimum 20 characters recommended
@@ -368,16 +389,18 @@ Organization-level encryption applies to **all surveys** created within an organ
 
 #### Step 3: Acknowledge Responsibility
 
-Check all boxes:
-- ☐ I understand this passphrase encrypts ALL organization surveys
-- ☐ I understand if this passphrase is lost, ALL organization data is unrecoverable
-- ☐ I will securely share this passphrase only with authorized data managers
-- ☐ I have documented this passphrase in our organization's secure records
-- ☐ I understand I am responsible for passphrase management
+Satisfy each of the following:
+
+- I understand this passphrase encrypts ALL Organisation surveys
+- I understand if this passphrase is lost, ALL Organisation data is unrecoverable
+- I will securely share this passphrase only with authorized data managers
+- I have documented this passphrase in our Organisation's secure records
+- I understand I am responsible for passphrase management
 
 #### Step 4: Secure Passphrase Management
 
 **Recommended practices**:
+
 1. **Store in organizational password manager** (e.g., 1Password Teams, LastPass Enterprise)
 2. **Document access procedures** (who can access, how to request access)
 3. **Create physical backup** in organizational safe
@@ -385,24 +408,27 @@ Check all boxes:
 5. **Limit access** to authorized personnel only
 
 **Share passphrase securely**:
+
 - Use encrypted communication (S/MIME email, encrypted messaging)
 - Share in person when possible
 - Use password manager sharing features
 - **Never** send via plain email, Slack, or SMS
 
-### Managing Organization Encryption
+### Managing Organisation Encryption
 
 #### Granting Access to Encrypted Data
 
-Organization encryption creates two levels of access control:
+Organisation encryption creates two levels of access control:
 
 **Level 1: Survey access** (managed in CheckTick)
-- Organization owner assigns users to surveys
+
+- Organisation owner assigns users to surveys
 - Users can see survey structure
 - Users can create/edit surveys
 
 **Level 2: Data access** (managed outside CheckTick)
-- Organization owner shares encryption passphrase with authorized data managers
+
+- Organisation owner shares encryption passphrase with authorized data managers
 - Only those with passphrase can decrypt data
 - Passphrase sharing is your responsibility
 
@@ -415,23 +441,25 @@ Organization encryption creates two levels of access control:
 | Clinician | ✅ Editor | ❌ No | ❌ No |
 | Research Assistant | ✅ Viewer | ❌ No | ❌ No |
 
-#### Changing Organization Passphrase
+#### Changing Organisation Passphrase
 
-Organization owner can change the passphrase:
+Organisation owner can change the passphrase:
 
-1. Go to Organization Settings → Encryption
-2. Click "Change Organization Passphrase"
+1. Go to Organisation Settings → Encryption
+2. Click "Change Organisation Passphrase"
 3. Enter **old passphrase**
 4. Enter **new passphrase**
 5. All surveys re-encrypted with new passphrase
 
 **When to change passphrase**:
+
 - Scheduled rotation (e.g., annually)
-- Personnel change (data manager leaves organization)
+- Personnel change (data manager leaves Organisation)
 - Security incident or suspected compromise
 - Organizational policy requirement
 
 **After changing**:
+
 - Notify all users with old passphrase
 - Securely share new passphrase
 - Update organizational records
@@ -439,25 +467,26 @@ Organization owner can change the passphrase:
 
 #### Audit Trail
 
-Organization encryption creates additional audit entries:
+Organisation encryption creates additional audit entries:
 
 - Encryption enabled (timestamp, by whom)
 - Passphrase changed (timestamp, by whom)
 - Data export attempts (successful and failed)
 - Users entering passphrase (successful decryption events)
 
-Organization owner can view encryption audit log:
-1. Organization Settings → Encryption
+Organisation owner can view encryption audit log:
+
+1. Organisation Settings → Encryption
 2. Click "View Encryption Audit Log"
 3. See all encryption-related events
 
-### Organization + Individual Encryption
+### Organisation + Individual Encryption
 
-You can use **both** organization and individual encryption:
+You can use **both** Organisation and individual encryption:
 
 ```
 ┌──────────────────────────────────────────┐
-│ Organization Encryption (Layer 1)        │
+│ Organisation Encryption (Layer 1)        │
 │  └── All org surveys encrypted           │
 │      with org passphrase                 │
 │                                          │
@@ -471,6 +500,7 @@ You can use **both** organization and individual encryption:
 ```
 
 **How it works**:
+
 1. User enables individual encryption (in addition to org encryption)
 2. User's surveys are **double-encrypted**:
    - First with org passphrase
@@ -478,32 +508,35 @@ You can use **both** organization and individual encryption:
 3. To decrypt data, need **both** passphrases
 
 **When to use double encryption**:
+
 - Extra sensitive data (e.g., HIV status, mental health)
 - Principal investigator wants personal control
 - Regulatory requirement for dual control
 - Separation of duties needed
 
 **To view double-encrypted data**:
-1. Enter organization passphrase (first layer)
+
+1. Enter Organisation passphrase (first layer)
 2. Enter individual passphrase (second layer)
 3. Data decrypted
 
 **Caution**: If **either** passphrase is lost, data is unrecoverable.
 
-### Disabling Organization Encryption
+### Disabling Organisation Encryption
 
-⚠️ **Major impact** - affects all organization surveys.
+⚠️ **Major impact** - affects all Organisation surveys.
 
 To disable:
 
-1. Organization owner goes to Organization Settings → Encryption
-2. Click "Disable Organization Encryption"
+1. Organisation owner goes to Organisation Settings → Encryption
+2. Click "Disable Organisation Encryption"
 3. Enter current passphrase
-4. Confirm: "I understand this will decrypt ALL organization survey data"
-5. **All organization surveys** decrypted
+4. Confirm: "I understand this will decrypt ALL Organisation survey data"
+5. **All Organisation surveys** decrypted
 
 **Before disabling**:
-- Notify all organization members
+
+- Notify all Organisation members
 - Confirm data no longer needs encryption
 - Export encrypted backups if needed
 - Document reason for disabling
@@ -513,12 +546,14 @@ To disable:
 #### Scenario 1: Research Team
 
 **Setup**:
-- Organization owner: Principal Investigator (PI)
+
+- Organisation owner: Principal Investigator (PI)
 - Data managers: 2 research assistants
 - Survey creators: 5 clinicians
 
 **Workflow**:
-1. PI enables organization encryption
+
+1. PI enables Organisation encryption
 2. PI shares passphrase with 2 data managers (via password manager)
 3. Clinicians create surveys (automatically encrypted)
 4. Clinicians **cannot** view response data (don't have passphrase)
@@ -529,11 +564,13 @@ To disable:
 #### Scenario 2: Clinical Audit Team
 
 **Setup**:
-- Organization owner: Audit Lead
+
+- Organisation owner: Audit Lead
 - Encryption access: Audit Lead + Deputy
 - Survey access: All clinical staff
 
 **Workflow**:
+
 1. Audit Lead enables encryption
 2. Passphrase shared only with Deputy (succession planning)
 3. Clinical staff create audit surveys
@@ -545,26 +582,29 @@ To disable:
 #### Scenario 3: Multi-Site Trial
 
 **Setup**:
-- Organization: Trial Coordinating Center
+
+- Organisation: Trial Coordinating Center
 - Sub-organizations: 5 hospital sites
-- Encryption: Organization-level
+- Encryption: Organisation-level
 
 **Workflow**:
-1. Coordinating Center enables organization encryption
+
+1. Coordinating Center enables Organisation encryption
 2. Passphrase shared with lead researcher at each site
-3. Each site creates own surveys (within main organization)
+3. Each site creates own surveys (within main Organisation)
 4. All data encrypted with same organizational passphrase
 5. Central data manager can access all site data for analysis
 
 **Benefit**: Consistent encryption across all sites.
 
-### Lost Organization Passphrase
+### Lost Organisation Passphrase
 
-❌ **Critical situation** - affects entire organization.
+❌ **Critical situation** - affects entire Organisation.
 
-If organization passphrase is lost:
-- **All** organization survey data is unrecoverable
-- Affects all organization members
+If Organisation passphrase is lost:
+
+- **All** Organisation survey data is unrecoverable
+- Affects all Organisation members
 - No recovery mechanism exists
 - CheckTick support cannot help
 
@@ -592,34 +632,40 @@ If organization passphrase is lost:
    - Contact information for key personnel
 
 **If lost**:
+
 1. Accept that encrypted data is unrecoverable
-2. Disable organization encryption (old data lost, new data unencrypted)
+2. Disable Organisation encryption (old data lost, new data unencrypted)
 3. Use any unencrypted exports previously created
 4. Implement stronger passphrase management for future
 5. Report to data protection officer if required
 
 ### Compliance and Encryption
 
-Organization encryption supports compliance with:
+Organisation encryption supports compliance with:
 
 **GDPR**:
+
 - Article 32: Security of processing (encryption as technical measure)
 - Reduces risk in event of data breach
 - Demonstrates "appropriate technical measures"
 
 **NHS Data Security and Protection Toolkit**:
+
 - Encryption of personal data at rest
 - Access control via passphrase
 
 **Research ethics**:
+
 - Additional protection for sensitive data
 - Separation of identifiable data access
 
 **Caldicott Principles**:
+
 - Principle 2: Don't use personal data unless necessary (encryption limits access)
 - Principle 6: Use minimum necessary (passphrase access control)
 
 **Important**: Encryption is **one** security measure. Must be combined with:
+
 - Access controls
 - Audit trails
 - Data retention policies
@@ -632,7 +678,8 @@ Organization encryption supports compliance with:
 
 ### Passphrase Management
 
-✅ **Do**:
+**Do**:
+
 - Use password manager
 - Create long, unique passphrases
 - Store backup in secure physical location
@@ -640,7 +687,8 @@ Organization encryption supports compliance with:
 - Share via encrypted channels only
 - Rotate passphrases periodically
 
-❌ **Don't**:
+**Don't**:
+
 - Reuse passphrases from other services
 - Share via email/Slack/SMS
 - Store in plain text
@@ -650,24 +698,28 @@ Organization encryption supports compliance with:
 ### Individual Encryption
 
 **Best for**:
+
 - Solo practitioners
 - Personal research projects
 - When you want exclusive control
 
 **Key considerations**:
+
 - You are solely responsible for passphrase
 - Data unrecoverable if passphrase lost
 - Must enter passphrase each session
 
-### Organization Encryption
+### Organisation Encryption
 
 **Best for**:
+
 - Teams and organizations
 - Consistent security policy
 - Shared data responsibility
 
 **Key considerations**:
-- Affects all organization surveys
+
+- Affects all Organisation surveys
 - Requires passphrase management procedures
 - Must plan for owner succession
 - Consider business continuity
@@ -694,19 +746,21 @@ Encryption is **part** of comprehensive security:
 **Issue**: "Incorrect passphrase" error when trying to view data
 
 **Solutions**:
+
 - Verify caps lock off
 - Check for extra spaces
 - Retrieve passphrase from password manager
-- If using organization encryption, verify you have current passphrase (may have been changed)
+- If using Organisation encryption, verify you have current passphrase (may have been changed)
 
 ---
 
 **Issue**: Forgot passphrase
 
 **Solutions**:
+
 - Check password manager
 - Check physical backup location
-- For organizations: Contact organization owner
+- For organizations: Contact Organisation owner
 - **If truly lost**: Data is unrecoverable - consider disabling encryption (loses access to encrypted data)
 
 ---
@@ -714,6 +768,7 @@ Encryption is **part** of comprehensive security:
 **Issue**: Passphrase prompt not appearing
 
 **Solutions**:
+
 - Ensure encryption is actually enabled (check Account/Org Settings)
 - Clear browser cache/cookies
 - Try different browser
@@ -724,13 +779,14 @@ Encryption is **part** of comprehensive security:
 **Issue**: Want to share data with colleague but they don't have passphrase
 
 **Solutions**:
+
 - **Individual encryption**: Cannot share passphrase (your personal encryption)
   - Export data, re-encrypt with shared password, send encrypted file
   - Disable encryption (if appropriate)
-  - Set up organization encryption instead
+  - Set up Organisation encryption instead
 
-- **Organization encryption**:
-  - Contact organization owner to share passphrase with colleague
+- **Organisation encryption**:
+  - Contact Organisation owner to share passphrase with colleague
   - Ensure colleague is authorized to access data
   - Use secure sharing method
 
@@ -739,6 +795,7 @@ Encryption is **part** of comprehensive security:
 **Issue**: Slow performance when accessing encrypted surveys
 
 **Solutions**:
+
 - Encryption/decryption happens in browser (CPU-intensive)
 - Use modern browser (Chrome, Firefox, Safari)
 - Reduce number of responses loaded at once
@@ -751,25 +808,27 @@ Encryption is **part** of comprehensive security:
 For encryption issues:
 
 1. **Check this guide** - covers most common scenarios
-2. **Contact organization owner** (for org encryption issues)
+2. **Contact Organisation owner** (for org encryption issues)
 3. **GitHub Issues** - [Report technical issues](https://github.com/eatyourpeas/checktick/issues)
-4. **Security incidents** - Contact your organization's security team immediately
+4. **Security incidents** - Contact your Organisation's security team immediately
 
 ---
 
 ## Summary
 
 **Encryption protects your survey data at rest**:
-- Choose individual or organization encryption (or both)
+
+- Choose individual or Organisation encryption (or both)
 - Never lose your passphrase - data is unrecoverable
 - Store passphrase in password manager + secure backup
 - Encryption complements (not replaces) other security measures
 - Plan for passphrase management and succession
 
 **Questions to ask before enabling encryption**:
+
 1. Do I really need encryption? (Is data sensitive enough?)
 2. Can I securely manage a passphrase long-term?
-3. Individual or organization encryption? (Solo vs. team?)
+3. Individual or Organisation encryption? (Solo vs. team?)
 4. Who else needs access to encrypted data?
 5. What happens if I lose the passphrase? (Business continuity)
 6. How will I share passphrase securely?

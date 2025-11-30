@@ -68,7 +68,14 @@ def hosting(request):
 
 
 def pricing(request):
-    return render(request, "core/pricing.html")
+    """Display pricing tiers with Paddle checkout integration."""
+    from django.conf import settings
+
+    context = {
+        "price_ids": settings.PAYMENT_PRICE_IDS,
+        "self_hosted": getattr(settings, "SELF_HOSTED", False),
+    }
+    return render(request, "core/pricing.html", context)
 
 
 def healthz(request):
@@ -334,6 +341,16 @@ def profile(request):
         user.is_staff or stats["orgs_owned"] > 0 or stats["org_admin_count"] > 0
     )
 
+    # Get subscription information
+    profile = user.profile
+    subscription_info = {
+        "tier": profile.account_tier,
+        "tier_display": profile.get_account_tier_display(),
+        "subscription_status": profile.subscription_status,
+        "created_at": profile.created_at,
+        "payment_provider": profile.payment_provider,
+    }
+
     return render(
         request,
         "core/profile.html",
@@ -347,6 +364,7 @@ def profile(request):
             "can_manage_any_users": can_manage_any_users,
             "light_theme_choices": light_theme_choices,
             "dark_theme_choices": dark_theme_choices,
+            "subscription_info": subscription_info,
         },
     )
 
@@ -373,24 +391,26 @@ def signup(request):
                 logger = logging.getLogger(__name__)
                 logger.error(f"Failed to send welcome email to {user.username}: {e}")
 
-            account_type = request.POST.get("account_type")
-            if account_type == "org":
-                with transaction.atomic():
-                    org_name = (
-                        request.POST.get("org_name")
-                        or f"{user.username}'s Organisation"
-                    )
-                    org = Organization.objects.create(name=org_name, owner=user)
-                    OrganizationMembership.objects.create(
-                        organization=org,
-                        user=user,
-                        role=OrganizationMembership.Role.ADMIN,
-                    )
-                messages.success(
-                    request, _("Organisation created. You are an organisation admin.")
+            # Get selected tier (default to free)
+            selected_tier = request.POST.get("tier", "free").lower()
+
+            # Handle tier selection and billing redirect
+            if selected_tier == "free":
+                # FREE tier - complete signup normally
+                return redirect("core:home")
+            else:
+                # Paid tier - redirect to billing
+                # Store tier in session for after payment completion
+                request.session["pending_tier"] = selected_tier
+
+                messages.info(
+                    request,
+                    _("Please complete payment to activate your %(tier)s subscription.")
+                    % {"tier": selected_tier.upper()},
                 )
-                return redirect("surveys:org_users", org_id=org.id)
-            return redirect("core:home")
+
+                # Redirect to pricing page for upgrade
+                return redirect("core:pricing")
     else:
         form = SignupForm()
     return render(request, "registration/signup.html", {"form": form})
@@ -669,8 +689,8 @@ def _discover_doc_pages():
             # Get category from frontmatter (required)
             category = frontmatter.get("category")
 
-            # Skip if no category specified
-            if not category:
+            # Skip if no category specified (must be explicit, even if None)
+            if "category" not in frontmatter:
                 continue
 
             # Handle category: None (hide from menu but keep accessible via URL)
@@ -925,6 +945,17 @@ def docs_page(request, slug: str):
         content,
         extensions=["fenced_code", "tables", "toc"],
     )
+
+    # Rewrite internal .md links to proper /docs/slug/ URLs
+    # Convert patterns like href="filename.md" or href="path/filename.md" to href="/docs/filename/"
+    import re
+
+    html = re.sub(
+        r'href="([^"]*?)\.md(#[^"]*)?(")',
+        lambda m: f'href="/docs/{m.group(1).split("/")[-1]}/{m.group(2) or ""}{m.group(3)}',
+        html,
+    )
+
     return render(
         request,
         "core/docs.html",

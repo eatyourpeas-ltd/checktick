@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, views_billing
 
 app_name = "core"
 
@@ -16,4 +16,20 @@ urlpatterns = [
     path("docs/<slug:slug>/", views.docs_page, name="docs_page"),
     path("branding/", views.configure_branding, name="configure_branding"),
     path("delete-account/", views.delete_account, name="delete_account"),
+    # Billing
+    path(
+        "subscription/", views_billing.subscription_portal, name="subscription_portal"
+    ),
+    path(
+        "subscription/cancel/",
+        views_billing.cancel_subscription,
+        name="cancel_subscription",
+    ),
+    path(
+        "subscription/payment-history/",
+        views_billing.payment_history,
+        name="payment_history",
+    ),
+    path("billing/success/", views_billing.checkout_success, name="checkout_success"),
+    path("webhooks/payment/", views_billing.payment_webhook, name="payment_webhook"),
 ]

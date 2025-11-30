@@ -132,6 +132,129 @@ class OrganizationMembership(models.Model):
         unique_together = ("organization", "user")
 
 
+class Team(models.Model):
+    """
+    A collaboration team for groups of users with shared billing.
+
+    Teams can be standalone (own billing) or hosted within an Organisation
+    (organisation manages billing). Teams provide collaboration features
+    without the full governance capabilities of Organisations.
+    """
+
+    class Size(models.TextChoices):
+        SMALL = "small", "Small (5 users)"
+        MEDIUM = "medium", "Medium (10 users)"
+        LARGE = "large", "Large (20 users)"
+        CUSTOM = "custom", "Custom (>20 users)"
+
+    name = models.CharField(max_length=255)
+    owner = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="owned_teams"
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="teams",
+        help_text="Optional parent organisation (for org-hosted teams)",
+    )
+
+    size = models.CharField(
+        max_length=20,
+        choices=Size.choices,
+        default=Size.SMALL,
+        help_text="Team size tier determining member limit and pricing",
+    )
+    custom_max_members = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Maximum members for custom-sized teams (>20 users)",
+    )
+    max_surveys = models.PositiveIntegerField(
+        default=50, help_text="Maximum number of surveys this team can create"
+    )
+
+    # Generic billing reference (not tied to specific payment provider)
+    subscription_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="External subscription reference (payment provider agnostic)",
+    )
+
+    # Encryption (placeholder for Phase 2 - Vault integration)
+    encrypted_master_key = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=False,
+        help_text="Team master key for administrative recovery (will be encrypted with Vault in Phase 2)",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:  # pragma: no cover
+        return self.name
+
+    @property
+    def max_members(self) -> int:
+        """Get maximum member count based on size tier."""
+        if self.size == self.Size.CUSTOM:
+            return self.custom_max_members or 20
+        return {
+            self.Size.SMALL: 5,
+            self.Size.MEDIUM: 10,
+            self.Size.LARGE: 20,
+        }.get(self.size, 5)
+
+    def current_member_count(self) -> int:
+        """Get current number of team members."""
+        return self.memberships.count()
+
+    def can_add_members(self) -> bool:
+        """Check if team has capacity for more members."""
+        return self.current_member_count() < self.max_members
+
+    def current_survey_count(self) -> int:
+        """Get current number of surveys owned by this team."""
+        return self.surveys.count()
+
+    def can_create_surveys(self) -> bool:
+        """Check if team has capacity for more surveys."""
+        return self.current_survey_count() < self.max_surveys
+
+
+class TeamMembership(models.Model):
+    """
+    Membership linking users to teams with specific roles.
+
+    Roles are team-level and persist if the team migrates to an Organisation.
+    """
+
+    class Role(models.TextChoices):
+        ADMIN = "admin", "Admin"
+        CREATOR = "creator", "Creator"
+        VIEWER = "viewer", "Viewer"
+
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="team_memberships"
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=Role.choices,
+        default=Role.CREATOR,
+        help_text="Role persists if team migrates to organisation",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("team", "user")
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.user.username} - {self.team.name} ({self.role})"
+
+
 class QuestionGroup(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -275,6 +398,14 @@ class Survey(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="surveys")
     organization = models.ForeignKey(
         Organization, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="surveys",
+        help_text="Team this survey belongs to (if any)",
     )
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)

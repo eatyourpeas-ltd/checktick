@@ -53,9 +53,10 @@ When you publish a survey for the first time while signed in via SSO:
 1. Navigate to your survey and click **Publish**
 2. Configure publish settings (visibility, dates, etc.)
 3. Click **Publish Survey**
-4. ✅ **Done!** Encryption is automatic - no setup required
+4. **Done!** Encryption is automatic - no setup required
 
 **What happens behind the scenes:**
+
 - Your survey key is encrypted using your SSO identity
 - The same key is also encrypted with your organisation's master key
 - Your survey will auto-unlock whenever you're signed in via SSO
@@ -63,6 +64,7 @@ When you publish a survey for the first time while signed in via SSO:
 - All of this happens automatically - you don't need to do anything
 
 **This means:**
+
 - No passwords to remember
 - No recovery phrases to save
 - Automatic unlock when signed in
@@ -78,9 +80,10 @@ When you publish a survey for the first time with password authentication:
    - **Choose a strong password** (12+ characters recommended)
    - **Write down your 12-word recovery phrase** (shown once only)
 3. Confirm you've saved your recovery information
-4. ✅ Done! Organisation encryption is automatically added too
+4. Done! Organisation encryption is automatically added too
 
 **What this means:**
+
 - You can unlock with your password (quick daily access)
 - You can unlock with your recovery phrase (if you forget password)
 - Your organisation admin can recover access (administrative backup)
@@ -112,11 +115,11 @@ Organisation key recovery should be used when:
 
 The system verifies:
 
-- ✅ You are an organisation owner or admin
-- ✅ The survey belongs to your organisation
-- ✅ You are not the survey owner (owners use regular unlock)
-- ✅ You explicitly confirm the recovery action
-- ✅ All recovery actions are logged
+- You are an organisation owner or admin
+- The survey belongs to your organisation
+- You are not the survey owner (owners use regular unlock)
+- You explicitly confirm the recovery action
+- All recovery actions are logged
 
 ### Audit Trail
 
@@ -206,7 +209,7 @@ Members with Viewer role:
 
 ### For Organisation Owners/Admins
 
-✅ **Do:**
+ **Do:**
 
 - Document your recovery procedures
 - Use recovery only when necessary
@@ -215,7 +218,7 @@ Members with Viewer role:
 - Follow your organisation's data access policies
 - Encourage SSO use for simpler key management
 
-❌ **Don't:**
+ **Don't:**
 
 - Use recovery for routine survey access
 - Access surveys without business justification
@@ -224,14 +227,14 @@ Members with Viewer role:
 
 ### For Organisation Members (SSO Users)
 
-✅ **Do:**
+**Do:**
 
 - Maintain access to your SSO account
 - Contact your admin if you lose SSO access
 - Understand that admins can recover your surveys
 - Trust your organisation's authentication system
 
-❌ **Don't:**
+**Don't:**
 
 - Share your SSO credentials
 - Assume your data is inaccessible to your organisation
@@ -239,14 +242,14 @@ Members with Viewer role:
 
 ### For Organisation Members (Password Users)
 
-✅ **Do:**
+**Do:**
 
 - Choose strong passwords for your surveys
 - Store your recovery phrase securely
 - Understand that admins can recover your surveys
 - Contact your admin if you lose access
 
-❌ **Don't:**
+**Don't:**
 
 - Assume your data is inaccessible to your organisation
 - Share passwords with colleagues
@@ -263,7 +266,8 @@ Your organisation should establish policies for:
 5. **Where** audit logs are reviewed
 
 **Example Policy**:
-> "Organisation key recovery may only be used when:
+ Organisation key recovery may only be used when:
+
 > - The survey owner has left the organisation, OR
 > - The owner has exhausted all personal recovery methods, AND
 > - A department head approves the access in writing, AND

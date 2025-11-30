@@ -466,3 +466,251 @@ def require_can_import_published_template(user, template) -> None:
 def require_can_delete_published_template(user, template) -> None:
     if not can_delete_published_template(user, template):
         raise PermissionDenied("You do not have permission to delete this template.")
+
+
+# ============================================================================
+# Team Permissions
+# ============================================================================
+
+
+def can_view_team_survey(user, survey: Survey) -> bool:
+    """
+    Check if a user can view a team survey.
+
+    Access hierarchy:
+    1. Survey owner (always has access)
+    2. Organisation admin (if team belongs to org)
+    3. Team admin
+    4. Team creator/viewer (can view surveys)
+    5. Survey membership (CREATOR, EDITOR, VIEWER)
+
+    Args:
+        user: The user to check permissions for
+        survey: The survey to check access to
+
+    Returns:
+        bool: True if user can view the survey, False otherwise
+    """
+    from .models import TeamMembership
+
+    if not user.is_authenticated:
+        return False
+
+    if not survey.team:
+        # Not a team survey, use existing can_view_survey logic
+        return can_view_survey(user, survey)
+
+    # Survey owner always has access
+    if survey.owner_id == getattr(user, "id", None):
+        return True
+
+    # Check if user is organization admin (if team is hosted by org)
+    if survey.team.organization:
+        if is_org_admin(user, survey.team.organization):
+            return True
+
+    # Check team membership - all team members can view surveys
+    if TeamMembership.objects.filter(team=survey.team, user=user).exists():
+        return True
+
+    # Check survey membership (explicit share)
+    if SurveyMembership.objects.filter(user=user, survey=survey).exists():
+        return True
+
+    return False
+
+
+def can_edit_team_survey(user, survey: Survey) -> bool:
+    """
+    Check if a user can edit a team survey.
+
+    Access hierarchy:
+    1. Survey owner (always has edit access)
+    2. Organisation admin (if team belongs to org)
+    3. Team admin
+    4. Team creator (can edit surveys)
+    5. Survey membership with CREATOR or EDITOR role
+
+    Args:
+        user: The user to check permissions for
+        survey: The survey to check edit access to
+
+    Returns:
+        bool: True if user can edit the survey, False otherwise
+    """
+    from .models import TeamMembership
+
+    if not user.is_authenticated:
+        return False
+
+    if not survey.team:
+        # Not a team survey, use existing can_edit_survey logic
+        return can_edit_survey(user, survey)
+
+    # Survey owner always has edit access
+    if survey.owner_id == getattr(user, "id", None):
+        return True
+
+    # Check if user is organization admin (if team is hosted by org)
+    if survey.team.organization:
+        if is_org_admin(user, survey.team.organization):
+            return True
+
+    # Check team membership - admin and creator can edit
+    if TeamMembership.objects.filter(
+        team=survey.team, user=user, role__in=["admin", "creator"]
+    ).exists():
+        return True
+
+    # Check survey membership for explicit edit permissions
+    if SurveyMembership.objects.filter(
+        user=user,
+        survey=survey,
+        role__in=[SurveyMembership.Role.CREATOR, SurveyMembership.Role.EDITOR],
+    ).exists():
+        return True
+
+    return False
+
+
+def can_manage_team(user, team) -> bool:
+    """
+    Check if a user can manage a team (add/remove members, change settings).
+
+    Access hierarchy:
+    1. Team owner (always has access)
+    2. Organisation admin (if team belongs to org)
+    3. Team admin
+
+    Args:
+        user: The user to check permissions for
+        team: The team to check management permissions for
+
+    Returns:
+        bool: True if user can manage the team, False otherwise
+    """
+    from .models import TeamMembership
+
+    if not user.is_authenticated:
+        return False
+
+    # Team owner always has access
+    if team.owner_id == getattr(user, "id", None):
+        return True
+
+    # Check if user is organization admin (if team is hosted by org)
+    if team.organization:
+        if is_org_admin(user, team.organization):
+            return True
+
+    # Check if user is team admin
+    return TeamMembership.objects.filter(team=team, user=user, role="admin").exists()
+
+
+def can_add_team_member(user, team) -> bool:
+    """
+    Check if a user can add new members to a team.
+
+    Requirements:
+    1. User must have management permissions (owner, org admin, or team admin)
+    2. Team must have capacity for new members
+
+    Args:
+        user: The user attempting to add members
+        team: The team to add members to
+
+    Returns:
+        bool: True if user can add members, False otherwise
+    """
+    if not can_manage_team(user, team):
+        return False
+
+    return team.can_add_members()
+
+
+def can_create_survey_in_team(user, team) -> bool:
+    """
+    Check if a user can create a new survey in a team.
+
+    Requirements:
+    1. User must be team member with creator or admin role
+    2. Team must not have reached survey limit
+    3. If team is in organization, check org permissions as well
+
+    Args:
+        user: The user attempting to create a survey
+        team: The team to create survey in
+
+    Returns:
+        bool: True if user can create surveys, False otherwise
+    """
+    from .models import TeamMembership
+
+    if not user.is_authenticated:
+        return False
+
+    # Check if team has capacity for more surveys
+    if not team.can_create_surveys():
+        return False
+
+    # Team owner can always create surveys
+    if team.owner_id == getattr(user, "id", None):
+        return True
+
+    # Organization admins can create surveys in their org's teams
+    if team.organization:
+        if is_org_admin(user, team.organization):
+            return True
+
+    # Team members with creator or admin role can create surveys
+    return TeamMembership.objects.filter(
+        team=team, user=user, role__in=["admin", "creator"]
+    ).exists()
+
+
+def get_user_team_role(user, team):
+    """
+    Get the user's role in a team.
+
+    Args:
+        user: The user to check
+        team: The team to check membership in
+
+    Returns:
+        str: The role ('admin', 'creator', 'viewer') or None if not a member
+    """
+    from .models import TeamMembership
+
+    if not user.is_authenticated:
+        return None
+
+    if team.owner_id == getattr(user, "id", None):
+        return "admin"
+
+    membership = TeamMembership.objects.filter(team=team, user=user).first()
+
+    return membership.role if membership else None
+
+
+# Require functions for teams (raise PermissionDenied)
+
+
+def require_can_manage_team(user, team) -> None:
+    if not can_manage_team(user, team):
+        raise PermissionDenied("You do not have permission to manage this team.")
+
+
+def require_can_add_team_member(user, team) -> None:
+    if not can_add_team_member(user, team):
+        if not can_manage_team(user, team):
+            raise PermissionDenied("You do not have permission to manage this team.")
+        raise PermissionDenied("This team has reached its member capacity.")
+
+
+def require_can_create_survey_in_team(user, team) -> None:
+    if not can_create_survey_in_team(user, team):
+        if not team.can_create_surveys():
+            raise PermissionDenied("This team has reached its survey limit.")
+        raise PermissionDenied(
+            "You do not have permission to create surveys in this team."
+        )

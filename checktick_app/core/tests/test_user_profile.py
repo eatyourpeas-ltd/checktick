@@ -224,11 +224,91 @@ class TestUserProfile:
         user.profile.account_tier = UserProfile.AccountTier.ENTERPRISE
         user.profile.save()
 
-        user.profile.downgrade_tier(UserProfile.AccountTier.PRO)
+        success, message = user.profile.downgrade_tier(UserProfile.AccountTier.PRO)
         user.profile.refresh_from_db()
 
+        assert success is True
+        assert "Successfully downgraded" in message
         assert user.profile.account_tier == UserProfile.AccountTier.PRO
         assert user.profile.tier_changed_at is not None
+
+    def test_downgrade_tier_blocked_by_survey_limit(self):
+        """Test that downgrade is blocked if user has too many surveys."""
+        from checktick_app.surveys.models import Survey
+
+        user = User.objects.create_user(
+            username="testuser_downgrade", email="testdowngrade@example.com"
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.save()
+
+        # Create 5 surveys (more than FREE tier limit of 3)
+        for i in range(5):
+            Survey.objects.create(
+                name=f"Survey {i}",
+                slug=f"survey-downgrade-{i}",
+                owner=user,
+            )
+
+        # Attempt to downgrade to FREE
+        success, message = user.profile.downgrade_tier(UserProfile.AccountTier.FREE)
+
+        # Should be blocked
+        assert success is False
+        assert "Cannot downgrade" in message
+        assert "5 surveys" in message
+        assert "maximum of 3" in message
+        assert "delete or archive 2 survey(s)" in message.lower()
+
+        # Verify tier didn't change
+        user.profile.refresh_from_db()
+        assert user.profile.account_tier == UserProfile.AccountTier.PRO
+
+    def test_downgrade_tier_allowed_within_limit(self):
+        """Test that downgrade succeeds if user is within survey limit."""
+        from checktick_app.surveys.models import Survey
+
+        user = User.objects.create_user(
+            username="testuser_downgrade2", email="testdowngrade2@example.com"
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.save()
+
+        # Create 3 surveys (exactly at FREE tier limit)
+        for i in range(3):
+            Survey.objects.create(
+                name=f"Survey {i}",
+                slug=f"survey-downgrade2-{i}",
+                owner=user,
+            )
+
+        # Attempt to downgrade to FREE
+        success, message = user.profile.downgrade_tier(UserProfile.AccountTier.FREE)
+
+        # Should succeed
+        assert success is True
+        assert "Successfully downgraded" in message
+
+        # Verify tier changed
+        user.profile.refresh_from_db()
+        assert user.profile.account_tier == UserProfile.AccountTier.FREE
+
+    def test_downgrade_tier_invalid_tier(self):
+        """Test that downgrade fails with invalid tier."""
+        user = User.objects.create_user(
+            username="testuser_invalid", email="testinvalid@example.com"
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.save()
+
+        success, message = user.profile.downgrade_tier("INVALID_TIER")
+
+        assert success is False
+        assert "Invalid tier" in message
+
+        # Verify tier didn't change
+        user.profile.refresh_from_db()
+        assert user.profile.account_tier == UserProfile.AccountTier.PRO
 
     def test_update_subscription(self):
         """Test updating subscription information."""

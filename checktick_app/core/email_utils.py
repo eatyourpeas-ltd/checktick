@@ -578,3 +578,120 @@ def send_authenticated_survey_invite_new_user(
             "contact_email": contact_email,
         },
     )
+
+
+def send_subscription_created_email(
+    user, tier: str, billing_cycle: str = "Monthly"
+) -> bool:
+    """Send welcome email when user subscribes to a paid plan.
+
+    Args:
+        user: Django User instance
+        tier: Account tier (pro, enterprise)
+        billing_cycle: Billing cycle (Monthly, Yearly)
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(
+        f"Attempting to send subscription created email to {user.email} (username: {user.username}, tier: {tier}, cycle: {billing_cycle})"
+    )
+
+    branding = get_platform_branding()
+
+    tier_display = tier.title()
+    subject = f"Welcome to {branding['title']} {tier_display}!"
+
+    markdown_content = render_to_string(
+        "emails/subscription_created.md",
+        {
+            "user": user,
+            "brand_title": branding["title"],
+            "tier": tier,
+            "tier_name": tier_display,
+            "billing_cycle": billing_cycle,
+            "site_url": getattr(settings, "SITE_URL", "http://localhost:8000"),
+        },
+    )
+
+    return send_branded_email(
+        to_email=user.email,
+        subject=subject,
+        markdown_content=markdown_content,
+        branding=branding,
+        context={
+            "user": user,
+            "tier": tier,
+            "tier_name": tier_display,
+            "billing_cycle": billing_cycle,
+        },
+    )
+
+
+def send_subscription_cancelled_email(
+    user,
+    tier: str,
+    end_date,
+    survey_count: int = 0,
+    surveys_to_close: int = 0,
+    free_tier_limit: int = 3,
+) -> bool:
+    """Send notification when user cancels subscription.
+
+    Args:
+        user: Django User instance
+        tier: Account tier being cancelled
+        end_date: Date when subscription access ends
+        survey_count: Current number of surveys user owns
+        surveys_to_close: Number of surveys that will be auto-closed
+        free_tier_limit: Max surveys allowed on free tier
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    from django.utils.formats import date_format
+
+    logger.info(
+        f"Attempting to send subscription cancelled email to {user.email} (username: {user.username}, tier: {tier})"
+    )
+
+    branding = get_platform_branding()
+
+    tier_display = tier.title()
+    subject = f"Subscription Cancelled - {branding['title']}"
+
+    # Format the end date
+    access_until_date = (
+        date_format(end_date, "F j, Y") if end_date else "your billing period ends"
+    )
+
+    markdown_content = render_to_string(
+        "emails/subscription_cancelled.md",
+        {
+            "user": user,
+            "brand_title": branding["title"],
+            "tier": tier,
+            "tier_name": tier_display,
+            "access_until_date": access_until_date,
+            "survey_count": survey_count,
+            "surveys_to_close": surveys_to_close,
+            "free_tier_limit": free_tier_limit,
+            "site_url": getattr(settings, "SITE_URL", "http://localhost:8000"),
+        },
+    )
+
+    return send_branded_email(
+        to_email=user.email,
+        subject=subject,
+        markdown_content=markdown_content,
+        branding=branding,
+        context={
+            "user": user,
+            "tier": tier,
+            "tier_name": tier_display,
+            "access_until_date": access_until_date,
+            "survey_count": survey_count,
+            "surveys_to_close": surveys_to_close,
+            "free_tier_limit": free_tier_limit,
+        },
+    )

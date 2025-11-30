@@ -4345,6 +4345,8 @@ def survey_users(request: HttpRequest, slug: str) -> HttpResponse:
 
 @login_required
 def user_management_hub(request: HttpRequest) -> HttpResponse:
+    from .models import Team, TeamMembership
+
     # Single organisation model: pick the organisation where user is ADMIN (or None)
     org = (
         Organization.objects.filter(
@@ -4355,6 +4357,11 @@ def user_management_hub(request: HttpRequest) -> HttpResponse:
         .first()
     )
 
+    # Get teams where user is ADMIN
+    managed_teams_qs = Team.objects.filter(
+        memberships__user=request.user, memberships__role=TeamMembership.Role.ADMIN
+    ).select_related("owner", "organization")
+
     if request.method == "POST":
         # HTMX quick add flows
         scope = request.POST.get("scope")
@@ -4364,6 +4371,7 @@ def user_management_hub(request: HttpRequest) -> HttpResponse:
         user = User.objects.filter(email__iexact=email).first()
         if not user:
             return HttpResponse("User not found by email", status=400)
+
         if scope == "org":
             if not org or not can_manage_org_users(request.user, org):
                 return HttpResponse(status=403)
@@ -4380,7 +4388,52 @@ def user_management_hub(request: HttpRequest) -> HttpResponse:
                 target_user=user,
                 metadata={"role": mem.role},
             )
-            return HttpResponse("Added/updated in org", status=200)
+            return HttpResponse("Added/updated in organisation", status=200)
+
+        elif scope == "team":
+            team_id = request.POST.get("team_id")
+            if not team_id:
+                return HttpResponse("Team ID required", status=400)
+            team = get_object_or_404(Team, id=team_id)
+
+            # Check if user can manage this team
+            is_team_admin = TeamMembership.objects.filter(
+                team=team, user=request.user, role=TeamMembership.Role.ADMIN
+            ).exists()
+            is_org_admin = (
+                team.organization
+                and OrganizationMembership.objects.filter(
+                    organization=team.organization,
+                    user=request.user,
+                    role=OrganizationMembership.Role.ADMIN,
+                ).exists()
+            )
+
+            if not (is_team_admin or is_org_admin):
+                return HttpResponse(status=403)
+
+            # Check team capacity
+            if not team.can_add_members():
+                return HttpResponse(
+                    f"Team is at maximum capacity ({team.max_members} members)",
+                    status=400,
+                )
+
+            mem, created = TeamMembership.objects.update_or_create(
+                team=team,
+                user=user,
+                defaults={"role": role or TeamMembership.Role.VIEWER},
+            )
+            AuditLog.objects.create(
+                actor=request.user,
+                scope=AuditLog.Scope.ORGANIZATION,
+                organization=team.organization,
+                action=AuditLog.Action.ADD if created else AuditLog.Action.UPDATE,
+                target_user=user,
+                metadata={"role": mem.role, "team_id": team.id, "team_name": team.name},
+            )
+            return HttpResponse("Added/updated in team", status=200)
+
         elif scope == "survey":
             slug = request.POST.get("slug") or ""
             survey = get_object_or_404(Survey, slug=slug)
@@ -4400,10 +4453,13 @@ def user_management_hub(request: HttpRequest) -> HttpResponse:
                 metadata={"role": smem.role},
             )
             return HttpResponse("Added/updated in survey", status=200)
+
     # Build users grouped by surveys for this organisation
     grouped = []
     manageable_surveys = Survey.objects.none()
     members = OrganizationMembership.objects.none()
+    org_teams = []
+
     if org:
         members = (
             OrganizationMembership.objects.select_related("user")
@@ -4423,10 +4479,34 @@ def user_management_hub(request: HttpRequest) -> HttpResponse:
             )
             grouped.append({"survey": sv, "members": sv_members})
 
+        # Get teams within this organisation
+        org_teams_qs = Team.objects.filter(organization=org).prefetch_related(
+            "memberships__user"
+        )
+        for team in org_teams_qs:
+            team_members = team.memberships.select_related("user").order_by(
+                "user__username"
+            )
+            org_teams.append({"team": team, "members": team_members})
+
+    # Build data for teams user manages (not within their org)
+    managed_teams = []
+    for team in managed_teams_qs:
+        team_members = team.memberships.select_related("user").order_by(
+            "user__username"
+        )
+        managed_teams.append({"team": team, "members": team_members})
+
     return render(
         request,
         "surveys/user_management_hub.html",
-        {"org": org, "members": members, "grouped": grouped},
+        {
+            "org": org,
+            "members": members,
+            "grouped": grouped,
+            "org_teams": org_teams,
+            "managed_teams": managed_teams,
+        },
     )
 
 
