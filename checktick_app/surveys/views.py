@@ -44,7 +44,6 @@ from .models import (
     CollectionDefinition,
     CollectionItem,
     DataSet,
-    IdentityVerification,
     LLMConversationSession,
     Organization,
     OrganizationMembership,
@@ -8447,7 +8446,9 @@ def recovery_approve_primary(request: HttpRequest, request_id: str) -> HttpRespo
             f"{recovery_request.request_code} (survey: {recovery_request.survey.slug})"
         )
 
-        messages.success(request, "Primary approval granted successfully (superuser override).")
+        messages.success(
+            request, "Primary approval granted successfully (superuser override)."
+        )
     except Exception as e:
         messages.error(request, f"Error approving request: {e}")
 
@@ -8525,7 +8526,9 @@ def recovery_reject(request: HttpRequest, request_id: str) -> HttpResponse:
         messages.error(request, "This request cannot be rejected in its current state.")
         return redirect("surveys:recovery_detail", request_id=request_id)
 
-    reason = request.POST.get("reason", "Rejected via Platform Recovery Console (superuser)")
+    reason = request.POST.get(
+        "reason", "Rejected via Platform Recovery Console (superuser)"
+    )
 
     try:
         recovery_request.reject(admin=request.user, reason=reason)
@@ -8557,7 +8560,10 @@ def recovery_execute(request: HttpRequest, request_id: str) -> HttpResponse:
 
     # Check if in time delay and ready
     if recovery_request.status == RecoveryRequest.Status.IN_TIME_DELAY:
-        if recovery_request.time_delay_until and timezone.now() >= recovery_request.time_delay_until:
+        if (
+            recovery_request.time_delay_until
+            and timezone.now() >= recovery_request.time_delay_until
+        ):
             recovery_request.status = RecoveryRequest.Status.READY_FOR_EXECUTION
             recovery_request.save(update_fields=["status"])
         else:
@@ -8624,7 +8630,12 @@ def get_admin_context(request: HttpRequest) -> dict:
     - tier_display/tier_badge_class: for UI display
     - can_approve_primary/secondary, can_reject: permission flags
     """
-    from checktick_app.surveys.models import Organization, Team, OrganizationMembership, TeamMembership
+    from checktick_app.surveys.models import (
+        Organization,
+        OrganizationMembership,
+        Team,
+        TeamMembership,
+    )
 
     org_id = request.GET.get("org")
     team_id = request.GET.get("team")
@@ -8650,21 +8661,26 @@ def get_admin_context(request: HttpRequest) -> dict:
             is_admin = OrganizationMembership.objects.filter(
                 organization=org,
                 user=request.user,
-                role__in=[OrganizationMembership.Role.ADMIN, OrganizationMembership.Role.DATA_CUSTODIAN],
+                role__in=[
+                    OrganizationMembership.Role.ADMIN,
+                    OrganizationMembership.Role.DATA_CUSTODIAN,
+                ],
             ).exists()
 
             if is_owner or is_admin:
-                context.update({
-                    "context_type": "organization",
-                    "organization": org,
-                    "dashboard_title": f"{org.name} Recovery Dashboard",
-                    "tier_display": "Organisation Admin",
-                    "tier_badge_class": "badge-secondary",
-                    "can_approve_primary": True,
-                    "can_approve_secondary": True,
-                    "can_reject": True,
-                    "is_admin": True,
-                })
+                context.update(
+                    {
+                        "context_type": "organization",
+                        "organization": org,
+                        "dashboard_title": f"{org.name} Recovery Dashboard",
+                        "tier_display": "Organisation Admin",
+                        "tier_badge_class": "badge-secondary",
+                        "can_approve_primary": True,
+                        "can_approve_secondary": True,
+                        "can_reject": True,
+                        "is_admin": True,
+                    }
+                )
         except Organization.DoesNotExist:
             pass
 
@@ -8688,17 +8704,19 @@ def get_admin_context(request: HttpRequest) -> dict:
                     tier_display = "Team Owner"
                     tier_badge_class = "badge-primary"
 
-                context.update({
-                    "context_type": "team",
-                    "team": team,
-                    "dashboard_title": f"{team.name} Recovery Dashboard",
-                    "tier_display": tier_display,
-                    "tier_badge_class": tier_badge_class,
-                    "can_approve_primary": True,
-                    "can_approve_secondary": True,
-                    "can_reject": True,
-                    "is_admin": True,
-                })
+                context.update(
+                    {
+                        "context_type": "team",
+                        "team": team,
+                        "dashboard_title": f"{team.name} Recovery Dashboard",
+                        "tier_display": tier_display,
+                        "tier_badge_class": tier_badge_class,
+                        "can_approve_primary": True,
+                        "can_approve_secondary": True,
+                        "can_reject": True,
+                        "is_admin": True,
+                    }
+                )
         except Team.DoesNotExist:
             pass
 
@@ -8712,16 +8730,16 @@ def get_scoped_recovery_requests(context: dict):
     if context["context_type"] == "organization":
         org = context["organization"]
         # Get all surveys belonging to this org
-        return RecoveryRequest.objects.filter(
-            survey__organization=org
-        ).select_related("user", "survey", "primary_approver", "secondary_approver")
+        return RecoveryRequest.objects.filter(survey__organization=org).select_related(
+            "user", "survey", "primary_approver", "secondary_approver"
+        )
 
     elif context["context_type"] == "team":
         team = context["team"]
         # Get all surveys belonging to this team
-        return RecoveryRequest.objects.filter(
-            survey__team=team
-        ).select_related("user", "survey", "primary_approver", "secondary_approver")
+        return RecoveryRequest.objects.filter(survey__team=team).select_related(
+            "user", "survey", "primary_approver", "secondary_approver"
+        )
 
     return RecoveryRequest.objects.none()
 
@@ -8738,7 +8756,9 @@ def admin_recovery_dashboard(request: HttpRequest) -> HttpResponse:
     context = get_admin_context(request)
 
     if not context["is_admin"]:
-        messages.error(request, "You do not have permission to access recovery management.")
+        messages.error(
+            request, "You do not have permission to access recovery management."
+        )
         return redirect("surveys:list")
 
     # Get scoped requests
@@ -8755,8 +8775,12 @@ def admin_recovery_dashboard(request: HttpRequest) -> HttpResponse:
                 RecoveryRequest.Status.AWAITING_SECONDARY,
             ]
         ).count(),
-        "in_delay": requests_qs.filter(status=RecoveryRequest.Status.IN_TIME_DELAY).count(),
-        "completed": requests_qs.filter(status=RecoveryRequest.Status.COMPLETED).count(),
+        "in_delay": requests_qs.filter(
+            status=RecoveryRequest.Status.IN_TIME_DELAY
+        ).count(),
+        "completed": requests_qs.filter(
+            status=RecoveryRequest.Status.COMPLETED
+        ).count(),
         "rejected": requests_qs.filter(status=RecoveryRequest.Status.REJECTED).count(),
     }
 
@@ -8782,17 +8806,22 @@ def admin_recovery_dashboard(request: HttpRequest) -> HttpResponse:
         requests_qs = requests_qs.filter(status=RecoveryRequest.Status.COMPLETED)
     elif filter_param == "rejected":
         requests_qs = requests_qs.filter(
-            status__in=[RecoveryRequest.Status.REJECTED, RecoveryRequest.Status.CANCELLED]
+            status__in=[
+                RecoveryRequest.Status.REJECTED,
+                RecoveryRequest.Status.CANCELLED,
+            ]
         )
 
     requests_qs = requests_qs.order_by("-submitted_at")
 
-    context.update({
-        "requests": requests_qs,
-        "stats": stats,
-        "filter": filter_param,
-        "user": request.user,
-    })
+    context.update(
+        {
+            "requests": requests_qs,
+            "stats": stats,
+            "filter": filter_param,
+            "user": request.user,
+        }
+    )
 
     return render(request, "surveys/admin_recovery_dashboard.html", context)
 
@@ -8816,7 +8845,9 @@ def admin_recovery_detail(request: HttpRequest, request_id: str) -> HttpResponse
     # Verify the request belongs to admin's scope
     scoped_requests = get_scoped_recovery_requests(context)
     if not scoped_requests.filter(id=request_id).exists():
-        messages.error(request, "This recovery request is not within your administrative scope.")
+        messages.error(
+            request, "This recovery request is not within your administrative scope."
+        )
         return redirect("surveys:admin_recovery_dashboard")
 
     # Get verifications and audit entries
@@ -8831,13 +8862,15 @@ def admin_recovery_detail(request: HttpRequest, request_id: str) -> HttpResponse
         RecoveryRequest.Status.VERIFICATION_IN_PROGRESS,
     ]
 
-    context.update({
-        "request_obj": recovery_request,
-        "verifications": verifications,
-        "audit_entries": audit_entries,
-        "can_take_action": can_take_action,
-        "user": request.user,
-    })
+    context.update(
+        {
+            "request_obj": recovery_request,
+            "verifications": verifications,
+            "audit_entries": audit_entries,
+            "can_take_action": can_take_action,
+            "user": request.user,
+        }
+    )
 
     return render(request, "surveys/admin_recovery_detail.html", context)
 
@@ -8845,7 +8878,9 @@ def admin_recovery_detail(request: HttpRequest, request_id: str) -> HttpResponse
 @login_required
 @require_http_methods(["POST"])
 @ratelimit(key="user", rate="5/h", block=True)
-def admin_recovery_approve_primary(request: HttpRequest, request_id: str) -> HttpResponse:
+def admin_recovery_approve_primary(
+    request: HttpRequest, request_id: str
+) -> HttpResponse:
     """
     Approve a recovery request as primary approver (org/team admin).
 
@@ -8874,7 +8909,11 @@ def admin_recovery_approve_primary(request: HttpRequest, request_id: str) -> Htt
 
     try:
         context_type = context["context_type"]
-        context_name = context["organization"].name if context_type == "organization" else context["team"].name
+        context_name = (
+            context["organization"].name
+            if context_type == "organization"
+            else context["team"].name
+        )
 
         recovery_request.approve_primary(
             admin=request.user,
@@ -8886,12 +8925,17 @@ def admin_recovery_approve_primary(request: HttpRequest, request_id: str) -> Htt
             f"{recovery_request.request_code} ({context_type}: {context_name})"
         )
 
-        messages.success(request, "Primary approval granted. Awaiting secondary approval from another administrator.")
+        messages.success(
+            request,
+            "Primary approval granted. Awaiting secondary approval from another administrator.",
+        )
     except Exception as e:
         messages.error(request, f"Error approving request: {e}")
 
     # Redirect with context preserved
-    redirect_url = reverse("surveys:admin_recovery_detail", kwargs={"request_id": request_id})
+    redirect_url = reverse(
+        "surveys:admin_recovery_detail", kwargs={"request_id": request_id}
+    )
     if context["context_type"] == "organization":
         redirect_url += f"?org={context['organization'].id}"
     elif context["context_type"] == "team":
@@ -8903,7 +8947,9 @@ def admin_recovery_approve_primary(request: HttpRequest, request_id: str) -> Htt
 @login_required
 @require_http_methods(["POST"])
 @ratelimit(key="user", rate="5/h", block=True)
-def admin_recovery_approve_secondary(request: HttpRequest, request_id: str) -> HttpResponse:
+def admin_recovery_approve_secondary(
+    request: HttpRequest, request_id: str
+) -> HttpResponse:
     """
     Approve a recovery request as secondary approver (org/team admin).
 
@@ -8928,7 +8974,9 @@ def admin_recovery_approve_secondary(request: HttpRequest, request_id: str) -> H
 
     # Cannot be same person as primary approver
     if recovery_request.primary_approver == request.user:
-        messages.error(request, "Secondary approver must be different from primary approver.")
+        messages.error(
+            request, "Secondary approver must be different from primary approver."
+        )
         return redirect("surveys:admin_recovery_detail", request_id=request_id)
 
     if recovery_request.status != RecoveryRequest.Status.AWAITING_SECONDARY:
@@ -8937,7 +8985,11 @@ def admin_recovery_approve_secondary(request: HttpRequest, request_id: str) -> H
 
     try:
         context_type = context["context_type"]
-        context_name = context["organization"].name if context_type == "organization" else context["team"].name
+        context_name = (
+            context["organization"].name
+            if context_type == "organization"
+            else context["team"].name
+        )
 
         recovery_request.approve_secondary(
             admin=request.user,
@@ -8957,7 +9009,9 @@ def admin_recovery_approve_secondary(request: HttpRequest, request_id: str) -> H
         messages.error(request, f"Error approving request: {e}")
 
     # Redirect with context preserved
-    redirect_url = reverse("surveys:admin_recovery_detail", kwargs={"request_id": request_id})
+    redirect_url = reverse(
+        "surveys:admin_recovery_detail", kwargs={"request_id": request_id}
+    )
     if context["context_type"] == "organization":
         redirect_url += f"?org={context['organization'].id}"
     elif context["context_type"] == "team":
@@ -9002,7 +9056,11 @@ def admin_recovery_reject(request: HttpRequest, request_id: str) -> HttpResponse
 
     try:
         context_type = context["context_type"]
-        context_name = context["organization"].name if context_type == "organization" else context["team"].name
+        context_name = (
+            context["organization"].name
+            if context_type == "organization"
+            else context["team"].name
+        )
 
         recovery_request.reject(admin=request.user, reason=reason)
 

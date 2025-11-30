@@ -10,16 +10,12 @@ These tests verify:
 
 import uuid
 
-import pytest
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 from django.urls import reverse
+import pytest
 
-from checktick_app.surveys.models import (
-    Organization,
-    RecoveryRequest,
-    Survey,
-)
+from checktick_app.surveys.models import Organization, RecoveryRequest, Survey
 
 User = get_user_model()
 TEST_PASSWORD = "x"
@@ -143,21 +139,31 @@ class TestRecoveryDetailAccess:
 
     def test_anonymous_user_redirected(self, client, recovery_request):
         """Anonymous users should be redirected to login."""
-        url = reverse("surveys:recovery_detail", kwargs={"request_id": recovery_request.id})
+        url = reverse(
+            "surveys:recovery_detail", kwargs={"request_id": recovery_request.id}
+        )
         response = client.get(url)
         assert response.status_code == 302
 
-    def test_regular_user_gets_403(self, client, regular_user, recovery_request, disable_rate_limiting):
+    def test_regular_user_gets_403(
+        self, client, regular_user, recovery_request, disable_rate_limiting
+    ):
         """Regular users should get 403 Forbidden."""
         client.force_login(regular_user)
-        url = reverse("surveys:recovery_detail", kwargs={"request_id": recovery_request.id})
+        url = reverse(
+            "surveys:recovery_detail", kwargs={"request_id": recovery_request.id}
+        )
         response = client.get(url)
         assert response.status_code == 403
 
-    def test_superuser_can_access(self, client, superuser, recovery_request, disable_rate_limiting):
+    def test_superuser_can_access(
+        self, client, superuser, recovery_request, disable_rate_limiting
+    ):
         """Superusers should be able to access the detail view."""
         client.force_login(superuser)
-        url = reverse("surveys:recovery_detail", kwargs={"request_id": recovery_request.id})
+        url = reverse(
+            "surveys:recovery_detail", kwargs={"request_id": recovery_request.id}
+        )
         response = client.get(url)
         assert response.status_code == 200
         assert recovery_request.request_code.encode() in response.content
@@ -171,7 +177,10 @@ class TestRecoveryApprovalActions:
     ):
         """Non-superusers cannot approve requests."""
         client.force_login(regular_user)
-        url = reverse("surveys:recovery_approve_primary", kwargs={"request_id": recovery_request.id})
+        url = reverse(
+            "surveys:recovery_approve_primary",
+            kwargs={"request_id": recovery_request.id},
+        )
         response = client.post(url)
         assert response.status_code == 403
 
@@ -180,7 +189,10 @@ class TestRecoveryApprovalActions:
     ):
         """Superusers can approve as primary."""
         client.force_login(superuser)
-        url = reverse("surveys:recovery_approve_primary", kwargs={"request_id": recovery_request.id})
+        url = reverse(
+            "surveys:recovery_approve_primary",
+            kwargs={"request_id": recovery_request.id},
+        )
         response = client.post(url)
         # Should redirect to detail page
         assert response.status_code == 302
@@ -203,7 +215,9 @@ class TestRecoveryApprovalActions:
         )
 
         client.force_login(superuser)
-        url = reverse("surveys:recovery_approve_primary", kwargs={"request_id": own_request.id})
+        url = reverse(
+            "surveys:recovery_approve_primary", kwargs={"request_id": own_request.id}
+        )
         response = client.post(url)
 
         # Should redirect with error
@@ -222,7 +236,9 @@ class TestRecoveryRejectAction:
     ):
         """Non-superusers cannot reject requests."""
         client.force_login(regular_user)
-        url = reverse("surveys:recovery_reject", kwargs={"request_id": recovery_request.id})
+        url = reverse(
+            "surveys:recovery_reject", kwargs={"request_id": recovery_request.id}
+        )
         response = client.post(url, {"reason": "Suspicious request"})
         assert response.status_code == 403
 
@@ -231,7 +247,9 @@ class TestRecoveryRejectAction:
     ):
         """Superusers can reject requests."""
         client.force_login(superuser)
-        url = reverse("surveys:recovery_reject", kwargs={"request_id": recovery_request.id})
+        url = reverse(
+            "surveys:recovery_reject", kwargs={"request_id": recovery_request.id}
+        )
         response = client.post(url, {"reason": "Suspicious activity detected"})
 
         # Should redirect
@@ -254,7 +272,9 @@ class TestRecoveryExecuteAction:
         recovery_request.save()
 
         client.force_login(regular_user)
-        url = reverse("surveys:recovery_execute", kwargs={"request_id": recovery_request.id})
+        url = reverse(
+            "surveys:recovery_execute", kwargs={"request_id": recovery_request.id}
+        )
         response = client.post(url)
         assert response.status_code == 403
 
@@ -266,7 +286,9 @@ class TestRecoveryExecuteAction:
         recovery_request.save()
 
         client.force_login(superuser)
-        url = reverse("surveys:recovery_execute", kwargs={"request_id": recovery_request.id})
+        url = reverse(
+            "surveys:recovery_execute", kwargs={"request_id": recovery_request.id}
+        )
         response = client.post(url)
 
         # Should redirect
@@ -316,7 +338,9 @@ class TestRateLimiting:
 
         # First few approvals should work
         for req in requests[:2]:
-            url = reverse("surveys:recovery_approve_primary", kwargs={"request_id": req.id})
+            url = reverse(
+                "surveys:recovery_approve_primary", kwargs={"request_id": req.id}
+            )
             response = client.post(url)
             # 302 redirect means success
             assert response.status_code == 302
@@ -325,14 +349,18 @@ class TestRateLimiting:
 class TestNavbarSuperuserBadge:
     """Test that superusers see the correct badge in the navbar."""
 
-    def test_regular_user_sees_tier_badge(self, client, regular_user, disable_rate_limiting):
+    def test_regular_user_sees_tier_badge(
+        self, client, regular_user, disable_rate_limiting
+    ):
         """Regular users should see their tier badge."""
         client.force_login(regular_user)
         response = client.get("/surveys/")
         # Should not see SUPERUSER badge
         assert b"SUPERUSER" not in response.content
 
-    def test_superuser_sees_superuser_badge(self, client, superuser, disable_rate_limiting):
+    def test_superuser_sees_superuser_badge(
+        self, client, superuser, disable_rate_limiting
+    ):
         """Superusers should see the SUPERUSER badge."""
         client.force_login(superuser)
         response = client.get("/surveys/")
@@ -367,7 +395,9 @@ class TestDashboardStats:
 
         assert response.status_code == 200
         # Should show both requests
-        assert b"Request 1" in response.content or response.context["stats"]["total"] >= 2
+        assert (
+            b"Request 1" in response.content or response.context["stats"]["total"] >= 2
+        )
 
 
 class TestFilterFunctionality:
@@ -398,5 +428,7 @@ class TestFilterFunctionality:
         assert response.status_code == 200
 
         # Filter by completed
-        response = client.get(reverse("surveys:recovery_dashboard") + "?filter=completed")
+        response = client.get(
+            reverse("surveys:recovery_dashboard") + "?filter=completed"
+        )
         assert response.status_code == 200
