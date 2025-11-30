@@ -24,6 +24,7 @@ CheckTick takes data protection and governance seriously. This comprehensive gui
 ### What is Data Governance?
 
 Data governance is the framework that ensures survey data is:
+
 - **Secure** - Protected from unauthorized access
 - **Compliant** - Meets legal and regulatory requirements
 - **Controlled** - Only accessible to authorized people
@@ -33,6 +34,7 @@ Data governance is the framework that ensures survey data is:
 ### Why Does It Matter?
 
 When you collect survey data, especially in healthcare, you may be handling sensitive or personal information. Good data governance protects:
+
 - **Participants** - Their privacy and confidentiality
 - **Your organization** - From data breaches and compliance violations
 - **You** - From legal liability and reputational damage
@@ -56,6 +58,7 @@ Not everyone can access survey data. Access is strictly controlled based on role
 #### 2. Survey Closure
 
 Data can only be downloaded after a survey has been formally **closed**. Closing a survey:
+
 - Locks all responses (no further edits)
 - Enables data export functionality
 - Starts the retention countdown
@@ -66,6 +69,7 @@ This ensures data is only extracted when collection is complete.
 #### 3. Time-Limited Storage
 
 Survey data is **not kept indefinitely**. By default:
+
 - Data is kept for **6 months** after survey closure
 - You receive warnings at **1 month**, **1 week**, and **1 day** before deletion
 - Data is automatically deleted unless you extend retention
@@ -74,6 +78,7 @@ Survey data is **not kept indefinitely**. By default:
 #### 4. Audit Trail
 
 Every data access is logged:
+
 - Who downloaded data
 - When they downloaded it
 - What survey data was downloaded
@@ -85,6 +90,7 @@ Organization administrators receive email notifications for all data downloads.
 #### 5. User Responsibility
 
 When you download data, you become responsible for:
+
 - Storing it securely (encrypted, password-protected location)
 - Not sharing it inappropriately
 - Deleting it when no longer needed
@@ -139,6 +145,7 @@ This section outlines the formal data protection policy for CheckTick deployment
 ### Purpose
 
 This policy ensures that survey data collected through CheckTick is:
+
 1. Handled lawfully and ethically
 2. Protected against unauthorized access
 3. Retained only as long as necessary
@@ -148,6 +155,7 @@ This policy ensures that survey data collected through CheckTick is:
 ### Scope
 
 This policy applies to:
+
 - All survey data collected through CheckTick
 - All users with access to survey data (creators, owners, custodians)
 - All data exports from the system
@@ -156,6 +164,7 @@ This policy applies to:
 ### Legal Basis
 
 CheckTick processes survey data under the following legal bases (where applicable):
+
 - **Consent** - Explicit consent from survey participants
 - **Contract** - Necessary for service delivery
 - **Legal obligation** - Compliance with applicable laws
@@ -166,6 +175,7 @@ Organizations using CheckTick are responsible for ensuring they have appropriate
 ### Data Controller Responsibilities
 
 The **organization owner** acts as the data controller and is responsible for:
+
 1. Determining the lawful basis for data collection
 2. Ensuring participants are informed about data use
 3. Implementing appropriate security measures
@@ -177,6 +187,7 @@ The **organization owner** acts as the data controller and is responsible for:
 ### Data Processor Obligations
 
 CheckTick (as platform provider) acts as a data processor and commits to:
+
 1. Processing data only on documented instructions
 2. Ensuring confidentiality of personnel
 3. Implementing appropriate technical and organizational measures
@@ -188,6 +199,7 @@ CheckTick (as platform provider) acts as a data processor and commits to:
 ### Compliance Standards
 
 CheckTick supports compliance with:
+
 - **GDPR** (General Data Protection Regulation)
 - **UK Data Protection Act 2018**
 - **NHS Data Security and Protection Toolkit**
@@ -208,6 +220,7 @@ CheckTick implements a hierarchical permission system with clearly defined roles
 **Who**: The user who created the survey
 
 **Permissions**:
+
 - View all responses to their survey
 - Download data exports
 - Close the survey
@@ -217,6 +230,7 @@ CheckTick implements a hierarchical permission system with clearly defined roles
 - Manage survey settings
 
 **Restrictions**:
+
 - Cannot access other users' surveys (unless also an org owner)
 - Cannot bypass retention limits
 
@@ -225,6 +239,7 @@ CheckTick implements a hierarchical permission system with clearly defined roles
 **Who**: The owner of an organization account
 
 **Permissions**:
+
 - All permissions of Survey Creator for ALL organization surveys
 - Assign data custodians
 - Place legal holds
@@ -233,6 +248,7 @@ CheckTick implements a hierarchical permission system with clearly defined roles
 - Manage organization members
 
 **Restrictions**:
+
 - Cannot access surveys from other organizations
 - Subject to same retention limits (except legal holds)
 
@@ -241,11 +257,13 @@ CheckTick implements a hierarchical permission system with clearly defined roles
 **Who**: A designated user assigned to specific surveys
 
 **Permissions**:
+
 - Download data exports for assigned surveys
 - View audit logs for assigned surveys
 - Receive deletion warning emails
 
 **Restrictions**:
+
 - Cannot view responses in the UI
 - Cannot edit survey settings
 - Cannot extend retention
@@ -258,12 +276,14 @@ CheckTick implements a hierarchical permission system with clearly defined roles
 **Who**: Users with edit permission on specific surveys
 
 **Permissions**:
+
 - Edit survey structure (add/remove questions)
 - Modify survey settings
 - View survey dashboard
 - Manage question groups
 
 **Restrictions**:
+
 - **Cannot** view responses
 - **Cannot** download data
 - **Cannot** close the survey
@@ -274,11 +294,13 @@ CheckTick implements a hierarchical permission system with clearly defined roles
 **Who**: Users with read-only permission
 
 **Permissions**:
+
 - View survey structure
 - View survey settings
 - Preview the survey
 
 **Restrictions**:
+
 - Cannot edit anything
 - Cannot view responses
 - Cannot download data
@@ -348,6 +370,7 @@ Data can only be exported after a survey has been **closed**. This ensures all r
 ### Step 4: Secure Storage
 
 After downloading:
+
 1. **Immediately encrypt** the file (password-protected ZIP or encrypted drive)
 2. Store in a secure location:
    - Encrypted fileserver
@@ -421,6 +444,7 @@ uuid-2,2025-01-16 09:15,user456,Jane,38,Type 1
 ### Audit Trail
 
 Every data export creates an audit log entry with:
+
 - **Who** - User ID and name
 - **When** - Exact timestamp
 - **What** - Survey ID and name
@@ -446,12 +470,14 @@ View full audit log: [link]
 ### Re-Downloading Data
 
 You can download data multiple times:
+
 - No limit on number of exports
 - Each export creates a new audit log entry
 - Must provide a purpose statement each time
 - Organization owners notified for each download
 
 This allows:
+
 - Correcting failed downloads
 - Sharing with additional authorized colleagues
 - Regenerating exports after data updates (if survey reopened)
@@ -459,6 +485,7 @@ This allows:
 ### Data Deletion After Export
 
 Exporting data does **not** prevent automatic deletion:
+
 - Retention countdown continues after export
 - Downloaded files are **your responsibility**
 - System will still auto-delete at scheduled time
@@ -489,6 +516,7 @@ Survey Closed → [6 months] → Automatic Deletion
 ### Warning Emails
 
 At each warning milestone, emails are sent to:
+
 - Survey creator
 - Organization owner
 - All assigned data custodians
@@ -530,17 +558,20 @@ You can extend retention up to a **maximum of 24 months** total.
 #### Justification Requirements
 
 Extensions must be justified because:
+
 - Data minimization principle (GDPR)
 - Storage costs
 - Security risk (older data, more exposure)
 - Compliance requirements
 
 Poor justifications (will be rejected):
+
 - "Just in case"
 - "Might need it later"
 - "No specific reason"
 
 Good justifications:
+
 - "Longitudinal study, 2-year follow-up planned"
 - "Regulatory requirement for clinical trial data"
 - "Awaiting ethics committee review"
@@ -555,10 +586,12 @@ Good justifications:
 ### Maximum Retention Period
 
 Data **cannot** be kept longer than 24 months except:
+
 1. **Legal hold** (see Special Cases)
 2. **Legal obligation** (e.g., clinical trial regulations)
 
 After 24 months:
+
 - Must download data if needed
 - System will force deletion
 - No further extensions allowed
@@ -604,6 +637,7 @@ Survey creators can delete data **before** the retention period expires:
 4. Data immediately removed
 
 This is useful for:
+
 - Accidentally closed surveys
 - Completed analysis, data no longer needed
 - Participant withdrawal requests
@@ -625,6 +659,7 @@ When you export survey data, you become the **data controller**. This section ex
 #### Recommended Storage Locations
 
 ✅ **Secure Options**:
+
 - Institutional encrypted file server
 - Password-protected encrypted cloud storage (OneDrive for Business, Google Workspace with encryption)
 - Encrypted external hard drive in locked cabinet
@@ -632,6 +667,7 @@ When you export survey data, you become the **data controller**. This section ex
 - Secure research data management system (e.g., REDCap, institutional repository)
 
 ❌ **Insecure Options**:
+
 - Unencrypted USB drives
 - Personal Dropbox/Google Drive (without encryption)
 - Email attachments
@@ -654,6 +690,7 @@ zip -er survey_data.zip survey_data.csv
 ```
 
 Use a **strong password**:
+
 - Minimum 16 characters
 - Mix of letters, numbers, symbols
 - Not related to survey content
@@ -680,12 +717,14 @@ This encrypts your entire hard drive, protecting all files automatically.
 Only people with a **legitimate need** should access the data:
 
 ✅ **Appropriate**:
+
 - Research team members listed on ethics approval
 - Quality improvement team members
 - Audit committee members (if auditing the service)
 - Data analyst assigned to the project
 
 ❌ **Inappropriate**:
+
 - Colleagues not involved in the project
 - Students not listed on ethics approval
 - External collaborators without data sharing agreement
@@ -704,6 +743,7 @@ If you need to share data with authorized colleagues:
 4. **Remind recipient** of their data protection obligations
 
 **Never**:
+
 - Send unencrypted email attachments
 - Upload to public file sharing sites
 - Share passwords in the same message as encrypted files
@@ -828,6 +868,7 @@ A **legal hold** is a mechanism to prevent automatic deletion of survey data whe
 Legal holds should only be used in specific circumstances:
 
 ✅ **Appropriate use cases**:
+
 - Active litigation involving the survey data
 - Regulatory investigation (e.g., ICO, Care Quality Commission)
 - Freedom of Information request
@@ -837,6 +878,7 @@ Legal holds should only be used in specific circumstances:
 - Serious incident investigation
 
 ❌ **Inappropriate use cases**:
+
 - "Just in case we need it later"
 - Avoiding normal retention policies
 - Ongoing research (use retention extension instead)
@@ -847,6 +889,7 @@ Legal holds should only be used in specific circumstances:
 Only **organization owners** can place legal holds.
 
 **Why this restriction?**
+
 - Legal holds override normal data minimization principles
 - Require documented legal justification
 - Subject to audit and review
@@ -895,6 +938,7 @@ Legal holds should be reviewed regularly:
    - Data immediately subject to normal retention policy
 
 After lifting:
+
 - Retention countdown resumes from where it left off
 - Deletion warnings sent if close to deadline
 - Can be placed again if needed
@@ -902,6 +946,7 @@ After lifting:
 #### Legal Hold Audit Trail
 
 All legal hold actions are logged:
+
 - Who placed the hold
 - When it was placed
 - Justification provided
@@ -909,6 +954,7 @@ All legal hold actions are logged:
 - Reason for lifting
 
 Organization owners can view legal hold reports showing:
+
 - All active legal holds
 - Hold duration
 - Surveys affected
@@ -921,11 +967,13 @@ When a survey creator leaves the organization or changes roles, survey ownership
 #### Automatic Transfer
 
 Surveys automatically transfer to the **organization owner** when:
+
 - Survey creator's account is deactivated
 - Survey creator leaves the organization (membership revoked)
 - Survey creator requests transfer
 
 **Automatic transfer process**:
+
 1. System detects creator account deactivation
 2. Ownership transfers to organization owner
 3. Both parties notified via email (if possible)
@@ -956,6 +1004,7 @@ Survey creators can manually transfer ownership:
 5. New owner receives notification and must accept
 
 **Transfer confirmation**:
+
 - New owner must explicitly accept
 - All data access permissions retained
 - Original creator loses owner permissions (becomes Editor)
@@ -964,12 +1013,14 @@ Survey creators can manually transfer ownership:
 #### Transfer Implications
 
 **For the new owner**:
+
 - Full survey control
 - Data download permission
 - Retention management
 - All future emails (warnings, exports, etc.)
 
 **For the previous owner**:
+
 - Automatically becomes Editor (can modify survey structure)
 - Loses data access
 - No longer receives deletion warnings
@@ -978,6 +1029,7 @@ Survey creators can manually transfer ownership:
 #### Organization Dissolution
 
 If an organization is deleted:
+
 - All surveys automatically transfer to individual survey creators
 - Organization-level encryption removed (if applicable)
 - Each creator becomes independent owner
@@ -990,12 +1042,14 @@ The **Data Custodian** role allows delegation of data management without grantin
 #### When to Use Data Custodians
 
 ✅ **Appropriate use cases**:
+
 - Research data manager responsible for data exports
 - Quality improvement lead who analyzes data
 - Audit committee member who reviews data
 - Delegate who handles data while you're on leave
 
 ❌ **Not appropriate for**:
+
 - Survey editors (use Editor role)
 - People who should view responses in UI (use organization membership)
 - General collaborators (use Viewer role)
@@ -1032,12 +1086,14 @@ You cannot:
 #### Data Custodian Permissions
 
 **Can do**:
+
 - Download exports (CSV, JSON, Excel)
 - Provide purpose statements
 - View audit logs for this survey
 - Receive deletion warning emails
 
 **Cannot do**:
+
 - View responses in the web interface
 - Edit survey questions or settings
 - Close or reopen survey
@@ -1103,6 +1159,7 @@ If a survey participant requests their data be removed:
 #### Right to Erasure (GDPR)
 
 Participants have the right to request deletion of their data if:
+
 - They withdraw consent
 - Data no longer necessary for original purpose
 - They object to processing
@@ -1123,6 +1180,7 @@ Participants have the right to request deletion of their data if:
 #### Deletion Limitations
 
 Cannot delete if:
+
 - Data already anonymized (cannot identify individual response)
 - Legal obligation to retain (e.g., clinical trial regulations)
 - Public interest (e.g., public health research)
@@ -1133,6 +1191,7 @@ If deletion not possible, must inform participant and explain why.
 #### Partial Deletion
 
 Participant can request:
+
 - Deletion of specific questions
 - Anonymization instead of deletion
 - Restricted processing (mark as "do not use")
@@ -1573,6 +1632,7 @@ If you have questions about data governance:
 ## Compliance
 
 CheckTick is designed to support compliance with:
+
 - **GDPR** (General Data Protection Regulation)
 - **UK Data Protection Act 2018**
 - **NHS Data Security and Protection Toolkit**

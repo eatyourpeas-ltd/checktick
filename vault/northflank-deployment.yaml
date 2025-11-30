@@ -1,0 +1,282 @@
+# HashiCorp Vault Deployment for Northflank
+#
+# This configuration deploys a 3-node Vault cluster in HA mode
+# with persistent storage and internal networking.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-config
+  namespace: checktick
+data:
+  vault.hcl: |
+    # Vault Server Configuration
+
+    ui = true
+
+    # Storage backend - Integrated Storage (Raft)
+    storage "raft" {
+      path = "/vault/data"
+      node_id = "POD_NAME"
+
+      # Autopilot for automated upgrades and recovery
+      autopilot {
+        cleanup_dead_servers = true
+        last_contact_threshold = "200ms"
+        max_trailing_logs = 250
+        min_quorum = 2
+        server_stabilization_time = "10s"
+      }
+    }
+
+    # Network listener
+    listener "tcp" {
+      address = "0.0.0.0:8200"
+      cluster_address = "0.0.0.0:8201"
+      tls_disable = false
+      tls_cert_file = "/vault/tls/tls.crt"
+      tls_key_file = "/vault/tls/tls.key"
+    }
+
+    # API address for clustering
+    api_addr = "https://POD_IP:8200"
+    cluster_addr = "https://POD_IP:8201"
+
+    # Telemetry
+    telemetry {
+      prometheus_retention_time = "30s"
+      disable_hostname = false
+    }
+
+    # Enable seal wrapping
+    seal "transit" {
+      disabled = true
+    }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  namespace: checktick
+  labels:
+    app: vault
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+      protocol: TCP
+    - name: https-internal
+      port: 8201
+      targetPort: 8201
+      protocol: TCP
+  selector:
+    app: vault
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault-internal
+  namespace: checktick
+  labels:
+    app: vault
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+      protocol: TCP
+    - name: https-internal
+      port: 8201
+      targetPort: 8201
+      protocol: TCP
+  selector:
+    app: vault
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vault
+  namespace: checktick
+  labels:
+    app: vault
+spec:
+  serviceName: vault-internal
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vault
+  template:
+    metadata:
+      labels:
+        app: vault
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: vault
+              topologyKey: kubernetes.io/hostname
+
+      terminationGracePeriodSeconds: 10
+
+      initContainers:
+        - name: config-init
+          image: busybox:1.36
+          command:
+            - /bin/sh
+            - -c
+            - |
+              # Replace POD_NAME and POD_IP in config
+              sed -e "s/POD_NAME/${HOSTNAME}/g" \
+                  -e "s/POD_IP/${POD_IP}/g" \
+                  /vault/config/vault.hcl > /vault/config-init/vault.hcl
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          volumeMounts:
+            - name: config
+              mountPath: /vault/config
+            - name: config-init
+              mountPath: /vault/config-init
+
+      containers:
+        - name: vault
+          image: hashicorp/vault:1.15
+          imagePullPolicy: IfNotPresent
+
+          command:
+            - vault
+            - server
+            - -config=/vault/config-init/vault.hcl
+
+          env:
+            - name: VAULT_ADDR
+              value: "https://127.0.0.1:8200"
+            - name: VAULT_API_ADDR
+              value: "https://$(POD_IP):8200"
+            - name: VAULT_CLUSTER_ADDR
+              value: "https://$(POD_IP):8201"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SKIP_SETCAP
+              value: "true"
+
+          ports:
+            - name: http
+              containerPort: 8200
+              protocol: TCP
+            - name: https-internal
+              containerPort: 8201
+              protocol: TCP
+            - name: prometheus
+              containerPort: 9090
+              protocol: TCP
+
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - vault status -tls-skip-verify
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 2
+
+          livenessProbe:
+            httpGet:
+              path: /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204
+              port: 8200
+              scheme: HTTPS
+            initialDelaySeconds: 60
+            periodSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              add:
+                - IPC_LOCK
+
+          volumeMounts:
+            - name: data
+              mountPath: /vault/data
+            - name: config-init
+              mountPath: /vault/config-init
+            - name: tls
+              mountPath: /vault/tls
+              readOnly: true
+
+      volumes:
+        - name: config
+          configMap:
+            name: vault-config
+        - name: config-init
+          emptyDir: {}
+        - name: tls
+          secret:
+            secretName: vault-tls
+            defaultMode: 0400
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: standard
+
+---
+# Network Policy - Allow CheckTick app to connect to Vault
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vault-network-policy
+  namespace: checktick
+spec:
+  podSelector:
+    matchLabels:
+      app: vault
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow CheckTick web app to connect
+    - from:
+        - podSelector:
+            matchLabels:
+              app: checktick-web
+      ports:
+        - protocol: TCP
+          port: 8200
+    # Allow Vault pods to communicate with each other
+    - from:
+        - podSelector:
+            matchLabels:
+              app: vault
+      ports:
+        - protocol: TCP
+          port: 8200
+        - protocol: TCP
+          port: 8201

@@ -253,3 +253,9 @@ docker-isort
 docker-ruff
 docker-pylint
 docker-djlint
+
+# certificates
+certs/
+*.pem
+*.crt
+*.key

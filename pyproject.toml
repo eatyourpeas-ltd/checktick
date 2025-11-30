@@ -34,6 +34,7 @@ ggshield = "^1.43.0"
 mozilla-django-oidc = "^4.0.1"
 beautifulsoup4 = "^4.12.0"
 requests = "^2.32.0"
+hvac = "^2.4.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"

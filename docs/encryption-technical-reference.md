@@ -1,22 +1,16 @@
 ---
-title: Patient Data Encryption
-category: security
+title: Encryption Technical Reference
+category: api
 priority: 6
 ---
 
+# Encryption Technical Reference
+
+This document provides technical implementation details for developers working on CheckTick's encryption system. For user guides, see [Encryption for Users](/docs/encryption-for-users/). For admin procedures, see [Key Management for Administrators](/docs/key-management-for-administrators/).
+
+---
+
 CheckTick implements a security-first approach to handling sensitive patient data, using per-survey encryption keys with AES-GCM encryption. This document describes the current implementation and planned enhancements for organizational and individual users.
-
-## 🎯 Current Status (October 2025)
-
-**✅ PRODUCTION READY** for clinicians and organizations:
-
-- **Option 2 (Dual Encryption)**: Password + BIP39 recovery phrase ✅
-- **OIDC Integration**: SSO with automatic survey unlocking ✅
-- **Option 4 (Forward Secrecy)**: Session security implemented ✅
-- **Test Coverage**: 46/46 unit + 7/7 integration + 8/8 OIDC tests ✅
-- **Healthcare Ready**: Designed for clinical workflows with compliance ✅
-
-**🔄 Next Priority**: Organization key escrow for administrative recovery
 
 ## Table of Contents
 
@@ -83,6 +77,7 @@ survey.set_dual_encryption(kek, password, recovery_words)
 ```
 
 The dual encryption process:
+
 1. **Password Path**: KEK encrypted with user's password using Scrypt KDF
 2. **Recovery Path**: KEK encrypted with BIP39 recovery phrase using PBKDF2
 3. **Storage**: Only encrypted KEKs stored, never plaintext keys
@@ -108,6 +103,7 @@ response.enc_demographics = encrypted_blob  # Stored in database
 ```
 
 The encryption process:
+
 1. Derives encryption key from survey key using Scrypt KDF with random salt
 2. Generates random 12-byte nonce
 3. Encrypts JSON data with AES-GCM
@@ -168,12 +164,14 @@ if survey_key:
 CheckTick implements a **forward secrecy** model where encryption keys are never persisted in sessions:
 
 **What's Stored in Sessions:**
+
 - `unlock_credentials`: Encrypted blob containing user's password or recovery phrase
 - `unlock_method`: Which method was used ("password" or "recovery")
 - `unlock_verified_at`: ISO timestamp of when unlock occurred
 - `unlock_survey_slug`: Which survey was unlocked
 
 **What's NOT Stored:**
+
 - ❌ The KEK (Key Encryption Key) itself
 - ❌ Any plaintext key material
 - ❌ Decrypted credentials
