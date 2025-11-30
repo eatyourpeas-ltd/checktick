@@ -17,6 +17,7 @@ from rest_framework.decorators import (
 )
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 
 from checktick_app.surveys.models import (
     AuditLog,
@@ -25,6 +26,8 @@ from checktick_app.surveys.models import (
     OrganizationMembership,
     PublishedQuestionGroup,
     QuestionGroup,
+    RecoveryAuditEntry,
+    RecoveryRequest,
     Survey,
     SurveyAccessToken,
     SurveyMembership,
@@ -1682,3 +1685,721 @@ def redoc_ui(request):
     CSP is exempted on this route to allow loading ReDoc assets.
     """
     return render(request, "api/redoc.html", {})
+
+
+# =============================================================================
+# Key Recovery API
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# Recovery Throttle Classes - Strict rate limits for security-sensitive actions
+# -----------------------------------------------------------------------------
+
+
+class RecoveryCreateThrottle(UserRateThrottle):
+    """
+    Strict throttle for creating recovery requests.
+    Limit: 3 requests per hour per user.
+    """
+
+    scope = "recovery_create"
+    rate = "3/hour"
+
+
+class RecoveryApprovalThrottle(UserRateThrottle):
+    """
+    Strict throttle for approval/rejection actions.
+    Limit: 10 actions per hour per admin.
+    """
+
+    scope = "recovery_approval"
+    rate = "10/hour"
+
+
+class RecoveryViewThrottle(UserRateThrottle):
+    """
+    Moderate throttle for viewing recovery requests.
+    Limit: 60 views per minute per user.
+    """
+
+    scope = "recovery_view"
+    rate = "60/minute"
+
+
+# -----------------------------------------------------------------------------
+# Recovery Audit Logging Helper
+# -----------------------------------------------------------------------------
+
+
+def log_recovery_audit(
+    recovery_request,
+    event_type: str,
+    actor_type: str,
+    severity: str = "info",
+    actor_id: int | None = None,
+    actor_email: str | None = None,
+    actor_ip: str | None = None,
+    actor_user_agent: str = "",
+    details: dict | None = None,
+) -> "RecoveryAuditEntry":
+    """
+    Create an immutable audit log entry for a recovery action.
+
+    Args:
+        recovery_request: The RecoveryRequest instance
+        event_type: Type of event (e.g., 'request_submitted', 'primary_approval')
+        actor_type: 'user', 'admin', or 'system'
+        severity: 'info', 'warning', or 'critical'
+        actor_id: User ID of the actor
+        actor_email: Email of the actor
+        actor_ip: IP address of the actor
+        actor_user_agent: User agent string
+        details: Additional JSON details
+
+    Returns:
+        The created RecoveryAuditEntry
+    """
+    import hashlib
+    import json
+
+    # Get previous entry hash for chain integrity
+    previous_entry = recovery_request.audit_entries.order_by("-timestamp").first()
+    previous_hash = previous_entry.entry_hash if previous_entry else ""
+
+    # Create entry
+    entry = RecoveryAuditEntry(
+        recovery_request=recovery_request,
+        event_type=event_type,
+        severity=severity,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        actor_email=actor_email,
+        actor_ip=actor_ip,
+        actor_user_agent=actor_user_agent,
+        details=details or {},
+        previous_hash=previous_hash,
+    )
+
+    # Calculate entry hash for tamper detection
+    hash_data = json.dumps(
+        {
+            "request_id": str(recovery_request.id),
+            "event_type": event_type,
+            "severity": severity,
+            "actor_type": actor_type,
+            "actor_id": actor_id,
+            "actor_email": actor_email,
+            "details": details or {},
+            "previous_hash": previous_hash,
+        },
+        sort_keys=True,
+    )
+    entry.entry_hash = hashlib.sha256(hash_data.encode()).hexdigest()
+
+    entry.save()
+    return entry
+
+
+# -----------------------------------------------------------------------------
+# Recovery Serializers
+# -----------------------------------------------------------------------------
+
+
+class RecoveryRequestSerializer(serializers.ModelSerializer):
+    """Serializer for recovery request list and details."""
+
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    survey_name = serializers.CharField(source="survey.name", read_only=True)
+    time_remaining_seconds = serializers.SerializerMethodField()
+
+    class Meta:
+
+        model = RecoveryRequest
+        fields = [
+            "id",
+            "request_code",
+            "user_email",
+            "survey_name",
+            "status",
+            "submitted_at",
+            "verification_completed_at",
+            "approved_at",
+            "time_delay_until",
+            "time_delay_hours",
+            "completed_at",
+            "time_remaining_seconds",
+        ]
+        read_only_fields = fields
+
+    def get_time_remaining_seconds(self, obj) -> int | None:
+        remaining = obj.time_remaining
+        if remaining:
+            return int(remaining.total_seconds())
+        return None
+
+
+class RecoveryRequestCreateSerializer(serializers.Serializer):
+    """Serializer for creating a new recovery request."""
+
+    survey_id = serializers.IntegerField(
+        help_text="ID of the survey to recover access to"
+    )
+    reason = serializers.CharField(
+        max_length=1000,
+        help_text="Explanation of why recovery is needed",
+    )
+
+
+class RecoveryApprovalSerializer(serializers.Serializer):
+    """Serializer for approving/rejecting recovery requests."""
+
+    reason = serializers.CharField(
+        max_length=1000,
+        help_text="Verification notes or reason for decision",
+    )
+
+
+class RecoveryCancelSerializer(serializers.Serializer):
+    """Serializer for cancelling recovery requests."""
+
+    reason = serializers.CharField(
+        max_length=1000,
+        required=False,
+        default="",
+        help_text="Reason for cancellation",
+    )
+
+
+class RecoveryAdminDetailSerializer(serializers.ModelSerializer):
+    """Detailed serializer for admins reviewing recovery requests."""
+
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    user_username = serializers.CharField(source="user.username", read_only=True)
+    survey_name = serializers.CharField(source="survey.name", read_only=True)
+    survey_slug = serializers.CharField(source="survey.slug", read_only=True)
+    primary_approver_email = serializers.EmailField(
+        source="primary_approver.email", read_only=True, allow_null=True
+    )
+    secondary_approver_email = serializers.EmailField(
+        source="secondary_approver.email", read_only=True, allow_null=True
+    )
+    rejected_by_email = serializers.EmailField(
+        source="rejected_by.email", read_only=True, allow_null=True
+    )
+    time_remaining_seconds = serializers.SerializerMethodField()
+    identity_verifications = serializers.SerializerMethodField()
+    is_verification_complete = serializers.BooleanField(read_only=True)
+
+    class Meta:
+
+        model = RecoveryRequest
+        fields = [
+            "id",
+            "request_code",
+            "user_email",
+            "user_username",
+            "survey_name",
+            "survey_slug",
+            "status",
+            "submitted_at",
+            "verification_completed_at",
+            "approved_at",
+            "time_delay_until",
+            "time_delay_hours",
+            "completed_at",
+            "time_remaining_seconds",
+            "primary_approver_email",
+            "primary_approved_at",
+            "primary_reason",
+            "secondary_approver_email",
+            "secondary_approved_at",
+            "secondary_reason",
+            "rejected_by_email",
+            "rejected_at",
+            "rejection_reason",
+            "user_context",
+            "identity_verifications",
+            "is_verification_complete",
+        ]
+        read_only_fields = fields
+
+    def get_time_remaining_seconds(self, obj) -> int | None:
+        remaining = obj.time_remaining
+        if remaining:
+            return int(remaining.total_seconds())
+        return None
+
+    def get_identity_verifications(self, obj) -> list:
+        return [
+            {
+                "id": str(v.id),
+                "verification_type": v.verification_type,
+                "status": v.status,
+                "submitted_at": v.submitted_at,
+                "verified_at": v.verified_at,
+            }
+            for v in obj.identity_verifications.all()
+        ]
+
+
+class IsPlatformAdmin(permissions.BasePermission):
+    """Permission that requires user to be a platform admin (staff or superuser)."""
+
+    def has_permission(self, request, view):
+        return request.user and (request.user.is_staff or request.user.is_superuser)
+
+
+class RecoveryViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for key recovery requests.
+
+    Users can:
+    - Create recovery requests for their own surveys
+    - View status of their own recovery requests
+    - Cancel their own pending requests
+
+    Platform admins can:
+    - View all recovery requests
+    - Approve or reject requests
+    - Execute completed requests
+
+    Rate Limits:
+    - Create requests: 3/hour per user
+    - View requests: 60/minute per user
+    - Admin actions (approve/reject): 10/hour per admin
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [RecoveryViewThrottle]
+    http_method_names = ["get", "post"]
+
+    def get_throttles(self):
+        """Apply action-specific throttles."""
+        if self.action == "create":
+            return [RecoveryCreateThrottle()]
+        if self.action in ["approve_primary", "approve_secondary", "reject"]:
+            return [RecoveryApprovalThrottle()]
+        return super().get_throttles()
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return RecoveryRequestCreateSerializer
+        if self.action in ["approve_primary", "approve_secondary", "reject"]:
+            return RecoveryApprovalSerializer
+        if self.action == "cancel":
+            return RecoveryCancelSerializer
+        if self.action in ["retrieve", "admin_list"] and self.request.user.is_staff:
+            return RecoveryAdminDetailSerializer
+        return RecoveryRequestSerializer
+
+    def get_queryset(self):
+
+        user = self.request.user
+
+        # Platform admins see all requests
+        if user.is_staff or user.is_superuser:
+            return RecoveryRequest.objects.select_related(
+                "user",
+                "survey",
+                "primary_approver",
+                "secondary_approver",
+                "rejected_by",
+            ).prefetch_related("identity_verifications")
+
+        # Regular users only see their own requests
+        return RecoveryRequest.objects.filter(user=user).select_related(
+            "user", "survey"
+        )
+
+    def create(self, request):
+        """
+        Create a new recovery request.
+
+        The user must own responses on the specified survey.
+        """
+        from checktick_app.surveys.models import Survey
+
+        serializer = RecoveryRequestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        survey_id = serializer.validated_data["survey_id"]
+        reason = serializer.validated_data["reason"]
+
+        # Check survey exists and user has responses
+        try:
+            survey = Survey.objects.get(id=survey_id)
+        except Survey.DoesNotExist:
+            return Response({"error": "Survey not found"}, status=404)
+
+        # Check user has encrypted responses on this survey
+        has_encrypted_responses = (
+            survey.responses.filter(submitted_by=request.user)
+            .exclude(enc_demographics__isnull=True)
+            .exists()
+        )
+
+        has_whole_response_encrypted = (
+            survey.responses.filter(submitted_by=request.user)
+            .exclude(enc_answers__isnull=True)
+            .exists()
+        )
+
+        if not has_encrypted_responses and not has_whole_response_encrypted:
+            return Response(
+                {"error": "No encrypted data found for this survey"},
+                status=400,
+            )
+
+        # Check no pending request already exists
+        existing = RecoveryRequest.objects.filter(
+            user=request.user,
+            survey=survey,
+            status__in=[
+                RecoveryRequest.Status.PENDING_VERIFICATION,
+                RecoveryRequest.Status.VERIFICATION_IN_PROGRESS,
+                RecoveryRequest.Status.AWAITING_PRIMARY,
+                RecoveryRequest.Status.AWAITING_SECONDARY,
+                RecoveryRequest.Status.IN_TIME_DELAY,
+                RecoveryRequest.Status.READY_FOR_EXECUTION,
+            ],
+        ).exists()
+
+        if existing:
+            return Response(
+                {"error": "A pending recovery request already exists for this survey"},
+                status=400,
+            )
+
+        # Determine time delay based on user tier
+        time_delay_hours = 48  # Individual users: 48 hours
+        if survey.organization:
+            time_delay_hours = 24  # Organization users: 24 hours
+
+        # Create the recovery request
+        recovery_request = RecoveryRequest.objects.create(
+            user=request.user,
+            survey=survey,
+            time_delay_hours=time_delay_hours,
+            user_context={
+                "email": request.user.email,
+                "username": request.user.username,
+                "account_created": str(request.user.date_joined),
+                "reason": reason,
+                "ip_address": self._get_client_ip(request),
+                "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+            },
+        )
+
+        # Audit log: request submitted
+        log_recovery_audit(
+            recovery_request=recovery_request,
+            event_type="request_submitted",
+            actor_type="user",
+            severity="info",
+            actor_id=request.user.id,
+            actor_email=request.user.email,
+            actor_ip=self._get_client_ip(request),
+            actor_user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            details={
+                "survey_id": survey.id,
+                "survey_name": survey.name,
+                "reason": reason,
+                "time_delay_hours": time_delay_hours,
+            },
+        )
+
+        # Send notification emails
+        self._send_request_notifications(recovery_request, reason)
+
+        output_serializer = RecoveryRequestSerializer(recovery_request)
+        return Response(output_serializer.data, status=201)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        """Cancel a recovery request."""
+        recovery_request = self.get_object()
+
+        # Check user owns this request or is admin
+        if recovery_request.user != request.user and not request.user.is_staff:
+            raise PermissionDenied("You can only cancel your own recovery requests")
+
+        # Check request can be cancelled
+        cancellable_statuses = [
+            recovery_request.Status.PENDING_VERIFICATION,
+            recovery_request.Status.VERIFICATION_IN_PROGRESS,
+            recovery_request.Status.AWAITING_PRIMARY,
+            recovery_request.Status.AWAITING_SECONDARY,
+            recovery_request.Status.IN_TIME_DELAY,
+        ]
+
+        if recovery_request.status not in cancellable_statuses:
+            return Response(
+                {
+                    "error": f"Cannot cancel request in status: {recovery_request.status}"
+                },
+                status=400,
+            )
+
+        serializer = RecoveryCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        recovery_request.cancel(
+            user=request.user,
+            reason=serializer.validated_data.get("reason", "User cancelled request"),
+        )
+
+        # Note: audit logging is handled by RecoveryRequest.cancel()
+
+        # Send cancellation notification
+        self._send_cancellation_notification(recovery_request)
+
+        output_serializer = RecoveryRequestSerializer(recovery_request)
+        return Response(output_serializer.data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[permissions.IsAuthenticated, IsPlatformAdmin],
+    )
+    def approve_primary(self, request, pk=None):
+        """Primary admin approval for a recovery request."""
+        recovery_request = self.get_object()
+
+        serializer = RecoveryApprovalSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            recovery_request.approve_primary(
+                admin=request.user,
+                reason=serializer.validated_data["reason"],
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=400)
+
+        # Note: audit logging is handled by RecoveryRequest.approve_primary()
+
+        output_serializer = RecoveryAdminDetailSerializer(recovery_request)
+        return Response(output_serializer.data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[permissions.IsAuthenticated, IsPlatformAdmin],
+    )
+    def approve_secondary(self, request, pk=None):
+        """Secondary admin approval for a recovery request (starts time delay)."""
+
+        from checktick_app.core.email_utils import send_recovery_approved_email
+
+        recovery_request = self.get_object()
+
+        serializer = RecoveryApprovalSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            recovery_request.approve_secondary(
+                admin=request.user,
+                reason=serializer.validated_data["reason"],
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=400)
+
+        # Note: audit logging is handled by RecoveryRequest.approve_secondary()
+
+        # Send approval notification with time delay info
+        send_recovery_approved_email(
+            to_email=recovery_request.user.email,
+            user_name=recovery_request.user.username,
+            request_id=recovery_request.request_code,
+            survey_name=recovery_request.survey.name,
+            time_delay_hours=recovery_request.time_delay_hours,
+            access_available_at=recovery_request.time_delay_until.strftime(
+                "%Y-%m-%d %H:%M UTC"
+            ),
+            approved_by="Platform Administrator",
+        )
+
+        output_serializer = RecoveryAdminDetailSerializer(recovery_request)
+        return Response(output_serializer.data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[permissions.IsAuthenticated, IsPlatformAdmin],
+    )
+    def reject(self, request, pk=None):
+        """Reject a recovery request."""
+        from checktick_app.core.email_utils import send_recovery_rejected_email
+
+        recovery_request = self.get_object()
+
+        serializer = RecoveryApprovalSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        recovery_request.reject(
+            admin=request.user,
+            reason=serializer.validated_data["reason"],
+        )
+
+        # Note: audit logging is handled by RecoveryRequest.reject()
+
+        # Send rejection notification
+        send_recovery_rejected_email(
+            to_email=recovery_request.user.email,
+            user_name=recovery_request.user.username,
+            request_id=recovery_request.request_code,
+            survey_name=recovery_request.survey.name,
+            reason=serializer.validated_data["reason"],
+            rejected_by="Platform Administrator",
+        )
+
+        output_serializer = RecoveryAdminDetailSerializer(recovery_request)
+        return Response(output_serializer.data)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        permission_classes=[permissions.IsAuthenticated, IsPlatformAdmin],
+        url_path="admin",
+    )
+    def admin_list(self, request):
+        """List all recovery requests for admin dashboard."""
+
+        queryset = self.get_queryset()
+
+        # Filter by status if provided
+        status = request.query_params.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # Pagination
+        page_size = int(request.query_params.get("page_size", 20))
+        page = int(request.query_params.get("page", 1))
+        offset = (page - 1) * page_size
+
+        total = queryset.count()
+        requests = queryset[offset : offset + page_size]
+
+        serializer = RecoveryAdminDetailSerializer(requests, many=True)
+        return Response(
+            {
+                "count": total,
+                "page": page,
+                "page_size": page_size,
+                "results": serializer.data,
+            }
+        )
+
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[permissions.IsAuthenticated, IsPlatformAdmin],
+        url_path="check-time-delay",
+    )
+    def check_time_delay(self, request, pk=None):
+        """Check if time delay has completed and update status."""
+        recovery_request = self.get_object()
+
+        completed = recovery_request.check_time_delay_complete()
+
+        if completed:
+            # Send ready notification
+            from django.conf import settings
+
+            from checktick_app.core.email_utils import send_recovery_ready_email
+
+            site_url = getattr(settings, "SITE_URL", "http://localhost:8000")
+            recovery_url = (
+                f"{site_url}/recovery/complete/{recovery_request.request_code}/"
+            )
+
+            send_recovery_ready_email(
+                to_email=recovery_request.user.email,
+                user_name=recovery_request.user.username,
+                request_id=recovery_request.request_code,
+                survey_name=recovery_request.survey.name,
+                recovery_url=recovery_url,
+            )
+
+        output_serializer = RecoveryAdminDetailSerializer(recovery_request)
+        return Response(
+            {
+                "time_delay_complete": completed,
+                "request": output_serializer.data,
+            }
+        )
+
+    def _get_client_ip(self, request) -> str:
+        """Extract client IP from request."""
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            return x_forwarded_for.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR", "")
+
+    def _send_request_notifications(self, recovery_request, reason: str) -> None:
+        """Send notifications when a recovery request is created."""
+        from django.conf import settings
+
+        from checktick_app.core.email_utils import (
+            send_recovery_admin_notification_email,
+            send_recovery_request_submitted_email,
+            send_recovery_security_alert_email,
+        )
+
+        site_url = getattr(settings, "SITE_URL", "http://localhost:8000")
+
+        # Notify user
+        send_recovery_request_submitted_email(
+            to_email=recovery_request.user.email,
+            user_name=recovery_request.user.username,
+            request_id=recovery_request.request_code,
+            survey_name=recovery_request.survey.name,
+            reason=reason,
+        )
+
+        # Notify platform admins
+        admin_users = User.objects.filter(is_staff=True, is_active=True)
+        dashboard_url = f"{site_url}/admin/recovery/{recovery_request.id}/"
+
+        for admin in admin_users:
+            send_recovery_admin_notification_email(
+                to_email=admin.email,
+                admin_name=admin.username,
+                request_id=recovery_request.request_code,
+                requester_name=recovery_request.user.username,
+                requester_email=recovery_request.user.email,
+                survey_name=recovery_request.survey.name,
+                reason=reason,
+                dashboard_url=dashboard_url,
+            )
+
+        # Send security alert to user
+        action_url = f"{site_url}/security/report-unauthorized/"
+        send_recovery_security_alert_email(
+            to_email=recovery_request.user.email,
+            user_name=recovery_request.user.username,
+            request_id=recovery_request.request_code,
+            survey_name=recovery_request.survey.name,
+            alert_type="Recovery Request Initiated",
+            alert_details="A key recovery request was submitted for your account. "
+            "If you did not initiate this request, please report it immediately.",
+            action_url=action_url,
+        )
+
+    def _send_cancellation_notification(self, recovery_request) -> None:
+        """Send notification when a recovery request is cancelled."""
+        from checktick_app.core.email_utils import send_recovery_cancelled_email
+
+        send_recovery_cancelled_email(
+            to_email=recovery_request.user.email,
+            user_name=recovery_request.user.username,
+            request_id=recovery_request.request_code,
+            survey_name=recovery_request.survey.name,
+            cancelled_by=(
+                "You"
+                if recovery_request.cancelled_by == recovery_request.user
+                else "Platform Administrator"
+            ),
+            reason=recovery_request.cancellation_reason,
+        )

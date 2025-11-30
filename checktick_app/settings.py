@@ -449,6 +449,10 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/minute",
         "user": "120/minute",
+        # Recovery API - strict limits for security-sensitive operations
+        "recovery_create": "3/hour",  # Creating recovery requests
+        "recovery_approval": "10/hour",  # Admin approval/rejection actions
+        "recovery_view": "60/minute",  # Viewing recovery status
     },
 }
 
