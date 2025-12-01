@@ -6217,9 +6217,7 @@ def _validate_and_process_image(uploaded_file) -> tuple[bool, str]:
             img_format = (
                 "PNG"
                 if ext == ".png"
-                else "JPEG"
-                if ext in (".jpg", ".jpeg")
-                else "WEBP"
+                else "JPEG" if ext in (".jpg", ".jpeg") else "WEBP"
             )
             img.save(buffer, format=img_format, quality=85)
             buffer.seek(0)
