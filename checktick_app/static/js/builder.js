@@ -393,6 +393,22 @@
       }
     }
 
+    // Restore image upload UI for image choice questions
+    if (payload.type === "image") {
+      if (typeof form._showImageUploadUI === "function" && payload.id) {
+        form._showImageUploadUI(
+          payload.id,
+          payload.group_id || null,
+          payload.survey_slug || null,
+          payload.images || []
+        );
+      }
+    } else {
+      if (typeof form._hideImageUploadUI === "function") {
+        form._hideImageUploadUI();
+      }
+    }
+
     const groupSelect = form.querySelector('select[name="group_id"]');
     if (groupSelect) {
       if (payload.group_id) {
@@ -700,6 +716,9 @@
     const yesnoFollowupSection = form.querySelector(
       '[data-section="yesno-followup"]'
     );
+    const imageOptionsSection = form.querySelector(
+      '[data-section="image-options"]'
+    );
     const likertCat = likertSection
       ? likertSection.querySelector('[data-likert="categories"]')
       : null;
@@ -715,6 +734,18 @@
     const loadDatasetBtn = form.querySelector("[data-load-dataset]");
     const optionsTextarea = form.querySelector('textarea[name="options"]');
 
+    // Image upload controls
+    const imageUploadContainer = form.querySelector(
+      "[data-image-upload-container]"
+    );
+    const imageUploadPlaceholder = form.querySelector(
+      "[data-image-upload-placeholder]"
+    );
+    const imageList = form.querySelector("[data-image-list]");
+    const imageUploadInput = form.querySelector("[data-image-upload-input]");
+    const imageLabelInput = form.querySelector("[data-image-label-input]");
+    const uploadImageBtn = form.querySelector("[data-upload-image-btn]");
+
     // Follow-up controls
     const followupContainer = form.querySelector(
       "[data-options-followup-container]"
@@ -729,12 +760,12 @@
       const type = checked ? checked.value : null;
       if (!type) return;
       const isText = type === "text";
+      const isImage = type === "image";
       const isMC =
         type === "mc_single" ||
         type === "mc_multi" ||
         type === "dropdown" ||
-        type === "orderable" ||
-        type === "image";
+        type === "orderable";
       const isDropdown = type === "dropdown";
       const isLikert = type === "likert";
       const isYesNo = type === "yesno";
@@ -751,6 +782,8 @@
       if (likertSection) likertSection.classList.toggle("hidden", !isLikert);
       if (yesnoFollowupSection)
         yesnoFollowupSection.classList.toggle("hidden", !isYesNo);
+      if (imageOptionsSection)
+        imageOptionsSection.classList.toggle("hidden", !isImage);
 
       // Show/hide follow-up container within options section
       if (followupContainer) {
@@ -911,12 +944,259 @@
     form._refreshCreateToggles = refresh;
     form._populateFollowupOptions = populateFollowupOptions;
 
+    // Image upload handling functions
+    let currentQuestionId = null;
+    let currentGroupId = null;
+    let currentSurveySlug = null;
+
+    function getImageUploadUrl() {
+      if (!currentSurveySlug || !currentQuestionId) return null;
+      if (currentGroupId) {
+        return `/surveys/${currentSurveySlug}/builder/groups/${currentGroupId}/questions/${currentQuestionId}/images/upload`;
+      }
+      return `/surveys/${currentSurveySlug}/builder/questions/${currentQuestionId}/images/upload`;
+    }
+
+    function getImageDeleteUrl(imageId) {
+      if (!currentSurveySlug || !currentQuestionId) return null;
+      if (currentGroupId) {
+        return `/surveys/${currentSurveySlug}/builder/groups/${currentGroupId}/questions/${currentQuestionId}/images/${imageId}/delete`;
+      }
+      return `/surveys/${currentSurveySlug}/builder/questions/${currentQuestionId}/images/${imageId}/delete`;
+    }
+
+    function renderImage(img) {
+      return `
+        <div class="relative group w-16 h-16" data-image-id="${
+          img.id
+        }" title="${img.label || "Image option"}">
+          <img src="${img.url}" alt="${
+        img.label || ""
+      }" class="w-16 h-16 object-cover rounded border border-base-300" />
+          <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center">
+            <button type="button" class="btn btn-circle btn-error btn-xs" data-delete-image="${
+              img.id
+            }" title="Delete image">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function refreshImageList(images) {
+      if (!imageList) return;
+      if (images && images.length > 0) {
+        imageList.innerHTML = images.map(renderImage).join("");
+      } else {
+        imageList.innerHTML =
+          '<p class="text-xs opacity-60">No images uploaded yet.</p>';
+      }
+    }
+
+    function showImageUploadUI(questionId, groupId, surveySlug, images) {
+      currentQuestionId = questionId;
+      currentGroupId = groupId;
+      currentSurveySlug = surveySlug;
+
+      if (imageUploadContainer) {
+        imageUploadContainer.classList.remove("hidden");
+      }
+      if (imageUploadPlaceholder) {
+        imageUploadPlaceholder.classList.add("hidden");
+      }
+
+      refreshImageList(images || []);
+    }
+
+    function hideImageUploadUI() {
+      currentQuestionId = null;
+      currentGroupId = null;
+      currentSurveySlug = null;
+
+      if (imageUploadContainer) {
+        imageUploadContainer.classList.add("hidden");
+      }
+      if (imageUploadPlaceholder) {
+        imageUploadPlaceholder.classList.remove("hidden");
+      }
+      if (imageList) {
+        imageList.innerHTML = "";
+      }
+      if (imageUploadInput) {
+        imageUploadInput.value = "";
+      }
+      if (imageLabelInput) {
+        imageLabelInput.value = "";
+      }
+    }
+
+    // Handle image upload button click
+    if (uploadImageBtn && imageUploadInput) {
+      uploadImageBtn.addEventListener("click", async function () {
+        const file = imageUploadInput.files && imageUploadInput.files[0];
+        if (!file) {
+          if (typeof window.showToast === "function") {
+            window.showToast("Please select an image file", "error");
+          }
+          return;
+        }
+
+        const uploadUrl = getImageUploadUrl();
+        if (!uploadUrl) {
+          if (typeof window.showToast === "function") {
+            window.showToast(
+              "Save the question first before uploading images",
+              "error"
+            );
+          }
+          return;
+        }
+
+        // Show loading state
+        uploadImageBtn.disabled = true;
+        const originalContent = uploadImageBtn.innerHTML;
+        uploadImageBtn.innerHTML =
+          '<span class="loading loading-spinner loading-xs"></span>';
+
+        const formData = new FormData();
+        formData.append("image", file);
+        formData.append("label", imageLabelInput ? imageLabelInput.value : "");
+
+        try {
+          const response = await fetch(uploadUrl, {
+            method: "POST",
+            headers: {
+              "X-CSRFToken": csrfToken(),
+            },
+            credentials: "same-origin",
+            body: formData,
+          });
+
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || "Upload failed");
+          }
+
+          // Add the new image to the list
+          const existingImages = imageList.querySelectorAll("[data-image-id]");
+          const currentImages = Array.from(existingImages).map((el) => {
+            const id = el.dataset.imageId;
+            const img = el.querySelector("img");
+            const label = el.querySelector("p");
+            return {
+              id: parseInt(id),
+              url: img ? img.src : "",
+              label: label ? label.textContent : "",
+            };
+          });
+          currentImages.push(data.image);
+          refreshImageList(currentImages);
+
+          // Clear inputs
+          if (imageUploadInput) imageUploadInput.value = "";
+          if (imageLabelInput) imageLabelInput.value = "";
+
+          if (typeof window.showToast === "function") {
+            window.showToast("Image uploaded successfully", "success");
+          }
+        } catch (error) {
+          console.error("Image upload error:", error);
+          if (typeof window.showToast === "function") {
+            window.showToast(
+              error.message || "Failed to upload image",
+              "error"
+            );
+          }
+        } finally {
+          uploadImageBtn.disabled = false;
+          uploadImageBtn.innerHTML = originalContent;
+        }
+      });
+    }
+
+    // Handle image delete (using event delegation on imageList)
+    if (imageList) {
+      imageList.addEventListener("click", async function (e) {
+        const deleteBtn = e.target.closest("[data-delete-image]");
+        if (!deleteBtn) return;
+
+        const imageId = deleteBtn.dataset.deleteImage;
+        if (!imageId) return;
+
+        const deleteUrl = getImageDeleteUrl(imageId);
+        if (!deleteUrl) return;
+
+        // Confirm deletion
+        if (!confirm("Are you sure you want to delete this image?")) {
+          return;
+        }
+
+        deleteBtn.disabled = true;
+
+        try {
+          const response = await fetch(deleteUrl, {
+            method: "POST",
+            headers: {
+              "X-CSRFToken": csrfToken(),
+              "Content-Type": "application/json",
+            },
+            credentials: "same-origin",
+          });
+
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || "Delete failed");
+          }
+
+          // Remove the image from the list
+          const imageEl = imageList.querySelector(
+            `[data-image-id="${imageId}"]`
+          );
+          if (imageEl) {
+            imageEl.remove();
+          }
+
+          // Check if there are any images left
+          if (!imageList.querySelector("[data-image-id]")) {
+            imageList.innerHTML =
+              '<p class="text-xs opacity-60 col-span-3">No images uploaded yet.</p>';
+          }
+
+          if (typeof window.showToast === "function") {
+            window.showToast("Image deleted successfully", "success");
+          }
+        } catch (error) {
+          console.error("Image delete error:", error);
+          if (typeof window.showToast === "function") {
+            window.showToast(
+              error.message || "Failed to delete image",
+              "error"
+            );
+          }
+          deleteBtn.disabled = false;
+        }
+      });
+    }
+
+    // Expose image handling functions for edit mode
+    form._showImageUploadUI = showImageUploadUI;
+    form._hideImageUploadUI = hideImageUploadUI;
+
     form.addEventListener("change", function (e) {
       if (
         e.target &&
         (e.target.name === "type" || e.target.name === "likert_mode")
       ) {
         refresh();
+        // Reset image upload UI when changing question type
+        if (e.target.name === "type" && e.target.value !== "image") {
+          hideImageUploadUI();
+        }
       }
     });
 

@@ -327,6 +327,27 @@ urlpatterns = [
         views.builder_group_questions_reorder,
         name="builder_group_questions_reorder",
     ),
+    # Image upload endpoints for image choice questions
+    path(
+        "<slug:slug>/builder/questions/<int:qid>/images/upload",
+        views.builder_question_image_upload,
+        name="builder_question_image_upload",
+    ),
+    path(
+        "<slug:slug>/builder/groups/<int:gid>/questions/<int:qid>/images/upload",
+        views.builder_group_question_image_upload,
+        name="builder_group_question_image_upload",
+    ),
+    path(
+        "<slug:slug>/builder/questions/<int:qid>/images/<int:img_id>/delete",
+        views.builder_question_image_delete,
+        name="builder_question_image_delete",
+    ),
+    path(
+        "<slug:slug>/builder/groups/<int:gid>/questions/<int:qid>/images/<int:img_id>/delete",
+        views.builder_group_question_image_delete,
+        name="builder_group_question_image_delete",
+    ),
     path(
         "<slug:slug>/builder/groups/create",
         views.builder_group_create,

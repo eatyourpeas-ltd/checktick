@@ -1731,6 +1731,55 @@ class SurveyQuestion(models.Model):
         ordering = ["order", "id"]
 
 
+def question_image_upload_path(instance, filename):
+    """
+    Generate upload path for question images.
+    Images are stored in: question_images/{survey_slug}/{question_id}/{filename}
+    """
+    import os
+
+    ext = os.path.splitext(filename)[1].lower()
+    # Use a UUID for the filename to avoid conflicts
+    import uuid
+
+    new_filename = f"{uuid.uuid4().hex}{ext}"
+    return f"question_images/{instance.question.survey.slug}/{instance.question.id}/{new_filename}"
+
+
+class QuestionImage(models.Model):
+    """
+    Stores images for image choice questions.
+
+    WARNING: Images are NOT encrypted and should only be used for
+    non-medical, non-patient-identifying content.
+    """
+
+    question = models.ForeignKey(
+        SurveyQuestion, on_delete=models.CASCADE, related_name="images"
+    )
+    image = models.ImageField(upload_to=question_image_upload_path)
+    label = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Optional label/alt text for the image",
+    )
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return f"Image {self.order} for question {self.question_id}"
+
+    @property
+    def url(self):
+        """Return the URL for the image."""
+        if self.image:
+            return self.image.url
+        return None
+
+
 class SurveyQuestionCondition(models.Model):
     class Operator(models.TextChoices):
         EQUALS = "eq", "Equals"
