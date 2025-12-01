@@ -5,7 +5,9 @@
 {% block title %}{% trans "Pricing" %} - {{ brand.title }}{% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8 max-w-7xl">
+<div class="container mx-auto px-4 py-8 max-w-7xl"
+     {% if auto_open_checkout %}data-auto-open-checkout="true"{% endif %}
+     {% if pending_tier %}data-pending-tier="{{ pending_tier }}"{% endif %}>
   <!-- Header -->
   <div class="text-center mb-12">
     <h1 class="text-4xl font-bold mb-4">{% trans "Choose Your Plan" %}</h1>
@@ -15,7 +17,7 @@
   </div>
 
   <!-- Pricing Cards -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-12">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-12">
 
     <!-- Individual Free (3 Surveys) -->
     <div class="card bg-base-100 shadow-xl border border-base-300">
@@ -172,14 +174,34 @@
       </div>
     </div>
 
-    <!-- Team Small (5 members) -->
-    <div class="card bg-base-100 shadow-xl border border-base-300">
+    <!-- Team Plans (Combined Card) -->
+    <div class="card bg-base-100 shadow-xl border-2 border-primary">
       <div class="card-body">
-        <h2 class="card-title text-2xl mb-2">{% trans "Team Small" %}</h2>
+        <div class="badge badge-primary mb-2">{% trans "Most Popular" %}</div>
+        <h2 class="card-title text-2xl mb-2">{% trans "Team" %}</h2>
+
+        {# Team Size Selector #}
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Select team size:" %}</span>
+          </label>
+          <select id="team-size-selector" class="select select-bordered w-full">
+            <option value="team_small" data-price="25" data-members="5" data-price-id="{{ price_ids.team_small }}">
+              {% trans "Small" %} - 5 {% trans "members" %} - £25/{% trans "month" %}
+            </option>
+            <option value="team_medium" data-price="50" data-members="10" data-price-id="{{ price_ids.team_medium }}">
+              {% trans "Medium" %} - 10 {% trans "members" %} - £50/{% trans "month" %}
+            </option>
+            <option value="team_large" data-price="100" data-members="20" data-price-id="{{ price_ids.team_large }}">
+              {% trans "Large" %} - 20 {% trans "members" %} - £100/{% trans "month" %}
+            </option>
+          </select>
+        </div>
+
         <div class="mb-4">
-          <span class="text-3xl font-bold">£25</span>
+          <span class="text-3xl font-bold" id="team-price-display">£25</span>
           <span class="text-base-content/70">/{% trans "month" %}</span>
-          <p class="text-sm text-base-content/70">{% trans "5 team members" %}</p>
+          <p class="text-sm text-base-content/70" id="team-members-display">{% trans "Up to" %} 5 {% trans "team members" %}</p>
         </div>
 
         <div class="divider"></div>
@@ -195,13 +217,7 @@
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span class="font-semibold">{% trans "Up to 5 team members" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Up to 50 active surveys" %}</span>
+            <span class="font-semibold">{% trans "Up to 50 active surveys" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -225,10 +241,11 @@
 
         <div class="card-actions mt-6">
           {% if user.is_authenticated and not self_hosted %}
-            {% if user.profile.account_tier == 'team_small' %}
+            {% if user.profile.account_tier in 'team_small,team_medium,team_large' %}
               <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
             {% else %}
               <button
+                id="team-checkout-btn"
                 class="btn btn-primary btn-block paddle-checkout-btn"
                 data-tier="team_small"
                 data-price-id="{{ price_ids.team_small }}">
@@ -242,14 +259,13 @@
       </div>
     </div>
 
-    <!-- Team Medium (10 members) -->
+    <!-- Organisation -->
     <div class="card bg-base-100 shadow-xl border border-base-300">
       <div class="card-body">
-        <h2 class="card-title text-2xl mb-2">{% trans "Team Medium" %}</h2>
+        <h2 class="card-title text-2xl mb-2">{% trans "Organisation" %}</h2>
         <div class="mb-4">
-          <span class="text-3xl font-bold">£50</span>
-          <span class="text-base-content/70">/{% trans "month" %}</span>
-          <p class="text-sm text-base-content/70">{% trans "10 team members" %}</p>
+          <span class="text-3xl font-bold">{% trans "Custom" %}</span>
+          <p class="text-sm text-base-content/70">{% trans "Per-user pricing" %}</p>
         </div>
 
         <div class="divider"></div>
@@ -259,77 +275,47 @@
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span>{% trans "Everything in Team Small" %}</span>
+            <span>{% trans "Everything in Team plans" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span class="font-semibold">{% trans "Up to 10 team members" %}</span>
+            <span class="font-semibold">{% trans "Unlimited team members" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span class="font-semibold">{% trans "Unlimited surveys" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>{% trans "Organisation-level encryption" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>{% trans "Webhooks & advanced integrations" %}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>{% trans "Priority support" %}</span>
           </li>
         </ul>
 
         <div class="card-actions mt-6">
-          {% if user.is_authenticated and not self_hosted %}
-            {% if user.profile.account_tier == 'team_medium' %}
-              <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
-            {% else %}
-              <button
-                class="btn btn-primary btn-block paddle-checkout-btn"
-                data-tier="team_medium"
-                data-price-id="{{ price_ids.team_medium }}">
-                {% trans "Upgrade Now" %}
-              </button>
-            {% endif %}
-          {% elif not user.is_authenticated %}
-            <a href="/signup/" class="btn btn-primary btn-block">{% trans "Get Started" %}</a>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-    <!-- Team Large (20 members) -->
-    <div class="card bg-base-100 shadow-xl border border-base-300">
-      <div class="card-body">
-        <h2 class="card-title text-2xl mb-2">{% trans "Team Large" %}</h2>
-        <div class="mb-4">
-          <span class="text-3xl font-bold">£100</span>
-          <span class="text-base-content/70">/{% trans "month" %}</span>
-          <p class="text-sm text-base-content/70">{% trans "20 team members" %}</p>
-        </div>
-
-        <div class="divider"></div>
-
-        <ul class="space-y-3 grow">
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          <a href="mailto:hello@checktick.com?subject=Organisation%20Plan%20Enquiry" class="btn btn-secondary btn-block">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
             </svg>
-            <span>{% trans "Everything in Team Medium" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span class="font-semibold">{% trans "Up to 20 team members" %}</span>
-          </li>
-        </ul>
-
-        <div class="card-actions mt-6">
-          {% if user.is_authenticated and not self_hosted %}
-            {% if user.profile.account_tier == 'team_large' %}
-              <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
-            {% else %}
-              <button
-                class="btn btn-primary btn-block paddle-checkout-btn"
-                data-tier="team_large"
-                data-price-id="{{ price_ids.team_large }}">
-                {% trans "Upgrade Now" %}
-              </button>
-            {% endif %}
-          {% elif not user.is_authenticated %}
-            <a href="/signup/" class="btn btn-primary btn-block">{% trans "Get Started" %}</a>
-          {% endif %}
+            {% trans "Contact Sales" %}
+          </a>
         </div>
       </div>
     </div>
@@ -374,24 +360,23 @@
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span>{% trans "Web UI + CLI branding configuration" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
             <span>{% trans "SSO/OIDC integration" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span>{% trans "Professional support available" %}</span>
+            <span>{% trans "Dedicated support & SLA" %}</span>
           </li>
         </ul>
 
         <div class="card-actions mt-6">
-          <a href="{% url 'core:hosting' %}" class="btn btn-outline btn-block">{% trans "Learn More" %}</a>
+          <a href="mailto:hello@checktick.com?subject=Enterprise%20Plan%20Enquiry" class="btn btn-secondary btn-block">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+            </svg>
+            {% trans "Contact Sales" %}
+          </a>
         </div>
       </div>
     </div>
@@ -633,4 +618,60 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Team size selector functionality
+  const teamSelector = document.getElementById('team-size-selector');
+  const teamCheckoutBtn = document.getElementById('team-checkout-btn');
+  const teamPriceDisplay = document.getElementById('team-price-display');
+  const teamMembersDisplay = document.getElementById('team-members-display');
+
+  if (teamSelector && teamCheckoutBtn) {
+    teamSelector.addEventListener('change', function() {
+      const selected = this.options[this.selectedIndex];
+      const tier = selected.value;
+      const price = selected.dataset.price;
+      const members = selected.dataset.members;
+      const priceId = selected.dataset.priceId;
+
+      // Update display
+      if (teamPriceDisplay) teamPriceDisplay.textContent = '£' + price;
+      if (teamMembersDisplay) teamMembersDisplay.textContent = 'Up to ' + members + ' team members';
+
+      // Update checkout button
+      teamCheckoutBtn.dataset.tier = tier;
+      teamCheckoutBtn.dataset.priceId = priceId;
+    });
+  }
+
+  // Auto-open Paddle checkout if redirected from signup with a pending tier
+  {% if auto_open_checkout and pending_tier %}
+  const pendingTier = '{{ pending_tier }}';
+  if (pendingTier) {
+    // For team tiers, select the right option first
+    if (pendingTier.startsWith('team_') && teamSelector) {
+      teamSelector.value = pendingTier;
+      teamSelector.dispatchEvent(new Event('change'));
+    }
+
+    // Small delay to ensure Paddle is fully initialized, then trigger checkout
+    setTimeout(function() {
+      // For team tiers, use the team checkout button
+      if (pendingTier.startsWith('team_') && teamCheckoutBtn) {
+        teamCheckoutBtn.click();
+      } else {
+        // For pro tier, find the specific button
+        const checkoutBtn = document.querySelector('.paddle-checkout-btn[data-tier="' + pendingTier + '"]');
+        if (checkoutBtn) {
+          checkoutBtn.click();
+        }
+      }
+    }, 800);
+  }
+  {% endif %}
+});
+</script>
 {% endblock %}

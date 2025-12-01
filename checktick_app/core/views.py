@@ -71,9 +71,15 @@ def pricing(request):
     """Display pricing tiers with Paddle checkout integration."""
     from django.conf import settings
 
+    # Check if coming from signup with a pending tier selection
+    auto_open_checkout = request.session.pop("auto_open_checkout", False)
+    pending_tier = request.session.get("pending_tier", "")
+
     context = {
         "price_ids": settings.PAYMENT_PRICE_IDS,
         "self_hosted": getattr(settings, "SELF_HOSTED", False),
+        "auto_open_checkout": auto_open_checkout,
+        "pending_tier": pending_tier,
     }
     return render(request, "core/pricing.html", context)
 
@@ -394,28 +400,39 @@ def signup(request):
             # Get selected tier (default to free)
             selected_tier = request.POST.get("tier", "free").lower()
 
-            # Handle tier selection - always redirect to surveys after signup
+            # Handle tier-based signup flow
+            # FREE: Go straight to surveys
+            # PRO/TEAM: Redirect to pricing to complete payment immediately
+            # Organisation/Enterprise: Contact sales (shouldn't reach here from form)
             if selected_tier == "free":
-                # FREE tier - welcome message and go to surveys
+                # FREE tier - go directly to surveys
                 messages.success(
                     request,
                     _("Welcome to CheckTick! Start by creating your first survey."),
                 )
-            else:
-                # Paid tier selected - store preference and prompt to upgrade
-                # User starts on FREE tier, can upgrade from account settings
+                return redirect("surveys:list")
+            elif selected_tier in ("pro", "team_small", "team_medium", "team_large"):
+                # Self-service paid tiers - redirect to pricing for immediate payment
                 request.session["pending_tier"] = selected_tier
+                request.session["auto_open_checkout"] = True  # Signal JS to auto-open
+                tier_display = selected_tier.upper().replace("_", " ")
                 messages.info(
                     request,
                     _(
-                        "Welcome to CheckTick! You've selected the %(tier)s plan. "
-                        "Visit Settings → Subscription to complete your upgrade."
+                        "Welcome to CheckTick! Complete your %(tier)s subscription "
+                        "payment to activate all features."
                     )
-                    % {"tier": selected_tier.upper().replace("_", " ")},
+                    % {"tier": tier_display},
                 )
-
-            # Always redirect to surveys list after signup
-            return redirect("surveys:list")
+                return redirect("core:pricing")
+            else:
+                # Organisation, Enterprise, or unknown - fallback to surveys
+                # These tiers require contacting sales and shouldn't be selectable in form
+                messages.success(
+                    request,
+                    _("Welcome to CheckTick! Start by creating your first survey."),
+                )
+                return redirect("surveys:list")
     else:
         form = SignupForm()
     return render(request, "registration/signup.html", {"form": form})

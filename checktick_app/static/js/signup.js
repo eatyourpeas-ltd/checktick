@@ -3,6 +3,14 @@ function updateHiddenFields() {
     'input[name="selected_tier"]:checked'
   );
   if (selectedTier) {
+    // If team tier is selected, use the team size dropdown value
+    if (selectedTier.id === "team-tier-radio") {
+      const teamSizeSelect = document.getElementById("team-size-select");
+      if (teamSizeSelect) {
+        document.getElementById("selected-tier").value = teamSizeSelect.value;
+        return;
+      }
+    }
     document.getElementById("selected-tier").value = selectedTier.value;
   }
 }
@@ -12,11 +20,18 @@ function handleSSOSignup(provider) {
     'input[name="selected_tier"]:checked'
   );
 
+  let tierValue = selectedTier ? selectedTier.value : "free";
+
+  // If team tier is selected, use the team size dropdown value
+  if (selectedTier && selectedTier.id === "team-tier-radio") {
+    const teamSizeSelect = document.getElementById("team-size-select");
+    if (teamSizeSelect) {
+      tierValue = teamSizeSelect.value;
+    }
+  }
+
   // Store choices in sessionStorage for post-auth processing
-  sessionStorage.setItem(
-    "signup_tier",
-    selectedTier ? selectedTier.value : "free"
-  );
+  sessionStorage.setItem("signup_tier", tierValue);
 
   // Redirect to OIDC with signup flag
   window.location.href = `/oidc/authenticate/?provider=${provider}&signup=true`;
@@ -29,6 +44,29 @@ document.addEventListener("DOMContentLoaded", function () {
   tierRadios.forEach((radio) => {
     radio.addEventListener("change", updateHiddenFields);
   });
+
+  // Add event listener to team size dropdown
+  const teamSizeSelect = document.getElementById("team-size-select");
+  if (teamSizeSelect) {
+    teamSizeSelect.addEventListener("change", function () {
+      // Also check the team tier radio when changing team size
+      const teamRadio = document.getElementById("team-tier-radio");
+      if (teamRadio) {
+        teamRadio.checked = true;
+        teamRadio.value = this.value; // Update the radio value to match
+      }
+      updateHiddenFields();
+    });
+
+    // When clicking on the dropdown, ensure the team radio is selected
+    teamSizeSelect.addEventListener("focus", function () {
+      const teamRadio = document.getElementById("team-tier-radio");
+      if (teamRadio) {
+        teamRadio.checked = true;
+      }
+      updateHiddenFields();
+    });
+  }
 
   // Add event listeners to SSO buttons
   const googleBtn = document.getElementById("google-signup");

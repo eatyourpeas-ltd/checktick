@@ -1,55 +1,57 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load i18n %}
-{% block title %}{% trans "Sign up" %} - {{ brand.title }}{% endblock %}
+{% block title %}
+  {% trans 'Sign up' %}- {{ brand.title }}
+{% endblock %}
 
 {% block head_theme_overrides %}
-<style>
-  /* Force all text within forms to wrap properly */
-  .card-body * {
-    white-space: normal !important;
-    word-wrap: break-word !important;
-    overflow-wrap: break-word !important;
-  }
-  /* Ensure specific password help text elements wrap */
-  .form-control .helptext,
-  .form-control .helptext ul,
-  .label .helptext,
-  .label .helptext ul,
-  .label-text-alt {
-    max-width: 100% !important;
-  }
-</style>
+  <style>
+    /* Force all text within forms to wrap properly */
+    .card-body * {
+      white-space: normal !important;
+      word-wrap: break-word !important;
+      overflow-wrap: break-word !important;
+    }
+    /* Ensure specific password help text elements wrap */
+    .form-control .helptext,
+    .form-control .helptext ul,
+    .label .helptext,
+    .label .helptext ul,
+    .label-text-alt {
+      max-width: 100% !important;
+    }
+  </style>
 {% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto px-4">
-  <div class="card bg-base-100 shadow">
-    <div class="card-body">
-      <h1 class="card-title text-2xl">{% trans "Create your account" %}</h1>
-      <p class="opacity-80 mb-2">{% trans "Sign up to start creating surveys and collecting responses." %}</p>
+  <div class="max-w-4xl mx-auto px-4">
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h1 class="card-title text-2xl">{% trans 'Create your account' %}</h1>
+        <p class="opacity-80 mb-2">
+          {% trans 'Sign up to start creating surveys and collecting responses.' %}
+        </p>
 
         {# Tier selection #}
         <div class="form-control mb-6">
           <div class="flex items-center justify-between">
-            <span class="label-text font-semibold text-lg">{% trans "Choose Your Plan" %}</span>
-            <a href="{% url 'core:pricing' %}"
-               target="_blank"
-               class="link link-primary text-sm flex items-center gap-1">
-              {% trans "Compare plans" %}
-            </a>
+            <span class="label-text font-semibold text-lg">{% trans 'Choose Your Plan' %}</span>
+            <a href="{% url 'core:pricing' %}" target="_blank" class="link link-primary text-sm flex items-center gap-1">{% trans 'Compare plans' %}</a>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
             {# Individual Free #}
             <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words bg-accent">
               <input type="radio" name="selected_tier" value="free" class="radio radio-primary shrink-0" checked />
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="label-text font-semibold">{% trans "FREE" %}</span>
-                  <span class="badge badge-sm">{% trans "£0/month" %}</span>
+                  <span class="label-text font-semibold">{% trans 'FREE' %}</span>
+                  <span class="badge badge-sm">{% trans '£0/month' %}</span>
                 </div>
-                <p class="text-sm opacity-70">{% trans "Up to 3 surveys, basic features" %}</p>
+                <p class="text-sm opacity-70">
+                  {% trans 'Up to 3 surveys, basic features' %}
+                </p>
               </div>
             </label>
 
@@ -58,72 +60,67 @@
               <input type="radio" name="selected_tier" value="pro" class="radio radio-primary shrink-0" />
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="label-text font-semibold">{% trans "PRO" %}</span>
-                  <span class="badge badge-sm badge-primary">{% trans "£5/month" %}</span>
+                  <span class="label-text font-semibold">{% trans 'PRO' %}</span>
+                  <span class="badge badge-sm badge-primary">{% trans '£5/month' %}</span>
                 </div>
-                <p class="text-sm opacity-70">{% trans "Unlimited surveys, collaboration, email support" %}</p>
+                <p class="text-sm opacity-70">
+                  {% trans 'Unlimited surveys, collaboration' %}
+                </p>
               </div>
             </label>
 
-            {# Team Small #}
-            <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words">
-              <input type="radio" name="selected_tier" value="team_small" class="radio radio-primary shrink-0" />
+            {# Team (consolidated) #}
+            <label class="label cursor-pointer justify-start gap-3 p-4 border-2 border-primary rounded-lg hover:border-primary break-words" id="team-tier-label">
+              <input type="radio" name="selected_tier" value="team_small" class="radio radio-primary shrink-0" id="team-tier-radio" />
               <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <span class="label-text font-semibold">{% trans "TEAM SMALL" %}</span>
-                  <span class="badge badge-sm badge-primary">{% trans "£20/month" %}</span>
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="label-text font-semibold">{% trans 'TEAM' %}</span>
+                  <span class="badge badge-sm badge-primary">{% trans 'From £25/month' %}</span>
                 </div>
-                <p class="text-sm opacity-70">{% trans "5 members, 50 surveys" %}</p>
+                <select id="team-size-select" class="select select-bordered select-sm w-full" onclick="event.stopPropagation();">
+                  <option value="team_small">
+                    {% trans 'Small' %}- 5{% trans 'members' %}(£25/{% trans 'mo' %})
+                  </option>
+                  <option value="team_medium">
+                    {% trans 'Medium' %}- 10{% trans 'members' %}(£50/{% trans 'mo' %})
+                  </option>
+                  <option value="team_large">
+                    {% trans 'Large' %}- 20{% trans 'members' %}(£100/{% trans 'mo' %})
+                  </option>
+                </select>
+                <p class="text-sm opacity-70 mt-1">
+                  {% trans 'Up to 50 surveys, full collaboration' %}
+                </p>
               </div>
             </label>
 
-            {# Team Medium #}
-            <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words">
-              <input type="radio" name="selected_tier" value="team_medium" class="radio radio-primary shrink-0" />
+            {# Organisation - Contact Sales #}
+            <div class="p-4 border border-base-300 rounded-lg break-words bg-base-200">
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="label-text font-semibold">{% trans "TEAM MEDIUM" %}</span>
-                  <span class="badge badge-sm badge-primary">{% trans "£35/month" %}</span>
+                  <span class="label-text font-semibold">{% trans 'ORGANISATION' %}</span>
+                  <span class="badge badge-sm badge-secondary">{% trans 'Custom' %}</span>
                 </div>
-                <p class="text-sm opacity-70">{% trans "10 members, 50 surveys" %}</p>
+                <p class="text-sm opacity-70 mb-2">
+                  {% trans 'Unlimited members, webhooks, priority support' %}
+                </p>
+                <a href="mailto:hello@checktick.com?subject=Organisation%20Plan%20Enquiry" class="btn btn-sm btn-secondary w-full">{% trans 'Contact Sales' %}</a>
               </div>
-            </label>
+            </div>
 
-            {# Team Large #}
-            <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words">
-              <input type="radio" name="selected_tier" value="team_large" class="radio radio-primary shrink-0" />
+            {# Enterprise - Contact Sales #}
+            <div class="p-4 border border-base-300 rounded-lg break-words bg-base-200">
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="label-text font-semibold">{% trans "TEAM LARGE" %}</span>
-                  <span class="badge badge-sm badge-primary">{% trans "£60/month" %}</span>
+                  <span class="label-text font-semibold">{% trans 'ENTERPRISE' %}</span>
+                  <span class="badge badge-sm badge-accent">{% trans 'Self-Hosted' %}</span>
                 </div>
-                <p class="text-sm opacity-70">{% trans "20 members, 50 surveys" %}</p>
+                <p class="text-sm opacity-70 mb-2">
+                  {% trans 'Custom branding, SSO, dedicated support' %}
+                </p>
+                <a href="mailto:hello@checktick.com?subject=Enterprise%20Plan%20Enquiry" class="btn btn-sm btn-secondary w-full">{% trans 'Contact Sales' %}</a>
               </div>
-            </label>
-
-            {# Organisation #}
-            <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words">
-              <input type="radio" name="selected_tier" value="organization" class="radio radio-primary shrink-0" />
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <span class="label-text font-semibold">{% trans "ORGANISATION" %}</span>
-                  <span class="badge badge-sm badge-secondary">{% trans "£30/user/month" %}</span>
-                </div>
-                <p class="text-sm opacity-70">{% trans "Team management, webhooks, priority support" %}</p>
-              </div>
-            </label>
-
-            {# Enterprise #}
-            <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words">
-              <input type="radio" name="selected_tier" value="enterprise" class="radio radio-primary shrink-0" />
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <span class="label-text font-semibold">{% trans "ENTERPRISE" %}</span>
-                  <span class="badge badge-sm badge-accent">{% trans "Contact us" %}</span>
-                </div>
-                <p class="text-sm opacity-70">{% trans "Custom branding, dedicated support, SLA" %}</p>
-              </div>
-            </label>
+            </div>
           </div>
         </div>
 
@@ -133,14 +130,10 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
           <div>
-            <strong>{% trans "Not sure which to choose?" %}</strong>
+            <strong>{% trans 'Not sure which to choose?' %}</strong>
             <p class="mt-1">
-              {% trans "Start with the FREE plan to try out CheckTick. You can upgrade anytime as your needs grow." %}
-              <a href="{% url 'core:pricing' %}"
-                 target="_blank"
-                 class="link link-primary font-medium">
-                {% trans "Compare all plans" %}
-              </a>
+              {% trans 'Start with the FREE plan to try out CheckTick. You can upgrade anytime as your needs grow.' %}
+              <a href="{% url 'core:pricing' %}" target="_blank" class="link link-primary font-medium">{% trans 'Compare all plans' %}</a>
             </p>
           </div>
         </div>
@@ -150,34 +143,30 @@
 
         {# Authentication method selection #}
         <div class="space-y-4">
-          <span class="label-text font-semibold">
-            {% trans "Choose how you'd like to create your account:" %}
-          </span>
+          <span class="label-text font-semibold">{% trans "Choose how you'd like to create your account:" %}</span>
 
           {# SSO Options #}
           <div class="space-y-3">
-            <button type="button" id="google-signup"
-                    class="btn btn-outline btn-primary w-full">
+            <button type="button" id="google-signup" class="btn btn-outline btn-primary w-full">
               <svg class="w-4 h-4 mr-2" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
               </svg>
-              {% trans "Continue with Google" %}
+              {% trans 'Continue with Google' %}
             </button>
 
-            <button type="button" id="azure-signup"
-                    class="btn btn-outline btn-primary w-full">
+            <button type="button" id="azure-signup" class="btn btn-outline btn-primary w-full">
               <svg class="w-4 h-4 mr-2" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z"/>
+                <path fill="currentColor" d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z" />
               </svg>
-              {% trans "Continue with Microsoft" %}
+              {% trans 'Continue with Microsoft' %}
             </button>
           </div>
 
           <div class="text-center text-sm opacity-70 font-medium">
-            {% trans "Or create with email and password" %}
+            {% trans 'Or create with email and password' %}
           </div>
 
           {# Traditional Form #}
@@ -187,10 +176,10 @@
             <input type="hidden" name="account_type" value="simple" />
             <input type="hidden" name="tier" id="selected-tier" value="free" />
 
-            {% include "components/form_errors.html" with form=form %}
+            {% include 'components/form_errors.html' with form=form %}
 
             <div class="grid gap-3">
-              {% include "components/render_form_fields.html" with form=form %}
+              {% include 'components/render_form_fields.html' with form=form %}
             </div>
 
             {# Terms and Privacy acceptance #}
@@ -198,26 +187,26 @@
               <label class="label cursor-pointer justify-start gap-3">
                 <input type="checkbox" name="accept_terms" class="checkbox checkbox-primary shrink-0" required />
                 <span class="label-text text-sm">
-                  {% trans "I agree to the" %}
-                  <a href="{% url 'core:docs_page' slug='terms-of-service' %}" target="_blank" class="link link-primary">{% trans "Terms of Service" %}</a>
-                  {% trans "and" %}
-                  <a href="{% url 'core:docs_page' slug='privacy-notice' %}" target="_blank" class="link link-primary">{% trans "Privacy Notice" %}</a>
+                  {% trans 'I agree to the' %}
+                  <a href="{% url 'core:docs_page' slug='terms-of-service' %}" target="_blank" class="link link-primary">{% trans 'Terms of Service' %}</a>
+                  {% trans 'and' %}
+                  <a href="{% url 'core:docs_page' slug='privacy-notice' %}" target="_blank" class="link link-primary">{% trans 'Privacy Notice' %}</a>
                 </span>
               </label>
             </div>
 
-            <button type="submit" class="btn btn-primary w-full">{% trans "Create account" %}</button>
+            <button type="submit" class="btn btn-primary w-full">{% trans 'Create account' %}</button>
           </form>
         </div>
 
-      <div class="mt-3 text-sm text-center">
-        {% trans "Already have an account?" %} <a class="link" href="{% url 'login' %}">{% trans "Sign in" %}</a>
+        <div class="mt-3 text-sm text-center">
+          {% trans 'Already have an account?' %} <a class="link" href="{% url 'login' %}">{% trans 'Sign in' %}</a>
+        </div>
       </div>
     </div>
   </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/signup.js' %}"></script>
+  <script src="{% static 'js/signup.js' %}"></script>
 {% endblock %}
