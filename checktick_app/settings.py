@@ -449,6 +449,10 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/minute",
         "user": "120/minute",
+        # Recovery API - strict limits for security-sensitive operations
+        "recovery_create": "3/hour",  # Creating recovery requests
+        "recovery_approval": "10/hour",  # Admin approval/rejection actions
+        "recovery_view": "60/minute",  # Viewing recovery status
     },
 }
 
@@ -660,3 +664,10 @@ OIDC_AUTHENTICATION_BACKEND = "checktick_app.core.auth.CustomOIDCAuthenticationB
 # Login/logout redirect URLs - use surveys page for authenticated clinicians
 OIDC_LOGIN_REDIRECT_URL = "/surveys/"  # Redirect to surveys after OIDC login
 OIDC_LOGOUT_REDIRECT_URL = "/"  # Where to go after logout
+
+# HashiCorp Vault Configuration
+# Required for hierarchical encryption key management
+VAULT_ADDR = env("VAULT_ADDR", default="https://vault.checktick.internal:8200")
+VAULT_ROLE_ID = env("VAULT_ROLE_ID", default="")
+VAULT_SECRET_ID = env("VAULT_SECRET_ID", default="")
+PLATFORM_CUSTODIAN_COMPONENT = env("PLATFORM_CUSTODIAN_COMPONENT", default="")

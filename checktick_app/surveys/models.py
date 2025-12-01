@@ -492,6 +492,12 @@ class Survey(models.Model):
         blank=True,
         help_text="Total number of recovery shares distributed (optional, for Shamir's Secret Sharing)",
     )
+    # Whether SSO users must set a passphrase for patient data surveys
+    # When True + survey has patient data: SSO users cannot use auto-unlock alone
+    require_passphrase_for_patient_data = models.BooleanField(
+        default=True,
+        help_text="Require SSO users to set a passphrase when survey collects patient data (recommended)",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     # Language and Translation fields
@@ -732,6 +738,46 @@ class Survey(models.Model):
             or self.encrypted_kek_oidc
             or self.encrypted_kek_org
         )
+
+    def collects_patient_data(self) -> bool:
+        """
+        Check if this survey collects patient data.
+
+        Returns:
+            True if survey has a patient_details_encrypted question group
+
+        A survey collects patient data if it includes a question group with
+        schema.template == "patient_details_encrypted". Such surveys require
+        whole-response encryption (not just demographics).
+        """
+        return self.question_groups.filter(
+            schema__template="patient_details_encrypted"
+        ).exists()
+
+    def requires_whole_response_encryption(self) -> bool:
+        """
+        Check if responses to this survey should be fully encrypted.
+
+        Returns:
+            True if all response data (not just demographics) should be encrypted
+
+        Surveys collecting patient data require the entire response to be
+        encrypted with store_complete_response(), not just demographics.
+        """
+        return self.collects_patient_data()
+
+    def sso_user_needs_passphrase(self) -> bool:
+        """
+        Check if SSO users need to set a passphrase for this survey.
+
+        Returns:
+            True if SSO users must set passphrase (not just use auto-unlock)
+
+        When survey collects patient data AND require_passphrase_for_patient_data
+        is True, SSO users must set up password-based encryption in addition to
+        (or instead of) OIDC auto-unlock.
+        """
+        return self.collects_patient_data() and self.require_passphrase_for_patient_data
 
     def set_oidc_encryption(self, kek: bytes, user) -> None:
         """
@@ -1776,10 +1822,16 @@ class SurveyResponse(models.Model):
     survey = models.ForeignKey(
         Survey, on_delete=models.CASCADE, related_name="responses"
     )
-    # Sensitive demographics encrypted per-survey
+    # Sensitive demographics encrypted per-survey (legacy - kept for backwards compatibility)
     enc_demographics = models.BinaryField(null=True, blank=True)
-    # Non-sensitive answers stored normally
+    # Non-sensitive answers stored normally (when survey is not encrypted)
     answers = models.JSONField(default=dict)
+    # Encrypted answers (when survey has patient data or user chooses encryption)
+    enc_answers = models.BinaryField(
+        null=True,
+        blank=True,
+        help_text="Encrypted survey answers (AES-256-GCM) for patient data surveys",
+    )
     submitted_at = models.DateTimeField(auto_now_add=True)
     submitted_by = models.ForeignKey(
         User,
@@ -1798,13 +1850,102 @@ class SurveyResponse(models.Model):
         related_name="response",
     )
 
+    def _to_bytes(self, data) -> bytes:
+        """Convert memoryview or bytes to bytes."""
+        if isinstance(data, memoryview):
+            return data.tobytes()
+        if isinstance(data, bytes):
+            return data
+        return bytes(data)
+
     def store_demographics(self, survey_key: bytes, demographics: dict):
         self.enc_demographics = encrypt_sensitive(survey_key, demographics)
 
     def load_demographics(self, survey_key: bytes) -> dict:
         if not self.enc_demographics:
             return {}
-        return decrypt_sensitive(survey_key, self.enc_demographics)
+        return decrypt_sensitive(survey_key, self._to_bytes(self.enc_demographics))
+
+    def store_answers(self, survey_key: bytes, answers: dict):
+        """
+        Encrypt and store survey answers (for patient data surveys).
+
+        Args:
+            survey_key: Survey's KEK (32-byte key)
+            answers: Dictionary of question_id -> answer
+
+        This encrypts the entire answers dictionary, providing complete
+        protection for surveys collecting patient data.
+        """
+        self.enc_answers = encrypt_sensitive(survey_key, answers)
+        # Clear plaintext answers when encrypting
+        self.answers = {}
+
+    def load_answers(self, survey_key: bytes) -> dict:
+        """
+        Decrypt and return survey answers.
+
+        Args:
+            survey_key: Survey's KEK (32-byte key)
+
+        Returns:
+            Dictionary of question_id -> answer
+
+        If answers are not encrypted, returns the plaintext answers field.
+        """
+        if self.enc_answers:
+            return decrypt_sensitive(survey_key, self._to_bytes(self.enc_answers))
+        return self.answers
+
+    def store_complete_response(
+        self, survey_key: bytes, answers: dict, demographics: dict | None = None
+    ):
+        """
+        Store a complete encrypted response (answers + demographics).
+
+        Args:
+            survey_key: Survey's KEK (32-byte key)
+            answers: Dictionary of question_id -> answer
+            demographics: Optional patient demographics
+
+        This is the preferred method for patient data surveys - encrypts
+        everything in one consistent format.
+        """
+        # Combine into single encrypted blob
+        full_response = {"answers": answers}
+        if demographics:
+            full_response["demographics"] = demographics
+
+        self.enc_answers = encrypt_sensitive(survey_key, full_response)
+        # Clear plaintext fields
+        self.answers = {}
+        self.enc_demographics = None
+
+    def load_complete_response(self, survey_key: bytes) -> dict:
+        """
+        Load a complete decrypted response.
+
+        Args:
+            survey_key: Survey's KEK (32-byte key)
+
+        Returns:
+            Dictionary with 'answers' and optionally 'demographics' keys
+
+        Falls back to legacy format if enc_answers not present.
+        """
+        if self.enc_answers:
+            return decrypt_sensitive(survey_key, self._to_bytes(self.enc_answers))
+
+        # Legacy format: separate fields
+        result = {"answers": self.answers}
+        if self.enc_demographics:
+            result["demographics"] = self.load_demographics(survey_key)
+        return result
+
+    @property
+    def is_encrypted(self) -> bool:
+        """Check if this response has encrypted data."""
+        return bool(self.enc_answers or self.enc_demographics)
 
     class Meta:
         constraints = [
@@ -2829,3 +2970,711 @@ class DataSet(models.Model):
         """Increment version number when dataset is updated."""
         self.version += 1
         self.save(update_fields=["version", "updated_at"])
+
+
+# ============================================================================
+# Recovery Request Models - Ethical Data Recovery
+# ============================================================================
+
+
+class RecoveryRequest(models.Model):
+    """
+    Tracks recovery requests for users who have lost both password and recovery phrase.
+
+    Implements the ethical recovery workflow with:
+    - Identity verification (photo ID, video call, security questions)
+    - Dual administrator authorization (two different admins must approve)
+    - Time delay (24-48 hours after approval before execution)
+    - Full audit trail for regulatory compliance
+
+    This enables data recovery while preventing unauthorized access through
+    multiple layers of verification and mandatory waiting periods.
+    """
+
+    class Status(models.TextChoices):
+        PENDING_VERIFICATION = "pending_verification", "Pending Identity Verification"
+        VERIFICATION_IN_PROGRESS = (
+            "verification_in_progress",
+            "Identity Verification In Progress",
+        )
+        AWAITING_PRIMARY = "awaiting_primary", "Awaiting Primary Authorization"
+        AWAITING_SECONDARY = "awaiting_secondary", "Awaiting Secondary Authorization"
+        IN_TIME_DELAY = "in_time_delay", "In Time Delay Period"
+        READY_FOR_EXECUTION = "ready_for_execution", "Ready for Execution"
+        COMPLETED = "completed", "Completed"
+        REJECTED = "rejected", "Rejected"
+        CANCELLED = "cancelled", "Cancelled"
+
+    # Primary key as UUID for non-sequential, secure identification
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # Human-readable request ID (e.g., ABC-123-XYZ)
+    request_code = models.CharField(
+        max_length=20,
+        unique=True,
+        editable=False,
+        help_text="Human-readable request code for reference",
+    )
+
+    # User requesting recovery
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="recovery_requests"
+    )
+    survey = models.ForeignKey(
+        Survey, on_delete=models.CASCADE, related_name="recovery_requests"
+    )
+
+    # Current status
+    status = models.CharField(
+        max_length=50, choices=Status.choices, default=Status.PENDING_VERIFICATION
+    )
+
+    # Timestamps for workflow stages
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    verification_completed_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(
+        null=True, blank=True, help_text="When both approvals completed"
+    )
+    time_delay_until = models.DateTimeField(
+        null=True, blank=True, help_text="Recovery can execute after this time"
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Time delay configuration (depends on user tier)
+    time_delay_hours = models.PositiveIntegerField(
+        default=48,
+        help_text="Hours to wait after approval before execution (24h org, 48h individual)",
+    )
+
+    # Primary authorization
+    primary_approver = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recovery_primary_approvals",
+    )
+    primary_approved_at = models.DateTimeField(null=True, blank=True)
+    primary_reason = models.TextField(
+        blank=True, help_text="Primary approver's verification notes"
+    )
+
+    # Secondary authorization (must be different admin)
+    secondary_approver = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recovery_secondary_approvals",
+    )
+    secondary_approved_at = models.DateTimeField(null=True, blank=True)
+    secondary_reason = models.TextField(
+        blank=True, help_text="Secondary approver's verification notes"
+    )
+
+    # Rejection details
+    rejected_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recovery_rejections",
+    )
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+
+    # Cancellation details
+    cancelled_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recovery_cancellations",
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.TextField(blank=True)
+
+    # Execution details
+    executed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recovery_executions",
+    )
+    custodian_component_used = models.BooleanField(
+        default=False,
+        help_text="Whether platform custodian component was used for recovery",
+    )
+
+    # Vault path for escrowed key
+    vault_recovery_path = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Vault path to escrowed recovery key",
+    )
+
+    # User context at time of request (for verification)
+    user_context = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="User details captured at request time (email, account age, etc.)",
+    )
+
+    class Meta:
+        ordering = ["-submitted_at"]
+        indexes = [
+            models.Index(fields=["status", "-submitted_at"]),
+            models.Index(fields=["user", "-submitted_at"]),
+            models.Index(fields=["survey", "-submitted_at"]),
+            models.Index(fields=["time_delay_until"]),
+            models.Index(fields=["request_code"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Recovery Request {self.request_code} - {self.user.email}"
+
+    def save(self, *args, **kwargs):
+        """Generate request code on first save."""
+        if not self.request_code:
+            self.request_code = self._generate_request_code()
+        super().save(*args, **kwargs)
+
+    def _generate_request_code(self) -> str:
+        """Generate human-readable request code like ABC-123-XYZ."""
+        import random
+        import string
+
+        chars = string.ascii_uppercase
+        digits = string.digits
+
+        part1 = "".join(random.choices(chars, k=3))
+        part2 = "".join(random.choices(digits, k=3))
+        part3 = "".join(random.choices(chars, k=3))
+
+        return f"{part1}-{part2}-{part3}"
+
+    def approve_primary(self, admin: User, reason: str) -> None:
+        """Record primary approval."""
+        if self.status != self.Status.AWAITING_PRIMARY:
+            raise ValueError(
+                f"Cannot approve: status is {self.status}, expected awaiting_primary"
+            )
+
+        self.primary_approver = admin
+        self.primary_approved_at = timezone.now()
+        self.primary_reason = reason
+        self.status = self.Status.AWAITING_SECONDARY
+        self.save()
+
+        # Log to audit trail
+        self._create_audit_entry(
+            event_type="primary_approval",
+            actor=admin,
+            details={"reason": reason},
+        )
+
+    def approve_secondary(self, admin: User, reason: str) -> None:
+        """Record secondary approval and start time delay."""
+        if self.status != self.Status.AWAITING_SECONDARY:
+            raise ValueError(
+                f"Cannot approve: status is {self.status}, expected awaiting_secondary"
+            )
+
+        if admin == self.primary_approver:
+            raise ValueError("Secondary approver must be different from primary")
+
+        from datetime import timedelta
+
+        self.secondary_approver = admin
+        self.secondary_approved_at = timezone.now()
+        self.secondary_reason = reason
+        self.approved_at = timezone.now()
+        self.time_delay_until = timezone.now() + timedelta(hours=self.time_delay_hours)
+        self.status = self.Status.IN_TIME_DELAY
+        self.save()
+
+        # Log to audit trail
+        self._create_audit_entry(
+            event_type="secondary_approval",
+            actor=admin,
+            details={
+                "reason": reason,
+                "time_delay_until": self.time_delay_until.isoformat(),
+            },
+        )
+
+        # Schedule time delay completion check (will be done via Celery in production)
+        # send_time_delay_notification.apply_async(eta=self.time_delay_until)
+
+    def reject(self, admin: User, reason: str) -> None:
+        """Reject the recovery request."""
+        self.rejected_by = admin
+        self.rejected_at = timezone.now()
+        self.rejection_reason = reason
+        self.status = self.Status.REJECTED
+        self.save()
+
+        self._create_audit_entry(
+            event_type="rejection",
+            actor=admin,
+            details={"reason": reason},
+        )
+
+    def cancel(self, user: User, reason: str) -> None:
+        """Cancel the recovery request (user or admin)."""
+        self.cancelled_by = user
+        self.cancelled_at = timezone.now()
+        self.cancellation_reason = reason
+        self.status = self.Status.CANCELLED
+        self.save()
+
+        self._create_audit_entry(
+            event_type="cancellation",
+            actor=user,
+            details={"reason": reason},
+        )
+
+    def check_time_delay_complete(self) -> bool:
+        """Check if time delay has passed and update status if needed."""
+        if self.status != self.Status.IN_TIME_DELAY:
+            return False
+
+        if self.time_delay_until and timezone.now() >= self.time_delay_until:
+            self.status = self.Status.READY_FOR_EXECUTION
+            self.save(update_fields=["status"])
+
+            self._create_audit_entry(
+                event_type="time_delay_complete",
+                actor=None,  # System action
+                details={"time_delay_hours": self.time_delay_hours},
+            )
+
+            return True
+
+        return False
+
+    def execute_recovery(self, admin: User, new_password: str) -> bytes:
+        """
+        Execute the recovery - decrypt escrowed KEK and re-encrypt with new password.
+
+        Returns the recovered survey KEK.
+        """
+        if self.status != self.Status.READY_FOR_EXECUTION:
+            raise ValueError(
+                f"Cannot execute: status is {self.status}, expected ready_for_execution"
+            )
+
+        from django.conf import settings
+
+        from .vault_client import get_vault_client
+
+        vault = get_vault_client()
+        custodian_component = bytes.fromhex(settings.PLATFORM_CUSTODIAN_COMPONENT)
+
+        # Recover KEK from Vault
+        survey_kek = vault.recover_user_survey_kek(
+            user_id=self.user.id,
+            survey_id=self.survey.id,
+            admin_id=admin.id,
+            verification_notes=f"Recovery request {self.request_code}",
+            platform_custodian_component=custodian_component,
+        )
+
+        # Re-encrypt with new password
+        from .utils import encrypt_kek_with_passphrase
+
+        self.survey.encrypted_kek_password = encrypt_kek_with_passphrase(
+            survey_kek, new_password
+        )
+        self.survey.save(update_fields=["encrypted_kek_password"])
+
+        # Update request status
+        self.executed_by = admin
+        self.custodian_component_used = True
+        self.completed_at = timezone.now()
+        self.status = self.Status.COMPLETED
+        self.save()
+
+        self._create_audit_entry(
+            event_type="recovery_executed",
+            actor=admin,
+            details={
+                "survey_id": self.survey.id,
+                "custodian_used": True,
+            },
+            severity="critical",
+        )
+
+        return survey_kek
+
+    @property
+    def time_remaining(self):
+        """Get time remaining in delay period."""
+        if self.status != self.Status.IN_TIME_DELAY or not self.time_delay_until:
+            return None
+
+        remaining = self.time_delay_until - timezone.now()
+        if remaining.total_seconds() < 0:
+            return None
+
+        return remaining
+
+    @property
+    def is_verification_complete(self) -> bool:
+        """Check if all required identity verifications are complete."""
+        verifications = self.identity_verifications.filter(status="verified")
+
+        # Require at least photo_id and one of video_call or security_questions
+        has_photo_id = verifications.filter(verification_type="photo_id").exists()
+        has_video_or_questions = verifications.filter(
+            verification_type__in=["video_call", "security_questions"]
+        ).exists()
+
+        return has_photo_id and has_video_or_questions
+
+    def _create_audit_entry(
+        self, event_type: str, actor: User | None, details: dict, severity: str = "info"
+    ) -> "RecoveryAuditEntry":
+        """Create an audit entry for this recovery request."""
+        return RecoveryAuditEntry.objects.create(
+            recovery_request=self,
+            event_type=event_type,
+            severity=severity,
+            actor_type=(
+                "system"
+                if actor is None
+                else (
+                    "admin" if hasattr(actor, "is_staff") and actor.is_staff else "user"
+                )
+            ),
+            actor_id=actor.id if actor else None,
+            actor_email=actor.email if actor else None,
+            details=details,
+        )
+
+
+class IdentityVerification(models.Model):
+    """
+    Tracks identity verification steps for recovery requests.
+
+    Supports multiple verification methods:
+    - Photo ID (government-issued identification)
+    - Video call (live verification by admin)
+    - Security questions (questions about account/data)
+    - Employment verification (for org users)
+    """
+
+    class VerificationType(models.TextChoices):
+        PHOTO_ID = "photo_id", "Photo ID"
+        VIDEO_CALL = "video_call", "Video Verification Call"
+        SECURITY_QUESTIONS = "security_questions", "Security Questions"
+        EMPLOYMENT_VERIFICATION = "employment_verification", "Employment Verification"
+        SSO_REAUTHENTICATION = "sso_reauth", "SSO Re-authentication"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SUBMITTED = "submitted", "Submitted"
+        VERIFIED = "verified", "Verified"
+        REJECTED = "rejected", "Rejected"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    recovery_request = models.ForeignKey(
+        RecoveryRequest, on_delete=models.CASCADE, related_name="identity_verifications"
+    )
+    verification_type = models.CharField(
+        max_length=50, choices=VerificationType.choices
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+
+    # Document storage (path to encrypted file, not stored in DB)
+    document_path = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Encrypted storage path for uploaded documents",
+    )
+    document_type = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Type of document (e.g., UK Driving Licence)",
+    )
+
+    # Timestamps
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    # Verification by admin
+    verified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="identity_verifications",
+    )
+    verification_notes = models.TextField(
+        blank=True, help_text="Admin notes on verification"
+    )
+
+    # For video calls
+    video_call_scheduled_at = models.DateTimeField(null=True, blank=True)
+    video_call_duration_minutes = models.IntegerField(null=True, blank=True)
+    video_recording_path = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Path to encrypted video recording (if enabled)",
+    )
+
+    # For security questions
+    questions_asked = models.JSONField(
+        default=list, blank=True, help_text="List of questions asked"
+    )
+    correct_answers = models.IntegerField(
+        null=True, blank=True, help_text="Number of correct answers"
+    )
+    total_questions = models.IntegerField(
+        null=True, blank=True, help_text="Total questions asked"
+    )
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Auto-deletion tracking
+    auto_delete_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Documents auto-deleted 30 days after request completion",
+    )
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["recovery_request", "verification_type"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["auto_delete_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_verification_type_display()} - {self.get_status_display()}"
+
+    def submit_document(self, document_path: str, document_type: str = "") -> None:
+        """Record document submission."""
+        self.document_path = document_path
+        self.document_type = document_type
+        self.submitted_at = timezone.now()
+        self.status = self.Status.SUBMITTED
+        self.save()
+
+    def verify(self, admin: User, notes: str) -> None:
+        """Mark verification as complete."""
+        self.verified_by = admin
+        self.verification_notes = notes
+        self.verified_at = timezone.now()
+        self.status = self.Status.VERIFIED
+        self.save()
+
+        # Check if all verifications complete and update parent request
+        request = self.recovery_request
+        if request.is_verification_complete and request.status in [
+            RecoveryRequest.Status.PENDING_VERIFICATION,
+            RecoveryRequest.Status.VERIFICATION_IN_PROGRESS,
+        ]:
+            request.verification_completed_at = timezone.now()
+            request.status = RecoveryRequest.Status.AWAITING_PRIMARY
+            request.save()
+
+    def reject(self, admin: User, notes: str) -> None:
+        """Reject this verification (user must resubmit)."""
+        self.verified_by = admin
+        self.verification_notes = notes
+        self.verified_at = timezone.now()
+        self.status = self.Status.REJECTED
+        self.save()
+
+    def schedule_auto_deletion(self) -> None:
+        """Schedule document auto-deletion 30 days after request completion."""
+        from datetime import timedelta
+
+        if self.recovery_request.completed_at:
+            self.auto_delete_at = self.recovery_request.completed_at + timedelta(
+                days=30
+            )
+            self.save(update_fields=["auto_delete_at"])
+
+
+class RecoveryAuditEntry(models.Model):
+    """
+    Immutable audit trail for recovery request actions.
+
+    Every action on a recovery request is logged here for:
+    - Regulatory compliance (GDPR, NHS IG)
+    - Security monitoring and alerting
+    - Dispute resolution
+    - SIEM integration
+
+    Entries include cryptographic hashes for tamper detection.
+    """
+
+    class Severity(models.TextChoices):
+        INFO = "info", "Information"
+        WARNING = "warning", "Warning"
+        CRITICAL = "critical", "Critical"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    recovery_request = models.ForeignKey(
+        RecoveryRequest, on_delete=models.CASCADE, related_name="audit_entries"
+    )
+
+    # Timestamp (cannot be modified)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    # Event details
+    event_type = models.CharField(
+        max_length=100,
+        db_index=True,
+        help_text="Type of event (e.g., request_submitted, primary_approval, recovery_executed)",
+    )
+    severity = models.CharField(
+        max_length=20, choices=Severity.choices, default=Severity.INFO
+    )
+
+    # Actor information
+    actor_type = models.CharField(
+        max_length=20,
+        help_text="user, admin, or system",
+    )
+    actor_id = models.IntegerField(null=True, blank=True)
+    actor_email = models.EmailField(null=True, blank=True)
+    actor_ip = models.GenericIPAddressField(null=True, blank=True)
+    actor_user_agent = models.TextField(blank=True)
+
+    # Event details (JSON for flexibility)
+    details = models.JSONField(default=dict)
+
+    # Cryptographic integrity
+    entry_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="SHA-256 hash of entry for tamper detection",
+    )
+    previous_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Hash of previous entry in chain",
+    )
+
+    # SIEM forwarding status
+    forwarded_to_siem = models.BooleanField(default=False)
+    forwarded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-timestamp"]
+        indexes = [
+            models.Index(fields=["recovery_request", "-timestamp"]),
+            models.Index(fields=["event_type", "-timestamp"]),
+            models.Index(fields=["severity", "-timestamp"]),
+            models.Index(fields=["actor_id"]),
+            models.Index(fields=["forwarded_to_siem"]),
+        ]
+        # Prevent deletion of audit entries
+        verbose_name = "Recovery Audit Entry"
+        verbose_name_plural = "Recovery Audit Entries"
+
+    def __str__(self) -> str:
+        return f"{self.timestamp} - {self.event_type}"
+
+    def save(self, *args, **kwargs):
+        """Generate entry hash on save."""
+        if not self.entry_hash:
+            self._generate_hash()
+        super().save(*args, **kwargs)
+
+    def _generate_hash(self) -> None:
+        """Generate SHA-256 hash of entry content."""
+        import hashlib
+        import json
+
+        # Get previous entry hash
+        previous = (
+            RecoveryAuditEntry.objects.filter(recovery_request=self.recovery_request)
+            .exclude(id=self.id)
+            .order_by("-timestamp")
+            .first()
+        )
+
+        self.previous_hash = previous.entry_hash if previous else ""
+
+        # Create hash of entry content
+        content = {
+            "recovery_request_id": str(self.recovery_request_id),
+            "timestamp": self.timestamp.isoformat() if self.timestamp else "",
+            "event_type": self.event_type,
+            "severity": self.severity,
+            "actor_type": self.actor_type,
+            "actor_id": self.actor_id,
+            "actor_email": self.actor_email,
+            "details": self.details,
+            "previous_hash": self.previous_hash,
+        }
+
+        content_str = json.dumps(content, sort_keys=True)
+        self.entry_hash = hashlib.sha256(content_str.encode()).hexdigest()
+
+    def verify_integrity(self) -> bool:
+        """Verify this entry hasn't been tampered with."""
+        import hashlib
+        import json
+
+        content = {
+            "recovery_request_id": str(self.recovery_request_id),
+            "timestamp": self.timestamp.isoformat() if self.timestamp else "",
+            "event_type": self.event_type,
+            "severity": self.severity,
+            "actor_type": self.actor_type,
+            "actor_id": self.actor_id,
+            "actor_email": self.actor_email,
+            "details": self.details,
+            "previous_hash": self.previous_hash,
+        }
+
+        content_str = json.dumps(content, sort_keys=True)
+        computed_hash = hashlib.sha256(content_str.encode()).hexdigest()
+
+        return computed_hash == self.entry_hash
+
+    def to_siem_format(self) -> dict:
+        """Format entry for SIEM forwarding (Elasticsearch, Splunk, etc.)."""
+        return {
+            "@timestamp": self.timestamp.isoformat(),
+            "event": {
+                "kind": "event",
+                "category": ["authentication", "iam"],
+                "type": [self.event_type],
+                "severity": self.severity,
+            },
+            "checktick": {
+                "recovery_request": {
+                    "id": str(self.recovery_request_id),
+                    "code": self.recovery_request.request_code,
+                    "user_id": self.recovery_request.user_id,
+                    "survey_id": self.recovery_request.survey_id,
+                },
+                "audit_entry": {
+                    "id": str(self.id),
+                    "event_type": self.event_type,
+                    "details": self.details,
+                    "entry_hash": self.entry_hash,
+                },
+            },
+            "user": {
+                "type": self.actor_type,
+                "id": str(self.actor_id) if self.actor_id else None,
+                "email": self.actor_email,
+            },
+            "source": {
+                "ip": self.actor_ip,
+                "user_agent": self.actor_user_agent,
+            },
+        }

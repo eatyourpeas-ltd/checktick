@@ -8,7 +8,7 @@ CheckTick requires scheduled tasks for data governance operations, housekeeping,
 
 ## Overview
 
-CheckTick uses five scheduled tasks:
+CheckTick uses six scheduled tasks:
 
 ### 1. Data Governance (Required for GDPR)
 
@@ -103,6 +103,27 @@ python manage.py sync_global_question_group_templates --dry-run
 python manage.py sync_global_question_group_templates --force
 ```
 
+### 6. Recovery Time Delay Processing (Required if Recovery Enabled)
+
+The `process_recovery_time_delays` management command runs frequently to:
+
+1. **Check expired time delays** - Finds recovery requests where the mandatory waiting period has elapsed
+2. **Update status** - Transitions requests from "In Time Delay" to "Ready for Execution"
+3. **Send notifications** - Alerts administrators that a recovery is ready to execute
+4. **Create audit entries** - Logs the automatic transition for regulatory compliance
+
+**Required for Recovery**: If you use the ethical key recovery feature, this command ensures recovery requests proceed after their mandatory waiting period (24-48 hours). Without it, approved recovery requests will remain stuck in the time delay state.
+
+**Schedule**: Run every 5 minutes (`*/5 * * * *`) to ensure timely processing. The command is idempotent and lightweight - it only processes requests whose time delays have expired.
+
+```bash
+# Check for expired time delays (dry-run)
+python manage.py process_recovery_time_delays --dry-run
+
+# Process expired time delays
+python manage.py process_recovery_time_delays --verbose
+```
+
 ## Prerequisites
 
 - CheckTick deployed and running
@@ -163,7 +184,16 @@ Northflank provides native cron job support, making this the simplest option.
    - **Schedule**: `0 6 * * *` (runs at 6 AM UTC daily)
    - **Command**: `python manage.py sync_global_question_group_templates`
 
-#### 6. Copy Environment Variables
+#### 6. Create Recovery Time Delay Cron Job
+
+1. Click **"Add Service"** → **"Cron Job"** again
+2. Configure the job:
+   - **Name**: `checktick-recovery-time-delays`
+   - **Docker Image**: Use the same image as your web service
+   - **Schedule**: `*/5 * * * *` (runs every 5 minutes)
+   - **Command**: `python manage.py process_recovery_time_delays`
+
+#### 7. Copy Environment Variables
 
 All cron jobs need the same environment variables as your web service:
 

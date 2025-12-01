@@ -103,6 +103,7 @@ Team-level role semantics (for Team tier accounts):
 - **Team VIEWER**: Read-only access to team surveys. Cannot create or edit surveys.
 
 Teams can exist:
+
 - **Standalone**: Independent teams (not part of an organization)
 - **Organization-hosted**: Teams within an organization (managed by org admins)
 
@@ -361,12 +362,98 @@ When `DEBUG=True`, developers can preview all error pages at `/debug/errors/` to
 
 The django-axes integration tracks failed login attempts and locks accounts after 5 failures. The lockout period is 1 hour, after which users can attempt to log in again. The custom lockout template (`403_lockout.html`) provides clear guidance during this period.
 
-## Security posture highlights
+## Security Summary
 
-- CSRF and session security enabled; cookies are Secure/HttpOnly in production.
-- Strict password validation and brute force protection (django-axes).
-- CSP via django-csp. WhiteNoise serves static assets.
-- Ratelimits for form submissions.
+CheckTick implements defence-in-depth security across multiple layers:
+
+### Authentication Security
+
+| Feature | Implementation | Details |
+|---------|----------------|---------|
+| **Session Security** | Django sessions | CSRF protection, Secure/HttpOnly cookies in production |
+| **JWT Authentication** | SimpleJWT | 30-minute access tokens, 7-day refresh tokens |
+| **SSO/OIDC** | Google OAuth, Azure AD | Email-based linking, supports external/guest accounts |
+| **Brute Force Protection** | django-axes | Account lockout after 5 failed attempts (1-hour cooldown) |
+| **Password Policy** | Django validators | Strong password requirements enforced |
+
+### Encryption & Data Protection
+
+| Feature | Implementation | Details |
+|---------|----------------|---------|
+| **Field-Level Encryption** | AES-256-GCM | Per-survey keys for sensitive demographics |
+| **Whole-Response Encryption** | AES-256-GCM with Vault | Encrypted storage for complete survey responses |
+| **Key Management** | HashiCorp Vault | Self-hosted in the UK for data sovereignty |
+| **Key Recovery** | Multi-party approval | Dual-admin approval with time delays |
+| **SSO User Passphrases** | Required for encryption | SSO users must set passphrase for decryption access |
+
+#### UK Data Sovereignty
+
+CheckTick self-hosts its own HashiCorp Vault instance within the UK to ensure all encryption keys and sensitive data remain under UK jurisdiction. This approach:
+
+- **Keeps data local**: All encryption keys stored on UK infrastructure
+- **No third-party cloud dependency**: Keys never leave CheckTick-controlled systems
+- **GDPR compliant**: Full control over data residency and processing
+- **NHS-ready**: Meets NHS data handling requirements
+
+For detailed encryption documentation, see:
+
+- [Encryption for Users](encryption-for-users.md) - How encryption works for each subscription tier
+- [Encryption Technical Reference](encryption-technical-reference.md) - Developer implementation guide
+- [Vault Integration](vault.md) - Key management and Vault deployment
+
+### Rate Limiting
+
+| Scope | Limit | Purpose |
+|-------|-------|---------|
+| **Anonymous API** | 60/minute | Protect public endpoints |
+| **Authenticated API** | 120/minute | Standard user operations |
+| **Recovery Create** | 3/hour | Prevent recovery request spam |
+| **Recovery Approval** | 10/hour | Limit admin approval actions |
+| **Recovery View** | 60/minute | Standard recovery status checks |
+
+### Role-Based Access Control (RBAC)
+
+**Organization Roles**: Owner, Admin, Creator, Viewer
+**Team Roles**: Owner, Admin, Creator, Viewer
+**Survey Roles**: Creator, Editor, Viewer
+
+See [Account Types & Tiers](getting-started-account-types.md) for tier-specific permissions.
+
+### Permission Functions
+
+Core permission checks in `checktick_app/surveys/permissions.py`:
+
+| Function | Purpose |
+|----------|---------|
+| `can_view_survey` | View access to surveys |
+| `can_edit_survey` | Edit access to surveys |
+| `can_manage_survey_users` | Manage survey collaborators |
+| `can_manage_org_users` | Manage organization members |
+| `can_create_datasets` | Create new datasets |
+| `can_edit_dataset` | Edit existing datasets |
+| `can_close_survey` | Close/archive surveys |
+| `can_export_survey_data` | Export survey responses |
+| `can_extend_retention` | Extend data retention periods |
+| `can_manage_legal_hold` | Manage legal hold status |
+| `can_manage_data_custodians` | Manage data custodian assignments |
+| `can_soft_delete_survey` | Soft delete surveys |
+| `can_hard_delete_survey` | Permanent survey deletion |
+| `can_publish_question_group` | Publish question templates |
+| `can_import_published_template` | Import published templates |
+| `can_delete_published_template` | Delete published templates |
+| `can_view_team_survey` | View team surveys |
+| `can_edit_team_survey` | Edit team surveys |
+| `can_manage_team` | Manage team settings/members |
+| `can_add_team_member` | Add members to teams |
+| `can_create_survey_in_team` | Create surveys within teams |
+
+### Additional Security Measures
+
+- **Content Security Policy (CSP)**: django-csp for XSS protection
+- **Static Asset Security**: WhiteNoise with secure headers
+- **CORS**: Disabled by default, explicit origin allowlist required
+- **Account Deletion**: Superuser-only to prevent data loss
+- **Audit Logging**: Recovery operations logged with tamper-proof hash chain
 
 ## Developer guidance
 

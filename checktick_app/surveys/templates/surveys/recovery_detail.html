@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Recovery Request" %} {{ recovery_request.request_code }} · {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Breadcrumb -->
+    <div class="text-sm breadcrumbs mb-4">
+        <ul>
+            <li><a href="{% url 'surveys:recovery_dashboard' %}">{% trans "Platform Recovery Console" %}</a></li>
+            <li>{{ recovery_request.request_code }}</li>
+        </ul>
+    </div>
+
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-semibold inline-flex items-center gap-2 text-base-content">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+            <span>{% trans "Recovery Request" %}: <span class="font-mono">{{ recovery_request.request_code }}</span></span>
+        </h1>
+        {% if is_superuser %}
+        <div class="flex items-center gap-2">
+            <span class="badge badge-error badge-lg">{% trans "SUPERUSER" %}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Status Banner -->
+    <div class="alert {% if recovery_request.status == 'completed' %}alert-success{% elif recovery_request.status == 'rejected' or recovery_request.status == 'cancelled' %}alert-error{% elif recovery_request.status == 'ready_for_execution' %}alert-success{% else %}alert-info{% endif %} mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+            <h3 class="font-bold">{{ recovery_request.get_status_display }}</h3>
+            {% if recovery_request.status == 'in_time_delay' and recovery_request.time_delay_until %}
+                <div class="text-sm">{% trans "Time delay expires" %}: {{ recovery_request.time_delay_until|date:"d M Y H:i" }}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+        <!-- Request Details -->
+        <div class="card bg-base-100 shadow">
+            <div class="card-body">
+                <h2 class="card-title text-lg mb-4">{% trans "Request Details" %}</h2>
+                <dl class="space-y-3">
+                    <div class="flex justify-between">
+                        <dt class="font-medium text-base-content/70">{% trans "User" %}</dt>
+                        <dd>{{ recovery_request.user.email }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="font-medium text-base-content/70">{% trans "Survey" %}</dt>
+                        <dd>
+                            <a href="{% url 'surveys:dashboard' slug=recovery_request.survey.slug %}" class="link link-primary">
+                                {{ recovery_request.survey.name }}
+                            </a>
+                        </dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="font-medium text-base-content/70">{% trans "Submitted" %}</dt>
+                        <dd>{{ recovery_request.submitted_at|date:"d M Y H:i" }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="font-medium text-base-content/70">{% trans "Time Delay" %}</dt>
+                        <dd>{{ recovery_request.time_delay_hours }} {% trans "hours" %}</dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Authorization Status -->
+        <div class="card bg-base-100 shadow">
+            <div class="card-body">
+                <h2 class="card-title text-lg mb-4">{% trans "Authorization Status" %}</h2>
+
+                <!-- Primary Approval -->
+                <div class="flex items-center gap-3 p-3 rounded-lg {% if recovery_request.primary_approved_at %}bg-success/10{% else %}bg-base-200{% endif %}">
+                    {% if recovery_request.primary_approved_at %}
+                        <div class="badge badge-success badge-lg">✓</div>
+                    {% else %}
+                        <div class="badge badge-outline badge-lg">1</div>
+                    {% endif %}
+                    <div class="flex-1">
+                        <div class="font-medium">{% trans "Primary Approval" %}</div>
+                        {% if recovery_request.primary_approved_at %}
+                            <div class="text-sm text-base-content/60">
+                                {{ recovery_request.primary_approver.email }} · {{ recovery_request.primary_approved_at|date:"d M Y H:i" }}
+                            </div>
+                        {% else %}
+                            <div class="text-sm text-base-content/60">{% trans "Pending" %}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Secondary Approval -->
+                <div class="flex items-center gap-3 p-3 rounded-lg mt-2 {% if recovery_request.secondary_approved_at %}bg-success/10{% else %}bg-base-200{% endif %}">
+                    {% if recovery_request.secondary_approved_at %}
+                        <div class="badge badge-success badge-lg">✓</div>
+                    {% else %}
+                        <div class="badge badge-outline badge-lg">2</div>
+                    {% endif %}
+                    <div class="flex-1">
+                        <div class="font-medium">{% trans "Secondary Approval" %}</div>
+                        {% if recovery_request.secondary_approved_at %}
+                            <div class="text-sm text-base-content/60">
+                                {{ recovery_request.secondary_approver.email }} · {{ recovery_request.secondary_approved_at|date:"d M Y H:i" }}
+                            </div>
+                        {% else %}
+                            <div class="text-sm text-base-content/60">{% trans "Pending" %}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Time Delay -->
+                {% if recovery_request.approved_at %}
+                <div class="flex items-center gap-3 p-3 rounded-lg mt-2 {% if recovery_request.status == 'ready_for_execution' or recovery_request.status == 'completed' %}bg-success/10{% else %}bg-warning/10{% endif %}">
+                    {% if recovery_request.status == 'ready_for_execution' or recovery_request.status == 'completed' %}
+                        <div class="badge badge-success badge-lg">✓</div>
+                    {% else %}
+                        <div class="badge badge-warning badge-lg">⏱</div>
+                    {% endif %}
+                    <div class="flex-1">
+                        <div class="font-medium">{% trans "Time Delay" %}</div>
+                        {% if recovery_request.status == 'ready_for_execution' or recovery_request.status == 'completed' %}
+                            <div class="text-sm text-base-content/60">{% trans "Completed" %}</div>
+                        {% else %}
+                            <div class="text-sm text-base-content/60">
+                                {% trans "Until" %}: {{ recovery_request.time_delay_until|date:"d M Y H:i" }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Identity Verifications -->
+    {% if identity_verifications %}
+    <div class="card bg-base-100 shadow mt-6">
+        <div class="card-body">
+            <h2 class="card-title text-lg mb-4">{% trans "Identity Verifications" %}</h2>
+            <div class="overflow-x-auto">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Type" %}</th>
+                            <th>{% trans "Status" %}</th>
+                            <th>{% trans "Submitted" %}</th>
+                            <th>{% trans "Verified By" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for verification in identity_verifications %}
+                        <tr>
+                            <td>{{ verification.get_verification_type_display }}</td>
+                            <td>
+                                {% if verification.status == 'verified' %}
+                                    <span class="badge badge-success">{% trans "Verified" %}</span>
+                                {% elif verification.status == 'rejected' %}
+                                    <span class="badge badge-error">{% trans "Rejected" %}</span>
+                                {% elif verification.status == 'submitted' %}
+                                    <span class="badge badge-info">{% trans "Submitted" %}</span>
+                                {% else %}
+                                    <span class="badge badge-warning">{% trans "Pending" %}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ verification.submitted_at|date:"d M Y H:i"|default:"—" }}</td>
+                            <td>{{ verification.verified_by.email|default:"—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Audit Trail -->
+    <div class="card bg-base-100 shadow mt-6">
+        <div class="card-body">
+            <h2 class="card-title text-lg mb-4">{% trans "Audit Trail" %}</h2>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Time" %}</th>
+                            <th>{% trans "Event" %}</th>
+                            <th>{% trans "Actor" %}</th>
+                            <th>{% trans "Severity" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in audit_entries %}
+                        <tr>
+                            <td class="text-xs">{{ entry.timestamp|date:"d M Y H:i:s" }}</td>
+                            <td>
+                                <span class="font-mono text-sm">{{ entry.event_type }}</span>
+                            </td>
+                            <td>
+                                <span class="text-sm">{{ entry.actor_email|default:entry.actor_type }}</span>
+                            </td>
+                            <td>
+                                {% if entry.severity == 'critical' %}
+                                    <span class="badge badge-error badge-sm">{% trans "Critical" %}</span>
+                                {% elif entry.severity == 'warning' %}
+                                    <span class="badge badge-warning badge-sm">{% trans "Warning" %}</span>
+                                {% else %}
+                                    <span class="badge badge-info badge-sm">{% trans "Info" %}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-base-content/50">{% trans "No audit entries yet" %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rejection/Cancellation Details -->
+    {% if recovery_request.status == 'rejected' %}
+    <div class="card bg-error/10 shadow mt-6">
+        <div class="card-body">
+            <h2 class="card-title text-lg text-error mb-4">{% trans "Rejection Details" %}</h2>
+            <dl class="space-y-2">
+                <div>
+                    <dt class="font-medium text-base-content/70">{% trans "Rejected By" %}</dt>
+                    <dd>{{ recovery_request.rejected_by.email|default:"—" }}</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-base-content/70">{% trans "Rejected At" %}</dt>
+                    <dd>{{ recovery_request.rejected_at|date:"d M Y H:i"|default:"—" }}</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-base-content/70">{% trans "Reason" %}</dt>
+                    <dd>{{ recovery_request.rejection_reason|default:"—" }}</dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if recovery_request.status == 'cancelled' %}
+    <div class="card bg-base-200 shadow mt-6">
+        <div class="card-body">
+            <h2 class="card-title text-lg mb-4">{% trans "Cancellation Details" %}</h2>
+            <dl class="space-y-2">
+                <div>
+                    <dt class="font-medium text-base-content/70">{% trans "Cancelled By" %}</dt>
+                    <dd>{{ recovery_request.cancelled_by.email|default:"—" }}</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-base-content/70">{% trans "Cancelled At" %}</dt>
+                    <dd>{{ recovery_request.cancelled_at|date:"d M Y H:i"|default:"—" }}</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-base-content/70">{% trans "Reason" %}</dt>
+                    <dd>{{ recovery_request.cancellation_reason|default:"—" }}</dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Action Buttons -->
+    <div class="card bg-base-100 shadow mt-6">
+        <div class="card-body">
+            <div class="flex flex-wrap gap-3 justify-between items-center">
+                <a href="{% url 'surveys:recovery_dashboard' %}" class="btn btn-ghost">
+                    ← {% trans "Back to Dashboard" %}
+                </a>
+
+                <div class="flex gap-2">
+                    {% if recovery_request.status == 'awaiting_primary' and can_approve_primary %}
+                        <form method="post" action="{% url 'surveys:recovery_approve_primary' request_id=recovery_request.id %}" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-primary" onclick="return confirm('{% trans "Approve as primary approver?" %}')">
+                                {% trans "Approve (Primary)" %}
+                            </button>
+                        </form>
+                    {% endif %}
+
+                    {% if recovery_request.status == 'awaiting_secondary' and can_approve_secondary and recovery_request.primary_approver != user %}
+                        <form method="post" action="{% url 'surveys:recovery_approve_secondary' request_id=recovery_request.id %}" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-primary" onclick="return confirm('{% trans "Approve as secondary approver?" %}')">
+                                {% trans "Approve (Secondary)" %}
+                            </button>
+                        </form>
+                    {% endif %}
+
+                    {% if recovery_request.status == 'ready_for_execution' %}
+                        <button class="btn btn-success" onclick="execute_modal.showModal()">
+                            {% trans "Execute Recovery" %}
+                        </button>
+                    {% endif %}
+
+                    {% if recovery_request.status in rejectable_statuses %}
+                        <button class="btn btn-error btn-outline" onclick="reject_modal.showModal()">
+                            {% trans "Reject" %}
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+{% if recovery_request.status in rejectable_statuses %}
+<dialog id="reject_modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">{% trans "Reject Recovery Request" %}</h3>
+        <form method="post" action="{% url 'surveys:recovery_reject' request_id=recovery_request.id %}">
+            {% csrf_token %}
+            <div class="form-control mt-4">
+                <label class="label">
+                    <span class="label-text">{% trans "Reason for rejection" %}</span>
+                </label>
+                <textarea name="reason" class="textarea textarea-bordered h-24" placeholder="{% trans 'Explain why this request is being rejected...' %}" required></textarea>
+            </div>
+            <div class="modal-action">
+                <button type="button" class="btn" onclick="reject_modal.close()">{% trans "Cancel" %}</button>
+                <button type="submit" class="btn btn-error">{% trans "Reject Request" %}</button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+{% endif %}
+
+<!-- Execute Recovery Modal -->
+{% if recovery_request.status == 'ready_for_execution' %}
+<dialog id="execute_modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg text-success">{% trans "Execute Key Recovery" %}</h3>
+
+        <div class="alert alert-warning mt-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+                <h4 class="font-bold">{% trans "Critical Operation" %}</h4>
+                <p class="text-sm">{% trans "This will decrypt the user's survey keys from Vault and re-encrypt them with the new password. This action is irreversible and will be logged for audit purposes." %}</p>
+            </div>
+        </div>
+
+        <form method="post" action="{% url 'surveys:recovery_execute' request_id=recovery_request.id %}" id="execute_form">
+            {% csrf_token %}
+
+            <div class="form-control mt-4">
+                <label class="label">
+                    <span class="label-text font-medium">{% trans "New Password for User" %}</span>
+                </label>
+                <input type="password" name="new_password" id="new_password" class="input input-bordered" placeholder="{% trans 'Enter new password (min 8 characters)' %}" required minlength="8" />
+                <label class="label">
+                    <span class="label-text-alt text-base-content/60">{% trans "This will become the user's new encryption password" %}</span>
+                </label>
+            </div>
+
+            <div class="form-control mt-2">
+                <label class="label">
+                    <span class="label-text font-medium">{% trans "Confirm Password" %}</span>
+                </label>
+                <input type="password" name="confirm_password" id="confirm_password" class="input input-bordered" placeholder="{% trans 'Confirm new password' %}" required minlength="8" />
+            </div>
+
+            <div class="form-control mt-4">
+                <label class="label cursor-pointer justify-start gap-3">
+                    <input type="checkbox" id="confirm_checkbox" class="checkbox checkbox-warning" required />
+                    <span class="label-text">{% trans "I confirm that I have verified the user's identity and understand this action is irreversible" %}</span>
+                </label>
+            </div>
+
+            <div class="modal-action">
+                <button type="button" class="btn" onclick="execute_modal.close()">{% trans "Cancel" %}</button>
+                <button type="submit" class="btn btn-success" id="execute_btn" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                    {% trans "Execute Recovery" %}
+                </button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const newPassword = document.getElementById('new_password');
+    const confirmPassword = document.getElementById('confirm_password');
+    const confirmCheckbox = document.getElementById('confirm_checkbox');
+    const executeBtn = document.getElementById('execute_btn');
+
+    function validateForm() {
+        const passwordsMatch = newPassword.value === confirmPassword.value;
+        const passwordLongEnough = newPassword.value.length >= 8;
+        const isConfirmed = confirmCheckbox.checked;
+
+        executeBtn.disabled = !(passwordsMatch && passwordLongEnough && isConfirmed);
+
+        // Show password mismatch warning
+        if (confirmPassword.value && !passwordsMatch) {
+            confirmPassword.classList.add('input-error');
+        } else {
+            confirmPassword.classList.remove('input-error');
+        }
+    }
+
+    if (newPassword && confirmPassword && confirmCheckbox && executeBtn) {
+        newPassword.addEventListener('input', validateForm);
+        confirmPassword.addEventListener('input', validateForm);
+        confirmCheckbox.addEventListener('change', validateForm);
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

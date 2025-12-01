@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ request_obj.request_code }} - {{ dashboard_title }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-4xl">
+    <!-- Breadcrumb -->
+    <div class="breadcrumbs text-sm mb-4">
+        <ul>
+            <li><a href="{% url 'surveys:list' %}">{% trans "Surveys" %}</a></li>
+            {% if context_type == 'organization' %}
+            <li>{{ organization.name }}</li>
+            <li><a href="{% url 'surveys:admin_recovery_dashboard' %}?org={{ organization.id }}">{% trans "Recovery Requests" %}</a></li>
+            {% elif context_type == 'team' %}
+            <li>{{ team.name }}</li>
+            <li><a href="{% url 'surveys:admin_recovery_dashboard' %}?team={{ team.id }}">{% trans "Recovery Requests" %}</a></li>
+            {% endif %}
+            <li>{{ request_obj.request_code }}</li>
+        </ul>
+    </div>
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold flex items-center gap-2">
+                {% trans "Recovery Request" %}
+                <span class="font-mono">{{ request_obj.request_code }}</span>
+            </h1>
+            <p class="text-base-content/70">
+                {% trans "Submitted" %} {{ request_obj.submitted_at|date:"d M Y H:i" }}
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            {% if request_obj.status == 'pending_verification' %}
+            <span class="badge badge-lg badge-outline">{% trans "Pending Verification" %}</span>
+            {% elif request_obj.status == 'verification_in_progress' %}
+            <span class="badge badge-lg badge-secondary">{% trans "Verifying" %}</span>
+            {% elif request_obj.status == 'awaiting_primary' %}
+            <span class="badge badge-lg badge-warning">{% trans "Awaiting Primary" %}</span>
+            {% elif request_obj.status == 'awaiting_secondary' %}
+            <span class="badge badge-lg badge-warning">{% trans "Awaiting Secondary" %}</span>
+            {% elif request_obj.status == 'in_time_delay' %}
+            <span class="badge badge-lg badge-info">{% trans "In Time Delay" %}</span>
+            {% elif request_obj.status == 'ready_for_execution' %}
+            <span class="badge badge-lg badge-accent">{% trans "Ready" %}</span>
+            {% elif request_obj.status == 'completed' %}
+            <span class="badge badge-lg badge-success">{% trans "Completed" %}</span>
+            {% elif request_obj.status == 'rejected' %}
+            <span class="badge badge-lg badge-error">{% trans "Rejected" %}</span>
+            {% elif request_obj.status == 'cancelled' %}
+            <span class="badge badge-lg badge-ghost">{% trans "Cancelled" %}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Request Details Card -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h2 class="card-title mb-4">{% trans "Request Details" %}</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="text-sm font-medium text-base-content/70">{% trans "Requesting User" %}</label>
+                    <p class="font-medium">{{ request_obj.user.email }}</p>
+                    <p class="text-sm text-base-content/60">{{ request_obj.user.get_full_name|default:request_obj.user.username }}</p>
+                </div>
+
+                <div>
+                    <label class="text-sm font-medium text-base-content/70">{% trans "Survey" %}</label>
+                    <p class="font-medium">{{ request_obj.survey.name }}</p>
+                    <p class="text-sm text-base-content/60">{{ request_obj.survey.slug }}</p>
+                </div>
+
+                <div>
+                    <label class="text-sm font-medium text-base-content/70">{% trans "Time Delay" %}</label>
+                    <p class="font-medium">{{ request_obj.time_delay_hours }} {% trans "hours" %}</p>
+                </div>
+
+                {% if request_obj.time_delay_until %}
+                <div>
+                    <label class="text-sm font-medium text-base-content/70">{% trans "Ready After" %}</label>
+                    <p class="font-medium">{{ request_obj.time_delay_until|date:"d M Y H:i" }}</p>
+                    {% if request_obj.time_remaining %}
+                    <p class="text-sm text-info">{{ request_obj.time_remaining }} {% trans "remaining" %}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Authorization Status -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h2 class="card-title mb-4">{% trans "Authorization Status" %}</h2>
+
+            <ul class="steps steps-vertical lg:steps-horizontal w-full">
+                <li class="step {% if request_obj.status != 'pending_verification' and request_obj.status != 'verification_in_progress' %}step-primary{% endif %}">
+                    {% trans "Identity Verified" %}
+                </li>
+                <li class="step {% if request_obj.primary_approver %}step-primary{% endif %}">
+                    {% trans "Primary Approval" %}
+                </li>
+                <li class="step {% if request_obj.secondary_approver %}step-primary{% endif %}">
+                    {% trans "Secondary Approval" %}
+                </li>
+                <li class="step {% if request_obj.status == 'ready_for_execution' or request_obj.status == 'completed' %}step-primary{% endif %}">
+                    {% trans "Time Delay" %}
+                </li>
+                <li class="step {% if request_obj.status == 'completed' %}step-primary{% endif %}">
+                    {% trans "Completed" %}
+                </li>
+            </ul>
+
+            <!-- Approval Details -->
+            {% if request_obj.primary_approver or request_obj.secondary_approver %}
+            <div class="divider"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% if request_obj.primary_approver %}
+                <div class="bg-base-200 p-4 rounded-lg">
+                    <h4 class="font-medium text-success mb-2">✓ {% trans "Primary Authorization" %}</h4>
+                    <p class="text-sm"><strong>{% trans "Approver" %}:</strong> {{ request_obj.primary_approver.email }}</p>
+                    <p class="text-sm"><strong>{% trans "Date" %}:</strong> {{ request_obj.primary_approved_at|date:"d M Y H:i" }}</p>
+                    {% if request_obj.primary_reason %}
+                    <p class="text-sm mt-2"><strong>{% trans "Notes" %}:</strong> {{ request_obj.primary_reason }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if request_obj.secondary_approver %}
+                <div class="bg-base-200 p-4 rounded-lg">
+                    <h4 class="font-medium text-success mb-2">✓ {% trans "Secondary Authorization" %}</h4>
+                    <p class="text-sm"><strong>{% trans "Approver" %}:</strong> {{ request_obj.secondary_approver.email }}</p>
+                    <p class="text-sm"><strong>{% trans "Date" %}:</strong> {{ request_obj.secondary_approved_at|date:"d M Y H:i" }}</p>
+                    {% if request_obj.secondary_reason %}
+                    <p class="text-sm mt-2"><strong>{% trans "Notes" %}:</strong> {{ request_obj.secondary_reason }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Rejection Details -->
+            {% if request_obj.rejected_by %}
+            <div class="divider"></div>
+            <div class="alert alert-error">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                    <h4 class="font-bold">{% trans "Request Rejected" %}</h4>
+                    <p class="text-sm">{% trans "By" %}: {{ request_obj.rejected_by.email }} {% trans "on" %} {{ request_obj.rejected_at|date:"d M Y H:i" }}</p>
+                    {% if request_obj.rejection_reason %}
+                    <p class="text-sm mt-1">{% trans "Reason" %}: {{ request_obj.rejection_reason }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Completion Details -->
+            {% if request_obj.executed_by %}
+            <div class="divider"></div>
+            <div class="alert alert-success">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                    <h4 class="font-bold">{% trans "Recovery Completed" %}</h4>
+                    <p class="text-sm">{% trans "Executed by" %}: {{ request_obj.executed_by.email }} {% trans "on" %} {{ request_obj.completed_at|date:"d M Y H:i" }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Identity Verification -->
+    {% if verifications %}
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h2 class="card-title mb-4">{% trans "Identity Verification" %}</h2>
+
+            <div class="space-y-3">
+                {% for verification in verifications %}
+                <div class="flex items-center justify-between p-3 bg-base-200 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        {% if verification.verification_type == 'photo_id' %}
+                        <span class="text-2xl">🪪</span>
+                        <span>{% trans "Photo ID Verification" %}</span>
+                        {% elif verification.verification_type == 'video_call' %}
+                        <span class="text-2xl">📹</span>
+                        <span>{% trans "Video Call Verification" %}</span>
+                        {% elif verification.verification_type == 'security_questions' %}
+                        <span class="text-2xl">❓</span>
+                        <span>{% trans "Security Questions" %}</span>
+                        {% elif verification.verification_type == 'manager_attestation' %}
+                        <span class="text-2xl">👔</span>
+                        <span>{% trans "Manager Attestation" %}</span>
+                        {% else %}
+                        <span class="text-2xl">✓</span>
+                        <span>{{ verification.verification_type }}</span>
+                        {% endif %}
+                    </div>
+                    {% if verification.completed_at %}
+                    <span class="badge badge-success">{% trans "Verified" %}</span>
+                    {% else %}
+                    <span class="badge badge-warning">{% trans "Pending" %}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    {% if can_take_action %}
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h2 class="card-title mb-4">{% trans "Actions" %}</h2>
+
+            <div class="flex flex-wrap gap-3">
+                {% if request_obj.status == 'awaiting_primary' and can_approve_primary %}
+                <form method="post" action="{% url 'surveys:admin_recovery_approve_primary' request_obj.id %}{% if context_type == 'organization' %}?org={{ organization.id }}{% elif context_type == 'team' %}?team={{ team.id }}{% endif %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success"
+                            onclick="return confirm('{% trans "Approve as primary authorizer? A second administrator must also approve." %}')">
+                        {% trans "Approve as Primary" %}
+                    </button>
+                </form>
+                {% endif %}
+
+                {% if request_obj.status == 'awaiting_secondary' and can_approve_secondary %}
+                {% if request_obj.primary_approver == user %}
+                <div class="alert alert-warning">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>{% trans "You provided primary approval. A different administrator must provide secondary approval." %}</span>
+                </div>
+                {% else %}
+                <form method="post" action="{% url 'surveys:admin_recovery_approve_secondary' request_obj.id %}{% if context_type == 'organization' %}?org={{ organization.id }}{% elif context_type == 'team' %}?team={{ team.id }}{% endif %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success"
+                            onclick="return confirm('{% trans "Approve as secondary authorizer? This will start the time delay period." %}')">
+                        {% trans "Approve as Secondary" %}
+                    </button>
+                </form>
+                {% endif %}
+                {% endif %}
+
+                {% if request_obj.status in 'pending_verification,verification_in_progress,awaiting_primary,awaiting_secondary' and can_reject %}
+                <button class="btn btn-error" onclick="document.getElementById('reject-modal').showModal()">
+                    {% trans "Reject Request" %}
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Audit Log -->
+    {% if audit_entries %}
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title mb-4">{% trans "Audit Log" %}</h2>
+
+            <div class="overflow-x-auto">
+                <table class="table table-zebra">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Date" %}</th>
+                            <th>{% trans "Event" %}</th>
+                            <th>{% trans "Actor" %}</th>
+                            <th>{% trans "Details" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in audit_entries %}
+                        <tr>
+                            <td class="text-sm">{{ entry.created_at|date:"d M Y H:i" }}</td>
+                            <td>
+                                <span class="badge badge-outline">{{ entry.event_type }}</span>
+                            </td>
+                            <td class="text-sm">{{ entry.actor.email|default:"System" }}</td>
+                            <td class="text-sm text-base-content/70">
+                                {% if entry.details %}
+                                {{ entry.details|truncatechars:50 }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Back Button -->
+    <div class="mt-6">
+        <a href="{% url 'surveys:admin_recovery_dashboard' %}{% if context_type == 'organization' %}?org={{ organization.id }}{% elif context_type == 'team' %}?team={{ team.id }}{% endif %}"
+           class="btn btn-ghost">
+            ← {% trans "Back to Recovery Dashboard" %}
+        </a>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+<dialog id="reject-modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">{% trans "Reject Recovery Request" %}</h3>
+        <p class="py-4">{% trans "Please provide a reason for rejecting this request. The user will be notified." %}</p>
+        <form method="post" action="{% url 'surveys:admin_recovery_reject' request_obj.id %}{% if context_type == 'organization' %}?org={{ organization.id }}{% elif context_type == 'team' %}?team={{ team.id }}{% endif %}">
+            {% csrf_token %}
+            <div class="form-control">
+                <textarea name="reason" class="textarea textarea-bordered" rows="3"
+                          placeholder="{% trans 'Reason for rejection...' %}" required></textarea>
+            </div>
+            <div class="modal-action">
+                <button type="button" class="btn" onclick="this.closest('dialog').close()">{% trans "Cancel" %}</button>
+                <button type="submit" class="btn btn-error">{% trans "Reject Request" %}</button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+{% endblock %}

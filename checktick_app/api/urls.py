@@ -42,6 +42,7 @@ router.register(
     views.PublishedQuestionGroupViewSet,
     basename="question-group-template",
 )
+router.register(r"recovery", views.RecoveryViewSet, basename="recovery")
 
 urlpatterns = [
     path("health", views.healthcheck, name="healthcheck"),

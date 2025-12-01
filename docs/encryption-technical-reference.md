@@ -1,22 +1,16 @@
 ---
-title: Patient Data Encryption
-category: security
+title: Encryption Technical Reference
+category: api
 priority: 6
 ---
 
+# Encryption Technical Reference
+
+This document provides technical implementation details for developers working on CheckTick's encryption system. For user guides, see [Encryption for Users](/docs/encryption-for-users/). For admin procedures, see [Key Management for Administrators](/docs/key-management-for-administrators/).
+
+---
+
 CheckTick implements a security-first approach to handling sensitive patient data, using per-survey encryption keys with AES-GCM encryption. This document describes the current implementation and planned enhancements for organizational and individual users.
-
-## 🎯 Current Status (October 2025)
-
-**✅ PRODUCTION READY** for clinicians and organizations:
-
-- **Option 2 (Dual Encryption)**: Password + BIP39 recovery phrase ✅
-- **OIDC Integration**: SSO with automatic survey unlocking ✅
-- **Option 4 (Forward Secrecy)**: Session security implemented ✅
-- **Test Coverage**: 46/46 unit + 7/7 integration + 8/8 OIDC tests ✅
-- **Healthcare Ready**: Designed for clinical workflows with compliance ✅
-
-**🔄 Next Priority**: Organization key escrow for administrative recovery
 
 ## Table of Contents
 
@@ -83,6 +77,7 @@ survey.set_dual_encryption(kek, password, recovery_words)
 ```
 
 The dual encryption process:
+
 1. **Password Path**: KEK encrypted with user's password using Scrypt KDF
 2. **Recovery Path**: KEK encrypted with BIP39 recovery phrase using PBKDF2
 3. **Storage**: Only encrypted KEKs stored, never plaintext keys
@@ -108,10 +103,47 @@ response.enc_demographics = encrypted_blob  # Stored in database
 ```
 
 The encryption process:
+
 1. Derives encryption key from survey key using Scrypt KDF with random salt
 2. Generates random 12-byte nonce
 3. Encrypts JSON data with AES-GCM
 4. Stores: `salt (16 bytes) | nonce (12 bytes) | ciphertext`
+
+#### 2b. Whole-Response Encryption (Patient Data Surveys)
+
+When a survey collects patient data (identified by a `patient_details_encrypted` question group), the **entire survey response** is encrypted - not just the demographics:
+
+```python
+# Patient data survey: encrypt ENTIRE response
+if survey.requires_whole_response_encryption():
+    # Combine all data into single encrypted blob
+    full_response = {
+        "answers": {
+            "q1_chest_pain": "mild",
+            "q2_duration": "3 days",
+            "q3_previous_history": "yes",
+            "q4_notes": "Patient describes intermittent pain..."
+        },
+        "demographics": {
+            "first_name": "John",
+            "nhs_number": "1234567890",
+            "date_of_birth": "1980-01-01"
+        }
+    }
+
+    # Store complete encrypted response
+    response.store_complete_response(survey_key, answers, demographics)
+    # response.enc_answers contains the encrypted blob
+    # response.answers is cleared (empty dict)
+    # response.enc_demographics is None (not used)
+```
+
+**Why whole-response encryption for patient data:**
+
+- Clinical observations (symptoms, notes) should be protected alongside identifiers
+- Free-text answers may contain identifying information
+- Complete protection prevents "re-identification" attacks
+- Simpler mental model: "patient data survey = everything encrypted"
 
 #### 3. Data Decryption
 
@@ -168,12 +200,14 @@ if survey_key:
 CheckTick implements a **forward secrecy** model where encryption keys are never persisted in sessions:
 
 **What's Stored in Sessions:**
+
 - `unlock_credentials`: Encrypted blob containing user's password or recovery phrase
 - `unlock_method`: Which method was used ("password" or "recovery")
 - `unlock_verified_at`: ISO timestamp of when unlock occurred
 - `unlock_survey_slug`: Which survey was unlocked
 
 **What's NOT Stored:**
+
 - ❌ The KEK (Key Encryption Key) itself
 - ❌ Any plaintext key material
 - ❌ Decrypted credentials
@@ -1740,15 +1774,59 @@ Layer 3: Encryption Key Control
 | **Insider Threat** | Admin could reset password | Cannot reset OIDC identity; org recovery needed |
 | **Lost Credentials** | Manual password reset | Identity provider handles recovery |
 
+### SSO and Patient Data: Passphrase Requirement
+
+While OIDC auto-unlock is convenient, it's not appropriate for all scenarios. When surveys collect patient data, additional explicit authentication is required:
+
+```python
+# Survey checks if SSO user needs passphrase
+if survey.sso_user_needs_passphrase():
+    # User must set up password-based encryption even with SSO
+    # Auto-unlock alone is NOT sufficient for patient data
+
+    # On first publish:
+    # 1. User enters a passphrase (separate from SSO)
+    # 2. KEK is encrypted with passphrase (encrypted_kek_password)
+    # 3. Recovery phrase also generated (encrypted_kek_recovery)
+    # 4. OIDC encryption may also be set up for convenience
+    pass
+```
+
+**Why require passphrase for SSO + patient data:**
+
+1. **Explicit Intent**: Unlocking patient data should require conscious action, not happen automatically on login
+2. **Device Compromise**: If SSO session is compromised, patient data remains protected
+3. **Shared Devices**: Clinical workstations may have persistent SSO sessions
+4. **Audit Clarity**: Passphrase entry creates clear "intent to access" audit event
+5. **Regulatory Compliance**: Some frameworks require explicit authentication for PHI access
+
+**Configuration in Survey Model:**
+
+```python
+class Survey(models.Model):
+    # Default: True - SSO users need passphrase for patient data
+    require_passphrase_for_patient_data = models.BooleanField(
+        default=True,
+        help_text="Require SSO users to set a passphrase when survey collects patient data"
+    )
+
+    def sso_user_needs_passphrase(self) -> bool:
+        """Check if SSO users need to set a passphrase for this survey."""
+        return self.collects_patient_data() and self.require_passphrase_for_patient_data
+```
+
+Organizations can disable this requirement if their security policy permits auto-unlock for patient data (e.g., in controlled clinical environments).
+
 ### User Experience with OIDC
 
 #### Organization User Flow
 
 1. **Signup**: "Sign in with Microsoft" (organization SSO)
 2. **Create Survey**: Automatic encryption (no manual key management!)
-3. **View Data**: Auto-unlock when authenticated via OIDC
-4. **Recovery**: Organization admin can recover if needed
-5. **MFA**: Handled by Microsoft/Google/Okta
+3. **Patient Data Survey**: Prompted to set passphrase on first publish
+4. **View Data**: Auto-unlock for non-patient data; passphrase required for patient data
+5. **Recovery**: Organization admin can recover if needed
+6. **MFA**: Handled by Microsoft/Google/Okta
 
 #### Individual User Flow
 

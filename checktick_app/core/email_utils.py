@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.template import TemplateDoesNotExist
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 import markdown
@@ -694,4 +695,737 @@ def send_subscription_cancelled_email(
             "surveys_to_close": surveys_to_close,
             "free_tier_limit": free_tier_limit,
         },
+    )
+
+
+# =============================================================================
+# Key Recovery Email Functions
+# =============================================================================
+
+
+def send_recovery_request_submitted_email(
+    to_email: str,
+    user_name: str,
+    request_id: str,
+    survey_name: str,
+    reason: str,
+    estimated_review_time: str = "24-48 hours",
+) -> bool:
+    """Send email to user confirming their key recovery request was submitted.
+
+    Args:
+        to_email: Recipient email address
+        user_name: User's display name
+        request_id: Unique recovery request ID
+        survey_name: Name of the survey
+        reason: User's stated reason for recovery
+        estimated_review_time: Estimated time for admin review
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(
+        f"Sending recovery request submitted email to {to_email} for request {request_id}"
+    )
+
+    branding = get_platform_branding()
+
+    context = {
+        "user_name": user_name,
+        "request_id": request_id,
+        "survey_name": survey_name,
+        "reason": reason,
+        "estimated_review_time": estimated_review_time,
+        "brand_title": branding.get("title", "CheckTick"),
+    }
+
+    try:
+        content = render_to_string("emails/recovery/request_submitted.md", context)
+    except TemplateDoesNotExist:
+        content = f"""## Key Recovery Request Submitted
+
+Hi {user_name},
+
+Your request to recover access to your encrypted survey data has been submitted and is pending review.
+
+### Request Details
+
+- **Request ID:** `{request_id}`
+- **Survey:** {survey_name}
+- **Reason:** {reason}
+
+### What Happens Next
+
+1. A platform administrator will review your request
+2. You may be asked to verify your identity
+3. Once approved, there will be a mandatory waiting period before access is restored
+
+**Estimated review time:** {estimated_review_time}
+
+⚠️ **Important:** If you did not submit this request, please contact your administrator immediately.
+
+---
+
+Thank you for your patience.
+
+The {branding.get("title", "CheckTick")} Team
+"""
+
+    return send_branded_email(
+        to_email=to_email,
+        subject=f"Key Recovery Request Submitted - {request_id[:8]}",
+        markdown_content=content,
+        branding=branding,
+    )
+
+
+def send_recovery_admin_notification_email(
+    to_email: str,
+    admin_name: str,
+    request_id: str,
+    requester_name: str,
+    requester_email: str,
+    survey_name: str,
+    reason: str,
+    dashboard_url: str,
+) -> bool:
+    """Send email to platform admin notifying them of a new recovery request.
+
+    Args:
+        to_email: Admin's email address
+        admin_name: Admin's display name
+        request_id: Unique recovery request ID
+        requester_name: Name of user requesting recovery
+        requester_email: Email of user requesting recovery
+        survey_name: Name of the survey
+        reason: User's stated reason for recovery
+        dashboard_url: URL to recovery dashboard
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(
+        f"Sending recovery admin notification email to {to_email} for request {request_id}"
+    )
+
+    branding = get_platform_branding()
+
+    context = {
+        "admin_name": admin_name,
+        "request_id": request_id,
+        "requester_name": requester_name,
+        "requester_email": requester_email,
+        "survey_name": survey_name,
+        "reason": reason,
+        "dashboard_url": dashboard_url,
+        "brand_title": branding.get("title", "CheckTick"),
+    }
+
+    try:
+        content = render_to_string("emails/recovery/admin_notification.md", context)
+    except TemplateDoesNotExist:
+        content = f"""## New Key Recovery Request Requires Review
+
+Hi {admin_name},
+
+A new key recovery request has been submitted and requires your review.
+
+### Request Details
+
+- **Request ID:** `{request_id}`
+- **Requester:** {requester_name} ({requester_email})
+- **Survey:** {survey_name}
+- **Reason:** {reason}
+
+### Action Required
+
+Please review this request and take appropriate action:
+
+[**Review Request in Dashboard**]({dashboard_url})
+
+Or copy and paste this URL:
+
+```
+{dashboard_url}
+```
+
+### Security Reminder
+
+Before approving any recovery request:
+- Verify the requester's identity through an out-of-band channel
+- Review the stated reason for reasonableness
+- Check for any suspicious account activity
+- Document your verification steps
+
+---
+
+The {branding.get("title", "CheckTick")} Security Team
+"""
+
+    return send_branded_email(
+        to_email=to_email,
+        subject=f"⚠️ Key Recovery Request Pending Review - {request_id[:8]}",
+        markdown_content=content,
+        branding=branding,
+    )
+
+
+def send_recovery_verification_needed_email(
+    to_email: str,
+    user_name: str,
+    request_id: str,
+    verification_method: str,
+    verification_instructions: str,
+    expires_at: str,
+) -> bool:
+    """Send email to user requesting identity verification.
+
+    Args:
+        to_email: Recipient email address
+        user_name: User's display name
+        request_id: Unique recovery request ID
+        verification_method: Type of verification required
+        verification_instructions: Instructions for verification
+        expires_at: When the verification expires
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(
+        f"Sending recovery verification needed email to {to_email} for request {request_id}"
+    )
+
+    branding = get_platform_branding()
+
+    context = {
+        "user_name": user_name,
+        "request_id": request_id,
+        "verification_method": verification_method,
+        "verification_instructions": verification_instructions,
+        "expires_at": expires_at,
+        "brand_title": branding.get("title", "CheckTick"),
+    }
+
+    try:
+        content = render_to_string("emails/recovery/verification_needed.md", context)
+    except TemplateDoesNotExist:
+        content = f"""## Identity Verification Required
+
+Hi {user_name},
+
+To proceed with your key recovery request, we need to verify your identity.
+
+### Request Details
+
+- **Request ID:** `{request_id}`
+
+### Verification Method
+
+**{verification_method}**
+
+{verification_instructions}
+
+### Important
+
+⏰ **This verification request expires:** {expires_at}
+
+If you do not complete verification by this time, your recovery request will be cancelled and you'll need to submit a new one.
+
+⚠️ **Security Note:** If you did not submit this recovery request, please contact your administrator immediately as someone may be attempting to access your data.
+
+---
+
+The {branding.get("title", "CheckTick")} Security Team
+"""
+
+    return send_branded_email(
+        to_email=to_email,
+        subject=f"Identity Verification Required - Recovery Request {request_id[:8]}",
+        markdown_content=content,
+        branding=branding,
+    )
+
+
+def send_recovery_approved_email(
+    to_email: str,
+    user_name: str,
+    request_id: str,
+    survey_name: str,
+    time_delay_hours: int,
+    access_available_at: str,
+    approved_by: str,
+) -> bool:
+    """Send email to user that their recovery request was approved with time delay.
+
+    Args:
+        to_email: Recipient email address
+        user_name: User's display name
+        request_id: Unique recovery request ID
+        survey_name: Name of the survey
+        time_delay_hours: Hours until access is granted
+        access_available_at: Formatted datetime when access is available
+        approved_by: Name of admin who approved
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(
+        f"Sending recovery approved email to {to_email} for request {request_id}"
+    )
+
+    branding = get_platform_branding()
+
+    context = {
+        "user_name": user_name,
+        "request_id": request_id,
+        "survey_name": survey_name,
+        "time_delay_hours": time_delay_hours,
+        "access_available_at": access_available_at,
+        "approved_by": approved_by,
+        "brand_title": branding.get("title", "CheckTick"),
+    }
+
+    try:
+        content = render_to_string("emails/recovery/approved.md", context)
+    except TemplateDoesNotExist:
+        content = f"""## Key Recovery Request Approved
+
+Hi {user_name},
+
+Good news! Your key recovery request has been approved.
+
+### Request Details
+
+- **Request ID:** `{request_id}`
+- **Survey:** {survey_name}
+- **Approved by:** {approved_by}
+
+### Mandatory Waiting Period
+
+For security reasons, there is a mandatory **{time_delay_hours}-hour waiting period** before your access is restored.
+
+⏰ **Access will be available at:** {access_available_at}
+
+This delay helps protect against unauthorized access by giving you time to report if this request was not legitimately made by you.
+
+### What Happens Next
+
+1. Wait for the time delay to complete
+2. You will receive another email when access is ready
+3. You may then need to set a new passphrase
+
+⚠️ **Important:** If you did not request this recovery, contact your administrator **immediately** to cancel the request during this waiting period.
+
+---
+
+The {branding.get("title", "CheckTick")} Security Team
+"""
+
+    return send_branded_email(
+        to_email=to_email,
+        subject=f"✅ Key Recovery Approved - Access Available {access_available_at}",
+        markdown_content=content,
+        branding=branding,
+    )
+
+
+def send_recovery_ready_email(
+    to_email: str,
+    user_name: str,
+    request_id: str,
+    survey_name: str,
+    recovery_url: str,
+) -> bool:
+    """Send email to user that their recovery is complete and they can set a new passphrase.
+
+    Args:
+        to_email: Recipient email address
+        user_name: User's display name
+        request_id: Unique recovery request ID
+        survey_name: Name of the survey
+        recovery_url: URL to complete recovery
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(f"Sending recovery ready email to {to_email} for request {request_id}")
+
+    branding = get_platform_branding()
+
+    context = {
+        "user_name": user_name,
+        "request_id": request_id,
+        "survey_name": survey_name,
+        "recovery_url": recovery_url,
+        "brand_title": branding.get("title", "CheckTick"),
+    }
+
+    try:
+        content = render_to_string("emails/recovery/ready.md", context)
+    except TemplateDoesNotExist:
+        content = f"""## Your Data Access is Ready
+
+Hi {user_name},
+
+The waiting period for your key recovery request has completed. You can now restore access to your encrypted data.
+
+### Request Details
+
+- **Request ID:** `{request_id}`
+- **Survey:** {survey_name}
+
+### Complete Your Recovery
+
+Click the link below to set a new passphrase and restore access to your data:
+
+[**Complete Recovery**]({recovery_url})
+
+Or copy and paste this URL:
+
+```
+{recovery_url}
+```
+
+### Important Notes
+
+- You will need to set a new passphrase
+- Your previous passphrase will no longer work
+- Make sure to save your new passphrase securely
+
+---
+
+The {branding.get("title", "CheckTick")} Team
+"""
+
+    return send_branded_email(
+        to_email=to_email,
+        subject="🔑 Your Data Access is Ready - Complete Recovery Now",
+        markdown_content=content,
+        branding=branding,
+    )
+
+
+def send_recovery_completed_email(
+    to_email: str,
+    user_name: str,
+    request_id: str,
+    survey_name: str,
+    survey_url: str,
+) -> bool:
+    """Send email to user that their recovery has been completed successfully.
+
+    Args:
+        to_email: Recipient email address
+        user_name: User's display name
+        request_id: Unique recovery request ID
+        survey_name: Name of the survey
+        survey_url: URL to access the survey
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(
+        f"Sending recovery completed email to {to_email} for request {request_id}"
+    )
+
+    branding = get_platform_branding()
+
+    context = {
+        "user_name": user_name,
+        "request_id": request_id,
+        "survey_name": survey_name,
+        "survey_url": survey_url,
+        "brand_title": branding.get("title", "CheckTick"),
+    }
+
+    try:
+        content = render_to_string("emails/recovery/completed.md", context)
+    except TemplateDoesNotExist:
+        content = f"""## 🎉 Recovery Complete - Access Restored
+
+Hi {user_name},
+
+Great news! Your key recovery request has been successfully completed. You can now access your encrypted survey data using your new password.
+
+### Recovery Details
+
+- **Request ID:** `{request_id}`
+- **Survey:** {survey_name}
+- **Status:** ✅ Completed
+
+### Access Your Survey
+
+Your data is now accessible. Click below to open your survey:
+
+[**Open Survey**]({survey_url})
+
+Or copy and paste this URL:
+
+```
+{survey_url}
+```
+
+### Important Security Reminders
+
+- **Remember your new password** - Store it securely
+- **Consider setting up a recovery phrase** - This helps prevent future lockouts
+- **Enable 2FA** if you haven't already
+
+### What Happened
+
+Your encryption keys have been recovered from our secure key escrow and re-encrypted with your new password. The original escrowed keys remain protected for future recovery needs.
+
+### Need Help?
+
+If you experience any issues accessing your data, please contact your administrator.
+
+---
+
+The {branding.get("title", "CheckTick")} Team
+"""
+
+    return send_branded_email(
+        to_email=to_email,
+        subject="🎉 Recovery Complete - Your Data Access Has Been Restored",
+        markdown_content=content,
+        branding=branding,
+    )
+
+
+def send_recovery_rejected_email(
+    to_email: str,
+    user_name: str,
+    request_id: str,
+    survey_name: str,
+    reason: str,
+    rejected_by: str,
+) -> bool:
+    """Send email to user that their recovery request was rejected.
+
+    Args:
+        to_email: Recipient email address
+        user_name: User's display name
+        request_id: Unique recovery request ID
+        survey_name: Name of the survey
+        reason: Reason for rejection
+        rejected_by: Name of admin who rejected
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(
+        f"Sending recovery rejected email to {to_email} for request {request_id}"
+    )
+
+    branding = get_platform_branding()
+
+    context = {
+        "user_name": user_name,
+        "request_id": request_id,
+        "survey_name": survey_name,
+        "reason": reason,
+        "rejected_by": rejected_by,
+        "brand_title": branding.get("title", "CheckTick"),
+    }
+
+    try:
+        content = render_to_string("emails/recovery/rejected.md", context)
+    except TemplateDoesNotExist:
+        content = f"""## Key Recovery Request Rejected
+
+Hi {user_name},
+
+Unfortunately, your key recovery request has been rejected.
+
+### Request Details
+
+- **Request ID:** `{request_id}`
+- **Survey:** {survey_name}
+- **Reviewed by:** {rejected_by}
+
+### Reason for Rejection
+
+{reason}
+
+### What You Can Do
+
+If you believe this rejection was made in error, you can:
+
+1. Contact your organization administrator
+2. Submit a new recovery request with additional information
+3. Verify your identity through your organization's IT support
+
+---
+
+The {branding.get("title", "CheckTick")} Security Team
+"""
+
+    return send_branded_email(
+        to_email=to_email,
+        subject=f"❌ Key Recovery Request Rejected - {request_id[:8]}",
+        markdown_content=content,
+        branding=branding,
+    )
+
+
+def send_recovery_cancelled_email(
+    to_email: str,
+    user_name: str,
+    request_id: str,
+    survey_name: str,
+    cancelled_by: str,
+    reason: str = "",
+) -> bool:
+    """Send email to user that their recovery request was cancelled.
+
+    Args:
+        to_email: Recipient email address
+        user_name: User's display name
+        request_id: Unique recovery request ID
+        survey_name: Name of the survey
+        cancelled_by: Who cancelled the request
+        reason: Optional reason for cancellation
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(
+        f"Sending recovery cancelled email to {to_email} for request {request_id}"
+    )
+
+    branding = get_platform_branding()
+
+    context = {
+        "user_name": user_name,
+        "request_id": request_id,
+        "survey_name": survey_name,
+        "cancelled_by": cancelled_by,
+        "reason": reason,
+        "brand_title": branding.get("title", "CheckTick"),
+    }
+
+    try:
+        content = render_to_string("emails/recovery/cancelled.md", context)
+    except TemplateDoesNotExist:
+        reason_line = f"- **Reason:** {reason}" if reason else ""
+        content = f"""## Key Recovery Request Cancelled
+
+Hi {user_name},
+
+Your key recovery request has been cancelled.
+
+### Request Details
+
+- **Request ID:** `{request_id}`
+- **Survey:** {survey_name}
+- **Cancelled by:** {cancelled_by}
+{reason_line}
+
+### Need Help?
+
+If you still need to recover access to your data, you can submit a new recovery request.
+
+If you have questions about why this request was cancelled, please contact your administrator.
+
+---
+
+The {branding.get("title", "CheckTick")} Team
+"""
+
+    return send_branded_email(
+        to_email=to_email,
+        subject=f"Key Recovery Request Cancelled - {request_id[:8]}",
+        markdown_content=content,
+        branding=branding,
+    )
+
+
+def send_recovery_security_alert_email(
+    to_email: str,
+    user_name: str,
+    request_id: str,
+    survey_name: str,
+    alert_type: str,
+    alert_details: str,
+    action_url: str,
+) -> bool:
+    """Send security alert email about a recovery request (e.g., suspicious activity).
+
+    Args:
+        to_email: Recipient email address
+        user_name: User's display name
+        request_id: Unique recovery request ID
+        survey_name: Name of the survey
+        alert_type: Type of security alert
+        alert_details: Details about the alert
+        action_url: URL to take action
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(
+        f"Sending recovery security alert email to {to_email} for request {request_id}"
+    )
+
+    branding = get_platform_branding()
+
+    context = {
+        "user_name": user_name,
+        "request_id": request_id,
+        "survey_name": survey_name,
+        "alert_type": alert_type,
+        "alert_details": alert_details,
+        "action_url": action_url,
+        "brand_title": branding.get("title", "CheckTick"),
+    }
+
+    try:
+        content = render_to_string("emails/recovery/security_alert.md", context)
+    except TemplateDoesNotExist:
+        content = f"""## 🚨 Security Alert: Key Recovery Request
+
+Hi {user_name},
+
+We detected potentially suspicious activity related to a key recovery request on your account.
+
+### Alert Details
+
+- **Alert Type:** {alert_type}
+- **Request ID:** `{request_id}`
+- **Survey:** {survey_name}
+
+### What Happened
+
+{alert_details}
+
+### Take Action
+
+If you **did not** initiate this recovery request, take immediate action:
+
+[**Report Unauthorized Access**]({action_url})
+
+Or copy and paste this URL:
+
+```
+{action_url}
+```
+
+### If This Was You
+
+If you did initiate this request, you can safely ignore this alert. This notification is sent as a security precaution.
+
+### Contact Support
+
+If you have any concerns about your account security, please contact your administrator immediately.
+
+---
+
+The {branding.get("title", "CheckTick")} Security Team
+"""
+
+    return send_branded_email(
+        to_email=to_email,
+        subject="🚨 Security Alert: Key Recovery Request on Your Account",
+        markdown_content=content,
+        branding=branding,
     )
