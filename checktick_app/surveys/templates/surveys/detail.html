@@ -312,6 +312,27 @@
               {% endif %}
             {% endfor %}
           </div>
+        {% elif q.type == 'image' %}
+          {# Image choice question - display clickable image cards #}
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {% for img in q.images.all %}
+              <label class="cursor-pointer group">
+                <input type="radio" name="q_{{ q.id }}" value="{{ img.id }}" class="hidden peer" />
+                <div class="card bg-base-200 border-2 border-transparent peer-checked:border-primary peer-checked:bg-primary/10 hover:border-base-300 transition-colors">
+                  <figure class="px-2 pt-2">
+                    <img src="{{ img.image.url }}" alt="{{ img.label|default:'Image option' }}" class="rounded-lg w-full h-24 object-cover" />
+                  </figure>
+                  {% if img.label %}
+                    <div class="card-body p-2">
+                      <p class="text-xs text-center truncate">{{ img.label }}</p>
+                    </div>
+                  {% endif %}
+                </div>
+              </label>
+            {% empty %}
+              <p class="text-sm opacity-60 col-span-full">No images configured for this question.</p>
+            {% endfor %}
+          </div>
         {% else %}
           <input class="input input-bordered w-full" type="text" name="q_{{ q.id }}" />
         {% endif %}

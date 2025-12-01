@@ -106,6 +106,24 @@
         {% endfor %}
       </ul>
     </div>
+  {% elif q.type == 'image' %}
+    <div class="space-y-2">
+      {% if q.images.exists %}
+        <div class="grid grid-cols-4 gap-2">
+          {% for img in q.images.all %}
+            <div class="relative group">
+              <img src="{{ img.url }}" alt="{{ img.label|default:'Image option' }}" class="w-full aspect-square object-cover rounded border border-base-300 opacity-70" />
+              {% if img.label %}
+                <p class="text-xs text-center mt-1 truncate opacity-60" title="{{ img.label }}">{{ img.label }}</p>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+        <p class="text-xs opacity-50">{{ q.images.count }} image option{{ q.images.count|pluralize }}</p>
+      {% else %}
+        <p class="text-sm opacity-60 italic">No images uploaded yet. Edit this question to add images.</p>
+      {% endif %}
+    </div>
   {% else %}
     <input class="input input-bordered w-full" type="text" disabled />
   {% endif %}

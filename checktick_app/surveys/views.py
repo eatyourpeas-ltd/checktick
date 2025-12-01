@@ -893,7 +893,9 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
 
     _prepare_question_rendering(survey)
     # Prepare ordered questions by group position, then by question order within group
-    all_questions = list(survey.questions.select_related("group").all())
+    all_questions = list(
+        survey.questions.select_related("group").prefetch_related("images").all()
+    )
     qs = _order_questions_by_group(survey, all_questions)
 
     # Mark questions that have SHOW conditions (should be hidden by default)
@@ -1001,7 +1003,9 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
 
     # Render the same detail template in preview mode
     _prepare_question_rendering(survey)
-    all_questions = list(survey.questions.select_related("group").all())
+    all_questions = list(
+        survey.questions.select_related("group").prefetch_related("images").all()
+    )
     qs = _order_questions_by_group(survey, all_questions)
 
     # Mark questions that have SHOW conditions (should be hidden by default)
@@ -1566,6 +1570,7 @@ def _serialize_question_for_builder(
         "type": question.type,
         "required": bool(question.required),
         "group_id": question.group_id,
+        "survey_slug": question.survey.slug if hasattr(question, "survey") else None,
     }
 
     options = question.options or []
@@ -1635,6 +1640,23 @@ def _serialize_question_for_builder(
         elif prefilled_dataset:
             # Backward compatibility for old metadata format
             payload["prefilled_dataset"] = prefilled_dataset
+
+        # For image questions, include the uploaded images
+        if question.type == SurveyQuestion.Types.IMAGE_CHOICE:
+            images_data = []
+            try:
+                for img in question.images.all():
+                    images_data.append(
+                        {
+                            "id": img.id,
+                            "url": img.url,
+                            "label": img.label or "",
+                            "order": img.order,
+                        }
+                    )
+            except Exception:
+                pass
+            payload["images"] = images_data
     elif question.type == SurveyQuestion.Types.YESNO:
         # For Yes/No questions, check for follow-up text config
         yesno_followup_config: dict[str, dict[str, Any]] = {}
@@ -4819,7 +4841,6 @@ def survey_unlock(request: HttpRequest, slug: str) -> HttpResponse:
         and survey.can_user_unlock_automatically(request.user)
         and request.session.get("unlock_survey_slug") != slug
     ):
-
         kek = survey.unlock_with_oidc(request.user)
         if kek:
             # Log OIDC automatic unlock
@@ -6126,6 +6147,222 @@ def builder_group_questions_reorder(
             "questions": questions,
             "message": "Order updated.",
         },
+    )
+
+
+# Maximum file size for uploaded images (1MB)
+MAX_IMAGE_SIZE = 1 * 1024 * 1024  # 1MB
+# Maximum image dimensions
+MAX_IMAGE_DIMENSION = 800
+# Allowed image formats (extensions)
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
+# Allowed MIME types
+ALLOWED_IMAGE_MIMES = {
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/svg+xml",
+}
+
+
+def _validate_and_process_image(uploaded_file) -> tuple[bool, str]:
+    """
+    Validate and optionally resize an uploaded image.
+
+    Returns:
+        (success, error_message) - if success is False, error_message contains
+        the reason
+    """
+    import os
+
+    from PIL import Image
+
+    # Check file size
+    if uploaded_file.size > MAX_IMAGE_SIZE:
+        return False, _("Image file is too large. Maximum size is 1MB.")
+
+    # Check extension
+    _base, ext = os.path.splitext(uploaded_file.name.lower())
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        return False, _("Invalid image format. Allowed formats: PNG, JPG, WebP, SVG.")
+
+    # Check MIME type
+    content_type = uploaded_file.content_type
+    if content_type not in ALLOWED_IMAGE_MIMES:
+        return False, _("Invalid image type. Allowed types: PNG, JPG, WebP, SVG.")
+
+    # For SVG files, we skip dimension checks and PIL processing
+    if ext == ".svg" or content_type == "image/svg+xml":
+        return True, ""
+
+    # Validate the image can be opened and check dimensions
+    try:
+        img = Image.open(uploaded_file)
+        img.verify()  # Verify it's a valid image
+
+        # Re-open after verify (verify closes the file)
+        uploaded_file.seek(0)
+        img = Image.open(uploaded_file)
+
+        # Resize if too large
+        if img.width > MAX_IMAGE_DIMENSION or img.height > MAX_IMAGE_DIMENSION:
+            img.thumbnail(
+                (MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.Resampling.LANCZOS
+            )
+
+            # Save the resized image back to the file
+            from io import BytesIO
+
+            buffer = BytesIO()
+            img_format = (
+                "PNG"
+                if ext == ".png"
+                else "JPEG"
+                if ext in (".jpg", ".jpeg")
+                else "WEBP"
+            )
+            img.save(buffer, format=img_format, quality=85)
+            buffer.seek(0)
+
+            # Update the file content
+            uploaded_file.file = buffer
+            uploaded_file.size = buffer.getbuffer().nbytes
+
+        uploaded_file.seek(0)
+        return True, ""
+
+    except Exception as e:
+        return False, _("Invalid or corrupted image file: %(error)s") % {
+            "error": str(e)
+        }
+
+
+@login_required
+@require_http_methods(["POST"])
+def builder_question_image_upload(
+    request: HttpRequest, slug: str, qid: int
+) -> HttpResponse:
+    """Upload an image for an image choice question (no group)."""
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    question = get_object_or_404(
+        SurveyQuestion, id=qid, survey=survey, group__isnull=True
+    )
+    return _handle_image_upload(request, survey, question)
+
+
+@login_required
+@require_http_methods(["POST"])
+def builder_group_question_image_upload(
+    request: HttpRequest, slug: str, gid: int, qid: int
+) -> HttpResponse:
+    """Upload an image for an image choice question (with group)."""
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)
+    question = get_object_or_404(SurveyQuestion, id=qid, survey=survey, group=group)
+    return _handle_image_upload(request, survey, question)
+
+
+def _handle_image_upload(
+    request: HttpRequest, survey: Survey, question: SurveyQuestion
+) -> HttpResponse:
+    """Common handler for image uploads."""
+    from .models import QuestionImage
+
+    if question.type != SurveyQuestion.Types.IMAGE_CHOICE:
+        return JsonResponse(
+            {"success": False, "error": _("Question is not an image choice type.")},
+            status=400,
+        )
+
+    uploaded_file = request.FILES.get("image")
+    if not uploaded_file:
+        return JsonResponse(
+            {"success": False, "error": _("No image file provided.")},
+            status=400,
+        )
+
+    # Validate and process the image
+    success, error = _validate_and_process_image(uploaded_file)
+    if not success:
+        return JsonResponse({"success": False, "error": error}, status=400)
+
+    # Get the label from the request
+    label = request.POST.get("label", "").strip()
+
+    # Calculate the order for the new image
+    max_order = question.images.aggregate(models.Max("order")).get("order__max") or 0
+
+    # Create the QuestionImage
+    image = QuestionImage.objects.create(
+        question=question,
+        image=uploaded_file,
+        label=label,
+        order=max_order + 1,
+    )
+
+    return JsonResponse(
+        {
+            "success": True,
+            "image": {
+                "id": image.id,
+                "url": image.url,
+                "label": image.label,
+                "order": image.order,
+            },
+            "message": _("Image uploaded successfully."),
+        }
+    )
+
+
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def builder_question_image_delete(
+    request: HttpRequest, slug: str, qid: int, img_id: int
+) -> HttpResponse:
+    """Delete an image from an image choice question (no group)."""
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    question = get_object_or_404(
+        SurveyQuestion, id=qid, survey=survey, group__isnull=True
+    )
+    return _handle_image_delete(request, survey, question, img_id)
+
+
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def builder_group_question_image_delete(
+    request: HttpRequest, slug: str, gid: int, qid: int, img_id: int
+) -> HttpResponse:
+    """Delete an image from an image choice question (with group)."""
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)
+    question = get_object_or_404(SurveyQuestion, id=qid, survey=survey, group=group)
+    return _handle_image_delete(request, survey, question, img_id)
+
+
+def _handle_image_delete(
+    request: HttpRequest, survey: Survey, question: SurveyQuestion, img_id: int
+) -> HttpResponse:
+    """Common handler for image deletion."""
+    from .models import QuestionImage
+
+    image = get_object_or_404(QuestionImage, id=img_id, question=question)
+
+    # Delete the file from storage
+    if image.image:
+        image.image.delete(save=False)
+
+    # Delete the model instance
+    image.delete()
+
+    return JsonResponse(
+        {
+            "success": True,
+            "message": _("Image deleted successfully."),
+        }
     )
 
 
