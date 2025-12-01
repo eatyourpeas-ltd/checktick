@@ -779,6 +779,32 @@ class Survey(models.Model):
         """
         return self.collects_patient_data() and self.require_passphrase_for_patient_data
 
+    def is_patient_data_readonly(self) -> bool:
+        """
+        Check if this survey's patient data is in readonly mode due to tier downgrade.
+
+        Returns:
+            True if survey collects patient data but owner no longer has permission.
+
+        This happens when a user:
+        1. Had a paid tier (Pro, Team, Organization)
+        2. Created a survey with patient data
+        3. Downgraded to FREE tier
+
+        In this state:
+        - Survey data remains encrypted and accessible
+        - Survey cannot be edited (questions/groups are readonly)
+        - Survey responses can still be viewed (with unlock)
+        - User must upgrade to edit the survey again
+        """
+        if not self.collects_patient_data():
+            return False
+
+        from checktick_app.core.tier_limits import check_patient_data_permission
+
+        can_collect, _ = check_patient_data_permission(self.owner)
+        return not can_collect
+
     def set_oidc_encryption(self, kek: bytes, user) -> None:
         """
         Set up OIDC encryption for automatic survey unlocking.

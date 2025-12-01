@@ -17,18 +17,23 @@ CheckTick implements a seven-tier account system designed to work seamlessly for
 ## Account Tiers
 
 ### 1. FREE
+
 Entry-level individual account with 3 survey limit.
 
 ### 2. PRO
+
 Paid individual account with unlimited surveys.
 
 ### 3. TEAM (Small/Medium/Large)
+
 Collaborative teams of 5-20 users with shared billing and role-based access.
 
 ### 4. ORGANISATION
+
 Multi-team organisations with private datasets, unlimited members, and full governance features.
 
 ### 5. ENTERPRISE
+
 Self-hosted deployments with custom branding, SSO, and full control.
 
 ---

@@ -12,7 +12,7 @@ CheckTick protects your sensitive survey data with encryption. This guide explai
 
 | Subscription Tier | Encryption Features | Recovery Options |
 |-------------------|---------------------|------------------|
-| **Free** | No encryption (local browser storage only) | N/A - data not stored on server |
+| **Free** | Standard surveys only (no patient data) | N/A - no encryption needed |
 | **Individual** | Password + Recovery Phrase + **Platform Key Escrow** | Password OR Recovery Phrase OR **Verified Identity Recovery** |
 | **Pro** | Enhanced encryption + Vault backup | Password OR Recovery Phrase OR **Verified Identity Recovery** |
 | **Team Small/Medium/Large** | Team-shared keys + Organization master key | Team admin OR Organization admin OR Platform recovery |
@@ -30,17 +30,27 @@ CheckTick implements **ethical key recovery**: if you lose both your password AN
 ## Free Tier
 
 ### What You Get
-- No server-side storage
-- Data stays in your browser only
-- No encryption (data stored in plain text locally)
+- Create up to 3 surveys
+- Collect general survey responses
+- Export your data
+- Basic API access
 
 ### When to Use
 - Testing CheckTick features
-- Non-sensitive practice surveys
+- Non-sensitive surveys and feedback forms
 - Learning how the platform works
+- General data collection (no patient identifiers)
 
 ### Limitations
-⚠️ **Not suitable for patient data** - no encryption or secure storage
+⚠️ **Patient data collection is not available** on the Free tier
+
+The Patient Details (encrypted) template is a paid feature. To collect patient-identifiable data with encryption, upgrade to Pro (£5/month) or higher.
+
+### Upgrade Path
+When you're ready to collect patient data or need more features:
+- **Pro (£5/mo)**: Unlimited surveys, encrypted patient data, collaboration
+- **Team (from £25/mo)**: Team collaboration, SSO, admin recovery
+- **Organization**: Custom pricing, hierarchical management
 
 ---
 
@@ -181,21 +191,24 @@ Everything in Individual tier, plus:
 
 ### What You Get
 - **Team-Shared Encryption Keys**: All team members use the same survey key
-- **Organization Master Key**: Hierarchical key management
 - **Admin Recovery**: Team admin can recover member surveys
 - **Platform Recovery**: Backup if team admin also loses access
 - **SSO Support**: Auto-unlock with Google/Azure/Microsoft
 
 ### How It Works
 
-#### Team Key Management
+Teams can operate in two modes:
+1. **Standalone Teams** - Independent teams not part of an organization
+2. **Organization Teams** - Teams that belong to a parent organization
 
-**When your team is created:**
+#### Standalone Team Key Management
 
-1. Organization owner sets up organization master key
-2. Team keys are derived from organization key
-3. All team surveys encrypted with team key
-4. Team admin manages access
+**When your standalone team is created:**
+
+1. Team owner sets up the team encryption key
+2. All team surveys are encrypted with this team key
+3. Team admin manages access and recovery
+4. Platform provides backup recovery as a last resort
 
 **For team members:**
 
@@ -203,6 +216,21 @@ Everything in Individual tier, plus:
 - Surveys automatically unlock when signed in
 - No passwords or recovery phrases to remember!
 - Team admin can grant/revoke access
+
+#### Organization Team Key Management
+
+**When your team belongs to an organization:**
+
+1. Organization owner sets up organization master key
+2. Team keys are derived from organization key
+3. All team surveys encrypted with team key
+4. Both team admin and organization admin can manage access
+
+**For team members:**
+
+- Same SSO experience as standalone teams
+- Additional recovery path through organization admin
+- Hierarchical key management provides extra redundancy
 
 #### SSO and Patient Data Surveys
 
@@ -228,9 +256,25 @@ When your survey collects patient data, **the entire response is encrypted**, no
 
 This provides complete protection - you can't accidentally expose clinical context by encrypting identifiers alone.
 
-#### Recovery Options
+#### Recovery Options for Standalone Teams
 
-**If a team member loses access:**
+**If a team member loses access (standalone team):**
+
+**Option 1: Team Admin Recovery** (Instant)
+
+- Team admin can recover member's survey immediately
+- Logged for compliance
+
+**Option 2: Platform Recovery** (24-96 hours)
+
+- Same process as Individual tier
+- Identity verification + dual authorization + time delay
+- Used if team admin is also unavailable
+- All actions logged in immutable audit trail
+
+#### Recovery Options for Organization Teams
+
+**If a team member loses access (organization team):**
 
 **Option 1: Team Admin Recovery** (Instant)
 

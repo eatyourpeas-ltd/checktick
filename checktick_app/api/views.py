@@ -417,6 +417,28 @@ class SurveyViewSet(viewsets.ModelViewSet):
         # Valid question types from SurveyQuestion.Types
         valid_types = [choice[0] for choice in SurveyQuestion.Types.choices]
 
+        # Check if any questions are patient template type
+        has_patient_template = any(
+            item.get("type") == "template_patient" for item in items
+        )
+        if has_patient_template:
+            from checktick_app.core.tier_limits import check_patient_data_permission
+
+            can_collect, reason = check_patient_data_permission(request.user)
+            if not can_collect:
+                return Response(
+                    {
+                        "errors": [
+                            {
+                                "field": "type",
+                                "value": "template_patient",
+                                "message": f"{reason} Patient details templates require a paid subscription.",
+                            }
+                        ]
+                    },
+                    status=403,
+                )
+
         # Validate all items first before creating any
         errors = []
         for idx, item in enumerate(items):
@@ -580,6 +602,16 @@ class SurveyViewSet(viewsets.ModelViewSet):
         # Enforce encryption requirement for surveys collecting patient data
         # API users must set up encryption through the web interface before publishing
         if collects_patient and is_first_publish and not survey.has_any_encryption():
+            # Check if user can collect patient data (FREE tier cannot)
+            from checktick_app.core.tier_limits import check_patient_data_permission
+
+            can_collect, reason = check_patient_data_permission(request.user)
+            if not can_collect:
+                raise serializers.ValidationError(
+                    {
+                        "tier": f"{reason} Your survey contains patient data questions that require encryption.",
+                    }
+                )
             raise serializers.ValidationError(
                 {
                     "encryption": "This survey collects patient data and requires encryption to be set up before publishing. Please use the web interface to configure encryption, then publish via API.",

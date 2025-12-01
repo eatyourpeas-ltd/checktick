@@ -120,7 +120,13 @@ def test_patient_data_ack_required_for_public_visibility(django_user_model):
 @pytest.mark.django_db
 def test_encryption_required_for_patient_data_surveys(django_user_model):
     """API should block publishing surveys with patient data if no encryption exists."""
+    from checktick_app.core.models import UserProfile
+
     owner = django_user_model.objects.create_user(username="owner5", password="x")
+    # Upgrade to PRO so tier check passes - we want to test encryption requirement
+    owner.profile.account_tier = UserProfile.AccountTier.PRO
+    owner.profile.save()
+
     client = APIClient()
     client.force_authenticate(owner)
     survey = Survey.objects.create(owner=owner, name="Patient Survey", slug="s-patient")

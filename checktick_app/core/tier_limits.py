@@ -41,6 +41,9 @@ class TierLimits:
     can_export_data: bool
     can_use_webhooks: bool
 
+    # Patient data and encryption
+    can_collect_patient_data: bool  # FREE tier cannot collect patient data
+
     # Support level
     support_level: str  # "community", "email", "priority"
 
@@ -65,6 +68,7 @@ TIER_LIMITS_CONFIG = {
         can_use_api=True,  # Basic API access for all
         can_export_data=True,  # Can export own data
         can_use_webhooks=False,
+        can_collect_patient_data=False,  # FREE tier cannot collect patient data
         support_level="community",
     ),
     "pro": TierLimits(
@@ -83,6 +87,7 @@ TIER_LIMITS_CONFIG = {
         can_use_api=True,
         can_export_data=True,
         can_use_webhooks=False,
+        can_collect_patient_data=True,
         support_level="email",
     ),
     "team_small": TierLimits(
@@ -101,6 +106,7 @@ TIER_LIMITS_CONFIG = {
         can_use_api=True,
         can_export_data=True,
         can_use_webhooks=False,
+        can_collect_patient_data=True,
         support_level="email",
     ),
     "team_medium": TierLimits(
@@ -119,6 +125,7 @@ TIER_LIMITS_CONFIG = {
         can_use_api=True,
         can_export_data=True,
         can_use_webhooks=False,
+        can_collect_patient_data=True,
         support_level="email",
     ),
     "team_large": TierLimits(
@@ -137,6 +144,7 @@ TIER_LIMITS_CONFIG = {
         can_use_api=True,
         can_export_data=True,
         can_use_webhooks=False,
+        can_collect_patient_data=True,
         support_level="email",
     ),
     "organization": TierLimits(
@@ -155,6 +163,7 @@ TIER_LIMITS_CONFIG = {
         can_use_api=True,
         can_export_data=True,
         can_use_webhooks=True,
+        can_collect_patient_data=True,
         support_level="email",
     ),
     "enterprise": TierLimits(
@@ -176,6 +185,7 @@ TIER_LIMITS_CONFIG = {
         can_use_api=True,
         can_export_data=True,
         can_use_webhooks=True,
+        can_collect_patient_data=True,
         support_level="priority",
     ),
 }
@@ -390,6 +400,30 @@ def check_webhook_permission(user) -> tuple[bool, str]:
     return True, ""
 
 
+def check_patient_data_permission(user) -> tuple[bool, str]:
+    """Check if user can collect patient data in surveys.
+
+    Args:
+        user: User object with profile
+
+    Returns:
+        (can_collect, reason) - Boolean and error message if not allowed
+    """
+    if not hasattr(user, "profile"):
+        return False, "User profile not found"
+
+    effective_tier = user.profile.get_effective_tier()
+    limits = get_tier_limits(effective_tier)
+
+    if not limits.can_collect_patient_data:
+        return False, (
+            "Collecting patient data requires a paid subscription. "
+            "Upgrade to Pro (£5/mo) or higher to enable encrypted patient data collection."
+        )
+
+    return True, ""
+
+
 def get_feature_availability(user) -> dict[str, Any]:
     """Get complete feature availability for a user.
 
@@ -450,6 +484,9 @@ def get_feature_availability(user) -> dict[str, Any]:
             "can_use_api": limits.can_use_api,
             "can_export_data": limits.can_export_data,
             "can_use_webhooks": limits.can_use_webhooks,
+        },
+        "patient_data": {
+            "can_collect": limits.can_collect_patient_data,
         },
         "support": {
             "level": limits.support_level,

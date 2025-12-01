@@ -199,6 +199,7 @@ Option B" data-options-textarea></textarea>
                     <fieldset>
                       <legend class="label">Template type</legend>
                       <div class="space-y-3">
+                        {% if can_collect_patient_data %}
                         <label class="flex items-start gap-3 cursor-pointer">
                           <input type="radio" name="template" value="patient_details_encrypted" class="radio radio-primary mt-1" />
                           <div class="space-y-1">
@@ -208,6 +209,21 @@ Option B" data-options-textarea></textarea>
                             </p>
                           </div>
                         </label>
+                        {% else %}
+                        <div class="flex items-start gap-3 opacity-50 cursor-not-allowed">
+                          <input type="radio" name="template" value="patient_details_encrypted" class="radio radio-primary mt-1" disabled />
+                          <div class="space-y-1">
+                            <span class="font-semibold">Patient details (encrypted)</span>
+                            <span class="badge badge-warning badge-sm ml-2">{% trans "Paid feature" %}</span>
+                            <p class="text-sm opacity-60 leading-snug max-w-prose">
+                              Customisable set of patient identifier questions, with answers stored encrypted, viewable only to the person that entered the data.
+                            </p>
+                            <p class="text-sm text-warning leading-snug">
+                              <a href="{% url 'core:pricing' %}" class="link link-warning">{% trans "Upgrade to Pro" %}</a> {% trans "to collect encrypted patient data." %}
+                            </p>
+                          </div>
+                        </div>
+                        {% endif %}
                         <label class="flex items-start gap-3 cursor-pointer">
                           <input type="radio" name="template" value="professional_details" class="radio radio-primary mt-1" />
                           <div class="space-y-1">

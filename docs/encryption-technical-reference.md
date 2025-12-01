@@ -12,6 +12,8 @@ This document provides technical implementation details for developers working o
 
 CheckTick implements a security-first approach to handling sensitive patient data, using per-survey encryption keys with AES-GCM encryption. This document describes the current implementation and planned enhancements for organizational and individual users.
 
+> **Tier Requirement**: Patient data collection with encryption is available on **Pro tier and above**. FREE tier accounts can create surveys but cannot collect patient data (which triggers encryption). If a paid user downgrades to FREE, existing patient data surveys become read-only until they upgrade again.
+
 ## Table of Contents
 
 - [Current Implementation](#current-implementation)

@@ -847,7 +847,13 @@ class TestAPIValidation:
     @pytest.fixture
     def setup_basic_survey(self, client):
         """Create a basic survey for testing."""
+        from checktick_app.core.models import UserProfile
+
         user = User.objects.create_user(username="testuser", password=TEST_PASSWORD)
+        # Upgrade to PRO to allow patient data templates in validation tests
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.save()
+
         survey = Survey.objects.create(
             owner=user, name="Test Survey", slug="test-validation"
         )

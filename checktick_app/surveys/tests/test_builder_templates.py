@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 import pytest
 
+from checktick_app.core.models import UserProfile
 from checktick_app.surveys.models import QuestionGroup, Survey, SurveyQuestion
 from checktick_app.surveys.views import (
     DEMOGRAPHIC_FIELD_DEFS,
@@ -11,14 +12,22 @@ from checktick_app.surveys.views import (
 )
 
 
-@pytest.mark.django_db
-def test_add_patient_template_creates_question(client):
+@pytest.fixture
+def pro_owner(db):
+    """Create a PRO tier user for patient data tests."""
     owner = User.objects.create_user(username="owner", password="x")
-    survey = Survey.objects.create(owner=owner, name="Demo", slug="demo")
-    group = QuestionGroup.objects.create(name="Group", owner=owner)
+    owner.profile.account_tier = UserProfile.AccountTier.PRO
+    owner.profile.save()
+    return owner
+
+
+@pytest.mark.django_db
+def test_add_patient_template_creates_question(client, pro_owner):
+    survey = Survey.objects.create(owner=pro_owner, name="Demo", slug="demo")
+    group = QuestionGroup.objects.create(name="Group", owner=pro_owner)
     survey.question_groups.add(group)
 
-    client.force_login(owner)
+    client.force_login(pro_owner)
     url = reverse(
         "surveys:builder_group_template_add",
         kwargs={"slug": survey.slug, "gid": group.id},
@@ -61,7 +70,11 @@ def test_duplicate_template_request_no_second_question(client):
 
 @pytest.mark.django_db
 def test_patient_template_update_toggles_fields(client):
+    # Patient data requires PRO tier
     owner = User.objects.create_user(username="owner3", password="x")
+    owner.profile.account_tier = UserProfile.AccountTier.PRO
+    owner.profile.save()
+
     survey = Survey.objects.create(owner=owner, name="Demo 3", slug="demo-3")
     group = QuestionGroup.objects.create(name="Group", owner=owner)
     survey.question_groups.add(group)

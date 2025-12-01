@@ -2264,6 +2264,19 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             )
 
             if needs_encryption_setup:
+                # Check if user can collect patient data (FREE tier cannot)
+                from checktick_app.core.tier_limits import check_patient_data_permission
+
+                can_collect, reason = check_patient_data_permission(request.user)
+                if not can_collect:
+                    messages.error(
+                        request,
+                        f"{reason} Your survey contains patient data questions that require encryption.",
+                    )
+                    return render(
+                        request, "surveys/publish_settings.html", {"survey": survey}
+                    )
+
                 # Store pending publish settings in session
                 request.session["pending_publish"] = {
                     "slug": slug,
@@ -3932,12 +3945,28 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
     existing_repeats = list(
         CollectionDefinition.objects.filter(survey=survey).order_by("name")
     )
+
+    # Check if survey is in readonly mode due to tier downgrade
+    patient_data_readonly = survey.is_patient_data_readonly()
+    if patient_data_readonly:
+        # Override can_edit for patient data surveys owned by downgraded users
+        can_edit = False
+        messages.warning(
+            request,
+            _(
+                "This survey contains patient data and is currently read-only. "
+                "Your account tier does not include patient data collection. "
+                "Upgrade to Pro or higher to edit this survey."
+            ),
+        )
+
     ctx = {
         "survey": survey,
         "groups": groups,
         "can_edit": can_edit,
         "repeat_info": repeat_info,
         "existing_repeats": existing_repeats,
+        "patient_data_readonly": patient_data_readonly,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
@@ -5200,11 +5229,18 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
         "primary": style.get("primary_color"),
     }
     can_edit = can_edit_survey(request.user, survey)
+
+    # Check if user can collect patient data (FREE tier cannot)
+    from checktick_app.core.tier_limits import check_patient_data_permission
+
+    can_collect_patient_data, _ = check_patient_data_permission(request.user)
+
     ctx = {
         "survey": survey,
         "group": group,
         "questions": questions,
         "can_edit": can_edit,
+        "can_collect_patient_data": can_collect_patient_data,
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
         "demographic_defs": DEMOGRAPHIC_FIELD_DEFS,
@@ -5621,6 +5657,25 @@ def builder_group_template_add(
     required = request.POST.get("required") in ("on", "true", "1")
     message = "Template added."
     if template_key == "patient_details_encrypted":
+        # Check if user can collect patient data (FREE tier cannot)
+        from checktick_app.core.tier_limits import check_patient_data_permission
+
+        can_collect, reason = check_patient_data_permission(request.user)
+        if not can_collect:
+            messages.error(request, reason)
+            questions_qs = survey.questions.select_related("group").filter(group=group)
+            questions = _prepare_question_rendering(survey, questions_qs)
+            return render(
+                request,
+                "surveys/partials/questions_list_group.html",
+                {
+                    "survey": survey,
+                    "group": group,
+                    "questions": questions,
+                    "message": reason,
+                },
+            )
+
         if survey.questions.filter(
             group=group, type=SurveyQuestion.Types.TEMPLATE_PATIENT
         ).exists():
