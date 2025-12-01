@@ -49,7 +49,7 @@
           </div>
           <div class="flex items-center gap-2 ml-auto pr-1">
             {% if group and q.type != 'template_patient' and q.type != 'template_professional' %}
-              <button type="button" class="btn btn-xs btn-accent builder-edit-button" data-drag-ignore data-action="edit-question" data-payload-id="{{ payload_id }}" data-edit-url="/surveys/{{ q.survey.slug }}/builder/groups/{{ group.id }}/questions/{{ q.id }}/edit">Edit</button>
+              <button type="button" class="btn btn-xs btn-accent builder-edit-button" data-drag-ignore data-action="edit-question" data-payload-id="{{ payload_id }}" data-edit-url="/surveys/{{ q.survey.slug }}/builder/groups/{{ group.id }}/questions/{{ q.id }}/edit">{% if q.type == 'image' %}Upload/Edit Images{% else %}Edit{% endif %}</button>
               <form method="post" hx-post="/surveys/{{ q.survey.slug }}/builder/groups/{{ group.id }}/questions/{{ q.id }}/copy" hx-target="#questions-list" hx-swap="outerHTML">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-xs btn-outline" data-drag-ignore>Copy</button>

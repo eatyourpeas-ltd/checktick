@@ -967,24 +967,21 @@
 
     function renderImage(img) {
       return `
-        <div class="relative group" data-image-id="${img.id}">
+        <div class="relative group w-16 h-16" data-image-id="${
+          img.id
+        }" title="${img.label || "Image option"}">
           <img src="${img.url}" alt="${
         img.label || ""
-      }" class="w-full aspect-square object-cover rounded-lg border border-base-300" />
-          <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-            <button type="button" class="btn btn-circle btn-error btn-sm" data-delete-image="${
+      }" class="w-16 h-16 object-cover rounded border border-base-300" />
+          <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center">
+            <button type="button" class="btn btn-circle btn-error btn-xs" data-delete-image="${
               img.id
             }" title="Delete image">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          ${
-            img.label
-              ? `<p class="text-xs text-center mt-1 truncate" title="${img.label}">${img.label}</p>`
-              : ""
-          }
         </div>
       `;
     }
@@ -995,7 +992,7 @@
         imageList.innerHTML = images.map(renderImage).join("");
       } else {
         imageList.innerHTML =
-          '<p class="text-xs opacity-60 col-span-3">No images uploaded yet.</p>';
+          '<p class="text-xs opacity-60">No images uploaded yet.</p>';
       }
     }
 
