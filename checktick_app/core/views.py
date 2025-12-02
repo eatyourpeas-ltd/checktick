@@ -20,6 +20,7 @@ from checktick_app.surveys.models import (
     SurveyAccessToken,
     SurveyMembership,
     SurveyResponse,
+    TeamMembership,
 )
 
 from .forms import (
@@ -309,6 +310,10 @@ def profile(request):
             user=user, role=OrganizationMembership.Role.ADMIN
         ).count(),
         "org_memberships": OrganizationMembership.objects.filter(user=user).count(),
+        "team_admin_count": TeamMembership.objects.filter(
+            user=user, role=TeamMembership.Role.ADMIN
+        ).count(),
+        "team_memberships": TeamMembership.objects.filter(user=user).count(),
         "surveys_owned": Survey.objects.filter(owner=user).count(),
         "survey_creator_count": SurveyMembership.objects.filter(
             user=user, role=SurveyMembership.Role.CREATOR
@@ -342,9 +347,12 @@ def profile(request):
         [(theme, theme) for theme in DARK_THEMES] if DARK_THEMES else []
     )
 
-    # Check if user can manage any users (owns org, is admin, or is staff)
+    # Check if user can manage any users (owns org, is org/team admin, or is staff)
     can_manage_any_users = (
-        user.is_staff or stats["orgs_owned"] > 0 or stats["org_admin_count"] > 0
+        user.is_staff
+        or stats["orgs_owned"] > 0
+        or stats["org_admin_count"] > 0
+        or stats["team_admin_count"] > 0
     )
 
     # Get subscription information

@@ -84,6 +84,26 @@
             </div>
           </div>
         {% endif %}
+        {% if stats.team_admin_count %}
+          <div class="tooltip" data-tip="{% blocktrans count teams=stats.team_admin_count %}You are an administrator of {{ teams }} team{% plural %}You are an administrator of {{ teams }} teams{% endblocktrans %}">
+            <div class="indicator">
+              <span class="indicator-item badge badge-accent text-xs">{{ stats.team_admin_count }}</span>
+              <div class="bg-accent text-accent-content rounded-full w-12 h-12 flex items-center justify-center">
+                {% include "components/icons/users.html" with classes="w-6 h-6" %}
+              </div>
+            </div>
+          </div>
+        {% endif %}
+        {% if stats.team_memberships and not stats.team_admin_count %}
+          <div class="tooltip" data-tip="{% blocktrans count teams=stats.team_memberships %}You are a member of {{ teams }} team{% plural %}You are a member of {{ teams }} teams{% endblocktrans %}">
+            <div class="indicator">
+              <span class="indicator-item badge badge-neutral text-xs">{{ stats.team_memberships }}</span>
+              <div class="bg-neutral text-neutral-content rounded-full w-12 h-12 flex items-center justify-center">
+                {% include "components/icons/users.html" with classes="w-6 h-6" %}
+              </div>
+            </div>
+          </div>
+        {% endif %}
         {% if stats.surveys_owned %}
           <div class="tooltip" data-tip="{% blocktrans count surveys=stats.surveys_owned %}You own {{ surveys }} survey{% plural %}You own {{ surveys }} surveys{% endblocktrans %}">
             <div class="indicator">
