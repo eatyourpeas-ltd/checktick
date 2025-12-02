@@ -49,141 +49,84 @@
   {% if user.is_authenticated %}
     <p><a class="btn btn-primary not-prose" href="/surveys/create/">{% trans "Create survey" %}</a></p>
   {% endif %}
-  {% if surveys %}
-  <ul class="not-prose w-full flex flex-col gap-3">
+
+  {% if grouped_surveys %}
+    {# Grouped survey display #}
+
+    {# My Surveys (Owned) #}
+    {% if grouped_surveys.owned %}
+      <h2 class="text-xl font-semibold mt-8 mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+        </svg>
+        {% trans "My Surveys" %}
+        <span class="badge badge-ghost">{{ grouped_surveys.owned|length }}</span>
+      </h2>
+      <ul class="not-prose w-full flex flex-col gap-3">
+        {% for item in grouped_surveys.owned %}
+          {% include "surveys/partials/survey_list_item.html" with item=item %}
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {# Team Surveys #}
+    {% for team_name, team_surveys in grouped_surveys.team.items %}
+      <h2 class="text-xl font-semibold mt-8 mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+        </svg>
+        {{ team_name }}
+        <span class="badge badge-ghost">{{ team_surveys|length }}</span>
+      </h2>
+      <ul class="not-prose w-full flex flex-col gap-3">
+        {% for item in team_surveys %}
+          {% include "surveys/partials/survey_list_item.html" with item=item %}
+        {% endfor %}
+      </ul>
+    {% endfor %}
+
+    {# Organisation Surveys #}
+    {% for org_name, org_surveys in grouped_surveys.organisation.items %}
+      <h2 class="text-xl font-semibold mt-8 mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+        </svg>
+        {{ org_name }}
+        <span class="badge badge-ghost">{{ org_surveys|length }}</span>
+      </h2>
+      <ul class="not-prose w-full flex flex-col gap-3">
+        {% for item in org_surveys %}
+          {% include "surveys/partials/survey_list_item.html" with item=item %}
+        {% endfor %}
+      </ul>
+    {% endfor %}
+
+    {# Shared with Me #}
+    {% if grouped_surveys.shared %}
+      <h2 class="text-xl font-semibold mt-8 mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+        </svg>
+        {% trans "Shared with Me" %}
+        <span class="badge badge-ghost">{{ grouped_surveys.shared|length }}</span>
+      </h2>
+      <ul class="not-prose w-full flex flex-col gap-3">
+        {% for item in grouped_surveys.shared %}
+          {% include "surveys/partials/survey_list_item.html" with item=item %}
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {# Empty state - no surveys anywhere #}
+    {% if not grouped_surveys.owned and not grouped_surveys.team and not grouped_surveys.organisation and not grouped_surveys.shared %}
+      <p class="mt-4">{% trans "No surveys yet." %}</p>
+    {% endif %}
+
+  {% elif surveys %}
+    {# Fallback to flat list if grouped_surveys not available #}
+    <ul class="not-prose w-full flex flex-col gap-3">
       {% for item in surveys_with_translations %}
-        {% with s=item.survey %}
-        <li class="w-full">
-          <div class="w-full bg-base-100 rounded-lg border border-base-300 p-3 sm:p-4 hover:border-primary transition-colors">
-            <div class="flex items-center gap-4 min-w-0">
-              <div class="flex-shrink-0 inline-flex items-center justify-center">
-                {% include "components/icons/checktick.html" with classes=brand.icon_size_class|default:'w-8 h-8' aria_label=brand.icon_alt|default:brand.title title=brand.icon_title|default:brand.title %}
-              </div>
-              <div class="min-w-0 w-full">
-                <div class="flex items-center gap-2 min-w-0">
-                  <a href="/surveys/{{ s.slug }}/dashboard/" class="font-medium leading-tight truncate link link-accent">{{ s.name }}</a>
-
-                  <!-- Status badge (always primary) with language flags of that status -->
-                  {% if s.status == 'published' %}
-                    {# Base is published - show published languages #}
-                    <span class="badge badge-primary badge-outline whitespace-nowrap flex items-center gap-1">
-                      <span>{% trans "Published" %}</span>
-                      <span class="text-base" title="{{ item.language_name }}">{{ item.flag }}</span>
-                      {% for trans in item.translations %}
-                        {% if trans.status == 'published' %}
-                          <span class="text-base" title="{{ trans.language_name }}">{{ trans.flag }}</span>
-                        {% endif %}
-                      {% endfor %}
-                    </span>
-                  {% else %}
-                    {# Base is draft - show base language and any other draft translations #}
-                    <span class="badge badge-primary badge-outline whitespace-nowrap flex items-center gap-1">
-                      <span>{% trans "Draft" %}</span>
-                      <span class="text-base" title="{{ item.language_name }}">{{ item.flag }}</span>
-                      {% for trans in item.translations %}
-                        {% if trans.status == 'draft' %}
-                          <span class="text-base" title="{{ trans.language_name }}">{{ trans.flag }}</span>
-                        {% endif %}
-                      {% endfor %}
-                    </span>
-                  {% endif %}
-
-                  <!-- Draft translations badge - only show if base is published but translations are draft -->
-                  {% if s.status == 'published' %}
-                    {% regroup item.translations by status as translations_by_status %}
-                    {% for status_group in translations_by_status %}
-                      {% if status_group.grouper == 'draft' %}
-                        <span class="badge badge-warning badge-outline whitespace-nowrap flex items-center gap-1">
-                          <span>{% trans "Draft translations" %}</span>
-                          {% for trans in status_group.list %}
-                            <span class="text-base" title="{{ trans.language_name }}">{{ trans.flag }}</span>
-                          {% endfor %}
-                        </span>
-                      {% endif %}
-                    {% endfor %}
-                  {% endif %}
-
-                  {% if s.status == 'published' %}
-                    {% with days=s.days_remaining %}
-                      {% if days is None %}
-                        <span class="badge badge-info badge-outline whitespace-nowrap">{% trans "No end date" %}</span>
-                      {% elif days < 0 %}
-                        <span class="badge badge-error badge-outline whitespace-nowrap">{% trans "Expired" %}</span>
-                      {% elif days == 0 %}
-                        <span class="badge badge-warning badge-outline whitespace-nowrap">{% trans "Ends today" %}</span>
-                      {% elif days == 1 %}
-                        <span class="badge badge-warning badge-outline whitespace-nowrap">{% trans "1 day remaining" %}</span>
-                      {% elif days <= 7 %}
-                        <span class="badge badge-warning badge-outline whitespace-nowrap">{{ days }} {% trans "days remaining" %}</span>
-                      {% else %}
-                        <span class="badge badge-success badge-outline whitespace-nowrap">{{ days }} {% trans "days remaining" %}</span>
-                      {% endif %}
-                    {% endwith %}
-                  {% endif %}
-                </div>
-                {% if s.description %}
-                  <div class="text-sm opacity-70 truncate">{{ s.description }}</div>
-                {% endif %}
-              </div>
-            </div>
-            <div class="-mx-1 overflow-x-auto mt-3">
-              <div class="px-1 min-w-max flex items-center gap-2">
-                <a class="btn btn-secondary btn-sm" href="/surveys/{{ s.slug }}/dashboard/">
-                  {% include "components/icons/clipboard.html" with classes="w-4 h-4 mr-1" %}
-                  {% trans "Dashboard" %}
-                </a>
-                <a class="btn btn-outline btn-sm" href="{% url 'surveys:clone' slug=s.slug %}" title="{% trans 'Create a copy of this survey' %}">
-                  {% include "components/icons/documents.html" with classes="w-4 h-4 mr-1" %}
-                  {% trans "Create Copy" %}
-                </a>
-                {% if s.questions.count > 0 %}
-                  <button class="btn btn-outline btn-sm create-translation-btn"
-                          data-survey-slug="{{ s.slug }}"
-                          data-survey-id="{{ s.id }}"
-                          data-existing-languages="{{ s.language }}{% for trans in item.translations %},{{ trans.survey.language }}{% endfor %}"
-                          title="{% trans 'Create a translation of this survey' %}">
-                    {% include "components/icons/language.html" with classes="w-4 h-4 mr-1" %}
-                    {% trans "Create Translation" %}
-                  </button>
-                {% else %}
-                  <button class="btn btn-outline btn-sm btn-disabled" aria-disabled="true" title="{% trans 'Add questions before creating translation' %}">
-                    {% include "components/icons/language.html" with classes="w-4 h-4 mr-1" %}
-                    {% trans "Create Translation" %}
-                  </button>
-                {% endif %}
-                <a class="btn btn-secondary btn-sm{% if s.questions.count == 0 %} btn-disabled{% endif %}" href="{% if s.questions.count > 0 %}/surveys/{{ s.slug }}/preview/{% else %}#{% endif %}"{% if s.questions.count == 0 %} aria-disabled="true" title="{% trans 'Add questions before previewing' %}"{% endif %}>
-                  {% include "components/icons/building.html" with classes="w-4 h-4 mr-1" %}
-                  {% trans "Preview" %}
-                </a>
-                {% if s.status == 'draft' %}
-                  <a class="btn btn-success btn-sm{% if s.questions.count == 0 %} btn-disabled{% endif %}" href="{% if s.questions.count > 0 %}{% url 'surveys:publish_settings' slug=s.slug %}{% else %}#{% endif %}"{% if s.questions.count == 0 %} aria-disabled="true" title="{% trans 'Add questions before publishing' %}"{% endif %}>
-                    {% include "components/icons/cloud-upload.html" with classes="w-4 h-4 mr-1" %}
-                    {% trans "Publish" %}
-                  </a>
-                {% elif s.status == 'published' %}
-                  <a class="btn btn-primary btn-sm{% if s.questions.count == 0 %} btn-disabled{% endif %}" href="{% if s.questions.count > 0 %}{% url 'surveys:publish_settings' slug=s.slug %}{% else %}#{% endif %}"{% if s.questions.count == 0 %} aria-disabled="true" title="{% trans 'Add questions before publishing' %}"{% endif %}>
-                    {% include "components/icons/pencil.html" with classes="w-4 h-4 mr-1" %}
-                    {% trans "Edit Publication" %}
-                  </a>
-                {% endif %}
-                {% if s.status == 'published' %}
-                  {% if s.visibility == 'public' %}
-                    <button class="btn btn-outline btn-sm copy-survey-link" data-slug="{{ s.slug }}" data-url="{{ request.scheme }}://{{ request.get_host }}/surveys/{{ s.slug }}/take/">
-                      {% include "components/icons/documents.html" with classes="w-4 h-4 mr-1" %}
-                      {% trans "Copy Link" %}
-                    </button>
-                  {% elif s.visibility == 'unlisted' and s.unlisted_key %}
-                    <button class="btn btn-outline btn-sm copy-survey-link" data-slug="{{ s.slug }}" data-url="{{ request.scheme }}://{{ request.get_host }}/surveys/{{ s.slug }}/take/unlisted/{{ s.unlisted_key }}/">
-                      {% include "components/icons/documents.html" with classes="w-4 h-4 mr-1" %}
-                      {% trans "Copy Link" %}
-                    </button>
-                  {% endif %}
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        </li>
-        {% endwith %}
+        {% include "surveys/partials/survey_list_item.html" with item=item %}
       {% endfor %}
     </ul>
   {% else %}
