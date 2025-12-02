@@ -199,14 +199,24 @@ def checkout_success(request: HttpRequest) -> HttpResponse:
     The webhook should have already processed the subscription, so we just
     show a success message and refresh the user's tier info.
     """
+    from checktick_app.surveys.models import Team
+
     tier = request.GET.get("tier", "pro")
 
     # Refresh user profile to get latest tier info (in case webhook already updated it)
     request.user.profile.refresh_from_db()
 
+    # For team tiers, get the user's team for naming
+    user_team = None
+    is_team_tier = tier.startswith("team_")
+    if is_team_tier:
+        user_team = Team.objects.filter(owner=request.user).first()
+
     context = {
         "tier": tier,
         "current_tier": request.user.profile.account_tier,
+        "is_team_tier": is_team_tier,
+        "user_team": user_team,
     }
 
     messages.success(
@@ -215,6 +225,37 @@ def checkout_success(request: HttpRequest) -> HttpResponse:
     )
 
     return render(request, "core/checkout_success.html", context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def update_team_name(request: HttpRequest) -> HttpResponse:
+    """Update the team name for the user's owned team.
+
+    Called from checkout success page when user names their team.
+    """
+    from checktick_app.surveys.models import Team
+
+    team_name = request.POST.get("team_name", "").strip()
+
+    if not team_name:
+        return JsonResponse({"error": "Team name is required"}, status=400)
+
+    if len(team_name) > 100:
+        return JsonResponse({"error": "Team name must be 100 characters or less"}, status=400)
+
+    # Get the user's owned team
+    team = Team.objects.filter(owner=request.user).first()
+
+    if not team:
+        return JsonResponse({"error": "No team found"}, status=404)
+
+    team.name = team_name
+    team.save(update_fields=["name"])
+
+    logger.info(f"Team {team.id} renamed to '{team_name}' by {request.user.username}")
+
+    return JsonResponse({"success": True, "team_name": team_name})
 
 
 @csrf_exempt
@@ -416,6 +457,40 @@ def handle_subscription_created(payload: dict) -> HttpResponse:
         logger.warning("No items found in subscription data")
 
     profile.save()
+
+    # Auto-create team for Team tier users if they don't have one
+    # This ensures they become a team admin and see the User Management link
+    # Note: Pro tier users are individual accounts with encryption but no collaborators
+    team_tiers = [
+        UserProfile.AccountTier.TEAM_SMALL,
+        UserProfile.AccountTier.TEAM_MEDIUM,
+        UserProfile.AccountTier.TEAM_LARGE,
+    ]
+    if profile.account_tier in team_tiers:
+        from checktick_app.surveys.models import Team, TeamMembership
+
+        existing_team = Team.objects.filter(owner=profile.user).first()
+        if not existing_team:
+            # Determine team size from tier
+            size_map = {
+                UserProfile.AccountTier.TEAM_SMALL: Team.Size.SMALL,
+                UserProfile.AccountTier.TEAM_MEDIUM: Team.Size.MEDIUM,
+                UserProfile.AccountTier.TEAM_LARGE: Team.Size.LARGE,
+            }
+            team_size = size_map.get(profile.account_tier, Team.Size.SMALL)
+            team = Team.objects.create(
+                name=f"{profile.user.username}'s Team",
+                owner=profile.user,
+                size=team_size,
+            )
+            TeamMembership.objects.get_or_create(
+                team=team,
+                user=profile.user,
+                defaults={"role": TeamMembership.Role.ADMIN},
+            )
+            logger.info(
+                f"Auto-created team for {profile.user.username} after subscription upgrade to {profile.account_tier}"
+            )
 
     logger.info(
         f"Subscription created for user {profile.user.username}: {subscription_id} (tier: {profile.account_tier})"

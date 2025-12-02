@@ -46,6 +46,43 @@
           </div>
         {% endif %}
 
+        {# Team Name Card - show for team tiers with a team #}
+        {% if is_team_tier and user_team %}
+          <div class="card bg-primary/10 border border-primary/20 mb-6" id="team-name-card">
+            <div class="card-body">
+              <h3 class="card-title text-lg justify-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                {% trans "Name Your Team" %}
+              </h3>
+              <p class="text-sm text-base-content/70 mb-4">
+                {% trans "Give your team a name that your members will recognise." %}
+              </p>
+              <form id="team-name-form" class="flex flex-col sm:flex-row gap-2">
+                {% csrf_token %}
+                <input
+                  type="text"
+                  name="team_name"
+                  id="team-name-input"
+                  class="input input-bordered flex-1"
+                  placeholder="{% trans 'e.g. Marketing Team, Research Group...' %}"
+                  value="{{ user_team.name }}"
+                  maxlength="100"
+                  required
+                />
+                <button type="submit" class="btn btn-primary" id="save-team-name-btn">
+                  <span class="loading loading-spinner loading-sm hidden" id="team-name-loading"></span>
+                  <span id="team-name-btn-text">{% trans "Save" %}</span>
+                </button>
+              </form>
+              <p class="text-xs text-base-content/50 mt-2" id="team-name-hint">
+                {% trans "You can change this later in team settings." %}
+              </p>
+            </div>
+          </div>
+        {% endif %}
+
         <div class="divider"></div>
 
         <h2 class="text-xl font-semibold mb-4">{% trans "What's Next?" %}</h2>
@@ -93,4 +130,84 @@
       </div>
     </div>
   </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if is_team_tier and user_team %}
+<script nonce="{{ request.csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('team-name-form');
+  const input = document.getElementById('team-name-input');
+  const btn = document.getElementById('save-team-name-btn');
+  const btnText = document.getElementById('team-name-btn-text');
+  const loading = document.getElementById('team-name-loading');
+  const hint = document.getElementById('team-name-hint');
+  const card = document.getElementById('team-name-card');
+
+  if (form) {
+    // Focus the input for easy editing
+    input.focus();
+    input.select();
+
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const teamName = input.value.trim();
+      if (!teamName) {
+        input.classList.add('input-error');
+        return;
+      }
+
+      // Show loading state
+      btn.disabled = true;
+      loading.classList.remove('hidden');
+      btnText.textContent = '{% trans "Saving..." %}';
+
+      try {
+        const response = await fetch('{% url "core:update_team_name" %}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': '{{ csrf_token }}'
+          },
+          body: 'team_name=' + encodeURIComponent(teamName)
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          // Success - transform card to show confirmation
+          card.classList.remove('bg-primary/10', 'border-primary/20');
+          card.classList.add('bg-success/10', 'border-success/20');
+          card.innerHTML = `
+            <div class="card-body text-center py-4">
+              <div class="flex items-center justify-center gap-2 text-success">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <span class="font-semibold">{% trans "Team named:" %} "${data.team_name}"</span>
+              </div>
+            </div>
+          `;
+        } else {
+          // Error
+          hint.textContent = data.error || '{% trans "Failed to save team name. Please try again." %}';
+          hint.classList.add('text-error');
+          btn.disabled = false;
+          loading.classList.add('hidden');
+          btnText.textContent = '{% trans "Save" %}';
+        }
+      } catch (error) {
+        console.error('Error saving team name:', error);
+        hint.textContent = '{% trans "Failed to save team name. Please try again." %}';
+        hint.classList.add('text-error');
+        btn.disabled = false;
+        loading.classList.add('hidden');
+        btnText.textContent = '{% trans "Save" %}';
+      }
+    });
+  }
+});
+</script>
+{% endif %}
 {% endblock %}
