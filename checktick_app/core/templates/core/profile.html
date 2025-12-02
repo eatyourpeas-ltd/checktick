@@ -190,12 +190,12 @@
           </div>
         </div>
 
-        {% if subscription_info.subscription_status %}
+        {% if subscription_info.subscription_status and subscription_info.subscription_status != 'none' %}
         <div>
           <p class="text-sm opacity-70">{% trans "Status" %}</p>
           <p class="text-base">
             <span class="badge {% if subscription_info.subscription_status == 'active' %}badge-success{% elif subscription_info.subscription_status == 'canceled' %}badge-warning{% else %}badge-neutral{% endif %}">
-              {{ subscription_info.subscription_status|title }}
+              {% if subscription_info.subscription_status == 'canceled' %}{% trans "Cancelled" %}{% else %}{{ subscription_info.subscription_status|title }}{% endif %}
             </span>
           </p>
         </div>
