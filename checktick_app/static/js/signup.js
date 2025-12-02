@@ -33,6 +33,13 @@ function handleSSOSignup(provider) {
   // Store choices in sessionStorage for post-auth processing
   sessionStorage.setItem("signup_tier", tierValue);
 
+  // Get the 'next' URL from current page's query params (e.g., from survey invite)
+  const urlParams = new URLSearchParams(window.location.search);
+  const nextUrl = urlParams.get("next");
+  if (nextUrl) {
+    sessionStorage.setItem("signup_next_url", nextUrl);
+  }
+
   // Redirect to OIDC with signup flag
   window.location.href = `/oidc/authenticate/?provider=${provider}&signup=true`;
 }

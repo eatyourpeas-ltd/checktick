@@ -125,14 +125,14 @@
           </div>
         {% endif %}
         {% if stats.responses_submitted %}
-          <div class="tooltip" data-tip="{% blocktrans count responses=stats.responses_submitted %}You have submitted {{ responses }} response to surveys{% plural %}You have submitted {{ responses }} responses to surveys{% endblocktrans %}">
+          <a href="{% url 'core:my_surveys' %}" class="tooltip" data-tip="{% blocktrans count responses=stats.responses_submitted %}You have submitted {{ responses }} response to surveys - Click to view{% plural %}You have submitted {{ responses }} responses to surveys - Click to view{% endblocktrans %}">
             <div class="indicator">
               <span class="indicator-item badge badge-warning text-xs">{{ stats.responses_submitted }}</span>
-              <div class="bg-warning text-warning-content rounded-full w-12 h-12 flex items-center justify-center">
+              <div class="bg-warning text-warning-content rounded-full w-12 h-12 flex items-center justify-center hover:ring-2 hover:ring-warning hover:ring-offset-2 transition-all">
                 {% include "components/icons/clipboard.html" with classes="w-6 h-6" %}
               </div>
             </div>
-          </div>
+          </a>
         {% endif %}
         {% if stats.tokens_created %}
           <div class="tooltip" data-tip="{% blocktrans count tokens=stats.tokens_created %}You have created {{ tokens }} invitation token{% plural %}You have created {{ tokens }} invitation tokens{% endblocktrans %}">

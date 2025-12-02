@@ -8,6 +8,7 @@ import pytest
 from checktick_app.core.models import UserProfile
 
 User = get_user_model()
+TEST_PASSWORD = "x"
 
 
 @pytest.mark.django_db
@@ -338,3 +339,105 @@ class TestUserProfile:
         user.profile.account_tier = UserProfile.AccountTier.PRO
         user.profile.save()
         assert str(user.profile) == "testuser19 - Professional"
+
+
+@pytest.mark.django_db
+class TestMySurveysView:
+    """Test the my_surveys view for participation history."""
+
+    def test_my_surveys_requires_login(self, client):
+        """Test that my_surveys view requires authentication."""
+        from django.urls import reverse
+
+        response = client.get(reverse("core:my_surveys"))
+        assert response.status_code == 302
+        assert "/accounts/login/" in response.url
+
+    def test_my_surveys_empty_for_new_user(self, client):
+        """Test that new users see empty participation history."""
+        from django.urls import reverse
+
+        User.objects.create_user(
+            username="newuser", email="new@example.com", password=TEST_PASSWORD
+        )
+        client.login(username="newuser", password=TEST_PASSWORD)
+
+        response = client.get(reverse("core:my_surveys"))
+        assert response.status_code == 200
+        assert b"No surveys completed yet" in response.content
+
+    def test_my_surveys_shows_completed_surveys(self, client):
+        """Test that completed surveys are displayed."""
+        from django.urls import reverse
+
+        from checktick_app.surveys.models import Organization, Survey, SurveyResponse
+
+        # Create survey owner
+        owner = User.objects.create_user(
+            username="owner", email="owner@example.com", password=TEST_PASSWORD
+        )
+        org = Organization.objects.create(name="Test Org", owner=owner)
+        survey = Survey.objects.create(
+            name="Test Survey",
+            slug="test-survey",
+            owner=owner,
+            organization=org,
+            status=Survey.Status.PUBLISHED,
+        )
+
+        # Create participant and their response
+        participant = User.objects.create_user(
+            username="participant",
+            email="participant@example.com",
+            password=TEST_PASSWORD,
+        )
+        SurveyResponse.objects.create(
+            survey=survey,
+            submitted_by=participant,
+            answers={"q1": "answer1"},
+        )
+
+        client.login(username="participant", password=TEST_PASSWORD)
+        response = client.get(reverse("core:my_surveys"))
+
+        assert response.status_code == 200
+        assert b"Test Survey" in response.content
+        assert b"Test Org" in response.content
+        assert b"1 Survey Completed" in response.content
+
+    def test_profile_badge_links_to_my_surveys(self, client):
+        """Test that the responses badge on profile links to my_surveys."""
+        from django.urls import reverse
+
+        from checktick_app.surveys.models import Organization, Survey, SurveyResponse
+
+        # Create survey owner
+        owner = User.objects.create_user(
+            username="owner2", email="owner2@example.com", password=TEST_PASSWORD
+        )
+        org = Organization.objects.create(name="Test Org 2", owner=owner)
+        survey = Survey.objects.create(
+            name="Test Survey 2",
+            slug="test-survey-2",
+            owner=owner,
+            organization=org,
+            status=Survey.Status.PUBLISHED,
+        )
+
+        # Create participant and their response
+        participant = User.objects.create_user(
+            username="participant2",
+            email="participant2@example.com",
+            password=TEST_PASSWORD,
+        )
+        SurveyResponse.objects.create(
+            survey=survey,
+            submitted_by=participant,
+            answers={"q1": "answer1"},
+        )
+
+        client.login(username="participant2", password=TEST_PASSWORD)
+        response = client.get(reverse("core:profile"))
+
+        assert response.status_code == 200
+        assert b'href="/my-surveys/"' in response.content

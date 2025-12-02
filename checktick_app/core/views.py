@@ -376,6 +376,13 @@ def profile(request):
 
 
 def signup(request):
+    # Get the 'next' URL from query params (e.g., from survey invite link)
+    next_url = request.GET.get("next") or request.POST.get("next")
+
+    # Validate next_url to prevent open redirect vulnerabilities
+    if next_url and not next_url.startswith("/"):
+        next_url = None
+
     if request.method == "POST":
         form = SignupForm(request.POST)
         if form.is_valid():
@@ -401,11 +408,17 @@ def signup(request):
             selected_tier = request.POST.get("tier", "free").lower()
 
             # Handle tier-based signup flow
-            # FREE: Go straight to surveys
+            # FREE: Go straight to surveys (or next_url if provided)
             # PRO/TEAM: Redirect to pricing to complete payment immediately
             # Organisation/Enterprise: Contact sales (shouldn't reach here from form)
             if selected_tier == "free":
-                # FREE tier - go directly to surveys
+                # FREE tier - redirect to next_url if provided, otherwise surveys
+                if next_url:
+                    messages.success(
+                        request,
+                        _("Welcome to CheckTick! You can now complete the survey."),
+                    )
+                    return redirect(next_url)
                 messages.success(
                     request,
                     _("Welcome to CheckTick! Start by creating your first survey."),
@@ -413,6 +426,9 @@ def signup(request):
                 return redirect("surveys:list")
             elif selected_tier in ("pro", "team_small", "team_medium", "team_large"):
                 # Self-service paid tiers - redirect to pricing for immediate payment
+                # Store next_url for after payment completion
+                if next_url:
+                    request.session["pending_next_url"] = next_url
                 request.session["pending_tier"] = selected_tier
                 request.session["auto_open_checkout"] = True  # Signal JS to auto-open
                 tier_display = selected_tier.upper().replace("_", " ")
@@ -428,6 +444,12 @@ def signup(request):
             else:
                 # Organisation, Enterprise, or unknown - fallback to surveys
                 # These tiers require contacting sales and shouldn't be selectable in form
+                if next_url:
+                    messages.success(
+                        request,
+                        _("Welcome to CheckTick! You can now complete the survey."),
+                    )
+                    return redirect(next_url)
                 messages.success(
                     request,
                     _("Welcome to CheckTick! Start by creating your first survey."),
@@ -435,7 +457,7 @@ def signup(request):
                 return redirect("surveys:list")
     else:
         form = SignupForm()
-    return render(request, "registration/signup.html", {"form": form})
+    return render(request, "registration/signup.html", {"form": form, "next": next_url})
 
 
 @login_required
@@ -451,6 +473,11 @@ def complete_signup(request):
 
     if request.method == "POST":
         account_type = request.POST.get("account_type")
+
+        # Get next URL from POST (from hidden field populated via sessionStorage)
+        next_url = request.POST.get("next")
+        if next_url and next_url.startswith("/"):
+            request.session["pending_next_url"] = next_url
 
         # Mark OIDC signup as completed
         if hasattr(request.user, "oidc"):
@@ -482,21 +509,40 @@ def complete_signup(request):
                     user=request.user,
                     role=OrganizationMembership.Role.ADMIN,
                 )
+            # Clear the signup completion flag
+            pending_next_url = request.session.pop("pending_next_url", None)
+            request.session.pop("needs_signup_completion", None)
+
+            if pending_next_url:
+                messages.success(
+                    request,
+                    _("Organisation created. You can now complete the survey."),
+                )
+                return redirect(pending_next_url)
+
             messages.success(
                 request, _("Organisation created. You are an organisation admin.")
             )
-            # Clear the signup completion flag
-            request.session.pop("needs_signup_completion", None)
             return redirect("surveys:org_users", org_id=org.id)
 
-        # Individual account - just clear the flag and redirect to surveys
+        # Individual account - just clear the flag and redirect
+        # Check if there's a pending survey URL from invite flow
+        pending_next_url = request.session.pop("pending_next_url", None)
+        request.session.pop("needs_signup_completion", None)
+
+        if pending_next_url:
+            messages.success(
+                request,
+                _("Account setup complete! You can now complete the survey."),
+            )
+            return redirect(pending_next_url)
+
         messages.success(
             request,
             _(
                 "Account setup complete! Welcome to CheckTick. Start by creating your first survey."
             ),
         )
-        request.session.pop("needs_signup_completion", None)
         return redirect("surveys:list")
 
     return render(
@@ -1061,6 +1107,50 @@ def can_user_safely_delete_own_account(user):
         return False
 
     return True
+
+
+@login_required
+def my_surveys(request):
+    """
+    Show surveys the user has participated in (completed).
+    Displays survey name, completion date, and survey open/close period.
+    """
+    from checktick_app.surveys.models import SurveyResponse
+
+    # Get all responses by this user, with related survey data
+    responses = (
+        SurveyResponse.objects.filter(submitted_by=request.user)
+        .select_related("survey", "survey__organization")
+        .order_by("-submitted_at")
+    )
+
+    # Build participation list with relevant info
+    participations = []
+    for response in responses:
+        survey = response.survey
+        participations.append(
+            {
+                "survey_name": survey.name,
+                "organization_name": (
+                    survey.organization.name if survey.organization else None
+                ),
+                "submitted_at": response.submitted_at,
+                "survey_start_at": survey.start_at,
+                "survey_end_at": survey.end_at,
+                "survey_status": survey.status,
+                "survey_slug": survey.slug,
+                "is_live": survey.is_live() if hasattr(survey, "is_live") else False,
+            }
+        )
+
+    return render(
+        request,
+        "core/my_surveys.html",
+        {
+            "participations": participations,
+            "total_count": len(participations),
+        },
+    )
 
 
 @login_required

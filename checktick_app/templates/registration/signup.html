@@ -175,6 +175,7 @@
             {# Hidden fields to store tier selection #}
             <input type="hidden" name="account_type" value="simple" />
             <input type="hidden" name="tier" id="selected-tier" value="free" />
+            {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
 
             {% include 'components/form_errors.html' with form=form %}
 

@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "My Survey Participation" %} - {{ brand.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4">
+  <div class="prose mb-6">
+    <h1 class="inline-flex items-center gap-2 text-base-content">
+      {% include "components/icons/clipboard.html" with classes="w-6 h-6 text-base-content" %}
+      <span>{% trans "My Survey Participation" %}</span>
+    </h1>
+    <p>{% trans "A history of surveys you have completed." %}</p>
+  </div>
+
+  {% if participations %}
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="card-title text-base-content">
+            {% blocktrans count total=total_count %}{{ total }} Survey Completed{% plural %}{{ total }} Surveys Completed{% endblocktrans %}
+          </h2>
+          <a href="{% url 'core:profile' %}" class="btn btn-ghost btn-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mr-1">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+            {% trans "Back to Profile" %}
+          </a>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="table table-zebra">
+            <thead>
+              <tr>
+                <th>{% trans "Survey" %}</th>
+                <th>{% trans "Organisation" %}</th>
+                <th>{% trans "Completed On" %}</th>
+                <th>{% trans "Survey Period" %}</th>
+                <th>{% trans "Status" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in participations %}
+                <tr>
+                  <td class="font-medium">{{ p.survey_name }}</td>
+                  <td>
+                    {% if p.organization_name %}
+                      <span class="opacity-70">{{ p.organization_name }}</span>
+                    {% else %}
+                      <span class="opacity-50">—</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <span class="text-sm">{{ p.submitted_at|date:"j M Y" }}</span>
+                    <span class="text-xs opacity-60 block">{{ p.submitted_at|time:"H:i" }}</span>
+                  </td>
+                  <td class="text-sm">
+                    {% if p.survey_start_at or p.survey_end_at %}
+                      {% if p.survey_start_at %}
+                        {{ p.survey_start_at|date:"j M Y" }}
+                      {% else %}
+                        {% trans "Open" %}
+                      {% endif %}
+                      –
+                      {% if p.survey_end_at %}
+                        {{ p.survey_end_at|date:"j M Y" }}
+                      {% else %}
+                        {% trans "No end date" %}
+                      {% endif %}
+                    {% else %}
+                      <span class="opacity-50">—</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if p.is_live %}
+                      <span class="badge badge-success badge-sm">{% trans "Live" %}</span>
+                    {% else %}
+                      <span class="badge badge-neutral badge-sm">{% trans "Closed" %}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="card bg-base-100 shadow">
+      <div class="card-body text-center py-12">
+        <div class="mx-auto mb-4 opacity-40">
+          {% include "components/icons/clipboard.html" with classes="w-16 h-16" %}
+        </div>
+        <h2 class="text-xl font-semibold mb-2">{% trans "No surveys completed yet" %}</h2>
+        <p class="opacity-70 mb-4">{% trans "When you complete surveys, they will appear here so you can keep track of your participation history." %}</p>
+        <a href="{% url 'core:profile' %}" class="btn btn-primary btn-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mr-1">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          {% trans "Back to Profile" %}
+        </a>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

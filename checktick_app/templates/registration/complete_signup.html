@@ -27,6 +27,7 @@
 
       <form method="post" class="space-y-6">
         {% csrf_token %}
+        <input type="hidden" name="next" id="next-url-field" value="" />
 
         {# Account type selection #}
         <div class="form-control">
@@ -138,6 +139,14 @@
     accountTypeRadios.forEach(radio => {
       radio.addEventListener('change', updateOrgNameState);
     });
+
+    // Check for pending next URL from signup flow (stored in sessionStorage during SSO)
+    const pendingNextUrl = sessionStorage.getItem('signup_next_url');
+    if (pendingNextUrl) {
+      document.getElementById('next-url-field').value = pendingNextUrl;
+      // Clear it from sessionStorage
+      sessionStorage.removeItem('signup_next_url');
+    }
   });
 </script>
 {% endblock %}
