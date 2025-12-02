@@ -32,7 +32,7 @@
 
   <div class="card bg-base-100 shadow-xl">
     <div class="card-body">
-      <form method="post" id="publish-form">
+      <form method="post" id="publish-form" action="{% url 'surveys:publish_settings' slug=survey.slug %}">
         {% csrf_token %}
 
         <div class="grid md:grid-cols-2 gap-6 mb-6">
@@ -58,7 +58,7 @@
             <label class="label">
               <span class="label-text font-semibold">{% trans "Max responses" %}</span>
             </label>
-            <input class="input input-bordered w-full" name="max_responses" type="number" min="1" value="{{ survey.max_responses }}" placeholder="{% trans 'Unlimited' %}" />
+            <input class="input input-bordered w-full" name="max_responses" type="number" min="1" value="{% if survey.max_responses %}{{ survey.max_responses }}{% endif %}" placeholder="{% trans 'Unlimited' %}" />
             <label class="label">
               <span class="label-text-alt opacity-70">{% trans "Leave blank for unlimited" %}</span>
             </label>
@@ -369,8 +369,8 @@
       formData.set('invite_emails', ''); // Clear emails to avoid sync processing
       formData.set('action', action);
 
-      // Submit settings first
-      fetch(publishForm.action, {
+      // Submit settings first - use current URL since form has no action attribute
+      fetch(window.location.href, {
         method: 'POST',
         body: formData,
         headers: {
@@ -392,13 +392,11 @@
 
   function showEmailModal(inviteEmails) {
     const modal = document.getElementById('emailModal');
-    const formView = document.getElementById('email-form-view');
     const progressView = document.getElementById('email-progress-view');
     const successView = document.getElementById('email-success-view');
     const errorView = document.getElementById('email-error-view');
 
-    // Reset views
-    formView.style.display = 'none';
+    // Reset views - show progress, hide success/error
     progressView.style.display = 'block';
     successView.style.display = 'none';
     errorView.style.display = 'none';
