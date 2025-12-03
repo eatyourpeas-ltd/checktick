@@ -1301,7 +1301,6 @@ def org_setup(request, token: str):
         token: The setup token from the invite link
     """
     from django.contrib.auth import get_user_model
-    from django_ratelimit.decorators import ratelimit
 
     User = get_user_model()
 
@@ -1311,7 +1310,9 @@ def org_setup(request, token: str):
     except Organization.DoesNotExist:
         messages.error(
             request,
-            _("Invalid or expired organization setup link. Please contact your administrator."),
+            _(
+                "Invalid or expired organization setup link. Please contact your administrator."
+            ),
         )
         return redirect("core:home")
 
@@ -1319,7 +1320,9 @@ def org_setup(request, token: str):
     if org.setup_completed_at:
         messages.info(
             request,
-            _("This organization has already been set up. Please sign in to access it."),
+            _(
+                "This organization has already been set up. Please sign in to access it."
+            ),
         )
         return redirect("login")
 
@@ -1348,14 +1351,22 @@ def org_setup(request, token: str):
             if not user:
                 messages.error(
                     request,
-                    _("An account with this email already exists. Please enter your password to continue."),
+                    _(
+                        "An account with this email already exists. Please enter your password to continue."
+                    ),
                 )
-                return render(request, "core/org_setup.html", {"org": org, "email": email, "existing_user": True})
+                return render(
+                    request,
+                    "core/org_setup.html",
+                    {"org": org, "email": email, "existing_user": True},
+                )
         else:
             # New user - create account
             if not password or len(password) < 8:
                 messages.error(request, _("Password must be at least 8 characters."))
-                return render(request, "core/org_setup.html", {"org": org, "email": email})
+                return render(
+                    request, "core/org_setup.html", {"org": org, "email": email}
+                )
 
             user = User.objects.create_user(
                 username=email,
@@ -1394,7 +1405,8 @@ def org_setup(request, token: str):
 
         messages.success(
             request,
-            _("Welcome to %(org_name)s! Your organization account is now active.") % {"org_name": org.name},
+            _("Welcome to %(org_name)s! Your organization account is now active.")
+            % {"org_name": org.name},
         )
 
         # Redirect based on billing type

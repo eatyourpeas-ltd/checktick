@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_billing
+from . import views, views_billing, views_platform_admin
 
 app_name = "core"
 
@@ -19,6 +19,52 @@ urlpatterns = [
     path("delete-account/", views.delete_account, name="delete_account"),
     # Organization setup
     path("org-setup/<str:token>/", views.org_setup, name="org_setup"),
+    # Platform Admin (superuser only)
+    path(
+        "platform-admin/",
+        views_platform_admin.platform_admin_dashboard,
+        name="platform_admin_dashboard",
+    ),
+    path(
+        "platform-admin/organizations/",
+        views_platform_admin.organization_list,
+        name="platform_admin_org_list",
+    ),
+    path(
+        "platform-admin/organizations/create/",
+        views_platform_admin.organization_create,
+        name="platform_admin_org_create",
+    ),
+    path(
+        "platform-admin/organizations/<int:org_id>/",
+        views_platform_admin.organization_detail,
+        name="platform_admin_org_detail",
+    ),
+    path(
+        "platform-admin/organizations/<int:org_id>/edit/",
+        views_platform_admin.organization_edit,
+        name="platform_admin_org_edit",
+    ),
+    path(
+        "platform-admin/organizations/<int:org_id>/invite/",
+        views_platform_admin.organization_generate_invite,
+        name="platform_admin_org_invite",
+    ),
+    path(
+        "platform-admin/organizations/<int:org_id>/send-invite/",
+        views_platform_admin.organization_send_invite_email,
+        name="platform_admin_org_send_invite",
+    ),
+    path(
+        "platform-admin/organizations/<int:org_id>/toggle-active/",
+        views_platform_admin.organization_toggle_active,
+        name="platform_admin_org_toggle_active",
+    ),
+    path(
+        "platform-admin/stats/",
+        views_platform_admin.organization_stats,
+        name="platform_admin_stats",
+    ),
     # Billing
     path(
         "subscription/", views_billing.subscription_portal, name="subscription_portal"

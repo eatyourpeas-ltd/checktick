@@ -1,0 +1,297 @@
+{% extends 'core/platform_admin/base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block platform_title %}{{ org.name }}{% endblock %}
+
+{% block platform_content %}
+<!-- Header with actions -->
+<div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+  <div class="flex items-center gap-4">
+    <a href="{% url 'core:platform_admin_org_list' %}" class="btn btn-ghost btn-sm">
+      ← {% trans "Back" %}
+    </a>
+    <div>
+      <h2 class="text-xl font-semibold">{{ org.name }}</h2>
+      <p class="text-sm text-base-content/60">
+        {% trans "Created" %} {{ org.created_at|date:"d M Y" }}
+        {% if org.created_by %}{% trans "by" %} {{ org.created_by.email }}{% endif %}
+      </p>
+    </div>
+  </div>
+  <div class="flex flex-wrap gap-2">
+    <a href="{% url 'core:platform_admin_org_edit' org_id=org.id %}" class="btn btn-sm btn-outline">
+      {% trans "Edit" %}
+    </a>
+    <form method="post" action="{% url 'core:platform_admin_org_toggle_active' org_id=org.id %}" class="inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm {% if org.is_active %}btn-warning{% else %}btn-success{% endif %}">
+        {% if org.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <!-- Main Info -->
+  <div class="lg:col-span-2 space-y-6">
+    <!-- Status Card -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h3 class="card-title text-lg">{% trans "Status" %}</h3>
+        <div class="flex flex-wrap gap-4">
+          <div>
+            <span class="text-sm text-base-content/60">{% trans "Active" %}</span>
+            <div>
+              {% if org.is_active %}
+                <span class="badge badge-success">{% trans "Yes" %}</span>
+              {% else %}
+                <span class="badge badge-ghost">{% trans "No" %}</span>
+              {% endif %}
+            </div>
+          </div>
+          <div>
+            <span class="text-sm text-base-content/60">{% trans "Subscription" %}</span>
+            <div>
+              {% if org.subscription_status == 'active' %}
+                <span class="badge badge-success">{% trans "Active" %}</span>
+              {% elif org.subscription_status == 'pending' %}
+                <span class="badge badge-warning">{% trans "Pending Setup" %}</span>
+              {% elif org.subscription_status == 'past_due' %}
+                <span class="badge badge-error">{% trans "Past Due" %}</span>
+              {% elif org.subscription_status == 'canceled' %}
+                <span class="badge badge-ghost">{% trans "Canceled" %}</span>
+              {% else %}
+                <span class="badge badge-info">{{ org.get_subscription_status_display }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <div>
+            <span class="text-sm text-base-content/60">{% trans "Setup Completed" %}</span>
+            <div>
+              {% if org.setup_completed_at %}
+                {{ org.setup_completed_at|date:"d M Y H:i" }}
+              {% else %}
+                <span class="text-warning">{% trans "Not yet" %}</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Billing Card -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h3 class="card-title text-lg">{% trans "Billing" %}</h3>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div>
+            <span class="text-sm text-base-content/60">{% trans "Billing Type" %}</span>
+            <div class="font-medium">{{ org.get_billing_type_display }}</div>
+          </div>
+          {% if org.billing_type == 'per_seat' and org.price_per_seat %}
+          <div>
+            <span class="text-sm text-base-content/60">{% trans "Price/Seat" %}</span>
+            <div class="font-medium">£{{ org.price_per_seat }}/{% trans "month" %}</div>
+          </div>
+          <div>
+            <span class="text-sm text-base-content/60">{% trans "Est. Monthly" %}</span>
+            <div class="font-medium text-primary">£{{ org.monthly_cost }}</div>
+          </div>
+          {% endif %}
+          {% if org.billing_type == 'flat_rate' and org.flat_rate_price %}
+          <div>
+            <span class="text-sm text-base-content/60">{% trans "Flat Rate" %}</span>
+            <div class="font-medium">£{{ org.flat_rate_price }}/{% trans "month" %}</div>
+          </div>
+          {% endif %}
+          <div>
+            <span class="text-sm text-base-content/60">{% trans "Current Seats" %}</span>
+            <div class="font-medium">
+              {{ org.current_seats }}{% if org.max_seats %} / {{ org.max_seats }}{% endif %}
+            </div>
+          </div>
+          <div>
+            <span class="text-sm text-base-content/60">{% trans "Billing Contact" %}</span>
+            <div class="font-medium">{{ org.billing_contact_email|default:"-" }}</div>
+          </div>
+        </div>
+        {% if org.billing_notes %}
+        <div class="mt-4 p-3 bg-base-200 rounded-lg">
+          <span class="text-sm text-base-content/60">{% trans "Notes" %}</span>
+          <p class="text-sm mt-1">{{ org.billing_notes }}</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Members Card -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h3 class="card-title text-lg">{% trans "Members" %} ({{ members.count }})</h3>
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>{% trans "User" %}</th>
+                <th>{% trans "Role" %}</th>
+                <th>{% trans "Joined" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for membership in members %}
+              <tr>
+                <td>
+                  <div>
+                    <span class="font-medium">{{ membership.user.email }}</span>
+                    {% if membership.user == org.owner %}
+                      <span class="badge badge-primary badge-xs ml-1">{% trans "Owner" %}</span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td>
+                  {% if membership.role == 'admin' %}
+                    <span class="badge badge-warning badge-sm">{% trans "Admin" %}</span>
+                  {% elif membership.role == 'creator' %}
+                    <span class="badge badge-info badge-sm">{% trans "Creator" %}</span>
+                  {% else %}
+                    <span class="badge badge-ghost badge-sm">{% trans "Viewer" %}</span>
+                  {% endif %}
+                </td>
+                <td class="text-sm text-base-content/70">{{ membership.created_at|date:"d M Y" }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="3" class="text-center text-base-content/60">{% trans "No members yet" %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Surveys Card -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h3 class="card-title text-lg">{% trans "Recent Surveys" %} ({{ org.survey_count }})</h3>
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>{% trans "Title" %}</th>
+                <th>{% trans "Owner" %}</th>
+                <th>{% trans "Created" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for survey in surveys %}
+              <tr>
+                <td>{{ survey.title }}</td>
+                <td class="text-sm">{{ survey.owner.email }}</td>
+                <td class="text-sm text-base-content/70">{{ survey.created_at|date:"d M Y" }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="3" class="text-center text-base-content/60">{% trans "No surveys yet" %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="space-y-6">
+    <!-- Owner Card -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h3 class="card-title text-lg">{% trans "Owner" %}</h3>
+        {% if org.owner %}
+        <div>
+          <p class="font-medium">{{ org.owner.email }}</p>
+          <p class="text-sm text-base-content/60">{{ org.owner.get_full_name|default:"" }}</p>
+        </div>
+        {% else %}
+        <p class="text-base-content/60">{% trans "No owner assigned" %}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Invite Link Card -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h3 class="card-title text-lg">{% trans "Setup Invite" %}</h3>
+        {% if invite_url %}
+        <div class="form-control">
+          <textarea readonly class="textarea textarea-bordered text-xs h-20" onclick="this.select()">{{ invite_url }}</textarea>
+        </div>
+        <div class="flex flex-col gap-2 mt-2">
+          <button onclick="navigator.clipboard.writeText('{{ invite_url }}')" class="btn btn-sm btn-outline w-full">
+            {% trans "Copy Link" %}
+          </button>
+          <form method="post" action="{% url 'core:platform_admin_org_send_invite' org_id=org.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-primary w-full">
+              {% trans "Send Email to Owner" %}
+            </button>
+          </form>
+        </div>
+        {% else %}
+        <p class="text-base-content/60 mb-2">{% trans "No invite link generated" %}</p>
+        {% endif %}
+        <form method="post" action="{% url 'core:platform_admin_org_invite' org_id=org.id %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-outline w-full">
+            {% if invite_url %}{% trans "Regenerate Link" %}{% else %}{% trans "Generate Link" %}{% endif %}
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Teams Card -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h3 class="card-title text-lg">{% trans "Teams" %} ({{ teams.count }})</h3>
+        {% if teams %}
+        <ul class="space-y-2">
+          {% for team in teams %}
+          <li class="flex justify-between items-center">
+            <span>{{ team.name }}</span>
+            <span class="badge badge-ghost badge-sm">{{ team.member_count }} {% trans "members" %}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-base-content/60">{% trans "No teams created" %}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Payment Provider Card -->
+    {% if org.payment_customer_id or org.payment_subscription_id %}
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h3 class="card-title text-lg">{% trans "Payment Provider" %}</h3>
+        <div class="space-y-2 text-sm">
+          {% if org.payment_customer_id %}
+          <div>
+            <span class="text-base-content/60">{% trans "Customer ID" %}</span>
+            <p class="font-mono text-xs">{{ org.payment_customer_id }}</p>
+          </div>
+          {% endif %}
+          {% if org.payment_subscription_id %}
+          <div>
+            <span class="text-base-content/60">{% trans "Subscription ID" %}</span>
+            <p class="font-mono text-xs">{{ org.payment_subscription_id }}</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,179 @@
+{% extends 'core/platform_admin/base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block platform_title %}{% if editing %}{% trans "Edit" %} {{ org.name }}{% else %}{% trans "Create Organization" %}{% endif %}{% endblock %}
+
+{% block platform_content %}
+<div class="flex items-center gap-4 mb-6">
+  <a href="{% if editing %}{% url 'core:platform_admin_org_detail' org_id=org.id %}{% else %}{% url 'core:platform_admin_org_list' %}{% endif %}" class="btn btn-ghost btn-sm">
+    ← {% trans "Back" %}
+  </a>
+  <h2 class="text-xl font-semibold">
+    {% if editing %}{% trans "Edit Organization" %}{% else %}{% trans "Create New Organization" %}{% endif %}
+  </h2>
+</div>
+
+<div class="card bg-base-100 shadow max-w-2xl">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+
+      <!-- Basic Info -->
+      <h3 class="text-lg font-medium mb-4">{% trans "Basic Information" %}</h3>
+
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">{% trans "Organization Name" %} *</span>
+        </label>
+        <input type="text" name="name"
+               value="{% if editing %}{{ org.name }}{% else %}{{ form_data.name }}{% endif %}"
+               class="input input-bordered" required />
+      </div>
+
+      {% if not editing %}
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">{% trans "Owner Email" %} *</span>
+        </label>
+        <input type="email" name="owner_email"
+               value="{{ form_data.owner_email }}"
+               class="input input-bordered" required />
+        <label class="label">
+          <span class="label-text-alt text-base-content/60">
+            {% trans "If no account exists, one will be created for this email" %}
+          </span>
+        </label>
+      </div>
+      {% endif %}
+
+      <!-- Billing Configuration -->
+      <h3 class="text-lg font-medium mt-6 mb-4">{% trans "Billing Configuration" %}</h3>
+
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">{% trans "Billing Type" %}</span>
+        </label>
+        <select name="billing_type" id="billing_type" class="select select-bordered" onchange="updateBillingFields()">
+          {% for value, label in billing_choices %}
+          <option value="{{ value }}"
+            {% if editing and org.billing_type == value %}selected{% endif %}
+            {% if not editing and form_data.billing_type == value %}selected{% endif %}>
+            {{ label }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div id="per_seat_fields" class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">{% trans "Price Per Seat (£/month)" %}</span>
+        </label>
+        <input type="number" name="price_per_seat" step="0.01" min="0"
+               value="{% if editing %}{{ org.price_per_seat }}{% else %}{{ form_data.price_per_seat }}{% endif %}"
+               class="input input-bordered" />
+      </div>
+
+      <div id="flat_rate_fields" class="form-control mb-4 hidden">
+        <label class="label">
+          <span class="label-text">{% trans "Flat Rate Price (£/month)" %}</span>
+        </label>
+        <input type="number" name="flat_rate_price" step="0.01" min="0"
+               value="{% if editing %}{{ org.flat_rate_price }}{% else %}{{ form_data.flat_rate_price }}{% endif %}"
+               class="input input-bordered" />
+      </div>
+
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">{% trans "Maximum Seats (optional)" %}</span>
+        </label>
+        <input type="number" name="max_seats" min="1"
+               value="{% if editing %}{{ org.max_seats }}{% else %}{{ form_data.max_seats }}{% endif %}"
+               class="input input-bordered" />
+        <label class="label">
+          <span class="label-text-alt text-base-content/60">
+            {% trans "Leave blank for unlimited seats" %}
+          </span>
+        </label>
+      </div>
+
+      <!-- Billing Contact -->
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">{% trans "Billing Contact Email" %}</span>
+        </label>
+        <input type="email" name="billing_contact_email"
+               value="{% if editing %}{{ org.billing_contact_email }}{% else %}{{ form_data.billing_contact_email }}{% endif %}"
+               class="input input-bordered" />
+        <label class="label">
+          <span class="label-text-alt text-base-content/60">
+            {% trans "Defaults to owner email if not specified" %}
+          </span>
+        </label>
+      </div>
+
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">{% trans "Billing Notes (internal)" %}</span>
+        </label>
+        <textarea name="billing_notes" rows="3"
+                  class="textarea textarea-bordered">{% if editing %}{{ org.billing_notes }}{% else %}{{ form_data.billing_notes }}{% endif %}</textarea>
+      </div>
+
+      {% if editing %}
+      <!-- Status (edit only) -->
+      <h3 class="text-lg font-medium mt-6 mb-4">{% trans "Status" %}</h3>
+
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">{% trans "Subscription Status" %}</span>
+        </label>
+        <select name="subscription_status" class="select select-bordered">
+          {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if org.subscription_status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-control mb-4">
+        <label class="cursor-pointer label justify-start gap-4">
+          <input type="checkbox" name="is_active"
+                 {% if org.is_active %}checked{% endif %}
+                 class="checkbox checkbox-primary" />
+          <span class="label-text">{% trans "Organization is active" %}</span>
+        </label>
+      </div>
+      {% endif %}
+
+      <!-- Submit -->
+      <div class="card-actions justify-end mt-8">
+        <a href="{% if editing %}{% url 'core:platform_admin_org_detail' org_id=org.id %}{% else %}{% url 'core:platform_admin_org_list' %}{% endif %}"
+           class="btn btn-ghost">{% trans "Cancel" %}</a>
+        <button type="submit" class="btn btn-primary">
+          {% if editing %}{% trans "Save Changes" %}{% else %}{% trans "Create Organization" %}{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script nonce="{{ request.csp_nonce }}">
+function updateBillingFields() {
+  const billingType = document.getElementById('billing_type').value;
+  const perSeatFields = document.getElementById('per_seat_fields');
+  const flatRateFields = document.getElementById('flat_rate_fields');
+
+  perSeatFields.classList.add('hidden');
+  flatRateFields.classList.add('hidden');
+
+  if (billingType === 'per_seat') {
+    perSeatFields.classList.remove('hidden');
+  } else if (billingType === 'flat_rate') {
+    flatRateFields.classList.remove('hidden');
+  }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', updateBillingFields);
+</script>
+{% endblock %}

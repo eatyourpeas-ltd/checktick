@@ -288,60 +288,81 @@ class OrganizationAdmin(admin.ModelAdmin):
     inlines = [OrganizationMembershipInline]
 
     fieldsets = (
-        (None, {
-            "fields": ("name", "owner", "is_active"),
-        }),
-        ("Billing Configuration", {
-            "fields": (
-                "billing_type",
-                "price_per_seat",
-                "flat_rate_price",
-                "max_seats",
-                "billing_contact_email",
-                "billing_notes",
-            ),
-            "description": "Set the billing terms for this organization.",
-        }),
-        ("Billing Status", {
-            "fields": (
-                "current_seats",
-                "monthly_cost_display",
-                "subscription_status",
-            ),
-            "classes": ("collapse",),
-        }),
-        ("Payment Provider", {
-            "fields": (
-                "payment_customer_id",
-                "payment_subscription_id",
-                "payment_price_id",
-            ),
-            "classes": ("collapse",),
-            "description": "Integration with external payment provider.",
-        }),
-        ("Setup & Onboarding", {
-            "fields": (
-                "invite_link_display",
-                "setup_token",
-                "setup_completed_at",
-                "created_by",
-            ),
-            "classes": ("collapse",),
-        }),
-        ("Theming", {
-            "fields": (
-                "default_theme",
-                "theme_preset_light",
-                "theme_preset_dark",
-                "theme_light_css",
-                "theme_dark_css",
-            ),
-            "classes": ("collapse",),
-        }),
-        ("Timestamps", {
-            "fields": ("created_at", "updated_at"),
-            "classes": ("collapse",),
-        }),
+        (
+            None,
+            {
+                "fields": ("name", "owner", "is_active"),
+            },
+        ),
+        (
+            "Billing Configuration",
+            {
+                "fields": (
+                    "billing_type",
+                    "price_per_seat",
+                    "flat_rate_price",
+                    "max_seats",
+                    "billing_contact_email",
+                    "billing_notes",
+                ),
+                "description": "Set the billing terms for this organization.",
+            },
+        ),
+        (
+            "Billing Status",
+            {
+                "fields": (
+                    "current_seats",
+                    "monthly_cost_display",
+                    "subscription_status",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Payment Provider",
+            {
+                "fields": (
+                    "payment_customer_id",
+                    "payment_subscription_id",
+                    "payment_price_id",
+                ),
+                "classes": ("collapse",),
+                "description": "Integration with external payment provider.",
+            },
+        ),
+        (
+            "Setup & Onboarding",
+            {
+                "fields": (
+                    "invite_link_display",
+                    "setup_token",
+                    "setup_completed_at",
+                    "created_by",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Theming",
+            {
+                "fields": (
+                    "default_theme",
+                    "theme_preset_light",
+                    "theme_preset_dark",
+                    "theme_light_css",
+                    "theme_dark_css",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Timestamps",
+            {
+                "fields": ("created_at", "updated_at"),
+                "classes": ("collapse",),
+            },
+        ),
     )
 
     actions = ["generate_invite_links", "mark_active", "mark_inactive"]
@@ -351,11 +372,13 @@ class OrganizationAdmin(admin.ModelAdmin):
         if obj.max_seats:
             return f"{obj.current_seats}/{obj.max_seats}"
         return f"{obj.current_seats}/∞"
+
     seats_display.short_description = "Seats"
 
     def current_seats(self, obj):
         """Display current seat count."""
         return obj.current_seats
+
     current_seats.short_description = "Current Members"
 
     def monthly_cost_display(self, obj):
@@ -364,6 +387,7 @@ class OrganizationAdmin(admin.ModelAdmin):
         if cost is not None:
             return f"£{cost:.2f}"
         return "-"
+
     monthly_cost_display.short_description = "Monthly Cost"
 
     def invite_link_display(self, obj):
@@ -371,6 +395,7 @@ class OrganizationAdmin(admin.ModelAdmin):
         if obj.setup_token:
             # Build the invite URL
             from django.urls import reverse
+
             try:
                 url = reverse("core:org_setup", kwargs={"token": obj.setup_token})
                 return format_html(
@@ -382,6 +407,7 @@ class OrganizationAdmin(admin.ModelAdmin):
             except Exception:
                 return f"Token: {obj.setup_token} (URL not configured)"
         return "No invite link generated. Use the action below to generate one."
+
     invite_link_display.short_description = "Invite Link"
 
     @admin.action(description="Generate invite links for selected organizations")
@@ -393,9 +419,13 @@ class OrganizationAdmin(admin.ModelAdmin):
                 org.generate_setup_token()
                 count += 1
         if count:
-            messages.success(request, f"Generated invite links for {count} organization(s).")
+            messages.success(
+                request, f"Generated invite links for {count} organization(s)."
+            )
         else:
-            messages.warning(request, "No organizations needed invite links (already set up).")
+            messages.warning(
+                request, "No organizations needed invite links (already set up)."
+            )
 
     @admin.action(description="Mark selected organizations as active")
     def mark_active(self, request, queryset):

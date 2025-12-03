@@ -1,0 +1,160 @@
+{% extends 'core/platform_admin/base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block platform_title %}{% trans "Dashboard" %}{% endblock %}
+
+{% block platform_content %}
+<!-- Stats Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Total Organizations" %}</div>
+    <div class="stat-value text-primary">{{ org_stats.total }}</div>
+    <div class="stat-desc">{{ org_stats.active }} {% trans "active" %}</div>
+  </div>
+
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Pending Setup" %}</div>
+    <div class="stat-value text-warning">{{ org_stats.pending }}</div>
+    <div class="stat-desc">{% trans "Awaiting owner activation" %}</div>
+  </div>
+
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Total Users" %}</div>
+    <div class="stat-value text-secondary">{{ total_users }}</div>
+    <div class="stat-desc">{% trans "Platform-wide" %}</div>
+  </div>
+
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Total Surveys" %}</div>
+    <div class="stat-value text-accent">{{ total_surveys }}</div>
+    <div class="stat-desc">{% trans "All organizations" %}</div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <!-- Recent Organizations -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <div class="flex items-center justify-between">
+        <h2 class="card-title">{% trans "Recent Organizations" %}</h2>
+        <a href="{% url 'core:platform_admin_org_create' %}" class="btn btn-sm btn-primary">
+          + {% trans "Create New" %}
+        </a>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>{% trans "Name" %}</th>
+              <th>{% trans "Owner" %}</th>
+              <th>{% trans "Members" %}</th>
+              <th>{% trans "Status" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for org in recent_orgs %}
+            <tr>
+              <td>
+                <a href="{% url 'core:platform_admin_org_detail' org_id=org.id %}" class="link link-primary">
+                  {{ org.name }}
+                </a>
+              </td>
+              <td>{{ org.owner.email|default:"-" }}</td>
+              <td>{{ org.member_count }}</td>
+              <td>
+                {% if org.is_active %}
+                  <span class="badge badge-success badge-sm">{% trans "Active" %}</span>
+                {% else %}
+                  <span class="badge badge-ghost badge-sm">{% trans "Inactive" %}</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="4" class="text-center text-base-content/60">{% trans "No organizations yet" %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card-actions justify-end mt-4">
+        <a href="{% url 'core:platform_admin_org_list' %}" class="btn btn-sm btn-ghost">
+          {% trans "View All" %} →
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Needs Attention -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h2 class="card-title text-warning">{% trans "Needs Attention" %}</h2>
+
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>{% trans "Organization" %}</th>
+              <th>{% trans "Issue" %}</th>
+              <th>{% trans "Action" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for org in attention_orgs %}
+            <tr>
+              <td>
+                <a href="{% url 'core:platform_admin_org_detail' org_id=org.id %}" class="link">
+                  {{ org.name }}
+                </a>
+              </td>
+              <td>
+                {% if org.subscription_status == 'past_due' %}
+                  <span class="badge badge-error badge-sm">{% trans "Past Due" %}</span>
+                {% elif org.subscription_status == 'pending' %}
+                  <span class="badge badge-warning badge-sm">{% trans "Setup Pending >7d" %}</span>
+                {% endif %}
+              </td>
+              <td>
+                <a href="{% url 'core:platform_admin_org_detail' org_id=org.id %}" class="btn btn-xs btn-ghost">
+                  {% trans "View" %}
+                </a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="3" class="text-center text-base-content/60">
+                {% trans "All organizations are in good standing" %} ✓
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card bg-base-100 shadow mt-6">
+  <div class="card-body">
+    <h2 class="card-title">{% trans "Quick Actions" %}</h2>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'core:platform_admin_org_create' %}" class="btn btn-primary">
+        + {% trans "Create Organization" %}
+      </a>
+      <a href="{% url 'core:platform_admin_org_list' %}?status=pending" class="btn btn-outline">
+        {% trans "View Pending Setups" %}
+      </a>
+      <a href="{% url 'core:platform_admin_stats' %}" class="btn btn-outline">
+        {% trans "View Statistics" %}
+      </a>
+      <a href="{% url 'admin:surveys_organization_changelist' %}" class="btn btn-outline">
+        {% trans "Django Admin → Organizations" %}
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

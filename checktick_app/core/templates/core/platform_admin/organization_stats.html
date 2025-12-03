@@ -1,0 +1,140 @@
+{% extends 'core/platform_admin/base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block platform_title %}{% trans "Statistics" %}{% endblock %}
+
+{% block platform_content %}
+<h2 class="text-xl font-semibold mb-6">{% trans "Platform Statistics" %}</h2>
+
+<!-- Revenue Overview -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Est. Monthly Revenue" %}</div>
+    <div class="stat-value text-primary">£{{ total_monthly_revenue }}</div>
+    <div class="stat-desc">{% trans "Active subscriptions" %}</div>
+  </div>
+
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Per-Seat Revenue" %}</div>
+    <div class="stat-value text-secondary">£{{ per_seat_revenue }}</div>
+    <div class="stat-desc">{% trans "From per-seat billing" %}</div>
+  </div>
+
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Flat Rate Revenue" %}</div>
+    <div class="stat-value text-accent">£{{ flat_rate_revenue }}</div>
+    <div class="stat-desc">{% trans "From flat-rate billing" %}</div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+  <!-- Billing Type Breakdown -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h3 class="card-title">{% trans "Organizations by Billing Type" %}</h3>
+      <div class="space-y-3 mt-4">
+        {% for label, count in billing_stats.items %}
+        <div class="flex items-center justify-between">
+          <span>{{ label }}</span>
+          <div class="flex items-center gap-2">
+            <progress class="progress progress-primary w-32" value="{{ count }}" max="{% widthratio count 1 1 %}"></progress>
+            <span class="font-mono text-sm w-8 text-right">{{ count }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Breakdown -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h3 class="card-title">{% trans "Organizations by Status" %}</h3>
+      <div class="space-y-3 mt-4">
+        {% for label, count in status_stats.items %}
+        <div class="flex items-center justify-between">
+          <span>{{ label }}</span>
+          <div class="flex items-center gap-2">
+            <progress class="progress progress-secondary w-32" value="{{ count }}" max="{% widthratio count 1 1 %}"></progress>
+            <span class="font-mono text-sm w-8 text-right">{{ count }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <!-- Top by Members -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h3 class="card-title">{% trans "Top Organizations by Members" %}</h3>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>{% trans "Organization" %}</th>
+              <th class="text-right">{% trans "Members" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for org in top_by_members %}
+            <tr>
+              <td class="text-base-content/60">{{ forloop.counter }}</td>
+              <td>
+                <a href="{% url 'core:platform_admin_org_detail' org_id=org.id %}" class="link link-primary">
+                  {{ org.name }}
+                </a>
+              </td>
+              <td class="text-right font-mono">{{ org.member_count }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="3" class="text-center text-base-content/60">{% trans "No data" %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top by Surveys -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h3 class="card-title">{% trans "Top Organizations by Surveys" %}</h3>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>{% trans "Organization" %}</th>
+              <th class="text-right">{% trans "Surveys" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for org in top_by_surveys %}
+            <tr>
+              <td class="text-base-content/60">{{ forloop.counter }}</td>
+              <td>
+                <a href="{% url 'core:platform_admin_org_detail' org_id=org.id %}" class="link link-primary">
+                  {{ org.name }}
+                </a>
+              </td>
+              <td class="text-right font-mono">{{ org.survey_count }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="3" class="text-center text-base-content/60">{% trans "No data" %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,178 @@
+{% extends 'core/platform_admin/base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block platform_title %}{% trans "Organizations" %}{% endblock %}
+
+{% block platform_content %}
+<div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+  <h2 class="text-xl font-semibold">{% trans "Organizations" %}</h2>
+  <a href="{% url 'core:platform_admin_org_create' %}" class="btn btn-primary">
+    + {% trans "Create Organization" %}
+  </a>
+</div>
+
+<!-- Filters -->
+<div class="card bg-base-100 shadow mb-6">
+  <div class="card-body py-4">
+    <form method="get" class="flex flex-wrap gap-4 items-end">
+      <div class="form-control">
+        <label class="label py-1">
+          <span class="label-text text-sm">{% trans "Search" %}</span>
+        </label>
+        <input type="text" name="q" value="{{ search }}"
+               placeholder="{% trans 'Name, email...' %}"
+               class="input input-sm input-bordered w-48" />
+      </div>
+
+      <div class="form-control">
+        <label class="label py-1">
+          <span class="label-text text-sm">{% trans "Status" %}</span>
+        </label>
+        <select name="status" class="select select-sm select-bordered">
+          <option value="">{% trans "All" %}</option>
+          <option value="active" {% if status_filter == 'active' %}selected{% endif %}>{% trans "Active" %}</option>
+          <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>{% trans "Inactive" %}</option>
+          {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-control">
+        <label class="label py-1">
+          <span class="label-text text-sm">{% trans "Billing Type" %}</span>
+        </label>
+        <select name="billing" class="select select-sm select-bordered">
+          <option value="">{% trans "All" %}</option>
+          {% for value, label in billing_choices %}
+          <option value="{{ value }}" {% if billing_filter == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <button type="submit" class="btn btn-sm btn-primary">{% trans "Filter" %}</button>
+      <a href="{% url 'core:platform_admin_org_list' %}" class="btn btn-sm btn-ghost">{% trans "Clear" %}</a>
+    </form>
+  </div>
+</div>
+
+<!-- Organizations Table -->
+<div class="card bg-base-100 shadow">
+  <div class="card-body">
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>{% trans "Name" %}</th>
+            <th>{% trans "Owner" %}</th>
+            <th>{% trans "Billing" %}</th>
+            <th>{% trans "Members" %}</th>
+            <th>{% trans "Surveys" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Created" %}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for org in orgs %}
+          <tr class="hover">
+            <td>
+              <a href="{% url 'core:platform_admin_org_detail' org_id=org.id %}" class="font-medium link link-primary">
+                {{ org.name }}
+              </a>
+            </td>
+            <td>
+              {% if org.owner %}
+                <span class="text-sm">{{ org.owner.email }}</span>
+              {% else %}
+                <span class="text-base-content/50">-</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if org.billing_type == 'per_seat' %}
+                <span class="badge badge-info badge-sm">{% trans "Per Seat" %}</span>
+              {% elif org.billing_type == 'flat_rate' %}
+                <span class="badge badge-secondary badge-sm">{% trans "Flat Rate" %}</span>
+              {% elif org.billing_type == 'invoice' %}
+                <span class="badge badge-warning badge-sm">{% trans "Invoice" %}</span>
+              {% else %}
+                <span class="badge badge-ghost badge-sm">{% trans "Free" %}</span>
+              {% endif %}
+            </td>
+            <td>{{ org.member_count }}</td>
+            <td>{{ org.survey_count }}</td>
+            <td>
+              {% if org.is_active %}
+                {% if org.subscription_status == 'active' %}
+                  <span class="badge badge-success badge-sm">{% trans "Active" %}</span>
+                {% elif org.subscription_status == 'pending' %}
+                  <span class="badge badge-warning badge-sm">{% trans "Pending" %}</span>
+                {% elif org.subscription_status == 'past_due' %}
+                  <span class="badge badge-error badge-sm">{% trans "Past Due" %}</span>
+                {% else %}
+                  <span class="badge badge-ghost badge-sm">{{ org.get_subscription_status_display }}</span>
+                {% endif %}
+              {% else %}
+                <span class="badge badge-ghost badge-sm">{% trans "Inactive" %}</span>
+              {% endif %}
+            </td>
+            <td class="text-sm text-base-content/70">{{ org.created_at|date:"d M Y" }}</td>
+            <td>
+              <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-ghost btn-xs">
+                  ⋮
+                </div>
+                <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-40">
+                  <li><a href="{% url 'core:platform_admin_org_detail' org_id=org.id %}">{% trans "View" %}</a></li>
+                  <li><a href="{% url 'core:platform_admin_org_edit' org_id=org.id %}">{% trans "Edit" %}</a></li>
+                  <li>
+                    <form method="post" action="{% url 'core:platform_admin_org_toggle_active' org_id=org.id %}">
+                      {% csrf_token %}
+                      <button type="submit" class="w-full text-left">
+                        {% if org.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}
+                      </button>
+                    </form>
+                  </li>
+                </ul>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" class="text-center py-8 text-base-content/60">
+              {% if search or status_filter or billing_filter %}
+                {% trans "No organizations match your filters" %}
+              {% else %}
+                {% trans "No organizations yet" %}
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if orgs.has_other_pages %}
+    <div class="flex justify-center mt-6">
+      <div class="join">
+        {% if orgs.has_previous %}
+          <a href="?page={{ orgs.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if billing_filter %}&billing={{ billing_filter }}{% endif %}"
+             class="join-item btn btn-sm">«</a>
+        {% endif %}
+
+        <span class="join-item btn btn-sm btn-disabled">
+          {% trans "Page" %} {{ orgs.number }} {% trans "of" %} {{ orgs.paginator.num_pages }}
+        </span>
+
+        {% if orgs.has_next %}
+          <a href="?page={{ orgs.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if billing_filter %}&billing={{ billing_filter }}{% endif %}"
+             class="join-item btn btn-sm">»</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

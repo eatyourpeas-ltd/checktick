@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% block platform_title %}{% trans "Platform Admin" %}{% endblock %} - {{ brand.title }}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen">
+  <!-- Platform Admin Header -->
+  <div class="bg-base-200 border-b border-base-300">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <h1 class="text-2xl font-bold text-primary">{% trans "Platform Admin" %}</h1>
+          <span class="badge badge-warning">{% trans "Superuser Only" %}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <a href="{% url 'admin:index' %}" class="btn btn-sm btn-outline">
+            {% include "components/icons/settings.html" with classes="w-4 h-4" %}
+            {% trans "Django Admin" %}
+          </a>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="mt-4">
+        <ul class="flex gap-2 flex-wrap">
+          <li>
+            <a href="{% url 'core:platform_admin_dashboard' %}"
+               class="btn btn-sm {% if request.resolver_match.url_name == 'platform_admin_dashboard' %}btn-primary{% else %}btn-ghost{% endif %}">
+              {% trans "Dashboard" %}
+            </a>
+          </li>
+          <li>
+            <a href="{% url 'core:platform_admin_org_list' %}"
+               class="btn btn-sm {% if 'org' in request.resolver_match.url_name %}btn-primary{% else %}btn-ghost{% endif %}">
+              {% trans "Organizations" %}
+            </a>
+          </li>
+          <li>
+            <a href="{% url 'core:platform_admin_stats' %}"
+               class="btn btn-sm {% if request.resolver_match.url_name == 'platform_admin_stats' %}btn-primary{% else %}btn-ghost{% endif %}">
+              {% trans "Statistics" %}
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="container mx-auto px-4 py-6">
+    {% if messages %}
+      {% for message in messages %}
+        <div role="alert" class="alert {% if message.tags == 'error' %}alert-error{% elif message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% else %}alert-info{% endif %} mb-4">
+          <span>{{ message }}</span>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    {% block platform_content %}{% endblock %}
+  </div>
+</div>
+{% endblock %}
