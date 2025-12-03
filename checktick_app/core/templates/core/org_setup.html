@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}
+  {% trans 'Organization Setup' %} - {{ org.name }} - {{ brand.title }}
+{% endblock %}
+
+{% block content %}
+  <div class="container mx-auto px-4 py-12 max-w-2xl">
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        {# Organization Icon #}
+        <div class="flex justify-center mb-6">
+          <div class="rounded-full bg-primary/20 p-6">
+            <svg class="w-16 h-16 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+            </svg>
+          </div>
+        </div>
+
+        <h1 class="text-3xl font-bold text-center mb-2">{% trans 'Welcome to' %} {{ org.name }}</h1>
+        <p class="text-center text-base-content/70 mb-8">
+          {% trans 'Complete your account setup to get started with your organization.' %}
+        </p>
+
+        {# Billing Summary #}
+        <div class="alert alert-info mb-6">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <div>
+            <h3 class="font-bold">{% trans 'Your Plan' %}</h3>
+            <div class="text-sm">
+              {% if org.billing_type == 'per_seat' %}
+                {% blocktrans with price=org.price_per_seat %}£{{ price }}/user/month{% endblocktrans %}
+                {% if org.max_seats %}
+                  {% blocktrans with seats=org.max_seats %}(up to {{ seats }} seats){% endblocktrans %}
+                {% endif %}
+              {% elif org.billing_type == 'flat_rate' %}
+                {% blocktrans with price=org.flat_rate_price %}£{{ price }}/month (flat rate){% endblocktrans %}
+              {% elif org.billing_type == 'invoice' %}
+                {% trans 'Invoice billing - your administrator will contact you separately about payment.' %}
+              {% elif org.billing_type == 'free' %}
+                {% trans 'Free organization account' %}
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        {# Setup Form #}
+        <form method="post" class="space-y-6">
+          {% csrf_token %}
+
+          {# Email #}
+          <div class="form-control">
+            <label class="label" for="email">
+              <span class="label-text font-semibold">{% trans 'Email Address' %}</span>
+            </label>
+            <input type="email"
+                   id="email"
+                   name="email"
+                   class="input input-bordered w-full"
+                   placeholder="you@example.com"
+                   value="{{ email|default:'' }}"
+                   required>
+            <label class="label">
+              <span class="label-text-alt text-base-content/60">
+                {% trans 'This will be your login email and organization contact.' %}
+              </span>
+            </label>
+          </div>
+
+          {# Password #}
+          <div class="form-control">
+            <label class="label" for="password">
+              <span class="label-text font-semibold">
+                {% if existing_user %}
+                  {% trans 'Your Password' %}
+                {% else %}
+                  {% trans 'Create Password' %}
+                {% endif %}
+              </span>
+            </label>
+            <input type="password"
+                   id="password"
+                   name="password"
+                   class="input input-bordered w-full"
+                   {% if existing_user %}
+                   placeholder="{% trans 'Enter your existing password' %}"
+                   {% else %}
+                   placeholder="{% trans 'Minimum 8 characters' %}"
+                   minlength="8"
+                   {% endif %}
+                   required>
+            {% if existing_user %}
+              <label class="label">
+                <span class="label-text-alt text-warning">
+                  {% trans 'An account with this email already exists. Enter your password to link this organization to your account.' %}
+                </span>
+              </label>
+            {% endif %}
+          </div>
+
+          {# Terms and Conditions #}
+          <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-3">
+              <input type="checkbox" name="accept_terms" class="checkbox checkbox-primary" required>
+              <span class="label-text">
+                {% blocktrans %}
+                  I agree to the <a href="/docs/terms-of-service/" target="_blank" class="link link-primary">Terms of Service</a>
+                  and <a href="/docs/privacy-notice/" target="_blank" class="link link-primary">Privacy Notice</a>
+                {% endblocktrans %}
+              </span>
+            </label>
+          </div>
+
+          {# Submit #}
+          <div class="form-control mt-8">
+            <button type="submit" class="btn btn-primary btn-lg w-full">
+              {% if org.billing_type == 'invoice' or org.billing_type == 'free' %}
+                {% trans 'Complete Setup' %}
+              {% else %}
+                {% trans 'Continue to Payment' %}
+              {% endif %}
+            </button>
+          </div>
+        </form>
+
+        {# Help Text #}
+        <div class="divider my-8"></div>
+        <p class="text-center text-sm text-base-content/60">
+          {% trans 'Need help? Contact' %}
+          <a href="mailto:support@checktick.uk" class="link link-primary">support@checktick.uk</a>
+        </p>
+      </div>
+    </div>
+  </div>
+{% endblock %}

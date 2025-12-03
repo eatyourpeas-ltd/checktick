@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import decimal
 import json
 import uuid
 
@@ -58,15 +59,130 @@ LANGUAGE_FLAGS = {
 
 
 class Organization(models.Model):
+    """
+    An organization account with multiple members and custom billing.
+
+    Organizations are typically created by platform admins (superusers) for
+    enterprise customers with negotiated billing terms. They support:
+    - Custom per-seat or flat-rate billing
+    - Multiple teams within the organization
+    - Advanced governance features
+    - Invoice-based payment collection
+    """
+
     DEFAULT_THEME_CHOICES = [
         ("checktick-light", "CheckTick Light"),
         ("checktick-dark", "CheckTick Dark"),
     ]
 
+    class BillingType(models.TextChoices):
+        PER_SEAT = "per_seat", "Per Seat"
+        FLAT_RATE = "flat_rate", "Flat Rate"
+        INVOICE = "invoice", "Invoice (Manual)"
+        FREE = "free", "Free (Internal/Trial)"
+
+    class SubscriptionStatus(models.TextChoices):
+        PENDING = "pending", "Pending Setup"
+        ACTIVE = "active", "Active"
+        PAST_DUE = "past_due", "Past Due"
+        CANCELED = "canceled", "Canceled"
+        TRIALING = "trialing", "Trialing"
+
     name = models.CharField(max_length=255)
     owner = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="organizations"
     )
+
+    # Billing configuration (set by platform admin)
+    billing_type = models.CharField(
+        max_length=20,
+        choices=BillingType.choices,
+        default=BillingType.PER_SEAT,
+        help_text="How this organization is billed",
+    )
+    price_per_seat = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Price per seat per month (for per-seat billing)",
+    )
+    flat_rate_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Fixed monthly price (for flat-rate billing)",
+    )
+    max_seats = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Maximum number of seats (null = unlimited)",
+    )
+    billing_contact_email = models.EmailField(
+        blank=True,
+        default="",
+        help_text="Email for billing communications",
+    )
+    billing_notes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Internal notes about billing arrangements",
+    )
+
+    # Payment provider integration (provider-agnostic)
+    payment_customer_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Customer ID from payment provider",
+    )
+    payment_subscription_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Subscription ID from payment provider",
+    )
+    payment_price_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Custom price ID from payment provider (for per-seat billing)",
+    )
+    subscription_status = models.CharField(
+        max_length=20,
+        choices=SubscriptionStatus.choices,
+        default=SubscriptionStatus.PENDING,
+        help_text="Current subscription status",
+    )
+
+    # Setup and onboarding
+    setup_token = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Token for owner invite/setup link",
+    )
+    setup_completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the organization owner completed setup",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this organization is active",
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_organizations",
+        help_text="Platform admin who created this organization",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
     # Organization master key for encrypting member surveys (Option 1: Key Escrow)
     # In production, this should be encrypted with AWS KMS or Azure Key Vault
     # For now, storing as plaintext for development/testing
@@ -108,8 +224,66 @@ class Organization(models.Model):
         help_text="Custom CSS for dark theme (overrides preset if provided)",
     )
 
+    class Meta:
+        ordering = ["-created_at"]
+
     def __str__(self) -> str:  # pragma: no cover
         return self.name
+
+    @property
+    def current_seats(self) -> int:
+        """Number of current members in the organization."""
+        return self.memberships.count()
+
+    @property
+    def seats_remaining(self) -> int | None:
+        """Number of seats remaining, or None if unlimited."""
+        if self.max_seats is None:
+            return None
+        return max(0, self.max_seats - self.current_seats)
+
+    @property
+    def is_over_seat_limit(self) -> bool:
+        """Whether the organization has exceeded its seat limit."""
+        if self.max_seats is None:
+            return False
+        return self.current_seats > self.max_seats
+
+    @property
+    def monthly_cost(self) -> decimal.Decimal | None:
+        """Calculate the current monthly cost based on billing type."""
+        if self.billing_type == self.BillingType.FREE:
+            return decimal.Decimal("0.00")
+        elif self.billing_type == self.BillingType.FLAT_RATE:
+            return self.flat_rate_price
+        elif self.billing_type == self.BillingType.PER_SEAT and self.price_per_seat:
+            return self.price_per_seat * self.current_seats
+        return None
+
+    def generate_setup_token(self) -> str:
+        """Generate a new setup token for the owner invite link."""
+        import secrets
+
+        self.setup_token = secrets.token_urlsafe(32)
+        self.save(update_fields=["setup_token", "updated_at"])
+        return self.setup_token
+
+    def complete_setup(self) -> None:
+        """Mark organization setup as complete."""
+        from django.utils import timezone
+
+        self.setup_completed_at = timezone.now()
+        self.setup_token = ""  # Clear token after use
+        if self.subscription_status == self.SubscriptionStatus.PENDING:
+            self.subscription_status = self.SubscriptionStatus.ACTIVE
+        self.save(
+            update_fields=[
+                "setup_completed_at",
+                "setup_token",
+                "subscription_status",
+                "updated_at",
+            ]
+        )
 
 
 class OrganizationMembership(models.Model):

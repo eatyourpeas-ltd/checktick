@@ -9,6 +9,7 @@ from .models import (
     DataSet,
     IdentityVerification,
     Organization,
+    OrganizationMembership,
     PublishedQuestionGroup,
     QuestionGroup,
     RecoveryAuditEntry,
@@ -233,9 +234,184 @@ class DataSetAdmin(admin.ModelAdmin):
         return readonly
 
 
+class OrganizationMembershipInline(admin.TabularInline):
+    """Inline for viewing/managing organization members."""
+
+    model = OrganizationMembership
+    extra = 0
+    fields = ("user", "role", "created_at")
+    readonly_fields = ("created_at",)
+    autocomplete_fields = ["user"]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("user")
+
+
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):
-    list_display = ("name", "owner")
+    """
+    Enhanced admin for managing Organizations.
+
+    Provides platform admins (superusers) with the ability to:
+    - Create organizations with custom billing terms
+    - Manage members and seats
+    - Track payment/subscription status
+    - Generate setup/invite links for org owners
+    """
+
+    list_display = (
+        "name",
+        "owner",
+        "billing_type",
+        "seats_display",
+        "subscription_status",
+        "is_active",
+        "created_at",
+    )
+    list_filter = (
+        "billing_type",
+        "subscription_status",
+        "is_active",
+        "created_at",
+    )
+    search_fields = ("name", "owner__username", "owner__email", "billing_contact_email")
+    autocomplete_fields = ["owner", "created_by"]
+    readonly_fields = (
+        "current_seats",
+        "monthly_cost_display",
+        "setup_token",
+        "setup_completed_at",
+        "created_at",
+        "updated_at",
+        "invite_link_display",
+    )
+    inlines = [OrganizationMembershipInline]
+
+    fieldsets = (
+        (None, {
+            "fields": ("name", "owner", "is_active"),
+        }),
+        ("Billing Configuration", {
+            "fields": (
+                "billing_type",
+                "price_per_seat",
+                "flat_rate_price",
+                "max_seats",
+                "billing_contact_email",
+                "billing_notes",
+            ),
+            "description": "Set the billing terms for this organization.",
+        }),
+        ("Billing Status", {
+            "fields": (
+                "current_seats",
+                "monthly_cost_display",
+                "subscription_status",
+            ),
+            "classes": ("collapse",),
+        }),
+        ("Payment Provider", {
+            "fields": (
+                "payment_customer_id",
+                "payment_subscription_id",
+                "payment_price_id",
+            ),
+            "classes": ("collapse",),
+            "description": "Integration with external payment provider.",
+        }),
+        ("Setup & Onboarding", {
+            "fields": (
+                "invite_link_display",
+                "setup_token",
+                "setup_completed_at",
+                "created_by",
+            ),
+            "classes": ("collapse",),
+        }),
+        ("Theming", {
+            "fields": (
+                "default_theme",
+                "theme_preset_light",
+                "theme_preset_dark",
+                "theme_light_css",
+                "theme_dark_css",
+            ),
+            "classes": ("collapse",),
+        }),
+        ("Timestamps", {
+            "fields": ("created_at", "updated_at"),
+            "classes": ("collapse",),
+        }),
+    )
+
+    actions = ["generate_invite_links", "mark_active", "mark_inactive"]
+
+    def seats_display(self, obj):
+        """Display current/max seats."""
+        if obj.max_seats:
+            return f"{obj.current_seats}/{obj.max_seats}"
+        return f"{obj.current_seats}/∞"
+    seats_display.short_description = "Seats"
+
+    def current_seats(self, obj):
+        """Display current seat count."""
+        return obj.current_seats
+    current_seats.short_description = "Current Members"
+
+    def monthly_cost_display(self, obj):
+        """Display calculated monthly cost."""
+        cost = obj.monthly_cost
+        if cost is not None:
+            return f"£{cost:.2f}"
+        return "-"
+    monthly_cost_display.short_description = "Monthly Cost"
+
+    def invite_link_display(self, obj):
+        """Display the invite link if setup token exists."""
+        if obj.setup_token:
+            # Build the invite URL
+            from django.urls import reverse
+            try:
+                url = reverse("core:org_setup", kwargs={"token": obj.setup_token})
+                return format_html(
+                    '<a href="{}" target="_blank">{}</a><br>'
+                    '<small class="text-muted">Send this link to the organization owner to complete setup.</small>',
+                    url,
+                    url,
+                )
+            except Exception:
+                return f"Token: {obj.setup_token} (URL not configured)"
+        return "No invite link generated. Use the action below to generate one."
+    invite_link_display.short_description = "Invite Link"
+
+    @admin.action(description="Generate invite links for selected organizations")
+    def generate_invite_links(self, request, queryset):
+        """Generate setup tokens for selected organizations."""
+        count = 0
+        for org in queryset:
+            if not org.setup_completed_at:  # Only for orgs not yet set up
+                org.generate_setup_token()
+                count += 1
+        if count:
+            messages.success(request, f"Generated invite links for {count} organization(s).")
+        else:
+            messages.warning(request, "No organizations needed invite links (already set up).")
+
+    @admin.action(description="Mark selected organizations as active")
+    def mark_active(self, request, queryset):
+        updated = queryset.update(is_active=True)
+        messages.success(request, f"Marked {updated} organization(s) as active.")
+
+    @admin.action(description="Mark selected organizations as inactive")
+    def mark_inactive(self, request, queryset):
+        updated = queryset.update(is_active=False)
+        messages.success(request, f"Marked {updated} organization(s) as inactive.")
+
+    def save_model(self, request, obj, form, change):
+        """Set created_by on new organizations."""
+        if not change:  # New object
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(QuestionGroup)

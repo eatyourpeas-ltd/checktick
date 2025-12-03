@@ -17,6 +17,8 @@ urlpatterns = [
     path("docs/<slug:slug>/", views.docs_page, name="docs_page"),
     path("branding/", views.configure_branding, name="configure_branding"),
     path("delete-account/", views.delete_account, name="delete_account"),
+    # Organization setup
+    path("org-setup/<str:token>/", views.org_setup, name="org_setup"),
     # Billing
     path(
         "subscription/", views_billing.subscription_portal, name="subscription_portal"

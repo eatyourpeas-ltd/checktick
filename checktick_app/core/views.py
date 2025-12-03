@@ -1285,3 +1285,132 @@ def configure_branding(request):
             "branding": branding,
         },
     )
+
+
+def org_setup(request, token: str):
+    """Organization setup/onboarding view.
+
+    This view handles the setup flow for organization owners:
+    1. Validates the setup token
+    2. Shows organization details and T&Cs
+    3. Creates user account if needed (or logs in existing)
+    4. Makes user the org owner/admin
+    5. Redirects to payment (if self-service) or dashboard (if invoiced)
+
+    Args:
+        token: The setup token from the invite link
+    """
+    from django.contrib.auth import get_user_model
+    from django_ratelimit.decorators import ratelimit
+
+    User = get_user_model()
+
+    # Find organization by setup token
+    try:
+        org = Organization.objects.get(setup_token=token, is_active=True)
+    except Organization.DoesNotExist:
+        messages.error(
+            request,
+            _("Invalid or expired organization setup link. Please contact your administrator."),
+        )
+        return redirect("core:home")
+
+    # Check if already set up
+    if org.setup_completed_at:
+        messages.info(
+            request,
+            _("This organization has already been set up. Please sign in to access it."),
+        )
+        return redirect("login")
+
+    if request.method == "POST":
+        # Handle form submission
+        email = request.POST.get("email", "").strip().lower()
+        password = request.POST.get("password", "")
+        accept_terms = request.POST.get("accept_terms")
+
+        if not accept_terms:
+            messages.error(request, _("You must accept the terms and conditions."))
+            return render(request, "core/org_setup.html", {"org": org, "email": email})
+
+        if not email:
+            messages.error(request, _("Email is required."))
+            return render(request, "core/org_setup.html", {"org": org})
+
+        # Check if user exists
+        existing_user = User.objects.filter(email__iexact=email).first()
+
+        if existing_user:
+            # Existing user - check password
+            from django.contrib.auth import authenticate
+
+            user = authenticate(request, username=email, password=password)
+            if not user:
+                messages.error(
+                    request,
+                    _("An account with this email already exists. Please enter your password to continue."),
+                )
+                return render(request, "core/org_setup.html", {"org": org, "email": email, "existing_user": True})
+        else:
+            # New user - create account
+            if not password or len(password) < 8:
+                messages.error(request, _("Password must be at least 8 characters."))
+                return render(request, "core/org_setup.html", {"org": org, "email": email})
+
+            user = User.objects.create_user(
+                username=email,
+                email=email,
+                password=password,
+            )
+
+        # Update organization ownership and complete setup
+        org.owner = user
+        org.complete_setup()
+
+        # Ensure user is an admin member
+        OrganizationMembership.objects.get_or_create(
+            organization=org,
+            user=user,
+            defaults={"role": OrganizationMembership.Role.ADMIN},
+        )
+
+        # Update user's profile to organization tier
+        from checktick_app.core.models import UserProfile
+
+        profile = UserProfile.get_or_create_for_user(user)
+        profile.account_tier = UserProfile.AccountTier.ORGANIZATION
+        profile.save(update_fields=["account_tier", "updated_at"])
+
+        # Log the user in
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+
+        # Send welcome email
+        try:
+            from .email_utils import send_welcome_email
+
+            send_welcome_email(user)
+        except Exception as e:
+            logger.error(f"Failed to send welcome email: {e}")
+
+        messages.success(
+            request,
+            _("Welcome to %(org_name)s! Your organization account is now active.") % {"org_name": org.name},
+        )
+
+        # Redirect based on billing type
+        if org.billing_type == Organization.BillingType.INVOICE:
+            # Invoice billing - no payment needed, go to dashboard
+            return redirect("surveys:list")
+        else:
+            # Self-service payment - redirect to checkout
+            # TODO: Implement payment checkout with custom price
+            return redirect("surveys:list")
+
+    # GET request - show setup form
+    return render(
+        request,
+        "core/org_setup.html",
+        {
+            "org": org,
+        },
+    )
