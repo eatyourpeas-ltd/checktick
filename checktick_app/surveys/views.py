@@ -86,6 +86,7 @@ DEMOGRAPHIC_FIELD_DEFS: dict[str, str] = {
     "gender": "Gender",
     "nhs_number": "NHS number",
     "hospital_number": "Hospital number",
+    "mrn": "MRN",
     "post_code": "Post code",
     "address_first_line": "Address line 1",
     "address_second_line": "Address line 2",
