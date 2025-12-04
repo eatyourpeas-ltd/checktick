@@ -27,6 +27,25 @@ Webapp tests are organized by app:
 
 ## Running Webapp Tests
 
+### Parallel Execution (Recommended)
+
+CheckTick uses `pytest-xdist` for parallel test execution, which significantly speeds up test runs:
+
+```bash
+# Run all tests in parallel (recommended - ~14x faster)
+docker compose exec web pytest -n auto
+
+# Run all tests in parallel with quiet output
+docker compose exec web pytest -n auto -q
+
+# Run specific test file in parallel
+docker compose exec web pytest checktick_app/surveys/tests/ -n auto
+```
+
+The `-n auto` flag automatically detects available CPU cores and distributes tests across them. This reduces full test suite runtime from ~12-15 minutes to under 1 minute.
+
+### Sequential Execution
+
 ```bash
 # Run all webapp tests for surveys app
 docker compose exec web pytest checktick_app/surveys/tests/

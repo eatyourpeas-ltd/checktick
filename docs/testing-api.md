@@ -18,6 +18,22 @@ API tests are located in:
 
 ## Running API Tests
 
+### Parallel Execution (Recommended)
+
+CheckTick uses `pytest-xdist` for parallel test execution, which significantly speeds up test runs:
+
+```bash
+# Run all tests in parallel (recommended - ~14x faster)
+docker compose exec web pytest -n auto
+
+# Run all API tests in parallel
+docker compose exec web pytest tests/test_api_*.py -n auto
+```
+
+The `-n auto` flag automatically detects available CPU cores and distributes tests across them. Each worker gets its own database, ensuring test isolation.
+
+### Sequential Execution
+
 ```bash
 # Run all API tests
 docker compose exec web pytest tests/test_api_*.py

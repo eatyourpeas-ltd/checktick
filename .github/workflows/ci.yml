@@ -68,7 +68,7 @@ jobs:
           poetry run python manage.py migrate --noinput
       - name: Run tests
         run: |
-          poetry run pytest -q --junitxml=pytest-report.xml
+          poetry run pytest -n auto -q --junitxml=pytest-report.xml
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
