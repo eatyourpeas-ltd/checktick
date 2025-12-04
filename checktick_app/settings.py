@@ -513,6 +513,12 @@ EXTERNAL_DATASET_API_URL = os.environ.get(
 )
 EXTERNAL_DATASET_API_KEY = os.environ.get("EXTERNAL_DATASET_API_KEY", "")
 
+# Postcodes API Configuration (for postcode validation)
+POSTCODES_API_URL = os.environ.get(
+    "POSTCODES_API_URL", "https://api.rcpch.ac.uk/postcodes/postcodes/"
+)
+POSTCODES_API_KEY = os.environ.get("POSTCODES_API_KEY", "")
+
 # Data Governance Configuration
 # These settings control data retention and export policies for GDPR/healthcare compliance
 CHECKTICK_DEFAULT_RETENTION_MONTHS = int(
