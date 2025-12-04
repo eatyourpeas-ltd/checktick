@@ -6,20 +6,20 @@ priority: 3
 
 # Refund Policy
 
-**Last Updated: 28 November 2025**
+**Last Updated: 4 December 2025**
 
 This Refund Policy explains our policies regarding refunds, cancellations, and billing for CheckTick paid subscriptions.
 
 ## 1. Overview
 
-CheckTick subscriptions are processed through Paddle, our payment processor and Merchant of Record. All payments are handled securely by Paddle, and refunds are subject to this policy.
+CheckTick subscriptions are processed through Paddle, our payment processor and Merchant of Record. All payments are handled securely by Paddle, and refunds are subject to this policy and [Paddle's Checkout Buyer Terms and Conditions](https://www.paddle.com/legal/checkout-buyer-terms).
 
 ### 1.1 Key Points
 
+* **14-day right to cancel** for consumers on their initial subscription (see section 4.2)
+* We may grant refunds at our discretion beyond the 14-day period
 * Subscriptions can be cancelled at any time
-* Refunds are available under specific circumstances
 * You retain access until the end of your paid period after cancellation
-* All refund requests are reviewed on a case-by-case basis
 
 ## 2. Subscription Plans
 
@@ -84,9 +84,35 @@ When downgrading from a paid tier to FREE:
 
 ### 4.1 General Refund Policy
 
-Subscriptions are generally **non-refundable**. However, we offer refunds in the following circumstances:
+We want you to be happy with CheckTick. If you're not satisfied, we may grant refunds at our discretion beyond the statutory 14-day period. Contact us at [support@checktick.com](mailto:support@checktick.com) to discuss your situation.
 
-### 4.2 Eligible for Refund
+Refunds are processed through Paddle, our Merchant of Record. This does not affect your statutory rights as a consumer in relation to products which are not as described, faulty, or not fit for purpose.
+
+### 4.2 Consumer Right to Cancel (14-Day Cooling Off Period)
+
+If you are a consumer, you have the right to cancel your subscription within **14 days** of your initial purchase without giving any reason. This is in accordance with [Paddle's Checkout Buyer Terms](https://www.paddle.com/legal/checkout-buyer-terms).
+
+**How to exercise your right to cancel:**
+
+* Contact Paddle at [https://paddle.net/](https://paddle.net/) before the 14-day period expires
+* Or contact us at [support@checktick.com](mailto:support@checktick.com)
+* To meet the cancellation deadline, you must send your cancellation request before the 14-day period expires
+
+**Effect of cancellation:**
+
+* Paddle will reimburse all payments received from you
+* Reimbursement will be made within 14 days of Paddle being informed of your cancellation
+* The same payment method used for the original transaction will be used for the refund
+* No fees will be charged for the reimbursement
+
+**Important:**
+
+* The right to cancel applies only to your **initial subscription**, not to automatic renewals
+* There are **no refunds on unused subscription periods** for renewals
+
+### 4.3 Additional Refund Circumstances
+
+Beyond the 14-day consumer right to cancel, we may provide refunds in these circumstances (at our and Paddle's discretion):
 
 **1. Service Unavailability**
 
@@ -103,37 +129,36 @@ Subscriptions are generally **non-refundable**. However, we offer refunds in the
 * If you were charged incorrectly due to a system error
 * Refund: Amount of the incorrect charge
 
-**4. Early Cancellation (First-Time Subscribers)**
-
-* If you cancel within **14 days** of your first subscription payment
-* Refund: Full refund of the most recent payment
-* Condition: Applies only to your first subscription; not available for renewals
-
-**5. Technical Issues**
+**4. Technical Issues**
 
 * If a critical bug prevents you from using core features for more than 7 days
 * Refund: Pro-rated amount for the affected period
 * Condition: Must be reported promptly and confirmed by our support team
 
-### 4.3 Not Eligible for Refund
+### 4.4 Not Eligible for Refund
 
 The following situations are **not** eligible for refunds:
 
-* Change of mind after the 14-day window (for first-time subscribers)
-* Renewal charges (subscriptions that auto-renew)
-* Partial billing periods (you used the service for part of the period)
+* Requests made after the 14-day cancellation period (for first-time subscribers)
+* Renewal charges (subscriptions that auto-renew) - see section 4.2
+* Unused portions of subscription periods
 * Account termination due to Terms of Service violations
 * Features not meeting your expectations (unless they are genuinely broken)
 * Your encryption keys being lost (this is your responsibility)
 * Third-party payment processor fees (charged by Paddle)
+* Wire transfer payments (see section 4.6)
 
-### 4.4 Annual Subscriptions
+### 4.5 Annual Subscriptions
 
 For annual subscriptions:
 
-* 14-day refund window applies to first-time subscribers only
-* After 14 days, refunds are only available for service unavailability or technical issues
-* Pro-rated refunds may be considered for exceptional circumstances
+* 14-day consumer right to cancel applies to first-time subscribers only
+* After 14 days or once the service has been used, refunds are only available for service unavailability or technical issues
+* Pro-rated refunds may be considered for exceptional circumstances at our discretion
+
+### 4.6 Wire Transfer Payments
+
+Orders where payments are made via wire transfer are not protected under the Consumer Credit Act and are therefore not eligible for a refund through standard processes. However, for transactions above £100 (or equivalent), you may be entitled to a refund at Paddle's discretion.
 
 ## 5. How to Request a Refund
 
@@ -237,10 +262,13 @@ For enterprise refund inquiries, please contact your account manager or our ente
 
 ### 10.1 Dispute Process
 
+In accordance with [Paddle's Checkout Buyer Terms](https://www.paddle.com/legal/checkout-buyer-terms), you agree to contact Paddle prior to raising a request for a chargeback or any dispute with your bank or card issuer.
+
 If you dispute a charge with your bank or credit card company (chargeback):
 
 * Your account will be immediately suspended
-* We will provide evidence of the transaction to Paddle
+* Paddle will provide evidence of the transaction to refute invalid chargeback requests
+* If you make a card payment and later dispute a legitimate charge without merit or legitimate reason, Paddle reserves the right to prohibit you from using their services
 * If the chargeback is upheld, your account may be permanently closed
 * Chargeback fees may be charged to your account
 
@@ -289,6 +317,6 @@ We reserve the right to deny refund requests that appear to be:
 
 ---
 
-**Last Updated: 28 November 2025**
+**Last Updated: 4 December 2025**
 
-We strive to be fair and transparent with our refund policy. If you have any questions or concerns, please don't hesitate to contact us. We're here to help!
+We strive to be fair and transparent with our refund policy. This policy is aligned with [Paddle's Checkout Buyer Terms and Conditions](https://www.paddle.com/legal/checkout-buyer-terms). If you have any questions or concerns, please don't hesitate to contact us. We're here to help!

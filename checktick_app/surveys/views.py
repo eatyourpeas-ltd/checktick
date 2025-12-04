@@ -86,6 +86,7 @@ DEMOGRAPHIC_FIELD_DEFS: dict[str, str] = {
     "gender": "Gender",
     "nhs_number": "NHS number",
     "hospital_number": "Hospital number",
+    "mrn": "MRN",
     "post_code": "Post code",
     "address_first_line": "Address line 1",
     "address_second_line": "Address line 2",
@@ -9930,3 +9931,196 @@ def admin_recovery_reject(request: HttpRequest, request_id: str) -> HttpResponse
         redirect_url += f"?team={context['team'].id}"
 
     return redirect(redirect_url)
+
+
+@require_http_methods(["POST"])
+@ratelimit(key="ip", rate="30/m", block=True)
+def validate_nhs_number(request: HttpRequest) -> HttpResponse:
+    """
+    HTMX endpoint to validate and format an NHS number.
+    Returns the formatted number with validation status.
+    Rate limited to 30 requests per minute per IP.
+    """
+    from nhs_number import is_valid, standardise_format
+
+    value = request.POST.get("nhs_number", "").strip()
+
+    # Remove any existing spaces/formatting
+    digits_only = "".join(c for c in value if c.isdigit())
+
+    if not digits_only:
+        # Empty input - return empty input field
+        return HttpResponse(
+            '<input type="text" name="nhs_number" '
+            'class="grow min-w-0 bg-transparent outline-none border-0" '
+            'placeholder="NHS number" '
+            'hx-post="/surveys/validate/nhs-number/" '
+            'hx-trigger="blur, keyup changed delay:500ms" '
+            'hx-target="closest label" '
+            'hx-swap="outerHTML" />'
+        )
+
+    # Validate using the nhs-number package
+    try:
+        normalised = standardise_format(digits_only)
+        valid = is_valid(normalised)
+    except Exception:
+        valid = False
+
+    # Format as 3 3 4 pattern
+    if len(digits_only) == 10:
+        formatted = f"{digits_only[:3]} {digits_only[3:6]} {digits_only[6:]}"
+    else:
+        formatted = digits_only
+
+    if valid:
+        # Valid NHS number - green border, checkmark
+        return HttpResponse(
+            f'<label class="input input-bordered input-sm flex items-center gap-1.5 input-success">'
+            f'<input type="text" name="nhs_number" value="{formatted}" '
+            f'class="grow min-w-0 bg-transparent outline-none border-0" '
+            f'placeholder="NHS number" '
+            f'hx-post="/surveys/validate/nhs-number/" '
+            f'hx-trigger="blur, keyup changed delay:500ms" '
+            f'hx-target="closest label" '
+            f'hx-swap="outerHTML" />'
+            f'<svg class="w-4 h-4 text-success" xmlns="http://www.w3.org/2000/svg" '
+            f'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+            f'<polyline points="20 6 9 17 4 12"></polyline></svg>'
+            f"</label>"
+        )
+    else:
+        # Invalid NHS number - red border, X icon
+        return HttpResponse(
+            f'<label class="input input-bordered input-sm flex items-center gap-1.5 input-error">'
+            f'<input type="text" name="nhs_number" value="{formatted}" '
+            f'class="grow min-w-0 bg-transparent outline-none border-0" '
+            f'placeholder="NHS number" '
+            f'hx-post="/surveys/validate/nhs-number/" '
+            f'hx-trigger="blur, keyup changed delay:500ms" '
+            f'hx-target="closest label" '
+            f'hx-swap="outerHTML" />'
+            f'<svg class="w-4 h-4 text-error" xmlns="http://www.w3.org/2000/svg" '
+            f'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+            f'<line x1="18" y1="6" x2="6" y2="18"></line>'
+            f'<line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+            f"</label>"
+        )
+
+
+@require_http_methods(["POST"])
+@ratelimit(key="ip", rate="30/m", block=True)
+def validate_postcode(request: HttpRequest) -> HttpResponse:
+    """
+    HTMX endpoint to validate a UK postcode using the RCPCH API.
+    Returns the formatted postcode with validation status.
+    Rate limited to 30 requests per minute per IP.
+    """
+    import requests
+
+    value = request.POST.get("post_code", "").strip().upper()
+
+    # Remove extra spaces and normalise
+    postcode = " ".join(value.split())
+
+    if not postcode:
+        # Empty input - return empty input field
+        return HttpResponse(
+            '<input type="text" name="post_code" '
+            'class="grow min-w-0 bg-transparent outline-none border-0" '
+            'placeholder="Post code" '
+            'hx-post="/surveys/validate/postcode/" '
+            'hx-trigger="blur, keyup changed delay:500ms" '
+            'hx-target="closest label" '
+            'hx-swap="outerHTML" />'
+        )
+
+    # Check if API is configured
+    api_url = settings.POSTCODES_API_URL
+    api_key = settings.POSTCODES_API_KEY
+
+    if not api_url or not api_key:
+        # API not configured - return input without validation styling
+        return HttpResponse(
+            f'<label class="input input-bordered input-sm flex items-center gap-1.5">'
+            f'<input type="text" name="post_code" value="{postcode}" '
+            f'class="grow min-w-0 bg-transparent outline-none border-0" '
+            f'placeholder="Post code" '
+            f'hx-post="/surveys/validate/postcode/" '
+            f'hx-trigger="blur, keyup changed delay:500ms" '
+            f'hx-target="closest label" '
+            f'hx-swap="outerHTML" />'
+            f'<svg class="w-4 h-4 opacity-50 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            f'<g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">'
+            f'<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path>'
+            f'<circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle>'
+            f"</g></svg>"
+            f"</label>"
+        )
+
+    # Validate using RCPCH Postcodes API
+    try:
+        # URL encode the postcode (remove spaces for API call)
+        postcode_for_api = postcode.replace(" ", "")
+        response = requests.get(
+            f"{api_url}{postcode_for_api}/validate",
+            headers={"Ocp-Apim-Subscription-Key": api_key},
+            timeout=5,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            valid = data.get("valid", False)
+        else:
+            valid = False
+    except Exception:
+        # API error - don't show error to user, just no validation styling
+        return HttpResponse(
+            f'<label class="input input-bordered input-sm flex items-center gap-1.5">'
+            f'<input type="text" name="post_code" value="{postcode}" '
+            f'class="grow min-w-0 bg-transparent outline-none border-0" '
+            f'placeholder="Post code" '
+            f'hx-post="/surveys/validate/postcode/" '
+            f'hx-trigger="blur, keyup changed delay:500ms" '
+            f'hx-target="closest label" '
+            f'hx-swap="outerHTML" />'
+            f'<svg class="w-4 h-4 opacity-50 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            f'<g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">'
+            f'<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path>'
+            f'<circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle>'
+            f"</g></svg>"
+            f"</label>"
+        )
+
+    if valid:
+        # Valid postcode - green border, checkmark
+        return HttpResponse(
+            f'<label class="input input-bordered input-sm flex items-center gap-1.5 input-success">'
+            f'<input type="text" name="post_code" value="{postcode}" '
+            f'class="grow min-w-0 bg-transparent outline-none border-0" '
+            f'placeholder="Post code" '
+            f'hx-post="/surveys/validate/postcode/" '
+            f'hx-trigger="blur, keyup changed delay:500ms" '
+            f'hx-target="closest label" '
+            f'hx-swap="outerHTML" />'
+            f'<svg class="w-4 h-4 text-success" xmlns="http://www.w3.org/2000/svg" '
+            f'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+            f'<polyline points="20 6 9 17 4 12"></polyline></svg>'
+            f"</label>"
+        )
+    else:
+        # Invalid postcode - red border, X icon
+        return HttpResponse(
+            f'<label class="input input-bordered input-sm flex items-center gap-1.5 input-error">'
+            f'<input type="text" name="post_code" value="{postcode}" '
+            f'class="grow min-w-0 bg-transparent outline-none border-0" '
+            f'placeholder="Post code" '
+            f'hx-post="/surveys/validate/postcode/" '
+            f'hx-trigger="blur, keyup changed delay:500ms" '
+            f'hx-target="closest label" '
+            f'hx-swap="outerHTML" />'
+            f'<svg class="w-4 h-4 text-error" xmlns="http://www.w3.org/2000/svg" '
+            f'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+            f'<line x1="18" y1="6" x2="6" y2="18"></line>'
+            f'<line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+            f"</label>"
+        )

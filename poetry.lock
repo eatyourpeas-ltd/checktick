@@ -1075,6 +1075,18 @@ files = [
 ]
 
 [[package]]
+name = "nhs-number"
+version = "1.3.6"
+description = "Python package to provide utilities for NHS Numbers, including validity checks, normalisation, and generation."
+optional = false
+python-versions = "<4.0,>=3.8"
+groups = ["main"]
+files = [
+    {file = "nhs_number-1.3.6-py3-none-any.whl", hash = "sha256:22b8937b148f0d930acc69aaff00af1d6fb0e73f4c03fced3df4ad017479dc19"},
+    {file = "nhs_number-1.3.6.tar.gz", hash = "sha256:5effca980ce7bb6734f07a7843816ae952166767511c3edf179b8fdcde8713e5"},
+]
+
+[[package]]
 name = "nodeenv"
 version = "1.9.1"
 description = "Node.js virtual environment builder"
@@ -1954,4 +1966,4 @@ brotli = ["brotli"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "cf10d9647d5ae10f0686f18c49bd5d53b1c831a5df098dc347f663624c0985d6"
+content-hash = "bdde8cfb466554c78d54477b6f1d3d2fa836f4518ac9771aa3011afca2594f01"

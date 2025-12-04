@@ -6,13 +6,13 @@ priority: 2
 
 # Privacy Notice
 
-**Last Updated: 28 November 2025**
+**Last Updated: 4 December 2025**
 
-This Privacy Notice explains how CheckTick ("we", "us", or "our") collects, uses, stores, and protects your personal information when you use our survey platform and services.
+This Privacy Notice explains how Eatyourpeas Ltd ("we", "us", or "our"), trading as CheckTick, collects, uses, stores, and protects your personal information when you use our survey platform and services.
 
 ## 1. Introduction
 
-CheckTick is committed to protecting your privacy and complying with data protection laws, including the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018.
+Eatyourpeas Ltd is committed to protecting your privacy and complying with data protection laws, including the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018.
 
 ### 1.1 Key Principles
 
@@ -24,9 +24,11 @@ CheckTick is committed to protecting your privacy and complying with data protec
 
 ### 1.2 Data Controller
 
-For your CheckTick account data, CheckTick (or the self-hosted instance operator) is the data controller.
+For your CheckTick account data, Eatyourpeas Ltd (or the self-hosted instance operator) is the data controller.
 
-For survey data you collect, **you are the data controller** and CheckTick is the data processor. You are responsible for:
+Eatyourpeas Ltd is a company registered in England and Wales.
+
+For survey data you collect, **you are the data controller** and Eatyourpeas Ltd (trading as CheckTick) is the data processor. You are responsible for:
 
 * Obtaining appropriate consent from survey respondents
 * Providing privacy notices to respondents
@@ -186,7 +188,7 @@ We will notify you of legal requests unless prohibited by law.
 
 ### 4.4 Business Transfers
 
-If CheckTick is acquired or merged with another entity, your data may be transferred to the new owner. We will notify you of any such change and your data will remain subject to this Privacy Notice.
+If Eatyourpeas Ltd or CheckTick is acquired or merged with another entity, your data may be transferred to the new owner. We will notify you of any such change and your data will remain subject to this Privacy Notice.
 
 ### 4.5 Collaboration Features
 
@@ -410,6 +412,6 @@ If you believe we have not adequately addressed your privacy concerns, you have 
 
 ---
 
-**Last Updated: 28 November 2025**
+**Last Updated: 4 December 2025**
 
-This Privacy Notice is designed to be transparent and help you understand how CheckTick handles your personal information. If you have any questions, please don't hesitate to contact us.
+This Privacy Notice is designed to be transparent and help you understand how Eatyourpeas Ltd (trading as CheckTick) handles your personal information. If you have any questions, please don't hesitate to contact us.

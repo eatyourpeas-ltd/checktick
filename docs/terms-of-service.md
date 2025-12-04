@@ -6,9 +6,9 @@ priority: 1
 
 # Terms of Service
 
-**Last Updated: 28 November 2025**
+**Last Updated: 4 December 2025**
 
-Welcome to CheckTick. These Terms of Service ("Terms") govern your access to and use of CheckTick's survey platform, website, and services (collectively, the "Service"). By accessing or using the Service, you agree to be bound by these Terms.
+Welcome to CheckTick. These Terms of Service ("Terms") govern your access to and use of CheckTick's survey platform, website, and services (collectively, the "Service"), operated by Eatyourpeas Ltd. By accessing or using the Service, you agree to be bound by these Terms.
 
 ## 1. Acceptance of Terms
 
@@ -229,15 +229,16 @@ See our Data Governance documentation for detailed guidance on these requirement
 
 ## 7. Intellectual Property
 
-### 7.1 CheckTick's Rights
-* CheckTick owns all rights to the Service, including code, design, and trademarks
+### 7.1 Eatyourpeas Ltd's Rights
+* CheckTick is owned and operated by Eatyourpeas Ltd, a company registered in England and Wales
+* Eatyourpeas Ltd owns all rights to the Service, including code, design, and trademarks
 * These Terms do not grant you any intellectual property rights except as necessary to use the Service
-* CheckTick is open source software licensed under the GNU General Public License v3.0
+* CheckTick is open source software licensed under the GNU Affero General Public License v3.0 (AGPL-3.0)
 
 ### 7.2 Open Source
 * The CheckTick source code is available at https://github.com/eatyourpeas/checktick
-* Self-hosting CheckTick is permitted under the GPL-3.0 license terms
-* Commercial use of CheckTick must comply with the GPL-3.0 license
+* Self-hosting CheckTick is permitted under the AGPL-3.0 license terms
+* Commercial use of CheckTick must comply with the AGPL-3.0 license
 
 ### 7.3 Feedback
 * We welcome feedback and suggestions about the Service
@@ -283,7 +284,7 @@ TO THE MAXIMUM EXTENT PERMITTED BY LAW:
 
 ## 12. Indemnification
 
-You agree to indemnify and hold harmless CheckTick, its operators, and contributors from any claims, damages, losses, or expenses (including legal fees) arising from:
+You agree to indemnify and hold harmless Eatyourpeas Ltd (trading as CheckTick), its operators, and contributors from any claims, damages, losses, or expenses (including legal fees) arising from:
 
 * Your use of the Service
 * Your Content
@@ -342,3 +343,5 @@ For questions about these Terms, please contact us:
 ---
 
 **By using CheckTick, you acknowledge that you have read, understood, and agree to be bound by these Terms of Service, including your responsibilities as a data controller and your obligations to obtain appropriate consent from survey participants.**
+
+**CheckTick is owned and operated by Eatyourpeas Ltd.**

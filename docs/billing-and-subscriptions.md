@@ -262,18 +262,20 @@ To fix a past due account:
 
 ### Refund Policy
 
-- **7-day money-back guarantee** for new subscriptions
-- **Prorated refunds** for annual plans cancelled early (contact support)
-- **No refunds** for partial months on monthly plans
-- **Downgrade credits** applied to future billing when downgrading
+In accordance with [Paddle's Checkout Buyer Terms](https://www.paddle.com/legal/checkout-buyer-terms):
+
+- **14-day right to cancel** for consumers on initial subscriptions
+- **No automatic refunds** on subscription renewals or unused subscription periods
+- We may grant refunds at our discretion beyond the 14-day period - contact us to discuss
+- **Pro-rated refunds** for annual plans may be considered for exceptional circumstances
 
 ### Requesting a Refund
 
-To request a refund within the 7-day guarantee period:
+To request a refund within the 14-day cancellation period:
 
-1. Email support at [support@checktick.uk](mailto:support@checktick.uk)
-2. Include your account email and reason for refund
-3. We'll process the refund within 5-7 business days
+1. Contact Paddle at [https://paddle.net/](https://paddle.net/) or email us at [support@checktick.com](mailto:support@checktick.com)
+2. Include your account email and order number
+3. Refunds are processed within 14 days of the cancellation request
 4. Refunds go back to the original payment method
 
 For more details, see our [Refund Policy](/docs/refund-policy/).

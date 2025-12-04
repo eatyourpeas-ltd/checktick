@@ -369,6 +369,16 @@ urlpatterns = [
         name="builder_demographics_update",
     ),
     path(
+        "validate/nhs-number/",
+        views.validate_nhs_number,
+        name="validate_nhs_number",
+    ),
+    path(
+        "validate/postcode/",
+        views.validate_postcode,
+        name="validate_postcode",
+    ),
+    path(
         "<slug:slug>/builder/professional/update",
         views.builder_professional_update,
         name="builder_professional_update",
