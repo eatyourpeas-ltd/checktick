@@ -345,6 +345,20 @@ X_FRAME_OPTIONS = "DENY"
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
+# Session security - healthcare compliance requires session timeout
+# Session expires after 30 minutes of inactivity
+SESSION_COOKIE_AGE = 1800  # 30 minutes in seconds
+# Session expires when browser closes (defense in depth)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+# Save session on every request to reset inactivity timer
+SESSION_SAVE_EVERY_REQUEST = True
+# Use database-backed sessions for security audit trail
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+# HttpOnly flag prevents JavaScript access to session cookie
+SESSION_COOKIE_HTTPONLY = True
+# SameSite prevents CSRF attacks via cross-origin requests
+SESSION_COOKIE_SAMESITE = "Lax"
+
 # Forms configuration
 # Set default URL scheme to HTTPS for Django 6.0+ compatibility
 FORMS_URLFIELD_ASSUME_HTTPS = True
