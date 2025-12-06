@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "Manage Two-Factor Authentication" %} - CheckTick{% endblock %}
+
+{% block content %}
+<div class="prose max-w-none">
+  <h1 class="inline-flex items-center gap-2 text-base-content">
+    {% include "components/icons/shield-check.html" with classes="w-6 h-6 text-base-content" only %}
+    <span>{% trans "Two-Factor Authentication" %}</span>
+  </h1>
+</div>
+
+<div class="mt-6 max-w-xl">
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <div class="flex items-center gap-3">
+        <div class="bg-success text-success-content rounded-full p-2">
+          {% include "components/icons/check.html" with classes="w-5 h-5" only %}
+        </div>
+        <div>
+          <h2 class="card-title text-base-content mb-0">{% trans "2FA is enabled" %}</h2>
+          <p class="opacity-70 text-sm">{% trans "Your account is protected with two-factor authentication." %}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow mt-6">
+    <div class="card-body">
+      <h2 class="card-title text-base-content">{% trans "Backup Codes" %}</h2>
+      <p class="opacity-80">
+        {% trans "Backup codes can be used to access your account if you lose your authenticator device. Each code can only be used once." %}
+      </p>
+
+      <form method="post" action="{% url 'core:two_factor_regenerate_backup_codes' %}" class="mt-4">
+        {% csrf_token %}
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Current Password" %}</span>
+          </label>
+          <input type="password"
+                 name="password"
+                 class="input input-bordered"
+                 placeholder="{% trans 'Enter your password' %}"
+                 required />
+        </div>
+        <button type="submit" class="btn btn-outline mt-4">
+          {% include "components/icons/refresh.html" with classes="w-4 h-4 mr-2" only %}
+          {% trans "Generate New Backup Codes" %}
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow mt-6 border border-error/20">
+    <div class="card-body">
+      <h2 class="card-title text-error">{% trans "Disable 2FA" %}</h2>
+      <p class="opacity-80">
+        {% trans "Disabling two-factor authentication will make your account less secure. You'll need to enter your password to confirm." %}
+      </p>
+
+      <form method="post" action="{% url 'core:two_factor_disable' %}" class="mt-4">
+        {% csrf_token %}
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Current Password" %}</span>
+          </label>
+          <input type="password"
+                 name="password"
+                 class="input input-bordered"
+                 placeholder="{% trans 'Enter your password' %}"
+                 required />
+        </div>
+        <button type="submit"
+                class="btn btn-error btn-outline mt-4"
+                onclick="return confirm('{% trans "Are you sure you want to disable two-factor authentication?" %}')">
+          {% include "components/icons/x.html" with classes="w-4 h-4 mr-2" only %}
+          {% trans "Disable 2FA" %}
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="mt-6">
+    <a href="{% url 'core:profile' %}" class="btn btn-ghost">
+      {% trans "← Back to Profile" %}
+    </a>
+  </div>
+</div>
+{% endblock %}

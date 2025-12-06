@@ -6,6 +6,7 @@ from django.urls import include, path
 from django.views.generic import RedirectView
 
 from checktick_app.core.views import BrandedPasswordResetView
+from checktick_app.core.views_2fa import TwoFactorLoginView
 
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="core:home", permanent=False)),
@@ -13,7 +14,7 @@ urlpatterns = [
     # Auth routes (explicit to avoid include conflicts)
     path(
         "accounts/login/",
-        auth_views.LoginView.as_view(template_name="registration/login.html"),
+        TwoFactorLoginView.as_view(template_name="registration/login.html"),
         name="login",
     ),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),

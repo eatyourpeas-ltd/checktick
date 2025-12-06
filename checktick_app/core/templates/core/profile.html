@@ -266,6 +266,37 @@
     </div>
   </div>
 
+  {% if is_password_user %}
+  <div class="card bg-base-100 shadow mb-6">
+    <div class="card-body">
+      <h2 class="card-title inline-flex items-center gap-2 text-base-content">
+        {% include "components/icons/shield-check.html" with classes="w-5 h-5 text-base-content" %}
+        <span>{% trans "Two-Factor Authentication" %}</span>
+      </h2>
+      {% if has_2fa %}
+      <div class="flex items-center gap-2 mt-2">
+        <span class="badge badge-success">{% trans "Enabled" %}</span>
+        <span class="opacity-70">{% trans "Your account is protected with 2FA" %}</span>
+      </div>
+      <div class="mt-4">
+        <a href="{% url 'core:two_factor_manage' %}" class="btn btn-outline">
+          {% include "components/icons/settings.html" with classes="w-4 h-4 mr-2" %}
+          {% trans "Manage 2FA" %}
+        </a>
+      </div>
+      {% else %}
+      <p class="opacity-80">{% trans "Add an extra layer of security to your account by enabling two-factor authentication." %}</p>
+      <div class="mt-4">
+        <a href="{% url 'core:two_factor_setup' %}" class="btn btn-primary">
+          {% include "components/icons/shield-check.html" with classes="w-4 h-4 mr-2" %}
+          {% trans "Set Up 2FA" %}
+        </a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   {% if user.is_superuser and is_self_hosted or user_tier == 'enterprise' %}
   <div class="card bg-base-100 shadow mb-6">
     <div class="card-body">

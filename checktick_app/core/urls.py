@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_billing, views_platform_admin
+from . import views, views_2fa, views_billing, views_platform_admin
 
 app_name = "core"
 
@@ -86,4 +86,14 @@ urlpatterns = [
         name="update_team_name",
     ),
     path("webhooks/payment/", views_billing.payment_webhook, name="payment_webhook"),
+    # Two-Factor Authentication
+    path("2fa/setup/", views_2fa.two_factor_setup, name="two_factor_setup"),
+    path("2fa/manage/", views_2fa.two_factor_manage, name="two_factor_manage"),
+    path("2fa/disable/", views_2fa.two_factor_disable, name="two_factor_disable"),
+    path(
+        "2fa/backup-codes/",
+        views_2fa.two_factor_regenerate_backup_codes,
+        name="two_factor_regenerate_backup_codes",
+    ),
+    path("2fa/verify/", views_2fa.two_factor_verify, name="two_factor_verify"),
 ]
