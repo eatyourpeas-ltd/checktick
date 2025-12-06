@@ -45,12 +45,14 @@ repos:
         stages: [pre-push]
 
   # Dependency vulnerability scanning (runs on push only, can be slow)
+  # Note: Use s/security-audit for local checks; CI runs pip-audit in GitHub Actions
   - repo: local
     hooks:
       - id: pip-audit
         name: Check for vulnerable dependencies
-        entry: bash -c 'poetry export -f requirements.txt --without-hashes -o /tmp/requirements-audit.txt && pip-audit -r /tmp/requirements-audit.txt --strict'
+        entry: bash -c 'echo "Dependency scanning runs in CI (see .github/workflows/security.yml)" && echo "Run s/security-audit for local checks"'
         language: system
         pass_filenames: false
         files: ^(pyproject\.toml|poetry\.lock)$
         stages: [pre-push]
+        always_run: false

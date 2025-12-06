@@ -1,4 +1,8 @@
-# Self-Hosted CDN Libraries
+---
+title: CDN Libraries
+category: security
+priority: 10
+---
 
 CheckTick self-hosts critical JavaScript libraries with Subresource Integrity (SRI) verification for enhanced security. This document describes the libraries, their purposes, and how to update them.
 
