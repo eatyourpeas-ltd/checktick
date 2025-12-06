@@ -43,3 +43,14 @@ repos:
         name: ggshield secret scan (pre-push)
         args: ["secret", "scan", "pre-push", "--verbose"]
         stages: [pre-push]
+
+  # Dependency vulnerability scanning (runs on push only, can be slow)
+  - repo: local
+    hooks:
+      - id: pip-audit
+        name: Check for vulnerable dependencies
+        entry: bash -c 'poetry export -f requirements.txt --without-hashes -o /tmp/requirements-audit.txt && pip-audit -r /tmp/requirements-audit.txt --strict'
+        language: system
+        pass_filenames: false
+        files: ^(pyproject\.toml|poetry\.lock)$
+        stages: [pre-push]

@@ -1,0 +1,88 @@
+name: Security Scan
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+    schedule:
+        # Run daily at 6am UTC to catch new vulnerabilities
+        - cron: "0 6 * * *"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    security-events: write
+
+jobs:
+    dependency-audit:
+        name: Dependency Vulnerability Scan
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - name: Install Poetry
+              run: pip install poetry==2.2.1
+
+            - name: Export requirements
+              run: |
+                  poetry export -f requirements.txt --without-hashes -o requirements.txt
+                  poetry export -f requirements.txt --without-hashes --with dev -o requirements-dev.txt
+
+            - name: Run pip-audit on production dependencies
+              uses: pypa/gh-action-pip-audit@v1.1.0
+              with:
+                  inputs: requirements.txt
+                  summary: true
+
+            - name: Run pip-audit on dev dependencies
+              uses: pypa/gh-action-pip-audit@v1.1.0
+              with:
+                  inputs: requirements-dev.txt
+                  summary: true
+              continue-on-error: true # Dev deps are less critical
+
+    codeql:
+        name: CodeQL Analysis
+        runs-on: ubuntu-latest
+        permissions:
+            security-events: write
+            actions: read
+            contents: read
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Initialize CodeQL
+              uses: github/codeql-action/init@v3
+              with:
+                  languages: python, javascript
+
+            - name: Autobuild
+              uses: github/codeql-action/autobuild@v3
+
+            - name: Perform CodeQL Analysis
+              uses: github/codeql-action/analyze@v3
+              with:
+                  category: "/language:python"
+
+    secrets-scan:
+        name: Secrets Scan
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: GitGuardian scan
+              uses: GitGuardian/ggshield-action@v1.34.0
+              env:
+                  GITHUB_PUSH_BEFORE_SHA: ${{ github.event.before }}
+                  GITHUB_PUSH_BASE_SHA: ${{ github.event.base_ref }}
+                  GITHUB_PULL_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+                  GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}

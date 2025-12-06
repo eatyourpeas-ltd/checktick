@@ -2569,7 +2569,9 @@ class AuditLog(models.Model):
         verbose_name_plural = "Audit Logs"
 
     def __str__(self):
-        actor_name = self.actor.username if self.actor else self.username_attempted or "System"
+        actor_name = (
+            self.actor.username if self.actor else self.username_attempted or "System"
+        )
         return f"{self.get_action_display()} by {actor_name} at {self.created_at}"
 
     @classmethod
