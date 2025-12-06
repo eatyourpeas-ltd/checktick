@@ -1,8 +1,8 @@
 # SimpleJWT defaults
 from datetime import timedelta
 import os
-import sys
 from pathlib import Path
+import sys
 
 import environ
 

@@ -14,16 +14,15 @@ import logging
 import secrets
 from urllib.parse import quote
 
-import qrcode
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login as auth_login
-from django.contrib.auth import views as auth_views
+from django.contrib.auth import login as auth_login, views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext as _
 from django_otp import user_has_device
 from django_otp.plugins.otp_totp.models import TOTPDevice
+import qrcode
 
 logger = logging.getLogger(__name__)
 

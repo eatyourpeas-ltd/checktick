@@ -48,7 +48,7 @@ class Require2FAMiddleware:
                 return self.get_response(request)
 
             # Import here to avoid circular imports
-            from checktick_app.core.views_2fa import check_2fa_required, is_password_user
+            from checktick_app.core.views_2fa import is_password_user
 
             # Only enforce for password users
             if is_password_user(request.user):
