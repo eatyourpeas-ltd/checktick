@@ -8,7 +8,34 @@ priority: 5
 
 This document specifies the logging, notification, and SIEM requirements for CheckTick's encryption and recovery system.
 
+For a complete overview of security controls aligned with OWASP Top 10, see [Security Overview](/docs/security-overview/).
+
 ## Audit Logging Requirements
+
+### Implementation
+
+CheckTick uses a unified `AuditLog` model for all security-relevant events. The model is located in `checktick_app/surveys/models.py` and supports:
+
+- **Scopes**: Organization, Survey, Security, Account
+- **Severity levels**: INFO, WARNING, CRITICAL (auto-detected based on action)
+- **Context capture**: IP address, user agent, actor, target user
+- **Structured metadata**: JSON field for additional context
+
+#### Logging Security Events
+
+Use the convenience method for security events:
+
+```python
+from checktick_app.surveys.models import AuditLog
+
+# Log a security event
+AuditLog.log_security_event(
+    action=AuditLog.Action.LOGIN_SUCCESS,
+    actor=user,
+    request=request,  # IP and user-agent extracted automatically
+    message="Successful login via password",
+)
+```
 
 ### Events That MUST Be Logged
 
@@ -18,13 +45,23 @@ All key management and recovery events must create immutable audit entries.
 
 | Event | Severity | Required Fields |
 |-------|----------|-----------------|
-| `user_login_success` | INFO | user_id, method (password/sso), ip, user_agent |
-| `user_login_failed` | WARNING | email_attempted, reason, ip, user_agent |
-| `user_logout` | INFO | user_id, session_duration |
-| `password_changed` | INFO | user_id, ip |
-| `recovery_phrase_viewed` | WARNING | user_id, ip |
-| `mfa_enabled` | INFO | user_id, method |
-| `mfa_disabled` | WARNING | user_id, method, reason |
+| `login_success` | INFO | user_id, method (password/sso), ip, user_agent |
+| `login_failed` | WARNING | email_attempted, reason, ip, user_agent |
+| `logout` | INFO | user_id, session_duration |
+| `account_locked` | CRITICAL | user_id, ip, failure_count |
+| `password_changed` | CRITICAL | user_id, ip |
+| `user_created` | INFO | user_id, registration_method |
+
+#### Two-Factor Authentication Events
+
+| Event | Severity | Required Fields |
+|-------|----------|-----------------|
+| `2fa_enabled` | INFO | user_id, method (totp), ip |
+| `2fa_disabled` | CRITICAL | user_id, ip, reason |
+| `2fa_verified` | INFO | user_id, method (totp/backup_code), ip |
+| `2fa_failed` | WARNING | user_id, ip, failure_reason |
+| `backup_codes_generated` | INFO | user_id, code_count, ip |
+| `backup_code_used` | WARNING | user_id, remaining_codes, ip |
 
 #### Survey Access Events
 

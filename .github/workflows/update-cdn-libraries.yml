@@ -1,0 +1,221 @@
+name: Check CDN Library Updates
+
+on:
+    schedule:
+        # Run weekly on Mondays at 9:30am UTC (after Paddle.js check)
+        - cron: "30 9 * * 1"
+    workflow_dispatch: # Allow manual trigger
+
+permissions:
+    contents: write
+    pull-requests: write
+    issues: write
+
+env:
+    # Library versions - update these when upgrading
+    HTMX_VERSION: "1.9.12"
+    SORTABLEJS_VERSION: "1.15.2"
+    SWAGGER_UI_VERSION: "5.17.14"
+    REDOC_VERSION: "2.1.5"
+
+jobs:
+    check-libraries:
+        runs-on: ubuntu-latest
+        outputs:
+            htmx_changed: ${{ steps.check-htmx.outputs.changed }}
+            htmx_new_hash: ${{ steps.check-htmx.outputs.new_hash }}
+            htmx_current_hash: ${{ steps.check-htmx.outputs.current_hash }}
+            sortablejs_changed: ${{ steps.check-sortablejs.outputs.changed }}
+            sortablejs_new_hash: ${{ steps.check-sortablejs.outputs.new_hash }}
+            sortablejs_current_hash: ${{ steps.check-sortablejs.outputs.current_hash }}
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Check HTMX
+              id: check-htmx
+              run: |
+                  # Download the pinned version of HTMX
+                  curl -s -o htmx-new.js "https://unpkg.com/htmx.org@${{ env.HTMX_VERSION }}/dist/htmx.min.js"
+
+                  # Calculate new hash
+                  NEW_HASH=$(openssl dgst -sha384 -binary htmx-new.js | openssl base64 -A)
+                  echo "new_hash=${NEW_HASH}" >> $GITHUB_OUTPUT
+
+                  # Calculate current hash
+                  if [ -f checktick_app/static/js/htmx.min.js ]; then
+                    CURRENT_HASH=$(openssl dgst -sha384 -binary checktick_app/static/js/htmx.min.js | openssl base64 -A)
+                    echo "current_hash=${CURRENT_HASH}" >> $GITHUB_OUTPUT
+                  else
+                    echo "current_hash=" >> $GITHUB_OUTPUT
+                  fi
+
+                  # Compare hashes
+                  if [ "${NEW_HASH}" != "${CURRENT_HASH}" ]; then
+                    echo "changed=true" >> $GITHUB_OUTPUT
+                    echo "HTMX has been updated or is missing"
+                    cp htmx-new.js checktick_app/static/js/htmx.min.js
+                  else
+                    echo "changed=false" >> $GITHUB_OUTPUT
+                    echo "HTMX is up to date"
+                  fi
+
+            - name: Check SortableJS
+              id: check-sortablejs
+              run: |
+                  # Download the pinned version of SortableJS
+                  curl -s -o sortable-new.js "https://cdn.jsdelivr.net/npm/sortablejs@${{ env.SORTABLEJS_VERSION }}/Sortable.min.js"
+
+                  # Calculate new hash
+                  NEW_HASH=$(openssl dgst -sha384 -binary sortable-new.js | openssl base64 -A)
+                  echo "new_hash=${NEW_HASH}" >> $GITHUB_OUTPUT
+
+                  # Calculate current hash
+                  if [ -f checktick_app/static/js/sortable.min.js ]; then
+                    CURRENT_HASH=$(openssl dgst -sha384 -binary checktick_app/static/js/sortable.min.js | openssl base64 -A)
+                    echo "current_hash=${CURRENT_HASH}" >> $GITHUB_OUTPUT
+                  else
+                    echo "current_hash=" >> $GITHUB_OUTPUT
+                  fi
+
+                  # Compare hashes
+                  if [ "${NEW_HASH}" != "${CURRENT_HASH}" ]; then
+                    echo "changed=true" >> $GITHUB_OUTPUT
+                    echo "SortableJS has been updated or is missing"
+                    cp sortable-new.js checktick_app/static/js/sortable.min.js
+                  else
+                    echo "changed=false" >> $GITHUB_OUTPUT
+                    echo "SortableJS is up to date"
+                  fi
+
+            - name: Check for newer versions available
+              id: check-versions
+              run: |
+                  echo "## Checking for newer library versions..." >> $GITHUB_STEP_SUMMARY
+
+                  # Check HTMX latest version from npm
+                  HTMX_LATEST=$(curl -s "https://registry.npmjs.org/htmx.org" | jq -r '.["dist-tags"].latest')
+                  echo "HTMX: Current pinned = ${{ env.HTMX_VERSION }}, Latest = ${HTMX_LATEST}"
+                  echo "htmx_latest=${HTMX_LATEST}" >> $GITHUB_OUTPUT
+
+                  if [ "${{ env.HTMX_VERSION }}" != "${HTMX_LATEST}" ]; then
+                    echo "- ⚠️ **HTMX**: Newer version available (${HTMX_LATEST} vs ${{ env.HTMX_VERSION }})" >> $GITHUB_STEP_SUMMARY
+                    echo "htmx_update_available=true" >> $GITHUB_OUTPUT
+                  else
+                    echo "- ✅ **HTMX**: Up to date (${{ env.HTMX_VERSION }})" >> $GITHUB_STEP_SUMMARY
+                    echo "htmx_update_available=false" >> $GITHUB_OUTPUT
+                  fi
+
+                  # Check SortableJS latest version from npm
+                  SORTABLEJS_LATEST=$(curl -s "https://registry.npmjs.org/sortablejs" | jq -r '.["dist-tags"].latest')
+                  echo "SortableJS: Current pinned = ${{ env.SORTABLEJS_VERSION }}, Latest = ${SORTABLEJS_LATEST}"
+                  echo "sortablejs_latest=${SORTABLEJS_LATEST}" >> $GITHUB_OUTPUT
+
+                  if [ "${{ env.SORTABLEJS_VERSION }}" != "${SORTABLEJS_LATEST}" ]; then
+                    echo "- ⚠️ **SortableJS**: Newer version available (${SORTABLEJS_LATEST} vs ${{ env.SORTABLEJS_VERSION }})" >> $GITHUB_STEP_SUMMARY
+                    echo "sortablejs_update_available=true" >> $GITHUB_OUTPUT
+                  else
+                    echo "- ✅ **SortableJS**: Up to date (${{ env.SORTABLEJS_VERSION }})" >> $GITHUB_STEP_SUMMARY
+                    echo "sortablejs_update_available=false" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Create Pull Request for hash changes
+              id: create-pr
+              if: steps.check-htmx.outputs.changed == 'true' || steps.check-sortablejs.outputs.changed == 'true'
+              continue-on-error: true
+              uses: peter-evans/create-pull-request@v6
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  commit-message: |
+                      Update CDN libraries with new SRI hashes
+
+                      Libraries updated:
+                      - HTMX ${{ env.HTMX_VERSION }}: ${{ steps.check-htmx.outputs.changed == 'true' && 'Updated' || 'No change' }}
+                      - SortableJS ${{ env.SORTABLEJS_VERSION }}: ${{ steps.check-sortablejs.outputs.changed == 'true' && 'Updated' || 'No change' }}
+                  branch: update-cdn-libraries
+                  delete-branch: true
+                  title: "Update CDN libraries with new SRI hashes"
+                  body: |
+                      ## CDN Library Update
+
+                      One or more self-hosted CDN libraries have been refreshed from their sources.
+
+                      ### Changes
+
+                      | Library | Version | Status | New Hash |
+                      |---------|---------|--------|----------|
+                      | HTMX | ${{ env.HTMX_VERSION }} | ${{ steps.check-htmx.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-htmx.outputs.new_hash }}` |
+                      | SortableJS | ${{ env.SORTABLEJS_VERSION }} | ${{ steps.check-sortablejs.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-sortablejs.outputs.new_hash }}` |
+
+                      ### Files Updated
+                      - `checktick_app/static/js/htmx.min.js`
+                      - `checktick_app/static/js/sortable.min.js`
+
+                      ### Testing Checklist
+                      Before merging, please verify:
+                      - [ ] Survey form works correctly (HTMX)
+                      - [ ] Question reordering works (SortableJS)
+                      - [ ] No console errors or CSP violations
+                      - [ ] Build survey page functions correctly
+
+                      ### Manual Steps Required
+                      If SRI hashes have changed, update the templates:
+
+                      **base.html (HTMX)**:
+                      ```html
+                      integrity="sha384-${{ steps.check-htmx.outputs.new_hash }}"
+                      ```
+
+                      **detail.html, builder.html, groups.html, group_builder.html (SortableJS)**:
+                      ```html
+                      integrity="sha384-${{ steps.check-sortablejs.outputs.new_hash }}"
+                      ```
+
+            - name: Create Issue for version upgrades
+              if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true'
+              uses: peter-evans/create-issue-from-file@v5
+              with:
+                  title: "CDN Library Version Updates Available"
+                  content-filepath: /dev/stdin
+                  labels: dependencies, security
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              continue-on-error: true
+
+            - name: Create version update issue content
+              if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true'
+              run: |
+                  cat << 'EOF' > /tmp/issue-body.md
+                  ## CDN Library Version Updates Available
+
+                  New versions of self-hosted CDN libraries are available. Consider upgrading:
+
+                  ### Available Updates
+
+                  | Library | Current | Latest | Changelog |
+                  |---------|---------|--------|-----------|
+                  ${{ steps.check-versions.outputs.htmx_update_available == 'true' && format('| HTMX | {0} | {1} | [Changelog](https://github.com/bigskysoftware/htmx/releases) |', env.HTMX_VERSION, steps.check-versions.outputs.htmx_latest) || '' }}
+                  ${{ steps.check-versions.outputs.sortablejs_update_available == 'true' && format('| SortableJS | {0} | {1} | [Changelog](https://github.com/SortableJS/Sortable/releases) |', env.SORTABLEJS_VERSION, steps.check-versions.outputs.sortablejs_latest) || '' }}
+
+                  ### To Upgrade
+
+                  1. Update the version in `.github/workflows/update-cdn-libraries.yml`
+                  2. Run the workflow manually to download new versions
+                  3. Update SRI hashes in templates
+                  4. Test all affected functionality
+
+                  ### Security Notes
+                  - Review the changelog for security fixes
+                  - Check for breaking changes before upgrading
+                  - Test in development before deploying
+                  EOF
+
+            - name: Create version update issue
+              if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true'
+              uses: peter-evans/create-issue-from-file@v5
+              with:
+                  title: "CDN Library Version Updates Available"
+                  content-filepath: /tmp/issue-body.md
+                  labels: dependencies,security
+              continue-on-error: true

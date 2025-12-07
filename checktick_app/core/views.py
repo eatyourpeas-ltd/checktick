@@ -365,6 +365,12 @@ def profile(request):
         "payment_provider": profile.payment_provider,
     }
 
+    # 2FA status for password users
+    from .views_2fa import check_2fa_required, is_password_user
+
+    is_password_user_flag = is_password_user(user)
+    has_2fa = check_2fa_required(user) if is_password_user_flag else False
+
     return render(
         request,
         "core/profile.html",
@@ -379,6 +385,8 @@ def profile(request):
             "light_theme_choices": light_theme_choices,
             "dark_theme_choices": dark_theme_choices,
             "subscription_info": subscription_info,
+            "is_password_user": is_password_user_flag,
+            "has_2fa": has_2fa,
         },
     )
 

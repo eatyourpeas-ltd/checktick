@@ -284,6 +284,57 @@ def send_password_change_email(user) -> bool:
     )
 
 
+def send_security_email(
+    user,
+    subject: str,
+    template_name: str,
+    context: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Send a security notification email.
+
+    Security emails are always sent regardless of user preferences,
+    as they inform users of important security events.
+
+    Args:
+        user: The user to send the email to
+        subject: Email subject line
+        template_name: Path to the email template (.md file)
+        context: Additional context for the template
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    if not user.email:
+        logger.warning(f"Cannot send security email - user {user.id} has no email")
+        return False
+
+    branding = get_platform_branding()
+
+    # Build template context
+    template_context = {
+        "user": user,
+        "brand_title": branding["title"],
+        "site_url": getattr(settings, "SITE_URL", "http://localhost:8000"),
+    }
+    if context:
+        template_context.update(context)
+
+    # Render markdown content
+    try:
+        markdown_content = render_to_string(template_name, template_context)
+    except TemplateDoesNotExist:
+        logger.error(f"Security email template not found: {template_name}")
+        return False
+
+    return send_branded_email(
+        to_email=user.email,
+        subject=f"🔒 {subject}",
+        markdown_content=markdown_content,
+        branding=branding,
+        context=template_context,
+    )
+
+
 def send_survey_created_email(user, survey) -> bool:
     """Send notification when survey is created.
 

@@ -2,8 +2,12 @@
 from datetime import timedelta
 import os
 from pathlib import Path
+import sys
 
 import environ
+
+# Detect if running tests
+TESTING = "pytest" in sys.modules or "test" in sys.argv
 
 env = environ.Env(
     DEBUG=(bool, False),
@@ -196,6 +200,9 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "mozilla_django_oidc",
+    "django_otp",
+    "django_otp.plugins.otp_totp",
+    "django_otp.plugins.otp_static",
     # Local apps
     "checktick_app.core",
     "checktick_app.surveys",
@@ -212,6 +219,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django_otp.middleware.OTPMiddleware",
+    "checktick_app.core.middleware.Require2FAMiddleware",
     "checktick_app.core.middleware.UserLanguageMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -251,6 +260,13 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    # Custom validators for healthcare compliance
+    {
+        "NAME": "checktick_app.core.password_validators.ComplexityValidator",
+        "OPTIONS": {"min_character_types": 3},
+    },
+    {"NAME": "checktick_app.core.password_validators.NoRepeatingCharactersValidator"},
+    {"NAME": "checktick_app.core.password_validators.NoSequentialCharactersValidator"},
 ]
 
 # Authentication backends: include AxesStandaloneBackend (renamed in django-axes >= 5.0)
@@ -328,6 +344,20 @@ SECURE_SSL_REDIRECT = env("SECURE_SSL_REDIRECT")
 X_FRAME_OPTIONS = "DENY"
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# Session security - healthcare compliance requires session timeout
+# Session expires after 30 minutes of inactivity
+SESSION_COOKIE_AGE = 1800  # 30 minutes in seconds
+# Session expires when browser closes (defense in depth)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+# Save session on every request to reset inactivity timer
+SESSION_SAVE_EVERY_REQUEST = True
+# Use database-backed sessions for security audit trail
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+# HttpOnly flag prevents JavaScript access to session cookie
+SESSION_COOKIE_HTTPONLY = True
+# SameSite prevents CSRF attacks via cross-origin requests
+SESSION_COOKIE_SAMESITE = "Lax"
 
 # Forms configuration
 # Set default URL scheme to HTTPS for Django 6.0+ compatibility
@@ -677,3 +707,7 @@ VAULT_ADDR = env("VAULT_ADDR", default="https://vault.checktick.internal:8200")
 VAULT_ROLE_ID = env("VAULT_ROLE_ID", default="")
 VAULT_SECRET_ID = env("VAULT_SECRET_ID", default="")
 PLATFORM_CUSTODIAN_COMPONENT = env("PLATFORM_CUSTODIAN_COMPONENT", default="")
+
+# Two-Factor Authentication
+# Require 2FA for all password users (disabled during tests)
+REQUIRE_2FA = env.bool("REQUIRE_2FA", default=not TESTING)

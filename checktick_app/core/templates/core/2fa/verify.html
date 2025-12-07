@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "Two-Factor Verification" %} - CheckTick{% endblock %}
+
+{% block content %}
+<div class="flex min-h-[60vh] items-center justify-center">
+  <div class="card bg-base-100 shadow-xl w-full max-w-md">
+    <div class="card-body">
+      <div class="text-center mb-4">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+          {% include "components/icons/shield-check.html" with classes="w-8 h-8 text-primary" only %}
+        </div>
+        <h1 class="text-2xl font-bold text-base-content">{% trans "Two-Factor Verification" %}</h1>
+        <p class="opacity-70 mt-2">{% trans "Enter the 6-digit code from your authenticator app to continue." %}</p>
+      </div>
+
+      <form method="post">
+        {% csrf_token %}
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{% trans "Verification Code" %}</span>
+          </label>
+          <input type="text"
+                 name="token"
+                 class="input input-bordered font-mono text-2xl tracking-[0.5em] text-center"
+                 placeholder="000000"
+                 maxlength="10"
+                 inputmode="numeric"
+                 autocomplete="one-time-code"
+                 required
+                 autofocus />
+          <label class="label">
+            <span class="label-text-alt opacity-70">{% trans "You can also use a backup code" %}</span>
+          </label>
+        </div>
+
+        <div class="mt-6">
+          <button type="submit" class="btn btn-primary w-full">
+            {% trans "Verify" %}
+          </button>
+        </div>
+      </form>
+
+      <div class="divider">{% trans "OR" %}</div>
+
+      <div class="text-center">
+        <a href="{% url 'login' %}" class="link link-primary text-sm">
+          {% trans "← Back to login" %}
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

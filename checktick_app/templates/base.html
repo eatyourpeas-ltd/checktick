@@ -268,7 +268,9 @@
         </div>
       </div>
     </footer>
-    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="{% static 'js/htmx.min.js' %}"
+            integrity="sha384-EfwldhYywH4qYH9vU8lMn+pd6pcH0kGpPUVJuwyHnj/5felkkIUVxf1wMAEX7rCY"
+            crossorigin="anonymous"></script>
     <script src="{% static 'js/theme-toggle.js' %}"></script>
     {# Global toast root for lightweight notifications #}
     <div id="toast-root" class="toast toast-top toast-end z-[1000]" aria-live="polite" aria-atomic="true"></div>

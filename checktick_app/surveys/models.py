@@ -2470,25 +2470,65 @@ def validate_markdown_survey(md_text: str) -> list[dict]:
 
 
 class AuditLog(models.Model):
+    """
+    Unified audit log for all security-relevant events.
+
+    Tracks organization/survey actions, authentication events, and security
+    changes for healthcare compliance and forensic analysis.
+    """
+
     class Scope(models.TextChoices):
         ORGANIZATION = "organization", "Organization"
         SURVEY = "survey", "Survey"
+        SECURITY = "security", "Security"  # Authentication, 2FA, password events
+        ACCOUNT = "account", "Account"  # User account changes
 
     class Action(models.TextChoices):
+        # Original actions
         ADD = "add", "Add"
         REMOVE = "remove", "Remove"
         UPDATE = "update", "Update"
         CREATE = "create", "Create"
         INVITE = "invite", "Invite"
         KEY_RECOVERY = "key_recovery", "Key Recovery"
+        # Authentication actions
+        LOGIN_SUCCESS = "login_success", "Successful Login"
+        LOGIN_FAILED = "login_failed", "Failed Login Attempt"
+        LOGOUT = "logout", "Logout"
+        ACCOUNT_LOCKED = "account_locked", "Account Locked"
+        # 2FA actions
+        TWO_FA_ENABLED = "2fa_enabled", "2FA Enabled"
+        TWO_FA_DISABLED = "2fa_disabled", "2FA Disabled"
+        TWO_FA_VERIFIED = "2fa_verified", "2FA Verification Success"
+        TWO_FA_FAILED = "2fa_failed", "2FA Verification Failed"
+        BACKUP_CODES_GENERATED = "backup_codes_generated", "Backup Codes Generated"
+        BACKUP_CODE_USED = "backup_code_used", "Backup Code Used"
+        # Account changes
+        PASSWORD_CHANGED = "password_changed", "Password Changed"
+        PASSWORD_RESET = "password_reset", "Password Reset Requested"
+        EMAIL_CHANGED = "email_changed", "Email Address Changed"
+        USER_CREATED = "user_created", "User Account Created"
+        USER_DEACTIVATED = "user_deactivated", "User Account Deactivated"
 
-    actor = models.ForeignKey(User, on_delete=models.CASCADE, related_name="audit_logs")
+    class Severity(models.TextChoices):
+        INFO = "info", "Information"
+        WARNING = "warning", "Warning"
+        CRITICAL = "critical", "Critical"
+
+    # Who performed the action (nullable for failed logins, system events)
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_logs",
+    )
     scope = models.CharField(max_length=20, choices=Scope.choices)
     organization = models.ForeignKey(
         Organization, null=True, blank=True, on_delete=models.CASCADE
     )
     survey = models.ForeignKey(Survey, null=True, blank=True, on_delete=models.CASCADE)
-    action = models.CharField(max_length=20, choices=Action.choices)
+    action = models.CharField(max_length=30, choices=Action.choices)
     target_user = models.ForeignKey(
         User,
         null=True,
@@ -2499,11 +2539,118 @@ class AuditLog(models.Model):
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Security-specific fields (for authentication/security events)
+    severity = models.CharField(
+        max_length=20,
+        choices=Severity.choices,
+        default=Severity.INFO,
+        blank=True,
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    username_attempted = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Username used in login attempt (for failed logins)",
+    )
+    message = models.TextField(blank=True, help_text="Human-readable event description")
+
     class Meta:
+        ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["scope", "organization", "survey"]),
             models.Index(fields=["created_at"]),
+            models.Index(fields=["action", "-created_at"]),
+            models.Index(fields=["actor", "-created_at"]),
+            models.Index(fields=["severity", "-created_at"]),
+            models.Index(fields=["ip_address", "-created_at"]),
         ]
+        verbose_name = "Audit Log"
+        verbose_name_plural = "Audit Logs"
+
+    def __str__(self):
+        actor_name = (
+            self.actor.username if self.actor else self.username_attempted or "System"
+        )
+        return f"{self.get_action_display()} by {actor_name} at {self.created_at}"
+
+    @classmethod
+    def log_security_event(
+        cls,
+        action: str,
+        actor=None,
+        request=None,
+        message: str = "",
+        severity: str = None,
+        username_attempted: str = "",
+        metadata: dict = None,
+        target_user=None,
+    ) -> "AuditLog":
+        """
+        Convenience method to log a security event.
+
+        Args:
+            action: Type of action from Action choices
+            actor: User who triggered the event (optional)
+            request: HTTP request object for IP/user-agent extraction
+            message: Human-readable description
+            severity: Event severity (auto-determined if not provided)
+            username_attempted: Username tried (for failed logins)
+            metadata: Additional structured data
+            target_user: User affected by the action (if different from actor)
+
+        Returns:
+            The created AuditLog instance
+        """
+        # Auto-determine severity based on action if not provided
+        if severity is None:
+            critical_actions = [
+                cls.Action.ACCOUNT_LOCKED,
+                cls.Action.TWO_FA_DISABLED,
+                cls.Action.PASSWORD_CHANGED,
+                cls.Action.USER_DEACTIVATED,
+                cls.Action.KEY_RECOVERY,
+            ]
+            warning_actions = [
+                cls.Action.LOGIN_FAILED,
+                cls.Action.TWO_FA_FAILED,
+            ]
+            if action in critical_actions:
+                severity = cls.Severity.CRITICAL
+            elif action in warning_actions:
+                severity = cls.Severity.WARNING
+            else:
+                severity = cls.Severity.INFO
+
+        # Extract IP and user agent from request
+        ip_address = None
+        user_agent = ""
+        if request:
+            ip_address = cls._get_client_ip(request)
+            user_agent = request.META.get("HTTP_USER_AGENT", "")[:1000]
+
+        return cls.objects.create(
+            actor=actor,
+            scope=cls.Scope.SECURITY,
+            action=action,
+            severity=severity,
+            message=message,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            username_attempted=username_attempted,
+            metadata=metadata or {},
+            target_user=target_user,
+        )
+
+    @staticmethod
+    def _get_client_ip(request) -> str:
+        """Extract client IP address from request, handling proxies."""
+        if request is None:
+            return None
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            return x_forwarded_for.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR")
 
 
 class LLMConversationSession(models.Model):
