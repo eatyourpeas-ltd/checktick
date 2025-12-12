@@ -14,6 +14,10 @@ CheckTick uses a secure payment provider to handle all billing. We offer flexibl
 
 > **Note for Self-Hosters:** If you're running CheckTick with `SELF_HOSTED=true` in your environment configuration, billing features are automatically hidden and all users get Enterprise-level features without payment requirements.
 
+## Pricing
+
+All prices are **inclusive of 20% UK VAT**. Base rate: £5 per seat (ex VAT) = £6 per seat (inc VAT).
+
 ## Available Plans
 
 ### Individual Plans
@@ -26,7 +30,7 @@ CheckTick uses a secure payment provider to handle all billing. We offer flexibl
 - Basic features
 
 **Individual Pro**
-- £5/month
+- £6/month (inc VAT) - 1 seat
 - Unlimited surveys
 - Unlimited responses
 - Collaboration features
@@ -34,32 +38,32 @@ CheckTick uses a secure payment provider to handle all billing. We offer flexibl
 
 ### Team Plans
 
-Teams provide shared billing and collaboration for groups of 5-20 users.
+Teams provide shared billing and collaboration for groups of 5-50 users.
 
 **Team Small**
-- £25/month
+- £30/month (inc VAT) - 5 seats
 - 5 team members
-- 50 active surveys
+- Unlimited active surveys
 - Role-based access (Admin/Creator/Viewer)
 - Team encryption management
 
 **Team Medium**
-- £50/month
-- 10 team members
-- 50 active surveys
+- £90/month (inc VAT) - 15 seats
+- 15 team members
+- Unlimited active surveys
 - All Team Small features
 
 **Team Large**
-- £100/month
-- 20 team members
-- 50 active surveys
+- £300/month (inc VAT) - 50 seats
+- 50 team members
+- Unlimited active surveys
 - All Team Medium features
 
 ### Organization & Enterprise
 
 **Organisation**
-- £30/user/month (contact sales)
-- Unlimited members and surveys
+- Bespoke pricing (£6/seat/month inc VAT)
+- Custom number of seats
 - Multiple teams within organization
 - Private datasets
 - Advanced governance features
@@ -67,11 +71,24 @@ Teams provide shared billing and collaboration for groups of 5-20 users.
 
 **Enterprise**
 - Custom pricing (contact sales)
+- Includes hosting and support costs
 - Self-hosted option
 - Custom branding
 - SSO/OIDC integration
 - Dedicated support
 - SLA guarantee
+
+## VAT Information
+
+All prices include UK VAT at 20%. VAT invoices are automatically sent on subscription confirmation containing:
+- Unique invoice number
+- Invoice date
+- Amount excluding VAT
+- VAT amount
+- Total including VAT
+- VAT registration number
+
+For VAT-exempt customers (e.g., charities, educational institutions), please contact sales.
 
 ## Payment Methods
 

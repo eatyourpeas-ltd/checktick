@@ -76,9 +76,7 @@ class Command(BaseCommand):
         # Skip if self-hosted (no billing)
         if getattr(settings, "SELF_HOSTED", False):
             self.stdout.write(
-                self.style.WARNING(
-                    "Self-hosted mode - billing is disabled, skipping"
-                )
+                self.style.WARNING("Self-hosted mode - billing is disabled, skipping")
             )
             return
 
@@ -86,9 +84,7 @@ class Command(BaseCommand):
         expired_count = self._process_expired_subscriptions(dry_run, verbose)
 
         # Process past due accounts (exceeded grace period)
-        past_due_count = self._process_past_due_accounts(
-            dry_run, verbose, grace_days
-        )
+        past_due_count = self._process_past_due_accounts(dry_run, verbose, grace_days)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -156,7 +152,9 @@ class Command(BaseCommand):
 
                 if success:
                     # Update subscription status
-                    profile.subscription_status = UserProfile.SubscriptionStatus.CANCELED
+                    profile.subscription_status = (
+                        UserProfile.SubscriptionStatus.CANCELED
+                    )
                     profile.payment_subscription_id = ""
                     profile.subscription_current_period_end = None
                     profile.save(
@@ -190,12 +188,8 @@ class Command(BaseCommand):
                         self.style.SUCCESS(f"    ✓ Downgraded to FREE tier")
                     )
                 else:
-                    logger.error(
-                        f"Failed to downgrade {user.username}: {message}"
-                    )
-                    self.stdout.write(
-                        self.style.ERROR(f"    ✗ Failed: {message}")
-                    )
+                    logger.error(f"Failed to downgrade {user.username}: {message}")
+                    self.stdout.write(self.style.ERROR(f"    ✗ Failed: {message}"))
 
             processed += 1
 
@@ -218,14 +212,18 @@ class Command(BaseCommand):
         # - Were updated (became past_due) more than grace_days ago
         # - Don't have a future period end date (if they do, let that handle it)
         # - Still have a paid tier
-        past_due_profiles = UserProfile.objects.filter(
-            subscription_status=UserProfile.SubscriptionStatus.PAST_DUE,
-            updated_at__lt=grace_cutoff,
-        ).exclude(
-            account_tier=UserProfile.AccountTier.FREE,
-        ).exclude(
-            # Don't process if period end is in the future
-            subscription_current_period_end__gt=now,
+        past_due_profiles = (
+            UserProfile.objects.filter(
+                subscription_status=UserProfile.SubscriptionStatus.PAST_DUE,
+                updated_at__lt=grace_cutoff,
+            )
+            .exclude(
+                account_tier=UserProfile.AccountTier.FREE,
+            )
+            .exclude(
+                # Don't process if period end is in the future
+                subscription_current_period_end__gt=now,
+            )
         )
 
         if verbose:
@@ -300,12 +298,8 @@ class Command(BaseCommand):
                         self.style.SUCCESS(f"    ✓ Downgraded to FREE tier")
                     )
                 else:
-                    logger.error(
-                        f"Failed to downgrade {user.username}: {message}"
-                    )
-                    self.stdout.write(
-                        self.style.ERROR(f"    ✗ Failed: {message}")
-                    )
+                    logger.error(f"Failed to downgrade {user.username}: {message}")
+                    self.stdout.write(self.style.ERROR(f"    ✗ Failed: {message}"))
 
             processed += 1
 

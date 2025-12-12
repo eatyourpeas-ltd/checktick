@@ -113,9 +113,10 @@
       <div class="card-body">
         <h2 class="card-title text-2xl mb-2">{% trans "Individual Pro" %}</h2>
         <div class="mb-4">
-          <span class="text-3xl font-bold">£5</span>
+          <span class="text-3xl font-bold">£6</span>
           <span class="text-base-content/70">/{% trans "month" %}</span>
           <p class="text-sm text-base-content/70">{% trans "Unlimited surveys" %}</p>
+          <p class="text-xs text-base-content/50">{% trans "inc. VAT" %}</p>
         </div>
 
         <div class="divider"></div>
@@ -199,22 +200,23 @@
             <span class="label-text font-semibold">{% trans "Select team size:" %}</span>
           </label>
           <select id="team-size-selector" class="select select-bordered w-full">
-            <option value="team_small" data-price="25" data-members="5" data-price-id="{{ price_ids.team_small }}">
-              {% trans "Small" %} - 5 {% trans "members" %} - £25/{% trans "month" %}
+            <option value="team_small" data-price="30" data-members="5" data-price-id="{{ price_ids.team_small }}">
+              {% trans "Small" %} - 5 {% trans "members" %} - £30/{% trans "month" %}
             </option>
-            <option value="team_medium" data-price="50" data-members="10" data-price-id="{{ price_ids.team_medium }}">
-              {% trans "Medium" %} - 10 {% trans "members" %} - £50/{% trans "month" %}
+            <option value="team_medium" data-price="90" data-members="15" data-price-id="{{ price_ids.team_medium }}">
+              {% trans "Medium" %} - 15 {% trans "members" %} - £90/{% trans "month" %}
             </option>
-            <option value="team_large" data-price="100" data-members="20" data-price-id="{{ price_ids.team_large }}">
-              {% trans "Large" %} - 20 {% trans "members" %} - £100/{% trans "month" %}
+            <option value="team_large" data-price="300" data-members="50" data-price-id="{{ price_ids.team_large }}">
+              {% trans "Large" %} - 50 {% trans "members" %} - £300/{% trans "month" %}
             </option>
           </select>
         </div>
 
         <div class="mb-4">
-          <span class="text-3xl font-bold" id="team-price-display">£25</span>
+          <span class="text-3xl font-bold" id="team-price-display">£30</span>
           <span class="text-base-content/70">/{% trans "month" %}</span>
           <p class="text-sm text-base-content/70" id="team-members-display">{% trans "Up to" %} 5 {% trans "team members" %}</p>
+          <p class="text-xs text-base-content/50">{% trans "inc. VAT" %}</p>
         </div>
 
         <div class="divider"></div>

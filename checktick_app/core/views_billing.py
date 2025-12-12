@@ -273,6 +273,7 @@ def checkout_success(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_http_methods(["POST"])
+@ratelimit(key="user", rate="10/h", block=True)
 def update_team_name(request: HttpRequest) -> HttpResponse:
     """Update the team name for the user's owned team.
 
@@ -364,6 +365,7 @@ def start_checkout(request: HttpRequest) -> HttpResponse:
 @login_required
 @billing_enabled_required
 @require_http_methods(["GET"])
+@ratelimit(key="user", rate="10/h", block=True)
 def checkout_complete(request: HttpRequest) -> HttpResponse:
     """Complete GoCardless checkout after user returns from redirect.
 
@@ -700,10 +702,13 @@ def handle_gocardless_payment_confirmed(event: dict) -> None:
     """Handle GoCardless payments.confirmed event.
 
     This is called when a payment is confirmed (money has been collected).
+    Creates a Payment record for VAT tracking.
 
     Args:
         event: The GoCardless event object
     """
+    from .models import Payment
+
     links = event.get("links", {})
     payment_id = links.get("payment")
     subscription_id = links.get("subscription")
@@ -727,6 +732,25 @@ def handle_gocardless_payment_confirmed(event: dict) -> None:
             logger.info(
                 f"Payment confirmed, reactivated subscription for {profile.user.username}"
             )
+
+        # Create payment record for VAT tracking
+        # Check if we already have a record for this payment
+        if not Payment.objects.filter(payment_id=payment_id).exists():
+            billing_period_end = None
+            if profile.subscription_current_period_end:
+                billing_period_end = profile.subscription_current_period_end.date()
+
+            payment = Payment.create_from_subscription(
+                user=profile.user,
+                tier=profile.account_tier,
+                payment_id=payment_id,
+                subscription_id=subscription_id,
+                billing_period_end=billing_period_end,
+            )
+            logger.info(
+                f"Created payment record {payment.invoice_number} for {profile.user.username}"
+            )
+
     except UserProfile.DoesNotExist:
         logger.warning(f"No user found for subscription ID: {subscription_id}")
 

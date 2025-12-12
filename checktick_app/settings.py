@@ -122,13 +122,24 @@ PAYMENT_WEBHOOK_SECRET = (
     else env("PAYMENT_PROCESSING_PRODUCTION_WEBHOOK_SECRET")
 )
 
+# VAT Configuration
+# Set these in environment or override in local settings
+VAT_RATE = float(os.environ.get("VAT_RATE", "0.20"))  # 20% UK VAT
+VAT_NUMBER = os.environ.get("VAT_NUMBER", "")  # Your VAT registration number
+COMPANY_NAME = os.environ.get("COMPANY_NAME", "CheckTick Ltd")
+COMPANY_ADDRESS = os.environ.get("COMPANY_ADDRESS", "123 Business Street, London, UK")
+
 # Subscription Tiers Configuration
 # GoCardless uses amounts directly (not price IDs like Paddle)
 # Amounts are in minor currency units (pence for GBP)
+# All amounts are INCLUSIVE of VAT at the configured VAT_RATE
+# Base price: £5 per seat (ex VAT), £6 per seat (inc VAT at 20%)
 SUBSCRIPTION_TIERS = {
     "pro": {
         "name": "Pro",
-        "amount": 500,  # £5.00/month
+        "seats": 1,
+        "amount": 600,  # £6.00/month (£5.00 + 20% VAT)
+        "amount_ex_vat": 500,  # £5.00/month excluding VAT
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
@@ -136,7 +147,9 @@ SUBSCRIPTION_TIERS = {
     },
     "team_small": {
         "name": "Team (Small)",
-        "amount": 1500,  # £15.00/month
+        "seats": 5,
+        "amount": 3000,  # £30.00/month (£25.00 + 20% VAT) - 5 seats × £6
+        "amount_ex_vat": 2500,  # £25.00/month excluding VAT - 5 seats × £5
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
@@ -145,7 +158,9 @@ SUBSCRIPTION_TIERS = {
     },
     "team_medium": {
         "name": "Team (Medium)",
-        "amount": 3000,  # £30.00/month
+        "seats": 15,
+        "amount": 9000,  # £90.00/month (£75.00 + 20% VAT) - 15 seats × £6
+        "amount_ex_vat": 7500,  # £75.00/month excluding VAT - 15 seats × £5
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
@@ -154,7 +169,9 @@ SUBSCRIPTION_TIERS = {
     },
     "team_large": {
         "name": "Team (Large)",
-        "amount": 5000,  # £50.00/month
+        "seats": 50,
+        "amount": 30000,  # £300.00/month (£250.00 + 20% VAT) - 50 seats × £6
+        "amount_ex_vat": 25000,  # £250.00/month excluding VAT - 50 seats × £5
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
@@ -163,21 +180,25 @@ SUBSCRIPTION_TIERS = {
     },
     "organization": {
         "name": "Organization",
-        "amount": 10000,  # £100.00/month
+        "seats": None,  # Bespoke - depends on number of seats required
+        "amount": 0,  # Custom pricing - contact sales
+        "amount_ex_vat": 0,
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
-        "max_members": 200,
-        "description": "Organization with up to 200 members",
+        "max_members": None,  # Configured per organization
+        "description": "Organization with custom seat allocation (£5/seat ex VAT)",
     },
     "enterprise": {
         "name": "Enterprise",
-        "amount": 0,  # Custom pricing - contact sales
+        "seats": None,  # Unlimited
+        "amount": 0,  # Custom pricing - includes hosting and support
+        "amount_ex_vat": 0,
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
         "max_members": None,  # Unlimited
-        "description": "Enterprise with custom features and unlimited members",
+        "description": "Enterprise with custom features, hosting, and unlimited members",
     },
 }
 
