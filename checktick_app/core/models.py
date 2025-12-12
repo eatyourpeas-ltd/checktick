@@ -278,6 +278,12 @@ class UserProfile(models.Model):
         default="",
         help_text="Subscription ID from payment provider",
     )
+    payment_mandate_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Mandate ID from payment provider (GoCardless)",
+    )
     subscription_status = models.CharField(
         max_length=30,
         choices=SubscriptionStatus.choices,

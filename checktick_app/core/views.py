@@ -69,7 +69,7 @@ def hosting(request):
 
 
 def pricing(request):
-    """Display pricing tiers with Paddle checkout integration."""
+    """Display pricing tiers with GoCardless redirect flow integration."""
     from django.conf import settings
 
     # Check if coming from signup with a pending tier selection
@@ -77,7 +77,7 @@ def pricing(request):
     pending_tier = request.session.get("pending_tier", "")
 
     context = {
-        "price_ids": settings.PAYMENT_PRICE_IDS,
+        "subscription_tiers": settings.SUBSCRIPTION_TIERS,
         "self_hosted": getattr(settings, "SELF_HOSTED", False),
         "auto_open_checkout": auto_open_checkout,
         "pending_tier": pending_tier,

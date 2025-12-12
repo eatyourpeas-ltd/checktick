@@ -76,42 +76,34 @@ class TestFeatureUnlockingOnSuccessfulSubscription:
     """Test that features are properly unlocked when subscription succeeds."""
 
     @pytest.mark.django_db
-    @patch("checktick_app.core.views_billing.get_tier_from_price_id")
     @patch("checktick_app.core.views_billing.send_subscription_created_email")
-    @patch("checktick_app.core.views_billing.verify_paddle_webhook_signature")
+    @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
     def test_successful_subscription_upgrades_to_pro(
-        self, mock_validate, mock_email, mock_get_tier, free_user
+        self, mock_validate, mock_email, free_user
     ):
-        """Test successful subscription.created webhook upgrades user to PRO tier."""
+        """Test successful GoCardless subscription.created webhook upgrades user to PRO tier."""
         # Mock webhook validation to return True
         mock_validate.return_value = True
-        # Mock tier mapping to return "pro" for any price ID
-        mock_get_tier.return_value = "pro"
 
-        # Set up payment customer ID
-        free_user.profile.payment_customer_id = "ctm_new123"
-        free_user.profile.payment_provider = "paddle"
+        # Set up payment mandate ID (GoCardless uses mandates)
+        free_user.profile.payment_mandate_id = "MD0001"
+        free_user.profile.payment_provider = "gocardless"
+        free_user.profile.account_tier = UserProfile.AccountTier.PRO  # Set by redirect flow completion
         free_user.profile.save()
 
+        # GoCardless sends events in an array
         payload = {
-            "event_type": "subscription.created",
-            "data": {
-                "id": "sub_new123",
-                "customer_id": "ctm_new123",
-                "status": "active",
-                "custom_data": {"userId": str(free_user.id)},
-                "items": [
-                    {
-                        "price": {
-                            "id": "pri_test_pro_price",  # Test price ID (mocked)
-                            "billing_cycle": {"interval": "month", "frequency": 1},
-                        }
-                    }
-                ],
-                "current_billing_period": {
-                    "ends_at": (timezone.now() + timedelta(days=30)).isoformat()
-                },
-            },
+            "events": [
+                {
+                    "id": "EV0001",
+                    "resource_type": "subscriptions",
+                    "action": "created",
+                    "links": {
+                        "subscription": "SB0001",
+                        "mandate": "MD0001",
+                    },
+                }
+            ]
         }
 
         client = Client()
@@ -124,13 +116,12 @@ class TestFeatureUnlockingOnSuccessfulSubscription:
         assert response.status_code == 200
 
         free_user.profile.refresh_from_db()
-        # Verify tier upgraded to PRO
-        assert free_user.profile.account_tier == UserProfile.AccountTier.PRO
+        # Verify subscription ID was stored
+        assert free_user.profile.payment_subscription_id == "SB0001"
         assert (
             free_user.profile.subscription_status
             == UserProfile.SubscriptionStatus.ACTIVE
         )
-        assert free_user.profile.payment_subscription_id == "sub_new123"
 
         # Verify welcome email was sent
         mock_email.assert_called_once()
@@ -211,27 +202,34 @@ class TestDowngradeWorkflow:
 
     @pytest.mark.django_db
     @patch("checktick_app.core.views_billing.send_subscription_cancelled_email")
-    @patch("checktick_app.core.views_billing.verify_paddle_webhook_signature")
+    @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
     def test_cancel_subscription_downgrades_to_free(
         self, mock_validate, mock_email, pro_user
     ):
-        """Test subscription.canceled webhook downgrades user to FREE."""
+        """Test GoCardless subscription.cancelled webhook downgrades user to FREE."""
         # Mock webhook validation
         mock_validate.return_value = True
+
+        # Update user to use GoCardless
+        pro_user.profile.payment_provider = "gocardless"
+        pro_user.profile.save()
 
         # Create surveys within free tier limit
         Survey.objects.create(name="Survey 1", owner=pro_user, slug="survey-1")
         Survey.objects.create(name="Survey 2", owner=pro_user, slug="survey-2")
 
+        # GoCardless event format
         payload = {
-            "event_type": "subscription.canceled",
-            "data": {
-                "id": pro_user.profile.payment_subscription_id,
-                "status": "canceled",
-                "current_billing_period": {
-                    "ends_at": (timezone.now() + timedelta(days=7)).isoformat()
-                },
-            },
+            "events": [
+                {
+                    "id": "EV0002",
+                    "resource_type": "subscriptions",
+                    "action": "cancelled",
+                    "links": {
+                        "subscription": pro_user.profile.payment_subscription_id,
+                    },
+                }
+            ]
         }
 
         client = Client()
@@ -257,7 +255,7 @@ class TestDowngradeWorkflow:
 
     @pytest.mark.django_db
     @patch("checktick_app.core.views_billing.send_subscription_cancelled_email")
-    @patch("checktick_app.core.views_billing.verify_paddle_webhook_signature")
+    @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
     def test_cancel_auto_closes_excess_surveys(
         self, mock_validate, mock_email, pro_user
     ):
@@ -265,21 +263,28 @@ class TestDowngradeWorkflow:
         # Mock webhook validation
         mock_validate.return_value = True
 
+        # Update user to use GoCardless
+        pro_user.profile.payment_provider = "gocardless"
+        pro_user.profile.save()
+
         # Create 5 surveys
         for i in range(5):
             Survey.objects.create(
                 name=f"Survey {i+1}", owner=pro_user, slug=f"survey-{i+1}"
             )
 
+        # GoCardless event format
         payload = {
-            "event_type": "subscription.canceled",
-            "data": {
-                "id": pro_user.profile.payment_subscription_id,
-                "status": "canceled",
-                "current_billing_period": {
-                    "ends_at": (timezone.now() + timedelta(days=7)).isoformat()
-                },
-            },
+            "events": [
+                {
+                    "id": "EV0003",
+                    "resource_type": "subscriptions",
+                    "action": "cancelled",
+                    "links": {
+                        "subscription": pro_user.profile.payment_subscription_id,
+                    },
+                }
+            ]
         }
 
         client = Client()

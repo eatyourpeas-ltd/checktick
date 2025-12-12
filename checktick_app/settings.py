@@ -57,32 +57,13 @@ env = environ.Env(
     OIDC_OP_JWKS_ENDPOINT_GOOGLE=(str, "https://www.googleapis.com/oauth2/v3/certs"),
     OIDC_OP_JWKS_ENDPOINT_AZURE=(str, ""),
     SITE_URL=(str, "http://localhost:8000"),
-    # Payment Processing
+    # Payment Processing (GoCardless)
     PAYMENT_PROCESSING_SANDBOX_API_KEY=(str, ""),
     PAYMENT_PROCESSING_PRODUCTION_API_KEY=(str, ""),
-    PAYMENT_PROCESSING_SANDBOX_CLIENT_TOKEN=(str, ""),
-    PAYMENT_PROCESSING_PRODUCTION_CLIENT_TOKEN=(str, ""),
     PAYMENT_PROCESSING_SANDBOX_WEBHOOK_SECRET=(str, ""),
     PAYMENT_PROCESSING_PRODUCTION_WEBHOOK_SECRET=(str, ""),
-    PAYMENT_PROCESSING_SANDBOX_BASE_URL=(
-        str,
-        "",
-    ),
-    PAYMENT_PROCESSING_PRODUCTION_BASE_URL=(str, ""),
-    # Payment Product IDs (Sandbox)
-    PAYMENT_PRICE_ID_PRO_SANDBOX=(str, ""),
-    PAYMENT_PRICE_ID_TEAM_SMALL_SANDBOX=(str, ""),
-    PAYMENT_PRICE_ID_TEAM_MEDIUM_SANDBOX=(str, ""),
-    PAYMENT_PRICE_ID_TEAM_LARGE_SANDBOX=(str, ""),
-    PAYMENT_PRICE_ID_ORGANIZATION_SANDBOX=(str, ""),
-    PAYMENT_PRICE_ID_ENTERPRISE_SANDBOX=(str, ""),
-    # Production
-    PAYMENT_PRICE_ID_PRO_PRODUCTION=(str, ""),
-    PAYMENT_PRICE_ID_TEAM_SMALL_PRODUCTION=(str, ""),
-    PAYMENT_PRICE_ID_TEAM_MEDIUM_PRODUCTION=(str, ""),
-    PAYMENT_PRICE_ID_TEAM_LARGE_PRODUCTION=(str, ""),
-    PAYMENT_PRICE_ID_ORGANIZATION_PRODUCTION=(str, ""),
-    PAYMENT_PRICE_ID_ENTERPRISE_PRODUCTION=(str, ""),
+    PAYMENT_PROCESSING_SANDBOX_BASE_URL=(str, "https://api-sandbox.gocardless.com"),
+    PAYMENT_PROCESSING_PRODUCTION_BASE_URL=(str, "https://api.gocardless.com"),
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -133,55 +114,71 @@ PAYMENT_BASE_URL = (
 )
 PAYMENT_ENVIRONMENT = "sandbox" if DEBUG else "production"
 
-# Payment Client-Side Token
-# This is different from API key - it's safe to expose in frontend
-PAYMENT_CLIENT_TOKEN = (
-    env("PAYMENT_PROCESSING_SANDBOX_CLIENT_TOKEN")
-    if DEBUG
-    else env("PAYMENT_PROCESSING_PRODUCTION_CLIENT_TOKEN")
-)
-
 # Payment Webhook Secret (for signature verification)
-# Get this from your payment provider's dashboard
+# Get this from GoCardless dashboard: Developers > Webhooks
 PAYMENT_WEBHOOK_SECRET = (
     env("PAYMENT_PROCESSING_SANDBOX_WEBHOOK_SECRET")
     if DEBUG
     else env("PAYMENT_PROCESSING_PRODUCTION_WEBHOOK_SECRET")
 )
 
-# Payment Price IDs (environment-specific)
-# Automatically selected based on DEBUG setting
-PAYMENT_PRICE_IDS = {
-    "pro": (
-        env("PAYMENT_PRICE_ID_PRO_SANDBOX")
-        if DEBUG
-        else env("PAYMENT_PRICE_ID_PRO_PRODUCTION")
-    ),
-    "team_small": (
-        env("PAYMENT_PRICE_ID_TEAM_SMALL_SANDBOX")
-        if DEBUG
-        else env("PAYMENT_PRICE_ID_TEAM_SMALL_PRODUCTION")
-    ),
-    "team_medium": (
-        env("PAYMENT_PRICE_ID_TEAM_MEDIUM_SANDBOX")
-        if DEBUG
-        else env("PAYMENT_PRICE_ID_TEAM_MEDIUM_PRODUCTION")
-    ),
-    "team_large": (
-        env("PAYMENT_PRICE_ID_TEAM_LARGE_SANDBOX")
-        if DEBUG
-        else env("PAYMENT_PRICE_ID_TEAM_LARGE_PRODUCTION")
-    ),
-    "organization": (
-        env("PAYMENT_PRICE_ID_ORGANIZATION_SANDBOX")
-        if DEBUG
-        else env("PAYMENT_PRICE_ID_ORGANIZATION_PRODUCTION")
-    ),
-    "enterprise": (
-        env("PAYMENT_PRICE_ID_ENTERPRISE_SANDBOX")
-        if DEBUG
-        else env("PAYMENT_PRICE_ID_ENTERPRISE_PRODUCTION")
-    ),
+# Subscription Tiers Configuration
+# GoCardless uses amounts directly (not price IDs like Paddle)
+# Amounts are in minor currency units (pence for GBP)
+SUBSCRIPTION_TIERS = {
+    "pro": {
+        "name": "Pro",
+        "amount": 500,  # £5.00/month
+        "currency": "GBP",
+        "interval_unit": "monthly",
+        "interval": 1,
+        "description": "Individual professional with encryption and unlimited surveys",
+    },
+    "team_small": {
+        "name": "Team (Small)",
+        "amount": 1500,  # £15.00/month
+        "currency": "GBP",
+        "interval_unit": "monthly",
+        "interval": 1,
+        "max_members": 5,
+        "description": "Small team with up to 5 members",
+    },
+    "team_medium": {
+        "name": "Team (Medium)",
+        "amount": 3000,  # £30.00/month
+        "currency": "GBP",
+        "interval_unit": "monthly",
+        "interval": 1,
+        "max_members": 15,
+        "description": "Medium team with up to 15 members",
+    },
+    "team_large": {
+        "name": "Team (Large)",
+        "amount": 5000,  # £50.00/month
+        "currency": "GBP",
+        "interval_unit": "monthly",
+        "interval": 1,
+        "max_members": 50,
+        "description": "Large team with up to 50 members",
+    },
+    "organization": {
+        "name": "Organization",
+        "amount": 10000,  # £100.00/month
+        "currency": "GBP",
+        "interval_unit": "monthly",
+        "interval": 1,
+        "max_members": 200,
+        "description": "Organization with up to 200 members",
+    },
+    "enterprise": {
+        "name": "Enterprise",
+        "amount": 0,  # Custom pricing - contact sales
+        "currency": "GBP",
+        "interval_unit": "monthly",
+        "interval": 1,
+        "max_members": None,  # Unlimited
+        "description": "Enterprise with custom features and unlimited members",
+    },
 }
 
 INSTALLED_APPS = [

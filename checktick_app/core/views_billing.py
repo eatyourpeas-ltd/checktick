@@ -264,56 +264,88 @@ def update_team_name(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["POST"])
 @ratelimit(key="ip", rate="100/m", block=True)
 def payment_webhook(request: HttpRequest) -> HttpResponse:
-    """Handle payment processor webhook events.
+    """Handle GoCardless webhook events.
 
-    Paddle sends webhooks for:
-    - subscription.created
-    - subscription.updated
-    - subscription.canceled
-    - subscription.past_due
-    - transaction.completed
-    - transaction.payment_failed
+    GoCardless sends webhooks for:
+    - mandates: created, submitted, active, failed, cancelled, expired
+    - subscriptions: created, payment_created, cancelled, finished
+    - payments: created, submitted, confirmed, paid_out, failed, cancelled
 
-    Reference: https://developer.paddle.com/webhooks/overview
+    Reference: https://developer.gocardless.com/api-reference/#appendix-webhooks
     """
     # Verify webhook signature (important for security)
-    if not verify_paddle_webhook_signature(request):
-        logger.warning("Invalid Paddle webhook signature")
+    if not verify_gocardless_webhook_signature(request):
+        logger.warning("Invalid GoCardless webhook signature")
         return JsonResponse({"error": "Invalid signature"}, status=403)
 
     try:
         payload = json.loads(request.body)
-        event_type = payload.get("event_type")
+        events = payload.get("events", [])
 
-        logger.info(f"Received payment webhook: {event_type}")
+        logger.info(f"Received GoCardless webhook with {len(events)} event(s)")
 
-        # Route to appropriate handler
-        if event_type == "subscription.created":
-            return handle_subscription_created(payload)
-        elif event_type == "subscription.updated":
-            return handle_subscription_updated(payload)
-        elif event_type == "subscription.canceled":
-            return handle_subscription_canceled(payload)
-        elif event_type == "subscription.past_due":
-            return handle_subscription_past_due(payload)
-        elif event_type == "transaction.completed":
-            return handle_transaction_completed(payload)
-        elif event_type == "transaction.payment_failed":
-            return handle_transaction_failed(payload)
-        else:
-            logger.warning(f"Unhandled webhook event type: {event_type}")
-            return JsonResponse({"status": "ignored"}, status=200)
+        # GoCardless sends an array of events in each webhook
+        for event in events:
+            resource_type = event.get("resource_type")
+            action = event.get("action")
+            event_id = event.get("id")
+
+            logger.info(
+                f"Processing GoCardless event: {resource_type}.{action} ({event_id})"
+            )
+
+            # Route to appropriate handler based on resource_type and action
+            if resource_type == "subscriptions":
+                if action == "created":
+                    handle_gocardless_subscription_created(event)
+                elif action == "cancelled":
+                    handle_gocardless_subscription_cancelled(event)
+                elif action == "finished":
+                    handle_gocardless_subscription_finished(event)
+                elif action == "payment_created":
+                    # A payment was created for this subscription
+                    logger.info(f"Subscription payment created: {event_id}")
+                else:
+                    logger.info(f"Ignoring subscription action: {action}")
+
+            elif resource_type == "payments":
+                if action == "confirmed":
+                    handle_gocardless_payment_confirmed(event)
+                elif action == "failed":
+                    handle_gocardless_payment_failed(event)
+                elif action == "cancelled":
+                    handle_gocardless_payment_cancelled(event)
+                elif action in ["created", "submitted", "paid_out"]:
+                    # Informational events
+                    logger.info(f"Payment {action}: {event_id}")
+                else:
+                    logger.info(f"Ignoring payment action: {action}")
+
+            elif resource_type == "mandates":
+                if action == "active":
+                    handle_gocardless_mandate_active(event)
+                elif action in ["failed", "cancelled", "expired"]:
+                    handle_gocardless_mandate_inactive(event, action)
+                elif action in ["created", "submitted"]:
+                    logger.info(f"Mandate {action}: {event_id}")
+                else:
+                    logger.info(f"Ignoring mandate action: {action}")
+
+            else:
+                logger.info(f"Ignoring resource type: {resource_type}")
+
+        return JsonResponse({"status": "success"}, status=200)
 
     except Exception as e:
         logger.error(f"Error processing payment webhook: {e}", exc_info=True)
         return JsonResponse({"error": "Internal error"}, status=500)
 
 
-def verify_paddle_webhook_signature(request: HttpRequest) -> bool:
-    """Verify Paddle webhook signature.
+def verify_gocardless_webhook_signature(request: HttpRequest) -> bool:
+    """Verify GoCardless webhook signature.
 
-    Paddle signs all webhooks with a signature in the Paddle-Signature header.
-    Reference: https://developer.paddle.com/webhooks/signature-verification
+    GoCardless signs all webhooks with a signature in the Webhook-Signature header.
+    Reference: https://developer.gocardless.com/api-reference/#appendix-webhooks
 
     Args:
         request: The HttpRequest object
@@ -325,9 +357,9 @@ def verify_paddle_webhook_signature(request: HttpRequest) -> bool:
     import hmac
 
     # Get signature from header
-    signature = request.headers.get("Paddle-Signature")
+    signature = request.headers.get("Webhook-Signature")
     if not signature:
-        logger.warning("Missing Paddle-Signature header")
+        logger.warning("Missing Webhook-Signature header")
         return False
 
     # Get webhook secret from settings
@@ -342,43 +374,296 @@ def verify_paddle_webhook_signature(request: HttpRequest) -> bool:
             return True
         return False
 
-    # Parse signature header: format is "ts=timestamp;h1=signature"
-    sig_parts = {}
-    for part in signature.split(";"):
-        key, value = part.split("=", 1)
-        sig_parts[key] = value
-
-    timestamp = sig_parts.get("ts")
-    h1_signature = sig_parts.get("h1")
-
-    if not timestamp or not h1_signature:
-        logger.warning("Invalid signature format")
-        return False
-
-    # Construct the signed payload
-    signed_payload = f"{timestamp}:{request.body.decode('utf-8')}"
+    # GoCardless signature is a simple HMAC-SHA256 of the request body
+    # The signature is hex-encoded
+    body = request.body
 
     # Calculate expected signature
     expected_signature = hmac.new(
-        webhook_secret.encode("utf-8"), signed_payload.encode("utf-8"), hashlib.sha256
+        webhook_secret.encode("utf-8"), body, hashlib.sha256
     ).hexdigest()
 
     # Compare signatures (constant-time comparison to prevent timing attacks)
-    if not hmac.compare_digest(h1_signature, expected_signature):
+    if not hmac.compare_digest(signature, expected_signature):
         logger.warning("Signature mismatch")
         return False
 
-    # Optional: Check timestamp to prevent replay attacks
-    # Paddle recommends rejecting webhooks older than 5 minutes
-    import time
-
-    current_time = int(time.time())
-    webhook_time = int(timestamp)
-    if abs(current_time - webhook_time) > 300:  # 5 minutes
-        logger.warning(f"Webhook timestamp too old: {webhook_time} vs {current_time}")
-        return False
-
     return True
+
+
+# =============================================================================
+# GoCardless Event Handlers
+# =============================================================================
+
+
+def handle_gocardless_subscription_created(event: dict) -> None:
+    """Handle GoCardless subscriptions.created event.
+
+    This is called when a new subscription is successfully created.
+    The subscription is linked via the mandate, which is linked to the customer.
+
+    Args:
+        event: The GoCardless event object
+    """
+    links = event.get("links", {})
+    subscription_id = links.get("subscription")
+    mandate_id = links.get("mandate")
+
+    logger.info(f"GoCardless subscription created: {subscription_id} (mandate: {mandate_id})")
+
+    # Find user by mandate_id (stored when redirect flow completes)
+    try:
+        profile = UserProfile.objects.get(
+            payment_mandate_id=mandate_id, payment_provider="gocardless"
+        )
+    except UserProfile.DoesNotExist:
+        logger.error(f"No user found for mandate ID: {mandate_id}")
+        return
+
+    # Update profile with subscription ID
+    profile.payment_subscription_id = subscription_id
+    profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
+    profile.save(update_fields=[
+        "payment_subscription_id",
+        "subscription_status",
+        "updated_at",
+    ])
+
+    logger.info(f"Subscription {subscription_id} linked to user {profile.user.username}")
+
+    # Send welcome email
+    try:
+        # Determine billing cycle from subscription metadata if available
+        billing_cycle = "monthly"  # Default, can be enhanced with API lookup
+        send_subscription_created_email(
+            profile.user, profile.account_tier, billing_cycle
+        )
+        logger.info(f"Welcome email sent to {profile.user.email}")
+    except Exception as e:
+        logger.error(f"Failed to send welcome email to {profile.user.email}: {e}")
+
+
+def handle_gocardless_subscription_cancelled(event: dict) -> None:
+    """Handle GoCardless subscriptions.cancelled event.
+
+    This is called when a subscription is cancelled (by user or admin).
+
+    Args:
+        event: The GoCardless event object
+    """
+    links = event.get("links", {})
+    subscription_id = links.get("subscription")
+
+    logger.info(f"GoCardless subscription cancelled: {subscription_id}")
+
+    try:
+        profile = UserProfile.objects.get(
+            payment_subscription_id=subscription_id, payment_provider="gocardless"
+        )
+    except UserProfile.DoesNotExist:
+        logger.error(f"No user found for subscription ID: {subscription_id}")
+        return
+
+    # Store info for email before downgrade
+    old_tier = profile.account_tier
+
+    # Count surveys before downgrade
+    from checktick_app.surveys.models import Survey
+    survey_count = (
+        Survey.objects.filter(owner=profile.user)
+        .exclude(status=Survey.Status.CLOSED)
+        .count()
+    )
+
+    # Calculate how many surveys will be auto-closed
+    free_tier_limit = 3
+    surveys_to_close = max(0, survey_count - free_tier_limit)
+
+    # Downgrade to FREE tier
+    success, message = profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+
+    if not success:
+        logger.error(f"Failed to downgrade user {profile.user.username}: {message}")
+    else:
+        logger.info(f"User {profile.user.username} downgraded to FREE: {message}")
+
+    profile.subscription_status = UserProfile.SubscriptionStatus.CANCELED
+    profile.payment_subscription_id = ""
+    profile.save()
+
+    logger.info(f"Subscription canceled for user {profile.user.username}")
+
+    # Send cancellation email
+    try:
+        send_subscription_cancelled_email(
+            profile.user,
+            old_tier,
+            None,  # access_until - GoCardless cancels immediately
+            survey_count,
+            surveys_to_close,
+            free_tier_limit,
+        )
+        logger.info(f"Cancellation email sent to {profile.user.email}")
+    except Exception as e:
+        logger.error(f"Failed to send cancellation email to {profile.user.email}: {e}")
+
+
+def handle_gocardless_subscription_finished(event: dict) -> None:
+    """Handle GoCardless subscriptions.finished event.
+
+    This is called when a subscription reaches its end date (if set).
+
+    Args:
+        event: The GoCardless event object
+    """
+    links = event.get("links", {})
+    subscription_id = links.get("subscription")
+
+    logger.info(f"GoCardless subscription finished: {subscription_id}")
+
+    # Treat the same as cancelled
+    handle_gocardless_subscription_cancelled(event)
+
+
+def handle_gocardless_payment_confirmed(event: dict) -> None:
+    """Handle GoCardless payments.confirmed event.
+
+    This is called when a payment is confirmed (money has been collected).
+
+    Args:
+        event: The GoCardless event object
+    """
+    links = event.get("links", {})
+    payment_id = links.get("payment")
+    subscription_id = links.get("subscription")
+
+    logger.info(f"GoCardless payment confirmed: {payment_id} (subscription: {subscription_id})")
+
+    if not subscription_id:
+        logger.info("Payment not linked to subscription, ignoring")
+        return
+
+    # Update subscription status to active if it was past due
+    try:
+        profile = UserProfile.objects.get(
+            payment_subscription_id=subscription_id, payment_provider="gocardless"
+        )
+        if profile.subscription_status == UserProfile.SubscriptionStatus.PAST_DUE:
+            profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
+            profile.save(update_fields=["subscription_status", "updated_at"])
+            logger.info(f"Payment confirmed, reactivated subscription for {profile.user.username}")
+    except UserProfile.DoesNotExist:
+        logger.warning(f"No user found for subscription ID: {subscription_id}")
+
+
+def handle_gocardless_payment_failed(event: dict) -> None:
+    """Handle GoCardless payments.failed event.
+
+    This is called when a payment fails (insufficient funds, etc.).
+
+    Args:
+        event: The GoCardless event object
+    """
+    links = event.get("links", {})
+    payment_id = links.get("payment")
+    subscription_id = links.get("subscription")
+    details = event.get("details", {})
+    cause = details.get("cause", "unknown")
+    description = details.get("description", "")
+
+    logger.info(f"GoCardless payment failed: {payment_id} (cause: {cause})")
+
+    if not subscription_id:
+        logger.info("Payment not linked to subscription, ignoring")
+        return
+
+    try:
+        profile = UserProfile.objects.get(
+            payment_subscription_id=subscription_id, payment_provider="gocardless"
+        )
+        profile.subscription_status = UserProfile.SubscriptionStatus.PAST_DUE
+        profile.save(update_fields=["subscription_status", "updated_at"])
+        logger.info(f"Payment failed for user {profile.user.username}: {description}")
+        # TODO: Send payment failed email notification
+    except UserProfile.DoesNotExist:
+        logger.warning(f"No user found for subscription ID: {subscription_id}")
+
+
+def handle_gocardless_payment_cancelled(event: dict) -> None:
+    """Handle GoCardless payments.cancelled event.
+
+    This is called when a payment is cancelled before being submitted.
+
+    Args:
+        event: The GoCardless event object
+    """
+    links = event.get("links", {})
+    payment_id = links.get("payment")
+    subscription_id = links.get("subscription")
+
+    logger.info(f"GoCardless payment cancelled: {payment_id} (subscription: {subscription_id})")
+    # Usually informational - no action needed
+
+
+def handle_gocardless_mandate_active(event: dict) -> None:
+    """Handle GoCardless mandates.active event.
+
+    This is called when a mandate becomes active (customer has authorised).
+    The mandate is the authorisation to collect payments from the customer.
+
+    Args:
+        event: The GoCardless event object
+    """
+    links = event.get("links", {})
+    mandate_id = links.get("mandate")
+    customer_id = links.get("customer")
+
+    logger.info(f"GoCardless mandate active: {mandate_id} (customer: {customer_id})")
+
+    # Update user's mandate status if we have the mandate stored
+    try:
+        profile = UserProfile.objects.get(
+            payment_mandate_id=mandate_id, payment_provider="gocardless"
+        )
+        logger.info(f"Mandate active for user {profile.user.username}")
+        # The subscription creation will be handled separately
+    except UserProfile.DoesNotExist:
+        logger.info(f"No user found for mandate ID: {mandate_id} - may not be stored yet")
+
+
+def handle_gocardless_mandate_inactive(event: dict, action: str) -> None:
+    """Handle GoCardless mandates.failed/cancelled/expired events.
+
+    This is called when a mandate becomes inactive for any reason.
+
+    Args:
+        event: The GoCardless event object
+        action: The action that caused the mandate to become inactive
+    """
+    links = event.get("links", {})
+    mandate_id = links.get("mandate")
+    details = event.get("details", {})
+    cause = details.get("cause", "unknown")
+    description = details.get("description", "")
+
+    logger.info(f"GoCardless mandate {action}: {mandate_id} (cause: {cause})")
+
+    try:
+        profile = UserProfile.objects.get(
+            payment_mandate_id=mandate_id, payment_provider="gocardless"
+        )
+        logger.warning(
+            f"Mandate {action} for user {profile.user.username}: {description}"
+        )
+        # If mandate fails, any associated subscription will also fail
+        # The subscription.cancelled webhook will handle the downgrade
+    except UserProfile.DoesNotExist:
+        logger.info(f"No user found for mandate ID: {mandate_id}")
+
+
+# =============================================================================
+# Legacy Paddle Handlers (to be removed after migration)
+# =============================================================================
 
 
 def handle_subscription_created(payload: dict) -> HttpResponse:
@@ -695,32 +980,20 @@ def handle_transaction_failed(payload: dict) -> HttpResponse:
 
 
 def get_tier_from_price_id(price_id: str) -> str:
-    """Map payment processor price ID to CheckTick account tier.
+    """DEPRECATED: Map payment processor price ID to CheckTick account tier.
 
-    This mapping uses the configured price IDs from settings.PAYMENT_PRICE_IDS.
+    This function is for legacy Paddle support only.
+    GoCardless uses metadata to store tier directly.
 
     Args:
-        price_id: Payment processor price ID (pri_*)
+        price_id: Payment processor price ID
 
     Returns:
-        Account tier string (free, pro, team_small, team_large, organization, enterprise)
+        Account tier string or empty string if not found
     """
-    # Build reverse mapping from settings
-    price_ids = settings.PAYMENT_PRICE_IDS
-
-    # Map each price ID to its tier
-    price_to_tier = {}
-    for tier, tier_price_id in price_ids.items():
-        if tier_price_id:  # Skip empty price IDs
-            price_to_tier[tier_price_id] = tier
-
-    tier = price_to_tier.get(price_id)
-
-    if not tier:
-        logger.warning(
-            f"Unknown price ID: {price_id}. Configured price IDs: {price_ids}"
-        )
-        return ""
-
-    logger.info(f"Mapped price ID {price_id} to tier {tier}")
-    return tier
+    # For GoCardless, tier is stored in subscription metadata
+    # This function is kept for backward compatibility with any existing Paddle subscriptions
+    logger.warning(
+        f"get_tier_from_price_id called with {price_id} - this is deprecated for GoCardless"
+    )
+    return ""
