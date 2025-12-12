@@ -148,14 +148,20 @@ class PaymentClient:
             if user_email:
                 data["redirect_flows"]["prefilled_customer"]["email"] = user_email
             if user_name:
-                data["redirect_flows"]["prefilled_customer"]["given_name"] = user_name.split()[0] if user_name else ""
+                data["redirect_flows"]["prefilled_customer"]["given_name"] = (
+                    user_name.split()[0] if user_name else ""
+                )
                 if len(user_name.split()) > 1:
-                    data["redirect_flows"]["prefilled_customer"]["family_name"] = " ".join(user_name.split()[1:])
+                    data["redirect_flows"]["prefilled_customer"]["family_name"] = (
+                        " ".join(user_name.split()[1:])
+                    )
 
         logger.info(f"Creating redirect flow ({self.environment}): {description}")
         response = self._make_request("POST", "/redirect_flows", data=data)
         redirect_flow = response.get("redirect_flows", {})
-        logger.info(f"Redirect flow created ({self.environment}): {redirect_flow.get('id')}")
+        logger.info(
+            f"Redirect flow created ({self.environment}): {redirect_flow.get('id')}"
+        )
         return redirect_flow
 
     def complete_redirect_flow(self, redirect_flow_id: str, session_token: str) -> dict:
@@ -179,7 +185,9 @@ class PaymentClient:
             }
         }
 
-        logger.info(f"Completing redirect flow ({self.environment}): {redirect_flow_id}")
+        logger.info(
+            f"Completing redirect flow ({self.environment}): {redirect_flow_id}"
+        )
         response = self._make_request(
             "POST", f"/redirect_flows/{redirect_flow_id}/actions/complete", data=data
         )
@@ -259,9 +267,7 @@ class PaymentClient:
         Reference: https://developer.gocardless.com/api-reference/#mandates-cancel-a-mandate
         """
         logger.info(f"Cancelling mandate ({self.environment}): {mandate_id}")
-        response = self._make_request(
-            "POST", f"/mandates/{mandate_id}/actions/cancel"
-        )
+        response = self._make_request("POST", f"/mandates/{mandate_id}/actions/cancel")
         return response.get("mandates", {})
 
     # =========================================================================
@@ -324,7 +330,9 @@ class PaymentClient:
         )
         response = self._make_request("POST", "/subscriptions", data=data)
         subscription = response.get("subscriptions", {})
-        logger.info(f"Subscription created ({self.environment}): {subscription.get('id')}")
+        logger.info(
+            f"Subscription created ({self.environment}): {subscription.get('id')}"
+        )
         return subscription
 
     def get_subscription(self, subscription_id: str) -> dict:
@@ -422,15 +430,68 @@ class PaymentClient:
             data["subscriptions"]["metadata"] = metadata
 
         logger.info(f"Updating subscription ({self.environment}): {subscription_id}")
-        response = self._make_request("PUT", f"/subscriptions/{subscription_id}", data=data)
+        response = self._make_request(
+            "PUT", f"/subscriptions/{subscription_id}", data=data
+        )
         return response.get("subscriptions", {})
+
+    # =========================================================================
+    # Payment Methods
+    # =========================================================================
+
+    def list_payments(
+        self,
+        customer_id: Optional[str] = None,
+        subscription_id: Optional[str] = None,
+        limit: int = 50,
+    ) -> list:
+        """List payments, optionally filtered by customer or subscription.
+
+        Args:
+            customer_id: Filter by customer ID (optional)
+            subscription_id: Filter by subscription ID (optional)
+            limit: Maximum number of payments to return (default: 50)
+
+        Returns:
+            List of payment records
+
+        Reference: https://developer.gocardless.com/api-reference/#payments-list-payments
+        """
+        params = {"limit": limit}
+        if customer_id:
+            params["customer"] = customer_id
+        if subscription_id:
+            params["subscription"] = subscription_id
+
+        logger.info(
+            f"Listing payments ({self.environment}): customer={customer_id}, subscription={subscription_id}"
+        )
+        response = self._make_request("GET", "/payments", params=params)
+        return response.get("payments", [])
+
+    def get_payment(self, payment_id: str) -> dict:
+        """Get a single payment's details.
+
+        Args:
+            payment_id: GoCardless payment ID
+
+        Returns:
+            Payment data
+
+        Reference: https://developer.gocardless.com/api-reference/#payments-get-a-single-payment
+        """
+        logger.info(f"Fetching payment ({self.environment}): {payment_id}")
+        response = self._make_request("GET", f"/payments/{payment_id}")
+        return response.get("payments", {})
 
 
 # Global client instance
 payment_client = PaymentClient()
 
 
-def get_or_create_redirect_flow(user, tier: str, success_url: str, session_token: str) -> str:
+def get_or_create_redirect_flow(
+    user, tier: str, success_url: str, session_token: str
+) -> str:
     """Create a redirect flow for a user to set up Direct Debit.
 
     Args:
@@ -456,11 +517,15 @@ def get_or_create_redirect_flow(user, tier: str, success_url: str, session_token
         user_name=user.get_full_name() or user.username,
     )
 
-    logger.info(f"Created redirect flow for user {user.username}: {redirect_flow.get('id')}")
+    logger.info(
+        f"Created redirect flow for user {user.username}: {redirect_flow.get('id')}"
+    )
     return redirect_flow.get("redirect_url", "")
 
 
-def complete_mandate_setup(user, redirect_flow_id: str, session_token: str) -> tuple[str, str]:
+def complete_mandate_setup(
+    user, redirect_flow_id: str, session_token: str
+) -> tuple[str, str]:
     """Complete the mandate setup after user authorisation.
 
     Args:
@@ -474,7 +539,9 @@ def complete_mandate_setup(user, redirect_flow_id: str, session_token: str) -> t
     Raises:
         PaymentAPIError: If completion fails
     """
-    redirect_flow = payment_client.complete_redirect_flow(redirect_flow_id, session_token)
+    redirect_flow = payment_client.complete_redirect_flow(
+        redirect_flow_id, session_token
+    )
 
     links = redirect_flow.get("links", {})
     customer_id = links.get("customer", "")
@@ -485,12 +552,14 @@ def complete_mandate_setup(user, redirect_flow_id: str, session_token: str) -> t
     profile.payment_provider = "gocardless"
     profile.payment_customer_id = customer_id
     profile.payment_mandate_id = mandate_id
-    profile.save(update_fields=[
-        "payment_provider",
-        "payment_customer_id",
-        "payment_mandate_id",
-        "updated_at",
-    ])
+    profile.save(
+        update_fields=[
+            "payment_provider",
+            "payment_customer_id",
+            "payment_mandate_id",
+            "updated_at",
+        ]
+    )
 
     logger.info(
         f"Mandate setup completed for user {user.username}: "
@@ -540,14 +609,18 @@ def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
     profile.payment_subscription_id = subscription_id
     profile.subscription_status = "pending"  # Will become active via webhook
     profile.account_tier = tier
-    profile.tier_changed_at = settings.timezone.now() if hasattr(settings, 'timezone') else None
-    profile.save(update_fields=[
-        "payment_subscription_id",
-        "subscription_status",
-        "account_tier",
-        "tier_changed_at",
-        "updated_at",
-    ])
+    profile.tier_changed_at = (
+        settings.timezone.now() if hasattr(settings, "timezone") else None
+    )
+    profile.save(
+        update_fields=[
+            "payment_subscription_id",
+            "subscription_status",
+            "account_tier",
+            "tier_changed_at",
+            "updated_at",
+        ]
+    )
 
     logger.info(
         f"Created subscription for user {user.username}: {subscription_id} (tier: {tier})"

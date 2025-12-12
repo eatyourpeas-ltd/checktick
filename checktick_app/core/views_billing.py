@@ -69,7 +69,7 @@ def subscription_portal(request: HttpRequest) -> HttpResponse:
     }
 
     # If user has a subscription, fetch current details from payment processor
-    if profile.payment_subscription_id and profile.payment_provider == "paddle":
+    if profile.payment_subscription_id and profile.payment_provider == "gocardless":
         try:
             subscription_data = payment_client.get_subscription(
                 profile.payment_subscription_id
@@ -94,15 +94,14 @@ def cancel_subscription(request: HttpRequest) -> HttpResponse:
     user = request.user
     profile = user.profile
 
-    if not profile.payment_subscription_id or profile.payment_provider != "paddle":
+    if not profile.payment_subscription_id or profile.payment_provider != "gocardless":
         messages.error(request, "No active subscription found.")
         return redirect("core:subscription_portal")
 
     try:
-        # Cancel at end of billing period
-        payment_client.cancel_subscription(
-            profile.payment_subscription_id, effective_from="next_billing_period"
-        )
+        # Cancel subscription (GoCardless cancels immediately but subscription
+        # runs until the end of the current interval)
+        payment_client.cancel_subscription(profile.payment_subscription_id)
 
         # Update status
         profile.subscription_status = UserProfile.SubscriptionStatus.CANCELED
@@ -139,19 +138,10 @@ def cancel_subscription(request: HttpRequest) -> HttpResponse:
     except PaymentAPIError as e:
         logger.error(f"Error cancelling subscription: {e}")
 
-        # Handle specific Paddle error for pending changes (common in sandbox)
-        error_message = str(e)
-        if "subscription_locked_pending_changes" in error_message:
-            messages.error(
-                request,
-                "Your subscription has pending changes. Please wait a few moments and try again. "
-                "This is common after recently subscribing or updating your plan.",
-            )
-        else:
-            messages.error(
-                request,
-                "Unable to cancel subscription. Please try again or contact support.",
-            )
+        messages.error(
+            request,
+            "Unable to cancel subscription. Please try again or contact support.",
+        )
 
     return redirect("core:subscription_portal")
 
@@ -159,34 +149,37 @@ def cancel_subscription(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_http_methods(["GET"])
 def payment_history(request: HttpRequest) -> HttpResponse:
-    """Redirect to Paddle customer portal for payment history and invoices."""
+    """Show payment history page.
+
+    GoCardless doesn't have a customer portal like Paddle, so we show
+    payment history on our own page. Customers can view their mandate
+    in their bank's online banking.
+    """
     user = request.user
     profile = user.profile
 
-    if not profile.payment_customer_id or profile.payment_provider != "paddle":
+    if not profile.payment_customer_id or profile.payment_provider != "gocardless":
         messages.error(
             request,
             "No payment account found. Payment history is only available for users with active or past subscriptions.",
         )
         return redirect("core:subscription_portal")
 
+    # Fetch payments from GoCardless
+    payments = []
     try:
-        # Generate customer portal URL with return URL
-        return_url = request.build_absolute_uri(reverse("core:subscription_portal"))
-        portal_url = payment_client.generate_customer_portal_url(
-            profile.payment_customer_id, return_url=return_url
-        )
-
-        logger.info(f"User {user.username} accessing payment history via Paddle portal")
-        return redirect(portal_url)
-
+        payments = payment_client.list_payments(profile.payment_customer_id)
     except PaymentAPIError as e:
-        logger.error(f"Error generating customer portal URL: {e}")
-        messages.error(
-            request,
-            "Unable to access payment history. Please try again or contact support.",
-        )
-        return redirect("core:subscription_portal")
+        logger.error(f"Error fetching payment history: {e}")
+        messages.error(request, "Unable to fetch payment history.")
+
+    context = {
+        "payments": payments,
+        "current_tier": profile.account_tier,
+        "subscription_status": profile.subscription_status,
+    }
+
+    return render(request, "core/payment_history.html", context)
 
 
 @login_required
@@ -285,6 +278,7 @@ def start_checkout(request: HttpRequest) -> HttpResponse:
 
     # Generate a unique session token
     import uuid
+
     session_token = str(uuid.uuid4())
 
     # Store checkout info in session
@@ -370,7 +364,10 @@ def checkout_complete(request: HttpRequest) -> HttpResponse:
 
     except Exception as e:
         logger.error(f"Error completing checkout for {request.user.username}: {e}")
-        messages.error(request, "An error occurred setting up your subscription. Please contact support.")
+        messages.error(
+            request,
+            "An error occurred setting up your subscription. Please contact support.",
+        )
         return redirect("core:pricing")
 
 
@@ -523,7 +520,9 @@ def handle_gocardless_subscription_created(event: dict) -> None:
     subscription_id = links.get("subscription")
     mandate_id = links.get("mandate")
 
-    logger.info(f"GoCardless subscription created: {subscription_id} (mandate: {mandate_id})")
+    logger.info(
+        f"GoCardless subscription created: {subscription_id} (mandate: {mandate_id})"
+    )
 
     # Find user by mandate_id (stored when redirect flow completes)
     try:
@@ -537,13 +536,17 @@ def handle_gocardless_subscription_created(event: dict) -> None:
     # Update profile with subscription ID
     profile.payment_subscription_id = subscription_id
     profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
-    profile.save(update_fields=[
-        "payment_subscription_id",
-        "subscription_status",
-        "updated_at",
-    ])
+    profile.save(
+        update_fields=[
+            "payment_subscription_id",
+            "subscription_status",
+            "updated_at",
+        ]
+    )
 
-    logger.info(f"Subscription {subscription_id} linked to user {profile.user.username}")
+    logger.info(
+        f"Subscription {subscription_id} linked to user {profile.user.username}"
+    )
 
     # Send welcome email
     try:
@@ -583,6 +586,7 @@ def handle_gocardless_subscription_cancelled(event: dict) -> None:
 
     # Count surveys before downgrade
     from checktick_app.surveys.models import Survey
+
     survey_count = (
         Survey.objects.filter(owner=profile.user)
         .exclude(status=Survey.Status.CLOSED)
@@ -651,7 +655,9 @@ def handle_gocardless_payment_confirmed(event: dict) -> None:
     payment_id = links.get("payment")
     subscription_id = links.get("subscription")
 
-    logger.info(f"GoCardless payment confirmed: {payment_id} (subscription: {subscription_id})")
+    logger.info(
+        f"GoCardless payment confirmed: {payment_id} (subscription: {subscription_id})"
+    )
 
     if not subscription_id:
         logger.info("Payment not linked to subscription, ignoring")
@@ -665,7 +671,9 @@ def handle_gocardless_payment_confirmed(event: dict) -> None:
         if profile.subscription_status == UserProfile.SubscriptionStatus.PAST_DUE:
             profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
             profile.save(update_fields=["subscription_status", "updated_at"])
-            logger.info(f"Payment confirmed, reactivated subscription for {profile.user.username}")
+            logger.info(
+                f"Payment confirmed, reactivated subscription for {profile.user.username}"
+            )
     except UserProfile.DoesNotExist:
         logger.warning(f"No user found for subscription ID: {subscription_id}")
 
@@ -715,7 +723,9 @@ def handle_gocardless_payment_cancelled(event: dict) -> None:
     payment_id = links.get("payment")
     subscription_id = links.get("subscription")
 
-    logger.info(f"GoCardless payment cancelled: {payment_id} (subscription: {subscription_id})")
+    logger.info(
+        f"GoCardless payment cancelled: {payment_id} (subscription: {subscription_id})"
+    )
     # Usually informational - no action needed
 
 
@@ -742,7 +752,9 @@ def handle_gocardless_mandate_active(event: dict) -> None:
         logger.info(f"Mandate active for user {profile.user.username}")
         # The subscription creation will be handled separately
     except UserProfile.DoesNotExist:
-        logger.info(f"No user found for mandate ID: {mandate_id} - may not be stored yet")
+        logger.info(
+            f"No user found for mandate ID: {mandate_id} - may not be stored yet"
+        )
 
 
 def handle_gocardless_mandate_inactive(event: dict, action: str) -> None:

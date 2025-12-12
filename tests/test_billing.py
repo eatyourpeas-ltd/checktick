@@ -88,7 +88,9 @@ class TestFeatureUnlockingOnSuccessfulSubscription:
         # Set up payment mandate ID (GoCardless uses mandates)
         free_user.profile.payment_mandate_id = "MD0001"
         free_user.profile.payment_provider = "gocardless"
-        free_user.profile.account_tier = UserProfile.AccountTier.PRO  # Set by redirect flow completion
+        free_user.profile.account_tier = (
+            UserProfile.AccountTier.PRO
+        )  # Set by redirect flow completion
         free_user.profile.save()
 
         # GoCardless sends events in an array

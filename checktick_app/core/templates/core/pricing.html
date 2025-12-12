@@ -170,11 +170,15 @@
             {% if user.profile.account_tier == 'pro' %}
               <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
             {% elif user.profile.account_tier == 'free' %}
-              <a href="mailto:sales@checktick.uk?subject=CheckTick%20Pro%20Subscription" class="btn btn-primary btn-block">
-                {% trans "Contact Sales" %}
-              </a>
+              <form method="post" action="{% url 'core:start_checkout' %}">
+                {% csrf_token %}
+                <input type="hidden" name="tier" value="pro">
+                <button type="submit" class="btn btn-primary btn-block">
+                  {% trans "Subscribe Now" %}
+                </button>
+              </form>
             {% else %}
-              <button class="btn btn-outline btn-block" disabled>{% trans "Contact Sales" %}</button>
+              <a href="{% url 'core:subscription_portal' %}" class="btn btn-outline btn-block">{% trans "Manage Subscription" %}</a>
             {% endif %}
           {% elif not user.is_authenticated %}
             <a href="/signup/" class="btn btn-primary btn-block">{% trans "Get Started" %}</a>
@@ -253,9 +257,13 @@
             {% if user.profile.account_tier in 'team_small,team_medium,team_large' %}
               <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
             {% else %}
-              <a href="mailto:sales@checktick.uk?subject=CheckTick%20Team%20Subscription" class="btn btn-primary btn-block">
-                {% trans "Contact Sales" %}
-              </a>
+              <form method="post" action="{% url 'core:start_checkout' %}" id="team-checkout-form">
+                {% csrf_token %}
+                <input type="hidden" name="tier" value="team_small" id="team-tier-input">
+                <button type="submit" class="btn btn-primary btn-block" id="team-checkout-btn">
+                  {% trans "Subscribe Now" %}
+                </button>
+              </form>
             {% endif %}
           {% elif not user.is_authenticated %}
             <a href="/signup/" class="btn btn-primary btn-block">{% trans "Get Started" %}</a>
@@ -639,25 +647,23 @@
 document.addEventListener('DOMContentLoaded', function() {
   // Team size selector functionality
   const teamSelector = document.getElementById('team-size-selector');
-  const teamCheckoutBtn = document.getElementById('team-checkout-btn');
+  const teamTierInput = document.getElementById('team-tier-input');
   const teamPriceDisplay = document.getElementById('team-price-display');
   const teamMembersDisplay = document.getElementById('team-members-display');
 
-  if (teamSelector && teamCheckoutBtn) {
+  if (teamSelector && teamTierInput) {
     teamSelector.addEventListener('change', function() {
       const selected = this.options[this.selectedIndex];
       const tier = selected.value;
       const price = selected.dataset.price;
       const members = selected.dataset.members;
-      const priceId = selected.dataset.priceId;
 
       // Update display
       if (teamPriceDisplay) teamPriceDisplay.textContent = '£' + price;
       if (teamMembersDisplay) teamMembersDisplay.textContent = 'Up to ' + members + ' team members';
 
-      // Update checkout button
-      teamCheckoutBtn.dataset.tier = tier;
-      teamCheckoutBtn.dataset.priceId = priceId;
+      // Update hidden tier input for form submission
+      teamTierInput.value = tier;
     });
   }
 });
