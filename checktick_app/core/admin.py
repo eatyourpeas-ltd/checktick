@@ -316,27 +316,25 @@ class PaymentAdmin(admin.ModelAdmin):
         return self._generate_csv(quarter_payments, f"vat_return_{quarter_name}.csv")
 
     def _generate_csv(self, queryset, filename):
-        """Generate CSV from payment queryset."""
+        """Generate CSV from payment queryset for VAT returns.
+
+        Only includes financial data required for HMRC - no personal customer data.
+        """
         output = StringIO()
         writer = csv.writer(output)
 
-        # Header row
+        # Header row - financial data only, no PII
         writer.writerow(
             [
                 "Invoice Number",
                 "Invoice Date",
-                "Customer Email",
-                "Customer Name",
+                "Subscription ID",
                 "Tier",
-                "Amount (ex VAT)",
-                "VAT Rate",
-                "VAT Amount",
-                "Total (inc VAT)",
-                "Currency",
+                "Amount (ex VAT) GBP",
+                "VAT Rate %",
+                "VAT Amount GBP",
+                "Total (inc VAT) GBP",
                 "Status",
-                "Payment ID",
-                "Billing Period Start",
-                "Billing Period End",
             ]
         )
 
@@ -346,26 +344,13 @@ class PaymentAdmin(admin.ModelAdmin):
                 [
                     payment.invoice_number,
                     payment.invoice_date.isoformat(),
-                    payment.customer_email,
-                    payment.customer_name,
+                    payment.subscription_id,
                     payment.tier,
-                    payment.amount_ex_vat / 100,  # Convert to pounds
-                    float(payment.vat_rate) * 100,  # As percentage
-                    payment.vat_amount / 100,  # Convert to pounds
-                    payment.amount_inc_vat / 100,  # Convert to pounds
-                    payment.currency,
+                    f"{payment.amount_ex_vat / 100:.2f}",
+                    f"{float(payment.vat_rate) * 100:.0f}",
+                    f"{payment.vat_amount / 100:.2f}",
+                    f"{payment.amount_inc_vat / 100:.2f}",
                     payment.status,
-                    payment.payment_id,
-                    (
-                        payment.billing_period_start.isoformat()
-                        if payment.billing_period_start
-                        else ""
-                    ),
-                    (
-                        payment.billing_period_end.isoformat()
-                        if payment.billing_period_end
-                        else ""
-                    ),
                 ]
             )
 
@@ -382,16 +367,11 @@ class PaymentAdmin(admin.ModelAdmin):
                 "",
                 "",
                 "",
+                f"{total_ex_vat:.2f}",
                 "",
-                total_ex_vat,
-                "",
-                total_vat,
-                total_inc_vat,
-                "GBP",
-                f"{confirmed_payments.count()} confirmed payments",
-                "",
-                "",
-                "",
+                f"{total_vat:.2f}",
+                f"{total_inc_vat:.2f}",
+                f"{confirmed_payments.count()} confirmed",
             ]
         )
 
