@@ -2,6 +2,7 @@
 
 import json
 import logging
+from functools import wraps
 
 from django.conf import settings
 from django.contrib import messages
@@ -22,6 +23,26 @@ from checktick_app.core.email_utils import (
 from checktick_app.core.models import UserProfile
 
 logger = logging.getLogger(__name__)
+
+
+def billing_enabled_required(view_func):
+    """Decorator that blocks access to billing views when SELF_HOSTED is True.
+
+    Self-hosted instances have all features enabled without billing.
+    """
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if settings.SELF_HOSTED:
+            messages.info(
+                request,
+                "Billing is not available on self-hosted instances. "
+                "All features are already enabled.",
+            )
+            return redirect("core:home")
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
 
 
 @login_required
@@ -83,6 +104,7 @@ def subscription_portal(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@billing_enabled_required
 @require_http_methods(["POST"])
 @ratelimit(key="user", rate="5/h", block=True)
 def cancel_subscription(request: HttpRequest) -> HttpResponse:
@@ -147,6 +169,7 @@ def cancel_subscription(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@billing_enabled_required
 @require_http_methods(["GET"])
 def payment_history(request: HttpRequest) -> HttpResponse:
     """Show payment history page.
@@ -259,6 +282,7 @@ def update_team_name(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@billing_enabled_required
 @require_http_methods(["POST"])
 @ratelimit(key="user", rate="10/h", block=True)
 def start_checkout(request: HttpRequest) -> HttpResponse:
@@ -310,6 +334,7 @@ def start_checkout(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@billing_enabled_required
 @require_http_methods(["GET"])
 def checkout_complete(request: HttpRequest) -> HttpResponse:
     """Complete GoCardless checkout after user returns from redirect.
