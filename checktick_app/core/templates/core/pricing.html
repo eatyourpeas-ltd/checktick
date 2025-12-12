@@ -666,6 +666,45 @@ document.addEventListener('DOMContentLoaded', function() {
       teamTierInput.value = tier;
     });
   }
+
+  // Auto-open checkout for users redirected from signup with a pending tier
+  const container = document.querySelector('[data-auto-open-checkout]');
+  if (container && container.dataset.autoOpenCheckout === 'true') {
+    const pendingTier = container.dataset.pendingTier;
+    if (pendingTier) {
+      // Find the appropriate form and submit it
+      let formToSubmit = null;
+
+      if (pendingTier === 'pro') {
+        // Find the Pro tier form (has hidden input with value="pro")
+        const proForms = document.querySelectorAll('form input[name="tier"][value="pro"]');
+        if (proForms.length > 0) {
+          formToSubmit = proForms[0].closest('form');
+        }
+      } else if (pendingTier.startsWith('team_')) {
+        // Set the team selector to the correct tier and submit
+        const teamForm = document.getElementById('team-checkout-form');
+        if (teamForm && teamSelector && teamTierInput) {
+          // Select the correct team size
+          for (let i = 0; i < teamSelector.options.length; i++) {
+            if (teamSelector.options[i].value === pendingTier) {
+              teamSelector.selectedIndex = i;
+              teamTierInput.value = pendingTier;
+              break;
+            }
+          }
+          formToSubmit = teamForm;
+        }
+      }
+
+      // Auto-submit after a brief delay to let user see the page
+      if (formToSubmit) {
+        setTimeout(function() {
+          formToSubmit.submit();
+        }, 500);
+      }
+    }
+  }
 });
 </script>
 {% endblock %}

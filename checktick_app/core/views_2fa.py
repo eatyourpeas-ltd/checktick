@@ -423,7 +423,12 @@ def check_2fa_required(user) -> bool:
     """Check if 2FA verification is required for a user.
 
     Returns True if the user has 2FA enabled and needs to verify.
+    Returns False in DEBUG mode to bypass 2FA for development.
     """
+    # Bypass 2FA in DEBUG mode for easier development
+    if settings.DEBUG:
+        return False
+
     if not is_password_user(user):
         return False
     return user_has_device(user, confirmed=True)

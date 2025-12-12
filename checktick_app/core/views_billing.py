@@ -215,7 +215,8 @@ def checkout_success(request: HttpRequest) -> HttpResponse:
     The webhook should have already processed the subscription, so we just
     show a success message and refresh the user's tier info.
     """
-    from checktick_app.surveys.models import Team
+    from checktick_app.surveys.models import Team, TeamMembership
+    from checktick_app.surveys.permissions import is_org_admin
 
     tier = request.GET.get("tier", "pro")
 
@@ -228,11 +229,37 @@ def checkout_success(request: HttpRequest) -> HttpResponse:
     if is_team_tier:
         user_team = Team.objects.filter(owner=request.user).first()
 
+    # Check if user can manage any team:
+    # - Team owner
+    # - Team admin
+    # - Organisation admin (for any org they admin)
+    can_manage_teams = False
+    account_tier = request.user.profile.account_tier
+
+    if account_tier in ["team", "organisation", "enterprise"]:
+        # Check if user owns any team
+        if Team.objects.filter(owner=request.user).exists():
+            can_manage_teams = True
+        # Check if user is admin of any team
+        elif TeamMembership.objects.filter(user=request.user, role="admin").exists():
+            can_manage_teams = True
+        # Check if user is org admin (org/enterprise tiers)
+        elif account_tier in ["organisation", "enterprise"]:
+            from checktick_app.surveys.models import Organisation
+
+            user_orgs = Organisation.objects.filter(
+                organisationmembership__user=request.user,
+                organisationmembership__role="admin",
+            )
+            if user_orgs.exists():
+                can_manage_teams = True
+
     context = {
         "tier": tier,
         "current_tier": request.user.profile.account_tier,
         "is_team_tier": is_team_tier,
         "user_team": user_team,
+        "can_manage_teams": can_manage_teams,
     }
 
     messages.success(

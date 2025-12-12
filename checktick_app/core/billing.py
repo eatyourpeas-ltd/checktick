@@ -70,7 +70,9 @@ class PaymentClient:
         Raises:
             PaymentAPIError: If API request fails
         """
-        url = f"{self.base_url}{endpoint}"
+        # Strip trailing slash from base_url to avoid double slashes
+        base = self.base_url.rstrip("/")
+        url = f"{base}{endpoint}"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
