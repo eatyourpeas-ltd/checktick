@@ -70,12 +70,12 @@
 </div>
 
 <div class="flex flex-wrap gap-2 items-center mb-2">
-  <span class="badge badge-primary badge-outline">{% trans "Visibility" %}: {{ visible }}</span>
-  <span class="badge badge-primary badge-outline">{% trans "Window" %}: {{ survey.start_at|default:'—' }} → {{ survey.end_at|default:'—' }}</span>
-  <span class="badge badge-primary badge-outline">{% trans "Total responses" %}: {{ total }}{% if survey.max_responses %} / {{ survey.max_responses }}{% endif %}</span>
+  <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Visibility" %}: {{ visible }}</span>
+  <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Window" %}: {{ survey.start_at|default:'—' }} → {{ survey.end_at|default:'—' }}</span>
+  <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Total responses" %}: {{ total }}{% if survey.max_responses %} / {{ survey.max_responses }}{% endif %}</span>
   {% if survey.visibility == 'token' or survey.visibility == 'authenticated' %}
     {% if invites_sent > 0 %}
-    <a class="badge badge-primary badge-outline hover:bg-primary hover:text-primary-content transition-colors cursor-pointer" href="{% url 'surveys:invites_pending' slug=survey.slug %}">{% trans "Invites" %}: {{ invites_sent }}{% if invites_pending > 0 %} ({{ invites_pending }} {% trans "pending" %}){% endif %}</a>
+    <a class="badge bg-base-200 text-base-content border border-base-300 hover:bg-base-300 transition-colors cursor-pointer" href="{% url 'surveys:invites_pending' slug=survey.slug %}">{% trans "Invites" %}: {{ invites_sent }}{% if invites_pending > 0 %} ({{ invites_pending }} {% trans "pending" %}){% endif %}</a>
     {% endif %}
   {% endif %}
 </div>

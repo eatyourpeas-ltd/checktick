@@ -25,7 +25,7 @@
 
           {# Status badge with language flags #}
           {% if s.status == 'published' %}
-            <span class="badge badge-primary badge-outline whitespace-nowrap flex items-center gap-1">
+            <span class="badge bg-base-200 text-base-content border border-base-300 whitespace-nowrap flex items-center gap-1">
               <span>{% trans "Published" %}</span>
               <span class="text-base" title="{{ item.language_name }}">{{ item.flag }}</span>
               {% for trans in item.translations %}
@@ -35,7 +35,7 @@
               {% endfor %}
             </span>
           {% else %}
-            <span class="badge badge-primary badge-outline whitespace-nowrap flex items-center gap-1">
+            <span class="badge bg-base-200 text-base-content border border-base-300 whitespace-nowrap flex items-center gap-1">
               <span>{% trans "Draft" %}</span>
               <span class="text-base" title="{{ item.language_name }}">{{ item.flag }}</span>
               {% for trans in item.translations %}
@@ -51,7 +51,7 @@
             {% regroup item.translations by status as translations_by_status %}
             {% for status_group in translations_by_status %}
               {% if status_group.grouper == 'draft' %}
-                <span class="badge badge-warning badge-outline whitespace-nowrap flex items-center gap-1">
+                <span class="badge badge-warning whitespace-nowrap flex items-center gap-1">
                   <span>{% trans "Draft translations" %}</span>
                   {% for trans in status_group.list %}
                     <span class="text-base" title="{{ trans.language_name }}">{{ trans.flag }}</span>
@@ -65,17 +65,17 @@
           {% if s.status == 'published' %}
             {% with days=s.days_remaining %}
               {% if days is None %}
-                <span class="badge badge-info badge-outline whitespace-nowrap">{% trans "No end date" %}</span>
+                <span class="badge bg-base-200 text-base-content border border-base-300 whitespace-nowrap">{% trans "No end date" %}</span>
               {% elif days < 0 %}
-                <span class="badge badge-error badge-outline whitespace-nowrap">{% trans "Expired" %}</span>
+                <span class="badge badge-error whitespace-nowrap">{% trans "Expired" %}</span>
               {% elif days == 0 %}
-                <span class="badge badge-warning badge-outline whitespace-nowrap">{% trans "Ends today" %}</span>
+                <span class="badge badge-warning whitespace-nowrap">{% trans "Ends today" %}</span>
               {% elif days == 1 %}
-                <span class="badge badge-warning badge-outline whitespace-nowrap">{% trans "1 day remaining" %}</span>
+                <span class="badge badge-warning whitespace-nowrap">{% trans "1 day remaining" %}</span>
               {% elif days <= 7 %}
-                <span class="badge badge-warning badge-outline whitespace-nowrap">{{ days }} {% trans "days remaining" %}</span>
+                <span class="badge badge-warning whitespace-nowrap">{{ days }} {% trans "days remaining" %}</span>
               {% else %}
-                <span class="badge badge-success badge-outline whitespace-nowrap">{{ days }} {% trans "days remaining" %}</span>
+                <span class="badge badge-success whitespace-nowrap">{{ days }} {% trans "days remaining" %}</span>
               {% endif %}
             {% endwith %}
           {% endif %}
