@@ -10192,13 +10192,22 @@ def validate_nhs_number(request: HttpRequest) -> HttpResponse:
     if not digits_only:
         # Empty input - return empty input field
         return HttpResponse(
+            '<label class="input input-bordered input-sm flex items-center gap-1.5">'
+            '<span class="sr-only">NHS number</span>'
             '<input type="text" name="nhs_number" '
             'class="grow min-w-0 bg-transparent outline-none border-0" '
             'placeholder="NHS number" '
+            'aria-label="NHS number" '
             'hx-post="/surveys/validate/nhs-number/" '
             'hx-trigger="blur, keyup changed delay:500ms" '
             'hx-target="closest label" '
             'hx-swap="outerHTML" />'
+            '<svg class="w-4 h-4 opacity-50 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            '<g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">'
+            '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path>'
+            '<circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle>'
+            "</g></svg>"
+            "</label>"
         )
 
     # Validate using the nhs-number package
@@ -10218,33 +10227,42 @@ def validate_nhs_number(request: HttpRequest) -> HttpResponse:
         # Valid NHS number - green border, checkmark
         return HttpResponse(
             f'<label class="input input-bordered input-sm flex items-center gap-1.5 input-success">'
+            f'<span class="sr-only">NHS number - valid</span>'
             f'<input type="text" name="nhs_number" value="{formatted}" '
             f'class="grow min-w-0 bg-transparent outline-none border-0" '
             f'placeholder="NHS number" '
+            f'aria-label="NHS number, valid" '
+            f'aria-invalid="false" '
             f'hx-post="/surveys/validate/nhs-number/" '
             f'hx-trigger="blur, keyup changed delay:500ms" '
             f'hx-target="closest label" '
             f'hx-swap="outerHTML" />'
-            f'<svg class="w-4 h-4 text-success" xmlns="http://www.w3.org/2000/svg" '
+            f'<svg class="w-4 h-4 text-success" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" '
             f'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
             f'<polyline points="20 6 9 17 4 12"></polyline></svg>'
+            f'<span role="status" class="sr-only">NHS number is valid</span>'
             f"</label>"
         )
     else:
         # Invalid NHS number - red border, X icon
         return HttpResponse(
             f'<label class="input input-bordered input-sm flex items-center gap-1.5 input-error">'
+            f'<span class="sr-only">NHS number - invalid</span>'
             f'<input type="text" name="nhs_number" value="{formatted}" '
             f'class="grow min-w-0 bg-transparent outline-none border-0" '
             f'placeholder="NHS number" '
+            f'aria-label="NHS number, invalid" '
+            f'aria-invalid="true" '
+            f'aria-describedby="nhs-error" '
             f'hx-post="/surveys/validate/nhs-number/" '
             f'hx-trigger="blur, keyup changed delay:500ms" '
             f'hx-target="closest label" '
             f'hx-swap="outerHTML" />'
-            f'<svg class="w-4 h-4 text-error" xmlns="http://www.w3.org/2000/svg" '
+            f'<svg class="w-4 h-4 text-error" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" '
             f'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
             f'<line x1="18" y1="6" x2="6" y2="18"></line>'
             f'<line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+            f'<span id="nhs-error" role="alert" class="sr-only">Invalid NHS number. Please check and try again.</span>'
             f"</label>"
         )
 
@@ -10269,13 +10287,22 @@ def validate_postcode(request: HttpRequest) -> HttpResponse:
     if not postcode:
         # Empty input - return empty input field
         return HttpResponse(
+            '<label class="input input-bordered input-sm flex items-center gap-1.5">'
+            '<span class="sr-only">Post code</span>'
             '<input type="text" name="post_code" '
             'class="grow min-w-0 bg-transparent outline-none border-0" '
             'placeholder="Post code" '
+            'aria-label="Post code" '
             'hx-post="/surveys/validate/postcode/" '
             'hx-trigger="blur, keyup changed delay:500ms" '
             'hx-target="closest label" '
             'hx-swap="outerHTML" />'
+            '<svg class="w-4 h-4 opacity-50 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            '<g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">'
+            '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path>'
+            '<circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle>'
+            '</g></svg>'
+            '</label>'
         )
 
     # Check if API is configured
@@ -10286,14 +10313,16 @@ def validate_postcode(request: HttpRequest) -> HttpResponse:
         # API not configured - return input without validation styling
         return HttpResponse(
             f'<label class="input input-bordered input-sm flex items-center gap-1.5">'
+            f'<span class="sr-only">Post code</span>'
             f'<input type="text" name="post_code" value="{postcode_html}" '
             f'class="grow min-w-0 bg-transparent outline-none border-0" '
             f'placeholder="Post code" '
+            f'aria-label="Post code" '
             f'hx-post="/surveys/validate/postcode/" '
             f'hx-trigger="blur, keyup changed delay:500ms" '
             f'hx-target="closest label" '
             f'hx-swap="outerHTML" />'
-            f'<svg class="w-4 h-4 opacity-50 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            f'<svg class="w-4 h-4 opacity-50 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
             f'<g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">'
             f'<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path>'
             f'<circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle>'
@@ -10319,14 +10348,16 @@ def validate_postcode(request: HttpRequest) -> HttpResponse:
         # API error - don't show error to user, just no validation styling
         return HttpResponse(
             f'<label class="input input-bordered input-sm flex items-center gap-1.5">'
+            f'<span class="sr-only">Post code</span>'
             f'<input type="text" name="post_code" value="{postcode_html}" '
             f'class="grow min-w-0 bg-transparent outline-none border-0" '
             f'placeholder="Post code" '
+            f'aria-label="Post code" '
             f'hx-post="/surveys/validate/postcode/" '
             f'hx-trigger="blur, keyup changed delay:500ms" '
             f'hx-target="closest label" '
             f'hx-swap="outerHTML" />'
-            f'<svg class="w-4 h-4 opacity-50 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            f'<svg class="w-4 h-4 opacity-50 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
             f'<g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">'
             f'<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path>'
             f'<circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle>'
@@ -10338,32 +10369,41 @@ def validate_postcode(request: HttpRequest) -> HttpResponse:
         # Valid postcode - green border, checkmark
         return HttpResponse(
             f'<label class="input input-bordered input-sm flex items-center gap-1.5 input-success">'
+            f'<span class="sr-only">Post code - valid</span>'
             f'<input type="text" name="post_code" value="{postcode_html}" '
             f'class="grow min-w-0 bg-transparent outline-none border-0" '
             f'placeholder="Post code" '
+            f'aria-label="Post code, valid" '
+            f'aria-invalid="false" '
             f'hx-post="/surveys/validate/postcode/" '
             f'hx-trigger="blur, keyup changed delay:500ms" '
             f'hx-target="closest label" '
             f'hx-swap="outerHTML" />'
-            f'<svg class="w-4 h-4 text-success" xmlns="http://www.w3.org/2000/svg" '
+            f'<svg class="w-4 h-4 text-success" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" '
             f'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
             f'<polyline points="20 6 9 17 4 12"></polyline></svg>'
+            f'<span role="status" class="sr-only">Post code is valid</span>'
             f"</label>"
         )
     else:
         # Invalid postcode - red border, X icon
         return HttpResponse(
             f'<label class="input input-bordered input-sm flex items-center gap-1.5 input-error">'
+            f'<span class="sr-only">Post code - invalid</span>'
             f'<input type="text" name="post_code" value="{postcode_html}" '
             f'class="grow min-w-0 bg-transparent outline-none border-0" '
             f'placeholder="Post code" '
+            f'aria-label="Post code, invalid" '
+            f'aria-invalid="true" '
+            f'aria-describedby="postcode-error" '
             f'hx-post="/surveys/validate/postcode/" '
             f'hx-trigger="blur, keyup changed delay:500ms" '
             f'hx-target="closest label" '
             f'hx-swap="outerHTML" />'
-            f'<svg class="w-4 h-4 text-error" xmlns="http://www.w3.org/2000/svg" '
+            f'<svg class="w-4 h-4 text-error" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" '
             f'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
             f'<line x1="18" y1="6" x2="6" y2="18"></line>'
             f'<line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+            f'<span id="postcode-error" role="alert" class="sr-only">Invalid UK post code. Please check and try again.</span>'
             f"</label>"
         )

@@ -235,7 +235,7 @@
           {% endwith %}
         {% elif q.type == 'orderable' %}
           <ol class="orderable-list list-decimal pl-5" data-name="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}" role="listbox" aria-describedby="orderable_hint_{{ q.id }}">
-            <span id="orderable_hint_{{ q.id }}" class="sr-only">{% trans "Drag items to reorder them" %}</span>
+            <span id="orderable_hint_{{ q.id }}" class="sr-only">{% trans "Use arrow keys to navigate items. Press Enter or Space to grab an item, then use arrow keys to move it. Press Enter or Space again to release." %}</span>
             {% for opt in q.options|as_list %}
               <li class="flex items-center gap-2 py-1" role="option" aria-selected="false">
                 <button type="button" class="drag-handle inline-flex items-center justify-center w-7 h-7 mr-1 rounded-md text-primary border border-primary/30 hover:bg-primary/20 shrink-0 cursor-move" style="background-color: color-mix(in oklch, var(--p) 12%, transparent);" aria-label="{% trans 'Drag to reorder' %}" title="{% trans 'Drag to reorder' %}">
