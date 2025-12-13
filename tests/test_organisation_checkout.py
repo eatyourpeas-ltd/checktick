@@ -460,7 +460,9 @@ class TestCheckoutWorkflow:
 
         parsed_url = urlparse(response.url)
         # Check exact domain or subdomain (e.g., pay.gocardless.com)
-        assert parsed_url.netloc == "gocardless.com" or parsed_url.netloc.endswith(".gocardless.com")
+        assert parsed_url.netloc == "gocardless.com" or parsed_url.netloc.endswith(
+            ".gocardless.com"
+        )
 
         # Verify redirect flow was created with correct params
         mock_payment_client.create_redirect_flow.assert_called_once()
