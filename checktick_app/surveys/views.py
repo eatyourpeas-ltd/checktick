@@ -111,6 +111,56 @@ def _get_patient_group_and_fields(
     return group, fields
 
 
+def _enrich_demographics_with_imd(
+    demo: dict[str, str], patient_group: QuestionGroup | None
+) -> dict[str, str]:
+    """
+    If include_imd is enabled and a postcode is present, look up IMD decile.
+
+    Adds 'imd_decile' (1-10, where 1=most deprived) to the demographics dict.
+    The IMD lookup is non-blocking - if it fails, the submission continues
+    without IMD data.
+
+    Args:
+        demo: Demographics dictionary (may contain 'post_code')
+        patient_group: The patient details group (contains include_imd setting)
+
+    Returns:
+        Demographics dict, potentially enriched with imd_decile
+    """
+    if not patient_group:
+        return demo
+
+    schema = patient_group.schema or {}
+    include_imd = bool(schema.get("include_imd"))
+
+    if not include_imd:
+        return demo
+
+    postcode = demo.get("post_code", "").strip()
+    if not postcode:
+        return demo
+
+    # Import here to avoid circular imports
+    from .services.imd_service import IMDService
+
+    if not IMDService.is_configured():
+        logger.warning("IMD lookup requested but API not configured")
+        return demo
+
+    result = IMDService.lookup_imd(postcode)
+
+    if result.is_valid:
+        demo["imd_decile"] = str(result.imd_decile)
+        if result.imd_rank is not None:
+            demo["imd_rank"] = str(result.imd_rank)
+        logger.info(f"IMD lookup for {postcode}: decile={result.imd_decile}")
+    else:
+        logger.warning(f"IMD lookup failed for {postcode}: {result.error}")
+
+    return demo
+
+
 # Professional details (non-encrypted) field definitions
 PROFESSIONAL_FIELD_DEFS: dict[str, str] = {
     "title": "Title",
@@ -1032,6 +1082,8 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
             val = request.POST.get(field)
             if val:
                 demo[field] = val
+        # Enrich with IMD data if enabled and postcode is present
+        demo = _enrich_demographics_with_imd(demo, patient_group)
         # Option 4: Re-derive KEK from stored credentials
         if demo:
             survey_key = get_survey_key_from_session(request, slug)
@@ -3978,6 +4030,8 @@ def _handle_participant_submission(
             val = request.POST.get(field)
             if val:
                 demo[field] = val
+        # Enrich with IMD data if enabled and postcode is present
+        demo = _enrich_demographics_with_imd(demo, patient_group)
         # Option 4: Re-derive KEK from stored credentials
         if demo:
             survey_key = get_survey_key_from_session(request, survey.slug)
@@ -5879,19 +5933,61 @@ def survey_export_csv(
         messages.error(request, "Unlock survey first.")
         return redirect("surveys:unlock", slug=slug)
 
+    # Get patient group configuration to check include_imd
+    patient_group, demographics_fields = _get_patient_group_and_fields(survey)
+    include_imd = (
+        bool((patient_group.schema or {}).get("include_imd"))
+        if patient_group
+        else False
+    )
+
     def generate():
         import csv
         from io import StringIO
 
-        header = ["id", "submitted_at", "answers"]
+        # Build header row
+        header = ["id", "submitted_at", "submitted_by"]
+
+        # Add demographics fields if patient data is configured
+        demo_fields_for_export = (
+            list(demographics_fields) if demographics_fields else []
+        )
+        if include_imd:
+            demo_fields_for_export.extend(["imd_decile", "imd_rank"])
+
+        for field in demo_fields_for_export:
+            header.append(f"demographics_{field}")
+
+        header.append("answers")
+
         s = StringIO()
         writer = csv.writer(s)
         writer.writerow(header)
         yield s.getvalue()
         s.seek(0)
         s.truncate(0)
+
         for r in survey.responses.iterator():
-            writer.writerow([r.id, r.submitted_at.isoformat(), json.dumps(r.answers)])
+            row = [
+                r.id,
+                r.submitted_at.isoformat(),
+                r.submitted_by.username if r.submitted_by else "Anonymous",
+            ]
+
+            # Decrypt demographics if present
+            demographics = {}
+            if r.enc_demographics and survey_key:
+                try:
+                    demographics = r.load_demographics(survey_key)
+                except Exception:
+                    pass  # Continue without demographics if decryption fails
+
+            # Add demographics fields
+            for field in demo_fields_for_export:
+                row.append(demographics.get(field, ""))
+
+            row.append(json.dumps(r.answers))
+            writer.writerow(row)
             yield s.getvalue()
             s.seek(0)
             s.truncate(0)

@@ -541,6 +541,15 @@ POSTCODES_API_URL = os.environ.get(
 )
 POSTCODES_API_KEY = os.environ.get("POSTCODES_API_KEY", "")
 
+# IMD (Index of Multiple Deprivation) API Configuration
+# Used to look up deprivation decile from postcode when include_imd is enabled
+# API returns quantile (default 10 = deciles): 1=most deprived, 10=least deprived
+IMD_API_URL = os.environ.get(
+    "IMD_API_URL",
+    "https://api.rcpch.ac.uk/deprivation/v1/index_of_multiple_deprivation_quantile",
+)
+IMD_API_KEY = os.environ.get("IMD_API_KEY", "")
+
 # Data Governance Configuration
 # These settings control data retention and export policies for GDPR/healthcare compliance
 CHECKTICK_DEFAULT_RETENTION_MONTHS = int(
