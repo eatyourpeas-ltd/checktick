@@ -144,5 +144,167 @@ class TestCSVExportIntegration(TestCase):
         assert response.status_code == 302
         assert "/login" in response.url or "/accounts/login" in response.url
 
-    # Additional integration tests would require setting up survey fixtures
-    # with questions and responses, which is covered in other test files
+    def test_export_requires_ownership(self):
+        """Export endpoint should only allow survey owner."""
+        from django.contrib.auth import get_user_model
+
+        from checktick_app.surveys.models import Survey
+
+        TEST_PASSWORD = "testpass123"  # noqa: S105
+        User = get_user_model()
+        owner = User.objects.create_user(username="owner", password=TEST_PASSWORD)
+        other_user = User.objects.create_user(
+            username="other_user", password=TEST_PASSWORD
+        )
+        survey = Survey.objects.create(
+            name="Test Survey",
+            slug="test-export-perm",
+            owner=owner,
+        )
+
+        from django.test import Client
+
+        client = Client()
+        client.login(username="other_user", password=TEST_PASSWORD)
+        response = client.get(f"/surveys/{survey.slug}/export.csv")
+        # Should return 404 (owner filter in queryset)
+        assert response.status_code == 404
+
+    def test_export_requires_unlock(self):
+        """Export endpoint should require survey to be unlocked."""
+        from django.contrib.auth import get_user_model
+
+        from checktick_app.surveys.models import Survey
+
+        TEST_PASSWORD = "testpass123"  # noqa: S105
+        User = get_user_model()
+        owner = User.objects.create_user(username="owner2", password=TEST_PASSWORD)
+        survey = Survey.objects.create(
+            name="Test Survey",
+            slug="test-export-unlock",
+            owner=owner,
+        )
+
+        from django.test import Client
+
+        client = Client()
+        client.login(username="owner2", password=TEST_PASSWORD)
+        response = client.get(f"/surveys/{survey.slug}/export.csv")
+        # Should redirect to unlock page
+        assert response.status_code == 302
+        assert "unlock" in response.url
+
+
+class TestDashboardIntegration(TestCase):
+    """Integration tests for dashboard functionality."""
+
+    def test_dashboard_requires_authentication(self):
+        """Dashboard endpoint should require login."""
+        from django.contrib.auth import get_user_model
+
+        from checktick_app.surveys.models import Survey
+
+        TEST_PASSWORD = "x"  # noqa: S105
+        User = get_user_model()
+        user = User.objects.create_user(
+            username="dashuser", password=TEST_PASSWORD
+        )
+        survey = Survey.objects.create(
+            name="Test Survey",
+            slug="test-dash-auth",
+            owner=user,
+        )
+
+        from django.test import Client
+
+        client = Client()
+        response = client.get(f"/surveys/{survey.slug}/dashboard/")
+        # Should redirect to login
+        assert response.status_code == 302
+        assert "/login" in response.url or "/accounts/login" in response.url
+
+    def test_dashboard_requires_view_permission(self):
+        """Dashboard endpoint should check view permissions."""
+        from django.contrib.auth import get_user_model
+
+        from checktick_app.surveys.models import Survey
+
+        TEST_PASSWORD = "testpass123"  # noqa: S105
+        User = get_user_model()
+        owner = User.objects.create_user(
+            username="dashowner", password=TEST_PASSWORD
+        )
+        other_user = User.objects.create_user(
+            username="dashother", password=TEST_PASSWORD
+        )
+        survey = Survey.objects.create(
+            name="Test Survey",
+            slug="test-dash-perm",
+            owner=owner,
+        )
+
+        from django.test import Client
+
+        client = Client()
+        client.login(username="dashother", password=TEST_PASSWORD)
+        response = client.get(f"/surveys/{survey.slug}/dashboard/")
+        # Should return 403 Forbidden
+        assert response.status_code == 403
+
+    def test_dashboard_accessible_by_owner(self):
+        """Dashboard endpoint should be accessible by survey owner."""
+        from django.contrib.auth import get_user_model
+
+        from checktick_app.surveys.models import Survey
+
+        TEST_PASSWORD = "testpass123"  # noqa: S105
+        User = get_user_model()
+        owner = User.objects.create_user(
+            username="dashowner2", password=TEST_PASSWORD
+        )
+        survey = Survey.objects.create(
+            name="Test Survey",
+            slug="test-dash-owner",
+            owner=owner,
+        )
+
+        from django.test import Client
+
+        client = Client()
+        client.login(username="dashowner2", password=TEST_PASSWORD)
+        response = client.get(f"/surveys/{survey.slug}/dashboard/")
+        # Should return 200 OK
+        assert response.status_code == 200
+
+    def test_dashboard_accessible_with_view_membership(self):
+        """Dashboard endpoint should be accessible by users with view membership."""
+        from django.contrib.auth import get_user_model
+
+        from checktick_app.surveys.models import Survey, SurveyMembership
+
+        TEST_PASSWORD = "testpass123"  # noqa: S105
+        User = get_user_model()
+        owner = User.objects.create_user(
+            username="dashowner3", password=TEST_PASSWORD
+        )
+        viewer = User.objects.create_user(
+            username="dashviewer", password=TEST_PASSWORD
+        )
+        survey = Survey.objects.create(
+            name="Test Survey",
+            slug="test-dash-viewer",
+            owner=owner,
+        )
+        SurveyMembership.objects.create(
+            user=viewer,
+            survey=survey,
+            role=SurveyMembership.Role.VIEWER,
+        )
+
+        from django.test import Client
+
+        client = Client()
+        client.login(username="dashviewer", password=TEST_PASSWORD)
+        response = client.get(f"/surveys/{survey.slug}/dashboard/")
+        # Should return 200 OK
+        assert response.status_code == 200
