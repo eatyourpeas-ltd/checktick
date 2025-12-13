@@ -13,8 +13,8 @@ permissions:
 
 env:
   # Library versions - update these when upgrading
-  HTMX_VERSION: "1.9.12"
-  SORTABLEJS_VERSION: "1.15.2"
+  HTMX_VERSION: "2.0.8"
+  SORTABLEJS_VERSION: "1.15.6"
   SWAGGER_UI_VERSION: "5.17.14"
   REDOC_VERSION: "2.1.5"
   AXE_CORE_VERSION: "4.10.2"

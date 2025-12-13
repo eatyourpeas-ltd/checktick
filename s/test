@@ -1,0 +1,116 @@
+#!/bin/bash
+
+# Test runner script for CheckTick
+# Runs tests in parallel using pytest-xdist for faster execution
+# Usage: ./s/test [OPTIONS]
+#   --all         Run all tests (default)
+#   --fast        Run tests excluding slow/integration tests
+#   --a11y        Run only accessibility tests
+#   --unit        Run only unit tests (exclude playwright)
+#   --serial      Run tests serially (no parallelization)
+#   --coverage    Run with coverage report
+#   --help        Show this help message
+
+set -e
+
+# Default options
+TEST_SCOPE="all"
+PARALLEL=true
+COVERAGE=false
+EXTRA_ARGS=""
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --all)
+            TEST_SCOPE="all"
+            shift
+            ;;
+        --fast)
+            TEST_SCOPE="fast"
+            shift
+            ;;
+        --a11y)
+            TEST_SCOPE="a11y"
+            shift
+            ;;
+        --unit)
+            TEST_SCOPE="unit"
+            shift
+            ;;
+        --serial)
+            PARALLEL=false
+            shift
+            ;;
+        --coverage)
+            COVERAGE=true
+            shift
+            ;;
+        --help)
+            echo "CheckTick Test Runner"
+            echo ""
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Test Scope Options:"
+            echo "  --all         Run all tests (default)"
+            echo "  --fast        Run tests excluding slow markers"
+            echo "  --a11y        Run only accessibility tests"
+            echo "  --unit        Run unit tests only (exclude playwright)"
+            echo ""
+            echo "Execution Options:"
+            echo "  --serial      Run tests serially (no parallelization)"
+            echo "  --coverage    Generate coverage report"
+            echo ""
+            echo "Examples:"
+            echo "  $0                    # Run all tests in parallel"
+            echo "  $0 --a11y             # Run accessibility tests only"
+            echo "  $0 --fast --coverage  # Fast tests with coverage"
+            echo "  $0 --serial           # Run all tests without xdist"
+            exit 0
+            ;;
+        *)
+            # Pass unknown args to pytest
+            EXTRA_ARGS="$EXTRA_ARGS $1"
+            shift
+            ;;
+    esac
+done
+
+# Build pytest command
+PYTEST_CMD="python -m pytest"
+
+# Add parallelization flag
+if [ "$PARALLEL" = true ]; then
+    PYTEST_CMD="$PYTEST_CMD -n auto"
+fi
+
+# Add coverage if requested
+if [ "$COVERAGE" = true ]; then
+    PYTEST_CMD="$PYTEST_CMD --cov=checktick_app --cov-report=html --cov-report=term"
+fi
+
+# Add test scope filters
+case $TEST_SCOPE in
+    all)
+        # Run everything
+        ;;
+    fast)
+        PYTEST_CMD="$PYTEST_CMD -m 'not slow'"
+        ;;
+    a11y)
+        PYTEST_CMD="$PYTEST_CMD tests/test_accessibility.py"
+        ;;
+    unit)
+        PYTEST_CMD="$PYTEST_CMD --ignore=tests/test_accessibility.py"
+        ;;
+esac
+
+# Add any extra args
+PYTEST_CMD="$PYTEST_CMD $EXTRA_ARGS"
+
+echo "🧪 Running tests..."
+echo "   Command: $PYTEST_CMD"
+echo ""
+
+# Run tests
+$PYTEST_CMD
