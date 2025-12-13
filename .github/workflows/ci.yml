@@ -90,6 +90,17 @@ jobs:
       - name: Install Playwright browsers
         if: needs.changes.outputs.templates == 'true'
         run: poetry run playwright install chromium --with-deps
+      - name: Setup Node.js for CSS build
+        if: needs.changes.outputs.templates == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install npm dependencies and build CSS
+        if: needs.changes.outputs.templates == 'true'
+        run: |
+          npm ci
+          npm run build:css
       - name: Run accessibility tests
         if: needs.changes.outputs.templates == 'true'
         run: |
