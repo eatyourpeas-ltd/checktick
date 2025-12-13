@@ -2010,6 +2010,7 @@ def _serialize_question_for_builder(
 
 
 @login_required
+@ratelimit(key="user", rate="100/h", block=True)
 def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
     require_can_view(request.user, survey)
@@ -5970,6 +5971,7 @@ def _format_answer_for_export(answer: Any, question_type: str) -> str:
 
 
 @login_required
+@ratelimit(key="user", rate="30/h", block=True)
 def survey_export_csv(
     request: HttpRequest, slug: str
 ) -> Union[HttpResponse, StreamingHttpResponse]:
