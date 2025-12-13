@@ -1,0 +1,163 @@
+{#
+Response Insights Partial
+
+Displays answer distribution charts for survey responses.
+This partial is designed to be easily swappable for a JavaScript charting
+library (e.g., Plotly) in the future.
+
+Expected context:
+- analytics: ResponseAnalytics object with distributions
+- survey: Survey object (for linking/context)
+
+To swap to Plotly later:
+1. Change this partial to render a container div with data attributes
+2. Add a script block that initializes Plotly charts from the data
+3. The view/service stays the same - just the rendering changes
+#}
+{% load i18n %}
+
+{% if analytics.distributions %}
+<div class="mt-6">
+  <details class="collapse collapse-arrow bg-base-100 shadow-sm" open>
+    <summary class="collapse-title text-lg font-semibold cursor-pointer">
+      <span class="flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        {% trans "Response Insights" %}
+      </span>
+    </summary>
+
+    <div class="collapse-content">
+      <p class="text-sm text-base-content/70 mb-4">
+        {% blocktrans with count=analytics.total_responses %}
+        Answer distributions based on {{ count }} responses.
+        {% endblocktrans %}
+      </p>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {% for dist in analytics.distributions %}
+        <div class="card bg-base-200 shadow-sm">
+          <div class="card-body p-4">
+            {# Question header #}
+            <h4 class="card-title text-sm font-medium mb-3">
+              {{ dist.question_text }}
+              <span class="badge badge-ghost badge-sm ml-auto">{{ dist.total_responses }} {% trans "responses" %}</span>
+            </h4>
+
+            {# Chart container - data attributes for future JS library #}
+            <div class="response-chart"
+                 data-question-id="{{ dist.question_id }}"
+                 data-question-type="{{ dist.question_type }}"
+                 data-chart-data='{{ dist.options|safe }}'>
+
+              {# Pure CSS/HTML horizontal bar chart #}
+              <div class="space-y-2">
+                {% for option in dist.options %}
+                <div class="flex items-center gap-2 text-sm">
+                  {# Label #}
+                  <span class="w-28 truncate flex-shrink-0" title="{{ option.label }}">
+                    {% if dist.question_type == 'yesno' %}
+                      {% if option.label == 'Yes' %}
+                        <span class="text-success">✓</span>
+                      {% else %}
+                        <span class="text-error">✗</span>
+                      {% endif %}
+                    {% endif %}
+                    {{ option.label }}
+                  </span>
+
+                  {# Bar #}
+                  <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-300
+                                {% if dist.question_type == 'yesno' %}
+                                  {% if option.label == 'Yes' %}bg-success{% else %}bg-error{% endif %}
+                                {% else %}
+                                  bg-primary
+                                {% endif %}"
+                         style="width: {{ option.percent }}%"
+                         role="progressbar"
+                         aria-valuenow="{{ option.percent }}"
+                         aria-valuemin="0"
+                         aria-valuemax="100"
+                         aria-label="{{ option.label }}: {{ option.percent }}%">
+                    </div>
+                  </div>
+
+                  {# Count and percentage #}
+                  <span class="w-16 text-right text-base-content/70 flex-shrink-0">
+                    {{ option.count }} <span class="text-xs">({{ option.percent }}%)</span>
+                  </span>
+                </div>
+                {% endfor %}
+              </div>
+
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {# Placeholder for future: date range filter #}
+      {#
+      <div class="mt-4 flex gap-2 items-center">
+        <span class="text-sm">{% trans "Filter by date:" %}</span>
+        <select class="select select-sm select-bordered">
+          <option>{% trans "All time" %}</option>
+          <option>{% trans "Last 7 days" %}</option>
+          <option>{% trans "Last 30 days" %}</option>
+        </select>
+      </div>
+      #}
+    </div>
+  </details>
+</div>
+{% elif analytics.total_responses == 0 %}
+{# No responses yet - show placeholder #}
+<div class="mt-6">
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body">
+      <h3 class="card-title text-lg">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        {% trans "Response Insights" %}
+      </h3>
+      <p class="text-base-content/70">
+        {% trans "Response insights will appear here once you receive submissions." %}
+      </p>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{#
+================================================================================
+FUTURE: To swap to Plotly, replace the bar chart section above with:
+
+<div class="response-chart-plotly"
+     id="chart-{{ dist.question_id }}"
+     data-options='{{ dist.options|escapejs }}'>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.response-chart-plotly').forEach(function(el) {
+    const data = JSON.parse(el.dataset.options);
+    const labels = data.map(d => d.label);
+    const values = data.map(d => d.count);
+
+    Plotly.newPlot(el.id, [{
+      type: 'bar',
+      x: values,
+      y: labels,
+      orientation: 'h'
+    }], {
+      margin: { l: 100, r: 20, t: 20, b: 30 },
+      height: Math.max(200, labels.length * 30)
+    });
+  });
+});
+</script>
+================================================================================
+#}

@@ -2010,6 +2010,7 @@ def _serialize_question_for_builder(
 
 
 @login_required
+@ratelimit(key="user", rate="100/h", block=True)
 def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
     require_can_view(request.user, survey)
@@ -2133,6 +2134,12 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         "primary_hex": style.get("primary_color"),
         "font_css_url": style.get("font_css_url"),
     }
+
+    # Compute response analytics for insights charts
+    from .services.response_analytics import compute_response_analytics
+
+    analytics = compute_response_analytics(survey)
+
     ctx = {
         "survey": survey,
         "total": total,
@@ -2162,6 +2169,8 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         # Translation management
         "available_translations": survey.get_available_translations(),
         "supported_languages": SUPPORTED_SURVEY_LANGUAGES,
+        # Response insights
+        "analytics": analytics,
     }
 
     # Import language constants for flags
@@ -5922,10 +5931,60 @@ def organization_key_recovery(request: HttpRequest, slug: str) -> HttpResponse:
     return render(request, "surveys/organization_key_recovery.html", context)
 
 
+def _format_answer_for_export(answer: Any, question_type: str) -> str:
+    """
+    Format an answer value for CSV export based on question type.
+
+    Args:
+        answer: The raw answer value (string, list, dict, etc.)
+        question_type: The question type (text, mc_single, mc_multi, etc.)
+
+    Returns:
+        Formatted string suitable for CSV export
+    """
+    if answer is None or answer == "":
+        return ""
+
+    # Handle template questions (patient/professional details)
+    if question_type in ("template_patient", "template_professional"):
+        if isinstance(answer, dict):
+            # Return comma-separated list of fields that were filled
+            fields = answer.get("fields", [])
+            return ", ".join(fields) if fields else ""
+        return str(answer)
+
+    # Handle multi-select and orderable questions (lists)
+    if question_type in ("mc_multi", "orderable"):
+        if isinstance(answer, list):
+            return "; ".join(str(item) for item in answer)
+        return str(answer)
+
+    # Handle single value questions
+    if isinstance(answer, list):
+        # Shouldn't happen for single-select, but handle gracefully
+        return "; ".join(str(item) for item in answer)
+    if isinstance(answer, dict):
+        # Complex answer structure - serialize
+        return json.dumps(answer)
+
+    return str(answer)
+
+
 @login_required
+@ratelimit(key="user", rate="30/h", block=True)
 def survey_export_csv(
     request: HttpRequest, slug: str
 ) -> Union[HttpResponse, StreamingHttpResponse]:
+    """
+    Export survey responses to CSV with structured columns.
+
+    Exports:
+    - Response metadata (id, timestamp, submitter)
+    - Demographics fields (if configured, decrypted)
+    - IMD data (if enabled)
+    - Professional details (if configured)
+    - Individual columns for each question with readable headers
+    """
     survey = get_object_or_404(Survey, slug=slug, owner=request.user)
     # Option 4: Re-derive KEK from stored credentials
     survey_key = get_survey_key_from_session(request, slug)
@@ -5933,7 +5992,7 @@ def survey_export_csv(
         messages.error(request, "Unlock survey first.")
         return redirect("surveys:unlock", slug=slug)
 
-    # Get patient group configuration to check include_imd
+    # Get patient group configuration
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
     include_imd = (
         bool((patient_group.schema or {}).get("include_imd"))
@@ -5941,24 +6000,53 @@ def survey_export_csv(
         else False
     )
 
+    # Get professional group configuration
+    prof_group, professional_fields, _ = _get_professional_group_and_fields(survey)
+
+    # Get all questions ordered by group position (from survey.style) then by question order
+    all_questions = list(survey.questions.select_related("group").all())
+    questions = _order_questions_by_group(survey, all_questions)
+
     def generate():
         import csv
         from io import StringIO
 
         # Build header row
-        header = ["id", "submitted_at", "submitted_by"]
+        header = ["Response ID", "Submitted At", "Submitted By"]
 
-        # Add demographics fields if patient data is configured
-        demo_fields_for_export = (
-            list(demographics_fields) if demographics_fields else []
-        )
+        # Add demographics fields with readable labels
+        demo_fields_for_export = []
+        if demographics_fields:
+            for field in demographics_fields:
+                label = DEMOGRAPHIC_FIELD_DEFS.get(field, field)
+                header.append(f"Patient: {label}")
+                demo_fields_for_export.append(field)
+
+        # Add IMD fields if enabled
         if include_imd:
+            header.append("Patient: IMD Decile")
+            header.append("Patient: IMD Rank")
             demo_fields_for_export.extend(["imd_decile", "imd_rank"])
 
-        for field in demo_fields_for_export:
-            header.append(f"demographics_{field}")
+        # Add professional fields with readable labels
+        prof_fields_for_export = []
+        if professional_fields:
+            for field in professional_fields:
+                label = PROFESSIONAL_FIELD_DEFS.get(field, field)
+                header.append(f"Professional: {label}")
+                prof_fields_for_export.append(field)
 
-        header.append("answers")
+        # Add question columns (skip template questions, they're handled above)
+        question_columns = []
+        for q in questions:
+            if q.type in ("template_patient", "template_professional"):
+                continue
+            # Use question text as header, truncated if too long
+            q_header = q.text[:100] + "..." if len(q.text) > 100 else q.text
+            # Clean up for CSV header (remove newlines)
+            q_header = " ".join(q_header.split())
+            header.append(q_header)
+            question_columns.append(q)
 
         s = StringIO()
         writer = csv.writer(s)
@@ -5970,7 +6058,7 @@ def survey_export_csv(
         for r in survey.responses.iterator():
             row = [
                 r.id,
-                r.submitted_at.isoformat(),
+                r.submitted_at.strftime("%Y-%m-%d %H:%M:%S") if r.submitted_at else "",
                 r.submitted_by.username if r.submitted_by else "Anonymous",
             ]
 
@@ -5986,7 +6074,20 @@ def survey_export_csv(
             for field in demo_fields_for_export:
                 row.append(demographics.get(field, ""))
 
-            row.append(json.dumps(r.answers))
+            # Get professional details from answers
+            answers_dict = r.answers or {}
+            professional_data = answers_dict.get("professional", {})
+
+            # Add professional fields
+            for field in prof_fields_for_export:
+                row.append(professional_data.get(field, ""))
+
+            # Add question answers
+            for q in question_columns:
+                answer = answers_dict.get(str(q.id), "")
+                formatted = _format_answer_for_export(answer, q.type)
+                row.append(formatted)
+
             writer.writerow(row)
             yield s.getvalue()
             s.seek(0)
