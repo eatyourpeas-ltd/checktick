@@ -4,8 +4,7 @@ Tests for IMD (Index of Multiple Deprivation) service.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-from django.test import TestCase, override_settings
+from django.test import override_settings
 
 from checktick_app.surveys.services.imd_service import IMDResult, IMDService
 
@@ -197,7 +196,7 @@ class TestIMDServiceLookup:
         mock_response.json.return_value = {"quantile": 2}
         mock_get.return_value = mock_response
 
-        result = IMDService.lookup_imd("SW1A 1AA", quantile=5)
+        _ = IMDService.lookup_imd("SW1A 1AA", quantile=5)
 
         call_args = mock_get.call_args
         assert call_args[1]["params"]["quantile"] == 5

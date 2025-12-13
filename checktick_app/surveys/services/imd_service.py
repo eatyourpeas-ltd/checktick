@@ -21,12 +21,12 @@ IMD data is returned as a quantile (decile by default), where:
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
+import logging
 from typing import TYPE_CHECKING
 
-import requests
 from django.conf import settings
+import requests
 
 if TYPE_CHECKING:
     pass
