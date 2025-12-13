@@ -661,7 +661,7 @@ def send_subscription_created_email(
     import uuid
 
     logger.info(
-        f"Attempting to send subscription created email to user_id={user.id} (tier: {tier}, cycle: {billing_cycle})"
+        f"Attempting to send subscription created email (tier: {tier}, cycle: {billing_cycle})"
     )
 
     branding = get_platform_branding()
