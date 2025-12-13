@@ -660,7 +660,9 @@ def send_subscription_created_email(
     from datetime import datetime
     import uuid
 
-    logger.debug("Sending subscription created email")  # nosec - no sensitive data logged
+    logger.debug(
+        "Sending subscription created email"
+    )  # nosec - no sensitive data logged
 
     branding = get_platform_branding()
 
