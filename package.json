@@ -1,6 +1,6 @@
 {
   "name": "checktick-ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev:css": "tailwindcss -i ./checktick_app/static/css/daisyui_themes.css -o ./checktick_app/static/build/styles.css --watch",
