@@ -1,19 +1,44 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load i18n %}
-{% block title %}{% trans "Question Group Templates" %} - CheckTick{% endblock %}
+{% block title %}{% trans "Question Groups" %} - CheckTick{% endblock %}
 {% block content %}
 <div class="prose max-w-none">
-  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Templates' crumb2_href='/surveys/templates/' %}
+  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Question Groups' crumb2_href='/surveys/templates/' %}
 
   <h1 class="inline-flex items-center gap-2">
     <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     </svg>
-    <span>{% trans "Question Group Templates" %}</span>
+    <span>{% trans "Question Groups" %}</span>
   </h1>
 
-  <p class="lead">{% trans "Browse and import reusable question groups published by other users and organizations." %}</p>
+  <!-- Explainer Section -->
+  <div class="not-prose mb-6">
+    <div class="alert alert-info">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      <div>
+        <h3 class="font-bold">{% trans "What are Question Groups?" %}</h3>
+        <p class="text-sm">
+          {% trans "Question Groups are reusable collections of related questions that you can import into any survey. Unlike individual questions, groups bundle multiple questions together - for example, a 'Patient Demographics' group might include name, date of birth, and contact details." %}
+        </p>
+        <div class="mt-2">
+          <details class="collapse collapse-arrow bg-base-200/50">
+            <summary class="collapse-title text-sm font-medium py-2 min-h-0">{% trans "Learn more about sharing" %}</summary>
+            <div class="collapse-content text-sm">
+              <ul class="list-disc list-inside space-y-1">
+                <li><strong>{% trans "Global" %}</strong> - {% trans "Published for everyone to use. Great for standardised questionnaires and validated instruments." %}</li>
+                <li><strong>{% trans "Organisation" %}</strong> - {% trans "Private to your organisation. Ideal for internal standards and team-specific question sets." %}</li>
+              </ul>
+              <p class="mt-2">{% trans "To share your own question groups, create them in the survey builder, then use 'Publish to Library' from the group menu." %}</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="lead">{% trans "Browse and import reusable question groups published by other users and organisations." %}</p>
 
   <!-- Search and Filters -->
   <div class="not-prose mb-6">

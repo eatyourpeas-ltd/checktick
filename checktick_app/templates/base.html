@@ -71,6 +71,7 @@
           <ul tabindex="0" class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
             {% if user.is_authenticated %}
               <li><a href="/surveys">{% trans "Surveys" %}</a></li>
+              <li><a href="{% url 'surveys:published_templates_list' %}">{% trans "Question Groups" %}</a></li>
               {% if can_create_datasets %}
                 <li><a href="{% url 'surveys:dataset_list' %}">{% trans "Datasets" %}</a></li>
               {% endif %}
@@ -116,6 +117,7 @@
         <ul class="menu menu-horizontal px-1">
           {% if user.is_authenticated %}
             <li><a href="/surveys">{% trans "Surveys" %}</a></li>
+            <li><a href="{% url 'surveys:published_templates_list' %}">{% trans "Question Groups" %}</a></li>
             {% if can_create_datasets %}
               <li><a href="{% url 'surveys:dataset_list' %}">{% trans "Datasets" %}</a></li>
             {% endif %}
