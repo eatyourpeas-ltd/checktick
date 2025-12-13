@@ -647,7 +647,7 @@ def send_authenticated_survey_invite_new_user(
 def send_subscription_created_email(
     user, tier: str, billing_cycle: str = "Monthly"
 ) -> bool:
-    """Send welcome email when user subscribes to a paid plan.
+    """Send welcome email with VAT invoice when user subscribes to a paid plan.
 
     Args:
         user: Django User instance
@@ -657,11 +657,30 @@ def send_subscription_created_email(
     Returns:
         True if email sent successfully, False otherwise
     """
-    logger.info(
-        f"Attempting to send subscription created email to {user.email} (username: {user.username}, tier: {tier}, cycle: {billing_cycle})"
-    )
+    from datetime import datetime
+    import uuid
+
+    logger.debug(
+        "Sending subscription created email"
+    )  # nosec - no sensitive data logged
 
     branding = get_platform_branding()
+
+    # Get tier pricing info
+    tier_config = getattr(settings, "SUBSCRIPTION_TIERS", {}).get(tier, {})
+    amount_inc_vat = tier_config.get("amount", 0) / 100  # Convert pence to pounds
+    amount_ex_vat = tier_config.get("amount_ex_vat", 0) / 100
+    vat_amount = amount_inc_vat - amount_ex_vat
+    vat_rate = getattr(settings, "VAT_RATE", 0.20) * 100  # As percentage
+
+    # Invoice details
+    invoice_number = (
+        f"INV-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
+    )
+    invoice_date = datetime.now().strftime("%d %B %Y")
+    vat_number = getattr(settings, "VAT_NUMBER", "")
+    company_name = getattr(settings, "COMPANY_NAME", branding["title"])
+    company_address = getattr(settings, "COMPANY_ADDRESS", "")
 
     tier_display = tier.title()
     subject = f"Welcome to {branding['title']} {tier_display}!"
@@ -675,6 +694,16 @@ def send_subscription_created_email(
             "tier_name": tier_display,
             "billing_cycle": billing_cycle,
             "site_url": getattr(settings, "SITE_URL", "http://localhost:8000"),
+            # VAT invoice details
+            "invoice_number": invoice_number,
+            "invoice_date": invoice_date,
+            "amount_ex_vat": f"£{amount_ex_vat:.2f}",
+            "vat_amount": f"£{vat_amount:.2f}",
+            "vat_rate": f"{vat_rate:.0f}%",
+            "amount_inc_vat": f"£{amount_inc_vat:.2f}",
+            "vat_number": vat_number,
+            "company_name": company_name,
+            "company_address": company_address,
         },
     )
 
@@ -757,6 +786,214 @@ def send_subscription_cancelled_email(
             "survey_count": survey_count,
             "surveys_to_close": surveys_to_close,
             "free_tier_limit": free_tier_limit,
+        },
+    )
+
+
+def send_subscription_expired_email(
+    user,
+    old_tier: str,
+    survey_count: int = 0,
+    surveys_closed: int = 0,
+    reason: str = "expired",
+    free_tier_limit: int = 3,
+) -> bool:
+    """Send notification when subscription expires or payment fails.
+
+    This is used for:
+    - Subscriptions that reached their period end date
+    - Accounts downgraded due to payment failure after grace period
+
+    Args:
+        user: Django User instance
+        old_tier: The tier the user was on before downgrade
+        survey_count: Number of surveys user had
+        surveys_closed: Number of surveys that were auto-closed
+        reason: Why the subscription ended ('expired' or 'payment_failed')
+        free_tier_limit: Max surveys allowed on free tier
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(
+        f"Sending subscription expired email to {user.email} "
+        f"(old_tier: {old_tier}, reason: {reason})"
+    )
+
+    branding = get_platform_branding()
+
+    tier_display = old_tier.replace("_", " ").title()
+
+    if reason == "payment_failed":
+        subject = f"Account Downgraded Due to Payment Failure - {branding['title']}"
+        reason_text = (
+            "We were unable to collect payment for your subscription after multiple "
+            "attempts. Your account has been downgraded to the Free tier."
+        )
+    else:
+        subject = f"Subscription Expired - {branding['title']}"
+        reason_text = (
+            "Your subscription has expired and your account has been "
+            "downgraded to the Free tier."
+        )
+
+    # Build the email content
+    markdown_lines = [
+        f"# Your {tier_display} Subscription Has Ended",
+        "",
+        f"Hi {user.first_name or user.username},",
+        "",
+        reason_text,
+        "",
+    ]
+
+    if surveys_closed > 0:
+        markdown_lines.extend(
+            [
+                "## Your Surveys",
+                "",
+                f"Because the Free tier allows a maximum of {free_tier_limit} surveys, "
+                f"we've automatically **closed** {surveys_closed} of your oldest surveys.",
+                "",
+                "**Closed surveys are not deleted.** You can still:",
+                "- View all responses and data",
+                "- Export data in any format",
+                "- See all analytics and charts",
+                "",
+                "To reopen closed surveys, simply upgrade to a paid plan again.",
+                "",
+            ]
+        )
+    else:
+        markdown_lines.extend(
+            [
+                f"You had {survey_count} surveys, which is within the Free tier limit of "
+                f"{free_tier_limit}. All your surveys remain active.",
+                "",
+            ]
+        )
+
+    markdown_lines.extend(
+        [
+            "## Want to Continue with Premium Features?",
+            "",
+            "You can upgrade again at any time to restore full access to:",
+            "- Unlimited surveys",
+            "- Team collaboration features",
+            "- Priority support",
+            "- All premium features",
+            "",
+            f"[Upgrade Now]({getattr(settings, 'SITE_URL', 'http://localhost:8000')}/pricing/)",
+            "",
+            "If you have any questions, please don't hesitate to contact us.",
+            "",
+            "Best regards,",
+            f"The {branding['title']} Team",
+        ]
+    )
+
+    markdown_content = "\n".join(markdown_lines)
+
+    return send_branded_email(
+        to_email=user.email,
+        subject=subject,
+        markdown_content=markdown_content,
+        branding=branding,
+        context={
+            "user": user,
+            "old_tier": old_tier,
+            "tier_name": tier_display,
+            "survey_count": survey_count,
+            "surveys_closed": surveys_closed,
+            "reason": reason,
+            "free_tier_limit": free_tier_limit,
+        },
+    )
+
+
+def send_payment_failed_email(
+    user,
+    tier: str,
+    failure_reason: str = "",
+    grace_period_days: int = 7,
+) -> bool:
+    """Send notification when a subscription payment fails.
+
+    This is sent immediately when payment fails. The user has a grace period
+    to update their payment details before being downgraded.
+
+    Args:
+        user: Django User instance
+        tier: Current account tier
+        failure_reason: Optional reason for the failure (e.g., "insufficient funds")
+        grace_period_days: Days before account is downgraded
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(f"Sending payment failed email to {user.email} (tier: {tier})")
+
+    branding = get_platform_branding()
+    tier_display = tier.replace("_", " ").title()
+    site_url = getattr(settings, "SITE_URL", "http://localhost:8000")
+
+    subject = f"Payment Failed - Action Required - {branding['title']}"
+
+    markdown_lines = [
+        "# Payment Failed",
+        "",
+        f"Hi {user.first_name or user.username},",
+        "",
+        f"We were unable to collect your payment for your **{tier_display}** subscription.",
+        "",
+    ]
+
+    if failure_reason:
+        markdown_lines.extend(
+            [
+                f"**Reason:** {failure_reason}",
+                "",
+            ]
+        )
+
+    markdown_lines.extend(
+        [
+            "## What Happens Next",
+            "",
+            f"You have **{grace_period_days} days** to update your payment details. "
+            "During this time, you'll retain full access to all your features.",
+            "",
+            f"If payment is not received within {grace_period_days} days:",
+            "- Your account will be downgraded to the Free tier",
+            "- Surveys exceeding the free limit will be **closed** (not deleted)",
+            "- You can still view and export all your data",
+            "",
+            "## Update Your Payment",
+            "",
+            "Please update your payment details to continue enjoying your premium features:",
+            "",
+            f"[Update Payment Details]({site_url}/billing/subscription/)",
+            "",
+            "If you have any questions or need assistance, please contact us.",
+            "",
+            "Best regards,",
+            f"The {branding['title']} Team",
+        ]
+    )
+
+    markdown_content = "\n".join(markdown_lines)
+
+    return send_branded_email(
+        to_email=user.email,
+        subject=subject,
+        markdown_content=markdown_content,
+        branding=branding,
+        context={
+            "user": user,
+            "tier": tier,
+            "tier_name": tier_display,
+            "failure_reason": failure_reason,
+            "grace_period_days": grace_period_days,
         },
     )
 

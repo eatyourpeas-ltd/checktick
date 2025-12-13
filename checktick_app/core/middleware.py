@@ -29,13 +29,19 @@ class Require2FAMiddleware:
 
     SSO/OIDC users are exempt as their identity provider handles MFA.
 
-    Can be disabled by setting REQUIRE_2FA = False in settings (useful for tests).
+    Can be disabled by:
+    - Setting REQUIRE_2FA = False in settings (useful for tests)
+    - Running in DEBUG mode (automatic bypass for development)
     """
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
+        # Bypass 2FA in DEBUG mode for easier development
+        if django_settings.DEBUG:
+            return self.get_response(request)
+
         # Check if 2FA requirement is disabled (e.g., for tests)
         if not getattr(django_settings, "REQUIRE_2FA", True):
             return self.get_response(request)

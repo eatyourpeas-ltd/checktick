@@ -279,11 +279,14 @@ class OrganizationAdmin(admin.ModelAdmin):
     readonly_fields = (
         "current_seats",
         "monthly_cost_display",
+        "monthly_cost_inc_vat_display",
         "setup_token",
         "setup_completed_at",
+        "setup_expires_at",
+        "setup_email_sent_at",
         "created_at",
         "updated_at",
-        "invite_link_display",
+        "checkout_url_display",
     )
     inlines = [OrganizationMembershipInline]
 
@@ -305,18 +308,18 @@ class OrganizationAdmin(admin.ModelAdmin):
                     "billing_contact_email",
                     "billing_notes",
                 ),
-                "description": "Set the billing terms for this organization.",
+                "description": "Set the billing terms for this organisation.",
             },
         ),
         (
-            "Billing Status",
+            "Billing Summary",
             {
                 "fields": (
                     "current_seats",
                     "monthly_cost_display",
+                    "monthly_cost_inc_vat_display",
                     "subscription_status",
                 ),
-                "classes": ("collapse",),
             },
         ),
         (
@@ -328,19 +331,20 @@ class OrganizationAdmin(admin.ModelAdmin):
                     "payment_price_id",
                 ),
                 "classes": ("collapse",),
-                "description": "Integration with external payment provider.",
+                "description": "Integration with GoCardless.",
             },
         ),
         (
             "Setup & Onboarding",
             {
                 "fields": (
-                    "invite_link_display",
+                    "checkout_url_display",
                     "setup_token",
+                    "setup_expires_at",
+                    "setup_email_sent_at",
                     "setup_completed_at",
                     "created_by",
                 ),
-                "classes": ("collapse",),
             },
         ),
         (
@@ -365,7 +369,12 @@ class OrganizationAdmin(admin.ModelAdmin):
         ),
     )
 
-    actions = ["generate_invite_links", "mark_active", "mark_inactive"]
+    actions = [
+        "generate_checkout_links",
+        "send_checkout_emails",
+        "mark_active",
+        "mark_inactive",
+    ]
 
     def seats_display(self, obj):
         """Display current/max seats."""
@@ -382,37 +391,78 @@ class OrganizationAdmin(admin.ModelAdmin):
     current_seats.short_description = "Current Members"
 
     def monthly_cost_display(self, obj):
-        """Display calculated monthly cost."""
+        """Display calculated monthly cost (ex VAT)."""
         cost = obj.monthly_cost
         if cost is not None:
-            return f"£{cost:.2f}"
+            return f"£{cost:.2f} (ex VAT)"
         return "-"
 
     monthly_cost_display.short_description = "Monthly Cost"
 
-    def invite_link_display(self, obj):
-        """Display the invite link if setup token exists."""
+    def monthly_cost_inc_vat_display(self, obj):
+        """Display calculated monthly cost (inc VAT)."""
+        cost = obj.monthly_cost_inc_vat
+        if cost is not None:
+            return f"£{cost:.2f}"
+        return "-"
+
+    monthly_cost_inc_vat_display.short_description = "Monthly Cost (inc VAT)"
+
+    def checkout_url_display(self, obj):
+        """Display the checkout URL if setup token exists."""
+        if obj.setup_completed_at:
+            return format_html(
+                '<span style="color: green;">✓ Setup completed on {}</span>',
+                obj.setup_completed_at.strftime("%d %b %Y %H:%M"),
+            )
+
         if obj.setup_token:
-            # Build the invite URL
+            from django.conf import settings
             from django.urls import reverse
 
             try:
-                url = reverse("core:org_setup", kwargs={"token": obj.setup_token})
-                return format_html(
-                    '<a href="{}" target="_blank">{}</a><br>'
-                    '<small class="text-muted">Send this link to the organization owner to complete setup.</small>',
-                    url,
-                    url,
+                path = reverse(
+                    "surveys:organisation_checkout",
+                    kwargs={"token": obj.setup_token},
                 )
-            except Exception:
-                return f"Token: {obj.setup_token} (URL not configured)"
-        return "No invite link generated. Use the action below to generate one."
+                # Build absolute URL
+                site_url = getattr(settings, "SITE_URL", "http://localhost:8000")
+                full_url = f"{site_url.rstrip('/')}{path}"
 
-    invite_link_display.short_description = "Invite Link"
+                # Check expiry
+                expiry_info = ""
+                if obj.setup_expires_at:
+                    if obj.is_setup_expired:
+                        expiry_info = '<br><span style="color: red;">⚠ Expired - generate a new link</span>'
+                    else:
+                        days_left = (obj.setup_expires_at - timezone.now()).days
+                        expiry_info = f'<br><span style="color: gray;">Expires in {days_left} days</span>'
 
-    @admin.action(description="Generate invite links for selected organizations")
-    def generate_invite_links(self, request, queryset):
-        """Generate setup tokens for selected organizations."""
+                # Check if email sent
+                email_info = ""
+                if obj.setup_email_sent_at:
+                    email_info = f'<br><span style="color: blue;">✉ Email sent {obj.setup_email_sent_at.strftime("%d %b %Y")}</span>'
+
+                return format_html(
+                    '<a href="{}" target="_blank">{}</a>{}{}'
+                    '<br><small style="color: gray;">Copy this link to send to the customer</small>',
+                    full_url,
+                    full_url,
+                    expiry_info,
+                    email_info,
+                )
+            except Exception as e:
+                return f"Token: {obj.setup_token} (URL error: {e})"
+        return format_html(
+            '<span style="color: orange;">No checkout link generated. '
+            'Save the organisation first, then use "Generate checkout links" action.</span>'
+        )
+
+    checkout_url_display.short_description = "Checkout URL"
+
+    @admin.action(description="Generate checkout links for selected organisations")
+    def generate_checkout_links(self, request, queryset):
+        """Generate setup tokens for selected organisations."""
         count = 0
         for org in queryset:
             if not org.setup_completed_at:  # Only for orgs not yet set up
@@ -420,28 +470,124 @@ class OrganizationAdmin(admin.ModelAdmin):
                 count += 1
         if count:
             messages.success(
-                request, f"Generated invite links for {count} organization(s)."
+                request, f"Generated checkout links for {count} organisation(s)."
             )
         else:
             messages.warning(
-                request, "No organizations needed invite links (already set up)."
+                request, "No organisations needed checkout links (already set up)."
             )
 
-    @admin.action(description="Mark selected organizations as active")
+    @admin.action(description="Send checkout emails to selected organisations")
+    def send_checkout_emails(self, request, queryset):
+        """Send checkout invitation emails to selected organisations."""
+        from checktick_app.surveys.email_utils import send_organisation_checkout_email
+
+        sent_count = 0
+        errors = []
+
+        for org in queryset:
+            # Skip if already set up
+            if org.setup_completed_at:
+                errors.append(f"{org.name}: Already set up")
+                continue
+
+            # Skip if no billing email
+            if not org.billing_contact_email:
+                errors.append(f"{org.name}: No billing contact email")
+                continue
+
+            # Generate token if needed
+            if not org.setup_token or org.is_setup_expired:
+                org.generate_setup_token()
+
+            try:
+                send_organisation_checkout_email(org, request)
+                org.setup_email_sent_at = timezone.now()
+                org.subscription_status = Organization.SubscriptionStatus.QUOTE_SENT
+                org.save(
+                    update_fields=[
+                        "setup_email_sent_at",
+                        "subscription_status",
+                        "updated_at",
+                    ]
+                )
+                sent_count += 1
+            except Exception as e:
+                errors.append(f"{org.name}: {str(e)}")
+
+        if sent_count:
+            messages.success(
+                request, f"Sent checkout emails to {sent_count} organisation(s)."
+            )
+        if errors:
+            messages.warning(request, f"Errors: {'; '.join(errors)}")
+
+    @admin.action(description="Mark selected organisations as active")
     def mark_active(self, request, queryset):
         updated = queryset.update(is_active=True)
-        messages.success(request, f"Marked {updated} organization(s) as active.")
+        messages.success(request, f"Marked {updated} organisation(s) as active.")
 
-    @admin.action(description="Mark selected organizations as inactive")
+    @admin.action(description="Mark selected organisations as inactive")
     def mark_inactive(self, request, queryset):
         updated = queryset.update(is_active=False)
-        messages.success(request, f"Marked {updated} organization(s) as inactive.")
+        messages.success(request, f"Marked {updated} organisation(s) as inactive.")
 
     def save_model(self, request, obj, form, change):
         """Set created_by on new organizations."""
         if not change:  # New object
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+    def get_fieldsets(self, request, obj=None):
+        """Hide billing-related fieldsets in SELF_HOSTED mode."""
+        fieldsets = super().get_fieldsets(request, obj)
+
+        if getattr(settings, "SELF_HOSTED", False):
+            # Remove billing-related fieldsets in self-hosted mode
+            billing_fieldset_names = {
+                "Billing Configuration",
+                "Billing Summary",
+                "Payment Provider",
+                "Setup & Onboarding",
+            }
+            fieldsets = [fs for fs in fieldsets if fs[0] not in billing_fieldset_names]
+
+        return fieldsets
+
+    def get_list_display(self, request):
+        """Hide billing columns in SELF_HOSTED mode."""
+        list_display = list(super().get_list_display(request))
+
+        if getattr(settings, "SELF_HOSTED", False):
+            # Remove billing-related columns
+            billing_columns = {"billing_type", "seats_display", "subscription_status"}
+            list_display = [col for col in list_display if col not in billing_columns]
+
+        return list_display
+
+    def get_list_filter(self, request):
+        """Hide billing filters in SELF_HOSTED mode."""
+        list_filter = list(super().get_list_filter(request))
+
+        if getattr(settings, "SELF_HOSTED", False):
+            # Remove billing-related filters
+            billing_filters = {"billing_type", "subscription_status"}
+            list_filter = [f for f in list_filter if f not in billing_filters]
+
+        return list_filter
+
+    def get_actions(self, request):
+        """Hide billing actions in SELF_HOSTED mode."""
+        actions = super().get_actions(request)
+
+        if getattr(settings, "SELF_HOSTED", False):
+            # Remove billing-related actions
+            billing_actions = {"generate_checkout_links", "send_checkout_emails"}
+            for action in billing_actions:
+                if action in actions:
+                    del actions[action]
+
+        return actions
 
 
 @admin.register(QuestionGroup)

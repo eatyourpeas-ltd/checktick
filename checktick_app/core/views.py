@@ -69,16 +69,28 @@ def hosting(request):
 
 
 def pricing(request):
-    """Display pricing tiers with Paddle checkout integration."""
+    """Display pricing tiers with GoCardless redirect flow integration.
+
+    Self-hosted instances redirect to home as billing is not applicable.
+    """
     from django.conf import settings
+
+    # Self-hosted instances don't need pricing - redirect to home
+    if getattr(settings, "SELF_HOSTED", False):
+        messages.info(
+            request,
+            "Pricing is not applicable for self-hosted instances. "
+            "All features are already enabled.",
+        )
+        return redirect("core:home")
 
     # Check if coming from signup with a pending tier selection
     auto_open_checkout = request.session.pop("auto_open_checkout", False)
     pending_tier = request.session.get("pending_tier", "")
 
     context = {
-        "price_ids": settings.PAYMENT_PRICE_IDS,
-        "self_hosted": getattr(settings, "SELF_HOSTED", False),
+        "subscription_tiers": settings.SUBSCRIPTION_TIERS,
+        "self_hosted": False,  # Always False here since we redirect above
         "auto_open_checkout": auto_open_checkout,
         "pending_tier": pending_tier,
     }

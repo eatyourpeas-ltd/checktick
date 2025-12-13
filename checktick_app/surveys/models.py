@@ -82,6 +82,7 @@ class Organization(models.Model):
         FREE = "free", "Free (Internal/Trial)"
 
     class SubscriptionStatus(models.TextChoices):
+        QUOTE_SENT = "quote_sent", "Quote Sent"
         PENDING = "pending", "Pending Setup"
         ACTIVE = "active", "Active"
         PAST_DUE = "past_due", "Past Due"
@@ -90,7 +91,12 @@ class Organization(models.Model):
 
     name = models.CharField(max_length=255)
     owner = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="organizations"
+        User,
+        on_delete=models.SET_NULL,
+        related_name="organizations",
+        null=True,
+        blank=True,
+        help_text="Owner of the organization (set during checkout completion)",
     )
 
     # Billing configuration (set by platform admin)
@@ -167,6 +173,23 @@ class Organization(models.Model):
         null=True,
         blank=True,
         help_text="When the organization owner completed setup",
+    )
+    # Quote workflow fields (for sales-initiated onboarding)
+    setup_expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the setup token expires (30 days default)",
+    )
+    setup_email_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the checkout invitation email was sent",
+    )
+    redirect_flow_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="GoCardless redirect flow ID during checkout",
     )
     is_active = models.BooleanField(
         default=True,
@@ -260,26 +283,67 @@ class Organization(models.Model):
             return self.price_per_seat * self.current_seats
         return None
 
-    def generate_setup_token(self) -> str:
-        """Generate a new setup token for the owner invite link."""
+    @property
+    def monthly_cost_inc_vat(self) -> decimal.Decimal | None:
+        """Calculate monthly cost including VAT."""
+        cost = self.monthly_cost
+        if cost is None:
+            return None
+        vat_rate = decimal.Decimal(str(getattr(settings, "VAT_RATE", 0.20)))
+        return cost * (1 + vat_rate)
+
+    @property
+    def is_setup_expired(self) -> bool:
+        """Check if the setup token has expired."""
+        if not self.setup_expires_at:
+            return False
+        return timezone.now() > self.setup_expires_at
+
+    @property
+    def checkout_url(self) -> str:
+        """Get the checkout URL for this organisation."""
+        from django.urls import reverse
+
+        if not self.setup_token:
+            return ""
+        return reverse(
+            "surveys:organisation_checkout", kwargs={"token": self.setup_token}
+        )
+
+    def generate_setup_token(self, expires_days: int = 30) -> str:
+        """Generate a new setup token for the owner invite link.
+
+        Args:
+            expires_days: Number of days until token expires (default 30)
+
+        Returns:
+            The generated setup token
+        """
+        from datetime import timedelta
         import secrets
 
         self.setup_token = secrets.token_urlsafe(32)
-        self.save(update_fields=["setup_token", "updated_at"])
+        self.setup_expires_at = timezone.now() + timedelta(days=expires_days)
+        self.save(update_fields=["setup_token", "setup_expires_at", "updated_at"])
         return self.setup_token
 
     def complete_setup(self) -> None:
         """Mark organization setup as complete."""
-        from django.utils import timezone
-
         self.setup_completed_at = timezone.now()
         self.setup_token = ""  # Clear token after use
-        if self.subscription_status == self.SubscriptionStatus.PENDING:
+        self.setup_expires_at = None
+        self.redirect_flow_id = ""
+        if self.subscription_status in [
+            self.SubscriptionStatus.PENDING,
+            self.SubscriptionStatus.QUOTE_SENT,
+        ]:
             self.subscription_status = self.SubscriptionStatus.ACTIVE
         self.save(
             update_fields=[
                 "setup_completed_at",
                 "setup_token",
+                "setup_expires_at",
+                "redirect_flow_id",
                 "subscription_status",
                 "updated_at",
             ]

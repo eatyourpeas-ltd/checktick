@@ -22,6 +22,33 @@ Your subscription is now active and you have access to all {{ tier_name }} featu
 - **SLA guarantees** - Uptime and support commitments
   {% endif %}
 
+---
+
+## VAT Invoice
+
+|                    |                                        |
+| ------------------ | -------------------------------------- |
+| **Invoice Number** | {{ invoice_number }}                   |
+| **Invoice Date**   | {{ invoice_date }}                     |
+| **Customer**       | {{ user.username }} ({{ user.email }}) |
+
+### Invoice Details
+
+| Description                                        |                   Amount |
+| -------------------------------------------------- | -----------------------: |
+| {{ tier_name }} Subscription ({{ billing_cycle }}) |      {{ amount_ex_vat }} |
+| VAT @ {{ vat_rate }}                               |         {{ vat_amount }} |
+| **Total (inc. VAT)**                               | **{{ amount_inc_vat }}** |
+
+{% if vat_number %}
+**VAT Registration Number**: GB {{ vat_number }}
+{% endif %}
+
+**Supplier**: {{ company_name }}{% if company_address %}
+{{ company_address }}{% endif %}
+
+---
+
 ### Quick Links
 
 - [Manage Subscription]({{ site_url }}/subscription/) - View plan details and billing

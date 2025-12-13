@@ -278,6 +278,12 @@ class UserProfile(models.Model):
         default="",
         help_text="Subscription ID from payment provider",
     )
+    payment_mandate_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Mandate ID from payment provider (GoCardless)",
+    )
     subscription_status = models.CharField(
         max_length=30,
         choices=SubscriptionStatus.choices,
@@ -521,3 +527,203 @@ class UserProfile(models.Model):
                 "updated_at",
             ]
         )
+
+
+class Payment(models.Model):
+    """Record of payment transactions for VAT reporting and audit trail.
+
+    Each successful payment creates a record here for quarterly VAT returns.
+    """
+
+    class PaymentStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        CONFIRMED = "confirmed", "Confirmed"
+        FAILED = "failed", "Failed"
+        REFUNDED = "refunded", "Refunded"
+
+    # Link to user
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="payments",
+        help_text="User who made the payment",
+    )
+
+    # Invoice details
+    invoice_number = models.CharField(
+        max_length=50,
+        unique=True,
+        help_text="Unique invoice number for VAT purposes",
+    )
+    invoice_date = models.DateField(help_text="Date of invoice")
+
+    # Payment details
+    payment_provider = models.CharField(
+        max_length=50,
+        default="gocardless",
+        help_text="Payment provider (gocardless, manual, etc.)",
+    )
+    payment_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Payment ID from provider",
+    )
+    subscription_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Subscription ID from provider",
+    )
+
+    # Tier and billing period
+    tier = models.CharField(
+        max_length=20,
+        help_text="Subscription tier at time of payment",
+    )
+    billing_period_start = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Start of billing period",
+    )
+    billing_period_end = models.DateField(
+        null=True,
+        blank=True,
+        help_text="End of billing period",
+    )
+
+    # Amounts (stored in pence/minor currency units)
+    amount_ex_vat = models.IntegerField(help_text="Amount excluding VAT in pence")
+    vat_amount = models.IntegerField(help_text="VAT amount in pence")
+    amount_inc_vat = models.IntegerField(
+        help_text="Total amount including VAT in pence"
+    )
+    vat_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        default=0.20,
+        help_text="VAT rate applied (e.g., 0.20 for 20%)",
+    )
+    currency = models.CharField(max_length=3, default="GBP")
+
+    # Customer details at time of payment (for invoice)
+    customer_email = models.EmailField(help_text="Customer email at time of payment")
+    customer_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Customer name/username",
+    )
+
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=PaymentStatus.choices,
+        default=PaymentStatus.PENDING,
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    confirmed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When payment was confirmed",
+    )
+
+    class Meta:
+        verbose_name = "Payment"
+        verbose_name_plural = "Payments"
+        ordering = ["-invoice_date", "-created_at"]
+        indexes = [
+            models.Index(fields=["invoice_date"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["user"]),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.invoice_number} - £{self.amount_inc_vat / 100:.2f} ({self.status})"
+        )
+
+    @classmethod
+    def generate_invoice_number(cls) -> str:
+        """Generate a unique invoice number.
+
+        Format: INV-YYYYMMDD-XXXXXXXX
+        """
+        from datetime import date
+        import uuid
+
+        today = date.today()
+        unique_part = uuid.uuid4().hex[:8].upper()
+        return f"INV-{today.strftime('%Y%m%d')}-{unique_part}"
+
+    @classmethod
+    def create_from_subscription(
+        cls,
+        user,
+        tier: str,
+        payment_id: str = "",
+        subscription_id: str = "",
+        billing_period_start=None,
+        billing_period_end=None,
+    ):
+        """Create a payment record from a subscription confirmation.
+
+        Args:
+            user: Django User instance
+            tier: Subscription tier
+            payment_id: Payment ID from provider
+            subscription_id: Subscription ID from provider
+            billing_period_start: Start of billing period
+            billing_period_end: End of billing period
+
+        Returns:
+            Payment instance
+        """
+        from datetime import date
+
+        from django.conf import settings
+
+        # Get tier pricing
+        tier_config = getattr(settings, "SUBSCRIPTION_TIERS", {}).get(tier, {})
+        amount_ex_vat = tier_config.get("amount_ex_vat", 0)
+        amount_inc_vat = tier_config.get("amount", 0)
+        vat_amount = amount_inc_vat - amount_ex_vat
+        vat_rate = getattr(settings, "VAT_RATE", 0.20)
+
+        return cls.objects.create(
+            user=user,
+            invoice_number=cls.generate_invoice_number(),
+            invoice_date=date.today(),
+            payment_provider="gocardless",
+            payment_id=payment_id,
+            subscription_id=subscription_id,
+            tier=tier,
+            billing_period_start=billing_period_start,
+            billing_period_end=billing_period_end,
+            amount_ex_vat=amount_ex_vat,
+            vat_amount=vat_amount,
+            amount_inc_vat=amount_inc_vat,
+            vat_rate=vat_rate,
+            currency=tier_config.get("currency", "GBP"),
+            customer_email=user.email,
+            customer_name=user.get_full_name() or user.username,
+            status=cls.PaymentStatus.CONFIRMED,
+            confirmed_at=timezone.now(),
+        )
+
+    def get_amount_ex_vat_display(self) -> str:
+        """Return formatted amount excluding VAT."""
+        return f"£{self.amount_ex_vat / 100:.2f}"
+
+    def get_vat_amount_display(self) -> str:
+        """Return formatted VAT amount."""
+        return f"£{self.vat_amount / 100:.2f}"
+
+    def get_amount_inc_vat_display(self) -> str:
+        """Return formatted total amount."""
+        return f"£{self.amount_inc_vat / 100:.2f}"
+
+    def get_vat_rate_display(self) -> str:
+        """Return formatted VAT rate."""
+        return f"{float(self.vat_rate) * 100:.0f}%"

@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Payment History" %} - CheckTick{% endblock %}
+
+{% block content %}
+<div class="prose max-w-none">
+  <h1>{% trans "Payment History" %}</h1>
+
+  <div class="not-prose">
+    <div class="mb-4">
+      <a href="{% url 'core:subscription_portal' %}" class="btn btn-ghost btn-sm">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+        {% trans "Back to Subscription" %}
+      </a>
+    </div>
+
+    {% if payments %}
+      <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title">{% trans "Your Payments" %}</h2>
+          <div class="overflow-x-auto">
+            <table class="table table-zebra">
+              <thead>
+                <tr>
+                  <th>{% trans "Date" %}</th>
+                  <th>{% trans "Amount" %}</th>
+                  <th>{% trans "Status" %}</th>
+                  <th>{% trans "Description" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for payment in payments %}
+                <tr>
+                  <td>{{ payment.created_at|date:"d M Y" }}</td>
+                  <td>
+                    {% if payment.currency == 'GBP' %}£{% elif payment.currency == 'EUR' %}€{% elif payment.currency == 'USD' %}${% endif %}{{ payment.amount|floatformat:2 }}
+                  </td>
+                  <td>
+                    {% if payment.status == 'confirmed' or payment.status == 'paid_out' %}
+                      <span class="badge badge-success">{% trans "Paid" %}</span>
+                    {% elif payment.status == 'pending_submission' or payment.status == 'submitted' %}
+                      <span class="badge badge-warning">{% trans "Processing" %}</span>
+                    {% elif payment.status == 'failed' %}
+                      <span class="badge badge-error">{% trans "Failed" %}</span>
+                    {% elif payment.status == 'cancelled' %}
+                      <span class="badge badge-ghost">{% trans "Cancelled" %}</span>
+                    {% else %}
+                      <span class="badge">{{ payment.status }}</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ payment.description|default:"-" }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <div class="alert alert-info">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span>{% trans "No payment history found. Payments will appear here once your first subscription payment is processed." %}</span>
+      </div>
+    {% endif %}
+
+    <div class="mt-8 p-4 bg-base-200 rounded-lg">
+      <h3 class="font-bold mb-2">{% trans "About Direct Debit Payments" %}</h3>
+      <p class="text-sm">
+        {% trans "Your subscription payments are collected automatically via Direct Debit. Payments typically take 3-5 working days to process. You can view and manage your Direct Debit mandate through your bank's online banking." %}
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

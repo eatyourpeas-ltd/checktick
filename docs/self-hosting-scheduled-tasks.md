@@ -8,7 +8,7 @@ CheckTick requires scheduled tasks for data governance operations, housekeeping,
 
 ## Overview
 
-CheckTick uses six scheduled tasks:
+CheckTick uses seven scheduled tasks:
 
 ### 1. Data Governance (Required for GDPR)
 
@@ -128,6 +128,39 @@ python manage.py process_recovery_time_delays --verbose
 
 - CheckTick deployed and running
 - Email configured (for sending deletion warnings)
+
+### 7. Subscription Expiry Processing (Required for Billing)
+
+The `process_expired_subscriptions` management command runs daily to:
+
+1. **Process expired subscriptions** - Downgrades users whose subscription period has ended
+2. **Handle past due accounts** - Downgrades users who failed to pay after the grace period (default: 7 days)
+3. **Auto-close excess surveys** - Closes (locks) surveys exceeding the free tier limit (oldest first)
+4. **Send notifications** - Emails users about their account changes
+
+**Required for Billing**: This command ensures subscription expirations and failed payments result in appropriate downgrades. Without it, users with expired subscriptions would retain paid features indefinitely.
+
+**Note**: This task is NOT needed for self-hosted instances where `SELF_HOSTED=True` (billing is disabled).
+
+**Schedule**: Run daily, typically at a quiet hour (e.g., 3am).
+
+```bash
+# Check what would be processed (dry-run)
+python manage.py process_expired_subscriptions --dry-run --verbose
+
+# Process expired subscriptions
+python manage.py process_expired_subscriptions
+
+# Custom grace period (default is 7 days)
+python manage.py process_expired_subscriptions --grace-days=10
+```
+
+**What happens when a subscription expires:**
+- Account is downgraded to FREE tier
+- Surveys exceeding the limit (3) are automatically **closed** (not deleted)
+- Closed surveys remain accessible in read-only mode
+- User can still view and export all data
+- User can reopen surveys by upgrading again
 - Access to your hosting platform's scheduling features
 
 ---

@@ -113,9 +113,10 @@
       <div class="card-body">
         <h2 class="card-title text-2xl mb-2">{% trans "Individual Pro" %}</h2>
         <div class="mb-4">
-          <span class="text-3xl font-bold">£5</span>
+          <span class="text-3xl font-bold">£6</span>
           <span class="text-base-content/70">/{% trans "month" %}</span>
           <p class="text-sm text-base-content/70">{% trans "Unlimited surveys" %}</p>
+          <p class="text-xs text-base-content/50">{% trans "inc. VAT" %}</p>
         </div>
 
         <div class="divider"></div>
@@ -170,11 +171,15 @@
             {% if user.profile.account_tier == 'pro' %}
               <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
             {% elif user.profile.account_tier == 'free' %}
-              <a href="mailto:sales@checktick.uk?subject=CheckTick%20Pro%20Subscription" class="btn btn-primary btn-block">
-                {% trans "Contact Sales" %}
-              </a>
+              <form method="post" action="{% url 'core:start_checkout' %}">
+                {% csrf_token %}
+                <input type="hidden" name="tier" value="pro">
+                <button type="submit" class="btn btn-primary btn-block">
+                  {% trans "Subscribe Now" %}
+                </button>
+              </form>
             {% else %}
-              <button class="btn btn-outline btn-block" disabled>{% trans "Contact Sales" %}</button>
+              <a href="{% url 'core:subscription_portal' %}" class="btn btn-outline btn-block">{% trans "Manage Subscription" %}</a>
             {% endif %}
           {% elif not user.is_authenticated %}
             <a href="/signup/" class="btn btn-primary btn-block">{% trans "Get Started" %}</a>
@@ -195,22 +200,23 @@
             <span class="label-text font-semibold">{% trans "Select team size:" %}</span>
           </label>
           <select id="team-size-selector" class="select select-bordered w-full">
-            <option value="team_small" data-price="25" data-members="5" data-price-id="{{ price_ids.team_small }}">
-              {% trans "Small" %} - 5 {% trans "members" %} - £25/{% trans "month" %}
+            <option value="team_small" data-price="30" data-members="5" data-price-id="{{ price_ids.team_small }}">
+              {% trans "Small" %} - 5 {% trans "members" %} - £30/{% trans "month" %}
             </option>
-            <option value="team_medium" data-price="50" data-members="10" data-price-id="{{ price_ids.team_medium }}">
-              {% trans "Medium" %} - 10 {% trans "members" %} - £50/{% trans "month" %}
+            <option value="team_medium" data-price="90" data-members="15" data-price-id="{{ price_ids.team_medium }}">
+              {% trans "Medium" %} - 15 {% trans "members" %} - £90/{% trans "month" %}
             </option>
-            <option value="team_large" data-price="100" data-members="20" data-price-id="{{ price_ids.team_large }}">
-              {% trans "Large" %} - 20 {% trans "members" %} - £100/{% trans "month" %}
+            <option value="team_large" data-price="300" data-members="50" data-price-id="{{ price_ids.team_large }}">
+              {% trans "Large" %} - 50 {% trans "members" %} - £300/{% trans "month" %}
             </option>
           </select>
         </div>
 
         <div class="mb-4">
-          <span class="text-3xl font-bold" id="team-price-display">£25</span>
+          <span class="text-3xl font-bold" id="team-price-display">£30</span>
           <span class="text-base-content/70">/{% trans "month" %}</span>
           <p class="text-sm text-base-content/70" id="team-members-display">{% trans "Up to" %} 5 {% trans "team members" %}</p>
+          <p class="text-xs text-base-content/50">{% trans "inc. VAT" %}</p>
         </div>
 
         <div class="divider"></div>
@@ -253,9 +259,13 @@
             {% if user.profile.account_tier in 'team_small,team_medium,team_large' %}
               <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
             {% else %}
-              <a href="mailto:sales@checktick.uk?subject=CheckTick%20Team%20Subscription" class="btn btn-primary btn-block">
-                {% trans "Contact Sales" %}
-              </a>
+              <form method="post" action="{% url 'core:start_checkout' %}" id="team-checkout-form">
+                {% csrf_token %}
+                <input type="hidden" name="tier" value="team_small" id="team-tier-input">
+                <button type="submit" class="btn btn-primary btn-block" id="team-checkout-btn">
+                  {% trans "Subscribe Now" %}
+                </button>
+              </form>
             {% endif %}
           {% elif not user.is_authenticated %}
             <a href="/signup/" class="btn btn-primary btn-block">{% trans "Get Started" %}</a>
@@ -639,26 +649,63 @@
 document.addEventListener('DOMContentLoaded', function() {
   // Team size selector functionality
   const teamSelector = document.getElementById('team-size-selector');
-  const teamCheckoutBtn = document.getElementById('team-checkout-btn');
+  const teamTierInput = document.getElementById('team-tier-input');
   const teamPriceDisplay = document.getElementById('team-price-display');
   const teamMembersDisplay = document.getElementById('team-members-display');
 
-  if (teamSelector && teamCheckoutBtn) {
+  if (teamSelector && teamTierInput) {
     teamSelector.addEventListener('change', function() {
       const selected = this.options[this.selectedIndex];
       const tier = selected.value;
       const price = selected.dataset.price;
       const members = selected.dataset.members;
-      const priceId = selected.dataset.priceId;
 
       // Update display
       if (teamPriceDisplay) teamPriceDisplay.textContent = '£' + price;
       if (teamMembersDisplay) teamMembersDisplay.textContent = 'Up to ' + members + ' team members';
 
-      // Update checkout button
-      teamCheckoutBtn.dataset.tier = tier;
-      teamCheckoutBtn.dataset.priceId = priceId;
+      // Update hidden tier input for form submission
+      teamTierInput.value = tier;
     });
+  }
+
+  // Auto-open checkout for users redirected from signup with a pending tier
+  const container = document.querySelector('[data-auto-open-checkout]');
+  if (container && container.dataset.autoOpenCheckout === 'true') {
+    const pendingTier = container.dataset.pendingTier;
+    if (pendingTier) {
+      // Find the appropriate form and submit it
+      let formToSubmit = null;
+
+      if (pendingTier === 'pro') {
+        // Find the Pro tier form (has hidden input with value="pro")
+        const proForms = document.querySelectorAll('form input[name="tier"][value="pro"]');
+        if (proForms.length > 0) {
+          formToSubmit = proForms[0].closest('form');
+        }
+      } else if (pendingTier.startsWith('team_')) {
+        // Set the team selector to the correct tier and submit
+        const teamForm = document.getElementById('team-checkout-form');
+        if (teamForm && teamSelector && teamTierInput) {
+          // Select the correct team size
+          for (let i = 0; i < teamSelector.options.length; i++) {
+            if (teamSelector.options[i].value === pendingTier) {
+              teamSelector.selectedIndex = i;
+              teamTierInput.value = pendingTier;
+              break;
+            }
+          }
+          formToSubmit = teamForm;
+        }
+      }
+
+      // Auto-submit after a brief delay to let user see the page
+      if (formToSubmit) {
+        setTimeout(function() {
+          formToSubmit.submit();
+        }, 500);
+      }
+    }
   }
 });
 </script>

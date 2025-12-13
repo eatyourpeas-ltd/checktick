@@ -80,6 +80,10 @@ urlpatterns = [
         name="payment_history",
     ),
     path("billing/success/", views_billing.checkout_success, name="checkout_success"),
+    path("billing/start/", views_billing.start_checkout, name="start_checkout"),
+    path(
+        "billing/complete/", views_billing.checkout_complete, name="checkout_complete"
+    ),
     path(
         "billing/update-team-name/",
         views_billing.update_team_name,

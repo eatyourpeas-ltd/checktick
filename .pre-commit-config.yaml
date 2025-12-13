@@ -5,6 +5,23 @@ repos:
       - id: end-of-file-fixer
       - id: trailing-whitespace
 
+  # Semgrep - catches security issues similar to CodeQL (XSS, injection, etc.)
+  - repo: https://github.com/semgrep/semgrep
+    rev: v1.102.0
+    hooks:
+      - id: semgrep
+        name: Semgrep security scan
+        args:
+          - --config=p/python
+          - --config=p/django
+          - --config=p/security-audit
+          - --error
+          - --quiet
+        # Only run on changed Python files for speed
+        types: [python]
+        # Skip test files (less critical for security)
+        exclude: ^tests/
+
   # Check for hardcoded passwords in Python test files (only in new commits)
   - repo: local
     hooks:

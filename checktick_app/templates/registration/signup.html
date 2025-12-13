@@ -33,7 +33,8 @@
           {% trans 'Sign up to start creating surveys and collecting responses.' %}
         </p>
 
-        {# Tier selection #}
+        {# Tier selection - hidden for self-hosted instances #}
+        {% if not self_hosted %}
         <div class="form-control mb-6">
           <div class="flex items-center justify-between">
             <span class="label-text font-semibold text-lg">{% trans 'Choose Your Plan' %}</span>
@@ -137,6 +138,7 @@
             </p>
           </div>
         </div>
+        {% endif %}
 
         {# Hidden account type field - set to simple by default #}
         <input type="hidden" name="account_type_hidden" value="simple" />

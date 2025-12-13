@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}
+  {% trans 'Complete Your Subscription' %} - {{ organisation.name }}
+{% endblock %}
+
+{% block content %}
+  <div class="container mx-auto px-4 py-12 max-w-2xl">
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        {# Header #}
+        <div class="text-center mb-8">
+          <h1 class="text-3xl font-bold mb-2">{% trans 'Welcome to' %} {{ organisation.name }}</h1>
+          <p class="text-base-content/70">
+            {% trans 'Complete your subscription to get started' %}
+          </p>
+        </div>
+
+        {# Pricing Summary #}
+        <div class="card bg-base-200 mb-8">
+          <div class="card-body">
+            <h2 class="card-title text-lg mb-4">
+              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+              </svg>
+              {% trans 'Subscription Summary' %}
+            </h2>
+
+            <div class="space-y-3">
+              {% if billing_type == 'per_seat' %}
+                <div class="flex justify-between items-center">
+                  <span>{% trans 'Price per seat' %}</span>
+                  <span class="font-mono">£{{ price_per_seat|floatformat:2 }}/{% trans 'month' %}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span>{% trans 'Number of seats' %}</span>
+                  <span class="font-mono">{{ seats }}</span>
+                </div>
+              {% elif billing_type == 'flat_rate' %}
+                <div class="flex justify-between items-center">
+                  <span>{% trans 'Flat rate subscription' %}</span>
+                  <span class="font-mono">£{{ monthly_cost_ex_vat|floatformat:2 }}/{% trans 'month' %}</span>
+                </div>
+                {% if seats %}
+                  <div class="flex justify-between items-center text-base-content/70">
+                    <span>{% trans 'Maximum seats included' %}</span>
+                    <span>{{ seats }}</span>
+                  </div>
+                {% endif %}
+              {% endif %}
+
+              <div class="divider my-2"></div>
+
+              <div class="flex justify-between items-center">
+                <span>{% trans 'Subtotal' %}</span>
+                <span class="font-mono">£{{ monthly_cost_ex_vat|floatformat:2 }}</span>
+              </div>
+              <div class="flex justify-between items-center text-base-content/70">
+                <span>{% trans 'VAT' %} ({{ vat_rate_percent }}%)</span>
+                <span class="font-mono">£{{ vat_amount|floatformat:2 }}</span>
+              </div>
+
+              <div class="divider my-2"></div>
+
+              <div class="flex justify-between items-center text-lg font-bold">
+                <span>{% trans 'Total per month' %}</span>
+                <span class="font-mono text-primary">£{{ monthly_cost_inc_vat|floatformat:2 }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# Payment Info #}
+        <div class="alert mb-6">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <div>
+            <h3 class="font-bold">{% trans 'Secure Direct Debit' %}</h3>
+            <p class="text-sm">
+              {% trans "You'll be redirected to GoCardless to set up your Direct Debit. Payments are protected by the Direct Debit Guarantee." %}
+            </p>
+          </div>
+        </div>
+
+        {# Checkout Form #}
+        <form action="{% url 'surveys:organisation_start_checkout' token=token %}" method="post" class="space-y-4">
+          {% csrf_token %}
+
+          <div class="form-control">
+            <label class="label" for="email">
+              <span class="label-text">{% trans 'Billing email' %}</span>
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              class="input input-bordered"
+              placeholder="{% trans 'your@email.com' %}"
+              value="{{ organisation.billing_contact_email }}"
+              required
+            />
+            <label class="label">
+              <span class="label-text-alt">{% trans 'Receipts and invoices will be sent to this address' %}</span>
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg w-full">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            {% trans 'Set Up Direct Debit' %}
+          </button>
+        </form>
+
+        {# Terms #}
+        <p class="text-xs text-center text-base-content/50 mt-6">
+          {% trans 'By proceeding, you agree to our' %}
+          <a href="/terms/" class="link link-hover" target="_blank">{% trans 'Terms of Service' %}</a>
+          {% trans 'and' %}
+          <a href="/privacy/" class="link link-hover" target="_blank">{% trans 'Privacy Policy' %}</a>.
+        </p>
+      </div>
+    </div>
+
+    {# Company Footer #}
+    {% if company_name or vat_number %}
+      <div class="text-center text-sm text-base-content/50 mt-8">
+        {% if company_name %}{{ company_name }}{% endif %}
+        {% if vat_number %} · VAT: {{ vat_number }}{% endif %}
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

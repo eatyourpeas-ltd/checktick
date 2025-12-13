@@ -1,10 +1,30 @@
 from django.urls import path
 
-from . import views, views_data_governance as gov_views
+from . import (
+    views,
+    views_data_governance as gov_views,
+    views_organisation_billing as org_billing_views,
+)
 
 app_name = "surveys"
 
 urlpatterns = [
+    # Organisation checkout (must be before slug routes)
+    path(
+        "organisation/checkout/<str:token>/",
+        org_billing_views.organisation_checkout,
+        name="organisation_checkout",
+    ),
+    path(
+        "organisation/checkout/<str:token>/start/",
+        org_billing_views.organisation_start_checkout,
+        name="organisation_start_checkout",
+    ),
+    path(
+        "organisation/checkout/<str:token>/complete/",
+        org_billing_views.organisation_checkout_complete,
+        name="organisation_checkout_complete",
+    ),
     path("", views.survey_list, name="list"),
     # User management hub (must be before slug routes)
     path("manage/users/", views.user_management_hub, name="user_management_hub"),
