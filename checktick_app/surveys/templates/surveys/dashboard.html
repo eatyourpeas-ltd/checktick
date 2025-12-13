@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load i18n %}
+{% load static %}
 {% load survey_extras %}
 {% block head_theme_overrides %}
   {% if survey.style.theme_css_light or survey.style.theme_css_dark %}
@@ -328,10 +329,33 @@
         <label class="label">Font CSS URL (e.g. Google Fonts)</label>
         <input class="input input-bordered w-full" name="font_css_url" value="{{ survey.style.font_css_url }}" placeholder="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Source+Serif+4:wght@400;700&display=swap" />
       </div>
-      <div class="md:col-span-2">
+      <div class="md:col-span-2 flex flex-wrap gap-2">
         <button class="btn btn-primary" type="submit">Save style</button>
+        <button type="button" class="btn btn-outline btn-secondary" id="run-accessibility-test" data-survey-preview-url="{% url 'surveys:preview' slug=survey.slug %}">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {% trans "Test Accessibility" %}
+        </button>
       </div>
     </form>
+
+    {# Accessibility test results container #}
+    <div id="accessibility-results" class="mt-4 hidden">
+      <div class="card bg-base-200 shadow-sm">
+        <div class="card-body">
+          <h4 class="card-title text-base">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {% trans "Accessibility Test Results" %}
+          </h4>
+          <div id="accessibility-results-content" aria-live="polite">
+            {# Results will be inserted here by JavaScript #}
+          </div>
+        </div>
+      </div>
+    </div>
   </details>
 
   {# Group management is available on the Groups page #}
@@ -749,5 +773,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
   </div>
 </dialog>
+
+<script src="{% static 'js/accessibility-test.js' %}"></script>
 
 {% endblock %}

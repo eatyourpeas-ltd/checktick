@@ -19,6 +19,7 @@ CheckTick self-hosts critical JavaScript libraries with Subresource Integrity (S
 |---------|---------|------|---------|
 | HTMX | 1.9.12 | `checktick_app/static/js/htmx.min.js` | Dynamic HTML updates without JavaScript |
 | SortableJS | 1.15.2 | `checktick_app/static/js/sortable.min.js` | Drag-and-drop reordering |
+| axe-core | 4.10.2 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
 
 ## SRI Hashes
 
@@ -34,6 +35,12 @@ sha384-EfwldhYywH4qYH9vU8lMn+pd6pcH0kGpPUVJuwyHnj/5felkkIUVxf1wMAEX7rCY
 
 ```text
 sha384-x9T5uN6arBCGAt3RJPa+A5l/6KQXb0UC7Eig1DxZI+EekZYlD+5S+EEJ+U2lebod
+```
+
+### axe-core 4.10.2
+
+```text
+sha384-3NYxCdpLKVHfNs2FHPtg3qqaYuhq85m4mMnlHBlN0JzSpKYKct2PMGYfsKGaKIj4
 ```
 
 ## Automatic Updates
@@ -62,6 +69,9 @@ curl -o checktick_app/static/js/htmx.min.js https://unpkg.com/htmx.org@1.9.12/di
 
 # SortableJS
 curl -o checktick_app/static/js/sortable.min.js https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js
+
+# axe-core
+curl -o checktick_app/static/js/axe-core.min.js https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js
 ```
 
 ### 2. Generate SRI Hash
@@ -146,3 +156,4 @@ Since files are self-hosted, CDN outages don't affect the application. If you ne
 |---------|-------------|-------------|
 | HTMX | unpkg.com | jsdelivr.net |
 | SortableJS | jsdelivr.net | unpkg.com |
+| axe-core | cdnjs.cloudflare.com | unpkg.com |

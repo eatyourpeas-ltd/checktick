@@ -1,3 +1,9 @@
+---
+title: Accessibility
+category: internationalization
+priority: 2
+---
+
 # Accessibility
 
 CheckTick is designed with accessibility in mind, following **WCAG 2.1 AA** guidelines to ensure surveys are usable by people with disabilities, including those using screen readers, keyboard navigation, and other assistive technologies.

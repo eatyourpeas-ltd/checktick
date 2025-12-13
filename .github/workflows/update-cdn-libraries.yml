@@ -17,6 +17,7 @@ env:
   SORTABLEJS_VERSION: "1.15.2"
   SWAGGER_UI_VERSION: "5.17.14"
   REDOC_VERSION: "2.1.5"
+  AXE_CORE_VERSION: "4.10.2"
 
 jobs:
   check-libraries:
@@ -28,6 +29,9 @@ jobs:
       sortablejs_changed: ${{ steps.check-sortablejs.outputs.changed }}
       sortablejs_new_hash: ${{ steps.check-sortablejs.outputs.new_hash }}
       sortablejs_current_hash: ${{ steps.check-sortablejs.outputs.current_hash }}
+      axecore_changed: ${{ steps.check-axecore.outputs.changed }}
+      axecore_new_hash: ${{ steps.check-axecore.outputs.new_hash }}
+      axecore_current_hash: ${{ steps.check-axecore.outputs.current_hash }}
 
     steps:
       - name: Checkout repository
@@ -89,6 +93,34 @@ jobs:
             echo "SortableJS is up to date"
           fi
 
+      - name: Check axe-core
+        id: check-axecore
+        run: |
+          # Download the pinned version of axe-core
+          curl -s -o axecore-new.js "https://cdnjs.cloudflare.com/ajax/libs/axe-core/${{ env.AXE_CORE_VERSION }}/axe.min.js"
+
+          # Calculate new hash
+          NEW_HASH=$(openssl dgst -sha384 -binary axecore-new.js | openssl base64 -A)
+          echo "new_hash=${NEW_HASH}" >> $GITHUB_OUTPUT
+
+          # Calculate current hash
+          if [ -f checktick_app/static/js/axe-core.min.js ]; then
+            CURRENT_HASH=$(openssl dgst -sha384 -binary checktick_app/static/js/axe-core.min.js | openssl base64 -A)
+            echo "current_hash=${CURRENT_HASH}" >> $GITHUB_OUTPUT
+          else
+            echo "current_hash=" >> $GITHUB_OUTPUT
+          fi
+
+          # Compare hashes
+          if [ "${NEW_HASH}" != "${CURRENT_HASH}" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "axe-core has been updated or is missing"
+            cp axecore-new.js checktick_app/static/js/axe-core.min.js
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "axe-core is up to date"
+          fi
+
       - name: Check for newer versions available
         id: check-versions
         run: |
@@ -120,9 +152,22 @@ jobs:
             echo "sortablejs_update_available=false" >> $GITHUB_OUTPUT
           fi
 
+          # Check axe-core latest version from npm
+          AXECORE_LATEST=$(curl -s "https://registry.npmjs.org/axe-core" | jq -r '.["dist-tags"].latest')
+          echo "axe-core: Current pinned = ${{ env.AXE_CORE_VERSION }}, Latest = ${AXECORE_LATEST}"
+          echo "axecore_latest=${AXECORE_LATEST}" >> $GITHUB_OUTPUT
+
+          if [ "${{ env.AXE_CORE_VERSION }}" != "${AXECORE_LATEST}" ]; then
+            echo "- ⚠️ **axe-core**: Newer version available (${AXECORE_LATEST} vs ${{ env.AXE_CORE_VERSION }})" >> $GITHUB_STEP_SUMMARY
+            echo "axecore_update_available=true" >> $GITHUB_OUTPUT
+          else
+            echo "- ✅ **axe-core**: Up to date (${{ env.AXE_CORE_VERSION }})" >> $GITHUB_STEP_SUMMARY
+            echo "axecore_update_available=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create Pull Request for hash changes
         id: create-pr
-        if: steps.check-htmx.outputs.changed == 'true' || steps.check-sortablejs.outputs.changed == 'true'
+        if: steps.check-htmx.outputs.changed == 'true' || steps.check-sortablejs.outputs.changed == 'true' || steps.check-axecore.outputs.changed == 'true'
         continue-on-error: true
         uses: peter-evans/create-pull-request@v6
         with:
@@ -133,6 +178,7 @@ jobs:
             Libraries updated:
             - HTMX ${{ env.HTMX_VERSION }}: ${{ steps.check-htmx.outputs.changed == 'true' && 'Updated' || 'No change' }}
             - SortableJS ${{ env.SORTABLEJS_VERSION }}: ${{ steps.check-sortablejs.outputs.changed == 'true' && 'Updated' || 'No change' }}
+            - axe-core ${{ env.AXE_CORE_VERSION }}: ${{ steps.check-axecore.outputs.changed == 'true' && 'Updated' || 'No change' }}
           branch: update-cdn-libraries
           delete-branch: true
           title: "Update CDN libraries with new SRI hashes"
@@ -147,15 +193,18 @@ jobs:
             |---------|---------|--------|----------|
             | HTMX | ${{ env.HTMX_VERSION }} | ${{ steps.check-htmx.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-htmx.outputs.new_hash }}` |
             | SortableJS | ${{ env.SORTABLEJS_VERSION }} | ${{ steps.check-sortablejs.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-sortablejs.outputs.new_hash }}` |
+            | axe-core | ${{ env.AXE_CORE_VERSION }} | ${{ steps.check-axecore.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-axecore.outputs.new_hash }}` |
 
             ### Files Updated
             - `checktick_app/static/js/htmx.min.js`
             - `checktick_app/static/js/sortable.min.js`
+            - `checktick_app/static/js/axe-core.min.js`
 
             ### Testing Checklist
             Before merging, please verify:
             - [ ] Survey form works correctly (HTMX)
             - [ ] Question reordering works (SortableJS)
+            - [ ] Accessibility testing works (axe-core)
             - [ ] No console errors or CSP violations
             - [ ] Build survey page functions correctly
 
@@ -173,7 +222,7 @@ jobs:
             ```
 
       - name: Create Issue for version upgrades
-        if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true'
+        if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true' || steps.check-versions.outputs.axecore_update_available == 'true'
         uses: peter-evans/create-issue-from-file@v5
         with:
           title: "CDN Library Version Updates Available"
@@ -184,7 +233,7 @@ jobs:
         continue-on-error: true
 
       - name: Create version update issue content
-        if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true'
+        if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true' || steps.check-versions.outputs.axecore_update_available == 'true'
         run: |
           cat << 'EOF' > /tmp/issue-body.md
           ## CDN Library Version Updates Available
@@ -197,6 +246,7 @@ jobs:
           |---------|---------|--------|-----------|
           ${{ steps.check-versions.outputs.htmx_update_available == 'true' && format('| HTMX | {0} | {1} | [Changelog](https://github.com/bigskysoftware/htmx/releases) |', env.HTMX_VERSION, steps.check-versions.outputs.htmx_latest) || '' }}
           ${{ steps.check-versions.outputs.sortablejs_update_available == 'true' && format('| SortableJS | {0} | {1} | [Changelog](https://github.com/SortableJS/Sortable/releases) |', env.SORTABLEJS_VERSION, steps.check-versions.outputs.sortablejs_latest) || '' }}
+          ${{ steps.check-versions.outputs.axecore_update_available == 'true' && format('| axe-core | {0} | {1} | [Changelog](https://github.com/dequelabs/axe-core/releases) |', env.AXE_CORE_VERSION, steps.check-versions.outputs.axecore_latest) || '' }}
 
           ### To Upgrade
 
@@ -212,7 +262,7 @@ jobs:
           EOF
 
       - name: Create version update issue
-        if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true'
+        if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true' || steps.check-versions.outputs.axecore_update_available == 'true'
         uses: peter-evans/create-issue-from-file@v5
         with:
           title: "CDN Library Version Updates Available"
