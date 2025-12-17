@@ -1,4 +1,4 @@
-{#
+{% comment %}
 Response Insights Partial
 
 Displays answer distribution charts for survey responses.
@@ -13,7 +13,7 @@ To swap to Plotly later:
 1. Change this partial to render a container div with data attributes
 2. Add a script block that initializes Plotly charts from the data
 3. The view/service stays the same - just the rendering changes
-#}
+{% endcomment %}
 {% load i18n %}
 
 {% if analytics.distributions %}
@@ -98,8 +98,8 @@ To swap to Plotly later:
         {% endfor %}
       </div>
 
-      {# Placeholder for future: date range filter #}
-      {#
+      {% comment %}
+      Placeholder for future: date range filter
       <div class="mt-4 flex gap-2 items-center">
         <span class="text-sm">{% trans "Filter by date:" %}</span>
         <select class="select select-sm select-bordered">
@@ -108,7 +108,7 @@ To swap to Plotly later:
           <option>{% trans "Last 30 days" %}</option>
         </select>
       </div>
-      #}
+      {% endcomment %}
     </div>
   </details>
 </div>
@@ -131,8 +131,7 @@ To swap to Plotly later:
 </div>
 {% endif %}
 
-{#
-================================================================================
+{% comment %}
 FUTURE: To swap to Plotly, replace the bar chart section above with:
 
 <div class="response-chart-plotly"
@@ -159,5 +158,4 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
-================================================================================
-#}
+{% endcomment %}
