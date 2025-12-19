@@ -5,10 +5,11 @@
 {% block platform_title %}{% trans "Dashboard" %}{% endblock %}
 
 {% block platform_content %}
+
 <!-- Stats Cards -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
   <div class="stat bg-base-100 rounded-box shadow">
-    <div class="stat-title">{% trans "Total Organizations" %}</div>
+    <div class="stat-title">{% trans "Total Organisations" %}</div>
     <div class="stat-value text-primary">{{ org_stats.total }}</div>
     <div class="stat-desc">{{ org_stats.active }} {% trans "active" %}</div>
   </div>
@@ -33,11 +34,11 @@
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-  <!-- Recent Organizations -->
+  <!-- Recent Organisations -->
   <div class="card bg-base-100 shadow">
     <div class="card-body">
       <div class="flex items-center justify-between">
-        <h2 class="card-title">{% trans "Recent Organizations" %}</h2>
+        <h2 class="card-title">{% trans "Recent Organisations" %}</h2>
         <a href="{% url 'core:platform_admin_org_create' %}" class="btn btn-sm btn-primary">
           + {% trans "Create New" %}
         </a>

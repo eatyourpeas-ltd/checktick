@@ -61,6 +61,7 @@
 </div>
 
 <div class="flex items-center gap-3 mt-2">
+  {% include "components/icons/checktick_your_surveys.html" with classes="w-6 h-6" %}
   <h2 class="text-2xl font-bold">
     <a class="link text-base-content underline hover:text-primary" href="/surveys/{{ survey.slug }}/groups/" id="survey-title-display">{{ survey.name }}</a>
   </h2>

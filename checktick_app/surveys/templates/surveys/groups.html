@@ -18,7 +18,7 @@
     {% trans 'Question Groups' as crumb3_text %}
     {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href='/surveys/' crumb2_label=crumb2_text crumb2_href='/surveys/'|add:survey.slug|add:'/dashboard/' crumb3_label=crumb3_text %}
     <h1 class="inline-flex items-center gap-2 w-full text-base-content">
-      {% include 'components/icons/documents.html' with classes='w-7 h-7 text-base-content' %}
+      {% include "components/icons/checktick_question_group.html" with classes="w-7 h-7" %}
       <span>{% blocktrans %}Question Groups for {{ survey }}{% endblocktrans %}</span>
     </h1>
     <p class="mt-2 text-sm opacity-80 w-full">

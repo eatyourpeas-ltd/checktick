@@ -39,7 +39,7 @@
           <div class="tooltip" data-tip="{{ tooltip_superuser }}">
             <div class="indicator">
               <div class="bg-primary text-primary-content rounded-full w-12 h-12 flex items-center justify-center">
-                {% include "components/icons/bolt.html" with classes="w-6 h-6" %}
+                {% include "components/icons/checktick_platform_admin.html" with classes="w-6 h-6" %}
               </div>
             </div>
           </div>
@@ -109,7 +109,7 @@
             <div class="indicator">
               <span class="indicator-item badge badge-outline badge-primary text-xs">{{ stats.surveys_owned }}</span>
               <div class="bg-primary text-primary-content rounded-full w-12 h-12 flex items-center justify-center">
-                {% include "components/icons/clipboard.html" with classes="w-6 h-6" %}
+                {% include "components/icons/checktick_group_surveys.html" with classes="w-6 h-6" %}
               </div>
             </div>
           </div>
@@ -129,7 +129,7 @@
             <div class="indicator">
               <span class="indicator-item badge badge-outline badge-neutral text-xs">{{ stats.survey_viewer_count }}</span>
               <div class="bg-neutral text-neutral-content rounded-full w-12 h-12 flex items-center justify-center">
-                {% include "components/icons/clipboard.html" with classes="w-6 h-6" %}
+                {% include "components/icons/checktick_group_surveys.html" with classes="w-6 h-6" %}
               </div>
             </div>
           </div>
@@ -139,7 +139,7 @@
             <div class="indicator">
               <span class="indicator-item badge badge-outline badge-success text-xs">{{ stats.groups_owned }}</span>
               <div class="bg-success text-success-content rounded-full w-12 h-12 flex items-center justify-center">
-                {% include "components/icons/documents.html" with classes="w-6 h-6" %}
+                {% include "components/icons/checktick_question_group.html" with classes="w-6 h-6" %}
               </div>
             </div>
           </div>
@@ -149,7 +149,7 @@
             <div class="indicator">
               <span class="indicator-item badge badge-outline badge-warning text-xs">{{ stats.responses_submitted }}</span>
               <div class="bg-warning text-warning-content rounded-full w-12 h-12 flex items-center justify-center hover:ring-2 hover:ring-warning hover:ring-offset-2 transition-all">
-                {% include "components/icons/clipboard.html" with classes="w-6 h-6" %}
+                {% include "components/icons/checktick_question.html" with classes="w-6 h-6" %}
               </div>
             </div>
           </a>
@@ -717,7 +717,7 @@
     <div class="card bg-warning/10 border border-warning/20 shadow">
       <div class="card-body">
         <h2 class="card-title inline-flex items-center gap-2 text-warning">
-          {% include "components/icons/shield-exclamation.html" with classes="w-3 h-3 text-warning flex-shrink-0" %}
+          {% include "components/icons/shield-exclamation.html" with classes="w-5 h-5 text-warning flex-shrink-0" %}
           <span>{% trans "Superuser Administration" %}</span>
         </h2>
 

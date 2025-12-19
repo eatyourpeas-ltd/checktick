@@ -2,7 +2,7 @@
 {% load static %}
 {% load i18n %}
 
-{% block platform_title %}{% if editing %}{% trans "Edit" %} {{ org.name }}{% else %}{% trans "Create Organization" %}{% endif %}{% endblock %}
+{% block platform_title %}{% if editing %}{% trans "Edit" %} {{ org.name }}{% else %}{% trans "Create Organisation" %}{% endif %}{% endblock %}
 
 {% block platform_content %}
 <div class="flex items-center gap-4 mb-6">
@@ -10,7 +10,7 @@
     ← {% trans "Back" %}
   </a>
   <h2 class="text-xl font-semibold">
-    {% if editing %}{% trans "Edit Organization" %}{% else %}{% trans "Create New Organization" %}{% endif %}
+    {% if editing %}{% trans "Edit Organisation" %}{% else %}{% trans "Create New Organisation" %}{% endif %}
   </h2>
 </div>
 
