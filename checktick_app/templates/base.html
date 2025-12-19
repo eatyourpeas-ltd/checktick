@@ -96,7 +96,7 @@
             {% endif %}
           </ul>
         </div>
-        <a href="{% url 'core:home' %}" class="btn btn-ghost h-12 px-2">
+        <a href="{% url 'core:home' %}" class="btn btn-ghost h-12 px-2" aria-label="{% trans 'Go to home page' %}">
           {% if brand.icon_url %}
             {# Custom brand icon - show light/dark variants #}
             <span class="theme-light-icon">

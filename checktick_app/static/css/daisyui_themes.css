@@ -106,6 +106,31 @@
   }
 }
 
+/*
+ * Prose code block styling override for WCAG AA contrast compliance.
+ * Tailwind Typography's default colors may not meet contrast requirements
+ * with all daisyUI themes. These overrides use theme-aware CSS variables
+ * to ensure sufficient contrast in both light and dark modes.
+ * Placed outside @layer for higher specificity.
+ */
+.prose pre {
+  background-color: var(--color-base-300) !important;
+  color: var(--color-base-content) !important;
+}
+
+.prose pre code,
+.prose pre code[class*="language-"] {
+  background-color: transparent !important;
+  color: inherit !important;
+}
+
+.prose :not(pre) > code {
+  background-color: var(--color-base-200) !important;
+  color: var(--color-base-content) !important;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
 /* stylelint-disable at-rule-no-unknown */
 :root {
   --theme-root: ":root";
