@@ -60,6 +60,10 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "HTMX has been updated or is missing"
             cp htmx-new.js checktick_app/static/js/htmx.min.js
+            # Update integrity hash in base.html
+            sed -i "s|integrity=\"sha384-[A-Za-z0-9+/=]*\"\([[:space:]]*crossorigin=\"anonymous\">.*htmx\)|integrity=\"sha384-${NEW_HASH}\"\1|g" checktick_app/templates/base.html || true
+            # More robust: Update the line after htmx.min.js
+            sed -i "/htmx\.min\.js/,/integrity=/{s|integrity=\"sha384-[A-Za-z0-9+/=]*\"|integrity=\"sha384-${NEW_HASH}\"|}" checktick_app/templates/base.html || true
           else
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "HTMX is up to date"
@@ -88,6 +92,15 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "SortableJS has been updated or is missing"
             cp sortable-new.js checktick_app/static/js/sortable.min.js
+            # Update integrity hash in all SortableJS template files
+            for file in checktick_app/surveys/templates/surveys/detail.html \
+                        checktick_app/surveys/templates/surveys/builder.html \
+                        checktick_app/surveys/templates/surveys/groups.html \
+                        checktick_app/surveys/templates/surveys/group_builder.html; do
+              if [ -f "$file" ]; then
+                sed -i "/sortable\.min\.js/,/integrity=/{s|integrity=\"sha384-[A-Za-z0-9+/=]*\"|integrity=\"sha384-${NEW_HASH}\"|}" "$file" || true
+              fi
+            done
           else
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "SortableJS is up to date"
@@ -199,6 +212,8 @@ jobs:
             - `checktick_app/static/js/htmx.min.js`
             - `checktick_app/static/js/sortable.min.js`
             - `checktick_app/static/js/axe-core.min.js`
+            - `checktick_app/templates/base.html` (HTMX integrity hash)
+            - `checktick_app/surveys/templates/surveys/*.html` (SortableJS integrity hashes)
 
             ### Testing Checklist
             Before merging, please verify:
@@ -208,18 +223,11 @@ jobs:
             - [ ] No console errors or CSP violations
             - [ ] Build survey page functions correctly
 
-            ### Manual Steps Required
-            If SRI hashes have changed, update the templates:
+            ### Integrity Hashes (Auto-Updated)
+            The SRI integrity hashes in templates have been automatically updated:
 
-            **base.html (HTMX)**:
-            ```html
-            integrity="sha384-${{ steps.check-htmx.outputs.new_hash }}"
-            ```
-
-            **detail.html, builder.html, groups.html, group_builder.html (SortableJS)**:
-            ```html
-            integrity="sha384-${{ steps.check-sortablejs.outputs.new_hash }}"
-            ```
+            **HTMX** (base.html): `sha384-${{ steps.check-htmx.outputs.new_hash }}`
+            **SortableJS** (detail.html, builder.html, groups.html, group_builder.html): `sha384-${{ steps.check-sortablejs.outputs.new_hash }}`
 
       - name: Create Issue for version upgrades
         if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true' || steps.check-versions.outputs.axecore_update_available == 'true'
