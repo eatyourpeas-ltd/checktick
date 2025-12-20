@@ -7,7 +7,7 @@ from django.urls import reverse
 import pytest
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 class TestPasswordResetFlow:
     def test_password_reset_pages_render(self, client):
         assert client.get(reverse("password_reset")).status_code == 200
@@ -15,11 +15,14 @@ class TestPasswordResetFlow:
         assert client.get(reverse("password_reset_complete")).status_code == 200
 
     def test_request_reset_sends_email(self, client):
-        # Generate passwords at runtime to avoid hardcoded secrets in repo
+        # Generate passwords and unique identifiers at runtime to avoid conflicts in parallel tests
         initial_password = secrets.token_urlsafe(12)
         new_password = secrets.token_urlsafe(16)
+        unique_id = secrets.token_hex(8)
         user = User.objects.create_user(
-            username="alice", email="alice@example.com", password=initial_password
+            username=f"alice_{unique_id}",
+            email=f"alice_{unique_id}@example.com",
+            password=initial_password,
         )
         resp = client.post(reverse("password_reset"), {"email": user.email})
         # Redirect to done
