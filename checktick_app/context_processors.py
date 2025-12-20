@@ -125,46 +125,28 @@ def branding(request):
         # All authenticated users can create datasets (individual or organization-based)
         can_create_datasets_flag = True
 
-    # Defaults from settings
+    # All defaults are defined in settings.py - this is the single source of truth
     brand = {
-        "title": getattr(settings, "BRAND_TITLE", "CheckTick"),
-        # Only set when explicitly configured
-        "icon_url": getattr(settings, "BRAND_ICON_URL", None),
-        # Optional dark-mode icon; when present, shown when data-theme contains 'checktick-dark'
-        "icon_url_dark": getattr(settings, "BRAND_ICON_URL_DARK", None),
-        # Accessibility and UX metadata for the brand icon
-        "icon_alt": getattr(settings, "BRAND_ICON_ALT", None),
-        "icon_title": getattr(settings, "BRAND_ICON_TITLE", None),
-        # Icon size (Tailwind classes). Prefer explicit class; fall back to numeric size -> w-{n} h-{n}
-        "icon_size_class": None,
-        "theme_name": getattr(settings, "BRAND_THEME", "checktick-light"),
-        "font_heading": getattr(
-            settings,
-            "BRAND_FONT_HEADING",
-            "'DIN Round Pro', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-        ),
-        "font_body": getattr(
-            settings,
-            "BRAND_FONT_BODY",
-            "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-        ),
-        "font_css_url": getattr(
-            settings,
-            "BRAND_FONT_CSS_URL",
-            "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap",
-        ),
-        # Optional CSS overrides injected into head to support DaisyUI builder pastes
-        "theme_css_light": getattr(settings, "BRAND_THEME_CSS_LIGHT", ""),
-        "theme_css_dark": getattr(settings, "BRAND_THEME_CSS_DARK", ""),
-        # DaisyUI preset theme names
-        "theme_preset_light": getattr(settings, "BRAND_THEME_PRESET_LIGHT", "lofi"),
-        "theme_preset_dark": getattr(settings, "BRAND_THEME_PRESET_DARK", "dim"),
+        "title": settings.BRAND_TITLE or "CheckTick",
+        "icon_url": settings.BRAND_ICON_URL,
+        "icon_url_dark": settings.BRAND_ICON_URL_DARK,
+        "icon_alt": settings.BRAND_ICON_ALT,
+        "icon_title": settings.BRAND_ICON_TITLE,
+        "icon_size_class": None,  # Computed below
+        "theme_name": settings.BRAND_THEME or "checktick-light",
+        "font_heading": settings.BRAND_FONT_HEADING,
+        "font_body": settings.BRAND_FONT_BODY,
+        "font_css_url": settings.BRAND_FONT_CSS_URL,
+        "theme_css_light": settings.BRAND_THEME_CSS_LIGHT or "",
+        "theme_css_dark": settings.BRAND_THEME_CSS_DARK or "",
+        "theme_preset_light": settings.BRAND_THEME_PRESET_LIGHT or "lofi",
+        "theme_preset_dark": settings.BRAND_THEME_PRESET_DARK or "dim",
     }
     # Compute icon_size_class from settings
     try:
-        size_class = getattr(settings, "BRAND_ICON_SIZE_CLASS", None)
+        size_class = settings.BRAND_ICON_SIZE_CLASS
         if not size_class:
-            raw_size = getattr(settings, "BRAND_ICON_SIZE", None)
+            raw_size = settings.BRAND_ICON_SIZE
             if isinstance(raw_size, int) or (
                 isinstance(raw_size, str) and raw_size.isdigit()
             ):
