@@ -120,15 +120,15 @@ Platform-level branding can be configured via environment variables. These are i
 
 ### Font Settings
 
-- `BRAND_FONT_HEADING` (str) — CSS font stack for headings. Default: `'DIN 2014 Rounded', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif`
+- `BRAND_FONT_HEADING` (str) — CSS font stack for headings. Default: `'DIN Round Pro', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif`
 - `BRAND_FONT_BODY` (str) — CSS font stack for body text. Default: `'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif`
 - `BRAND_FONT_CSS_URL` (str) — External font CSS URL. Default: Google Fonts URL for IBM Plex Sans
 
 ### Local Fonts
 
-CheckTick includes local font files for the default heading font (DIN 2014 Rounded) in `/static/fonts/`. These are loaded automatically via CSS `@font-face` declarations in `/static/fonts/din-2014-rounded.css`.
+CheckTick includes local font files for the default heading font (DIN Round Pro) in `/static/fonts/`. These are loaded automatically via CSS `@font-face` declarations in `/static/fonts/din-round-pro.css`.
 
-Available weights: 200 (ExtraLight), 300 (Light), 400 (Regular), 600 (SemiBold), 700 (Bold), 800 (ExtraBold).
+Available weights: 300 (Light), 400 (Regular), 500 (Medium), 700 (Bold), 900 (Black).
 
 The body font (IBM Plex Sans) is loaded from Google Fonts by default via `BRAND_FONT_CSS_URL`.
 
@@ -431,7 +431,7 @@ When multiple theme levels are configured, CheckTick uses this precedence:
 - **Profile UI**: `checktick_app/core/templates/core/profile.html` (theme preset dropdowns)
 - **Theme switcher JS**: `checktick_app/static/js/theme-toggle.js`, `admin-theme.js`
 - **Survey dashboard style form**: `checktick_app/surveys/templates/surveys/dashboard.html`
-- **Local fonts**: `checktick_app/static/fonts/din-2014-rounded.css`
+- **Local fonts**: `checktick_app/static/fonts/din-round-pro.css`
 - **Branding sync command**: `checktick_app/core/management/commands/sync_branding.py`
 
 ## Rebuilding the CSS

@@ -30,11 +30,11 @@
   <meta name="checktick-theme" content="{{ brand.theme_name|default:'checktick-light' }}">
   <style>
     :root {
-      --font-heading: {{ brand.font_heading }};
-      --font-body: {{ brand.font_body }};
+      --font-heading: {{ brand.font_heading|safe }};
+      --font-body: {{ brand.font_body|safe }};
     }
-    h1,h2,h3,h4,h5,h6,.font-heading { font-family: var(--font-heading); }
-    body, .font-body { font-family: var(--font-body); }
+    h1,h2,h3,h4,h5,h6,.font-heading { font-family: var(--font-heading) !important; }
+    body, .font-body { font-family: var(--font-body) !important; }
   </style>
   <script src="{% static 'js/admin-theme.js' %}"></script>
 {% endblock %}

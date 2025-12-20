@@ -141,7 +141,7 @@ def branding(request):
         "font_heading": getattr(
             settings,
             "BRAND_FONT_HEADING",
-            "DIN, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+            "'DIN Round Pro', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
         ),
         "font_body": getattr(
             settings,
@@ -180,17 +180,30 @@ def branding(request):
             sb = SiteBranding.objects.first()
             if sb:
                 # Determine icon href: prefer uploaded file when present
+                # Only use file reference if the file actually exists in storage
                 icon_href = brand["icon_url"]
                 dark_icon_href = brand["icon_url_dark"]
                 try:
                     if getattr(sb, "icon_file", None) and sb.icon_file.name:
-                        from django.conf import settings as _s
+                        # Check if file actually exists in storage before using it
+                        try:
+                            if sb.icon_file.storage.exists(sb.icon_file.name):
+                                from django.conf import settings as _s
 
-                        icon_href = f"{_s.MEDIA_URL}{sb.icon_file.name}"
+                                icon_href = f"{_s.MEDIA_URL}{sb.icon_file.name}"
+                        except Exception:
+                            pass  # File doesn't exist, fall back to default
                     if getattr(sb, "icon_file_dark", None) and sb.icon_file_dark.name:
-                        from django.conf import settings as _s2
+                        # Check if file actually exists in storage before using it
+                        try:
+                            if sb.icon_file_dark.storage.exists(sb.icon_file_dark.name):
+                                from django.conf import settings as _s2
 
-                        dark_icon_href = f"{_s2.MEDIA_URL}{sb.icon_file_dark.name}"
+                                dark_icon_href = (
+                                    f"{_s2.MEDIA_URL}{sb.icon_file_dark.name}"
+                                )
+                        except Exception:
+                            pass  # File doesn't exist, fall back to default
                 except Exception:
                     pass
 

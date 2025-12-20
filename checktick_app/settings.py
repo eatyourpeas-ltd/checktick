@@ -33,7 +33,7 @@ env = environ.Env(
     ),  # Default daisyUI preset for checktick-dark
     BRAND_FONT_HEADING=(
         str,
-        "DIN, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+        "'DIN Round Pro', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
     ),
     BRAND_FONT_BODY=(
         str,
@@ -94,11 +94,11 @@ BRAND_THEME = env("BRAND_THEME")
 BRAND_THEME_PRESET_LIGHT = env("BRAND_THEME_PRESET_LIGHT")
 BRAND_THEME_PRESET_DARK = env("BRAND_THEME_PRESET_DARK")
 # Font settings: use env var if non-empty, otherwise use hardcoded default
-_DEFAULT_FONT_HEADING = "'DIN 2014 Rounded', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
-_DEFAULT_FONT_BODY = (
-    "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif"
-)
-_DEFAULT_FONT_CSS_URL = ""  # Empty means use local fonts only
+# DIN Round Pro is loaded locally via static/fonts/din-round-pro.css (always included in base.html)
+# IBM Plex Sans is loaded from Google Fonts as the default body font
+_DEFAULT_FONT_HEADING = "'DIN Round Pro', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+_DEFAULT_FONT_BODY = "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+_DEFAULT_FONT_CSS_URL = "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
 BRAND_FONT_HEADING = env("BRAND_FONT_HEADING") or _DEFAULT_FONT_HEADING
 BRAND_FONT_BODY = env("BRAND_FONT_BODY") or _DEFAULT_FONT_BODY
 BRAND_FONT_CSS_URL = env("BRAND_FONT_CSS_URL") or _DEFAULT_FONT_CSS_URL

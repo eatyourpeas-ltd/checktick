@@ -49,7 +49,7 @@ services:
         condition: service_healthy
     volumes:
       - ./:/app
-    command: sh -lc "npm install && npm run build:css && python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8000"
+    command: sh -lc "npm install && npm run build:css && python manage.py migrate --noinput && python manage.py collectstatic --noinput --clear && python manage.py runserver 0.0.0.0:8000"
 
 volumes:
   db_data:

@@ -12,8 +12,8 @@
   <meta property="og:type" content="website" />
     <title>{% block title %}{{ brand.title }}{% endblock %}</title>
   <link rel="icon" href="{% static 'icons/CheckTick_tick.svg' %}" type="image/svg+xml" />
-    {# Local DIN font for headings #}
-    <link rel="stylesheet" href="{% static 'fonts/din.css' %}">
+    {# Local DIN Round Pro font for headings #}
+    <link rel="stylesheet" href="{% static 'fonts/din-round-pro.css' %}?v=2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   {% if brand.font_css_url %}<link href="{{ brand.font_css_url }}" rel="stylesheet">{% endif %}
@@ -48,11 +48,11 @@
     {% block head_theme_overrides %}{% endblock %}
     <style>
       :root {
-        --font-heading: {{ brand.font_heading }};
-        --font-body: {{ brand.font_body }};
+        --font-heading: {{ brand.font_heading|safe }};
+        --font-body: {{ brand.font_body|safe }};
       }
-      h1,h2,h3,h4,h5,h6,.font-heading { font-family: var(--font-heading); }
-      body, .font-body { font-family: var(--font-body); }
+      h1,h2,h3,h4,h5,h6,.font-heading { font-family: var(--font-heading) !important; }
+      body, .font-body { font-family: var(--font-body) !important; }
     </style>
     {% block icon_link %}
       {# Only render favicon link when an explicit icon URL is provided #}

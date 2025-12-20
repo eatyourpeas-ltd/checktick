@@ -1,0 +1,49 @@
+/* DIN Round Pro Font Family - Local font faces */
+@font-face {
+  font-family: 'DIN Round Pro';
+  src: url('dinroundpro_light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DIN Round Pro';
+  src: url('dinroundpro.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DIN Round Pro';
+  src: url('dinroundpro_medi.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Map 600 (semibold) to medium since we don't have a semibold variant */
+@font-face {
+  font-family: 'DIN Round Pro';
+  src: url('dinroundpro_medi.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DIN Round Pro';
+  src: url('dinroundpro_bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DIN Round Pro';
+  src: url('dinroundpro_black.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
