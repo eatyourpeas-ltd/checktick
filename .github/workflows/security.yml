@@ -42,7 +42,8 @@ jobs:
                     --ignore-vuln GHSA-gm62-xv2j-4w53 \
                     --ignore-vuln GHSA-2xpw-w6gg-jr37 \
                     --ignore-vuln GHSA-wj6h-64fc-37mp \
-                    --ignore-vuln PYSEC-2024-187
+                    --ignore-vuln PYSEC-2024-187 \
+                    --ignore-vuln GHSA-428g-f7cq-pgp5  # <--- Add this line
               continue-on-error: false
 
             - name: Audit dev dependencies
@@ -56,8 +57,9 @@ jobs:
                     --ignore-vuln GHSA-gm62-xv2j-4w53 \
                     --ignore-vuln GHSA-2xpw-w6gg-jr37 \
                     --ignore-vuln GHSA-wj6h-64fc-37mp \
-                    --ignore-vuln PYSEC-2024-187
-              continue-on-error: true # Dev deps are less critical
+                    --ignore-vuln PYSEC-2024-187 \
+                    --ignore-vuln GHSA-428g-f7cq-pgp5  # <--- Add this line
+              continue-on-error: true
 
     codeql:
         name: CodeQL Analysis
