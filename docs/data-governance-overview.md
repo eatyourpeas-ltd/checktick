@@ -8,6 +8,7 @@ CheckTick takes data protection and governance seriously. This guide explains ho
 ## What is Data Governance?
 
 Data governance is the framework that ensures survey data is:
+
 - **Secure** - Protected from unauthorized access
 - **Compliant** - Meets legal and regulatory requirements
 - **Controlled** - Only accessible to authorized people
@@ -17,6 +18,7 @@ Data governance is the framework that ensures survey data is:
 ## Why Does It Matter?
 
 When you collect survey data, especially in healthcare, you may be handling sensitive or personal information. Good data governance protects:
+
 - **Participants** - Their privacy and confidentiality
 - **Your organization** - From data breaches and compliance violations
 - **You** - From legal liability and reputational damage
@@ -50,6 +52,7 @@ This ensures data is only extracted when collection is complete.
 ### 3. Time-Limited Storage
 
 Survey data is **not kept indefinitely**. By default:
+
 - Data is kept for **6 months** after survey closure
 - You receive warnings at **1 month**, **1 week**, and **1 day** before deletion
 - Data is automatically deleted unless you extend retention
@@ -58,6 +61,7 @@ Survey data is **not kept indefinitely**. By default:
 ### 4. Audit Trail
 
 Every data access is logged:
+
 - Who downloaded data
 - When they downloaded it
 - What survey data was downloaded
@@ -69,6 +73,7 @@ Organization administrators receive email notifications for all data downloads.
 ### 5. User Responsibility
 
 When you download data, you become responsible for:
+
 - Storing it securely (encrypted, password-protected location)
 - Not sharing it inappropriately
 - Deleting it when no longer needed
@@ -117,6 +122,7 @@ When you download data, you become responsible for:
 ### Legal Holds
 
 In rare cases, a **legal hold** may be placed on survey data:
+
 - Prevents automatic deletion
 - Applied by organization owners or administrators
 - Requires a documented reason
@@ -126,6 +132,7 @@ In rare cases, a **legal hold** may be placed on survey data:
 ### Ownership Transfer
 
 If a survey creator leaves the organization:
+
 - Survey ownership automatically transfers to the organization owner
 - All permissions and access rights are maintained
 - Both parties are notified via email
@@ -134,6 +141,7 @@ If a survey creator leaves the organization:
 ### Data Custodian Role
 
 Organizations can designate a **Data Custodian** for specific surveys:
+
 - Can download data but cannot edit the survey
 - Useful for delegating data management
 - Receives deletion warning emails
@@ -143,6 +151,7 @@ Organizations can designate a **Data Custodian** for specific surveys:
 ## Your Responsibilities
 
 ### As a Survey Creator
+
 - Close surveys promptly when data collection is complete
 - Download data only when necessary
 - Store downloaded data securely
@@ -151,6 +160,7 @@ Organizations can designate a **Data Custodian** for specific surveys:
 - Justify any retention extensions
 
 ### As an Organization Owner
+
 - Set clear data policies for your organization
 - Monitor data downloads across all surveys
 - Review retention extensions
@@ -159,6 +169,7 @@ Organizations can designate a **Data Custodian** for specific surveys:
 - Respond to legal hold requests
 
 ### As a Data Custodian
+
 - Download data only when authorized
 - Follow your organization's data handling procedures
 - Store exports securely
@@ -184,6 +195,7 @@ If you have questions about data governance:
 ## Compliance
 
 CheckTick is designed to support compliance with:
+
 - **GDPR** (General Data Protection Regulation)
 - **UK Data Protection Act 2018**
 - **NHS Data Security and Protection Toolkit**

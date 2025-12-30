@@ -111,6 +111,7 @@ Same as Individual, with faster recovery:
 ### Immediate Actions
 
 1. **Check Vault status** (for self-hosters):
+
    ```bash
    # Check Vault health
    curl -s https://your-vault-url/v1/sys/health | jq
@@ -123,6 +124,7 @@ Same as Individual, with faster recovery:
    ```
 
 2. **If Vault is sealed**, unseal it:
+
    ```bash
    # You need 3 of 4 unseal keys
    vault operator unseal <key1>

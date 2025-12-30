@@ -9,6 +9,7 @@ priority: 0
 CheckTick implements comprehensive security controls aligned with the [OWASP Top 10 (2021)](https://owasp.org/Top10/) to protect healthcare data. This document provides an overview of our security architecture and maps features to OWASP categories.
 
 **Related Security Documentation**:
+
 - [Authentication & Permissions](/docs/authentication-and-permissions/) – Access control, SSO, and role-based permissions
 - [Encryption for Users](/docs/encryption-for-users/) – How your data is encrypted
 - [Key Management for Administrators](/docs/key-management-for-administrators/) – Enterprise key management
@@ -192,6 +193,7 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 - Environment variables for all sensitive configuration
 
 **Related Documentation**:
+
 - [Self-Hosting Configuration](/docs/self-hosting-configuration/)
 - [Self-Hosting Quickstart](/docs/self-hosting-quickstart/)
 
@@ -225,7 +227,6 @@ All client-side JavaScript libraries are self-hosted with Subresource Integrity 
 | HTMX | Dynamic updates | ✅ SHA-384 |
 | SortableJS | Drag-and-drop | ✅ SHA-384 |
 
-
 See [CDN Libraries](/docs/cdn-libraries/) for current versions and hashes.
 
 #### Known Limitations
@@ -236,6 +237,7 @@ Some vulnerabilities are blocked by upstream dependencies:
 - These are tracked and will be updated when upstream releases fixes
 
 **Related Documentation**:
+
 - [CDN Libraries](/docs/cdn-libraries/)
 
 ---
@@ -283,6 +285,7 @@ Healthcare-compliant password requirements:
 - **Email notification** sent when account is locked
 
 **Related Documentation**:
+
 - [Authentication & Permissions](/docs/authentication-and-permissions/)
 - [OIDC SSO Setup](/docs/oidc-sso-setup/)
 
@@ -412,6 +415,7 @@ Audit logs are structured for export to SIEM systems:
 | Secrets detection | Every commit | GitGuardian (pre-commit) |
 | Static analysis | Every PR | CodeQL (GitHub Actions) |
 | Container scanning | On build | Docker Scout (optional) |
+
 
 ### Reporting Security Issues
 

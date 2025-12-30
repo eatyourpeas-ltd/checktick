@@ -310,7 +310,7 @@ To exercise any of these rights:
 * **Use in-app features** for data export and account deletion
 * **Expect a response** within 30 days
 
-We may request verification of your identity before fulfilling requests.
+We may request verification of your identity before fulfilling requests. We verify identity by requiring the request to come from the registered account email and confirming a recent transaction ID or account detail
 
 ## 8. Children's Privacy
 
