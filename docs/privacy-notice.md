@@ -209,7 +209,6 @@ We implement strong encryption:
 
 ### 5.2 Access Controls
 
-
 * User data is isolated by account
 * Role-based access control (RBAC) for organizations
 * Multi-factor authentication available (ENTERPRISE tier)

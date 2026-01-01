@@ -64,6 +64,7 @@ Each action is verified against the user's role at the appropriate level.
 - API endpoints enforce same permissions as web UI
 
 **Related Documentation**:
+
 - [Authentication & Permissions](/docs/authentication-and-permissions/)
 - [Account Types & Tiers](/docs/getting-started-account-types/)
 

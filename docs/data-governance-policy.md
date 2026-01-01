@@ -355,21 +355,25 @@ Participants can object to processing based on:
 We implement:
 
 **Encryption:**
+
 - Data encrypted in transit (TLS 1.3)
 - Data encrypted at rest (AES-256)
 - Database encryption
 
 **Access Control:**
+
 - Role-based access control (RBAC)
 - Multi-factor authentication (recommended)
 - Password policies (minimum 12 characters)
 
 **Audit Logging:**
+
 - All data access logged
 - Download history maintained
 - Regular audit reviews
 
 **Backup and Recovery:**
+
 - Regular automated backups
 - Encrypted backups
 - Disaster recovery procedures
@@ -381,22 +385,26 @@ We implement:
 We implement:
 
 **Policies and Procedures:**
+
 - This data protection policy
 - Data breach response plan
 - Access control procedures
 - Retention and deletion schedules
 
 **Training:**
+
 - Mandatory data protection training
 - Role-specific training
 - Regular refresher training
 
 **Audits:**
+
 - Regular compliance audits
 - Penetration testing
 - Vulnerability assessments
 
 **Vendor Management:**
+
 - Data processing agreements with third parties
 - Vendor security assessments
 - Regular reviews
@@ -408,11 +416,13 @@ We implement:
 ### 8.1 Internal Sharing
 
 Data may be shared within the organization with:
+
 - Organization administrators
 - Survey creators (their own surveys)
 - Data custodians (assigned surveys)
 
 **Conditions:**
+
 - Role-based access only
 - Legitimate need to know
 - Logged and auditable
@@ -420,12 +430,14 @@ Data may be shared within the organization with:
 ### 8.2 External Sharing
 
 Data may be shared externally only when:
+
 - Legal obligation requires it
 - Participant has consented
 - Necessary for public health
 - Anonymized/aggregated (not personal data)
 
 **Safeguards:**
+
 - Data sharing agreement in place
 - Minimum necessary data shared
 - Secure transfer methods
@@ -434,6 +446,7 @@ Data may be shared externally only when:
 ### 8.3 International Transfers
 
 If data is transferred outside UK/EU:
+
 - Adequate level of protection ensured
 - Appropriate safeguards in place (e.g., Standard Contractual Clauses)
 - Documented and approved
@@ -449,6 +462,7 @@ If data is transferred outside UK/EU:
 A data breach is any incident that compromises the confidentiality, integrity, or availability of personal data.
 
 **Examples:**
+
 - Unauthorized access
 - Accidental disclosure
 - Loss or theft of devices
@@ -475,6 +489,7 @@ A data breach is any incident that compromises the confidentiality, integrity, o
 If breach likely to result in risk to rights and freedoms:
 
 **Report to ICO (or relevant authority):**
+
 - Within 72 hours of becoming aware
 - Include details of breach and mitigation
 - Ongoing updates as investigation proceeds
@@ -486,6 +501,7 @@ If breach likely to result in risk to rights and freedoms:
 If breach likely to result in high risk to individuals:
 
 **Notify affected individuals:**
+
 - Without undue delay
 - In clear, plain language
 - Describe nature of breach
@@ -500,6 +516,7 @@ If breach likely to result in high risk to individuals:
 ### 10.1 When Required
 
 We conduct DPIAs for:
+
 - New types of data collection
 - Large-scale processing of special category data
 - Systematic monitoring
@@ -519,6 +536,7 @@ We conduct DPIAs for:
 ### 10.3 Consultation
 
 DPIAs are reviewed by:
+
 - Data Protection Officer
 - Organization administrator
 - Relevant stakeholders
@@ -531,15 +549,18 @@ DPIAs are reviewed by:
 ### 11.1 Retention Periods
 
 **Survey Responses:**
+
 - Default: 6 months after survey closure
 - Maximum: 24 months after survey closure
 - Extensions require justification
 
 **Audit Logs:**
+
 - Retained for 6 years (regulatory requirement)
 - Anonymized after 2 years
 
 **Backup Data:**
+
 - Included in main retention periods
 - Purged when main data deleted
 
@@ -548,11 +569,13 @@ DPIAs are reviewed by:
 ### 11.2 Deletion Process
 
 **Soft Deletion:**
+
 - Survey data marked deleted
 - 30-day grace period for recovery
 - Not visible to users
 
 **Hard Deletion:**
+
 - After 30 days, permanent deletion
 - All backups purged
 - Cannot be recovered
@@ -561,11 +584,13 @@ DPIAs are reviewed by:
 ### 11.3 Legal Holds
 
 Processing may be extended beyond retention periods for:
+
 - Legal proceedings
 - Regulatory investigations
 - Formal complaints
 
 **Legal holds:**
+
 - Applied by organization owner only
 - Require documented justification
 - Reviewed every 6 months
@@ -578,6 +603,7 @@ Processing may be extended beyond retention periods for:
 ### 12.1 Mandatory Training
 
 All users must complete:
+
 - Data protection awareness training (annually)
 - Role-specific training (on appointment)
 - CheckTick-specific training (before first use)
@@ -585,6 +611,7 @@ All users must complete:
 ### 12.2 Training Content
 
 **Awareness Training Covers:**
+
 - Data protection principles
 - Legal obligations
 - Individual rights
@@ -592,6 +619,7 @@ All users must complete:
 - Breach reporting
 
 **Role-Specific Training:**
+
 - Survey creators: Privacy by design, consent
 - Data custodians: Secure data handling
 - Organization owners: Compliance oversight
@@ -609,6 +637,7 @@ All users must complete:
 ### 13.1 Policy Review
 
 This policy is reviewed:
+
 - Annually (minimum)
 - When regulations change
 - After significant data breaches
@@ -619,6 +648,7 @@ This policy is reviewed:
 ### 13.2 Compliance Monitoring
 
 We monitor compliance through:
+
 - Quarterly access audits
 - Annual security assessments
 - Data protection impact assessments
@@ -628,6 +658,7 @@ We monitor compliance through:
 ### 13.3 Metrics
 
 We track:
+
 - Number of surveys with personal data
 - Data subject requests (type, response time)
 - Data breaches (number, severity)
@@ -661,10 +692,12 @@ To exercise your rights (access, rectification, erasure, etc.):
 If you are not satisfied with how we handle your data:
 
 **Internal Complaint:**
+
 - Contact our DPO/administrator (details above)
 - We will investigate and respond within 30 days
 
 **External Complaint:**
+
 - You have the right to complain to the supervisory authority:
 
 **Information Commissioner's Office (ICO):**
@@ -677,6 +710,7 @@ Post: Information Commissioner's Office, Wycliffe House, Water Lane, Wilmslow, C
 ## 15. Related Documentation
 
 **User Guides:**
+
 - [Data Governance Overview](/docs/data-governance-overview/)
 - [Data Export Guide](/docs/data-governance-export/)
 - [Data Retention Policy](/docs/data-governance-retention/)
@@ -684,10 +718,12 @@ Post: Information Commissioner's Office, Wycliffe House, Water Lane, Wilmslow, C
 - [Special Cases Guide](/docs/data-governance-special-cases/)
 
 **Technical Documentation:**
+
 - [Implementation Guide](/docs/data-governance-implementation/)
 - [API Documentation](/docs/api/)
 
 **External References:**
+
 - [UK GDPR Guidance (ICO)](https://ico.org.uk/for-organisations/guide-to-data-protection/guide-to-the-general-data-protection-regulation-gdpr/)
 - [NHS Data Security and Protection Toolkit](https://www.dsptoolkit.nhs.uk/)
 - [Caldicott Principles](https://www.gov.uk/government/publications/the-caldicott-principles)
@@ -710,6 +746,7 @@ Post: Information Commissioner's Office, Wycliffe House, Water Lane, Wilmslow, C
 | DPO (if applicable) | {{ site.dpo_name \| default: "Name" }} | _________________ | ________ |
 
 **Distribution:**
+
 - All CheckTick users (via system notification)
 - Organization website
 - Staff handbook

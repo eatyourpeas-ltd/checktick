@@ -39,9 +39,25 @@ Not everyone can access survey data. Access is strictly controlled based on role
 
 \* *Optional role - can be assigned per survey for data management delegation*
 
+**Organization Administrative Authority**
+To ensure accountability, every CheckTick Organization must have at least one designated Owner.
+
+*Provisioning*:
+
+Owners have the exclusive right to invite new members and assign roles (Editor, Viewer, Data Custodian).
+
+*Deprovisioning*:
+
+Owners are responsible for removing users who no longer require access (e.g., staff who have left the Trust).
+
+*CheckTick Support:*
+
+CheckTick staff will only intervene in account management upon a verified request from the registered Organization Owner or via a formal legal instruction.
+
 ### 2. Survey Closure
 
 Data can only be downloaded after a survey has been formally **closed**. Closing a survey:
+
 - Locks all responses (no further edits)
 - Enables data export functionality
 - Starts the retention countdown

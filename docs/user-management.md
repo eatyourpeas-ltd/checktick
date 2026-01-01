@@ -179,7 +179,7 @@ Actions:
 
 Authentication: All endpoints below require JWT. Include "Authorization: Bearer <access_token>".
 
-### Organization memberships
+### Organisation memberships
 
 - List: GET /api/org-memberships/
 - Create: POST /api/org-memberships/
@@ -188,7 +188,7 @@ Authentication: All endpoints below require JWT. Include "Authorization: Bearer 
 
 Scope and permissions:
 
-- Queryset is restricted to organizations where the caller is an admin.
+- Queryset is restricted to organisations where the caller is an admin.
 - Create/Update/Delete require admin role in the target organization.
 - Delete: additionally prevents an org admin from removing their own admin membership.
 - Unauthorized or out-of-scope access returns 403 Forbidden. Missing/invalid JWT returns 401 Unauthorized.
@@ -226,7 +226,7 @@ To support flows where an admin/creator wants to add a person who may not yet ex
 
 - Create user within a survey context (survey owner/org admin/creator):
   - POST /api/scoped-users/survey/{survey_id}/create
-  - **Only available for organization surveys. Individual users will receive 403 Forbidden.**
+  - **Only available for organisation surveys. Individual users will receive 403 Forbidden.**
 
 Request schema:
 
@@ -245,7 +245,7 @@ Note: The SSR UI allows searching by email and will create or reuse users accord
 
 Membership actions performed via the SSR UI are recorded in AuditLog with:
 
-- actor, scope (organization or survey), organization/survey context, action (add/update/remove), target_user, metadata (e.g., role), timestamp
+- actor, scope (organisation or survey), organization/survey context, action (add/update/remove), target_user, metadata (e.g., role), timestamp
 
 These records enable traceability of who changed which memberships and when.
 
@@ -262,7 +262,7 @@ For security and data integrity reasons, account deletion is restricted:
 
 - **User account deletion**: Only superusers can delete user accounts through the Django Admin interface (`/admin/`).
 - **Regular users cannot delete their own accounts** to prevent accidental data loss and maintain audit trails.
-- **Organization deletion**: Only superusers can delete organizations through the Django Admin interface.
+- **Organisation deletion**: Only superusers can delete organizations through the Django Admin interface.
 - **Survey deletion**: Survey owners and organization admins can delete surveys they manage, following proper confirmation workflows.
 
 **Rationale**: User and organization deletion can have cascading effects that permanently remove data belonging to multiple users. This restriction ensures:
@@ -273,6 +273,10 @@ For security and data integrity reasons, account deletion is restricted:
 4. **Intentionality**: Ensures deletion decisions are made by administrators with full context
 
 **For users needing account deletion**: Contact your system administrator, who can safely perform the deletion through the admin interface after confirming the impact on shared data.
+
+### Managing Staff Departures (Leaver's Process)
+
+To maintain the security of your survey data, Organisation Owners must revoke access for any staff member who leaves the project or the organisation. This can be performed by organisation administrators through the user portal. This action is immediate and will be logged in your organisation's Audit Trail.
 
 ## Organisation Administration Workflow
 

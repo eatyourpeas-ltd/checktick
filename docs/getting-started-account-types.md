@@ -311,7 +311,7 @@ When running CheckTick in self-hosted mode (with `SELF_HOSTED=true` in settings)
 
 ## Organization Roles Explained
 
-Organizations (ORGANIZATION and ENTERPRISE tiers) support role-based access control:
+Organizations (ORGANISATION and ENTERPRISE tiers) support role-based access control:
 
 ### Admin
 
@@ -330,7 +330,7 @@ Organizations (ORGANIZATION and ENTERPRISE tiers) support role-based access cont
 
 ### Viewer
 
-- Read-only access to surveys they're invited to (ORGANIZATION/ENTERPRISE tiers only)
+- Read-only access to surveys they're invited to (ORGANISATION/ENTERPRISE tiers only)
 - Can view survey results and responses
 - Cannot create or edit surveys
 - Cannot manage organization members
@@ -354,7 +354,7 @@ Organizations (ORGANIZATION and ENTERPRISE tiers) support role-based access cont
 > - ⚠️ All security responsibility on individual user
 >
 
-### Organization Tier Security (ORGANIZATION/ENTERPRISE)
+### Organization Tier Security (ORGANISATION/ENTERPRISE)
 
 **Encryption Model:**
 
@@ -382,7 +382,7 @@ You can upgrade from one tier to another as your needs grow:
 - All existing surveys are preserved
 - Keys remain self-managed
 
-### PRO → ORGANIZATION
+### PRO → ORGANISATION
 
 - Enables full team collaboration with viewer roles
 - Unlimited collaborators per survey
@@ -400,7 +400,7 @@ You can upgrade from one tier to another as your needs grow:
 ### Upgrade Process
 
 1. **Go to your Profile page**
-2. **Click "Upgrade Account"** (or contact sales for ORGANIZATION/ENTERPRISE)
+2. **Click "Upgrade Account"** (or contact sales for ORGANISATION/ENTERPRISE)
 3. **Choose your new tier**
 4. **Your existing surveys are preserved**
 5. **New features become available immediately**
@@ -421,7 +421,7 @@ You can upgrade from one tier to another as your needs grow:
 - You can invite team members (ORGANIZATION/ENTERPRISE)
 - You get administrative key recovery options (ORGANIZATION/ENTERPRISE)
 
-**Team building (ORGANIZATION/ENTERPRISE):**
+**Team building (ORGANISATION/ENTERPRISE):**
 
 - Invite colleagues via email
 - Assign appropriate roles (Admin, Creator, Viewer)
@@ -444,7 +444,7 @@ You can upgrade from one tier to another as your needs grow:
 - Check the [User Documentation](./getting-started.md)
 - Join the [Community Discussions](https://github.com/eatyourpeas/checktick/discussions)
 
-### For ORGANIZATION and ENTERPRISE Tiers
+### For ORGANISATION and ENTERPRISE Tiers
 
 - All FREE/PRO resources, plus:
 - Organization admin training materials
