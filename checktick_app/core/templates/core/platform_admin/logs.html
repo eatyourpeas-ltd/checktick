@@ -1,0 +1,308 @@
+{% extends 'core/platform_admin/base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block platform_title %}{% trans "Logs" %}{% endblock %}
+
+{% block platform_content %}
+
+<!-- Page Header -->
+<div class="mb-6">
+  <h2 class="text-2xl font-bold">{% trans "Platform Logs" %}</h2>
+  <p class="text-base-content/70 mt-1">
+    {% trans "Security audit logs and application events for DPST compliance. Review quarterly with DPO." %}
+  </p>
+</div>
+
+{% if log_source == "application" and log_stats %}
+<!-- Stats Cards (Application Logs Only) -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Events (24h)" %}</div>
+    <div class="stat-value text-primary">{{ log_stats.total_24h }}</div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Critical (24h)" %}</div>
+    <div class="stat-value {% if log_stats.critical_24h > 0 %}text-error{% endif %}">
+      {{ log_stats.critical_24h }}
+    </div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Warnings (24h)" %}</div>
+    <div class="stat-value {% if log_stats.warnings_24h > 5 %}text-warning{% endif %}">
+      {{ log_stats.warnings_24h }}
+    </div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Auth Failures (24h)" %}</div>
+    <div class="stat-value {% if log_stats.auth_failures_24h > 10 %}text-error{% elif log_stats.auth_failures_24h > 0 %}text-warning{% endif %}">
+      {{ log_stats.auth_failures_24h }}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Log Source Tabs -->
+<div role="tablist" class="tabs tabs-boxed mb-4 bg-base-200 p-1">
+  <a role="tab"
+     href="?source=application{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
+     class="tab {% if log_source == 'application' %}tab-active{% endif %}">
+    {% include "components/icons/document.html" with classes="w-4 h-4 inline mr-1" %}
+    {% trans "Application Logs" %}
+  </a>
+  <a role="tab"
+     href="?source=infrastructure{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}"
+     class="tab {% if log_source == 'infrastructure' %}tab-active{% endif %} {% if not hosting_configured %}opacity-50{% endif %}">
+    {% include "components/icons/cloud-upload.html" with classes="w-4 h-4 inline mr-1" %}
+    {% trans "Infrastructure Logs" %}
+    {% if not hosting_configured %}
+      <span class="badge badge-ghost badge-xs ml-1">{% trans "Not configured" %}</span>
+    {% endif %}
+  </a>
+</div>
+
+<!-- Filters -->
+<div class="card bg-base-100 shadow mb-6">
+  <div class="card-body py-4">
+    <form method="get" class="flex flex-wrap gap-4 items-end">
+      <input type="hidden" name="source" value="{{ log_source }}">
+
+      <!-- Date Range -->
+      <div class="form-control">
+        <label class="label py-1">
+          <span class="label-text text-xs">{% trans "From" %}</span>
+        </label>
+        <input type="date" name="from" value="{{ date_from }}"
+               class="input input-sm input-bordered w-40">
+      </div>
+      <div class="form-control">
+        <label class="label py-1">
+          <span class="label-text text-xs">{% trans "To" %}</span>
+        </label>
+        <input type="date" name="to" value="{{ date_to }}"
+               class="input input-sm input-bordered w-40">
+      </div>
+
+      {% if log_source == "application" %}
+      <!-- Severity Filter -->
+      <div class="form-control">
+        <label class="label py-1">
+          <span class="label-text text-xs">{% trans "Severity" %}</span>
+        </label>
+        <select name="severity" class="select select-sm select-bordered w-32">
+          <option value="">{% trans "All" %}</option>
+          {% for value, label in severity_choices %}
+            <option value="{{ value }}" {% if severity_filter == value %}selected{% endif %}>
+              {{ label }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Action Filter -->
+      <div class="form-control">
+        <label class="label py-1">
+          <span class="label-text text-xs">{% trans "Action" %}</span>
+        </label>
+        <select name="action" class="select select-sm select-bordered w-48">
+          <option value="">{% trans "All Actions" %}</option>
+          {% for value, label in action_choices %}
+            <option value="{{ value }}" {% if action_filter == value %}selected{% endif %}>
+              {{ label }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Search -->
+      <div class="form-control">
+        <label class="label py-1">
+          <span class="label-text text-xs">{% trans "Search" %}</span>
+        </label>
+        <input type="text" name="q" value="{{ search_query }}"
+               placeholder="{% trans 'User, IP, message...' %}"
+               class="input input-sm input-bordered w-48">
+      </div>
+      {% endif %}
+
+      <button type="submit" class="btn btn-sm btn-primary">
+        {% trans "Filter" %}
+      </button>
+      <a href="?source={{ log_source }}" class="btn btn-sm btn-ghost">
+        {% trans "Clear" %}
+      </a>
+    </form>
+  </div>
+</div>
+
+{% if log_source == "infrastructure" %}
+  <!-- Infrastructure Logs -->
+  {% if hosting_error %}
+    <div class="alert alert-warning mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <span>{{ hosting_error }}</span>
+    </div>
+  {% endif %}
+
+  {% if hosting_logs %}
+    <div class="card bg-base-100 shadow">
+      <div class="card-body p-0">
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr class="bg-base-200">
+                <th class="w-40">{% trans "Timestamp" %}</th>
+                <th class="w-24">{% trans "Level" %}</th>
+                <th>{% trans "Message" %}</th>
+              </tr>
+            </thead>
+            <tbody class="font-mono text-sm">
+              {% for log in hosting_logs %}
+              <tr class="hover {% if log.level == 'ERROR' or log.level == 'CRITICAL' %}bg-error/5{% elif log.level == 'WARNING' %}bg-warning/5{% endif %}">
+                <td class="whitespace-nowrap text-base-content/70">
+                  {{ log.timestamp|date:"Y-m-d H:i:s" }}
+                </td>
+                <td>
+                  {% if log.level == "CRITICAL" %}
+                    <span class="badge badge-error badge-sm">{{ log.level }}</span>
+                  {% elif log.level == "ERROR" %}
+                    <span class="badge badge-error badge-sm">{{ log.level }}</span>
+                  {% elif log.level == "WARNING" %}
+                    <span class="badge badge-warning badge-sm">{{ log.level }}</span>
+                  {% elif log.level == "DEBUG" %}
+                    <span class="badge badge-ghost badge-sm">{{ log.level }}</span>
+                  {% else %}
+                    <span class="badge badge-info badge-sm">{{ log.level }}</span>
+                  {% endif %}
+                </td>
+                <td class="break-all">{{ log.message|truncatechars:500 }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% elif not hosting_error %}
+    <div class="alert alert-info">
+      <span>{% trans "No infrastructure logs found for the selected time range." %}</span>
+    </div>
+  {% endif %}
+
+{% else %}
+  <!-- Application Audit Logs -->
+  {% if logs %}
+    <div class="card bg-base-100 shadow">
+      <div class="card-body p-0">
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr class="bg-base-200">
+                <th class="w-40">{% trans "Timestamp" %}</th>
+                <th class="w-24">{% trans "Severity" %}</th>
+                <th class="w-36">{% trans "Action" %}</th>
+                <th class="w-40">{% trans "Actor" %}</th>
+                <th class="w-32">{% trans "IP Address" %}</th>
+                <th>{% trans "Details" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for log in logs %}
+              <tr class="hover {% if log.severity == 'critical' %}bg-error/5{% elif log.severity == 'warning' %}bg-warning/5{% endif %}">
+                <td class="whitespace-nowrap text-base-content/70 text-sm">
+                  {{ log.created_at|date:"Y-m-d H:i:s" }}
+                </td>
+                <td>
+                  {% if log.severity == "critical" %}
+                    <span class="badge badge-error badge-sm">{% trans "Critical" %}</span>
+                  {% elif log.severity == "warning" %}
+                    <span class="badge badge-warning badge-sm">{% trans "Warning" %}</span>
+                  {% else %}
+                    <span class="badge badge-info badge-sm">{% trans "Info" %}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="text-sm font-medium">{{ log.get_action_display }}</span>
+                </td>
+                <td class="text-sm">
+                  {% if log.actor %}
+                    <span title="{{ log.actor.email }}">{{ log.actor.username|truncatechars:20 }}</span>
+                  {% elif log.username_attempted %}
+                    <span class="text-base-content/50" title="Attempted username">{{ log.username_attempted|truncatechars:20 }}</span>
+                  {% else %}
+                    <span class="text-base-content/30">{% trans "System" %}</span>
+                  {% endif %}
+                </td>
+                <td class="font-mono text-xs text-base-content/70">
+                  {{ log.ip_address|default:"-" }}
+                </td>
+                <td class="text-sm">
+                  {% if log.message %}
+                    {{ log.message|truncatechars:100 }}
+                  {% elif log.target_user %}
+                    {% trans "Target:" %} {{ log.target_user.email }}
+                  {% elif log.organization %}
+                    {% trans "Org:" %} {{ log.organization.name }}
+                  {% elif log.survey %}
+                    {% trans "Survey:" %} {{ log.survey.title }}
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if logs.has_other_pages %}
+        <div class="flex justify-center p-4 border-t border-base-200">
+          <div class="join">
+            {% if logs.has_previous %}
+              <a href="?source={{ log_source }}&page={{ logs.previous_page_number }}{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
+                 class="join-item btn btn-sm">«</a>
+            {% endif %}
+
+            <span class="join-item btn btn-sm btn-disabled">
+              {% trans "Page" %} {{ logs.number }} {% trans "of" %} {{ logs.paginator.num_pages }}
+            </span>
+
+            {% if logs.has_next %}
+              <a href="?source={{ log_source }}&page={{ logs.next_page_number }}{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
+                 class="join-item btn btn-sm">»</a>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <p class="text-sm text-base-content/50 mt-2">
+      {% blocktrans with total=total_logs %}Showing {{ total }} total log entries{% endblocktrans %}
+    </p>
+
+  {% else %}
+    <div class="alert alert-info">
+      <span>{% trans "No audit logs found matching your filters." %}</span>
+    </div>
+  {% endif %}
+{% endif %}
+
+<!-- DPST Compliance Note -->
+<div class="card bg-base-200 mt-6">
+  <div class="card-body py-4">
+    <h3 class="font-semibold text-sm flex items-center gap-2">
+      {% include "components/icons/shield-check.html" with classes="w-4 h-4 text-primary" %}
+      {% trans "DPST Compliance" %}
+    </h3>
+    <p class="text-sm text-base-content/70 mt-1">
+      {% trans "Per our Logging Policy, the CTO and DPO review these logs quarterly. Authentication success/fail ratios should be monitored for unusual patterns. Critical and Warning events trigger automated Sentry/Slack alerts." %}
+    </p>
+    <p class="text-xs text-base-content/50 mt-2">
+      {% trans "Log retention: Authentication 12 months, Application Audit 12 months, System Errors 6 months." %}
+    </p>
+  </div>
+</div>
+
+{% endblock %}

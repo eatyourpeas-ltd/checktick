@@ -65,6 +65,11 @@ urlpatterns = [
         views_platform_admin.organization_stats,
         name="platform_admin_stats",
     ),
+    path(
+        "platform-admin/logs/",
+        views_platform_admin.platform_logs,
+        name="platform_admin_logs",
+    ),
     # Billing
     path(
         "subscription/", views_billing.subscription_portal, name="subscription_portal"

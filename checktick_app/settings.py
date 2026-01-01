@@ -556,6 +556,16 @@ IMD_API_URL = os.environ.get(
 )
 IMD_API_KEY = os.environ.get("IMD_API_KEY", "")
 
+# Hosting Provider API Configuration (for platform admin log viewing)
+# Used to fetch infrastructure logs from your hosting provider (Northflank, Railway, etc.)
+# See docs/self-hosting.md for provider-specific configuration examples
+HOSTING_API_TOKEN = os.environ.get("HOSTING_API_TOKEN", "")
+HOSTING_API_BASE_URL = os.environ.get(
+    "HOSTING_API_BASE_URL", "https://api.northflank.com/v1"
+)
+HOSTING_PROJECT_ID = os.environ.get("HOSTING_PROJECT_ID", "")
+HOSTING_SERVICE_ID = os.environ.get("HOSTING_SERVICE_ID", "")
+
 # Data Governance Configuration
 # These settings control data retention and export policies for GDPR/healthcare compliance
 CHECKTICK_DEFAULT_RETENTION_MONTHS = int(
