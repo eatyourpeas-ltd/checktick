@@ -63,3 +63,40 @@ The Platform Admin dashboard provides superuser-only access to:
 * **Critical:** Account locked, 2FA disabled, password changed, user deactivated, key recovery
 * **Warning:** Login failed, 2FA failed
 * **Info:** All other events
+
+## 7. Hosting Provider Audit Logs
+
+The Platform Admin Log Dashboard captures application and container logs, but does **not** capture hosting provider platform-level events. These must be reviewed separately via the hosting provider's dashboard.
+
+### Events Not Captured in Platform Admin Dashboard
+
+| Event Type | Where to Review | Why It Matters |
+| :--- | :--- | :--- |
+| Container console access (SSH/exec) | Hosting provider audit log | Tracks who accessed the container shell |
+| Environment variable changes | Hosting provider audit log | Configuration and secrets modifications |
+| Deployments and rollbacks | Hosting provider audit log | Code changes to production |
+| Scaling and resource changes | Hosting provider audit log | Infrastructure modifications |
+| Team member access changes | Hosting provider audit log | Who has platform access |
+
+### Northflank Audit Log Location
+
+For Northflank-hosted deployments:
+
+1. Log in to [Northflank Dashboard](https://app.northflank.com)
+2. Navigate to **Settings → Audit Log**
+3. Review events for the relevant time period
+
+### Quarterly Review Checklist
+
+During quarterly CTO/DPO log reviews, check **both** sources:
+
+- [ ] **Platform Admin Dashboard** (`/platform-admin/logs/`)
+  - [ ] Application Logs: Review CRITICAL and WARNING events
+  - [ ] Infrastructure Logs: Review ERROR-level container logs
+- [ ] **Hosting Provider Audit Log** (e.g., Northflank Settings → Audit Log)
+  - [ ] Container console access sessions
+  - [ ] Environment variable modifications
+  - [ ] Deployment activity
+  - [ ] Team member access changes
+
+Document findings from both sources for DPST evidence.
