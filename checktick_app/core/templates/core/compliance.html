@@ -3,7 +3,7 @@
 {% block title %}Compliance · {{ block.super }}{% endblock %}
 {% block content %}
 <div class="grid grid-cols-12 gap-6">
-  <aside class="col-span-12 lg:col-span-3">
+  <aside class="col-span-12 lg:col-span-3 print:hidden">
     <div class="card bg-base-100 shadow sticky top-4">
       <div class="card-body p-4">
         <h2 class="card-title text-lg mb-2">
@@ -59,7 +59,21 @@
     </div>
   </aside>
   <section class="col-span-12 lg:col-span-9">
+    <div class="flex justify-end mb-4 print:hidden">
+      <button id="print-btn" class="btn btn-ghost btn-sm gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+        </svg>
+        Print / Save PDF
+      </button>
+    </div>
     <article class="prose max-w-none">
+      <div id="print-header" class="hidden print:block mb-4 pb-4 border-b border-base-300">
+        <p class="text-sm text-base-content/70 m-0">
+          Printed from CheckTick DSPT Compliance Documentation<br>
+          <span id="print-timestamp"></span>
+        </p>
+      </div>
       {{ html|safe }}
     </article>
   </section>
@@ -68,6 +82,18 @@
 
 {% block extra_js %}
 <script src="{% static 'js/docs-navigation.js' %}" nonce="{{ request.csp_nonce }}"></script>
+<script nonce="{{ request.csp_nonce }}">
+  document.getElementById('print-btn').addEventListener('click', function() {
+    // Set timestamp before printing
+    var now = new Date();
+    var timestamp = now.toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+    document.getElementById('print-timestamp').textContent = 'Generated: ' + timestamp;
+    window.print();
+  });
+</script>
 {% endblock %}
 
 {% block extra_css %}
@@ -96,6 +122,66 @@
 
 .docs-category-items {
   transition: display 0.2s ease-in-out;
+}
+
+/* Print styles */
+@media print {
+  /* Hide navigation, header, footer, sidebar */
+  aside,
+  nav,
+  header,
+  footer,
+  .navbar,
+  .lg\:col-span-3,
+  #print-btn,
+  [class*="print:hidden"] {
+    display: none !important;
+  }
+
+  /* Show print header */
+  #print-header {
+    display: block !important;
+  }
+
+  /* Full width content */
+  .grid {
+    display: block !important;
+  }
+  .col-span-12,
+  .lg\:col-span-9,
+  section {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .prose {
+    max-width: 100% !important;
+  }
+
+  /* Typography */
+  body {
+    font-size: 11pt;
+    line-height: 1.4;
+    background: white !important;
+    color: black !important;
+  }
+  h1 { font-size: 18pt; }
+  h2 { font-size: 14pt; page-break-after: avoid; }
+  h3 { font-size: 12pt; page-break-after: avoid; }
+
+  /* Links */
+  a { text-decoration: underline; color: black !important; }
+  a[href^="http"]:after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+    color: #666;
+  }
+
+  /* Avoid page breaks inside elements */
+  pre, blockquote, table, ul, ol {
+    page-break-inside: avoid;
+  }
 }
 </style>
 {% endblock %}

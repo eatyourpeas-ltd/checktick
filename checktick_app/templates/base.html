@@ -53,6 +53,12 @@
       }
       h1,h2,h3,h4,h5,h6,.font-heading { font-family: var(--font-heading) !important; }
       body, .font-body { font-family: var(--font-body) !important; }
+
+      /* Global print styles */
+      @media print {
+        .print\:hidden { display: none !important; }
+        .print\:block { display: block !important; }
+      }
     </style>
     {% block icon_link %}
       {# Only render favicon link when an explicit icon URL is provided #}
@@ -67,7 +73,7 @@
     data-user-email="{{ user.email }}"
     {% endif %}
   >
-    <div class="navbar bg-base-100 shadow">
+    <div class="navbar bg-base-100 shadow print:hidden">
       <div class="navbar-start">
         <div class="dropdown">
           <div tabindex="0" role="button" class="btn btn-ghost lg:hidden" aria-label="{% trans 'Open menu' %}">
@@ -214,7 +220,7 @@
       {% endif %}
       {% block content %}{% endblock %}
     </main>
-    <footer class="mt-10 border-t border-base-300 bg-base-200">
+    <footer class="mt-10 border-t border-base-300 bg-base-200 print:hidden">
       <div class="container mx-auto px-4 py-6">
         <div class="text-xs text-base-content/80 text-center md:text-left flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-2">
           <span>© {% now 'Y' %} {{ brand.title }}</span>

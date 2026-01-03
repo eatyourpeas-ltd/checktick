@@ -30,8 +30,7 @@ category: dspt-4-managing-access
 
 | Asset ID | Media Type | Security | Usage | Location |
 | :--- | :--- | :--- | :--- | :--- |
-| **CT-MED-01** | Apricorn Aegis | Hardware Encrypted | Weekly Offline Backup | Secure Safe (CTO) |
-| **CT-MED-02** | Apricorn Aegis | Hardware Encrypted | Weekly Offline Backup | Secure Safe (SIRO) |
+| **CT-MED-01** | None | None | None | None |
 
 ## 4. Decommissioned Assets
 

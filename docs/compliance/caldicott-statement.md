@@ -27,12 +27,12 @@ This statement outlines how {{ platform_name }}, as a provider of healthcare sur
 | **4. Access on a need-to-know basis** | We use Role-Based Access Control (RBAC). Staff access to production databases is strictly restricted and logged. |
 | **5. Understand responsibilities** | All staff (directors and developers) undergo annual data security training focused on the duty of confidentiality. |
 | **6. Comply with the law** | We maintain a Record of Processing Activities (ROPA) and follow UK GDPR and the Data Protection Act 2018. |
-| **7. Duty to share (Safe sharing)** | We provide secure API and export mechanisms (AES-256) to ensure data can be shared safely with authorized clinical teams. |
+| **7. Duty to share (Safe sharing)** | We provide secure API and export mechanisms (AES-256) to ensure data can be shared safely with authorised clinical teams. |
 | **8. Inform patients/users** | Transparency is maintained through our [Privacy Notice](https://checktick.uk/docs/privacy-notice/) and clear participant information on landing pages. |
 
 ## 3. The Role of the Caldicott Guardian in a Small Team
 
-Within our 2-person organizational structure, the Caldicott Guardian acts as the independent arbiter for data confidentiality. They are responsible for:
+Within our 2-person organisational structure, the Caldicott Guardian acts as the independent arbiter for data confidentiality. They are responsible for:
 
 * Reviewing and approving Data Protection Impact Assessments (DPIAs).
 * Acting as the point of escalation for complex data sharing or confidentiality queries.
