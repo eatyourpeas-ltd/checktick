@@ -22,7 +22,6 @@ db.sqlite3
 docs/compliance/training-certificates/
 docs/compliance/pdfs/
 
-
 # Node
 node_modules/
 package-lock.json
