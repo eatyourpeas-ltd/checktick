@@ -4071,8 +4071,8 @@ def _handle_participant_submission(
         # Store receipt token in session for pseudonymous responses
         # This allows showing it on thank-you page (only opportunity to share it)
         if resp.is_pseudonymous:
-            resp.ensure_receipt_token()
-            request.session[f"receipt_token_{survey.slug}"] = resp.receipt_token
+            resp.generate_receipt_token()
+            request.session[f"receipt_token_{survey.slug}"] = str(resp.receipt_token)
 
         messages.success(request, "Thank you for your response.")
         # Redirect to thank-you page
