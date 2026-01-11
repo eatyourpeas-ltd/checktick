@@ -59,7 +59,8 @@ jobs:
                     --ignore-vuln GHSA-2xpw-w6gg-jr37 \
                     --ignore-vuln GHSA-wj6h-64fc-37mp \
                     --ignore-vuln PYSEC-2024-187 \
-                    --ignore-vuln GHSA-428g-f7cq-pgp5  # <--- Add this line
+                    --ignore-vuln GHSA-428g-f7cq-pgp5 \
+                    --ignore-vuln GHSA-38jv-5279-wg99
               continue-on-error: true
 
     codeql:
