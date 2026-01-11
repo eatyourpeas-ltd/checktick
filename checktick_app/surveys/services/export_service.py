@@ -72,9 +72,21 @@ class ExportService:
         if survey.deleted_at:
             raise ValueError("Cannot export data from deleted survey")
 
-        # Count responses
-        response_count = SurveyResponse.objects.filter(survey=survey).count()
+        # Count exportable responses (exclude frozen)
+        response_count = SurveyResponse.objects.filter(
+            survey=survey,
+            is_frozen=False,
+        ).count()
+        frozen_count = SurveyResponse.objects.filter(
+            survey=survey,
+            is_frozen=True,
+        ).count()
+
         if response_count == 0:
+            if frozen_count > 0:
+                raise ValueError(
+                    f"All {frozen_count} responses are frozen pending data subject request resolution"
+                )
             raise ValueError("Survey has no responses to export")
 
         # Generate CSV data
@@ -157,9 +169,11 @@ class ExportService:
         writer.writerow(headers)
 
         # Write response rows
-        responses = SurveyResponse.objects.filter(survey=survey).order_by(
-            "submitted_at"
-        )
+        # IMPORTANT: Exclude frozen responses - they are pending data subject request resolution
+        responses = SurveyResponse.objects.filter(
+            survey=survey,
+            is_frozen=False,  # Exclude frozen responses
+        ).order_by("submitted_at")
 
         for response in responses:
             # Get the answers dict (already decrypted at model level if needed)

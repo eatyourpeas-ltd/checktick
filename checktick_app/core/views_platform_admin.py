@@ -466,3 +466,153 @@ def organization_stats(request: HttpRequest) -> HttpResponse:
     }
 
     return render(request, "core/platform_admin/organization_stats.html", context)
+
+
+@superuser_required
+@require_http_methods(["GET"])
+@ratelimit(key="user", rate="60/m", block=True)
+def platform_logs(request: HttpRequest) -> HttpResponse:
+    """
+    Platform logs dashboard for security auditing.
+
+    Displays:
+    - Application audit logs from the AuditLog model
+    - Infrastructure logs from hosting provider (if configured)
+
+    This view supports DPST compliance by providing quarterly log review
+    capability for the CTO and DPO.
+    """
+    from django.core.paginator import Paginator
+
+    from checktick_app.core.services.hosting import get_hosting_logs_service
+    from checktick_app.surveys.models import AuditLog
+
+    # Get filter parameters
+    log_source = request.GET.get("source", "application")  # application, infrastructure
+    severity_filter = request.GET.get("severity", "")
+    action_filter = request.GET.get("action", "")
+    date_from = request.GET.get("from", "")
+    date_to = request.GET.get("to", "")
+    search_query = request.GET.get("q", "").strip()
+    page_number = request.GET.get("page", 1)
+
+    context = {
+        "log_source": log_source,
+        "severity_filter": severity_filter,
+        "action_filter": action_filter,
+        "date_from": date_from,
+        "date_to": date_to,
+        "search_query": search_query,
+        "severity_choices": AuditLog.Severity.choices,
+        "action_choices": AuditLog.Action.choices,
+    }
+
+    if log_source == "infrastructure":
+        # Fetch infrastructure logs from hosting provider API
+        hosting_service = get_hosting_logs_service()
+        context["hosting_available"] = hosting_service.is_available
+
+        if hosting_service.is_available:
+            # Parse date filters
+            since = None
+            until = None
+            if date_from:
+                try:
+                    since = timezone.datetime.strptime(date_from, "%Y-%m-%d")
+                    since = timezone.make_aware(since)
+                except ValueError:
+                    pass
+            if date_to:
+                try:
+                    until = timezone.datetime.strptime(date_to, "%Y-%m-%d")
+                    until = timezone.make_aware(until)
+                    # Include the full day
+                    until = until + timezone.timedelta(days=1)
+                except ValueError:
+                    pass
+
+            logs, error = hosting_service.fetch_logs(
+                since=since,
+                until=until,
+                limit=200,
+                log_type=severity_filter or "all",
+            )
+            context["hosting_logs"] = logs
+            context["hosting_error"] = error
+        else:
+            context["hosting_logs"] = []
+            context["hosting_error"] = (
+                "Hosting logs API not configured. Set HOSTING_API_TOKEN, "
+                "HOSTING_PROJECT_ID, and HOSTING_SERVICE_ID environment variables."
+            )
+    else:
+        # Fetch application audit logs from database
+        logs_qs = AuditLog.objects.select_related(
+            "actor", "target_user", "organization", "survey"
+        ).order_by("-created_at")
+
+        # Apply filters
+        if severity_filter:
+            logs_qs = logs_qs.filter(severity=severity_filter)
+
+        if action_filter:
+            logs_qs = logs_qs.filter(action=action_filter)
+
+        if date_from:
+            try:
+                from_date = timezone.datetime.strptime(date_from, "%Y-%m-%d")
+                from_date = timezone.make_aware(from_date)
+                logs_qs = logs_qs.filter(created_at__gte=from_date)
+            except ValueError:
+                pass
+
+        if date_to:
+            try:
+                to_date = timezone.datetime.strptime(date_to, "%Y-%m-%d")
+                to_date = timezone.make_aware(to_date)
+                # Include the full day
+                to_date = to_date + timezone.timedelta(days=1)
+                logs_qs = logs_qs.filter(created_at__lt=to_date)
+            except ValueError:
+                pass
+
+        if search_query:
+            logs_qs = logs_qs.filter(
+                Q(message__icontains=search_query)
+                | Q(actor__username__icontains=search_query)
+                | Q(actor__email__icontains=search_query)
+                | Q(ip_address__icontains=search_query)
+                | Q(username_attempted__icontains=search_query)
+            )
+
+        # Pagination
+        paginator = Paginator(logs_qs, 50)  # 50 logs per page
+        page_obj = paginator.get_page(page_number)
+
+        context["logs"] = page_obj
+        context["total_logs"] = paginator.count
+
+        # Summary stats for dashboard
+        context["log_stats"] = {
+            "total_24h": AuditLog.objects.filter(
+                created_at__gte=timezone.now() - timezone.timedelta(hours=24)
+            ).count(),
+            "critical_24h": AuditLog.objects.filter(
+                severity=AuditLog.Severity.CRITICAL,
+                created_at__gte=timezone.now() - timezone.timedelta(hours=24),
+            ).count(),
+            "warnings_24h": AuditLog.objects.filter(
+                severity=AuditLog.Severity.WARNING,
+                created_at__gte=timezone.now() - timezone.timedelta(hours=24),
+            ).count(),
+            "auth_failures_24h": AuditLog.objects.filter(
+                action=AuditLog.Action.LOGIN_FAILED,
+                created_at__gte=timezone.now() - timezone.timedelta(hours=24),
+            ).count(),
+        }
+
+    # Check hosting logs availability for the tab display
+    hosting_service = get_hosting_logs_service()
+    context["hosting_configured"] = hosting_service.is_available
+
+    return render(request, "core/platform_admin/logs.html", context)

@@ -310,6 +310,25 @@ This protects against:
 
 Survey creators and organization admins retain full control over survey access and membership management, but cannot perform destructive account-level operations.
 
+### Platform Admin Functions
+
+Platform superusers have access to additional administrative interfaces for compliance and monitoring:
+
+| Interface | URL | Purpose |
+|-----------|-----|---------|
+| Django Admin | `/admin/` | User/organization management |
+| Platform Admin | `/platform-admin/` | Platform analytics and oversight |
+| **Platform Logs** | `/platform-admin/logs/` | Audit and infrastructure log review |
+
+The **Platform Logs** dashboard is essential for DPST compliance, enabling:
+
+- Quarterly log reviews with the Data Protection Officer (DPO)
+- Security incident investigation and forensics
+- Correlation of application events with infrastructure logs
+- Monitoring of authentication patterns and admin actions
+
+All Platform Admin access is logged in the audit trail. See [Audit Logging and Notifications](audit-logging-and-notifications.md) for dashboard details.
+
 ### Using the API with curl (JWT)
 
 1. Obtain a token pair (access and refresh):
@@ -460,3 +479,13 @@ Core permission checks in `checktick_app/surveys/permissions.py`:
 - Use the helpers in `surveys/permissions.py` from any new views.
 - When adding API endpoints, prefer DRF permission classes that delegate to these helpers and always scope querysets by the current user.
 - Return 403 (not 404) for authorization failures to avoid leaking resource existence to authenticated users; for anonymous API users, DRF may return 401 for unsafe methods.
+
+## Standards Compliance Mapping
+
+| Requirement | Implementation |
+| :--- | :--- |
+| **Identity Federation** | OIDC integration for Microsoft Entra ID and Google Workspace. |
+| **MFA Support** | Supported via federated providers and mandatory TOTP for local admin accounts. |
+| **Password Strength** | Enforced via Django Auth Validators (Min 12 chars, blocklists). |
+| **Brute Force Protection** | `django-axes` account lockout (5 attempts / 1-hour cooldown). |
+| **Session Security** | Secure, HttpOnly, and SameSite cookies enforced; HSTS active. |

@@ -8,7 +8,10 @@ priority: 0
 
 CheckTick implements comprehensive security controls aligned with the [OWASP Top 10 (2021)](https://owasp.org/Top10/) to protect healthcare data. This document provides an overview of our security architecture and maps features to OWASP categories.
 
+CheckTick is committed to **UK Data Sovereignty**; we intentionally prioritize UK-resident infrastructure and application-layer defenses over US-based interception services.
+
 **Related Security Documentation**:
+
 - [Authentication & Permissions](/docs/authentication-and-permissions/) – Access control, SSO, and role-based permissions
 - [Encryption for Users](/docs/encryption-for-users/) – How your data is encrypted
 - [Key Management for Administrators](/docs/key-management-for-administrators/) – Enterprise key management
@@ -63,6 +66,7 @@ Each action is verified against the user's role at the appropriate level.
 - API endpoints enforce same permissions as web UI
 
 **Related Documentation**:
+
 - [Authentication & Permissions](/docs/authentication-and-permissions/)
 - [Account Types & Tiers](/docs/getting-started-account-types/)
 
@@ -150,6 +154,7 @@ Each action is verified against the user's role at the appropriate level.
 - Pre-commit hooks for secret detection
 
 **Related Documentation**:
+
 - [Data Governance Overview](/docs/data-governance-overview/)
 - [Business Continuity](/docs/business-continuity/)
 
@@ -192,6 +197,7 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 - Environment variables for all sensitive configuration
 
 **Related Documentation**:
+
 - [Self-Hosting Configuration](/docs/self-hosting-configuration/)
 - [Self-Hosting Quickstart](/docs/self-hosting-quickstart/)
 
@@ -225,7 +231,6 @@ All client-side JavaScript libraries are self-hosted with Subresource Integrity 
 | HTMX | Dynamic updates | ✅ SHA-384 |
 | SortableJS | Drag-and-drop | ✅ SHA-384 |
 
-
 See [CDN Libraries](/docs/cdn-libraries/) for current versions and hashes.
 
 #### Known Limitations
@@ -236,6 +241,7 @@ Some vulnerabilities are blocked by upstream dependencies:
 - These are tracked and will be updated when upstream releases fixes
 
 **Related Documentation**:
+
 - [CDN Libraries](/docs/cdn-libraries/)
 
 ---
@@ -283,6 +289,7 @@ Healthcare-compliant password requirements:
 - **Email notification** sent when account is locked
 
 **Related Documentation**:
+
 - [Authentication & Permissions](/docs/authentication-and-permissions/)
 - [OIDC SSO Setup](/docs/oidc-sso-setup/)
 
@@ -316,6 +323,7 @@ All external JavaScript includes SRI hashes:
 - Verified commits badge on GitHub
 
 **Related Documentation**:
+
 - [CDN Libraries](/docs/cdn-libraries/)
 
 ---
@@ -331,22 +339,26 @@ All external JavaScript includes SRI hashes:
 All security-relevant events are logged to the `AuditLog` model:
 
 **Authentication Events**:
+
 - `login_success` / `login_failed` – with IP and user agent
 - `logout` – session termination
 - `account_locked` – after failed attempts
 
 **2FA Events**:
+
 - `2fa_enabled` / `2fa_disabled` – configuration changes
 - `2fa_verified` / `2fa_failed` – verification attempts
 - `backup_codes_generated` / `backup_code_used` – backup code lifecycle
 
 **Account Events**:
+
 - `user_created` – new account registration
 - `password_changed` – password updates
 
 #### Log Entry Structure
 
 Each audit entry includes:
+
 - Timestamp
 - Actor (user performing action)
 - Action type with severity (INFO/WARNING/CRITICAL)
@@ -357,6 +369,7 @@ Each audit entry includes:
 #### SIEM-Ready Format
 
 Audit logs are structured for export to SIEM systems:
+
 - JSON format compatible with Elasticsearch, Splunk, etc.
 - Correlation IDs for request tracing
 - Severity levels for alerting
@@ -372,6 +385,7 @@ Audit logs are structured for export to SIEM systems:
 | Admin actions | 7 years |
 
 **Related Documentation**:
+
 - [Audit Logging and Notifications](/docs/audit-logging-and-notifications/)
 
 ---
@@ -413,6 +427,32 @@ Audit logs are structured for export to SIEM systems:
 | Static analysis | Every PR | CodeQL (GitHub Actions) |
 | Container scanning | On build | Docker Scout (optional) |
 
+---
+
+## National Cyber Security Centre (NCSC) Integration
+
+CheckTick is registered for and actively utilizes the **NCSC Early Warning Service**.
+
+* **Threat Intelligence:** We receive automated notifications from the NCSC regarding malicious activity, compromised credentials, or vulnerabilities detected on our registered UK IP addresses and domains.
+* **Triage Process:** Critical alerts from the NCSC are triaged by the CTO within 4 hours.
+* **National Grid:** This integration ensures CheckTick is connected to the UK's national cyber defense infrastructure, providing an advanced layer of threat detection.
+
+---
+
+## Sovereign Advanced Threat Protection (ATP)
+
+In alignment with DSPT Standard 8.3, CheckTick manages an active ATP capability through application-layer and platform-native tools, ensuring data never leaves UK jurisdiction for security processing.
+
+| Component | Technology | Role |
+|-----------|------------|------|
+| **Intrusion Detection** | `django-axes` | Actively blocks brute-force IPs and accounts after 5 failed attempts. |
+| **Rate Limiting** | `django-ratelimit` | Prevents application-layer DoS and automated scraping. |
+| **Threat Feeds** | NCSC Early Warning | National-level intelligence on infrastructure threats. |
+| **Static Analysis** | GitHub CodeQL | Continuous automated scanning for 0-day logic flaws. |
+| **Secrets Protection** | `ggshield` | Real-time prevention of credential leakage in the CI/CD pipeline. |
+
+---
+
 ### Reporting Security Issues
 
 If you discover a security vulnerability:
@@ -424,6 +464,28 @@ If you discover a security vulnerability:
 
 We follow responsible disclosure and credit researchers who report valid issues.
 
+## Developer Environment Security Standard
+
+### 1. Tooling & Patching
+
+Because developer machines hold access tokens for GitHub and Northflank, they are treated as 'Remote Endpoints':
+
+* **Automated OS Updates:** macOS is configured to install security response files automatically (Window: <7 days).
+* **IDE & Tooling:** VS Code and Extensions are set to auto-update.
+* **Git Client:** Checked monthly for security updates to prevent 'Clone-based' vulnerabilities.
+
+### 2. Dependency Sync (Poetry)
+
+We avoid 'Version Drift' between laptops and production:
+* Local development must be performed within a virtual environment managed by `Poetry`.
+* Running `poetry install` is a prerequisite for any local development session to ensure the local stack is patched to the latest approved versions in `pyproject.toml`.
+
+### 3. Credential Protection
+
+* **No Hardcoded Secrets:** Local `.env` files are added to `.gitignore`.
+* **MFA:** Access to the GitHub repository and Northflank console requires Hardware/App-based MFA.
+* **SSH Keys:** SSH keys used for Git pushes are stored in the macOS Keychain and protected by biometric/password lock.
+
 ---
 
 ## References
@@ -432,3 +494,4 @@ We follow responsible disclosure and credit researchers who report valid issues.
 - [OWASP ASVS](https://owasp.org/www-project-application-security-verification-standard/)
 - [NHS DSPT](https://www.dsptoolkit.nhs.uk/)
 - [HIPAA Security Rule](https://www.hhs.gov/hipaa/for-professionals/security/index.html)
+- [NCSC Early Warning Service](https://www.ncsc.gov.uk/information/early-warning-service)

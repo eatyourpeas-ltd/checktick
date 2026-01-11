@@ -800,6 +800,7 @@ class Survey(models.Model):
         DRAFT = "draft", "Draft"
         PUBLISHED = "published", "Published"
         CLOSED = "closed", "Closed"
+        SUSPENDED = "suspended", "Suspended (Data Subject Request)"
 
     class Visibility(models.TextChoices):
         AUTHENTICATED = "authenticated", "Authenticated users only"
@@ -958,12 +959,43 @@ class Survey(models.Model):
         help_text="When ownership was transferred",
     )
 
+    # Data Subject Request (DSR) warning fields
+    # Used to alert controller of pending DSRs without blocking the survey
+    has_pending_dsr = models.BooleanField(
+        default=False,
+        help_text="Survey has one or more pending data subject requests",
+    )
+    dsr_warning_message = models.TextField(
+        blank=True,
+        help_text="Warning message shown to controller about pending DSRs",
+    )
+    suspended_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When survey was suspended (if status=SUSPENDED)",
+    )
+    suspended_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="suspended_surveys",
+        help_text="Platform admin who suspended this survey",
+    )
+    suspended_reason = models.TextField(
+        blank=True,
+        help_text="Reason for suspension (e.g., 'Non-compliance with DSR')",
+    )
+
     def is_live(self) -> bool:
         now = timezone.now()
         time_ok = (self.start_at is None or self.start_at <= now) and (
             self.end_at is None or now <= self.end_at
         )
         status_ok = self.status == self.Status.PUBLISHED
+        # Suspended surveys are not live (no new responses allowed)
+        if self.status == self.Status.SUSPENDED:
+            return False
         # Respect max responses if set
         if self.max_responses is not None and hasattr(self, "responses"):
             try:
@@ -973,6 +1005,68 @@ class Survey(models.Model):
             if count >= self.max_responses:
                 return False
         return status_ok and time_ok
+
+    @property
+    def is_suspended(self) -> bool:
+        """Check if survey is suspended."""
+        return self.status == self.Status.SUSPENDED
+
+    def suspend(self, reason: str, suspended_by: User) -> None:
+        """
+        Suspend survey due to DSR non-compliance or other serious issue.
+
+        Suspended surveys:
+        - Cannot accept new responses
+        - Cannot export data
+        - Show prominent warning to controller
+        - Require platform admin to unsuspend
+        """
+        self.status = self.Status.SUSPENDED
+        self.suspended_at = timezone.now()
+        self.suspended_by = suspended_by
+        self.suspended_reason = reason
+        self.save(
+            update_fields=[
+                "status",
+                "suspended_at",
+                "suspended_by",
+                "suspended_reason",
+            ]
+        )
+
+    def unsuspend(self, unsuspend_reason: str = "") -> None:
+        """
+        Unsuspend a suspended survey.
+
+        Returns survey to PUBLISHED status if it was published before.
+        """
+        if unsuspend_reason:
+            self.suspended_reason = (
+                f"RESOLVED: {unsuspend_reason} (was: {self.suspended_reason})"
+            )
+        self.status = self.Status.PUBLISHED
+        self.suspended_at = None
+        self.suspended_by = None
+        self.save(
+            update_fields=[
+                "status",
+                "suspended_at",
+                "suspended_by",
+                "suspended_reason",
+            ]
+        )
+
+    def set_dsr_warning(self, message: str) -> None:
+        """Set a DSR warning message that appears to the controller."""
+        self.has_pending_dsr = True
+        self.dsr_warning_message = message
+        self.save(update_fields=["has_pending_dsr", "dsr_warning_message"])
+
+    def clear_dsr_warning(self) -> None:
+        """Clear the DSR warning."""
+        self.has_pending_dsr = False
+        self.dsr_warning_message = ""
+        self.save(update_fields=["has_pending_dsr", "dsr_warning_message"])
 
     def days_remaining(self) -> int | None:
         """
@@ -2303,6 +2397,49 @@ class SurveyResponse(models.Model):
         related_name="response",
     )
 
+    # Receipt token for data subject rights requests
+    # Only populated for pseudonymous surveys (token/authenticated visibility)
+    # NOT populated for anonymous surveys (public/unlisted) to preserve anonymity
+    receipt_token = models.UUIDField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Receipt token for data subject requests (pseudonymous surveys only)",
+    )
+
+    # Data subject request freeze fields
+    class FreezeSource(models.TextChoices):
+        CONTROLLER = "controller", "Controller-initiated"
+        PLATFORM = "platform", "Platform-initiated (DSR escalation)"
+
+    is_frozen = models.BooleanField(
+        default=False,
+        help_text="Response is frozen pending data subject request resolution",
+    )
+    frozen_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this response was frozen",
+    )
+    frozen_reason = models.TextField(
+        blank=True,
+        help_text="Reason for freezing (e.g., 'Data subject request pending')",
+    )
+    frozen_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="frozen_responses",
+        help_text="User who froze this response",
+    )
+    freeze_source = models.CharField(
+        max_length=20,
+        choices=FreezeSource.choices,
+        blank=True,
+        help_text="Whether freeze was controller or platform initiated",
+    )
+
     def _to_bytes(self, data) -> bytes:
         """Convert memoryview or bytes to bytes."""
         if isinstance(data, memoryview):
@@ -2400,6 +2537,171 @@ class SurveyResponse(models.Model):
         """Check if this response has encrypted data."""
         return bool(self.enc_answers or self.enc_demographics)
 
+    @property
+    def is_pseudonymous(self) -> bool:
+        """
+        Check if this response is pseudonymous (can be linked to an individual).
+
+        Returns True if:
+        - Response has a submitted_by (authenticated user)
+        - Response has an access_token (invited respondent)
+        - Survey visibility is 'authenticated' or 'token'
+
+        Returns False for anonymous responses (public/unlisted visibility
+        with no authentication).
+        """
+        if self.submitted_by_id or self.access_token_id:
+            return True
+        return self.survey.visibility in [
+            Survey.Visibility.AUTHENTICATED,
+            Survey.Visibility.TOKEN,
+        ]
+
+    def generate_receipt_token(self) -> uuid.UUID | None:
+        """
+        Generate a receipt token for data subject rights requests.
+
+        Only generates token for pseudonymous responses.
+        Anonymous responses do not get tokens to preserve anonymity.
+
+        Returns:
+            UUID receipt token if generated, None if anonymous
+        """
+        if not self.is_pseudonymous:
+            # Anonymous response - no receipt token
+            return None
+
+        if not self.receipt_token:
+            self.receipt_token = uuid.uuid4()
+            self.save(update_fields=["receipt_token"])
+
+        return self.receipt_token
+
+    def freeze(
+        self,
+        reason: str,
+        frozen_by_user: User,
+        source: str = "controller",
+    ) -> None:
+        """
+        Freeze this response pending data subject request resolution.
+
+        Frozen responses:
+        - Are excluded from exports
+        - Appear greyed out in results
+        - Cannot be modified by controller
+        - Are preserved for potential ICO investigation
+
+        Args:
+            reason: Why the response is being frozen
+            frozen_by_user: User performing the freeze
+            source: "controller" or "platform" - affects unfreeze permissions
+        """
+        self.is_frozen = True
+        self.frozen_at = timezone.now()
+        self.frozen_reason = reason
+        self.frozen_by = frozen_by_user
+        self.freeze_source = source
+        self.save(
+            update_fields=[
+                "is_frozen",
+                "frozen_at",
+                "frozen_reason",
+                "frozen_by",
+                "freeze_source",
+            ]
+        )
+
+    def can_unfreeze(self, user: User) -> bool:
+        """
+        Check if user can unfreeze this response.
+
+        - Controller-initiated freezes: controller/org admin/team admin can unfreeze
+        - Platform-initiated freezes: only platform admin can unfreeze
+
+        Args:
+            user: User attempting to unfreeze
+
+        Returns:
+            True if user has permission to unfreeze
+        """
+        if not self.is_frozen:
+            return False
+
+        # Platform admin can always unfreeze
+        if user.is_superuser:
+            return True
+
+        # Platform-initiated freezes require platform admin
+        if self.freeze_source == self.FreezeSource.PLATFORM:
+            return False
+
+        # Controller-initiated: check if user has controller permissions
+        survey = self.survey
+
+        # Survey owner
+        if survey.owner_id == user.id:
+            return True
+
+        # Organization admin
+        if survey.organization:
+            from .models import OrganizationMembership
+
+            membership = OrganizationMembership.objects.filter(
+                organization=survey.organization,
+                user=user,
+                role=OrganizationMembership.Role.ADMIN,
+            ).first()
+            if membership:
+                return True
+
+        # Team admin
+        if survey.team:
+            from .models import TeamMembership
+
+            membership = TeamMembership.objects.filter(
+                team=survey.team,
+                user=user,
+                role=TeamMembership.Role.ADMIN,
+            ).first()
+            if membership:
+                return True
+
+        return False
+
+    def unfreeze(self, resolution_note: str = "", unfrozen_by: User = None) -> None:
+        """
+        Unfreeze this response after data subject request is resolved.
+
+        Args:
+            resolution_note: Optional note about how the request was resolved
+            unfrozen_by: User performing the unfreeze (for audit trail)
+        """
+        # Store resolution in frozen_reason before clearing
+        if resolution_note:
+            self.frozen_reason = (
+                f"RESOLVED: {resolution_note} (was: {self.frozen_reason})"
+            )
+
+        self.is_frozen = False
+        self.frozen_at = None
+        self.frozen_by = None
+        self.freeze_source = ""
+        self.save(
+            update_fields=[
+                "is_frozen",
+                "frozen_at",
+                "frozen_reason",
+                "frozen_by",
+                "freeze_source",
+            ]
+        )
+
+    @property
+    def is_platform_frozen(self) -> bool:
+        """Check if this response was frozen by platform admin."""
+        return self.is_frozen and self.freeze_source == self.FreezeSource.PLATFORM
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -2407,6 +2709,346 @@ class SurveyResponse(models.Model):
                 name="one_response_per_user_per_survey",
             )
         ]
+        indexes = [
+            models.Index(fields=["receipt_token"]),
+            models.Index(fields=["is_frozen"]),
+        ]
+
+
+class DataSubjectRequest(models.Model):
+    """
+    Tracks data subject rights requests from survey respondents.
+
+    When a respondent contacts CheckTick to exercise their GDPR rights,
+    this model tracks the request through the escalation process:
+
+    1. Request received → notify controller
+    2. Controller has 30 days to respond
+    3. If no response → freeze the response, escalate
+    4. Resolution → unfreeze or delete as appropriate
+
+    For encrypted surveys, we cannot independently verify or action requests.
+    The controller must decrypt and action. We can only freeze access.
+    """
+
+    class RequestType(models.TextChoices):
+        ACCESS = "access", "Right of Access (Art. 15)"
+        ERASURE = "erasure", "Right to Erasure (Art. 17)"
+        RECTIFICATION = "rectification", "Right to Rectification (Art. 16)"
+        OBJECTION = "objection", "Right to Object (Art. 21)"
+        PORTABILITY = "portability", "Right to Data Portability (Art. 20)"
+        RESTRICTION = "restriction", "Right to Restriction (Art. 18)"
+
+    class Status(models.TextChoices):
+        RECEIVED = "received", "Received"
+        REFERRED = "referred", "Referred to Controller"
+        CONTROLLER_RESPONDED = "responded", "Controller Responded"
+        ESCALATED = "escalated", "Escalated (Controller Non-Responsive)"
+        FROZEN = "frozen", "Response Frozen"
+        RESOLVED = "resolved", "Resolved"
+        REJECTED = "rejected", "Rejected (Invalid Request)"
+
+    # Link to specific response (if identifiable)
+    response = models.ForeignKey(
+        SurveyResponse,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="data_subject_requests",
+        help_text="Specific response if identified via receipt token",
+    )
+
+    # Link to survey (always required)
+    survey = models.ForeignKey(
+        Survey,
+        on_delete=models.CASCADE,
+        related_name="data_subject_requests",
+    )
+
+    # Request details
+    request_type = models.CharField(
+        max_length=20,
+        choices=RequestType.choices,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.RECEIVED,
+    )
+
+    # Respondent contact info
+    respondent_email = models.EmailField(
+        help_text="Email address of the person making the request",
+    )
+    receipt_token = models.UUIDField(
+        null=True,
+        blank=True,
+        help_text="Receipt token provided by respondent (if available)",
+    )
+
+    # Request content
+    request_details = models.TextField(
+        help_text="Details of the request as provided by the respondent",
+    )
+
+    # Controller notification tracking
+    controller_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the controller was first notified",
+    )
+    controller_deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Deadline for controller response (30 days from notification)",
+    )
+    controller_reminder_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When a reminder was sent to the controller",
+    )
+
+    # Controller response
+    controller_response = models.TextField(
+        blank=True,
+        help_text="Controller's response to the request",
+    )
+    controller_responded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the controller responded",
+    )
+
+    # Resolution
+    resolution_notes = models.TextField(
+        blank=True,
+        help_text="Notes on how the request was resolved",
+    )
+    resolved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the request was resolved",
+    )
+    resolved_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="resolved_dsr_requests",
+        help_text="Admin who resolved the request",
+    )
+
+    # Escalation tracking
+    escalated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the request was escalated due to controller non-response",
+    )
+    ico_reported = models.BooleanField(
+        default=False,
+        help_text="Whether this case was reported to the ICO",
+    )
+    ico_reported_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When reported to ICO",
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Audit trail
+    created_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_dsr_requests",
+        help_text="Admin who created this request record",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["controller_deadline"]),
+            models.Index(fields=["receipt_token"]),
+        ]
+        verbose_name = "Data Subject Request"
+        verbose_name_plural = "Data Subject Requests"
+
+    def __str__(self) -> str:
+        return f"DSR-{self.id}: {self.get_request_type_display()} ({self.get_status_display()})"
+
+    def notify_controller(self) -> None:
+        """
+        Notify the survey controller about this data subject request.
+
+        Sets the notification timestamp and calculates the 30-day deadline.
+        """
+        from datetime import timedelta
+
+        self.controller_notified_at = timezone.now()
+        self.controller_deadline = self.controller_notified_at + timedelta(days=30)
+        self.status = self.Status.REFERRED
+        self.save(
+            update_fields=[
+                "controller_notified_at",
+                "controller_deadline",
+                "status",
+                "updated_at",
+            ]
+        )
+
+        # TODO: Send email notification to controller
+        # self._send_controller_notification_email()
+
+    def record_controller_response(self, response_text: str) -> None:
+        """Record the controller's response to this request."""
+        self.controller_response = response_text
+        self.controller_responded_at = timezone.now()
+        self.status = self.Status.CONTROLLER_RESPONDED
+        self.save(
+            update_fields=[
+                "controller_response",
+                "controller_responded_at",
+                "status",
+                "updated_at",
+            ]
+        )
+
+    def escalate(self, freeze_response: bool = True) -> None:
+        """
+        Escalate the request due to controller non-response.
+
+        Args:
+            freeze_response: Whether to freeze the associated response
+        """
+        self.escalated_at = timezone.now()
+        self.status = self.Status.ESCALATED
+        self.save(update_fields=["escalated_at", "status", "updated_at"])
+
+        if freeze_response and self.response:
+            self.response.freeze(
+                reason=f"Data subject request escalated (DSR-{self.id})",
+                frozen_by_user=self.created_by,
+                source="platform",  # Platform-initiated freeze
+            )
+            self.status = self.Status.FROZEN
+            self.save(update_fields=["status", "updated_at"])
+
+            # Log the freeze action
+            ResponseFreezeLog.objects.create(
+                response=self.response,
+                action=ResponseFreezeLog.Action.FREEZE,
+                source=SurveyResponse.FreezeSource.PLATFORM,
+                reason=f"DSR escalation - controller non-responsive (DSR-{self.id})",
+                performed_by=self.created_by,
+                data_subject_request=self,
+            )
+
+    def resolve(self, resolution_notes: str, resolved_by: User) -> None:
+        """
+        Mark the request as resolved.
+
+        Args:
+            resolution_notes: How the request was resolved
+            resolved_by: Admin resolving the request
+        """
+        self.resolution_notes = resolution_notes
+        self.resolved_at = timezone.now()
+        self.resolved_by = resolved_by
+        self.status = self.Status.RESOLVED
+        self.save(
+            update_fields=[
+                "resolution_notes",
+                "resolved_at",
+                "resolved_by",
+                "status",
+                "updated_at",
+            ]
+        )
+
+        # Unfreeze response if it was frozen
+        if self.response and self.response.is_frozen:
+            self.response.unfreeze(resolution_note=resolution_notes)
+
+    @property
+    def is_overdue(self) -> bool:
+        """Check if controller deadline has passed."""
+        if not self.controller_deadline:
+            return False
+        return timezone.now() > self.controller_deadline
+
+    @property
+    def days_until_deadline(self) -> int | None:
+        """Days remaining until controller deadline."""
+        if not self.controller_deadline:
+            return None
+        delta = self.controller_deadline - timezone.now()
+        return delta.days
+
+    @classmethod
+    def find_by_receipt_token(
+        cls, receipt_token: uuid.UUID
+    ) -> "DataSubjectRequest | None":
+        """Find a data subject request by receipt token."""
+        return cls.objects.filter(receipt_token=receipt_token).first()
+
+
+class ResponseFreezeLog(models.Model):
+    """
+    Audit log for response freeze/unfreeze actions.
+
+    Every freeze and unfreeze action is logged here for compliance
+    and audit purposes.
+    """
+
+    class Action(models.TextChoices):
+        FREEZE = "freeze", "Frozen"
+        UNFREEZE = "unfreeze", "Unfrozen"
+
+    response = models.ForeignKey(
+        SurveyResponse,
+        on_delete=models.CASCADE,
+        related_name="freeze_logs",
+    )
+    action = models.CharField(
+        max_length=20,
+        choices=Action.choices,
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=SurveyResponse.FreezeSource.choices,
+        help_text="Whether freeze was controller or platform initiated",
+    )
+    reason = models.TextField(
+        help_text="Reason for the freeze/unfreeze action",
+    )
+    performed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="freeze_actions",
+    )
+    data_subject_request = models.ForeignKey(
+        DataSubjectRequest,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="freeze_logs",
+        help_text="Linked DSR if this freeze was due to a data subject request",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Response Freeze Log"
+        verbose_name_plural = "Response Freeze Logs"
+
+    def __str__(self) -> str:
+        return f"{self.get_action_display()} response {self.response_id} by {self.performed_by}"
 
 
 class SurveyAccessToken(models.Model):

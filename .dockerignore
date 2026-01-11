@@ -1,0 +1,81 @@
+# =============================================================================
+# Docker Build Exclusions for CheckTick
+# =============================================================================
+# This file excludes files and directories from the Docker build context,
+# reducing image size and preventing sensitive documentation from being
+# included in container images pushed to ghcr.io.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Compliance - Exclude PDFs and certificates only
+# -----------------------------------------------------------------------------
+# Compliance PDFs (large files, not needed at runtime - markdown is sufficient)
+docs/compliance/*.pdf
+
+# Training certificates contain personal data (PII)
+docs/compliance/training-certificates/
+
+# -----------------------------------------------------------------------------
+# Development & Testing
+# -----------------------------------------------------------------------------
+.git/
+.github/
+.gitignore
+.vscode/
+.idea/
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+pytest-a11y-report.xml
+tests/
+checktick/tests/
+
+# Development Docker Compose files
+docker-compose.dev.yml
+docker-compose.external-db.yml
+docker-compose.prod-test.yml
+docker-compose.registry.yml
+Dockerfile.dev
+Dockerfile.registry
+
+# -----------------------------------------------------------------------------
+# Build Artifacts & Dependencies
+# -----------------------------------------------------------------------------
+node_modules/
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# -----------------------------------------------------------------------------
+# Environment & Secrets
+# -----------------------------------------------------------------------------
+.env
+.env.*
+*.env
+vault/
+
+# -----------------------------------------------------------------------------
+# Media & User-Generated Content
+# -----------------------------------------------------------------------------
+# Media files are mounted as volumes, not baked into images
+media/
+
+# -----------------------------------------------------------------------------
+# Miscellaneous
+# -----------------------------------------------------------------------------
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+.DS_Store
+Thumbs.db
+s/

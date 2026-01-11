@@ -11,12 +11,14 @@ Get CheckTick running on your own infrastructure in minutes using pre-built Dock
 CheckTick can be self-hosted using Docker, similar to platforms like Discourse. You don't need to clone the repository or build anything - just pull the pre-built image and configure your deployment.
 
 **Self-hosted deployments automatically include all Enterprise tier features:**
+
 - Custom branding (logos, themes, fonts)
 - No survey limits
 - Full collaboration features
 - SSO/OIDC integration support
 
 **Branding Configuration:** Superusers can configure platform branding via:
+
 - Web UI at `/branding/` (requires superuser account)
 - CLI command: `python manage.py configure_branding`
 - Django admin at `/admin/core/sitebranding/`
@@ -120,6 +122,7 @@ docker compose logs -f web
 ### 4. Create Superuser Account
 
 **Important:** Superuser accounts have full administrative access including:
+
 - Access to Django admin interface at `/admin/`
 - Ability to configure platform branding at `/branding/`
 - User management and system configuration

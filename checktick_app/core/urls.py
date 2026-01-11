@@ -15,6 +15,9 @@ urlpatterns = [
     path("complete-signup/", views.complete_signup, name="complete_signup"),
     path("docs/", views.docs_index, name="docs_index"),
     path("docs/<slug:slug>/", views.docs_page, name="docs_page"),
+    # DSPT Compliance documentation (separate from main docs)
+    path("compliance/", views.compliance_index, name="compliance_index"),
+    path("compliance/<slug:slug>/", views.compliance_page, name="compliance_page"),
     path("branding/", views.configure_branding, name="configure_branding"),
     path("delete-account/", views.delete_account, name="delete_account"),
     # Organization setup
@@ -64,6 +67,11 @@ urlpatterns = [
         "platform-admin/stats/",
         views_platform_admin.organization_stats,
         name="platform_admin_stats",
+    ),
+    path(
+        "platform-admin/logs/",
+        views_platform_admin.platform_logs,
+        name="platform_admin_logs",
     ),
     # Billing
     path(

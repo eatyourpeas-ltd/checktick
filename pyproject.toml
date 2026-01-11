@@ -8,7 +8,7 @@ packages = [
     { include = "checktick_app" }
 ]
 
-[tool.poetry.dependencies]
+ [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
 django = "^5.1"
 django-environ = "^0.11.2"
@@ -20,7 +20,7 @@ django-axes = "^6.5.0"
 django-ratelimit = "^4.1.0"
 python-jose = {version = "^3.3.0", extras = ["cryptography"]}
 # NOTE: cryptography/urllib3 pinned by ggshield - CVEs require ggshield upstream update
-# Tracked vulnerabilities: CVE-2024-12797 (cryptography), CVE-2025-50182/50181/66418/66471 (urllib3)
+# Tracked vulnerabilities: CVE-2024-12797 (cryptography), CVE-2025-50182/50181/66418/66471, CVE-2024-3766 (urllib3)
 cryptography = "^43.0.1"
 itsdangerous = "^2.2.0"
 pyyaml = "^6.0.2"

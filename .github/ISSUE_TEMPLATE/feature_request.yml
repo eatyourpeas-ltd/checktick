@@ -59,7 +59,7 @@ body:
       description: Write a user story for this feature
       placeholder: "As a [type of user], I want [feature] so that [benefit/goal]"
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: user-type
@@ -74,7 +74,7 @@ body:
         - API User/Developer
         - All Users
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: use-case
@@ -93,7 +93,7 @@ body:
         - Multiple Use Cases
         - Other
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: alternatives

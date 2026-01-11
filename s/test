@@ -6,6 +6,7 @@
 #   --all         Run all tests (default)
 #   --fast        Run tests excluding slow/integration tests
 #   --a11y        Run only accessibility tests
+#   --no-a11y     Run all tests except accessibility (no Chromium needed)
 #   --unit        Run only unit tests (exclude playwright)
 #   --serial      Run tests serially (no parallelization)
 #   --coverage    Run with coverage report
@@ -38,6 +39,10 @@ while [[ $# -gt 0 ]]; do
             TEST_SCOPE="unit"
             shift
             ;;
+        --no-a11y)
+            TEST_SCOPE="no-a11y"
+            shift
+            ;;
         --serial)
             PARALLEL=false
             shift
@@ -55,6 +60,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --all         Run all tests (default)"
             echo "  --fast        Run tests excluding slow markers"
             echo "  --a11y        Run only accessibility tests"
+            echo "  --no-a11y     Run all tests except accessibility (no Chromium needed)"
             echo "  --unit        Run unit tests only (exclude playwright)"
             echo ""
             echo "Execution Options:"
@@ -63,6 +69,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Examples:"
             echo "  $0                    # Run all tests in parallel"
+            echo "  $0 --no-a11y          # Run all tests except accessibility"
             echo "  $0 --a11y             # Run accessibility tests only"
             echo "  $0 --fast --coverage  # Fast tests with coverage"
             echo "  $0 --serial           # Run all tests without xdist"
@@ -99,6 +106,9 @@ case $TEST_SCOPE in
         ;;
     a11y)
         PYTEST_CMD="$PYTEST_CMD tests/test_accessibility.py"
+        ;;
+    no-a11y)
+        PYTEST_CMD="$PYTEST_CMD --ignore=tests/test_accessibility.py"
         ;;
     unit)
         PYTEST_CMD="$PYTEST_CMD --ignore=tests/test_accessibility.py"

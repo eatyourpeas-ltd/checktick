@@ -1,8 +1,9 @@
+{% load i18n %}
 {% if show_patient_details %}
 <div id="demographics-preview" class="card bg-base-100 shadow mt-4">
   <div class="card-body">
-    <h3 class="card-title">Patient Demographics (encrypted)</h3>
-    <p class="text-sm opacity-70">These fields are encrypted at rest and never exported with identifiers.</p>
+    <h3 class="card-title">{% trans "Patient Demographics (encrypted)" %}</h3>
+    <p class="text-sm opacity-70">{% trans "These fields are encrypted at rest and never exported with identifiers." %}</p>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
       {% for key,label in demographic_defs.items %}
         {% if key in demographics_fields %}

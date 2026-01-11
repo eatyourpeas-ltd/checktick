@@ -28,14 +28,14 @@
                     {% if item.icon %}<span class="mr-1">{{ item.icon }}</span>{% endif %}
                     {{ item.title }}
                   </span>
-                  <svg class="docs-chevron w-4 h-4 transition-transform duration-200" 
-                       fill="none" 
-                       stroke="currentColor" 
+                  <svg class="docs-chevron w-4 h-4 transition-transform duration-200"
+                       fill="none"
+                       stroke="currentColor"
                        viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                   </svg>
                 </button>
-                <ul class="docs-category-items menu menu-sm pl-2 mt-1" 
+                <ul class="docs-category-items menu menu-sm pl-2 mt-1"
                     id="category-{{ item.title|slugify }}"
                     style="display: block;">
                   {% for page in item.pages %}
@@ -50,6 +50,17 @@
               </div>
             {% endif %}
           {% endfor %}
+          {# Link to DSPT Compliance section #}
+          <div class="mt-3 pt-2 border-t border-base-300">
+            <a href="{% url 'core:compliance_index' %}"
+               class="flex items-center text-sm px-2 py-1.5 rounded bg-primary/10 hover:bg-primary/20 transition-colors text-primary font-medium">
+              <span class="mr-2">🛡️</span>
+              DSPT Compliance
+              <svg class="w-4 h-4 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+              </svg>
+            </a>
+          </div>
         </nav>
       </div>
     </div>

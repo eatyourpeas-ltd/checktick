@@ -156,12 +156,24 @@ python manage.py process_expired_subscriptions --grace-days=10
 ```
 
 **What happens when a subscription expires:**
+
 - Account is downgraded to FREE tier
 - Surveys exceeding the limit (3) are automatically **closed** (not deleted)
 - Closed surveys remain accessible in read-only mode
 - User can still view and export all data
 - User can reopen surveys by upgrading again
 - Access to your hosting platform's scheduling features
+
+### 8. Data Subject Request
+
+The `process_dsr_deadlines` management command runs daily to:
+
+1. **Track DSR requests** - if responders ask for the data to be amended/removed the controller has 30 days to respond
+
+**What happens if the 30 days elapses and the issue is unresolved?**
+
+- the response is frozen
+- emails are sent to the controller to inform them
 
 ---
 

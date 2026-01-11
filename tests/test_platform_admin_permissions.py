@@ -513,3 +513,84 @@ class TestNonExistentOrganization:
         url = reverse("core:platform_admin_org_toggle_active", kwargs={"org_id": 99999})
         response = client.post(url)
         assert response.status_code == 404
+
+
+# ============================================================================
+# Platform Logs Access Tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestPlatformLogsAccess:
+    """Test access control for platform logs view."""
+
+    def test_anonymous_user_redirected_to_login(self, client):
+        """Anonymous users are redirected to login."""
+        url = reverse("core:platform_admin_logs")
+        response = client.get(url)
+        assert response.status_code == 302
+        assert "login" in response.url.lower()
+
+    def test_regular_user_denied_access(self, client, regular_user):
+        """Regular users cannot access platform logs."""
+        client.force_login(regular_user)
+        url = reverse("core:platform_admin_logs")
+        response = client.get(url)
+        assert response.status_code == 302
+
+    def test_staff_user_denied_access(self, client, staff_user):
+        """Staff users (non-superuser) cannot access platform logs."""
+        client.force_login(staff_user)
+        url = reverse("core:platform_admin_logs")
+        response = client.get(url)
+        assert response.status_code == 302
+
+    def test_org_admin_denied_access(self, client, org_admin_user):
+        """Organization admins cannot access platform logs."""
+        client.force_login(org_admin_user)
+        url = reverse("core:platform_admin_logs")
+        response = client.get(url)
+        assert response.status_code == 302
+
+    def test_superuser_can_access_logs(self, client, superuser):
+        """Superusers can access platform logs."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_logs")
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b"Platform Logs" in response.content
+
+    def test_superuser_can_filter_by_severity(self, client, superuser):
+        """Superusers can filter logs by severity."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_logs")
+        response = client.get(url, {"severity": "critical"})
+        assert response.status_code == 200
+
+    def test_superuser_can_filter_by_date(self, client, superuser):
+        """Superusers can filter logs by date range."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_logs")
+        response = client.get(url, {"from": "2025-01-01", "to": "2025-12-31"})
+        assert response.status_code == 200
+
+    def test_superuser_can_search_logs(self, client, superuser):
+        """Superusers can search logs."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_logs")
+        response = client.get(url, {"q": "login"})
+        assert response.status_code == 200
+
+    def test_superuser_can_view_infrastructure_logs_tab(self, client, superuser):
+        """Superusers can access infrastructure logs tab (even if not configured)."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_logs")
+        response = client.get(url, {"source": "infrastructure"})
+        assert response.status_code == 200
+
+    def test_logs_rejects_post(self, client, superuser):
+        """Logs view should reject POST requests."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_logs")
+        response = client.post(url)
+        assert response.status_code == 405

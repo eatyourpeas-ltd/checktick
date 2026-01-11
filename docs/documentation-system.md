@@ -50,6 +50,34 @@ Your documentation content starts here...
 - `getting-involved` - Contributing guides
 - `None` - Hide from menu (accessible via URL only)
 
+**DSPT Compliance Documentation:**
+
+DSPT (NHS Data Security and Protection Toolkit) documentation is served from a separate `/compliance/` section, keeping the main docs focused on user and developer documentation.
+
+The DSPT categories map to the 10 NHS standards:
+
+- `dspt-overview` - DSPT overview and master index
+- `dspt-1-confidential-data` - Personal confidential data policies
+- `dspt-2-staff-responsibilities` - Staff responsibilities and agreements
+- `dspt-3-training` - Training records and analysis
+- `dspt-4-managing-access` - Managing data access and asset registers
+- `dspt-5-process-reviews` - Process reviews and audits
+- `dspt-6-incidents` - Responding to incidents
+- `dspt-7-continuity` - Continuity planning and disaster recovery
+- `dspt-8-unsupported-systems` - Unsupported systems and patching
+- `dspt-9-it-protection` - IT protection and security controls
+- `dspt-10-suppliers` - Accountable suppliers
+
+DSPT docs are stored in `docs/compliance/` and accessed via `/compliance/<slug>/`.
+
+### Template Variables
+
+Documentation files support template variable interpolation for platform-specific content. This allows self-hosters to see their own platform name in policy documents.
+
+**Supported Variables:**
+
+- `{{ platform_name }}` - Replaced with the platform name from SiteBranding or settings
+
 **Example:**
 
 ```markdown

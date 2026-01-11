@@ -6,7 +6,7 @@ priority: 1
 
 # Terms of Service
 
-**Last Updated: 4 December 2025**
+**Last Updated: 4 January 2026**
 
 Welcome to CheckTick. These Terms of Service ("Terms") govern your access to and use of CheckTick's survey platform, website, and services (collectively, the "Service"), operated by Eatyourpeas Ltd. By accessing or using the Service, you agree to be bound by these Terms.
 
@@ -26,12 +26,14 @@ If you are using the Service on behalf of an organization, you represent that yo
 CheckTick offers four account tiers:
 
 ### 2.1 FREE Tier
+
 * Up to 3 surveys
 * Unlimited responses per survey
 * No collaboration features
 * Community support
 
 ### 2.2 PRO Tier
+
 * Unlimited surveys
 * Unlimited responses
 * Add up to 10 editors per survey
@@ -39,6 +41,7 @@ CheckTick offers four account tiers:
 * Requires paid subscription
 
 ### 2.3 ORGANIZATION Tier
+
 * All PRO features
 * Unlimited collaborators per survey
 * Viewer role for read-only access
@@ -47,6 +50,7 @@ CheckTick offers four account tiers:
 * Requires paid subscription
 
 ### 2.4 ENTERPRISE Tier
+
 * All ORGANIZATION features
 * Custom branding and theming
 * SSO/OIDC authentication
@@ -58,17 +62,20 @@ Tier features and limits may be adjusted with reasonable notice to users.
 ## 3. Account Registration and Security
 
 ### 3.1 Account Creation
+
 * You must provide accurate, current, and complete information during registration
 * You are responsible for maintaining the confidentiality of your account credentials
 * You must notify us immediately of any unauthorized access to your account
 * You may not share your account with others or allow others to access your account
 
 ### 3.2 Encryption Keys
+
 * **Individual Accounts**: You are solely responsible for safeguarding your encryption keys. Loss of encryption keys will result in permanent loss of encrypted data. CheckTick cannot recover lost encryption keys for individual accounts.
 * **Organization Accounts**: Your organization manages encryption keys and may recover them for authorized members.
 * You acknowledge that CheckTick cannot decrypt data without the appropriate encryption keys.
 
 ### 3.3 Account Termination
+
 We reserve the right to suspend or terminate your account if:
 * You violate these Terms
 * You engage in fraudulent activity
@@ -79,6 +86,7 @@ We reserve the right to suspend or terminate your account if:
 ## 4. Paid Subscriptions
 
 ### 4.1 Billing
+
 * Subscriptions are billed monthly or annually in advance
 * Prices are stated in GBP (£) and exclude applicable taxes
 * Payment processing is handled by our secure payment provider
@@ -86,18 +94,21 @@ We reserve the right to suspend or terminate your account if:
 * All fees are non-refundable except as stated in our Refund Policy
 
 ### 4.2 Subscription Changes
+
 * You may upgrade or downgrade your subscription at any time
 * Upgrades take effect immediately
 * Downgrades take effect at the end of the current billing period
 * When downgrading, features exceeding the new tier's limits will be restricted
 
 ### 4.3 Cancellation
+
 * You may cancel your subscription at any time
 * Cancellations take effect at the end of the current billing period
 * You will retain access to paid features until the end of the paid period
 * No refunds are provided for partial billing periods except as stated in our Refund Policy
 
 ### 4.4 Failed Payments
+
 * If payment fails, we will attempt to collect payment again
 * Your access to paid features may be suspended during payment failures
 * Your account may be downgraded to FREE tier if payment issues persist
@@ -105,14 +116,18 @@ We reserve the right to suspend or terminate your account if:
 ## 5. Use of the Service
 
 ### 5.1 Permitted Use
+
 You may use CheckTick to:
+
 * Create and distribute surveys and questionnaires
 * Collect and analyze survey responses
 * Collaborate with authorized team members
 * Export your data
 
 ### 5.2 Prohibited Use
+
 You may not:
+
 * Use the Service for any illegal purpose
 * Collect, process, or store illegal content
 * Violate any data protection laws (including GDPR, UK DPA 2018)
@@ -187,7 +202,26 @@ CheckTick acts as a **data processor** for survey data you collect. This means:
 * We do not use your survey data for our own purposes
 * Our Privacy Notice explains how we handle personal data
 
-### 6.4 Data Governance Requirements
+### 6.4 Data Subject Escalation and Data Quarantine
+
+If a survey respondent contacts CheckTick directly with a data subject request (e.g., access, erasure, objection):
+
+1. **Initial Referral**: We will direct the respondent to you (the data controller) as you are responsible for handling the request
+2. **Controller Response Window**: You must respond to the data subject within **30 days** of receiving the request, as required by GDPR Article 12
+3. **Escalation to CheckTick**: If you fail to respond within 30 days, or refuse the request without lawful basis, the data subject may escalate to CheckTick
+4. **Data Quarantine**: Upon valid escalation, we may:
+   * Place the disputed survey data in a quarantine state, preventing further processing
+   * Restrict your access to the affected survey while the dispute is resolved
+   * Require you to demonstrate lawful basis for continued processing
+5. **Account Restrictions**: If you repeatedly fail to respond to data subject requests, or demonstrate a pattern of unlawful processing, we may:
+   * Suspend your ability to create new surveys
+   * Terminate your account for breach of these Terms
+   * Report your conduct to the Information Commissioner's Office
+6. **Encrypted Data**: Where data is encrypted with your keys, quarantine means restricting platform access; we cannot modify encrypted content without your cooperation
+
+**You acknowledge that failure to comply with data subject rights is a material breach of these Terms.**
+
+### 6.5 Data Governance Requirements
 
 You must:
 
@@ -205,6 +239,7 @@ See our Data Governance documentation for detailed guidance on these requirement
 ## 7. Content and Data
 
 ### 6.1 Your Content
+
 * You retain ownership of all content you create or upload ("Your Content")
 * You grant CheckTick a license to host, store, and process Your Content solely to provide the Service
 * You are responsible for ensuring Your Content does not violate laws or third-party rights
@@ -230,17 +265,20 @@ See our Data Governance documentation for detailed guidance on these requirement
 ## 7. Intellectual Property
 
 ### 7.1 Eatyourpeas Ltd's Rights
+
 * CheckTick is owned and operated by Eatyourpeas Ltd, a company registered in England and Wales
 * Eatyourpeas Ltd owns all rights to the Service, including code, design, and trademarks
 * These Terms do not grant you any intellectual property rights except as necessary to use the Service
 * CheckTick is open source software licensed under the GNU Affero General Public License v3.0 (AGPL-3.0)
 
 ### 7.2 Open Source
+
 * The CheckTick source code is available at https://github.com/eatyourpeas/checktick
 * Self-hosting CheckTick is permitted under the AGPL-3.0 license terms
 * Commercial use of CheckTick must comply with the AGPL-3.0 license
 
 ### 7.3 Feedback
+
 * We welcome feedback and suggestions about the Service
 * You grant us a perpetual, royalty-free license to use any feedback you provide
 * We have no obligation to implement any feedback
@@ -248,12 +286,14 @@ See our Data Governance documentation for detailed guidance on these requirement
 ## 8. API Access
 
 ### 8.1 API Terms
+
 * API access is subject to these Terms and our API documentation
 * You must authenticate all API requests
 * You must not exceed reasonable rate limits
 * We may throttle or block abusive API usage
 
 ### 8.2 API Changes
+
 * We may modify the API with reasonable notice
 * Breaking changes will be communicated in advance when possible
 * We are not liable for issues caused by API changes
@@ -261,11 +301,13 @@ See our Data Governance documentation for detailed guidance on these requirement
 ## 9. Service Availability
 
 ### 9.1 Uptime
+
 * We strive to maintain high availability but do not guarantee uninterrupted access
 * The Service may be temporarily unavailable for maintenance
 * We will provide notice of planned maintenance when feasible
 
 ### 9.2 Service Changes
+
 * We may modify, suspend, or discontinue features at any time
 * We will provide reasonable notice for significant changes
 * We are not liable for any modifications or discontinuations
@@ -282,7 +324,7 @@ TO THE MAXIMUM EXTENT PERMITTED BY LAW:
 * YOU ARE RESPONSIBLE FOR MAINTAINING YOUR OWN BACKUPS
 * YOU ARE RESPONSIBLE FOR COMPLIANCE WITH DATA PROTECTION LAWS AS THE DATA CONTROLLER
 
-## 12. Indemnification
+## 10. Indemnification
 
 You agree to indemnify and hold harmless Eatyourpeas Ltd (trading as CheckTick), its operators, and contributors from any claims, damages, losses, or expenses (including legal fees) arising from:
 
@@ -294,45 +336,56 @@ You agree to indemnify and hold harmless Eatyourpeas Ltd (trading as CheckTick),
 * Your failure to comply with data protection laws
 * Data breaches resulting from your actions or negligence
 * Your misuse of patient or health data
+* Your failure to respond to data subject rights requests
+* Claims by survey respondents arising from your unlawful processing
 
-## 12. Dispute Resolution
+## 11. Dispute Resolution
 
 ### 12.1 Governing Law
+
 These Terms are governed by the laws of England and Wales.
 
 ### 12.2 Jurisdiction
+
 Any disputes shall be subject to the exclusive jurisdiction of the courts of England and Wales.
 
 ### 12.3 Informal Resolution
+
 We encourage you to contact us first to resolve any disputes informally.
 
-## 13. General Terms
+## 12. General Terms
 
 ### 13.1 Entire Agreement
+
 These Terms, together with our Privacy Notice and Refund Policy, constitute the entire agreement between you and CheckTick.
 
 ### 13.2 Severability
+
 If any provision is found unenforceable, the remaining provisions remain in effect.
 
 ### 13.3 No Waiver
+
 Our failure to enforce any right does not waive that right.
 
 ### 13.4 Assignment
+
 You may not assign these Terms without our consent. We may assign these Terms to a successor or affiliate.
 
 ### 13.5 Force Majeure
+
 We are not liable for delays or failures caused by events beyond our reasonable control.
 
-## 14. Changes to Terms
+## 13. Changes to Terms
 
 We may update these Terms at any time. We will:
+
 * Notify you of material changes via email or Service notification
 * Update the "Last Updated" date at the top of this page
 * Give you reasonable time to review changes before they take effect
 
 Continued use of the Service after changes constitutes acceptance of the updated Terms.
 
-## 15. Contact
+## 14. Contact
 
 For questions about these Terms, please contact us:
 

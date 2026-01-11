@@ -6,7 +6,7 @@ priority: 2
 
 # Privacy Notice
 
-**Last Updated: 4 December 2025**
+**Last Updated: 4 January 2026**
 
 This Privacy Notice explains how Eatyourpeas Ltd ("we", "us", or "our"), trading as CheckTick, collects, uses, stores, and protects your personal information when you use our survey platform and services.
 
@@ -44,8 +44,8 @@ When you create an account, we collect:
 * **Username** (required)
 * **Email address** (required)
 * **Password** (hashed and encrypted)
-* **Account tier** (FREE, PRO, ORGANIZATION, ENTERPRISE)
-* **Organization name** (if creating an organization account)
+* **Account tier** (FREE, PRO, ORGANISATION, ENTERPRISE)
+* **Organisation name** (if creating an organisation account)
 * **IP address** (for security and fraud prevention)
 * **Account creation date and last login**
 
@@ -58,7 +58,7 @@ When you create surveys and collect responses, we process:
 * **Respondent data** (as configured by you in your surveys)
 * **Survey metadata** (creation date, status, settings)
 
-**Important:** Survey data is encrypted using keys you control. For individual accounts, only you can decrypt this data. For organization accounts, your organization manages the encryption keys.
+**Important:** Survey data is encrypted using keys you control. For individual accounts, only you can decrypt this data. For organisation accounts, your organisation manages the encryption keys.
 
 ### 2.3 Usage Data
 
@@ -107,7 +107,7 @@ We use your information to:
 * Create and manage your account
 * Authenticate you and maintain security
 * Store and process your surveys and responses
-* Enable collaboration features (for ORGANIZATION tier)
+* Enable collaboration features (for organisation tier)
 * Provide customer support
 * Process payments and manage subscriptions
 
@@ -193,8 +193,8 @@ If Eatyourpeas Ltd or CheckTick is acquired or merged with another entity, your 
 If you use ORGANISATION tier collaboration features:
 
 * Your survey data may be visible to authorized team members
-* Organization administrators can manage user access
-* Organization accounts may recover encryption keys on behalf of users
+* organisation administrators can manage user access
+* organisation accounts may recover encryption keys on behalf of users
 
 ## 5. Data Security
 
@@ -209,9 +209,8 @@ We implement strong encryption:
 
 ### 5.2 Access Controls
 
-
 * User data is isolated by account
-* Role-based access control (RBAC) for organizations
+* Role-based access control (RBAC) for organisations
 * Multi-factor authentication available (ENTERPRISE tier)
 * Regular access reviews and security audits
 
@@ -310,7 +309,7 @@ To exercise any of these rights:
 * **Use in-app features** for data export and account deletion
 * **Expect a response** within 30 days
 
-We may request verification of your identity before fulfilling requests.
+We may request verification of your identity before fulfilling requests. We verify identity by requiring the request to come from the registered account email and confirming a recent transaction ID or account detail
 
 ## 8. Children's Privacy
 
@@ -361,25 +360,126 @@ When you collect survey data, you are the data controller and must:
 * Explain their rights regarding their data
 * Provide contact information for data requests
 
-### 10.3 Comply with Laws
+### 10.3 Respond to Data Subject Requests
+
+As the data controller, you are responsible for responding to requests from your survey respondents, including:
+
+* **Access requests** - providing copies of their data
+* **Erasure requests** - deleting their data when appropriate
+* **Objection requests** - ceasing processing when they object
+* **Rectification requests** - correcting inaccurate data
+
+You must respond to such requests within 30 days as required by UK GDPR.
+
+### 10.4 Comply with Laws
 
 * Follow GDPR, UK DPA 2018, and other applicable laws
 * Ensure you have a lawful basis for processing
 * Conduct Data Protection Impact Assessments (DPIAs) when required
 * For NHS/healthcare data, comply with NHS data policies and ethics requirements
 
-### 10.4 Secure Data
+### 10.5 Secure Data
 
 * Use CheckTick's encryption features
 * Safeguard your encryption keys
 * Limit access to authorized personnel only
 * Report data breaches as required by law
 
-## 11. Third-Party Links
+## 11. Information for Survey Respondents
+
+If you have completed a survey created on CheckTick and wish to exercise your data rights, please note:
+
+### 11.1 Who Controls Your Data
+
+The organisation or individual who created and sent you the survey is the **data controller** for your responses. They determine how your data is used and are responsible for responding to your requests.
+
+CheckTick (Eatyourpeas Ltd) is the **data processor** - we store and process the data on behalf of the survey creator, but we do not control how it is used.
+
+### 11.2 How to Exercise Your Rights
+
+**Step 1: Contact the Survey Creator**
+
+Your first point of contact should be the organisation that sent you the survey. They should have provided you with:
+
+* A privacy notice explaining how your data will be used
+* Contact details for data protection queries
+
+**Step 2: Contact CheckTick if Needed**
+
+If you cannot identify or contact the survey creator, or if they are unresponsive to your request, you may contact CheckTick directly at [dpo@checktick.uk](mailto:dpo@checktick.uk).
+
+We will:
+
+* Attempt to identify and contact the survey creator on your behalf
+* Forward your request to them with a deadline to respond
+* Keep you informed of progress
+
+### 11.3 Anonymous vs Pseudonymous Surveys
+
+Your ability to exercise data subject rights depends on whether your response can be identified:
+
+**Pseudonymous Surveys** (your response can be linked to you):
+
+* Surveys requiring login (authenticated)
+* Surveys where you received a personal invitation token
+* You will receive a **Receipt Token** when you submit your response
+* **Save this token** - you will need it to exercise your data rights
+
+**Anonymous Surveys** (your response cannot be linked to you):
+
+* Public surveys open to anyone
+* Unlisted surveys accessible via a shared link (without personal tokens)
+* **No receipt token is issued** to preserve your anonymity
+* We cannot identify which response is yours
+* **Data subject rights cannot be exercised** because there is no identifiable data subject
+
+**Important:** Under GDPR, anonymous data is not personal data. If you submit a truly anonymous response, we cannot later identify it as yours, even if you want us to. This is by design - it protects your privacy.
+
+**Pre-submission warning:** Before submitting an anonymous survey, you will see a notice explaining that your response cannot be linked to you and that data subject rights will not be exercisable.
+
+### 11.4 Receipt Tokens
+
+For pseudonymous surveys, you will receive a **Receipt Token** after submission. This token:
+
+* Is a unique identifier for your response
+* Is **not stored in a way that links it to your identity** - only you have it
+* Must be provided when making any data subject request
+* Allows us to locate your specific response without identifying all responses
+
+**If you lose your receipt token**, we may not be able to identify your response, especially for encrypted surveys. We recommend saving it securely.
+
+### 11.5 Encryption and Data Access
+
+Survey responses on CheckTick are encrypted with keys controlled by the survey creator. This means:
+
+* We cannot access or modify your encrypted data without the survey creator's involvement
+* Deletion or modification requests require the survey creator to action them
+* This encryption protects your data from unauthorized access, including from CheckTick staff
+
+### 11.4 Dispute Resolution
+
+If a survey creator refuses to comply with a legitimate data subject request:
+
+1. **We will investigate** the refusal and request justification from the controller
+2. **We may restrict processing** of the disputed data pending resolution
+3. **We may suspend the controller's account** if they persistently refuse to comply with data protection law
+4. **We will advise you** of your right to complain to the ICO
+
+We take data subject rights seriously. While we must balance our obligations as a processor with the controller's lawful purposes, we will not knowingly facilitate unlawful processing.
+
+### 11.5 Your Right to Complain
+
+If you believe your data protection rights have been violated, you may lodge a complaint with:
+
+* The **survey creator's** Data Protection Officer (if applicable)
+* **CheckTick** at [dpo@checktick.uk](mailto:dpo@checktick.uk)
+* The **Information Commissioner's Office (ICO)** - see Section 14
+
+## 12. Third-Party Links
 
 The Service may contain links to third-party websites or services. We are not responsible for their privacy practices. We encourage you to review their privacy policies.
 
-## 12. Changes to This Privacy Notice
+## 13. Changes to This Privacy Notice
 
 We may update this Privacy Notice from time to time. We will:
 
@@ -389,7 +489,7 @@ We may update this Privacy Notice from time to time. We will:
 
 Continued use of the Service after changes constitutes acceptance.
 
-## 13. Contact Us
+## 14. Contact Us
 
 For privacy-related questions or to exercise your data rights, contact us:
 
@@ -398,7 +498,7 @@ For privacy-related questions or to exercise your data rights, contact us:
 * **GitHub Issues:** [https://github.com/eatyourpeas/checktick/issues](https://github.com/eatyourpeas/checktick/issues)
 * **Documentation:** [https://checktick.com/docs/](https://checktick.com/docs/)
 
-## 14. Supervisory Authority
+## 15. Supervisory Authority
 
 If you believe we have not adequately addressed your privacy concerns, you have the right to lodge a complaint with:
 
@@ -410,6 +510,6 @@ If you believe we have not adequately addressed your privacy concerns, you have 
 
 ---
 
-**Last Updated: 4 December 2025**
+**Last Updated: 4 January 2026**
 
 This Privacy Notice is designed to be transparent and help you understand how Eatyourpeas Ltd (trading as CheckTick) handles your personal information. If you have any questions, please don't hesitate to contact us.

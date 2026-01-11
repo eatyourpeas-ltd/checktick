@@ -672,6 +672,63 @@ DOC_CATEGORIES = {
         "order": 11,
         "icon": "🤝",
     },
+    # DSPT (Data Security and Protection Toolkit) categories
+    # These map to the 10 NHS DSPT standards
+    "dspt-overview": {
+        "title": "DSPT Overview",
+        "order": 12,
+        "icon": "📋",
+    },
+    "dspt-1-confidential-data": {
+        "title": "1. Personal Confidential Data",
+        "order": 13,
+        "icon": "🔐",
+    },
+    "dspt-2-staff-responsibilities": {
+        "title": "2. Staff Responsibilities",
+        "order": 14,
+        "icon": "👥",
+    },
+    "dspt-3-training": {
+        "title": "3. Training",
+        "order": 15,
+        "icon": "🎓",
+    },
+    "dspt-4-managing-access": {
+        "title": "4. Managing Data Access",
+        "order": 16,
+        "icon": "🔑",
+    },
+    "dspt-5-process-reviews": {
+        "title": "5. Process Reviews",
+        "order": 17,
+        "icon": "📊",
+    },
+    "dspt-6-incidents": {
+        "title": "6. Responding to Incidents",
+        "order": 18,
+        "icon": "🚨",
+    },
+    "dspt-7-continuity": {
+        "title": "7. Continuity Planning",
+        "order": 19,
+        "icon": "🔄",
+    },
+    "dspt-8-unsupported-systems": {
+        "title": "8. Unsupported Systems",
+        "order": 20,
+        "icon": "⚠️",
+    },
+    "dspt-9-it-protection": {
+        "title": "9. IT Protection",
+        "order": 21,
+        "icon": "🛡️",
+    },
+    "dspt-10-suppliers": {
+        "title": "10. Accountable Suppliers",
+        "order": 22,
+        "icon": "🤝",
+    },
 }
 
 # Manual overrides for specific files (optional)
@@ -847,6 +904,59 @@ def _discover_doc_pages():
             # Make page accessible via URL but don't add to sidebar navigation
             pages[slug] = md_file
 
+    # Auto-discover compliance documentation in docs/compliance/
+    # These are DSPT evidence documents that self-hosters can also use as templates
+    compliance_dir = DOCS_DIR / "compliance"
+    if compliance_dir.exists():
+        for md_file in sorted(compliance_dir.glob("*.md")):
+            # Generate slug from filename with compliance prefix
+            slug = f"compliance-{md_file.stem}"
+
+            # Skip if already manually configured
+            if slug in pages:
+                continue
+
+            # Parse frontmatter - REQUIRED for all docs
+            frontmatter = _parse_frontmatter(md_file)
+
+            # Skip files without required frontmatter
+            if not frontmatter:
+                continue
+
+            # Get category from frontmatter (required)
+            category = frontmatter.get("category")
+
+            # Skip if no category specified
+            if "category" not in frontmatter:
+                continue
+
+            # Handle category: None (hide from menu but keep accessible via URL)
+            if category == "None" or category is None:
+                pages[slug] = md_file
+                continue
+
+            # Validate category exists in DOC_CATEGORIES
+            if category not in categorized:
+                continue
+
+            # Get title from frontmatter (required)
+            title = frontmatter.get("title")
+            if not title:
+                continue
+
+            # Get priority for sorting (default to 999 for items without priority)
+            priority = frontmatter.get("priority", 999)
+
+            pages[slug] = md_file
+            categorized[category].append(
+                {
+                    "slug": slug,
+                    "title": title,
+                    "file": md_file,
+                    "priority": priority,
+                }
+            )
+
     # Hide old consolidated files from sidebar (accessible via URL only)
     # These have been consolidated into comprehensive guides but remain accessible for backward compatibility
     hidden_files = [
@@ -958,9 +1068,13 @@ def _parse_frontmatter(file_path: Path) -> dict:
 DOC_PAGES, DOC_CATEGORIES_WITH_PAGES = _discover_doc_pages()
 
 
-def _nav_pages():
+def _nav_pages(include_dspt=False):
     """
     Return categorized navigation structure for documentation.
+
+    Args:
+        include_dspt: If True, include DSPT categories. If False, exclude them.
+                      Default False to keep main docs clean.
 
     Returns a list of categories and standalone items with their pages.
     """
@@ -988,6 +1102,13 @@ def _nav_pages():
         if not pages_list:  # Skip empty categories
             continue
 
+        # Filter based on include_dspt flag
+        is_dspt = cat_key.startswith("dspt-")
+        if is_dspt and not include_dspt:
+            continue
+        if not is_dspt and include_dspt:
+            continue
+
         cat_info = DOC_CATEGORIES.get(cat_key, {"title": cat_key.title(), "order": 99})
 
         nav.append(
@@ -1001,8 +1122,9 @@ def _nav_pages():
             }
         )
 
-    # Add standalone items to nav
-    nav.extend(standalone_items)
+    # Add standalone items to nav (only for main docs, not DSPT)
+    if not include_dspt:
+        nav.extend(standalone_items)
 
     # Sort all items by order
     nav.sort(key=lambda c: c["order"])
@@ -1050,6 +1172,18 @@ def docs_page(request, slug: str):
                 content = "\n".join(lines[i + 1 :])
                 break
 
+    # Interpolate platform variables for compliance docs and templates
+    # This allows self-hosters to see their own platform name in policy documents
+    platform_name = settings.BRAND_TITLE or "CheckTick"
+    if SiteBranding is not None:
+        try:
+            sb = SiteBranding.objects.first()
+            if sb and sb.title:
+                platform_name = sb.title
+        except Exception:
+            pass
+    content = content.replace("{{ platform_name }}", platform_name)
+
     html = mdlib.markdown(
         content,
         extensions=["fenced_code", "tables", "toc"],
@@ -1069,6 +1203,166 @@ def docs_page(request, slug: str):
         request,
         "core/docs.html",
         {"html": html, "active_slug": slug, "pages": _nav_pages()},
+    )
+
+
+def compliance_index(request):
+    """Render compliance index showing the DSPT master document."""
+    # Look for the master/index compliance doc
+    master_slug = "compliance-master"
+    if master_slug not in DOC_PAGES:
+        raise Http404("Compliance documentation not found")
+
+    file_path = DOC_PAGES[master_slug]
+    if not file_path.exists():
+        raise Http404("Compliance documentation not found")
+
+    # Read and process the file
+    content = file_path.read_text(encoding="utf-8")
+    lines = content.split("\n")
+
+    # Strip YAML frontmatter
+    if lines and lines[0].strip() == "---":
+        for i, line in enumerate(lines[1:], 1):
+            if line.strip() == "---":
+                content = "\n".join(lines[i + 1 :])
+                break
+
+    # Interpolate platform name
+    platform_name = settings.BRAND_TITLE or "CheckTick"
+    if SiteBranding is not None:
+        try:
+            sb = SiteBranding.objects.first()
+            if sb and sb.title:
+                platform_name = sb.title
+        except Exception:
+            pass
+    content = content.replace("{{ platform_name }}", platform_name)
+
+    html = mdlib.markdown(
+        content,
+        extensions=["fenced_code", "tables", "toc"],
+    )
+
+    # Rewrite internal links for compliance pages
+    import re
+
+    html = re.sub(
+        r'href="/docs/compliance-([^"]+)/"',
+        r'href="/compliance/\1/"',
+        html,
+    )
+
+    return render(
+        request,
+        "core/compliance.html",
+        {
+            "html": html,
+            "active_slug": "master",
+            "pages": _nav_pages(include_dspt=True),
+        },
+    )
+
+
+def compliance_page(request, slug: str):
+    """Render a specific DSPT compliance page by slug."""
+    # Compliance pages are stored with 'compliance-' prefix
+    full_slug = f"compliance-{slug}"
+    if full_slug not in DOC_PAGES:
+        raise Http404("Page not found")
+
+    file_path = DOC_PAGES[full_slug]
+    if not file_path.exists():
+        raise Http404("Page not found")
+
+    # Read and process the file
+    content = file_path.read_text(encoding="utf-8")
+    lines = content.split("\n")
+
+    # Extract title from YAML frontmatter and strip it
+    doc_title = slug.replace("-", " ").title()  # fallback
+    if lines and lines[0].strip() == "---":
+        for i, line in enumerate(lines[1:], 1):
+            if line.strip() == "---":
+                # Parse frontmatter for title
+                frontmatter = "\n".join(lines[1:i])
+                for fm_line in frontmatter.split("\n"):
+                    if fm_line.startswith("title:"):
+                        doc_title = (
+                            fm_line.split(":", 1)[1].strip().strip('"').strip("'")
+                        )
+                        break
+                content = "\n".join(lines[i + 1 :])
+                break
+
+    # Interpolate platform name
+    platform_name = settings.BRAND_TITLE or "CheckTick"
+    if SiteBranding is not None:
+        try:
+            sb = SiteBranding.objects.first()
+            if sb and sb.title:
+                platform_name = sb.title
+        except Exception:
+            pass
+    content = content.replace("{{ platform_name }}", platform_name)
+
+    # Interpolate governance roles from settings
+    content = content.replace(
+        "{{ dpo_name }}", getattr(settings, "DPO_NAME", "[DPO Name]")
+    )
+    content = content.replace(
+        "{{ dpo_email }}", getattr(settings, "DPO_EMAIL", "dpo@example.com")
+    )
+    content = content.replace(
+        "{{ siro_name }}", getattr(settings, "SIRO_NAME", "[SIRO Name]")
+    )
+    content = content.replace(
+        "{{ siro_email }}", getattr(settings, "SIRO_EMAIL", "siro@example.com")
+    )
+    content = content.replace(
+        "{{ caldicott_name }}",
+        getattr(settings, "CALDICOTT_NAME", "[Caldicott Guardian]"),
+    )
+    content = content.replace(
+        "{{ caldicott_email }}",
+        getattr(settings, "CALDICOTT_EMAIL", "caldicott@example.com"),
+    )
+    content = content.replace(
+        "{{ ig_lead_name }}", getattr(settings, "IG_LEAD_NAME", "[IG Lead]")
+    )
+    content = content.replace(
+        "{{ ig_lead_email }}", getattr(settings, "IG_LEAD_EMAIL", "ig@example.com")
+    )
+    content = content.replace(
+        "{{ cto_name }}", getattr(settings, "CTO_NAME", "[CTO Name]")
+    )
+    content = content.replace(
+        "{{ cto_email }}", getattr(settings, "CTO_EMAIL", "cto@example.com")
+    )
+
+    html = mdlib.markdown(
+        content,
+        extensions=["fenced_code", "tables", "toc"],
+    )
+
+    # Rewrite internal links for compliance pages
+    import re
+
+    html = re.sub(
+        r'href="/docs/compliance-([^"]+)/"',
+        r'href="/compliance/\1/"',
+        html,
+    )
+
+    return render(
+        request,
+        "core/compliance.html",
+        {
+            "html": html,
+            "active_slug": slug,
+            "doc_title": doc_title,
+            "pages": _nav_pages(include_dspt=True),
+        },
     )
 
 

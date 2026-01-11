@@ -11,10 +11,16 @@ venv/
 .pytest_cache/
 .mypy_cache/
 
+.DS_Store
+
 # Django
 staticfiles/
 media/
 db.sqlite3
+
+# Compliance - personal data (training certificates contain PII)
+docs/compliance/training-certificates/
+docs/compliance/pdfs/
 
 # Node
 node_modules/

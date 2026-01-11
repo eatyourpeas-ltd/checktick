@@ -187,6 +187,74 @@ CHECKTICK_WARN_BEFORE_DELETION_DAYS=30,7,1
 
 See the [Data Governance Overview](data-governance-overview.md) for details on how these settings affect survey lifecycle and data retention.
 
+#### Governance Roles (DSPT Compliance)
+
+**Optional** - Configure named individuals for DSPT compliance documentation. These values are interpolated into the `/compliance/` documentation pages.
+
+```bash
+# Data Protection Officer
+DPO="Dr Jane Smith"
+DPO_EMAIL="dpo@yourdomain.com"
+
+# Senior Information Risk Owner
+SIRO="Dr John Doe"
+SIRO_EMAIL="siro@yourdomain.com"
+
+# Caldicott Guardian
+CALDICOTT="Dr John Doe"
+CALDICOTT_EMAIL="caldicott@yourdomain.com"
+
+# Information Governance Lead
+IG_LEAD="Dr John Doe"
+IG_LEAD_EMAIL="ig@yourdomain.com"
+
+# Chief Technology Officer (optional - defaults to DPO if not set)
+CTO="Dr Jane Smith"
+CTO_EMAIL="cto@yourdomain.com"
+```
+
+**Defaults:**
+- If not provided, placeholder text like `[DPO Name]` will appear in documentation
+- `CTO` and `CTO_EMAIL` default to the `DPO` values if not separately configured
+- This allows small teams where one person holds multiple roles to configure fewer variables
+
+**Usage:** These variables appear in the DSPT compliance documentation at `/compliance/`. They are used for:
+- Policy ownership statements
+- Approval signatures
+- Contact information in procedures
+- Audit trail documentation
+
+**Note:** It is standard NHS practice to publish the names of governance role holders (DPO, Caldicott Guardian, SIRO) in public documentation. Ensure named individuals have consented to being listed.
+
+#### Hosting Provider API (Infrastructure Logs)
+
+**Optional** - Enable infrastructure log viewing in Platform Admin Logs dashboard for compliance reviews:
+
+```bash
+# API authentication token (read-only recommended)
+HOSTING_API_TOKEN=your-api-token
+
+# Base URL for your hosting provider's API
+# Northflank: https://api.northflank.com/v1
+# Railway: https://backboard.railway.app/graphql
+# Render: https://api.render.com/v1
+HOSTING_API_BASE_URL=https://api.northflank.com/v1
+
+# Project/service identifiers from your hosting provider
+HOSTING_PROJECT_ID=your-project-id
+HOSTING_SERVICE_ID=your-service-id
+```
+
+When configured, platform superusers can view container/infrastructure logs directly in the Platform Admin Logs dashboard (`/platform-admin/logs/`). This is essential for:
+
+- **DPST Compliance**: Quarterly log reviews with CTO and DPO
+- **Incident Investigation**: Correlating application events with infrastructure issues
+- **Security Monitoring**: Reviewing container-level security events
+
+**Important:** Use a read-only API token. Do not use deploy tokens or tokens with write permissions.
+
+See [Audit Logging and Notifications](audit-logging-and-notifications.md) for details on the Platform Admin Logs dashboard.
+
 ## Email Providers
 
 ### Gmail

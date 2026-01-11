@@ -2162,6 +2162,10 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         "can_export": (
             survey.is_closed and can_export_survey_data(request.user, survey)
         ),
+        # Data subject requests
+        "has_pending_dsr": survey.has_pending_dsr,
+        "dsr_warning_message": survey.dsr_warning_message,
+        "is_suspended": survey.is_suspended,
         # Check if survey has any questions for signposting
         "has_questions": survey.question_groups.filter(
             surveyquestion__survey=survey
@@ -4064,6 +4068,12 @@ def _handle_participant_submission(
         if progress:
             progress.delete()
 
+        # Store receipt token in session for pseudonymous responses
+        # This allows showing it on thank-you page (only opportunity to share it)
+        if resp.is_pseudonymous:
+            resp.generate_receipt_token()
+            request.session[f"receipt_token_{survey.slug}"] = str(resp.receipt_token)
+
         messages.success(request, "Thank you for your response.")
         # Redirect to thank-you page
         return redirect("surveys:thank_you", slug=survey.slug)
@@ -4129,11 +4139,23 @@ def survey_thank_you(request: HttpRequest, slug: str) -> HttpResponse:
     """Simple post-submission landing page for participants.
 
     Does not leak whether a survey exists beyond being reachable from a valid submission.
+    For pseudonymous surveys, displays a one-time receipt token that the respondent
+    can use to exercise their data subject rights (access, rectification, erasure).
     """
     survey = Survey.objects.filter(slug=slug).first()
+
+    # Retrieve and clear receipt token from session (one-time display)
+    receipt_token = request.session.pop(f"receipt_token_{slug}", None)
+
     # Render generic thank you even if survey missing to avoid information leakage
     return render(
-        request, "surveys/thank_you.html", {"survey": survey, "is_preview": False}
+        request,
+        "surveys/thank_you.html",
+        {
+            "survey": survey,
+            "is_preview": False,
+            "receipt_token": receipt_token,
+        },
     )
 
 

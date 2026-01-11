@@ -51,4 +51,13 @@
     <script src="{% static 'js/theme-toggle.js' %}"></script>
     <script src="{% static 'js/toast.js' %}?v=2ba505d"></script>
   </body>
+  <footer class="mt-10 border-t border-base-300 bg-base-200">
+      <div class="container mx-auto px-4 py-6">
+        <div class="text-xs text-base-content/80 text-center md:text-left flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-2">
+          <span>&copy; {{ current_year }} {{ brand.title }}</span>
+          <a href="{% url 'core:docs_page' slug='privacy-notice' %}" class="link link-hover">Privacy Policy</a>
+          <a href="{% url 'core:docs_page' slug='terms-of-service' %}" class="link link-hover">Terms of Service</a>
+        </div>
+      </div>
+    </footer>
 </html>

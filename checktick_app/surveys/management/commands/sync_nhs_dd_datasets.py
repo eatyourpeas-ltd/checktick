@@ -315,8 +315,15 @@ class Command(BaseCommand):
         """
         self.stdout.write(f"  📡 Fetching: {dataset.reference_url}")
 
-        # Fetch the page
-        response = requests.get(dataset.reference_url, timeout=30)
+        # Add a User-Agent header to mimic a real browser
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            )
+        }
+        response = requests.get(dataset.reference_url, timeout=30, headers=headers)
         response.raise_for_status()
 
         # Parse HTML

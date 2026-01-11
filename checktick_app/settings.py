@@ -106,6 +106,20 @@ BRAND_THEME_CSS_LIGHT = env("BRAND_THEME_CSS_LIGHT") or None
 BRAND_THEME_CSS_DARK = env("BRAND_THEME_CSS_DARK") or None
 SITE_URL = "http://localhost:8000" if DEBUG else env("SITE_URL")
 
+# Governance roles for DSPT compliance documentation
+# These are interpolated into compliance docs
+DPO_NAME = env("DPO", default="[DPO Name]")
+DPO_EMAIL = env("DPO_EMAIL", default="dpo@example.com")
+SIRO_NAME = env("SIRO", default="[SIRO Name]")
+SIRO_EMAIL = env("SIRO_EMAIL", default="siro@example.com")
+CALDICOTT_NAME = env("CALDICOTT", default="[Caldicott Guardian]")
+CALDICOTT_EMAIL = env("CALDICOTT_EMAIL", default="caldicott@example.com")
+IG_LEAD_NAME = env("IG_LEAD", default="[IG Lead]")
+IG_LEAD_EMAIL = env("IG_LEAD_EMAIL", default="ig@example.com")
+# CTO defaults to DPO if not set separately
+CTO_NAME = env("CTO", default=None) or DPO_NAME
+CTO_EMAIL = env("CTO_EMAIL", default=None) or DPO_EMAIL
+
 # Payment Processing Configuration
 # Use sandbox in DEBUG mode, production otherwise
 PAYMENT_API_KEY = (
@@ -555,6 +569,16 @@ IMD_API_URL = os.environ.get(
     "https://api.rcpch.ac.uk/deprivation/v1/index_of_multiple_deprivation_quantile",
 )
 IMD_API_KEY = os.environ.get("IMD_API_KEY", "")
+
+# Hosting Provider API Configuration (for platform admin log viewing)
+# Used to fetch infrastructure logs from your hosting provider (Northflank, Railway, etc.)
+# See docs/self-hosting.md for provider-specific configuration examples
+HOSTING_API_TOKEN = os.environ.get("HOSTING_API_TOKEN", "")
+HOSTING_API_BASE_URL = os.environ.get(
+    "HOSTING_API_BASE_URL", "https://api.northflank.com/v1"
+)
+HOSTING_PROJECT_ID = os.environ.get("HOSTING_PROJECT_ID", "")
+HOSTING_SERVICE_ID = os.environ.get("HOSTING_SERVICE_ID", "")
 
 # Data Governance Configuration
 # These settings control data retention and export policies for GDPR/healthcare compliance

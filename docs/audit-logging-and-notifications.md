@@ -543,7 +543,45 @@ alerts:
 
 ### Dashboard Requirements
 
-Create these dashboards in your SIEM:
+#### Platform Admin Logs Dashboard
+
+The Platform Admin Logs dashboard (`/platform-admin/logs/`) provides superusers with a unified interface for viewing both application audit logs and infrastructure logs. This interface is essential for:
+
+- **DPST Compliance**: Quarterly log reviews with the Data Protection Officer (DPO)
+- **Security Monitoring**: Real-time visibility into authentication events and admin actions
+- **Incident Investigation**: Correlating application events with infrastructure logs
+
+**Application Logs Tab:**
+| Column | Description |
+|--------|-------------|
+| Timestamp | When the event occurred |
+| Action | Event type (login, logout, admin action, etc.) |
+| User | Who performed the action |
+| Details | Additional context |
+| Severity | INFO, WARNING, CRITICAL |
+
+**Infrastructure Logs Tab:**
+| Column | Description |
+|--------|-------------|
+| Timestamp | When the log was generated |
+| Level | Log level (debug, info, warn, error) |
+| Instance | Container/pod identifier |
+| Message | Log message content |
+
+Both tabs support filtering by severity and pagination for large result sets. The dashboard displays summary statistics at the top for quick overview.
+
+**Access Control:** Only platform superusers can access this dashboard. All access is logged.
+
+**Quarterly Review Process:**
+1. CTO and DPO schedule quarterly review session
+2. Review CRITICAL and WARNING events in Application Logs
+3. Review ERROR events in Infrastructure Logs
+4. Document findings and any required actions
+5. Update security policies as needed
+
+#### SIEM Integration (Optional)
+
+Create these dashboards in your SIEM for additional monitoring:
 
 #### Recovery Operations Dashboard
 
@@ -602,5 +640,6 @@ Create these dashboards in your SIEM:
 
 - [Key Management for Administrators](/docs/key-management-for-administrators/) - Admin procedures
 - [Recovery Dashboard](/docs/recovery-dashboard/) - Dashboard specifications
-- [Business Continuity](/docs/business-continuity/) - Disaster recovery
+- [Business Continuity](/docs/business-continuity/) - Disaster recovery and quarterly log reviews
 - [Vault Setup](/docs/vault/) - SIEM deployment
+- [Logging Policy](/compliance/logging-policy/) - Compliance requirements and review schedules

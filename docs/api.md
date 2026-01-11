@@ -161,10 +161,12 @@ GET /api/question-group-templates/
 Returns a list of published question group templates visible to the authenticated user.
 
 **Access Control:**
+
 - Users see global templates (publication_level='global')
 - Users see organization-level templates from their own organization(s)
 
 **Query Parameters:**
+
 - `publication_level` (string): Filter by 'global' or 'organization'
 - `language` (string): Filter by language code (e.g., 'en', 'cy')
 - `tags` (string): Comma-separated list of tags to filter by
@@ -172,6 +174,7 @@ Returns a list of published question group templates visible to the authenticate
 - `ordering` (string): Order results by 'name', '-name', 'created_at', '-created_at', 'import_count', or '-import_count'
 
 **Response:** Array of template objects with fields:
+
 - `id`: Template ID
 - `name`: Template name
 - `description`: Template description
@@ -188,6 +191,7 @@ Returns a list of published question group templates visible to the authenticate
 - `updated_at`: Last update timestamp
 
 **Example:**
+
 ```bash
 curl -H "Authorization: Bearer <token>" \
   "https://example.com/api/question-group-templates/?publication_level=global&language=en"
@@ -204,6 +208,7 @@ Returns detailed information about a specific template.
 **Access Control:** Same as list endpoint (global + own org templates only)
 
 **Example:**
+
 ```bash
 curl -H "Authorization: Bearer <token>" \
   "https://example.com/api/question-group-templates/123/"
@@ -218,6 +223,7 @@ POST /api/question-group-templates/publish/
 Publishes a question group as a reusable template.
 
 **Request Body:**
+
 ```json
 {
   "question_group_id": 456,
@@ -236,12 +242,14 @@ Publishes a question group as a reusable template.
 ```
 
 **Required Fields:**
+
 - `question_group_id`: ID of the question group to publish
 - `name`: Template name
 - `publication_level`: 'global' or 'organization'
 - `organization_id`: Required if publication_level is 'organization'
 
 **Optional Fields:**
+
 - `description`: Template description (default: empty string)
 - `language`: Language code (default: 'en')
 - `tags`: Array of tags (default: empty array)
@@ -249,6 +257,7 @@ Publishes a question group as a reusable template.
 - `show_publisher_credit`: Show publisher name (default: true)
 
 **Access Control:**
+
 - User must have edit permission on the survey containing the question group
 - Cannot publish question groups that were imported from other templates (copyright protection)
 - **Organization-level** publication requires ADMIN role in the target organization
@@ -257,6 +266,7 @@ Publishes a question group as a reusable template.
 **Response:** Created template object (201 Created)
 
 **Example:**
+
 ```bash
 curl -X POST \
   -H "Authorization: Bearer <token>" \
@@ -285,11 +295,13 @@ curl -X POST \
 ### Copyright Protection
 
 The API prevents publishing question groups that were imported from other templates. This protects against:
+
 - Copyright violations
 - Circular attribution issues
 - Confusion about original sources
 
 If you need to share an imported question group, either:
+
 1. Credit the original template in your documentation
 2. Significantly modify the questions to create original content
 3. Contact the original publisher for permission
