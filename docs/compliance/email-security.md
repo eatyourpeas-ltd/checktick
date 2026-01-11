@@ -1,6 +1,6 @@
 ---
 title: "Email Authentication & Anti-Spoofing Policy"
-category: dspt-9-it-protection
+category: dspt-6-incidents
 ---
 
 # Email Authentication & Anti-Spoofing Policy
