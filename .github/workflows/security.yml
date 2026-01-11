@@ -36,7 +36,17 @@ jobs:
                   # Install both main and dev groups at once
                   poetry install --no-root --with dev
                   # Run a single audit against the entire environment
-                  poetry run pip-audit --desc on --ignore-file .pip-audit-ignore
+                  poetry run pip-audit --desc on \
+                    --ignore-vuln GHSA-79v4-65xg-pq4g \
+                    --ignore-vuln GHSA-48p4-8xcf-vxj5 \
+                    --ignore-vuln GHSA-pq67-6m6q-mj2v \
+                    --ignore-vuln GHSA-gm62-xv2j-4w53 \
+                    --ignore-vuln GHSA-2xpw-w6gg-jr37 \
+                    --ignore-vuln GHSA-wj6h-64fc-37mp \
+                    --ignore-vuln PYSEC-2024-187 \
+                    --ignore-vuln GHSA-428g-f7cq-pgp5 \
+                    --ignore-vuln GHSA-38jv-5279-wg99 \
+                    --ignore-vuln CVE-2024-3766
 
     codeql:
         name: CodeQL Analysis
