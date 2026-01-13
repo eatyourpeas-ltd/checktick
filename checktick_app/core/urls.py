@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_2fa, views_billing, views_platform_admin
+from . import views, views_2fa, views_billing, views_docs, views_platform_admin
 
 app_name = "core"
 
@@ -13,11 +13,14 @@ urlpatterns = [
     path("my-surveys/", views.my_surveys, name="my_surveys"),
     path("signup/", views.signup, name="signup"),
     path("complete-signup/", views.complete_signup, name="complete_signup"),
-    path("docs/", views.docs_index, name="docs_index"),
-    path("docs/<slug:slug>/", views.docs_page, name="docs_page"),
+    path("docs/", views_docs.docs_index, name="docs_index"),
+    path(
+        "docs/search/index.json", views_docs.doc_search_index, name="doc_search_index"
+    ),
+    path("docs/<slug:slug>/", views_docs.docs_page, name="docs_page"),
     # DSPT Compliance documentation (separate from main docs)
-    path("compliance/", views.compliance_index, name="compliance_index"),
-    path("compliance/<slug:slug>/", views.compliance_page, name="compliance_page"),
+    path("compliance/", views_docs.compliance_index, name="compliance_index"),
+    path("compliance/<slug:slug>/", views_docs.compliance_page, name="compliance_page"),
     path("branding/", views.configure_branding, name="configure_branding"),
     path("delete-account/", views.delete_account, name="delete_account"),
     # Organization setup

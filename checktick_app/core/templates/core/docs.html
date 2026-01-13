@@ -7,7 +7,11 @@
     <div class="card bg-base-100 shadow sticky top-4">
       <div class="card-body p-4">
         <h2 class="card-title text-lg mb-2">Documentation</h2>
-        <nav class="docs-nav" style="max-height: calc(100vh - 12rem); overflow-y: auto;">
+
+        {# Search component - add this #}
+        <div id="doc-search-container" class="mb-4"></div>
+
+        <nav class="docs-nav" style="max-height: calc(100vh - 16rem); overflow-y: auto;">
           {% for item in pages %}
             {% if item.standalone %}
               {# Standalone link item #}
@@ -75,6 +79,8 @@
 
 {% block extra_js %}
 <script src="{% static 'js/docs-navigation.js' %}" nonce="{{ request.csp_nonce }}"></script>
+{# Add search JS #}
+<script src="{% static 'js/docs-search.js' %}" nonce="{{ request.csp_nonce }}"></script>
 {% endblock %}
 
 {% block extra_css %}
@@ -103,6 +109,103 @@
 
 .docs-category-items {
   transition: display 0.2s ease-in-out;
+}
+
+/* Documentation Search Styles - DaisyUI Compatible */
+
+.search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  @apply bg-base-100 border border-base-300 rounded-box shadow-xl;
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.search-results.hidden {
+  display: none;
+}
+
+.search-results-header {
+  padding: 8px 12px;
+  @apply text-xs text-base-content/60 border-b border-base-300 bg-base-200;
+  font-weight: 500;
+}
+
+.search-result-item {
+  display: block;
+  padding: 8px 12px;
+  @apply border-b border-base-300 no-underline;
+  color: inherit;
+  transition: background-color 0.15s ease;
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.search-result-item:hover {
+  @apply bg-base-200;
+}
+
+.search-result-title {
+  @apply font-semibold text-sm text-base-content;
+  margin-bottom: 2px;
+}
+
+.search-result-category {
+  @apply text-xs text-base-content/50;
+  margin-bottom: 4px;
+}
+
+.search-result-snippet {
+  @apply text-xs text-base-content/70;
+  line-height: 1.4;
+}
+
+.search-no-results {
+  padding: 16px 12px;
+  text-align: center;
+  @apply text-base-content/60 text-xs;
+}
+
+.search-result-item mark {
+  @apply bg-warning/20 text-warning-content;
+  padding: 1px 3px;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
+.search-results::-webkit-scrollbar {
+  width: 6px;
+}
+
+.search-results::-webkit-scrollbar-track {
+  @apply bg-base-200;
+  border-radius: 0 8px 8px 0;
+}
+
+.search-results::-webkit-scrollbar-thumb {
+  background: oklch(var(--bc) / 0.2);
+  border-radius: 3px;
+}
+
+.search-results::-webkit-scrollbar-thumb:hover {
+  background: oklch(var(--bc) / 0.3);
+}
+
+@media (max-width: 1024px) {
+  .search-results {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 60vh;
+    border-radius: 16px 16px 0 0;
+  }
 }
 </style>
 {% endblock %}
