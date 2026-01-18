@@ -18,10 +18,7 @@ django-cors-headers = "^4.4.0"
 whitenoise = "^6.7.0"
 django-axes = "^6.5.0"
 django-ratelimit = "^4.1.0"
-python-jose = {version = "^3.3.0", extras = ["cryptography"]}
-# NOTE: cryptography/urllib3 pinned by ggshield - CVEs require ggshield upstream update
-# Tracked vulnerabilities: CVE-2024-12797 (cryptography), CVE-2025-50182/50181/66418/66471, CVE-2024-3766 (urllib3)
-cryptography = "^43.0.1"
+cryptography = "46.0.3"
 itsdangerous = "^2.2.0"
 pyyaml = "^6.0.2"
 nhs-number = "^1.3.6"
@@ -33,7 +30,6 @@ markdown = "^3.6"
 pygments = "^2.18.0"
 inflection = "^0.5.1"
 uritemplate = "^4.1.1"
-ggshield = "^1.43.0"
 mozilla-django-oidc = "^4.0.1"
 beautifulsoup4 = "^4.12.0"
 requests = "^2.32.0"
@@ -53,8 +49,7 @@ ruff = "^0.6.9"
 black = "^24.8.0"
 isort = "^5.13.2"
 django-stubs = {extras = ["compatible-mypy"], version = "^5.0.4"}
-pre-commit = "^4.3.0"
-ggshield = "^1.43.0"
+virtualenv = "^20.36.1"
 pip-audit = "^2.7.3"
 
 [build-system]
