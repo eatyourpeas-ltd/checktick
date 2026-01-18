@@ -5,6 +5,18 @@ repos:
       - id: end-of-file-fixer
       - id: trailing-whitespace
 
+  - repo: https://github.com/GitGuardian/ggshield
+    rev: v1.43.0
+    hooks:
+        - id: ggshield
+          name: ggshield secret scan (pre-commit)
+          args: ["secret", "scan", "pre-commit", "--verbose"]
+          stages: [pre-commit]
+        - id: ggshield
+          name: ggshield secret scan (pre-push)
+          args: ["secret", "scan", "pre-push", "--verbose"]
+          stages: [pre-push]
+
   # Semgrep - catches security issues similar to CodeQL (XSS, injection, etc.)
   - repo: https://github.com/semgrep/semgrep
     rev: v1.102.0
