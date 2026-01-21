@@ -146,6 +146,7 @@ docker compose exec web pytest tests/test_accessibility.py -v --headed
 ```
 
 The tests verify WCAG 2.1 AA compliance across:
+
 - Public pages (home, login, signup, docs)
 - Survey forms (the primary respondent experience)
 - Authenticated pages (dashboard, builder, settings)
@@ -161,7 +162,7 @@ Run accessibility audits using axe-core CLI:
 
 ```bash
 # Install axe-core CLI
-npm install -g @axe-core/cli
+npm install -g @axe-core/cli@4.11.1
 
 # Run against local development server
 axe http://localhost:8000/surveys/your-survey-slug/

@@ -1,0 +1,288 @@
+i=1
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Interactive helper to list self-hosted CDN assets and update a selected one
+# Features added:
+# - --dry-run to preview changes (no file writes)
+# - --yes to skip interactive confirmation
+# - Computes SHA-384 SRI and can update template `integrity` attributes
+# - Appends an entry to docs/compliance/vulnerability-patch-log.md when an update occurs
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+STATIC_DIR="$ROOT_DIR/checktick_app/static/js"
+DOCS_FILE="$ROOT_DIR/docs/cdn-libraries.md"
+LOG_FILE="$ROOT_DIR/docs/compliance/vulnerability-patch-log.md"
+
+# A map of package -> target file (customize as needed)
+declare -A PACKAGES
+PACKAGES=(
+  [htmx.org]="htmx.min.js"
+  [sortablejs]="sortable.min.js"
+  [axe-core]="axe-core.min.js"
+)
+
+DRY_RUN=0
+ASSUME_YES=0
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [--dry-run] [--yes]
+
+Interactive helper to update self-hosted JS assets from npm.
+
+Options:
+  --dry-run   Don't write any files; show what would change
+  --yes       Non-interactive: accept prompts and apply changes
+EOF
+  exit 1
+}
+
+while [[ ${1-} != "" ]]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1 ;;
+    --yes) ASSUME_YES=1 ;;
+    -h|--help) usage ;;
+    *) echo "Unknown arg: $1"; usage ;;
+  esac
+  shift
+done
+
+print_header() {
+  echo "Update CDN assets (npm pack source-of-truth)"
+  echo "Repository root: $ROOT_DIR"
+  echo "Static dir: $STATIC_DIR"
+  echo
+}
+
+get_current_version() {
+  local pkg=$1
+  grep -E "\|[ ]*$pkg[ ]*\|" "$DOCS_FILE" || true
+}
+
+get_latest_version() {
+  local pkg=$1
+  npm view "$pkg" version 2>/dev/null || echo "(unknown)"
+}
+
+list_deps() {
+  printf "%-3s  %-20s  %-14s  %s\n" "#" "Package" "Current" "Latest"
+  local i=1
+  for pkg in "${!PACKAGES[@]}"; do
+    local row
+    row=$(get_current_version "$pkg" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/, "", $0); print $0}')
+    local current="(not found)"
+    if [[ -n "$row" ]]; then
+      current=$(echo "$row" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/, "", $0); print $3}')
+    fi
+    local latest
+    latest=$(get_latest_version "$pkg")
+    printf "%-3s  %-20s  %-14s  %s\n" "$i" "$pkg" "$current" "$latest"
+    i=$((i+1))
+  done
+}
+
+select_dep() {
+  echo
+  if [[ $ASSUME_YES -eq 1 ]]; then
+    read -rp "Enter the number of the dependency to update: " sel
+  else
+    read -rp "Enter the number of the dependency to update (or Enter to cancel): " sel
+    if [[ -z "$sel" ]]; then
+      echo "Cancelled"
+      exit 0
+    fi
+  fi
+  if ! [[ "$sel" =~ ^[0-9]+$ ]]; then
+    echo "Invalid selection"
+    exit 1
+  fi
+  echo "$sel"
+}
+
+compute_sri() {
+  local file=$1
+  # compute SHA-384 and prefix
+  local b64
+  b64=$(openssl dgst -sha384 -binary "$file" | openssl base64 -A)
+  echo "sha384-$b64"
+}
+
+update_templates_integrity() {
+  local file_name=$1
+  local new_sri=$2
+  # Templates to consider (can be extended)
+  local templates=(
+    "$ROOT_DIR/checktick_app/templates/base.html"
+    "$ROOT_DIR/checktick_app/surveys/templates/surveys/detail.html"
+    "$ROOT_DIR/checktick_app/surveys/templates/surveys/builder.html"
+    "$ROOT_DIR/checktick_app/surveys/templates/surveys/groups.html"
+    "$ROOT_DIR/checktick_app/surveys/templates/surveys/group_builder.html"
+  )
+
+  for tpl in "${templates[@]}"; do
+    if [[ ! -f "$tpl" ]]; then
+      continue
+    fi
+    if ! grep -q "js/$file_name" "$tpl"; then
+      continue
+    fi
+
+    echo "Patching template: $tpl (script: $file_name)"
+    if [[ $DRY_RUN -eq 1 ]]; then
+      echo "Would set integrity=$new_sri in $tpl for script containing js/$file_name"
+      continue
+    fi
+
+    # Python inplace edit: find <script ... js/<file_name> ...> and add/replace integrity attr
+    python3 - <<PY
+import re
+p='''$tpl'''
+fname='''$file_name'''
+new='''$new_sri'''
+text=open(p,'r',encoding='utf-8').read()
+pattern=re.compile(r'(<script[^>]*?js/{}[^>]*?)(integrity="[^"]*"\s*)?([^>]*>)'.format(re.escape(fname)),re.IGNORECASE|re.DOTALL)
+def repl(m):
+    pre=m.group(1)
+    integrity=m.group(2) or ''
+    post=m.group(3) or ''
+    # ensure a single space before integrity
+    return pre + ' integrity="%s" ' % new + post
+newtext, count = pattern.subn(repl, text)
+if count>0:
+    open(p,'w',encoding='utf-8').write(newtext)
+    print('Updated %s' % p)
+else:
+    print('No matching <script> for %s in %s' % (fname,p))
+PY
+  done
+}
+
+append_compliance_log() {
+  local pkg=$1
+  local old_ver=$2
+  local new_ver=$3
+  local sri=$4
+  local date_str
+  date_str=$(date '+%d/%m/%Y')
+  local entry="| $date_str | `$pkg` | $old_ver -> $new_ver | Updated self-hosted asset and SRI (sha384) | Automated Script"
+  if [[ $DRY_RUN -eq 1 ]]; then
+    echo "Would append to $LOG_FILE:"
+    echo "$entry"
+    return
+  fi
+  # Append to log file before the closing code block (just add at end)
+  echo "\n$entry" >> "$LOG_FILE"
+  echo "Appended compliance log entry to $LOG_FILE"
+}
+
+update_dep() {
+  local pkg=$1
+  local file=$2
+  echo "Updating $pkg -> $file"
+  # Get latest version
+  local latest
+  latest=$(npm view "$pkg" version 2>/dev/null || true)
+  if [[ -z "$latest" ]]; then
+    echo "Failed to get latest version for $pkg"
+    exit 1
+  fi
+
+  # Attempt to parse current version from docs (best-effort)
+  local current_row
+  current_row=$(get_current_version "$pkg" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/, "", $0); print $0}') || true
+  local current_ver="(unknown)"
+  if [[ -n "$current_row" ]]; then
+    current_ver=$(echo "$current_row" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/, "", $0); print $3}')
+  fi
+
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+
+  echo "Packing $pkg@$latest..."
+  (cd "$tmpdir" && npm pack "$pkg@$latest")
+  tgz=$(ls "$tmpdir"/*.tgz | head -n1)
+  if [[ ! -f "$tgz" ]]; then
+    echo "Failed to download package tarball"
+    exit 1
+  fi
+  echo "Extracting $tgz..."
+  tar -xzf "$tgz" -C "$tmpdir"
+
+  # Heuristic: check common locations for minified files
+  candidates=(
+    "$tmpdir/package/dist/$file"
+    "$tmpdir/package/$file"
+    "$tmpdir/package/build/$file"
+    "$tmpdir/package/lib/$file"
+    "$tmpdir/package/umd/$file"
+  )
+
+  src=""
+  for c in "${candidates[@]}"; do
+    if [[ -f "$c" ]]; then
+      src="$c"
+      break
+    fi
+  done
+
+  if [[ -z "$src" ]]; then
+    echo "Could not find $file inside package. Listing files for inspection:"
+    find "$tmpdir/package" -maxdepth 4 -type f -name "*.min.js" -print
+    exit 1
+  fi
+
+  echo "Found asset: $src"
+  echo "Computing SRI (SHA-384) and writing to $STATIC_DIR/$file"
+
+  mkdir -p "$STATIC_DIR"
+  if [[ $DRY_RUN -eq 1 ]]; then
+    # Compute SRI but don't write
+    proposed_sri=$(compute_sri "$src")
+    echo "Proposed SRI: $proposed_sri"
+    echo "Would copy $src -> $STATIC_DIR/$file"
+    echo "Would update templates and append compliance log"
+    return
+  fi
+
+  tmpout="$STATIC_DIR/.${file}.tmp"
+  cp "$src" "$tmpout"
+  chmod 0644 "$tmpout"
+  mv -f "$tmpout" "$STATIC_DIR/$file"
+
+  new_sri=$(compute_sri "$STATIC_DIR/$file")
+  echo "Wrote $STATIC_DIR/$file (SRI: $new_sri)"
+
+  # Update templates
+  update_templates_integrity "$file" "$new_sri"
+
+  # Append compliance log
+  append_compliance_log "$pkg" "$current_ver" "$latest" "$new_sri"
+
+  echo "Updated $STATIC_DIR/$file to $pkg@$latest"
+  echo "Updated templates and appended compliance log entry."
+}
+
+print_header
+list_deps
+sel=$(select_dep)
+
+# Map selection to package
+
+for pkg in "${!PACKAGES[@]}"; do
+  if [[ "$i" -eq "$sel" ]]; then
+    selected_pkg="$pkg"
+    selected_file="${PACKAGES[$pkg]}"
+    break
+  fi
+  i=$((i+1))
+done
+
+if [[ -z "${selected_pkg-}" ]]; then
+  echo "Selection out of range"
+  exit 1
+fi
+
+update_dep "$selected_pkg" "$selected_file"
+
+echo "Done."
