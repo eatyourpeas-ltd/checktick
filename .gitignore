@@ -267,3 +267,8 @@ certs/
 *.key
 
 vault/*.pem
+
+# Temporary files created by update-cdn-libraries workflow
+htmx-new.js
+axecore-new.js
+sortable-new.js
