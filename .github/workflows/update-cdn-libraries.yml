@@ -40,12 +40,28 @@ jobs:
       - name: Check HTMX
         id: check-htmx
         run: |
-          # Download the pinned version of HTMX
-          curl -s -o htmx-new.js "https://unpkg.com/htmx.org@${{ env.HTMX_VERSION }}/dist/htmx.min.js"
+          # Use npm as source of truth: download package tarball with `npm pack`, extract, find minified file
+          tmpdir=$(mktemp -d)
+          trap 'rm -rf "$tmpdir"' EXIT
+          pushd "$tmpdir"
+          npm pack htmx.org@${{ env.HTMX_VERSION }} --silent
+          tarball=$(ls *.tgz | head -n1)
+          tar -xzf "$tarball"
+          # Prefer dist/htmx.min.js, fall back to any *.min.js
+          file=$(find package -type f -iname 'htmx*.min.js' -print -quit || true)
+          if [ -z "$file" ]; then
+            file=$(find package -type f -iname '*.min.js' -print -quit || true)
+          fi
+          if [ -z "$file" ]; then
+            echo "No minified htmx file found in package" >&2
+            exit 1
+          fi
+          src="$tmpdir/$file"
 
           # Calculate new hash
-          NEW_HASH=$(openssl dgst -sha384 -binary htmx-new.js | openssl base64 -A)
+          NEW_HASH=$(openssl dgst -sha384 -binary "$src" | openssl base64 -A)
           echo "new_hash=${NEW_HASH}" >> $GITHUB_OUTPUT
+          popd
 
           # Calculate current hash
           if [ -f checktick_app/static/js/htmx.min.js ]; then
@@ -59,7 +75,8 @@ jobs:
           if [ "${NEW_HASH}" != "${CURRENT_HASH}" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "HTMX has been updated or is missing"
-            cp htmx-new.js checktick_app/static/js/htmx.min.js
+            mv -f "$src" checktick_app/static/js/htmx.min.js
+            # tmpdir will be removed by trap
             # Update integrity hash in base.html
             sed -i "s|integrity=\"sha384-[A-Za-z0-9+/=]*\"\([[:space:]]*crossorigin=\"anonymous\">.*htmx\)|integrity=\"sha384-${NEW_HASH}\"\1|g" checktick_app/templates/base.html || true
             # More robust: Update the line after htmx.min.js
@@ -72,12 +89,28 @@ jobs:
       - name: Check SortableJS
         id: check-sortablejs
         run: |
-          # Download the pinned version of SortableJS
-          curl -s -o sortable-new.js "https://cdn.jsdelivr.net/npm/sortablejs@${{ env.SORTABLEJS_VERSION }}/Sortable.min.js"
+          # Use npm as source of truth: download package tarball with `npm pack`, extract, find minified file
+          tmpdir=$(mktemp -d)
+          trap 'rm -rf "$tmpdir"' EXIT
+          pushd "$tmpdir"
+          npm pack sortablejs@${{ env.SORTABLEJS_VERSION }} --silent
+          tarball=$(ls *.tgz | head -n1)
+          tar -xzf "$tarball"
+          # Try common names then fallback
+          file=$(find package -type f \( -iname 'sortable*.min.js' -o -iname 'Sortable.min.js' -o -iname 'sortable.min.js' \) -print -quit || true)
+          if [ -z "$file" ]; then
+            file=$(find package -type f -iname '*.min.js' -print -quit || true)
+          fi
+          if [ -z "$file" ]; then
+            echo "No minified SortableJS file found in package" >&2
+            exit 1
+          fi
+          src="$tmpdir/$file"
 
           # Calculate new hash
-          NEW_HASH=$(openssl dgst -sha384 -binary sortable-new.js | openssl base64 -A)
+          NEW_HASH=$(openssl dgst -sha384 -binary "$src" | openssl base64 -A)
           echo "new_hash=${NEW_HASH}" >> $GITHUB_OUTPUT
+          popd
 
           # Calculate current hash
           if [ -f checktick_app/static/js/sortable.min.js ]; then
@@ -91,7 +124,8 @@ jobs:
           if [ "${NEW_HASH}" != "${CURRENT_HASH}" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "SortableJS has been updated or is missing"
-            cp sortable-new.js checktick_app/static/js/sortable.min.js
+            mv -f "$src" checktick_app/static/js/sortable.min.js
+            # tmpdir will be removed by trap
             # Update integrity hash in all SortableJS template files
             for file in checktick_app/surveys/templates/surveys/detail.html \
                         checktick_app/surveys/templates/surveys/builder.html \
@@ -109,12 +143,28 @@ jobs:
       - name: Check axe-core
         id: check-axecore
         run: |
-          # Download the pinned version of axe-core
-          curl -s -o axecore-new.js "https://cdnjs.cloudflare.com/ajax/libs/axe-core/${{ env.AXE_CORE_VERSION }}/axe.min.js"
+          # Use npm as source of truth: download package tarball with `npm pack`, extract, find minified file
+          tmpdir=$(mktemp -d)
+          trap 'rm -rf "$tmpdir"' EXIT
+          pushd "$tmpdir"
+          npm pack axe-core@${{ env.AXE_CORE_VERSION }} --silent
+          tarball=$(ls *.tgz | head -n1)
+          tar -xzf "$tarball"
+          # Try common names then fallback
+          file=$(find package -type f \( -iname 'axe*.min.js' -o -iname 'axe.min.js' \) -print -quit || true)
+          if [ -z "$file" ]; then
+            file=$(find package -type f -iname '*.min.js' -print -quit || true)
+          fi
+          if [ -z "$file" ]; then
+            echo "No minified axe-core file found in package" >&2
+            exit 1
+          fi
+          src="$tmpdir/$file"
 
           # Calculate new hash
-          NEW_HASH=$(openssl dgst -sha384 -binary axecore-new.js | openssl base64 -A)
+          NEW_HASH=$(openssl dgst -sha384 -binary "$src" | openssl base64 -A)
           echo "new_hash=${NEW_HASH}" >> $GITHUB_OUTPUT
+          popd
 
           # Calculate current hash
           if [ -f checktick_app/static/js/axe-core.min.js ]; then
@@ -128,7 +178,8 @@ jobs:
           if [ "${NEW_HASH}" != "${CURRENT_HASH}" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "axe-core has been updated or is missing"
-            cp axecore-new.js checktick_app/static/js/axe-core.min.js
+            mv -f "$src" checktick_app/static/js/axe-core.min.js
+            # tmpdir will be removed by trap
           else
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "axe-core is up to date"

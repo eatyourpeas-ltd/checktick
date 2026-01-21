@@ -67,11 +67,23 @@ GitHub Actions workflows automatically check for updates:
 # HTMX
 curl -o checktick_app/static/js/htmx.min.js https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js
 
+# Alternative: npm pack (recommended for reproducibility)
+# npm pack htmx.org@1.9.12 && tar -xzf htmx.org-1.9.12.tgz -C /tmp && \
+#   cp /tmp/package/dist/htmx.min.js checktick_app/static/js/htmx.min.js && rm htmx.org-1.9.12.tgz
+
 # SortableJS
 curl -o checktick_app/static/js/sortable.min.js https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js
 
+# Alternative: npm pack (recommended for reproducibility)
+# npm pack sortablejs@1.15.2 && tar -xzf sortablejs-1.15.2.tgz -C /tmp && \
+#   cp /tmp/package/Sortable.min.js checktick_app/static/js/sortable.min.js && rm sortablejs-1.15.2.tgz
+
 # axe-core
 curl -o checktick_app/static/js/axe-core.min.js https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.11.1/axe.min.js
+
+# Alternative: npm pack (recommended)
+# npm pack axe-core@4.11.1 && tar -xzf axe-core-4.11.1.tgz -C /tmp && \
+#   cp /tmp/package/dist/axe.min.js checktick_app/static/js/axe-core.min.js && rm axe-core-4.11.1.tgz
 ```
 
 ### 2. Generate SRI Hash
@@ -157,3 +169,15 @@ Since files are self-hosted, CDN outages don't affect the application. If you ne
 | HTMX | unpkg.com | jsdelivr.net |
 | SortableJS | jsdelivr.net | unpkg.com |
 | axe-core | cdnjs.cloudflare.com | unpkg.com |
+
+## CI Source-of-Truth (npm)
+
+Our GitHub Actions workflow now uses `npm pack` as the canonical source-of-truth when updating self-hosted JavaScript libraries. Instead of directly curling files from third-party CDNs, the workflow:
+
+- Uses `npm pack <package>@<version>` to retrieve the package tarball from the registry
+- Extracts the packaged assets into a temporary directory
+- Locates the appropriate `*.min.js` file (for example, `axe-core.min.js`)
+- Computes the SHA-384 SRI from the exact bytes in the packed artifact
+- Atomically moves the file into `checktick_app/static/js/` and cleans up the temp files
+
+This approach ensures that the file we ship is identical to the npm registry artifact, avoids leaving temporary files in the repository root, and produces reproducible SRI hashes.
