@@ -304,6 +304,41 @@
     </div>
     {% endif %}
     {% endif %}
+
+    {# Export History #}
+    {% if recent_exports %}
+    <div class="mt-4 pt-4 border-t border-base-300">
+      <h3 class="font-semibold text-sm mb-2">{% trans "Recent Exports" %}</h3>
+      <div class="space-y-2">
+        {% for export in recent_exports %}
+        <div class="flex items-center justify-between text-sm bg-base-200/50 rounded p-2">
+          <div class="flex-1">
+            <div class="font-medium">{{ export.response_count }} {% trans "responses" %}</div>
+            <div class="text-xs opacity-70">
+              {% trans "Created" %}: {{ export.created_at|date:"Y-m-d H:i" }} {% trans "by" %} {{ export.created_by.get_full_name|default:export.created_by.username }}
+              {% if export.is_encrypted %}
+              <span class="badge badge-xs badge-success ml-1">{% trans "Encrypted" %}</span>
+              {% endif %}
+              {% if export.downloaded_at %}
+              <span class="badge badge-xs badge-info ml-1">{% trans "Downloaded" %} ({{ export.download_count }}x)</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="flex gap-1">
+            {% if not export.is_download_url_expired %}
+            <a href="{% url 'surveys:survey_export_download' survey.slug export.id %}" 
+               class="btn btn-xs btn-primary" title="{% trans 'View download link' %}">
+              {% include "components/icons/download.html" with classes="h-3 w-3" %}
+            </a>
+            {% else %}
+            <span class="text-xs opacity-50">{% trans "Expired" %}</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endif %}
