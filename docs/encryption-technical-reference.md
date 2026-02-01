@@ -1210,62 +1210,225 @@ def survey_responses(request: HttpRequest, slug: str) -> HttpResponse:
 
 ### CSV Export with Decryption
 
-Exporting data includes decrypted demographics when survey is unlocked:
+**Production Implementation** (as of v2.0):
+
+The export service provides secure, encrypted exports with comprehensive logging:
 
 ```python
+from checktick_app.surveys.services.export_service import ExportService
+
 @login_required
-def survey_export_csv(
-    request: HttpRequest, slug: str
-) -> Union[HttpResponse, StreamingHttpResponse]:
+def create_export(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug, owner=request.user)
-
-    # Get KEK via re-derivation (Option 4 pattern)
+    
+    # Get KEK from session (survey must be unlocked)
     survey_key = get_survey_key_from_session(request, slug)
-    if not survey_key:
-        messages.error(request, _("Please unlock survey first to export with patient data."))
+    if not survey_key and survey.requires_whole_response_encryption():
+        messages.error(request, _("Please unlock survey first to export encrypted data."))
         return redirect("surveys:unlock", slug=slug)
-
-    def generate():
-        import csv
-        from io import StringIO
-
-        # Build header with demographic fields
-        header = ["id", "submitted_at", "first_name", "last_name",
-                  "date_of_birth", "nhs_number", "answers"]
-        s = StringIO()
-        writer = csv.writer(s)
-        writer.writerow(header)
-        yield s.getvalue()
-        s.seek(0)
-        s.truncate(0)
-
-        for r in survey.responses.iterator():
-            # Decrypt demographics
-            demographics = {}
-            if r.enc_demographics:
-                try:
-                    demographics = r.load_demographics(survey_key)
-                except Exception:
-                    demographics = {"error": "decryption_failed"}
-
-            row = [
-                r.id,
-                r.submitted_at.isoformat(),
-                demographics.get("first_name", ""),
-                demographics.get("last_name", ""),
-                demographics.get("date_of_birth", ""),
-                demographics.get("nhs_number", ""),
-                json.dumps(r.answers)
-            ]
-            writer.writerow(row)
-            yield s.getvalue()
-            s.seek(0)
-            s.truncate(0)
-
-    resp = StreamingHttpResponse(generate(), content_type="text/csv")
-    resp["Content-Disposition"] = f"attachment; filename={slug}-responses.csv"
-    return resp
+    
+    # Get optional download password for export file encryption
+    download_password = request.POST.get("download_password")
+    
+    try:
+        # Create export with decryption and optional re-encryption
+        export = ExportService.create_export(
+            survey=survey,
+            user=request.user,
+            password=download_password,  # Optional: encrypt export file
+            survey_key=survey_key,  # Required for encrypted surveys
+        )
+        
+        # Provide download link (expires in 7 days)
+        download_url = ExportService.get_download_url(export)
+        messages.success(request, f"Export created: {download_url}")
+        
+        return redirect("surveys:export_list", slug=slug)
+        
+    except ValueError as e:
+        messages.error(request, str(e))
+        return redirect("surveys:dashboard", slug=slug)
 ```
+
+**Key Features:**
+
+1. **Survey Key Parameter**: `create_export()` now accepts `survey_key` to decrypt encrypted survey responses
+2. **CSV Generation**: `_generate_csv()` uses `load_complete_response()` to decrypt answers and demographics
+3. **Export File Encryption**: `_encrypt_csv()` encrypts the CSV file with Scrypt KDF + AES-256-GCM
+4. **Error Handling**: Graceful degradation if decryption fails (logs error, continues with remaining responses)
+5. **Comprehensive Logging**: INFO, DEBUG, and ERROR level logs throughout the process
+
+**Internal Implementation:**
+
+```python
+class ExportService:
+    @classmethod
+    def _generate_csv(cls, survey: Survey, survey_key: bytes = None) -> str:
+        """Generate CSV with decrypted response data."""
+        # ... build headers ...
+        
+        for response in survey.responses.filter(is_frozen=False):
+            if survey.requires_whole_response_encryption() and survey_key:
+                try:
+                    # Decrypt complete response (answers + demographics)
+                    full_response = response.load_complete_response(survey_key)
+                    answers_dict = full_response.get("answers", {})
+                    logger.debug(f"Decrypted response {response.id}")
+                except Exception as e:
+                    # Log error but continue processing
+                    logger.error(f"Failed to decrypt response {response.id}: {e}")
+                    continue
+            else:
+                # Legacy format: plaintext answers
+                answers_dict = response.answers or {}
+            
+            # ... build CSV row ...
+    
+    @classmethod
+    def _encrypt_csv(cls, csv_data: str, password: str) -> tuple[bytes, str]:
+        """Encrypt CSV file with download password."""
+        from ..utils import encrypt_sensitive
+        
+        # Encrypt with password (encrypt_sensitive handles Scrypt KDF)
+        encrypted_blob = encrypt_sensitive(
+            password.encode("utf-8"),
+            {"csv_content": csv_data}
+        )
+        
+        # Generate tracking ID
+        encryption_key_id = f"export-{secrets.token_hex(8)}"
+        
+        logger.info(f"CSV encrypted: key_id={encryption_key_id}")
+        return encrypted_blob, encryption_key_id
+```
+
+**Security Properties:**
+- Survey responses decrypted only when survey is unlocked in session
+- CSV file optionally re-encrypted with separate download password
+- Scrypt KDF (n=2^14, r=8, p=1) for password derivation
+- AES-256-GCM for authenticated encryption
+- Automatic 7-day expiry on export files
+- All export operations logged for audit trail
+
+### Secure Deletion with Cryptographic Key Erasure
+
+**Production Implementation** (as of v2.0):
+
+The `hard_delete()` method implements cryptographic key erasure for GDPR compliance:
+
+```python
+def hard_delete(self) -> None:
+    """
+    Permanently delete survey with cryptographic key erasure.
+    
+    This method:
+    1. Overwrites all encryption keys with random data
+    2. Deletes all responses and exports
+    3. Purges keys from HashiCorp Vault (if configured)
+    4. Creates audit trail
+    5. Permanently deletes survey from database
+    
+    Security: Keys are overwritten (not just deleted) to prevent recovery.
+    """
+    import secrets
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting hard deletion for survey {self.slug} (ID: {self.id})")
+    
+    # Step 1: Cryptographic key erasure
+    keys_overwritten = []
+    
+    if self.encrypted_kek_password:
+        self.encrypted_kek_password = secrets.token_bytes(64)
+        keys_overwritten.append("password")
+    
+    if self.encrypted_kek_recovery:
+        self.encrypted_kek_recovery = secrets.token_bytes(64)
+        keys_overwritten.append("recovery")
+    
+    if self.encrypted_kek_oidc:
+        self.encrypted_kek_oidc = secrets.token_bytes(64)
+        keys_overwritten.append("oidc")
+    
+    if self.encrypted_kek_org:
+        self.encrypted_kek_org = secrets.token_bytes(64)
+        keys_overwritten.append("org")
+    
+    self.save(update_fields=[
+        "encrypted_kek_password",
+        "encrypted_kek_recovery",
+        "encrypted_kek_oidc",
+        "encrypted_kek_org",
+    ])
+    
+    logger.info(
+        f"Cryptographic keys overwritten for survey {self.slug}: "
+        f"{', '.join(keys_overwritten)}"
+    )
+    
+    # Step 2: Delete responses
+    response_count = self.responses.count()
+    self.responses.all().delete()
+    logger.info(f"Deleted {response_count} responses for survey {self.slug}")
+    
+    # Step 3: Delete exports
+    export_count = DataExport.objects.filter(survey=self).count()
+    DataExport.objects.filter(survey=self).delete()
+    logger.info(f"Deleted {export_count} export records for survey {self.slug}")
+    
+    # Step 4: Purge Vault keys (if configured)
+    try:
+        from .vault_client import VaultClient
+        vault_client = VaultClient()
+        vault_path = f"surveys/{self.id}/kek"
+        vault_client.purge_survey_kek(vault_path)
+        logger.info(f"Purged Vault escrow keys at {vault_path}")
+    except (ImportError, Exception) as e:
+        logger.warning(f"Failed to purge Vault keys: {e}", exc_info=True)
+    
+    # Step 5: Create audit trail BEFORE deletion
+    audit_data = {
+        "survey_id": self.id,
+        "survey_slug": self.slug,
+        "survey_name": self.name,
+        "owner": self.owner.username if self.owner else None,
+        "response_count": response_count,
+        "deleted_at": timezone.now().isoformat(),
+        "encryption_keys_erased": keys_overwritten,
+    }
+    logger.info(f"Audit trail created for hard deletion: {audit_data}")
+    
+    # Step 6: Final database deletion
+    survey_id = self.id
+    survey_slug = self.slug
+    self.delete()
+    logger.info(f"Survey hard deleted: {survey_slug} (ID: {survey_id})")
+```
+
+**Why Cryptographic Key Erasure?**
+
+1. **GDPR Compliance**: Article 17 (Right to Erasure) requires that data be made unrecoverable
+2. **Defense in Depth**: Even if database backups exist, encrypted data cannot be recovered
+3. **Audit Trail**: Key erasure is logged before deletion for compliance verification
+4. **Secure by Default**: Uses `secrets.token_bytes()` for cryptographically secure random data
+
+**What Gets Overwritten:**
+- Password-encrypted KEK (`encrypted_kek_password`)
+- Recovery phrase-encrypted KEK (`encrypted_kek_recovery`)
+- OIDC-encrypted KEK (`encrypted_kek_oidc`) - if using SSO
+- Organization-encrypted KEK (`encrypted_kek_org`) - if using org-level encryption
+
+**What Gets Deleted:**
+- All survey responses (with encrypted data)
+- All data export records
+- Vault-escrowed keys (if platform key escrow is enabled)
+- Survey metadata and configuration
+
+**What Gets Retained:**
+- Audit log entries (who deleted, when, what keys were erased)
+- Aggregate statistics (if anonymized)
+- Organization-level summary data (response counts, not content)
 
 ### Session Security
 

@@ -15,8 +15,13 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 import pytest
 
-from checktick_app.surveys.models import Survey, SurveyResponse, QuestionGroup, DataExport
-from checktick_app.surveys.services import ExportService
+from checktick_app.surveys.models import (
+    DataExport,
+    QuestionGroup,
+    Survey,
+    SurveyResponse,
+)
+from checktick_app.surveys.services.export_service import ExportService
 
 User = get_user_model()
 
@@ -81,7 +86,7 @@ def encrypted_survey_with_data(db, user):
     survey.close_survey(user)
 
     # Create an export
-    export = ExportService.create_export(
+    _ = ExportService.create_export(
         survey=survey,
         user=user,
         survey_key=kek,
@@ -123,17 +128,12 @@ class TestSecureDeletion:
             encrypted_survey_with_data
         )
 
-        # Capture the survey ID
-        survey_id = survey.id
-
         # Manually execute just the key overwriting step to verify it works
         import secrets
 
         survey.encrypted_kek_password = secrets.token_bytes(64)
         survey.encrypted_kek_recovery = secrets.token_bytes(64)
-        survey.save(
-            update_fields=["encrypted_kek_password", "encrypted_kek_recovery"]
-        )
+        survey.save(update_fields=["encrypted_kek_password", "encrypted_kek_recovery"])
 
         # Reload from database
         survey.refresh_from_db()
@@ -176,9 +176,7 @@ class TestSecureDeletion:
         # Verify exports are deleted
         assert DataExport.objects.filter(survey_id=survey_id).count() == 0
 
-    def test_hard_delete_logs_comprehensive_info(
-        self, encrypted_survey_with_data
-    ):
+    def test_hard_delete_logs_comprehensive_info(self, encrypted_survey_with_data):
         """Hard deletion should complete successfully with comprehensive operations."""
         survey, _, _, _ = encrypted_survey_with_data
 
@@ -202,7 +200,6 @@ class TestSecureDeletion:
         """Hard deletion should complete successfully and create audit data."""
         survey, _, _, _ = encrypted_survey_with_data
 
-        survey_slug = survey.slug
         survey_id = survey.id
 
         # Perform hard deletion (which logs audit trail internally)
@@ -235,7 +232,7 @@ class TestSecureDeletion:
         )
 
         # Set up OIDC encryption
-        kek = os.urandom(32)
+        _ = os.urandom(32)
         survey.encrypted_kek_oidc = os.urandom(64)
         survey.save()
 
@@ -345,7 +342,6 @@ class TestRetentionServiceIntegration:
 
     def test_automatic_hard_deletion_workflow(self, encrypted_survey_with_data):
         """Test complete workflow from retention expiry to hard deletion."""
-        from checktick_app.surveys.services import RetentionService
 
         survey, original_password_key, _, _ = encrypted_survey_with_data
 

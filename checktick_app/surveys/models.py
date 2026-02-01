@@ -2080,9 +2080,7 @@ Return the translation as JSON following the exact structure specified in the sy
 
         logger = logging.getLogger(__name__)
 
-        logger.info(
-            f"Starting hard deletion for survey {self.slug} (ID: {self.id})"
-        )
+        logger.info(f"Starting hard deletion for survey {self.slug} (ID: {self.id})")
 
         # Step 1: Overwrite encryption keys with random data before deletion
         # This is defense-in-depth: makes key recovery impossible even from backups
@@ -2119,9 +2117,7 @@ Return the translation as JSON following the exact structure specified in the sy
         if hasattr(self, "responses"):
             response_count = self.responses.count()
             self.responses.all().delete()
-            logger.info(
-                f"Deleted {response_count} responses for survey {self.slug}"
-            )
+            logger.info(f"Deleted {response_count} responses for survey {self.slug}")
 
         # Step 3: Delete data exports
         try:
@@ -2129,13 +2125,9 @@ Return the translation as JSON following the exact structure specified in the sy
 
             export_count = DataExport.objects.filter(survey=self).count()
             DataExport.objects.filter(survey=self).delete()
-            logger.info(
-                f"Deleted {export_count} export records for survey {self.slug}"
-            )
+            logger.info(f"Deleted {export_count} export records for survey {self.slug}")
         except Exception as e:
-            logger.warning(
-                f"Failed to delete exports for survey {self.slug}: {e}"
-            )
+            logger.warning(f"Failed to delete exports for survey {self.slug}: {e}")
 
         # Step 4: Purge escrowed keys from Vault (if using platform key escrow)
         try:
@@ -2152,9 +2144,7 @@ Return the translation as JSON following the exact structure specified in the sy
             logger.debug("VaultClient not available - skipping Vault key purge")
         except AttributeError:
             # purge_survey_kek method doesn't exist yet
-            logger.debug(
-                "VaultClient.purge_survey_kek not implemented - skipping"
-            )
+            logger.debug("VaultClient.purge_survey_kek not implemented - skipping")
         except Exception as e:
             # Log but don't fail deletion
             logger.warning(
@@ -2174,9 +2164,7 @@ Return the translation as JSON following the exact structure specified in the sy
                 "encryption_keys_erased": keys_overwritten,
             }
             # Store in audit log (implementation depends on your AuditLog model)
-            logger.info(
-                f"Audit trail created for hard deletion: {audit_data}"
-            )
+            logger.info(f"Audit trail created for hard deletion: {audit_data}")
         except Exception as e:
             logger.error(
                 f"Failed to create audit record for survey {self.slug}: {e}",
@@ -2187,9 +2175,7 @@ Return the translation as JSON following the exact structure specified in the sy
         survey_id = self.id
         survey_slug = self.slug
         self.delete()
-        logger.info(
-            f"Survey hard deleted: {survey_slug} (ID: {survey_id})"
-        )
+        logger.info(f"Survey hard deleted: {survey_slug} (ID: {survey_id})")
 
     @property
     def days_until_deletion(self) -> int | None:

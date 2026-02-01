@@ -70,9 +70,7 @@ class ExportService:
         Raises:
             ValueError: If survey has no responses, is deleted, or is encrypted without key
         """
-        logger.info(
-            f"Creating export for survey {survey.slug} by user {user.username}"
-        )
+        logger.info(f"Creating export for survey {survey.slug} by user {user.username}")
         from ..models import DataExport, SurveyResponse
 
         # Validate survey state
@@ -283,7 +281,9 @@ class ExportService:
 
         # Encrypt CSV with password (encrypt_sensitive handles KDF internally)
         # Pass password as bytes - encrypt_sensitive will derive key with Scrypt
-        encrypted_blob = encrypt_sensitive(password.encode("utf-8"), {"csv_content": csv_data})
+        encrypted_blob = encrypt_sensitive(
+            password.encode("utf-8"), {"csv_content": csv_data}
+        )
 
         # Generate key ID for tracking
         encryption_key_id = f"export-{secrets.token_hex(8)}"

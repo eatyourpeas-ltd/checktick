@@ -25,6 +25,7 @@ Navigate to your survey and click "Dashboard" from the survey menu. The dashboar
 The Response Insights section displays horizontal bar charts showing how respondents answered each question. This section automatically appears once your survey has responses.
 
 **Supported question types:**
+
 - Yes/No questions (with colour-coded bars)
 - Single choice (radio buttons)
 - Multiple choice (checkboxes)
@@ -32,6 +33,7 @@ The Response Insights section displays horizontal bar charts showing how respond
 - Likert scales
 
 **Accessibility features:**
+
 - Fully keyboard accessible (uses native `<details>` element)
 - ARIA attributes on progress bars for screen readers
 - Truncated labels show full text on hover
@@ -62,6 +64,46 @@ Export your survey responses to CSV format for analysis in spreadsheet applicati
 - **Unlock required**: Survey must be unlocked with your password or recovery phrase
 
 This ensures that only authorised users with encryption credentials can access decrypted response data.
+
+### How Encryption Affects Exports
+
+For surveys with patient data encryption enabled, the export process handles encrypted data securely:
+
+**During Export Creation:**
+
+1. Survey must be unlocked (you've entered your password or recovery phrase)
+2. The system decrypts survey responses using your unlocked encryption key
+3. Decrypted data is written to a CSV file
+4. The CSV file itself is then re-encrypted with a download password you provide
+5. The encrypted export file is stored temporarily (7 days)
+
+**Security Properties:**
+
+- **Double encryption**: Survey data encrypted → decrypted → re-encrypted for download
+- **Separate keys**: Export encryption uses a different password than survey encryption
+- **Time-limited access**: Export links expire after 7 days
+- **Download protection**: Recipients need the download password to access the CSV
+- **Audit trail**: All exports are logged with user, timestamp, and encryption status
+
+**What Gets Decrypted:**
+
+- Patient demographics (first name, last name, NHS number, date of birth, address)
+- Survey response answers
+- Professional details (if collected)
+- Any other encrypted fields in the survey
+
+**What Stays Encrypted:**
+
+- The export file itself remains encrypted until downloaded
+- You provide a download password during export creation
+- Recipients must have this password to open the CSV file
+
+**Best Practices:**
+
+- Use a strong, unique password for each export
+- Share the download password separately from the download link
+- Delete exports after downloading if no longer needed
+- Don't reuse your survey encryption password for exports
 
 ### CSV Structure
 
@@ -113,6 +155,7 @@ Both the dashboard and export features have comprehensive access controls:
 ### Dashboard Access
 
 The dashboard (`/surveys/{slug}/dashboard/`) requires:
+
 - User must be logged in
 - User must have view permission for the survey:
   - Survey owner
@@ -124,6 +167,7 @@ Rate limit: 100 requests per hour per user.
 ### Export Access
 
 The CSV export (`/surveys/{slug}/export.csv`) requires:
+
 - User must be logged in
 - User must be the survey owner
 - Survey must be unlocked (encryption key in session)
@@ -145,6 +189,7 @@ Only questions that have been added to the survey will appear. Questions added a
 ### Response Insights not showing
 
 Response Insights only appear if:
+
 - The survey has at least one response
 - The survey has chartable questions (not just text fields)
 

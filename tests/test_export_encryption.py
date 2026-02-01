@@ -14,9 +14,9 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 import pytest
 
-from checktick_app.surveys.models import Survey, SurveyResponse, QuestionGroup
+from checktick_app.surveys.models import QuestionGroup, Survey, SurveyResponse
 from checktick_app.surveys.services import ExportService
-from checktick_app.surveys.utils import decrypt_sensitive, encrypt_sensitive
+from checktick_app.surveys.utils import decrypt_sensitive
 
 User = get_user_model()
 
@@ -35,7 +35,7 @@ def user(db):
 def encrypted_survey_with_responses(db, user):
     """Create an encrypted survey with patient data responses."""
     from checktick_app.surveys.models import SurveyQuestion
-    
+
     # Create a patient data question group
     patient_group = QuestionGroup.objects.create(
         name="Patient Details",
@@ -56,7 +56,7 @@ def encrypted_survey_with_responses(db, user):
 
     # Add patient data group to survey
     survey.question_groups.add(patient_group)
-    
+
     # Create survey questions
     q1 = SurveyQuestion.objects.create(
         survey=survey,
@@ -214,7 +214,9 @@ class TestExportServiceEncryption:
         # But encrypted data should not appear (responses skipped)
         assert "Patient0" not in csv_data
 
-    def test_export_file_encryption_with_password(self, plain_survey_with_responses, user):
+    def test_export_file_encryption_with_password(
+        self, plain_survey_with_responses, user
+    ):
         """Export file should be encrypted when password is provided."""
         survey = plain_survey_with_responses
 
@@ -244,11 +246,10 @@ class TestExportServiceEncryption:
         assert key_id.startswith("export-")
 
         # Decrypt CSV (using decrypt_sensitive)
-        from checktick_app.surveys.utils import decrypt_sensitive
 
         # Decrypt with same password (decrypt_sensitive handles KDF)
         decrypted_dict = decrypt_sensitive(password.encode("utf-8"), encrypted_blob)
-        
+
         assert "csv_content" in decrypted_dict
         assert decrypted_dict["csv_content"] == csv_data
 
@@ -267,9 +268,7 @@ class TestExportServiceEncryption:
         assert export is not None
         assert export.response_count == 2
 
-    def test_export_logs_encryption_status(
-        self, encrypted_survey_with_responses, user
-    ):
+    def test_export_logs_encryption_status(self, encrypted_survey_with_responses, user):
         """Export should complete successfully and log encryption status."""
         survey, kek, password = encrypted_survey_with_responses
 
@@ -375,9 +374,7 @@ class TestExportIntegrationWithEncryption:
         assert "Clinical notes 0" in csv_data
         assert "Primary Question" in csv_data
 
-    def test_export_without_unlock_fails(
-        self, encrypted_survey_with_responses, user
-    ):
+    def test_export_without_unlock_fails(self, encrypted_survey_with_responses, user):
         """Export should fail if survey not unlocked (no key available)."""
         survey, kek, password = encrypted_survey_with_responses
 

@@ -8,6 +8,7 @@ This guide explains how long survey data is kept in CheckTick, when it will be d
 ## Overview
 
 CheckTick follows a **time-limited storage** principle:
+
 - Survey data is **not kept indefinitely**
 - Retention periods are **clearly defined** and **enforced automatically**
 - Users receive **multiple warnings** before deletion
@@ -22,6 +23,7 @@ This policy balances the need for data access with data protection obligations a
 The retention period starts when a survey is **closed**:
 
 **Before Closure:**
+
 - Responses are being collected
 - No retention period applies
 - Data is kept until survey is closed
@@ -38,12 +40,14 @@ The retention period starts when a survey is **closed**:
 **Default: 6 months** from survey closure
 
 This is sufficient time for:
+
 - Analyzing results
 - Writing reports
 - Publishing findings
 - Archiving important data elsewhere
 
 **Example timeline:**
+
 - Survey closed: January 1, 2025
 - Retention period: 6 months
 - First warning: June 1, 2025 (1 month remaining)
@@ -58,6 +62,7 @@ This is sufficient time for:
 You can extend retention up to **24 months** (2 years) from closure.
 
 **Why the limit?**
+
 - Minimizes data protection risks
 - Reduces storage costs
 - Encourages timely analysis
@@ -66,20 +71,24 @@ You can extend retention up to **24 months** (2 years) from closure.
 ### Who Can Extend
 
 **Survey Creators:**
+
 - Can extend retention for **their own surveys**
 - Each survey treated separately
 - No organization-wide permissions needed
 
 **Organization Owners:**
+
 - Can extend retention for **any survey in the organization**
 - Can set organization-wide policies
 - Receive warnings for all surveys
 
 **Data Custodians:**
+
 - **Cannot extend retention** - Read-only access
 - Must ask survey creator or organization owner
 
 **Editors/Viewers:**
+
 - **Cannot extend retention** - No data access
 
 ### How to Extend Retention
@@ -87,6 +96,7 @@ You can extend retention up to **24 months** (2 years) from closure.
 **Step 1: Receive Warning**
 
 You'll receive emails at:
+
 - **1 month** before deletion
 - **1 week** before deletion
 - **1 day** before deletion
@@ -103,6 +113,7 @@ Each email contains a link to extend retention.
 **Step 3: Request Extension**
 
 Click "Extend Retention Period" and choose:
+
 - **3 months** - Short-term extension
 - **6 months** - Standard extension
 - **12 months** - Long-term extension
@@ -120,6 +131,7 @@ You must explain why you need more time:
 - Research project timeline
 
 **Invalid reasons:**
+
 - "Just in case"
 - "Might need it later"
 - No specific purpose
@@ -135,12 +147,14 @@ You must explain why you need more time:
 ### Extension Limits
 
 **Per Survey:**
+
 - **Maximum total retention:** 24 months from closure
 - **Number of extensions:** Unlimited (within 24-month limit)
 - **Minimum extension:** 1 month
 - **Maximum single extension:** 12 months
 
 **Example:**
+
 - Survey closed: January 1, 2025
 - Initial retention: 6 months (expires July 1, 2025)
 - First extension: +6 months (expires January 1, 2026)
@@ -155,9 +169,11 @@ You must explain why you need more time:
 You receive automatic warnings at:
 
 #### 1 Month Warning
+
 **Sent:** 30 days before deletion
 **Subject:** "Survey data will be deleted in 1 month"
 **Contains:**
+
 - Survey name and ID
 - Current expiry date
 - How to extend retention
@@ -166,9 +182,11 @@ You receive automatic warnings at:
 **Action:** Consider if you still need the data. Download now if unsure.
 
 #### 1 Week Warning
+
 **Sent:** 7 days before deletion
 **Subject:** "Survey data will be deleted in 1 week"
 **Contains:**
+
 - Survey name and ID
 - Exact deletion date and time
 - Last chance to extend
@@ -177,9 +195,11 @@ You receive automatic warnings at:
 **Action:** Make final decision. Download data if needed. Extend if necessary.
 
 #### 1 Day Warning
+
 **Sent:** 24 hours before deletion
 **Subject:** "URGENT: Survey data will be deleted tomorrow"
 **Contains:**
+
 - Survey name and ID
 - Deletion happens in 24 hours
 - This is your final warning
@@ -190,18 +210,22 @@ You receive automatic warnings at:
 ### Who Receives Warnings
 
 **Survey Creators:**
+
 - Warnings for their own surveys
 - One email per survey
 
 **Organization Owners:**
+
 - Warnings for all surveys in organization
 - Daily digest (not per-survey emails)
 - Summary of upcoming deletions
 
 **Data Custodians:**
+
 - Warnings for assigned surveys only
 
 **Administrators:**
+
 - Weekly summary of all upcoming deletions
 - Organization-wide statistics
 
@@ -210,11 +234,13 @@ You receive automatic warnings at:
 You **cannot** snooze or dismiss warnings.
 
 **Why?**
+
 - Deletion is permanent
 - Multiple reminders prevent accidents
 - Ensuring informed decisions
 
 **Too many emails?**
+
 - Set email filters
 - Unsubscribe from specific surveys (if you're not responsible)
 - Ask organization owner to reassign data custodian
@@ -226,18 +252,21 @@ You **cannot** snooze or dismiss warnings.
 When the retention period expires:
 
 **Day 0 (Deletion Date):**
+
 - Survey data is **soft deleted**
 - No longer accessible in the UI
 - Marked for permanent deletion
 - 30-day grace period begins
 
 **Grace Period (Days 1-30):**
+
 - Data still exists in database
 - **Can be recovered** by administrators
 - Not visible to users
 - Backups still include the data
 
 **Purpose of Grace Period:**
+
 - Protects against accidental deletion
 - Allows for "oops" moments
 - Organization owner can restore if needed
@@ -245,6 +274,7 @@ When the retention period expires:
 ### Recovery During Grace Period
 
 **Who Can Recover:**
+
 - **Organization owners** only
 - System administrators (on request)
 
@@ -258,6 +288,7 @@ When the retention period expires:
 6. Must provide justification for audit trail
 
 **Limitations:**
+
 - **Must be within 30 days** of soft deletion
 - **Cannot exceed 24-month total limit** from original closure
 - **Recovery is logged** and reported
@@ -265,41 +296,76 @@ When the retention period expires:
 ### Hard Deletion (Permanent)
 
 **After 30 days:**
+
 - Survey data is **hard deleted**
 - **Completely removed** from database
 - **Backups are purged**
 - **Cannot be recovered** by anyone
 - **Deletion is logged** for compliance
 
+**Cryptographic Key Erasure** (for encrypted surveys):
+
+For surveys with patient data encryption, hard deletion includes **cryptographic key erasure** to ensure GDPR compliance:
+
+1. **All encryption keys are overwritten** with cryptographically secure random data:
+   - Password-encrypted survey key
+   - Recovery phrase-encrypted survey key
+   - OIDC-encrypted survey key (if using SSO)
+   - Organization-encrypted survey key (if applicable)
+
+2. **Keys are purged** from HashiCorp Vault (if platform key escrow is enabled)
+
+3. **Why this matters**: Even if database backups exist somewhere, the encrypted patient data cannot be recovered because the encryption keys have been cryptographically erased
+
+4. **Audit trail**: Key erasure is logged before deletion, recording:
+   - Which keys were overwritten
+   - Timestamp of erasure
+   - User who initiated deletion
+   - Survey ID and metadata
+
 **What is Deleted:**
-- All survey responses
+
+- All survey responses (including encrypted patient data)
 - Personally identifiable information (PII)
 - Export history (summary retained for audit)
 - Attachments and uploaded files
 - Associated metadata
+- **All encryption keys** (overwritten with random data first)
 
 **What is Retained:**
+
 - Survey structure (questions, groups)
 - Audit log summary (who, when, not data content)
 - Aggregated statistics (if anonymized)
 - Download history (who downloaded, when, not data)
+- Key erasure audit records (proves compliance)
+
+**Security Properties:**
+
+- **Irreversible**: Once keys are overwritten, encrypted data cannot be recovered
+- **GDPR Compliant**: Meets Article 17 (Right to Erasure) requirements
+- **Auditable**: Complete trail of deletion and key erasure
+- **Defense in Depth**: Multiple layers (key erasure + data deletion + backup purge)
 
 ## Special Cases
 
 ### Legal Holds
 
 **What is a Legal Hold?**
+
 - Prevents automatic deletion
 - Used during legal proceedings, investigations, or audits
 - Overrides retention period
 - Requires documented reason
 
 **Who Can Place Legal Holds:**
+
 - **Organization owners only**
 - Must provide justification
 - Cannot be applied retroactively to hard-deleted data
 
 **Effect:**
+
 - Deletion warnings stop
 - Retention period frozen
 - Data export still available
@@ -317,6 +383,7 @@ When the retention period expires:
 **What happens when survey creator leaves?**
 
 If the creator is removed from the organization:
+
 - **Ownership transfers** to organization owner
 - Retention settings **remain unchanged**
 - Organization owner receives future warnings
@@ -368,12 +435,14 @@ If the creator is removed from the organization:
 ### Didn't Receive Warnings
 
 **Check:**
+
 - Email address is correct in your profile
 - Warnings not in spam folder
 - You have appropriate role (Creator/Owner/Custodian)
 - Email notifications enabled in settings
 
 **Fix:**
+
 - Update your email address
 - Check spam filters
 - Contact organization owner
@@ -382,6 +451,7 @@ If the creator is removed from the organization:
 ### Warning Says "Cannot Extend"
 
 **Possible reasons:**
+
 - Already at 24-month maximum
 - Survey has legal hold (cannot extend, already protected)
 - You don't have permission (not Creator or Owner)
@@ -390,12 +460,14 @@ If the creator is removed from the organization:
 ### Accidentally Deleted
 
 **Within 30 days:**
+
 - Contact organization owner immediately
 - Request recovery
 - Explain situation
 - Provide justification
 
 **After 30 days:**
+
 - **Cannot be recovered**
 - Data is permanently gone
 - Learn from the experience
@@ -404,6 +476,7 @@ If the creator is removed from the organization:
 ### Extension Request Rejected
 
 **Organization policies may:**
+
 - Limit maximum retention
 - Require approval for extensions over certain length
 - Prohibit extensions without strong justification
@@ -416,6 +489,7 @@ If the creator is removed from the organization:
 ### Data Minimization
 
 This policy implements the **data minimization principle** (GDPR Article 5):
+
 - Data kept only as long as necessary
 - Automatic deletion reduces risk
 - Clear retention periods
@@ -424,6 +498,7 @@ This policy implements the **data minimization principle** (GDPR Article 5):
 ### Right to Erasure
 
 Participants may request deletion under "right to be forgotten" (GDPR Article 17):
+
 - Deletion supersedes retention policy
 - Must be actioned within 30 days
 - Survey responses are removed immediately
@@ -432,6 +507,7 @@ Participants may request deletion under "right to be forgotten" (GDPR Article 17
 ### Accountability
 
 This policy ensures **accountability** (GDPR Article 5):
+
 - All retention decisions are logged
 - Justifications required and retained
 - Audit trail for compliance demonstration
@@ -440,6 +516,7 @@ This policy ensures **accountability** (GDPR Article 5):
 ## Getting Help
 
 **For questions about:**
+
 - **Extending retention:** Contact your organization owner
 - **Warnings not received:** Check your profile email settings
 - **Recovery:** Contact organization owner (within 30 days only)
