@@ -22,7 +22,13 @@ from django.db import transaction
 from django.utils import timezone
 
 if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractUser
+
     from ..models import Survey
+
+    UserType = AbstractUser
+else:
+    UserType = object
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -168,6 +174,137 @@ class RetentionService:
         )
 
     @classmethod
+    def send_retention_extension_email(
+        cls,
+        survey: Survey,
+        extended_by: UserType,
+        months_added: int,
+        old_deletion_date: timezone.datetime,
+        new_deletion_date: timezone.datetime,
+        reason: str,
+    ) -> None:
+        """
+        Send email notification when retention period is extended.
+
+        Args:
+            survey: Survey with extended retention
+            extended_by: User who extended retention
+            months_added: Number of months added
+            old_deletion_date: Previous deletion date
+            new_deletion_date: New deletion date
+            reason: Justification for extension
+        """
+        from django.template.loader import render_to_string
+
+        from checktick_app.core.email_utils import (
+            get_platform_branding,
+            send_branded_email,
+        )
+
+        owner_email = survey.owner.email
+
+        subject = f"Retention Extended: {survey.name}"
+
+        branding = get_platform_branding()
+
+        markdown_content = render_to_string(
+            "emails/data_governance/retention_extended.md",
+            {
+                "survey": survey,
+                "extended_by": extended_by,
+                "old_deletion_date": old_deletion_date.strftime("%B %d, %Y"),
+                "new_deletion_date": new_deletion_date.strftime("%B %d, %Y"),
+                "months_added": months_added,
+                "extension_date": timezone.now().strftime("%B %d, %Y at %I:%M %p"),
+                "reason": reason,
+                "brand_title": branding["title"],
+                "site_url": getattr(settings, "SITE_URL", "http://localhost:8000"),
+            },
+        )
+
+        send_branded_email(
+            to_email=owner_email,
+            subject=subject,
+            markdown_content=markdown_content,
+            branding=branding,
+        )
+
+        # Also email org owner if different
+        if (
+            survey.organization
+            and survey.organization.owner
+            and survey.organization.owner.email != owner_email
+        ):
+            send_branded_email(
+                to_email=survey.organization.owner.email,
+                subject=subject,
+                markdown_content=markdown_content,
+                branding=branding,
+            )
+
+    @classmethod
+    def send_deletion_cancelled_email(
+        cls, survey: Survey, cancelled_by: UserType
+    ) -> None:
+        """
+        Send email notification when soft deletion is cancelled.
+
+        Args:
+            survey: Survey that was restored
+            cancelled_by: User who cancelled the deletion
+        """
+        from django.template.loader import render_to_string
+
+        from checktick_app.core.email_utils import (
+            get_platform_branding,
+            send_branded_email,
+        )
+
+        owner_email = survey.owner.email
+
+        subject = f"Survey Deletion Cancelled: {survey.name}"
+
+        branding = get_platform_branding()
+
+        # Note: deleted_at should be cleared by now, but we can still reference closure
+        markdown_content = render_to_string(
+            "emails/data_governance/deletion_cancelled.md",
+            {
+                "survey": survey,
+                "cancelled_by": cancelled_by,
+                "deletion_date": "(cancelled)",
+                "closure_date": (
+                    survey.closed_at.strftime("%B %d, %Y")
+                    if survey.closed_at
+                    else "N/A"
+                ),
+                "cancellation_date": timezone.now().strftime("%B %d, %Y at %I:%M %p"),
+                "brand_title": branding["title"],
+                "site_url": getattr(settings, "SITE_URL", "http://localhost:8000"),
+            },
+        )
+
+        send_branded_email(
+            to_email=owner_email,
+            subject=subject,
+            markdown_content=markdown_content,
+            branding=branding,
+        )
+
+        # Also email org owner if different
+        if (
+            survey.organization
+            and survey.organization.owner
+            and survey.organization.owner.email != owner_email
+        ):
+            send_branded_email(
+                to_email=survey.organization.owner.email,
+                subject=subject,
+                markdown_content=markdown_content,
+                branding=branding,
+            )
+
+    @classmethod
     @transaction.atomic
     def process_automatic_deletions(cls) -> dict[str, int]:
         """
@@ -227,7 +364,7 @@ class RetentionService:
         cls,
         survey: Survey,
         months: int,
-        user: User,
+        user: UserType,
         reason: str,
     ) -> None:
         """
@@ -280,8 +417,15 @@ class RetentionService:
             approved_at=timezone.now(),
         )
 
-        # Deletion warnings handled by daily cron job (process_data_governance command)
-        # TODO: Send confirmation email to user about retention extension
+        # Send confirmation email to user about retention extension
+        cls.send_retention_extension_email(
+            survey=survey,
+            extended_by=user,
+            months_added=months,
+            old_deletion_date=previous_deletion_date,
+            new_deletion_date=survey.deletion_date,
+            reason=reason,
+        )
 
     @classmethod
     def get_retention_extension_history(cls, survey: Survey) -> list:
@@ -325,12 +469,13 @@ class RetentionService:
 
     @classmethod
     @transaction.atomic
-    def cancel_soft_deletion(cls, survey: Survey) -> None:
+    def cancel_soft_deletion(cls, survey: Survey, user: UserType) -> None:
         """
         Cancel a soft deletion before hard deletion occurs.
 
         Args:
             survey: Survey to restore
+            user: User cancelling the deletion
 
         Raises:
             ValueError: If survey not soft deleted or already hard deleted
@@ -346,5 +491,5 @@ class RetentionService:
         survey.hard_deletion_date = None
         survey.save(update_fields=["deleted_at", "hard_deletion_date"])
 
-        # Deletion warnings handled by daily cron job (process_data_governance command)
-        # TODO: Send confirmation email about deletion cancellation
+        # Send confirmation email about deletion cancellation
+        cls.send_deletion_cancelled_email(survey=survey, cancelled_by=user)

@@ -334,21 +334,21 @@ class TestRetentionService:
         assert can_delete is False
         assert "already deleted" in reason
 
-    def test_cancel_soft_deletion(self, survey):
+    def test_cancel_soft_deletion(self, survey, user):
         """Should be able to cancel soft deletion."""
         survey.soft_delete()
         assert survey.deleted_at is not None
 
-        RetentionService.cancel_soft_deletion(survey)
+        RetentionService.cancel_soft_deletion(survey, user)
         survey.refresh_from_db()
 
         assert survey.deleted_at is None
         assert survey.hard_deletion_date is None
 
-    def test_cancel_soft_deletion_fails_for_undeleted(self, survey):
+    def test_cancel_soft_deletion_fails_for_undeleted(self, survey, user):
         """Cannot cancel deletion for survey that's not deleted."""
         with pytest.raises(ValueError, match="not deleted"):
-            RetentionService.cancel_soft_deletion(survey)
+            RetentionService.cancel_soft_deletion(survey, user)
 
     def test_get_retention_extension_history(self, closed_survey, user):
         """Should return all extensions for a survey."""

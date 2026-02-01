@@ -26,14 +26,14 @@
       </div>
       <div class="prose max-w-md mx-auto mb-6">
         <h3 class="text-lg font-semibold">{% trans "What you can do:" %}</h3>
-        <ul class="text-left">
+        <ul class="text-left"> 
           <li>{% trans "Wait for the cooldown period to expire (1 hour)" %}</li>
           <li>{% trans "Reset your password if you've forgotten it" %}</li>
           <li>{% trans "Contact your system administrator for help" %}</li>
         </ul>
       </div>
       <div class="flex gap-3 justify-center">
-        <a href="/accounts/password/reset/" class="btn btn-primary">{% trans "Reset Password" %}</a>
+        <a href="{{ password_reset_url }}" class="btn btn-primary">{% trans "Reset Password" %}</a>
         <a href="/" class="btn btn-ghost">{% trans "Go Home" %}</a>
       </div>
     </div>

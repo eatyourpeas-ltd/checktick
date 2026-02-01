@@ -2163,8 +2163,9 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
             survey.is_closed and can_export_survey_data(request.user, survey)
         ),
         # Export history (last 5 exports for this survey)
-        "recent_exports": survey.exports.select_related("created_by")
-        .order_by("-created_at")[:5],
+        "recent_exports": survey.exports.select_related("created_by").order_by(
+            "-created_at"
+        )[:5],
         # Data subject requests
         "has_pending_dsr": survey.has_pending_dsr,
         "dsr_warning_message": survey.dsr_warning_message,

@@ -245,7 +245,11 @@ This is an automated notification for audit purposes.
             logger.error(f"Failed to send export notification to survey owner: {e}")
 
     # Email org owner if survey belongs to an organization
-    if survey.organization and survey.organization.owner and survey.organization.owner.email:
+    if (
+        survey.organization
+        and survey.organization.owner
+        and survey.organization.owner.email
+    ):
         if survey.organization.owner.email != survey.owner.email:
             try:
                 send_mail(
@@ -259,9 +263,7 @@ This is an automated notification for audit purposes.
                 import logging
 
                 logger = logging.getLogger(__name__)
-                logger.error(
-                    f"Failed to send export notification to org owner: {e}"
-                )
+                logger.error(f"Failed to send export notification to org owner: {e}")
 
 
 def _send_export_download_notifications(
@@ -299,12 +301,14 @@ This is an automated notification for audit purposes.
             import logging
 
             logger = logging.getLogger(__name__)
-            logger.error(
-                f"Failed to send download notification to survey owner: {e}"
-            )
+            logger.error(f"Failed to send download notification to survey owner: {e}")
 
     # Email org owner if different from survey owner
-    if survey.organization and survey.organization.owner and survey.organization.owner.email:
+    if (
+        survey.organization
+        and survey.organization.owner
+        and survey.organization.owner.email
+    ):
         if survey.organization.owner.email != survey.owner.email:
             try:
                 send_mail(
@@ -318,9 +322,7 @@ This is an automated notification for audit purposes.
                 import logging
 
                 logger = logging.getLogger(__name__)
-                logger.error(
-                    f"Failed to send download notification to org owner: {e}"
-                )
+                logger.error(f"Failed to send download notification to org owner: {e}")
 
 
 # ============================================================================
