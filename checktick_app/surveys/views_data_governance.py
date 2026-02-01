@@ -16,12 +16,13 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.core.mail import send_mail
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .models import DataCustodian, DataExport, LegalHold, Survey
+from .models import AuditLog, DataCustodian, DataExport, LegalHold, Survey
 from .permissions import (
     require_can_export_survey_data,
     require_can_extend_retention,
@@ -29,6 +30,7 @@ from .permissions import (
     require_can_manage_legal_hold,
 )
 from .services import ExportService, RetentionService
+from .views import get_survey_key_from_session
 
 # ============================================================================
 # Data Export
@@ -67,11 +69,40 @@ def survey_export_create(request: HttpRequest, slug: str) -> HttpResponse:
                 request, "surveys/data_governance/export_create.html", context
             )
 
-        try:
-            export = ExportService.create_export(survey, request.user, password)
+        # Get survey key from session if survey is encrypted
+        survey_key = None
+        if survey.is_encrypted:
+            survey_key = get_survey_key_from_session(request, slug)
+            if not survey_key:
+                messages.error(
+                    request,
+                    "Please unlock the survey before exporting encrypted data.",
+                )
+                return redirect("survey_unlock", slug=slug)
 
-            # Send email notification to organization administrators
-            _send_export_notification(export, request.user, survey)
+        try:
+            export = ExportService.create_export(
+                survey, request.user, password, survey_key=survey_key
+            )
+
+            # Log export creation in audit log
+            AuditLog.log_data_governance(
+                actor=request.user,
+                action=AuditLog.Action.DATA_EXPORTED,
+                survey=survey,
+                message=f"Survey data export created: {export.response_count} responses, "
+                f"encrypted={'Yes' if export.is_encrypted else 'No'}",
+                request=request,
+                metadata={
+                    "export_id": str(export.id),
+                    "response_count": export.response_count,
+                    "is_encrypted": export.is_encrypted,
+                    "survey_encrypted": survey.is_encrypted,
+                },
+            )
+
+            # Send email notifications to survey owner and org owner
+            _send_export_creation_notifications(survey, request.user, export)
 
             messages.success(
                 request,
@@ -133,18 +164,163 @@ def survey_export_file(
         messages.error(request, "Invalid or expired download link.")
         return redirect("surveys:dashboard", slug=slug)
 
-    # TODO: Retrieve CSV from object storage
-    # For now, generate on-the-fly
-    csv_data = ExportService._generate_csv(survey)
+    # Get survey key from session if survey is encrypted
+    survey_key = None
+    if survey.is_encrypted:
+        survey_key = get_survey_key_from_session(request, slug)
+        if not survey_key:
+            messages.error(
+                request,
+                "Please unlock the survey before downloading encrypted data.",
+            )
+            return redirect("survey_unlock", slug=slug)
+
+    # Generate CSV on-the-fly (more secure than object storage)
+    csv_data = ExportService._generate_csv(survey, survey_key=survey_key)
 
     # Record download
     ExportService.record_download(export)
+
+    # Log download in audit log
+    AuditLog.log_data_governance(
+        actor=request.user,
+        action=AuditLog.Action.DATA_EXPORTED,
+        survey=survey,
+        message=f"Survey data export downloaded: {export.response_count} responses, "
+        f"download #{export.download_count}",
+        request=request,
+        metadata={
+            "export_id": str(export.id),
+            "response_count": export.response_count,
+            "download_count": export.download_count,
+            "is_encrypted": export.is_encrypted,
+        },
+    )
+
+    # Send email notification about download
+    _send_export_download_notifications(survey, request.user, export)
 
     # Return CSV file
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="survey_{slug}_export.csv"'
 
     return response
+
+
+def _send_export_creation_notifications(
+    survey: Survey, exporter: "User", export: DataExport
+) -> None:
+    """Send email notifications when export is created."""
+    from django.conf import settings
+
+    subject = f"[CheckTick] Data export created: {survey.title}"
+    message = f"""
+A data export has been created for survey: {survey.title}
+
+Export Details:
+- Created by: {exporter.get_full_name() or exporter.username} ({exporter.email})
+- Response count: {export.response_count}
+- Encrypted: {'Yes' if export.is_encrypted else 'No'}
+- Created at: {export.created_at.strftime('%Y-%m-%d %H:%M UTC')}
+- Export ID: {export.id}
+
+This is an automated notification for audit purposes.
+"""
+
+    # Email survey owner
+    if survey.owner and survey.owner.email:
+        try:
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[survey.owner.email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            # Log but don't fail the request
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to send export notification to survey owner: {e}")
+
+    # Email org owner if survey belongs to an organization
+    if survey.organization and survey.organization.owner and survey.organization.owner.email:
+        if survey.organization.owner.email != survey.owner.email:
+            try:
+                send_mail(
+                    subject=subject,
+                    message=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[survey.organization.owner.email],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.error(
+                    f"Failed to send export notification to org owner: {e}"
+                )
+
+
+def _send_export_download_notifications(
+    survey: Survey, downloader: "User", export: DataExport
+) -> None:
+    """Send email notifications when export is downloaded."""
+    from django.conf import settings
+
+    subject = f"[CheckTick] Data export downloaded: {survey.title}"
+    message = f"""
+A data export has been downloaded for survey: {survey.title}
+
+Download Details:
+- Downloaded by: {downloader.get_full_name() or downloader.username} ({downloader.email})
+- Response count: {export.response_count}
+- Download count: {export.download_count}
+- Export created: {export.created_at.strftime('%Y-%m-%d %H:%M UTC')}
+- Downloaded at: {export.downloaded_at.strftime('%Y-%m-%d %H:%M UTC') if export.downloaded_at else 'N/A'}
+- Export ID: {export.id}
+
+This is an automated notification for audit purposes.
+"""
+
+    # Email survey owner
+    if survey.owner and survey.owner.email:
+        try:
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[survey.owner.email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.error(
+                f"Failed to send download notification to survey owner: {e}"
+            )
+
+    # Email org owner if different from survey owner
+    if survey.organization and survey.organization.owner and survey.organization.owner.email:
+        if survey.organization.owner.email != survey.owner.email:
+            try:
+                send_mail(
+                    subject=subject,
+                    message=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[survey.organization.owner.email],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.error(
+                    f"Failed to send download notification to org owner: {e}"
+                )
 
 
 # ============================================================================
@@ -402,63 +578,8 @@ def survey_custodian_revoke(
 # ============================================================================
 # Email Notification Helpers
 # ============================================================================
-
-
-def _send_export_notification(export: DataExport, user: User, survey: Survey) -> None:
-    """
-    Send email notification to organization administrators when data is exported.
-
-    Per data governance requirements, org admins must be notified of all data downloads.
-    """
-    from django.template.loader import render_to_string
-
-    from checktick_app.core.email_utils import get_platform_branding, send_branded_email
-
-    # Get organization administrators
-    recipients = []
-    if survey.organization:
-        # Organization owner
-        recipients.append(survey.organization.owner.email)
-
-        # Organization admins (if we have that model)
-        # TODO: Add org admins when OrganizationMember model is implemented
-
-    # If no organization, notify survey owner
-    if not recipients:
-        recipients.append(survey.owner.email)
-
-    subject = f"Data Export Alert: {survey.name}"
-
-    export_time = export.created_at.strftime("%B %d, %Y at %I:%M %p")
-    expiry_time = export.download_url_expires_at.strftime("%B %d, %Y at %I:%M %p")
-
-    branding = get_platform_branding()
-
-    # Send to all recipients
-    for recipient_email in recipients:
-        # Get recipient name if possible
-        recipient_name = recipient_email.split("@")[0]  # Fallback
-
-        markdown_content = render_to_string(
-            "emails/data_governance/export_notification.md",
-            {
-                "recipient_name": recipient_name,
-                "survey": survey,
-                "export_user": user,
-                "export_time": export_time,
-                "export": export,
-                "expiry_time": expiry_time,
-                "brand_title": branding["title"],
-                "site_url": getattr(settings, "SITE_URL", "http://localhost:8000"),
-            },
-        )
-
-        send_branded_email(
-            to_email=recipient_email,
-            subject=subject,
-            markdown_content=markdown_content,
-            branding=branding,
-        )
+# Helper Functions
+# ============================================================================
 
 
 def _send_custodian_assignment_notification(

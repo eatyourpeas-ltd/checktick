@@ -6,6 +6,7 @@ from django.utils.html import format_html
 from .models import (
     CollectionDefinition,
     CollectionItem,
+    DataExport,
     DataSet,
     IdentityVerification,
     Organization,
@@ -1480,6 +1481,80 @@ class RecoveryAuditEntryAdmin(admin.ModelAdmin):
         if obj.actor_email:
             return f"{obj.actor_type}: {obj.actor_email}"
         return obj.actor_type
+
+
+@admin.register(DataExport)
+class DataExportAdmin(admin.ModelAdmin):
+    """Admin interface for DataExport - provides audit trail of all exports."""
+
+    list_display = (
+        "id",
+        "survey_link",
+        "created_by",
+        "response_count",
+        "created_at",
+        "downloaded_status",
+        "download_count",
+        "is_encrypted",
+    )
+    list_filter = (
+        "is_encrypted",
+        "export_format",
+        "created_at",
+        "downloaded_at",
+    )
+    search_fields = (
+        "id",
+        "survey__title",
+        "survey__slug",
+        "created_by__username",
+        "created_by__email",
+    )
+    readonly_fields = (
+        "id",
+        "survey",
+        "created_by",
+        "created_at",
+        "download_token",
+        "download_url_expires_at",
+        "downloaded_at",
+        "download_count",
+        "file_size_bytes",
+        "response_count",
+        "export_format",
+        "is_encrypted",
+        "encryption_key_id",
+    )
+    ordering = ("-created_at",)
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        """Prevent creating exports through admin - use export view instead."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Prevent editing exports - they are immutable audit records."""
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Only superusers can delete exports for compliance cleanup."""
+        return request.user.is_superuser
+
+    @admin.display(description="Survey", ordering="survey__title")
+    def survey_link(self, obj):
+        """Display clickable link to survey."""
+        if obj.survey:
+            return format_html(
+                '<a href="/admin/surveys/survey/{}/change/">{}</a>',
+                obj.survey.id,
+                obj.survey.title,
+            )
+        return "-"
+
+    @admin.display(description="Downloaded", boolean=True)
+    def downloaded_status(self, obj):
+        """Show if export has been downloaded."""
+        return obj.downloaded_at is not None
 
 
 # Configure admin site branding after admin is imported
