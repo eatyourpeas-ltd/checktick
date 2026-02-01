@@ -3280,6 +3280,10 @@ class AuditLog(models.Model):
         SURVEY = "survey", "Survey"
         SECURITY = "security", "Security"  # Authentication, 2FA, password events
         ACCOUNT = "account", "Account"  # User account changes
+        DATA_GOVERNANCE = (
+            "data_governance",
+            "Data Governance",
+        )  # Exports, retention, deletion
 
     class Action(models.TextChoices):
         # Original actions
@@ -3307,6 +3311,8 @@ class AuditLog(models.Model):
         EMAIL_CHANGED = "email_changed", "Email Address Changed"
         USER_CREATED = "user_created", "User Account Created"
         USER_DEACTIVATED = "user_deactivated", "User Account Deactivated"
+        # Data governance actions
+        DATA_EXPORTED = "data_exported", "Data Exported"
 
     class Severity(models.TextChoices):
         INFO = "info", "Information"
@@ -3438,6 +3444,53 @@ class AuditLog(models.Model):
             username_attempted=username_attempted,
             metadata=metadata or {},
             target_user=target_user,
+        )
+
+    @classmethod
+    def log_data_governance(
+        cls,
+        action: str,
+        actor,
+        survey,
+        request=None,
+        message: str = "",
+        metadata: dict = None,
+    ) -> "AuditLog":
+        """
+        Convenience method to log data governance events (exports, deletions, retention).
+
+        Args:
+            action: Type of action from Action choices (e.g., DATA_EXPORTED)
+            actor: User who performed the action
+            survey: Survey affected by the action
+            request: HTTP request object for IP/user-agent extraction
+            message: Human-readable description
+            metadata: Additional structured data
+
+        Returns:
+            The created AuditLog instance
+        """
+        full_metadata = metadata or {}
+        full_metadata["survey_id"] = str(survey.id)
+        full_metadata["survey_slug"] = survey.slug
+        full_metadata["survey_name"] = survey.name
+
+        # Extract IP and user agent from request
+        ip_address = None
+        user_agent = ""
+        if request:
+            ip_address = cls._get_client_ip(request)
+            user_agent = request.META.get("HTTP_USER_AGENT", "")[:1000]
+
+        return cls.objects.create(
+            actor=actor,
+            scope=cls.Scope.DATA_GOVERNANCE,
+            action=action,
+            severity=cls.Severity.INFO,  # Data governance events are informational
+            message=message,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            metadata=full_metadata,
         )
 
     @staticmethod

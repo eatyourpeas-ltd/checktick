@@ -71,7 +71,7 @@ def survey_export_create(request: HttpRequest, slug: str) -> HttpResponse:
 
         # Get survey key from session if survey is encrypted
         survey_key = None
-        if survey.is_encrypted:
+        if survey.requires_whole_response_encryption():
             survey_key = get_survey_key_from_session(request, slug)
             if not survey_key:
                 messages.error(
@@ -97,7 +97,7 @@ def survey_export_create(request: HttpRequest, slug: str) -> HttpResponse:
                     "export_id": str(export.id),
                     "response_count": export.response_count,
                     "is_encrypted": export.is_encrypted,
-                    "survey_encrypted": survey.is_encrypted,
+                    "survey_encrypted": survey.requires_whole_response_encryption(),
                 },
             )
 
@@ -166,7 +166,7 @@ def survey_export_file(
 
     # Get survey key from session if survey is encrypted
     survey_key = None
-    if survey.is_encrypted:
+    if survey.requires_whole_response_encryption():
         survey_key = get_survey_key_from_session(request, slug)
         if not survey_key:
             messages.error(
@@ -213,9 +213,9 @@ def _send_export_creation_notifications(
     """Send email notifications when export is created."""
     from django.conf import settings
 
-    subject = f"[CheckTick] Data export created: {survey.title}"
+    subject = f"[CheckTick] Data export created: {survey.name}"
     message = f"""
-A data export has been created for survey: {survey.title}
+A data export has been created for survey: {survey.name}
 
 Export Details:
 - Created by: {exporter.get_full_name() or exporter.username} ({exporter.email})
@@ -272,9 +272,9 @@ def _send_export_download_notifications(
     """Send email notifications when export is downloaded."""
     from django.conf import settings
 
-    subject = f"[CheckTick] Data export downloaded: {survey.title}"
+    subject = f"[CheckTick] Data export downloaded: {survey.name}"
     message = f"""
-A data export has been downloaded for survey: {survey.title}
+A data export has been downloaded for survey: {survey.name}
 
 Download Details:
 - Downloaded by: {downloader.get_full_name() or downloader.username} ({downloader.email})
