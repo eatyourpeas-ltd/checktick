@@ -69,6 +69,8 @@ jobs:
           key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
           restore-keys: |
             venv-${{ runner.os }}-
+      - name: Upgrade pip (CVE-2026-1703)
+        run: pip install --upgrade pip>=26.0
       - name: Install Poetry
         run: pip install poetry==2.2.1
       - name: Install dependencies
