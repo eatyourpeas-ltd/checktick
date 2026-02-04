@@ -25,6 +25,7 @@ CheckTick's encryption system is designed with redundancy and recovery in mind. 
 **Data Location**: Browser local storage only
 
 **Disaster Scenarios:**
+
 | Scenario | Impact | Recovery |
 |----------|--------|----------|
 | Browser data cleared | Data lost | No recovery possible |
@@ -48,6 +49,7 @@ CheckTick's encryption system is designed with redundancy and recovery in mind. 
 | Email access lost | Can't receive notifications | Update email via support |
 
 **Recovery Priority Order:**
+
 1. Password (instant)
 2. Recovery phrase (instant)
 3. Platform recovery (48-96 hours)
@@ -76,6 +78,7 @@ Same as Individual, with faster recovery:
 | Entire team loses access | All team surveys locked | Organization admin recovery |
 
 **Recovery Hierarchy:**
+
 1. Team admin recovery (instant)
 2. Organization owner recovery (instant)
 3. Platform recovery (if organization also unavailable)
@@ -174,6 +177,7 @@ If Vault's storage backend is corrupted:
 1. **Stop Vault immediately** to prevent further damage
 
 2. **Restore from backup** (if available):
+
    ```bash
    # Stop Vault
    docker stop vault-container
@@ -206,11 +210,13 @@ If Vault's storage backend is corrupted:
 ⚠️ **Critical**: Without unseal keys, Vault data is unrecoverable by design.
 
 Options:
+
 1. Re-initialize Vault (loses all stored secrets)
 2. Users fall back to password/recovery phrase access
 3. Contact HashiCorp support (Enterprise only)
 
 **Prevention:**
+
 - Store unseal keys in multiple secure locations
 - Use Shamir's Secret Sharing (default) - need 3 of 4 keys
 - Document key storage locations securely
@@ -232,12 +238,14 @@ While Vault is unavailable:
 ### Team Admin Leaves
 
 **Before they leave:**
+
 1. Transfer admin role to another team member
 2. Review their recovery actions in audit log
 3. Revoke their team admin access
 4. Update emergency contact list
 
 **If they've already left:**
+
 1. Organization owner assigns new team admin
 2. Review audit logs for any concerning activity
 3. Consider rotating team encryption key
@@ -245,6 +253,7 @@ While Vault is unavailable:
 ### Organization Owner Leaves
 
 **Before they leave:**
+
 1. **Transfer ownership** to designated successor
 2. Update Vault access credentials
 3. Transfer custodian component responsibility
@@ -252,6 +261,7 @@ While Vault is unavailable:
 5. Review and document all admin procedures
 
 **If they've already left without handover:**
+
 1. Contact CheckTick support immediately
 2. Provide proof of authority (board resolution, HR confirmation)
 3. Platform will facilitate emergency ownership transfer
@@ -260,6 +270,7 @@ While Vault is unavailable:
 ### Platform Admin Changes
 
 **When platform admins change:**
+
 1. Rotate custodian component
 2. Update Vault access policies
 3. Revoke old admin credentials
@@ -315,6 +326,7 @@ If organization disappears suddenly (bankruptcy, etc.):
 The custodian component is critical and must be backed up securely:
 
 **Primary Storage:**
+
 - Secure safe or lockbox
 - Limited access (2-3 designated people)
 - Access logging
@@ -507,11 +519,14 @@ See [Audit Logging and Notifications](audit-logging-and-notifications.md) for de
 ## Getting Help
 
 **For business continuity planning:**
+
 - Email: support@checktick.uk
 
 **For active incidents:**
+
 - Email: emergency@checktick.uk
 - Include: Incident description, impact, urgency
 
 **For compliance questions:**
+
 - Email: compliance@checktick.uk

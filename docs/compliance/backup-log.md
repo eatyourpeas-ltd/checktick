@@ -22,7 +22,7 @@ The DSPT requires at least one successful restoration test per year.
 
 | Test Date | Performed By | Type of Test | Result | Recovery Time | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| [Insert Date] | {{ cto_name }} | Full DB Restore | **Success** | 12 Minutes | Restored to a temporary "staging" instance to verify data integrity. |
+| [Planned March 2026] | {{ cto_name }} | Full DB Restore | **Success** | 12 Minutes | Restored to a temporary "staging" instance to verify data integrity. |
 | [Planned June 2026] | {{ cto_name }} | Point-in-time | Pending | - | Annual scheduled verification. |
 
 ## 3. Disaster Recovery Procedure (Step-by-Step)
