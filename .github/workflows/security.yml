@@ -26,6 +26,10 @@ jobs:
               with:
                   python-version: "3.12"
 
+            - name: Upgrade pip (CVE-2026-1703)
+              run: |
+                  pip install --upgrade pip>=26.0
+
             - name: Install Poetry and export plugin
               run: |
                   pip install poetry==2.2.1
