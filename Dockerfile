@@ -7,6 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl nodejs npm gettext && rm -rf /var/lib/apt/lists/*
 
+# Upgrade pip to fix CVE-2026-1703 (path traversal vulnerability)
+RUN pip install --no-cache-dir --upgrade pip>=26.0
 RUN pip install --no-cache-dir poetry==${POETRY_VERSION}
 
 WORKDIR /app

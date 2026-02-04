@@ -26,6 +26,10 @@ jobs:
               with:
                   python-version: "3.12"
 
+            - name: Upgrade pip (CVE-2026-1703)
+              run: |
+                  pip install --upgrade pip>=26.0
+
             - name: Install Poetry and export plugin
               run: |
                   pip install poetry==2.2.1
@@ -34,8 +38,11 @@ jobs:
             - name: Install dependencies and run pip-audit
               run: |
                   poetry install --no-root --with dev
-                  poetry export -f requirements.txt --with dev --output requirements.txt
-                  poetry run pip-audit -r requirements.txt --desc on
+                  poetry run pip install --upgrade pip>=26.0
+                  echo "Pip version in virtualenv:"
+                  poetry run pip --version
+                  echo "Running pip-audit on installed packages:"
+                  poetry run pip-audit --desc on
 
     codeql:
         name: CodeQL Analysis

@@ -53,6 +53,7 @@ When you add a member to your team:
 6. Upon accepting, they automatically get access to team surveys
 
 **What happens behind the scenes:**
+
 - Their account is linked to the team
 - Team encryption key is made available via their SSO session
 - No passwords or recovery phrases needed (SSO handles authentication)
@@ -67,6 +68,7 @@ When someone leaves:
 4. Confirm the removal
 
 **Important**: Removing a member:
+
 - ✅ Revokes their access to team surveys immediately
 - ✅ Logs the removal action for audit
 - ❌ Does NOT delete any surveys they created
@@ -81,6 +83,7 @@ When someone leaves:
 | **Admin** | All above + manage team members + recover team surveys |
 
 To change a role:
+
 1. Navigate to **Settings → Team Management**
 2. Click the role dropdown next to the member
 3. Select the new role
@@ -118,6 +121,7 @@ If a team member loses access to their account (SSO issues, left organization te
 #### When to Escalate to Organization Admin
 
 Escalate if:
+
 - You cannot access the survey (permissions issue)
 - The survey involves multiple teams
 - The member disputes the recovery
@@ -217,6 +221,7 @@ The recovery dashboard shows:
 Navigate to **Admin → Audit Logs** to view all key management events:
 
 **Filter Options:**
+
 - Date range
 - Action type (recovery, access grant, access revoke)
 - User
@@ -224,6 +229,7 @@ Navigate to **Admin → Audit Logs** to view all key management events:
 - Survey
 
 **Export Options:**
+
 - CSV (for spreadsheet analysis)
 - JSON (for SIEM import)
 - PDF (for compliance reports)
@@ -245,11 +251,13 @@ When a user loses both their password AND recovery phrase, platform recovery is 
 #### Step 1: Request Submission
 
 **If user initiates:**
+
 1. User contacts support@checktick.uk
 2. Support creates recovery ticket
 3. User receives confirmation email with ticket ID
 
 **If organization admin initiates:**
+
 1. Navigate to **Admin → Recovery Dashboard**
 2. Click **Request Platform Recovery**
 3. Enter user email and survey details
@@ -261,6 +269,7 @@ When a user loses both their password AND recovery phrase, platform recovery is 
 The user (or their authorized representative) must verify identity:
 
 **Required Documents:**
+
 - ✅ Government-issued photo ID (passport, driving license)
 - ✅ Proof of association (NHS email, employment letter)
 
@@ -291,18 +300,21 @@ The user (or their authorized representative) must verify identity:
 Platform recovery requires **two independent admin approvals**:
 
 **Primary Authorization:**
+
 1. First admin reviews verification documents
 2. Confirms identity verification checklist is complete
 3. Documents reason for approval
 4. Clicks **Approve as Primary**
 
 **Secondary Authorization:**
+
 1. Different admin (cannot be same person) reviews
 2. Independently confirms verification
 3. Documents their approval reason
 4. Clicks **Approve as Secondary**
 
 **Rejection:**
+
 - Either admin can reject with documented reason
 - User is notified of rejection
 - They can appeal or resubmit with additional documentation
@@ -319,12 +331,14 @@ After dual authorization, a mandatory waiting period begins:
 | Enterprise | Custom (typically 24 hours) |
 
 **During time delay:**
+
 - User receives email notification with countdown
 - User can cancel the recovery if they didn't request it
 - Admins cannot bypass the delay
 - Timer shown in recovery dashboard
 
 **If user objects during time delay:**
+
 1. Click "I didn't request this" in notification email
 2. Recovery is immediately cancelled
 3. Account is flagged for security review
@@ -380,11 +394,13 @@ The custodian component is the offline portion of the platform master key.
 #### Rotation Schedule
 
 Rotate the custodian component:
+
 - After any suspected compromise
 - Annually (as part of security review)
 - When designated custodians change
 
 **Rotation Process:**
+
 1. Generate new platform master key
 2. Re-encrypt all escrowed keys with new platform key
 3. Securely destroy old custodian component
@@ -461,6 +477,7 @@ For GDPR compliance, maintain records of:
 - ✅ Data retention periods
 
 **Export GDPR Report:**
+
 1. Navigate to **Admin → Compliance → GDPR Report**
 2. Select date range
 3. Click **Generate Report**
@@ -476,6 +493,7 @@ For NHS Data Security and Protection Toolkit:
 - ✅ Staff training records
 
 **Export DSPT Evidence:**
+
 1. Navigate to **Admin → Compliance → DSPT Export**
 2. Select evidence categories needed
 3. Click **Generate Evidence Pack**
@@ -565,13 +583,16 @@ For HIPAA compliance:
 ## Getting Help
 
 **For urgent recovery issues:**
+
 - Email: support@checktick.uk
 - Include: Organization name, user email, survey ID, ticket number
 
 **For security concerns:**
+
 - Email: security@checktick.uk
 - Report any suspected unauthorized access immediately
 
 **For compliance questions:**
+
 - Email: compliance@checktick.uk
 - Include: Specific regulation and evidence needed

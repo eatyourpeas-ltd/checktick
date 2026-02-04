@@ -405,63 +405,73 @@ FORMS_URLFIELD_ASSUME_HTTPS = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
-CSP_DEFAULT_SRC = ("'self'",)
-CSP_STYLE_SRC = (
-    "'self'",
-    "'unsafe-inline'",
-    # Allow Google Fonts stylesheet
-    "https://fonts.googleapis.com",
+# Content Security Policy configuration (django-csp 4.0+ format)
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        "default-src": ("'self'",),
+        "script-src": (
+            "'self'",
+            "https://unpkg.com",
+            "https://cdn.jsdelivr.net",
+            "https://js.hcaptcha.com",  # hCaptcha widget script
+        ),
+        "style-src": (
+            "'self'",
+            "'unsafe-inline'",
+            "https://fonts.googleapis.com",  # Google Fonts stylesheet
+        ),
+        "font-src": (
+            "'self'",
+            "https://fonts.gstatic.com",  # Google Fonts
+            "data:",
+        ),
+        "img-src": ("'self'", "data:"),
+        "connect-src": (
+            "'self'",
+            "https://hcaptcha.com",
+            "https://*.hcaptcha.com",
+        ),
+        "frame-src": (
+            "'self'",
+            "https://hcaptcha.com",
+            "https://*.hcaptcha.com",
+        ),
+        "frame-ancestors": (
+            "'self'",
+            "http://localhost:8000" if DEBUG else None,  # For local development
+        ),
+    },
+    "NONCE_IN": ["script"],
+}
+# Remove None values from frame-ancestors
+CONTENT_SECURITY_POLICY["DIRECTIVES"]["frame-ancestors"] = tuple(
+    x for x in CONTENT_SECURITY_POLICY["DIRECTIVES"]["frame-ancestors"] if x is not None
 )
-CSP_FONT_SRC = (
-    "'self'",
-    # Fonts served from Google Fonts
-    "https://fonts.gstatic.com",
-    "data:",
-)
-CSP_SCRIPT_SRC = (
-    "'self'",
-    "https://unpkg.com",
-    "https://cdn.jsdelivr.net",
-    # hCaptcha widget script
-    "https://js.hcaptcha.com",
-)
-CSP_INCLUDE_NONCE_IN = ["script-src"]
-CSP_IMG_SRC = ("'self'", "data:")
-CSP_STYLE_SRC = (
-    "'self'",
-    "'unsafe-inline'",
-    "https://fonts.googleapis.com",
-)
-CSP_CONNECT_SRC = (
-    "'self'",
-    "https://hcaptcha.com",
-    "https://*.hcaptcha.com",
-)
-CSPO_FRAME_SRC = (
-    "'self'",
-    "https://hcaptcha.com",
-    "https://*.hcaptcha.com",
-)
-CSP_FRAME_SRC = (
-    "'self'",
-    "https://hcaptcha.com",
-    "https://*.hcaptcha.com",
-)
-# Allow framing for local development
-CSP_FRAME_ANCESTORS = (
-    "'self'",
-    "http://localhost:8000" if DEBUG else None,  # For local development
-)
-# Remove None values from tuple
-CSP_FRAME_ANCESTORS = tuple(x for x in CSP_FRAME_ANCESTORS if x is not None)
 
-# CORS minimal
-CORS_ALLOWED_ORIGINS = []
+# CORS configuration - allow badge validators and other trusted origins
+# Parse comma-separated list from environment, or use default
+_cors_origins = env.str("CORS_ALLOWED_ORIGINS", default="")
+if _cors_origins:
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip() for origin in _cors_origins.split(",") if origin.strip()
+    ]
+else:
+    # Default: badge validators only
+    CORS_ALLOWED_ORIGINS = ["https://img.shields.io"]
+# Add localhost/127.0.0.1 only in DEBUG mode for development
+if DEBUG:
+    CORS_ALLOWED_ORIGINS.extend(
+        [
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ]
+    )
+CORS_URLS_REGEX = r"^/api/schema$"  # Only allow CORS on the schema endpoint
 
 # Axes configuration for brute-force protection
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 1  # hour
-AXES_LOCKOUT_PARAMETERS = ["username"]
+AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]  # Lock by username AND IP
 # Disable axes for OIDC callbacks to avoid interference
 AXES_NEVER_LOCKOUT_WHITELIST = True
 AXES_IP_WHITELIST = ["127.0.0.1", "localhost"]

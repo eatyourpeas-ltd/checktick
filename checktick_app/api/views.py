@@ -1701,7 +1701,7 @@ class PublishedQuestionGroupViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data, status=201)
 
 
-@csp_exempt
+@csp_exempt()
 def swagger_ui(request):
     """Render an embedded Swagger UI that points at the API schema endpoint.
 
@@ -1710,7 +1710,7 @@ def swagger_ui(request):
     return render(request, "api/swagger.html", {})
 
 
-@csp_exempt
+@csp_exempt()
 def redoc_ui(request):
     """Render an embedded ReDoc UI pointing at the API schema endpoint.
 
