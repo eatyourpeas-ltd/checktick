@@ -39,8 +39,10 @@ jobs:
               run: |
                   poetry install --no-root --with dev
                   poetry run pip install --upgrade pip>=26.0
-                  poetry export -f requirements.txt --with dev --output requirements.txt
-                  poetry run pip-audit -r requirements.txt --desc on
+                  echo "Pip version in virtualenv:"
+                  poetry run pip --version
+                  echo "Running pip-audit on installed packages:"
+                  poetry run pip-audit --desc on
 
     codeql:
         name: CodeQL Analysis
