@@ -398,12 +398,14 @@ SESSION_COOKIE_SAMESITE = "Lax"
 
 # Forms configuration
 # Set default URL scheme to HTTPS for Django 6.0+ compatibility
-FORMS_URLFIELD_ASSUME_HTTPS = True
+FORMS_URLFIELD_ASSUME_HTTPS = not DEBUG
 
 # When running behind a reverse proxy (e.g., Northflank), trust forwarded proto/host
 # so Django correctly detects HTTPS and constructs absolute URLs without redirect loops.
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-USE_X_FORWARDED_HOST = True
+# Only enable in production to avoid HTTPS redirect issues in development
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
 
 # Content Security Policy configuration (django-csp 4.0+ format)
 CONTENT_SECURITY_POLICY = {

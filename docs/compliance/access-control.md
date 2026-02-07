@@ -143,7 +143,7 @@ To mitigate the risk of 'persistent' access by external parties or service accou
 To maintain the integrity of the {{ platform_name }} environment, all 'Authorized Devices' must meet the following technical baseline:
 
 1. **Antivirus/Malware:** * **Windows:** Microsoft Defender must be active.
-    * **macOS:** XProtect must be enabled, supplemented by [Insert Product Name].
+    * **macOS:** XProtect must be enabled.
 2. **Disk Encryption:** FileVault (macOS) or BitLocker (Windows) must be active to protect data at rest.
 3. **Automatic Updates:** Operating systems and browsers must be set to 'Auto-Update' to ensure security patches are applied within 14 days of release.
 4. **Firewall:** Native OS firewalls must be enabled and set to 'Block all unsolicited incoming connections.'

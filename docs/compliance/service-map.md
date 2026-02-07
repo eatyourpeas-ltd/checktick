@@ -25,9 +25,8 @@ To remain available and secure, our operational services rely on the following t
 
 | Category | Provider | Purpose |
 | :--- | :--- | :--- |
-| **PaaS / Orchestration** | Northflank | Manages container deployment, scaling, and runtime. |
-| **Cloud Infrastructure** | AWS (London) | Hosts the production PostgreSQL database (RDS). |
-| **Network & Security** | Cloudflare | Provides WAF, DDoS protection, and DNS management. |
+| **PaaS / Orchestration** | Northflank | Manages container deployment, scaling, and runtime. Hosts the production PostgreSQL database (RDS). |
+| **Network & Security** | NameCheap | DNS management. |
 | **Communication** | Mailgun | Sends transactional notifications and clinician alerts. |
 | **Development** | GitHub | Stores source code and manages CI/CD pipelines. |
 | **Identity** | Google/Microsoft | Provides SSO and MFA for staff administrative access. |
