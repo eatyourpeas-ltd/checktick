@@ -611,7 +611,7 @@ def docs_page(request, slug: str):
 
     html = mdlib.markdown(
         content,
-        extensions=["fenced_code", "tables", "toc"],
+        extensions=["fenced_code", "tables", "toc", "pymdownx.tasklist"],
     )
 
     # Rewrite internal .md links to proper /docs/slug/ URLs
@@ -666,7 +666,7 @@ def compliance_index(request):
 
     html = mdlib.markdown(
         content,
-        extensions=["fenced_code", "tables", "toc"],
+        extensions=["fenced_code", "tables", "toc", "pymdownx.tasklist"],
     )
 
     # Rewrite internal links for compliance pages
@@ -767,7 +767,7 @@ def compliance_page(request, slug: str):
 
     html = mdlib.markdown(
         content,
-        extensions=["fenced_code", "tables", "toc"],
+        extensions=["fenced_code", "tables", "toc", "pymdownx.tasklist"],
     )
 
     # Rewrite internal links for compliance pages

@@ -356,10 +356,9 @@ priority: 2
 
 ### Ongoing Monthly (September)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
-  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
-- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
-- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -383,10 +382,9 @@ priority: 2
 
 ### Ongoing Monthly (October)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
-  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
-- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
-- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -413,10 +411,9 @@ priority: 2
 
 ### Ongoing Monthly (November)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
-  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
-- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
-- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -464,10 +461,9 @@ priority: 2
 
 ### Ongoing Monthly (December)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
-  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
-- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
-- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
