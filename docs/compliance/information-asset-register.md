@@ -13,7 +13,7 @@ category: dspt-1-confidential-data
 | **AS-01** | Production DB | PostgreSQL database for {{ platform_name }}. | Patient IDs, Survey Responses. | AWS (London) | CTO |
 | **AS-02** | Auth Provider | Microsoft Entra ID / Google Auth. | Staff Credentials, Names. | Cloud (SaaS) | CTO |
 | **AS-03** | Source Code | GitHub Repository. | Code, Config (No Secrets). | GitHub | CTO |
-| **AS-04** | Email System | Google Workspace / Mailgun. | Business Communications. | Cloud (SaaS) | SIRO |
+| **AS-04** | Email System | Personal Google accounts (custom domain) / Mailgun. | Business Communications. | Cloud (SaaS) | SIRO |
 | **AS-05** | Local Devices | Laptops used by Founders/Directors. | Local Config, Temp Files. | Physical | User |
 
 ## Asset Classification

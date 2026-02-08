@@ -19,7 +19,7 @@ This policy defines the rules for granting, reviewing, and revoking access to {{
 Access to the production environment is restricted to the founding team.
 
 * **Individual Accounts:** No shared "admin" or "root" accounts are permitted.
-* **Authentication:** Mandatory Multi-Factor Authentication (MFA) is enforced for Northflank (Infrastructure), GitHub (Source Code), and Google Workspace (Management).
+* **Authentication:** Mandatory Multi-Factor Authentication (MFA) is enforced for Northflank (Infrastructure) and GitHub (Source Code). Personal email accounts also have MFA enabled.
 * **Workstations:** Administrative tasks must be performed on encrypted devices (FileVault/BitLocker).
 
 ## 3. Application Role-Based Access Control (RBAC)

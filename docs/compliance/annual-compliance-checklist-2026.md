@@ -38,6 +38,16 @@ priority: 2
 
 ### Week 3-4 (Jan 16-31)
 
+- [ ] **Unused Software & Service Removal** - Annual review and cleanup [Software Security Assessment](software-security-assessment.md)
+  - Desktop/Mobile: Review and uninstall unused applications from all laptops (macOS & Windows 11) and mobile device (iPhone)
+  - Cloud Services: Review and cancel unused SaaS/PaaS subscriptions
+  - Development: Remove unused dependencies from requirements.txt and package.json
+  - Disable unused system services and mobile apps (macOS, Windows 11, iOS)
+  - Document removals in Technical Change Log
+- [ ] **Software Asset Register Reconciliation (Q1)** - Quarterly review [Software Assets](software-assets.md)
+  - Verify all software in register matches actual deployments
+  - Remove decommissioned tools from register
+  - Update version numbers and support status
 - [ ] **Business Continuity Plan Review** - Annual review and update [Business Continuity Plan](business-continuity-plan.md)
 - [ ] **Risk Register Review** - Board-level annual review [Risk Register](risk-register.md)
 - [ ] **Vulnerability Management Policy Review** - SIRO approval [Vulnerability Management Policy](vulnerability-management-policy.md)
@@ -48,7 +58,10 @@ priority: 2
 
 ### Ongoing Monthly (January)
 
-- [ ] **Monthly Access Review** - GitHub & Northflank user lists (CTO) [Access Control Policy](access-control.md)
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
+  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -58,6 +71,40 @@ priority: 2
 
 ### Week 1-2 (Feb 1-15)
 
+- [ ] **Annual Infrastructure & Firewall Review (Cyber Essentials)** - Annual audit per CE requirements [Infrastructure Technical Change Log](infrastructure-technical-change-log.md)
+  - Verify router security (unique admin password, remote management disabled, UPnP disabled, no port forwarding)
+  - Verify all device firewalls enabled with stealth mode
+  - **Device User Account Audit:** Verify only necessary accounts on all devices
+    - Confirm Guest accounts DISABLED on all laptops (macOS & Windows 11)
+    - Verify single standard user per device + separate admin account
+    - Remove any test/temporary/unused accounts
+  - **Device Security Configuration (Cyber Essentials):** [Standard Build Specification](standard-build-specification.md)
+    - Automatic Login DISABLED on all devices
+    - Screen lock: Password/Touch ID required immediately after sleep (laptops max 10min inactivity, mobile max 2min)
+    - FileVault encryption enabled on all Macs
+    - Safari: Verify 'Open safe files after downloading' DISABLED
+    - Chrome: Verify all auto-open file preferences CLEARED
+    - Gatekeeper: Verify enabled (`spctl --status`)
+    - XProtect: Verify malware scanning active and up-to-date
+    - Failed login throttling: Verify 10-attempt limits active
+  - Audit cloud service user accounts (GitHub, Northflank)
+  - Verify user/admin separation on cloud services
+  - Document completion in Infrastructure Technical Change Log
+- [ ] **External Service Authentication Review (Cyber Essentials)** - Annual verification per CE Control 5.4 & 5.5 [External Service Authentication](external-service-authentication.md)
+  
+  **Organization Compliance (CE Scope - Staff Admin Access):**
+  - Verify MFA enabled for all staff administrative accounts (CheckTick backend/admin portal)
+  - Confirm 12-character minimum passwords on staff admin accounts (exceeds CE 8-char requirement)
+  - Test common password blocking (100,000+ NCSC deny list active)
+  - Verify django-axes brute force protection functioning (5 failed attempts lockout)
+  - Confirm rate limiting active (10 attempts/minute per IP)
+  - Review staff authentication logs for suspicious patterns (past 12 months)
+  
+  **Application Maintenance (DSPT Scope - Customer/User Authentication):**
+  - Verify MFA enforcement for customer Organization Owner and Data Custodian roles
+  - Review RBAC role assignments for least privilege
+  - Confirm session timeout settings (24 hours)
+  - Document completion in External Service Authentication policy
 - [ ] **DSPT Submission Preparation** - Begin compiling evidence for annual submission
   - Review all policies updated in January
   - Compile training records
@@ -74,7 +121,10 @@ priority: 2
 
 ### Ongoing Monthly (February)
 
-- [ ] **Monthly Access Review** - GitHub & Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
+  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -102,12 +152,28 @@ priority: 2
 - [ ] **DSPT Annual Submission** - Complete and submit (if due)
   - Final SIRO sign-off
   - Submit via DSPT portal
-- [ ] **Quarterly Access Review (Q1)** - Review emergency contacts and Unseal Key locations
+- [ ] **Quarterly Access Review (Q1) (Cyber Essentials)** - Comprehensive user account and privilege audit [Access Control Policy](access-control.md)
+  - **Automated Export & Reconciliation:** Export GitHub organisation members list and Northflank team members list; compare against Privileged Account Inventory for discrepancies
+  - **Device Privileges:** Verify standard/admin account separation maintained on all devices
+  - **Device Admin Credentials:** Verify device administrator credentials remain securely stored in password manager
+  - **Admin Usage Verification:** Confirm admin accounts (device and cloud) not used for routine work activities
+  - **Cloud Accounts:** Verify no orphaned or inactive accounts exist on GitHub and Northflank
+  - **Role Alignment:** Confirm all current users are authorized with appropriate role assignments (Owner vs Member)
+  - **Privilege Verification:** Verify account privileges match current role requirements and identify any 'privilege creep'
+  - **Admin Controls:** Verify administrative privileges only assigned to designated administrative accounts
+  - **Operational Restrictions:** Confirm operational accounts cannot perform security-critical operations
+  - **Contractor Access:** Ensure subcontractors only retain access to active projects
+  - **Leaver Verification:** Confirm any accounts belonging to departed staff have been fully removed
+  - **Emergency Contacts:** Review emergency contacts and Unseal Key locations
+  - **Documentation Check:** Verify Movers/Leavers Log is current and audit logs reviewed
 - [ ] **Data Flow Mapping Review** - Verify current state matches documentation
 
 ### Ongoing Monthly (March)
 
-- [ ] **Monthly Access Review** - GitHub & Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
+  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -117,6 +183,10 @@ priority: 2
 
 ### Week 1-4 (Apr 1-30)
 
+- [ ] **Software Asset Register Reconciliation (Q2)** - Quarterly review [Software Assets](software-assets.md)
+  - Verify all software in register matches actual deployments
+  - Remove decommissioned tools from register
+  - Update version numbers and support status
 - [ ] **DPIA Annual Review** - Review all existing DPIAs (minimum annually) [DPIA Procedure](dpia-procedure.md)
   - Survey Platform DPIA
   - Any new feature DPIAs from previous year
@@ -127,7 +197,10 @@ priority: 2
 
 ### Ongoing Monthly (April)
 
-- [ ] **Monthly Access Review** - GitHub & Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
+  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -149,7 +222,10 @@ priority: 2
 
 ### Ongoing Monthly (May)
 
-- [ ] **Monthly Access Review** - GitHub & Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
+  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -166,15 +242,43 @@ priority: 2
 
 ### Week 3-4 (Jun 16-30)
 
-- [ ] **Quarterly Access Review (Q2)** - Review emergency contacts and Unseal Key locations
-- [ ] **Security Review & Firewall Audit** - Bi-annual review [Security Review Log](security-review-log.md)
+- [ ] **Quarterly Access Review (Q2) (Cyber Essentials)** - Comprehensive user account and privilege audit [Access Control Policy](access-control.md)
+  - **Automated Export & Reconciliation:** Export GitHub organisation members list and Northflank team members list; compare against Privileged Account Inventory for discrepancies
+  - **Device Privileges:** Verify standard/admin account separation maintained on all devices
+  - **Device Admin Credentials:** Verify device administrator credentials remain securely stored in password manager
+  - **Admin Usage Verification:** Confirm admin accounts (device and cloud) not used for routine work activities
+  - **Cloud Accounts:** Verify no orphaned or inactive accounts exist on GitHub and Northflank
+  - **Role Alignment:** Confirm all current users are authorized with appropriate role assignments (Owner vs Member)
+  - **Privilege Verification:** Verify account privileges match current role requirements and identify any 'privilege creep'
+  - **Admin Controls:** Verify administrative privileges only assigned to designated administrative accounts
+  - **Operational Restrictions:** Confirm operational accounts cannot perform security-critical operations
+  - **Contractor Access:** Ensure subcontractors only retain access to active projects
+  - **Leaver Verification:** Confirm any accounts belonging to departed staff have been fully removed
+  - **Emergency Contacts:** Review emergency contacts and Unseal Key locations
+  - **Documentation Check:** Verify Movers/Leavers Log is current and audit logs reviewed
+- [ ] **Security Review & Firewall Audit (Bi-annual)** - Mid-year review [Security Review Log](security-review-log.md) and [Infrastructure Technical Change Log](infrastructure-technical-change-log.md)
   - Production ingress rules verification
   - Compare against authorized inbound rule register
+  - **Device User Account Re-verification:** Confirm only necessary accounts on all devices
+    - Guest accounts still DISABLED
+    - Single user per device maintained
+    - Admin/user separation maintained
+  - **Device Security Re-verification (Cyber Essentials):** [Standard Build Specification](standard-build-specification.md)
+    - Screen lock timers still configured (laptops ≤10min, mobile ≤2min)
+    - Safari 'Open safe files after downloading' still disabled
+    - Chrome auto-open preferences still cleared
+    - Gatekeeper still active
+    - Device firewalls enabled with stealth mode
+    - FileVault encryption active
+  - Cloud service account review
   - Document findings
 
 ### Ongoing Monthly (June)
 
-- [ ] **Monthly Access Review** - GitHub & Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
+  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -184,13 +288,20 @@ priority: 2
 
 ### Week 1-4 (Jul 1-31)
 
+- [ ] **Software Asset Register Reconciliation (Q3)** - Quarterly review [Software Assets](software-assets.md)
+  - Verify all software in register matches actual deployments
+  - Remove decommissioned tools from register
+  - Update version numbers and support status
 - [ ] **Mid-Year Training Refresh Check** - Verify no training expirations
 - [ ] **Incident Response Plan Review** - Mid-year review and update if needed [Incident Response Plan](incident-response-plan.md)
 - [ ] **Data Rights Request Tracker Review** - Verify no pending SARs [Data Rights Request Tracker](data-rights-request-tracker.md)
 
 ### Ongoing Monthly (July)
 
-- [ ] **Monthly Access Review** - GitHub & Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
+  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -213,7 +324,10 @@ priority: 2
 
 ### Ongoing Monthly (August)
 
-- [ ] **Monthly Access Review** - GitHub & Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
+  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -223,13 +337,29 @@ priority: 2
 
 ### Week 1-4 (Sep 1-30)
 
-- [ ] **Quarterly Access Review (Q3)** - Review emergency contacts and Unseal Key locations
+- [ ] **Quarterly Access Review (Q3) (Cyber Essentials)** - Comprehensive user account and privilege audit [Access Control Policy](access-control.md)
+  - **Automated Export & Reconciliation:** Export GitHub organisation members list and Northflank team members list; compare against Privileged Account Inventory for discrepancies
+  - **Device Privileges:** Verify standard/admin account separation maintained on all devices
+  - **Device Admin Credentials:** Verify device administrator credentials remain securely stored in password manager
+  - **Admin Usage Verification:** Confirm admin accounts (device and cloud) not used for routine work activities
+  - **Cloud Accounts:** Verify no orphaned or inactive accounts exist on GitHub and Northflank
+  - **Role Alignment:** Confirm all current users are authorized with appropriate role assignments (Owner vs Member)
+  - **Privilege Verification:** Verify account privileges match current role requirements and identify any 'privilege creep'
+  - **Admin Controls:** Verify administrative privileges only assigned to designated administrative accounts
+  - **Operational Restrictions:** Confirm operational accounts cannot perform security-critical operations
+  - **Contractor Access:** Ensure subcontractors only retain access to active projects
+  - **Leaver Verification:** Confirm any accounts belonging to departed staff have been fully removed
+  - **Emergency Contacts:** Review emergency contacts and Unseal Key locations
+  - **Documentation Check:** Verify Movers/Leavers Log is current and audit logs reviewed
 - [ ] **Access Audit Log Spot Check** - Bi-annual review of Data Custodian exports
 - [ ] **Change Management Policy Review** - Verify compliance with procedures
 
 ### Ongoing Monthly (September)
 
-- [ ] **Monthly Access Review** - GitHub & Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
+  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -239,6 +369,10 @@ priority: 2
 
 ### Week 1-4 (Oct 1-31)
 
+- [ ] **Software Asset Register Reconciliation (Q4)** - Quarterly review [Software Assets](software-assets.md)
+  - Verify all software in register matches actual deployments
+  - Remove decommissioned tools from register
+  - Update version numbers and support status
 - [ ] **Annual Training Season Begins** - Initiate annual training renewals
   - NHS Data Security Awareness (Level 1) - All staff
   - GDPR Training refresher
@@ -249,7 +383,10 @@ priority: 2
 
 ### Ongoing Monthly (October)
 
-- [ ] **Monthly Access Review** - GitHub & Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
+  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -276,7 +413,10 @@ priority: 2
 
 ### Ongoing Monthly (November)
 
-- [ ] **Monthly Access Review** - GitHub & Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
+  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -286,7 +426,26 @@ priority: 2
 
 ### Week 1-2 (Dec 1-15)
 
-- [ ] **Quarterly Access Review (Q4)** - Review emergency contacts and Unseal Key locations
+- [ ] **Security Review & Firewall Audit** - Bi-annual review [Security Review Log](security-review-log.md)
+  - Router ingress rules verification (BT Smart Hub 2)
+  - Verify no port forwarding enabled
+  - Verify DMZ disabled
+  - Verify UPnP disabled
+  - Document findings in Security Review Log
+- [ ] **Quarterly Access Review (Q4) (Cyber Essentials)** - Comprehensive user account and privilege audit [Access Control Policy](access-control.md)
+  - **Automated Export & Reconciliation:** Export GitHub organisation members list and Northflank team members list; compare against Privileged Account Inventory for discrepancies
+  - **Device Privileges:** Verify standard/admin account separation maintained on all devices
+  - **Device Admin Credentials:** Verify device administrator credentials remain securely stored in password manager
+  - **Admin Usage Verification:** Confirm admin accounts (device and cloud) not used for routine work activities
+  - **Cloud Accounts:** Verify no orphaned or inactive accounts exist on GitHub and Northflank
+  - **Role Alignment:** Confirm all current users are authorized with appropriate role assignments (Owner vs Member)
+  - **Privilege Verification:** Verify account privileges match current role requirements and identify any 'privilege creep'
+  - **Admin Controls:** Verify administrative privileges only assigned to designated administrative accounts
+  - **Operational Restrictions:** Confirm operational accounts cannot perform security-critical operations
+  - **Contractor Access:** Ensure subcontractors only retain access to active projects
+  - **Leaver Verification:** Confirm any accounts belonging to departed staff have been fully removed
+  - **Emergency Contacts:** Review emergency contacts and Unseal Key locations
+  - **Documentation Check:** Verify Movers/Leavers Log is current and audit logs reviewed
 - [ ] **Year-End Risk Register Review** - Prepare for annual board review
 - [ ] **Business Impact Assessment Review** - Annual update [Business Impact Assessment](business-impact-assessment.md)
   - Verify RTO/RPO targets
@@ -305,7 +464,10 @@ priority: 2
 
 ### Ongoing Monthly (December)
 
-- [ ] **Monthly Access Review** - GitHub & Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](access-control.md)
+  - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
+- [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](access-audit-logs.md)
+- [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](external-service-authentication.md)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
 - [ ] **Monthly Security Briefing** - Review logs, alerts, and policy updates
 
@@ -343,6 +505,12 @@ priority: 2
 ### Q1 (Jan-Mar)
 
 - Annual Security Validation
+- Unused Software & Service Removal (Annual)
+- Software Asset Register Reconciliation (Quarterly)
+- Annual Infrastructure & Firewall Review (Cyber Essentials)
+- External Service Authentication Review (Cyber Essentials)
+- Device User Account Audit (Annual)
+- Device Security Configuration Audit - AutoRun/Execution Controls (Bi-annual)
 - DSPT Submission
 - Disaster Recovery Drill
 - Contract Reviews
@@ -350,6 +518,9 @@ priority: 2
 
 ### Q2 (Apr-Jun)
 
+- Software Asset Register Reconciliation (Quarterly)
+- Device User Account Re-verification (Bi-annual)
+- Device Security Configuration Re-verification - AutoRun/Execution Controls (Bi-annual)
 - DPIA Reviews
 - Mid-year Backup Test
 - Semi-annual Internal Audit
@@ -357,6 +528,7 @@ priority: 2
 
 ### Q3 (Jul-Sep)
 
+- Software Asset Register Reconciliation (Quarterly)
 - Tabletop Exercise
 - Mid-year Reviews
 - Incident Response Plan Review
@@ -364,6 +536,7 @@ priority: 2
 
 ### Q4 (Oct-Dec)
 
+- Software Asset Register Reconciliation (Quarterly)
 - Annual Training Renewals
 - Policy Suite Review
 - Board Approval & Minutes

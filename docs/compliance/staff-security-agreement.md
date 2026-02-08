@@ -37,6 +37,6 @@ Upon dismissal, resignation, or the end of a contract period, all access to {{ p
 
 Access Revocation: Personnel must surrender all company-owned hardware and return any physical keys or tokens on their final day of engagement.
 
-Account Deactivation: All cloud service accounts (including GitHub, Northflank, and Google Workspace) and local device accounts will be disabled or deleted by the Administrator within 24 hours of the departure.
+Account Deactivation: All cloud service accounts (including GitHub and Northflank) and local device accounts will be disabled or deleted by the Administrator within 24 hours of the departure.
 
 Data Return: Personnel agree that all intellectual property and sensitive data remain the property of {{ platform_name }} and must not be copied or retained upon departure.

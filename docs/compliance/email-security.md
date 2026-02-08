@@ -12,7 +12,7 @@ To protect the {{ platform_name }} brand and prevent phishing attacks against ou
 ### 1.1 Sender Policy Framework (SPF)
 
 * **Status:** Active
-* **Configuration:** Includes all authorized IP ranges for Google Workspace and Mailgun.
+* **Configuration:** Includes all authorized IP ranges for personal email provider and Mailgun.
 * **Policy:** Set to `~all` (Softfail) or `-all` (Fail) to discourage unauthorized senders.
 
 ### 1.2 DomainKeys Identified Mail (DKIM)
@@ -40,9 +40,9 @@ To protect staff and the integrity of our internal systems, we utilize the follo
 
 ### 3.1 Advanced Threat Protection
 
-* **Solution:** [Google Workspace Advanced Protection / Microsoft Defender for Office 365].
-* **Attachment Scanning:** All attachments are scanned for malware signatures and 'Zero-Day' patterns before being made available to the user.
-* **Link Protection:** URLs in emails are checked against real-time blocklists (Safe Browsing).
+* **Solution:** Personal email accounts with built-in spam filtering and phishing protection.
+* **Attachment Scanning:** All attachments are scanned for malware signatures before being made available to the user.
+* **Link Protection:** URLs in emails are checked against real-time blocklists (Google Safe Browsing).
 
 ### 3.2 Inbound Authentication (DMARC Enforcement)
 

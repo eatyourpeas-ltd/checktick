@@ -18,10 +18,18 @@ category: dspt-9-it-protection
 * **In-Transit:** We enforce TLS 1.2 as a minimum (TLS 1.3 preferred). We use HSTS (HTTP Strict Transport Security) to prevent protocol downgrade attacks.
 * **Internal:** Traffic between the Load Balancer and our containers travels over the provider's secure private backbone.
 
-## 3. Boundary Protection (Firewall)
+## 3 Boundary Protection (Firewall)
+
+**Cloud Infrastructure:**
 
 * **Ingress Rules:** Northflank manages our firewall rules. All ports except 443 are blocked by default.
 * **Egress Rules:** Our containers are restricted to communicating only with verified external services (e.g., OIDC providers, SendGrid) via secure encrypted channels.
+
+**Local Network (Development/Administrative Access):**
+
+* BT Smart Hub 2 router configured with default-deny inbound policy
+* All administrative access to cloud services conducted from devices on trusted local network
+* Software firewalls enabled on all endpoint devices (macOS Application Firewall with Stealth Mode)
 
 ## 4. Application-Layer Defense
 

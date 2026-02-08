@@ -27,7 +27,16 @@ category: dspt-9-it-protection
 - [ ] Confirm **UPnP** is DISABLED on the router.
 - [ ] Verify **No Inbound Port Forwarding** rules exist (Deny by Default).
 - [ ] Check that all Mac/PC local firewalls are still enabled and in "Stealth Mode."
-- [ ] Audit user access to GitHub, Northflank, and Google Workspace (Remove old users).
+- [ ] **Device User Accounts:** Verify only necessary user accounts exist on all devices:
+  - [ ] Confirm Guest accounts DISABLED on all Mac devices (System Settings > Users and Groups)
+  - [ ] Verify only ONE standard user account per device (single user per device policy)
+  - [ ] Confirm Administrator accounts exist but only used with password manager authentication
+  - [ ] Remove any test, temporary, or unused accounts
+  - [ ] **Verify all default passwords changed** on all devices (CE requirement)
+  - [ ] **Mobile Device Check:** Verify mobile phones/tablets have 6+ digit PIN or biometric lock
+- [ ] Audit user access to GitHub and Northflank (Remove old users).
+- [ ] Verify cloud service accounts follow user/admin separation principles.
+- [ ] **Cloud Service Passwords:** Confirm no default or guessable passwords on any cloud accounts
 
 ---
 

@@ -9,13 +9,22 @@ category: dspt-9-it-protection
 
 To mitigate the risk of emerging threats, all anti-malware software must be configured for automatic updates:
 
-* **Microsoft Defender:** Must be set to check for updates at least daily. Cloud-protection must remain active to provide real-time protection against new variants.
-* **Apple XProtect/MRT:** The macOS setting 'Install Security Responses and System Files' must be toggled ON.
+* **Microsoft Defender (Windows 11):** Must be set to check for updates at least daily. Cloud-protection must remain active to provide real-time protection against new variants.
+* **Apple XProtect/MRT (macOS):** The macOS setting 'Install Security Responses and System Files' must be toggled ON.
+* **iOS Security (iPhone):** Automatic security updates must be enabled (Settings > General > Software Update > Automatic Updates). iOS includes built-in malware protection through app sandboxing and App Store code signing.
+* **Google Play Protect (Android):** Must be enabled with automatic scanning active (Settings > Security > Google Play Protect > Settings > Scan apps with Play Protect). Android includes built-in malware protection through app sandboxing, Play Protect scanning, and Play Store code signing.
 * **Third-Party Tools:** If any additional tools (e.g., Malwarebytes) are used, they must be set to 'Auto-Update' both the application and the threat database.
 
 ## 2. Real-Time Scanning
 
-All anti-malware solutions must have 'Real-Time Protection' or 'On-Access Scanning' enabled. Periodic full-disk scans are encouraged but real-time interception is the mandatory baseline.
+All anti-malware solutions must have 'Real-Time Protection' or 'On-Access Scanning' enabled:
+
+* **Windows 11:** Microsoft Defender real-time protection mandatory
+* **macOS:** XProtect and Gatekeeper provide real-time protection (always active)
+* **iPhone:** iOS app sandboxing and App Store verification provide continuous protection (native to iOS)
+* **Android:** Google Play Protect provides real-time scanning and app verification (native to Android)
+
+Periodic full-disk scans are encouraged but real-time interception is the mandatory baseline.
 
 ## 3. Handling Detections
 
@@ -52,5 +61,9 @@ While {{ platform_name }} primarily uses cloud-based storage (GitHub, AWS), any 
 
 During quarterly audits, the CTO will verify that:
 
-1. The 'Real-time protection' toggle is locked in the 'On' position on all Windows machines.
-2. Gatekeeper and XProtect services are running on all macOS machines (verified via `spctl --status`).
+1. **Windows 11 laptop:** 'Real-time protection' toggle is locked in the 'On' position, Microsoft Defender SmartScreen enabled for apps, files, and web browsing (Edge browser).
+2. **macOS laptop:** Gatekeeper and XProtect services are running (verified via `spctl --status`). Safari Fraudulent Website Warning and Chrome Safe Browsing verified active.
+3. **iPhone:** iOS version is current and supported, automatic security updates enabled, App Store is the only app source (no jailbreaking), Safari Fraudulent Website Warning enabled.
+4. **Android phone:** Google Play Protect is enabled and active, Android version is current and supported, automatic security updates enabled, Play Store is the only app source (no rooting or sideloading), Chrome Safe Browsing active.
+
+Additional web filtering configuration and verification details in [Web Filtering Procedure](web-filtering-policy.md).
