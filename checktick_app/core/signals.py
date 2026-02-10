@@ -121,7 +121,7 @@ def send_lockout_notification(sender, request, username, credentials, **kwargs):
         send_security_email(
             user=user,
             subject="Security Alert: Account Temporarily Locked",
-            template_name="emails/security/account_lockout.html",
+            template_name="emails/security/account_lockout.md",
             context={
                 "user": user,
                 "ip_address": ip_address,
@@ -158,6 +158,121 @@ def _get_client_ip(request) -> str:
     return request.META.get("REMOTE_ADDR", "Unknown")
 
 
+def _send_admin_login_notification(user, request, audit_log):
+    """Send email notification when admin/staff user logs in.
+
+    For healthcare apps with patient data, this provides an audit trail
+    and allows admins to detect unauthorized access quickly.
+    """
+    from .email_utils import send_security_email
+
+    # Get all superusers to notify (excluding the one logging in)
+    superusers = User.objects.filter(is_superuser=True, is_active=True).exclude(
+        id=user.id
+    )
+
+    # Extract request details
+    ip_address = _get_client_ip(request)
+    user_agent = request.META.get("HTTP_USER_AGENT", "Unknown")[:200]
+    timestamp = audit_log.created_at.strftime("%Y-%m-%d %H:%M:%S %Z")
+
+    # Determine access level
+    access_level = "Superuser" if user.is_superuser else "Staff"
+
+    try:
+        # Send notification to the user who logged in
+        send_security_email(
+            user=user,
+            subject=f"Security Alert: Admin Login Detected - {user.email}",
+            template_name="emails/security/admin_login_self.md",
+            context={
+                "user": user,
+                "ip_address": ip_address,
+                "user_agent": user_agent,
+                "timestamp": timestamp,
+                "access_level": access_level,
+            },
+        )
+
+        # Send notification to other superusers for monitoring
+        for admin in superusers:
+            send_security_email(
+                user=admin,
+                subject=f"Admin Access Alert: {access_level} Login - {user.email}",
+                template_name="emails/security/admin_login_notification.md",
+                context={
+                    "admin": admin,
+                    "logged_in_user": user,
+                    "ip_address": ip_address,
+                    "user_agent": user_agent,
+                    "timestamp": timestamp,
+                    "access_level": access_level,
+                },
+            )
+
+        logger.info(
+            f"Admin login notification sent for {user.email} (IP: {ip_address})"
+        )
+    except Exception as e:
+        # Don't fail the login if email fails, but log it
+        logger.error(f"Failed to send admin login notification: {e}")
+
+
+def _send_admin_failed_login_notification(user, request, audit_log):
+    """Send email when someone fails to log in to an admin/staff account.
+
+    This helps detect brute force attacks or unauthorized access attempts
+    against privileged accounts with access to patient data.
+    """
+    from .email_utils import send_security_email
+
+    # Get all superusers to notify
+    superusers = User.objects.filter(is_superuser=True, is_active=True)
+
+    ip_address = _get_client_ip(request)
+    user_agent = request.META.get("HTTP_USER_AGENT", "Unknown")[:200]
+    timestamp = audit_log.created_at.strftime("%Y-%m-%d %H:%M:%S %Z")
+    access_level = "Superuser" if user.is_superuser else "Staff"
+
+    try:
+        # Notify the account owner
+        send_security_email(
+            user=user,
+            subject=f"Security Alert: Failed Login Attempt to Your {access_level} Account",
+            template_name="emails/security/admin_failed_login.md",
+            context={
+                "user": user,
+                "ip_address": ip_address,
+                "user_agent": user_agent,
+                "timestamp": timestamp,
+                "access_level": access_level,
+                "was_you": False,
+            },
+        )
+
+        # Notify other superusers
+        for admin in superusers.exclude(id=user.id):
+            send_security_email(
+                user=admin,
+                subject=f"Security Alert: Failed {access_level} Login Attempt - {user.email}",
+                template_name="emails/security/admin_failed_login_notification.md",
+                context={
+                    "admin": admin,
+                    "targeted_user": user,
+                    "ip_address": ip_address,
+                    "user_agent": user_agent,
+                    "timestamp": timestamp,
+                    "access_level": access_level,
+                },
+            )
+
+        logger.warning(
+            f"Admin failed login notification sent for {user.email} (IP: {ip_address})"
+        )
+    except Exception as e:
+        logger.error(f"Failed to send admin failed login notification: {e}")
+
+
 # Security audit logging for authentication events
 @receiver(post_save, sender=User)
 def log_user_creation(sender, instance, created, **kwargs):
@@ -174,15 +289,20 @@ def log_user_creation(sender, instance, created, **kwargs):
 
 @receiver(user_logged_in)
 def log_successful_login(sender, request, user, **kwargs):
-    """Log successful login events."""
+    """Log successful login events and send admin access notifications."""
     from checktick_app.surveys.models import AuditLog
 
-    AuditLog.log_security_event(
+    # Log the login event
+    audit_log = AuditLog.log_security_event(
         action=AuditLog.Action.LOGIN_SUCCESS,
         actor=user,
         request=request,
         message=f"Successful login for {user.email}",
     )
+
+    # Send email notification for admin/staff logins (healthcare security requirement)
+    if user.is_staff or user.is_superuser:
+        _send_admin_login_notification(user, request, audit_log)
 
 
 @receiver(user_logged_out)
@@ -203,14 +323,24 @@ def log_logout(sender, request, user, **kwargs):
 
 @receiver(user_login_failed)
 def log_failed_login(sender, credentials, request, **kwargs):
-    """Log failed login attempts."""
+    """Log failed login attempts and notify admins of suspicious activity."""
     from checktick_app.surveys.models import AuditLog
 
     username = credentials.get("username", "")
 
-    AuditLog.log_security_event(
+    # Log the failed attempt
+    audit_log = AuditLog.log_security_event(
         action=AuditLog.Action.LOGIN_FAILED,
         request=request,
         message=f"Failed login attempt for username: {username}",
         username_attempted=username,
     )
+
+    # Check if this is an admin account being targeted
+    try:
+        user = User.objects.get(email__iexact=username)
+        if user.is_staff or user.is_superuser:
+            _send_admin_failed_login_notification(user, request, audit_log)
+    except User.DoesNotExist:
+        # Don't reveal whether admin account exists
+        pass

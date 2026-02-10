@@ -52,6 +52,40 @@ All key management and recovery events must create immutable audit entries.
 | `password_changed` | CRITICAL | user_id, ip |
 | `user_created` | INFO | user_id, registration_method |
 
+#### Admin Access Monitoring (Healthcare Compliance)
+
+For healthcare applications with access to patient data, all privileged account access (admin/staff users) receives enhanced monitoring with real-time email notifications. This provides an audit trail and enables rapid detection of unauthorized access.
+
+**Implementation**: Authentication signal handlers in `checktick_app/core/signals.py` detect admin logins and trigger email notifications.
+
+**Email Notifications Sent**:
+
+| Event | Recipients | Email Template |
+|-------|-----------|----------------|
+| Admin successful login | Logged-in user + all superusers | `emails/security/admin_login_self.md` (to user)<br>`emails/security/admin_login_notification.md` (to others) |
+| Admin failed login | Targeted user + all superusers | `emails/security/admin_failed_login.md` (to user)<br>`emails/security/admin_failed_login_notification.md` (to others) |
+
+**Information Captured**:
+- Account email and name
+- Access level (Staff/Superuser)
+- Timestamp (formatted with timezone)
+- IP address (extracted via X-Forwarded-For or REMOTE_ADDR)
+- User agent (browser/device, first 200 characters)
+- Login result (success/failure)
+
+**Notification Recipients**:
+1. **Account owner**: Receives notification of all login attempts (successful and failed) to their account
+2. **All superusers**: Receive monitoring notifications about all admin access events for security oversight
+
+**Purpose**:
+- Provides immediate awareness of privileged access to patient data
+- Enables account owners to detect unauthorized access quickly
+- Allows security team (superusers) to monitor for suspicious patterns
+- Meets healthcare compliance requirements for audit trails
+- Supports forensic investigation if unauthorized access occurs
+
+**Related Logging**: All admin access events are also logged to `AuditLog` with severity INFO (successful) or WARNING (failed).
+
 #### Two-Factor Authentication Events
 
 | Event | Severity | Required Fields |
@@ -384,6 +418,153 @@ View audit trail:
 
 CheckTick Admin System
 ```
+
+### Admin Access Notifications (Healthcare Compliance)
+
+For healthcare applications with patient data, all admin/staff account access is monitored with real-time email notifications. This ensures privileged access to sensitive data is transparent and enables rapid detection of unauthorized access.
+
+#### Admin Successful Login - Notification to Self
+
+**To**: Admin/staff user who just logged in
+**Subject**: `🔒 Security Alert: Admin Login Detected - admin@example.com`
+
+**Template**: `emails/security/admin_login_self.md`
+
+```text
+Hi John,
+
+Your Superuser account just logged in to CheckTick.
+
+Because this is a healthcare application with access to sensitive patient data,
+we notify you of all privileged account access.
+
+Login Details:
+- Account: admin@example.com
+- Access Level: Superuser
+- Time: 2026-02-10 14:30:00 UTC
+- IP Address: 192.168.1.100
+- Device/Browser: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)...
+
+What to do:
+If this was you, no action is needed. This is just a confirmation for your records.
+
+If this was NOT you, someone may have accessed your account. Take immediate action:
+1. Change your password immediately
+2. Review your recent account activity
+3. Enable two-factor authentication if not already enabled
+4. Contact your system administrator
+```
+
+#### Admin Successful Login - Notification to Other Admins
+
+**To**: All other superusers (for monitoring)
+**Subject**: `Admin Access Alert: Superuser Login - admin@example.com`
+
+**Template**: `emails/security/admin_login_notification.md`
+
+```text
+Hi Sarah,
+
+A Superuser account has logged in to CheckTick. As a system administrator,
+you receive this notification for security monitoring purposes.
+
+Login Details:
+- User: admin@example.com (John Smith)
+- Access Level: Superuser
+- Time: 2026-02-10 14:30:00 UTC
+- IP Address: 192.168.1.100
+- Device/Browser: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)...
+
+What to do:
+If this access is expected, no action is needed.
+
+If this access seems suspicious or unexpected:
+1. Contact the user to verify this was them
+2. Review recent account activity logs
+3. Check for any unusual data access patterns
+4. If unauthorized, immediately disable the account and investigate
+```
+
+#### Admin Failed Login - Notification to Targeted User
+
+**To**: Admin/staff user whose account was targeted
+**Subject**: `🔒 Security Alert: Failed Login Attempt to Your Superuser Account`
+
+**Template**: `emails/security/admin_failed_login.md`
+
+```text
+Hi John,
+
+Someone attempted to log in to your Superuser account on CheckTick but failed.
+
+Because your account has privileged access to patient data, we immediately
+notify you of any failed login attempts.
+
+Attempt Details:
+- Account Targeted: admin@example.com
+- Access Level: Superuser
+- Time: 2026-02-10 14:35:00 UTC
+- IP Address: 203.0.113.45
+- Device/Browser: Mozilla/5.0 (Windows NT 10.0; Win64; x64)...
+- Result: ❌ Login Failed
+
+What to do:
+If this was you, make sure you're using the correct password and try again.
+
+If this was NOT you, someone may be attempting to access your account:
+1. ⚠️ Change your password immediately
+2. Review your recent account activity
+3. Enable two-factor authentication if not already enabled
+4. Check if the IP address or location seems suspicious
+5. Contact your system administrator if you suspect unauthorized access
+
+Security Measures:
+Your account will be automatically locked after multiple failed login attempts.
+Other system administrators have also been notified of this event.
+```
+
+#### Admin Failed Login - Notification to Other Admins
+
+**To**: All superusers (for security monitoring)
+**Subject**: `🚨 Security Alert: Failed Superuser Login Attempt - admin@example.com`
+
+**Template**: `emails/security/admin_failed_login_notification.md`
+
+```text
+Hi Sarah,
+
+A failed login attempt was detected on a Superuser account in CheckTick.
+As a system administrator, you receive this notification to help monitor for
+potential security threats.
+
+Attempt Details:
+- Account Targeted: admin@example.com (John Smith)
+- Access Level: Superuser
+- Time: 2026-02-10 14:35:00 UTC
+- IP Address: 203.0.113.45
+- Device/Browser: Mozilla/5.0 (Windows NT 10.0; Win64; x64)...
+- Result: ❌ Login Failed
+
+What to do:
+Failed login attempts on privileged accounts may indicate:
+- Legitimate user forgot their password
+- Brute force attack attempt
+- Compromised credentials from another breach
+- Internal security testing
+
+Recommended Actions:
+1. Contact the user to verify if this was them
+2. Check audit logs for patterns or repeated attempts
+3. Review the IP address for known threats or suspicious location
+4. If multiple failures occur, consider temporarily locking the account
+5. If attack is confirmed, block the IP address at firewall level
+
+Automated Protections:
+The account will be automatically locked after 5 failed attempts.
+The user and all administrators are notified of both failed attempts and account lockouts.
+```
+
+**Implementation**: Configured in `checktick_app/core/signals.py` using Django authentication signals (`user_logged_in`, `user_login_failed`). Email templates use Django's internationalization framework for multi-language support.
 
 ### Email Technical Requirements
 
