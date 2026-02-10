@@ -12,7 +12,9 @@ This document provides technical implementation details for developers working o
 
 CheckTick implements a security-first approach to handling sensitive patient data, using per-survey encryption keys with AES-GCM encryption. This document describes the current implementation and planned enhancements for organizational and individual users.
 
-> **Tier Requirement**: Patient data collection with encryption is available on **Pro tier and above**. FREE tier accounts can create surveys but cannot collect patient data (which triggers encryption). If a paid user downgrades to FREE, existing patient data surveys become read-only until they upgrade again.
+> **Encryption Policy**: **ALL surveys are encrypted before publishing**, regardless of subscription tier. This ensures universal data protection across the platform.
+>
+> **Patient Data Templates**: The specialized `patient_details_encrypted` template (for NHS numbers, clinical data, etc.) is available on **Pro tier and above**. FREE tier accounts can create encrypted surveys but cannot use patient data templates. If a paid user downgrades to FREE, existing patient data surveys become read-only until they upgrade again.
 
 ## Table of Contents
 
@@ -1220,16 +1222,16 @@ from checktick_app.surveys.services.export_service import ExportService
 @login_required
 def create_export(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug, owner=request.user)
-    
+
     # Get KEK from session (survey must be unlocked)
     survey_key = get_survey_key_from_session(request, slug)
     if not survey_key and survey.requires_whole_response_encryption():
         messages.error(request, _("Please unlock survey first to export encrypted data."))
         return redirect("surveys:unlock", slug=slug)
-    
+
     # Get optional download password for export file encryption
     download_password = request.POST.get("download_password")
-    
+
     try:
         # Create export with decryption and optional re-encryption
         export = ExportService.create_export(
@@ -1238,13 +1240,13 @@ def create_export(request: HttpRequest, slug: str) -> HttpResponse:
             password=download_password,  # Optional: encrypt export file
             survey_key=survey_key,  # Required for encrypted surveys
         )
-        
+
         # Provide download link (expires in 7 days)
         download_url = ExportService.get_download_url(export)
         messages.success(request, f"Export created: {download_url}")
-        
+
         return redirect("surveys:export_list", slug=slug)
-        
+
     except ValueError as e:
         messages.error(request, str(e))
         return redirect("surveys:dashboard", slug=slug)
@@ -1266,7 +1268,7 @@ class ExportService:
     def _generate_csv(cls, survey: Survey, survey_key: bytes = None) -> str:
         """Generate CSV with decrypted response data."""
         # ... build headers ...
-        
+
         for response in survey.responses.filter(is_frozen=False):
             if survey.requires_whole_response_encryption() and survey_key:
                 try:
@@ -1281,23 +1283,23 @@ class ExportService:
             else:
                 # Legacy format: plaintext answers
                 answers_dict = response.answers or {}
-            
+
             # ... build CSV row ...
-    
+
     @classmethod
     def _encrypt_csv(cls, csv_data: str, password: str) -> tuple[bytes, str]:
         """Encrypt CSV file with download password."""
         from ..utils import encrypt_sensitive
-        
+
         # Encrypt with password (encrypt_sensitive handles Scrypt KDF)
         encrypted_blob = encrypt_sensitive(
             password.encode("utf-8"),
             {"csv_content": csv_data}
         )
-        
+
         # Generate tracking ID
         encryption_key_id = f"export-{secrets.token_hex(8)}"
-        
+
         logger.info(f"CSV encrypted: key_id={encryption_key_id}")
         return encrypted_blob, encryption_key_id
 ```
@@ -1320,63 +1322,63 @@ The `hard_delete()` method implements cryptographic key erasure for GDPR complia
 def hard_delete(self) -> None:
     """
     Permanently delete survey with cryptographic key erasure.
-    
+
     This method:
     1. Overwrites all encryption keys with random data
     2. Deletes all responses and exports
     3. Purges keys from HashiCorp Vault (if configured)
     4. Creates audit trail
     5. Permanently deletes survey from database
-    
+
     Security: Keys are overwritten (not just deleted) to prevent recovery.
     """
     import secrets
     import logging
-    
+
     logger = logging.getLogger(__name__)
     logger.info(f"Starting hard deletion for survey {self.slug} (ID: {self.id})")
-    
+
     # Step 1: Cryptographic key erasure
     keys_overwritten = []
-    
+
     if self.encrypted_kek_password:
         self.encrypted_kek_password = secrets.token_bytes(64)
         keys_overwritten.append("password")
-    
+
     if self.encrypted_kek_recovery:
         self.encrypted_kek_recovery = secrets.token_bytes(64)
         keys_overwritten.append("recovery")
-    
+
     if self.encrypted_kek_oidc:
         self.encrypted_kek_oidc = secrets.token_bytes(64)
         keys_overwritten.append("oidc")
-    
+
     if self.encrypted_kek_org:
         self.encrypted_kek_org = secrets.token_bytes(64)
         keys_overwritten.append("org")
-    
+
     self.save(update_fields=[
         "encrypted_kek_password",
         "encrypted_kek_recovery",
         "encrypted_kek_oidc",
         "encrypted_kek_org",
     ])
-    
+
     logger.info(
         f"Cryptographic keys overwritten for survey {self.slug}: "
         f"{', '.join(keys_overwritten)}"
     )
-    
+
     # Step 2: Delete responses
     response_count = self.responses.count()
     self.responses.all().delete()
     logger.info(f"Deleted {response_count} responses for survey {self.slug}")
-    
+
     # Step 3: Delete exports
     export_count = DataExport.objects.filter(survey=self).count()
     DataExport.objects.filter(survey=self).delete()
     logger.info(f"Deleted {export_count} export records for survey {self.slug}")
-    
+
     # Step 4: Purge Vault keys (if configured)
     try:
         from .vault_client import VaultClient
@@ -1386,7 +1388,7 @@ def hard_delete(self) -> None:
         logger.info(f"Purged Vault escrow keys at {vault_path}")
     except (ImportError, Exception) as e:
         logger.warning(f"Failed to purge Vault keys: {e}", exc_info=True)
-    
+
     # Step 5: Create audit trail BEFORE deletion
     audit_data = {
         "survey_id": self.id,
@@ -1398,7 +1400,7 @@ def hard_delete(self) -> None:
         "encryption_keys_erased": keys_overwritten,
     }
     logger.info(f"Audit trail created for hard deletion: {audit_data}")
-    
+
     # Step 6: Final database deletion
     survey_id = self.id
     survey_slug = self.slug

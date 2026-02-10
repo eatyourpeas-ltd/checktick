@@ -22,17 +22,19 @@ CheckTick's encryption system is designed with redundancy and recovery in mind. 
 
 ### Free Tier
 
-**Data Location**: Browser local storage only
+**Data Location**: Encrypted in database (all surveys are encrypted)
 
 **Disaster Scenarios:**
 
 | Scenario | Impact | Recovery |
 |----------|--------|----------|
-| Browser data cleared | Data lost | No recovery possible |
-| Device lost/stolen | Data lost | No recovery possible |
-| Browser crash | Possible data loss | Check browser recovery |
+| Forgot password | Can't unlock surveys | Use recovery phrase |
+| Lost recovery phrase | Backup option unavailable | Use password (still works) |
+| Lost both password AND phrase | Can't unlock surveys | Platform recovery (48-96 hours) |
 
-**Recommendation**: Free tier is not suitable for important data. Upgrade to Individual or higher for encryption and recovery.
+**Note**: All Free tier surveys are encrypted with the same protection as paid tiers. Free tier is limited to 3 surveys and cannot use patient data templates, but data security is equivalent across all tiers.
+
+**Recommendation**: Free tier is suitable for general surveys. Upgrade to Pro or higher for unlimited surveys and access to patient data templates.
 
 ### Individual Tier
 

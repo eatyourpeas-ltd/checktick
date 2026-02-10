@@ -12,7 +12,7 @@ CheckTick protects your sensitive survey data with encryption. This guide explai
 
 | Subscription Tier | Encryption Features | Recovery Options |
 |-------------------|---------------------|------------------|
-| **Free** | Standard surveys only (no patient data) | N/A - no encryption needed |
+| **Free** | **All surveys encrypted** (no patient data templates) | Password OR Recovery Phrase OR **Verified Identity Recovery** |
 | **Individual** | Password + Recovery Phrase + **Platform Key Escrow** | Password OR Recovery Phrase OR **Verified Identity Recovery** |
 | **Pro** | Enhanced encryption + Vault backup | Password OR Recovery Phrase OR **Verified Identity Recovery** |
 | **Team Small/Medium/Large** | Team-shared keys + Organization master key | Team admin OR Organization admin OR Platform recovery |
@@ -30,10 +30,12 @@ CheckTick implements **ethical key recovery**: if you lose both your password AN
 ## Free Tier
 
 ### What You Get
-- Create up to 3 surveys
-- Collect general survey responses
+- Create up to 3 **encrypted surveys**
+- **All surveys are automatically encrypted** before publishing
+- Collect general survey responses securely
 - Export your data
 - Basic API access
+- Password + Recovery Phrase protection
 
 ### When to Use
 - Testing CheckTick features
@@ -41,10 +43,22 @@ CheckTick implements **ethical key recovery**: if you lose both your password AN
 - Learning how the platform works
 - General data collection (no patient identifiers)
 
-### Limitations
-⚠️ **Patient data collection is not available** on the Free tier
+### Encryption on Free Tier
 
-The Patient Details (encrypted) template is a paid feature. To collect patient-identifiable data with encryption, upgrade to Pro (£5/month) or higher.
+**All surveys are encrypted, even on the free tier.** When you publish your first survey:
+
+1. Choose a strong password
+2. Save your 12-word recovery phrase
+3. Your survey is encrypted and published
+
+This ensures all data collected through CheckTick is secure, regardless of subscription tier.
+
+### Limitations
+⚠️ **Patient data collection templates are not available** on the Free tier
+
+The **Patient Details (encrypted)** template is a paid feature designed for NHS number, clinical data, and patient identifiers. While ALL surveys are encrypted on the Free tier, specialized patient data templates require a paid subscription.
+
+To collect patient-identifiable data using the patient data templates, upgrade to Pro (£5/month) or higher.
 
 ### Upgrade Path
 When you're ready to collect patient data or need more features:
