@@ -4,14 +4,14 @@ category: self-hosting
 priority: 9
 ---
 
-This guide covers platform-level theme configuration for self-hosted CheckTick deployments. These settings control the default appearance for all users and can be overridden by organization owners.
+This guide covers platform-level theme configuration for self-hosted CheckTick deployments. These settings control the default appearance for all users and can be overridden by organisation owners.
 
 ## Overview
 
 CheckTick uses a **3-tier theme hierarchy**:
 
 1. **Platform defaults** (this guide) - Set by superusers via Branding Configuration UI (`/branding/`)
-2. **Organization themes** - Set by organization owners via Profile page (see [Branding and Theme Settings](branding-and-theme-settings.md))
+2. **Organisation themes** - Set by organisation owners via Profile page (see [Branding and Theme Settings](branding-and-theme-settings.md))
 3. **Survey themes** - Set by survey creators for individual surveys
 
 This guide focuses on **platform-level configuration** for deployment administrators.
@@ -316,9 +316,9 @@ CheckTick uses a **logical naming system** to separate user preferences from act
 The context processor (`context_processors.py`) implements the cascade:
 
 ```python
-# Check for organization theme
+# Check for organisation theme
 if user_org and (user_org.theme_preset_light or user_org.theme_preset_dark):
-    # Use organization theme
+    # Use organisation theme
     preset_light = user_org.theme_preset_light
     preset_dark = user_org.theme_preset_dark
 else:
@@ -327,7 +327,7 @@ else:
     preset_dark = platform_preset_dark
 ```
 
-**Result:** Organization members see their org's custom theme, while users without an organization see platform defaults.
+**Result:** Organisation members see their org's custom theme, while users without an organisation see platform defaults.
 
 ## Custom Theme CSS
 
@@ -374,7 +374,7 @@ In `docker-compose.yml` or `.env`:
 
 ```yaml
 environment:
-  - BRAND_TITLE=MyOrganization CheckTick
+  - BRAND_TITLE=MyOrganisation CheckTick
   - BRAND_THEME_PRESET_LIGHT=corporate
   - BRAND_THEME_PRESET_DARK=luxury
   - BRAND_ICON_URL=/static/icons/custom-logo.svg
@@ -388,7 +388,7 @@ kind: ConfigMap
 metadata:
   name: checktick-config
 data:
-  BRAND_TITLE: "MyOrganization CheckTick"
+  BRAND_TITLE: "MyOrganisation CheckTick"
   BRAND_THEME_PRESET_LIGHT: "corporate"
   BRAND_THEME_PRESET_DARK: "luxury"
 ```
@@ -413,7 +413,7 @@ docker compose exec web python manage.py collectstatic --noinput
 
 - Only superusers can access `/admin/` and modify SiteBranding
 - Regular users cannot change platform defaults
-- Organization owners can only theme their own organization
+- Organisation owners can only theme their own organisation
 - Survey creators can only theme their own surveys
 
 ### CSS Injection Protection
@@ -437,8 +437,8 @@ docker compose exec web python manage.py collectstatic --noinput
 **Check precedence:**
 
 1. Database SiteBranding overrides environment variables
-2. Organization themes override platform defaults
-3. Survey themes override organization themes
+2. Organisation themes override platform defaults
+3. Survey themes override organisation themes
 
 **Clear caches:**
 
@@ -496,7 +496,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 ## Related Documentation
 
-- [Branding and Theme Settings](branding-and-theme-settings.md) - User guide for theme hierarchy and organization-level theming
+- [Branding and Theme Settings](branding-and-theme-settings.md) - User guide for theme hierarchy and organisation-level theming
 - [Themes](themes.md) - Technical implementation details for developers
 - [Self-Hosting Configuration](self-hosting-configuration.md) - General deployment configuration
 

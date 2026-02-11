@@ -10,7 +10,7 @@ This guide explains how billing works in CheckTick, including subscriptions, pay
 
 ## Overview
 
-CheckTick uses a secure payment provider to handle all billing. We offer flexible subscription plans to suit individual users, small teams, and large organizations.
+CheckTick uses a secure payment provider to handle all billing. We offer flexible subscription plans to suit individual users, small teams, and large organisations.
 
 > **Note for Self-Hosters:** If you're running CheckTick with `SELF_HOSTED=true` in your environment configuration, billing features are automatically hidden and all users get Enterprise-level features without payment requirements.
 
@@ -59,12 +59,12 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 - Unlimited active surveys
 - All Team Medium features
 
-### Organization & Enterprise
+### Organisation & Enterprise
 
 **Organisation**
 - Bespoke pricing (£6/seat/month inc VAT)
 - Custom number of seats
-- Multiple teams within organization
+- Multiple teams within organisation
 - Private datasets
 - Advanced governance features
 - Priority support
@@ -190,7 +190,7 @@ To downgrade to a lower tier:
 - Downgrades take effect at the end of your current billing period
 - You retain access to current features until the period ends
 - If you have more surveys than the new limit allows, excess surveys will be automatically closed
-- **Organization members cannot downgrade** - only individual users can downgrade their accounts
+- **Organisation members cannot downgrade** - only individual users can downgrade their accounts
 
 **Survey Auto-Closure:**
 If downgrading would exceed survey limits:
@@ -295,7 +295,7 @@ To request a refund within the 14-day cancellation period:
 
 For more details, see our [Refund Policy](/docs/refund-policy/).
 
-## Team & Organization Billing
+## Team & Organisation Billing
 
 ### How Team Billing Works
 
@@ -304,14 +304,14 @@ For more details, see our [Refund Policy](/docs/refund-policy/).
 - **Per-team pricing**: Each team is billed separately
 - **Member changes**: Adding/removing members doesn't affect billing until next renewal
 
-### Organization Billing
+### Organisation Billing
 
-Organizations are billed per user per month:
+Organisations are billed per user per month:
 
 - **Base rate**: £30/user/month
 - **Minimum commitment**: Contact sales
 - **Annual discounts**: Available for yearly contracts
-- **Invoice billing**: Available for organizations
+- **Invoice billing**: Available for organisations
 
 ### Managing Team Members
 
@@ -394,7 +394,7 @@ Each invoice includes:
 **"Cannot cancel subscription" error:**
 - You may have hit the rate limit (5 per hour)
 - Wait an hour and try again
-- Organization members cannot self-cancel
+- Organisation members cannot self-cancel
 - Contact support for assistance
 
 **"Survey limit exceeded" after downgrade:**
@@ -412,7 +412,7 @@ If you encounter billing issues:
 - Visit [Community Discussions](https://github.com/eatyourpeas/checktick/discussions)
 - Email support: [support@checktick.uk](mailto:support@checktick.uk)
 
-**For ORGANIZATION and ENTERPRISE users:**
+**For ORganisaTION and ENTERPRISE users:**
 - Priority support email: [enterprise@checktick.uk](mailto:enterprise@checktick.uk)
 - Phone support (if applicable to your plan)
 - Dedicated account manager (Enterprise only)
@@ -465,12 +465,12 @@ For more details, see our [Data Governance](/docs/data-governance/) documentatio
 
 ## Contact Sales
 
-For Organization or Enterprise plans:
+For Organisation or Enterprise plans:
 
 - **Email**: [sales@checktick.uk](mailto:sales@checktick.uk)
 - **Custom quotes**: Volume discounts available
 - **Annual contracts**: Significant savings on yearly billing
-- **Invoice billing**: Available for large organizations
+- **Invoice billing**: Available for large organisations
 
 ## Next Steps
 

@@ -5,7 +5,7 @@ category: dspt-9-it-protection
 
 # Infrastructure Technical Change Log
 
-**Organization:** eatyourpeas
+**Organisation:** eatyourpeas
 **Document Owner:** Directors
 **Scope:** Boundary Firewalls, Cloud Infrastructure (PaaS/SaaS), and End-User Device Configurations.
 

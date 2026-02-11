@@ -7,7 +7,7 @@ category: None
 **Last Updated:** {{ site.updated_date | default: "Please update in admin settings" }}
 **Review Date:** {{ site.policy_review_date | default: "Annual review required" }}
 
-This policy explains how {{ site.organization_name | default: "your organization" }} handles personal and sensitive data collected through CheckTick surveys, in compliance with data protection laws.
+This policy explains how {{ site.organisation_name | default: "your organisation" }} handles personal and sensitive data collected through CheckTick surveys, in compliance with data protection laws.
 
 ---
 
@@ -16,6 +16,7 @@ This policy explains how {{ site.organization_name | default: "your organization
 ### 1.1 Purpose
 
 This policy sets out how we:
+
 - Collect, use, and protect survey data
 - Ensure compliance with data protection laws
 - Respect the rights of survey participants
@@ -24,17 +25,19 @@ This policy sets out how we:
 ### 1.2 Scope
 
 This policy applies to:
+
 - All survey data collected through CheckTick
-- All users with access to CheckTick (survey creators, editors, viewers, organization administrators)
+- All users with access to CheckTick (survey creators, editors, viewers, organisation administrators)
 - Personal data, sensitive personal data, and anonymous data
 - Data throughout its lifecycle (collection, storage, use, deletion)
 
 ### 1.3 Legal Basis
 
 This policy complies with:
+
 - **UK GDPR** - Data Protection Act 2018
 - **EU GDPR** - Regulation (EU) 2016/679 (if applicable)
-- **NHS Data Security and Protection Toolkit** (for NHS organizations)
+- **NHS Data Security and Protection Toolkit** (for NHS organisations)
 - **Caldicott Principles** (for health and social care data)
 - **Common Law Duty of Confidentiality**
 
@@ -46,20 +49,21 @@ This policy complies with:
 
 The data controller for survey data is:
 
-**Organization:** {{ site.organization_name | default: "Your Organization Name" }}
-**Address:** {{ site.organization_address | default: "Your Organization Address" }}
+**Organisation:** {{ site.organisation_name | default: "Your Organisation Name" }}
+**Address:** {{ site.organisation_address | default: "Your Organisation Address" }}
 **Email:** {{ site.data_controller_email | default: site.admin_email | default: "dpo@example.org" }}
-**Phone:** {{ site.organization_phone | default: "Your Organization Phone" }}
+**Phone:** {{ site.organisation_phone | default: "Your Organisation Phone" }}
 
 ### 2.2 Data Protection Officer (DPO)
 
-If your organization is required to appoint a DPO:
+If your organisation is required to appoint a DPO:
 
 **Name:** {{ site.dpo_name | default: "To be appointed" }}
 **Email:** {{ site.dpo_email | default: site.data_controller_email | default: "dpo@example.org" }}
 **Phone:** {{ site.dpo_phone | default: "Contact via email" }}
 
 **When to contact the DPO:**
+
 - Questions about data protection rights
 - Concerns about data handling
 - Data breach notifications
@@ -70,7 +74,7 @@ If your organization is required to appoint a DPO:
 
 For operational data governance questions:
 
-**Name:** {{ site.ig_lead_name | default: "Contact organization administrator" }}
+**Name:** {{ site.ig_lead_name | default: "Contact organisation administrator" }}
 **Email:** {{ site.ig_lead_email | default: site.admin_email | default: "admin@example.org" }}
 **Phone:** {{ site.ig_lead_phone | default: "Contact via email" }}
 
@@ -83,6 +87,7 @@ We process data in accordance with the following principles (GDPR Article 5):
 ### 3.1 Lawfulness, Fairness, and Transparency
 
 We will:
+
 - Process data lawfully with appropriate legal basis
 - Be transparent about what data we collect and why
 - Inform participants how their data will be used
@@ -91,6 +96,7 @@ We will:
 ### 3.2 Purpose Limitation
 
 We will:
+
 - Collect data for specific, explicit, and legitimate purposes
 - Not use data in ways incompatible with those purposes
 - Clearly state the purpose when creating surveys
@@ -99,6 +105,7 @@ We will:
 ### 3.3 Data Minimization
 
 We will:
+
 - Collect only data that is necessary for the stated purpose
 - Not collect data "just in case" it might be useful
 - Design surveys to minimize personal data collection
@@ -107,6 +114,7 @@ We will:
 ### 3.4 Accuracy
 
 We will:
+
 - Take reasonable steps to ensure data is accurate
 - Allow participants to correct their responses (where appropriate)
 - Update or delete inaccurate data when identified
@@ -115,6 +123,7 @@ We will:
 ### 3.5 Storage Limitation
 
 We will:
+
 - Keep data only as long as necessary for the stated purpose
 - Implement automatic deletion after retention periods expire
 - Provide warnings before deletion
@@ -127,7 +136,8 @@ We will:
 ### 3.6 Integrity and Confidentiality
 
 We will:
-- Implement appropriate technical and organizational security measures
+
+- Implement appropriate technical and organisational security measures
 - Protect data from unauthorized access, loss, or damage
 - Encrypt data in transit and at rest
 - Limit access to authorized personnel only
@@ -138,6 +148,8 @@ We will:
 ### 3.7 Accountability
 
 We will:
+
+
 - Demonstrate compliance with data protection principles
 - Maintain records of processing activities
 - Conduct Data Protection Impact Assessments (DPIAs) when required
@@ -153,19 +165,23 @@ We will:
 We process data under one or more of the following legal bases (GDPR Article 6):
 
 **1. Consent (Article 6(1)(a))**
+
 - Participants provide explicit, informed consent
 - Used for most surveys collecting personal data
 - Consent can be withdrawn at any time
 
 **2. Legal Obligation (Article 6(1)(c))**
+
 - Processing necessary to comply with legal requirements
 - e.g., statutory audits, mandatory reporting
 
 **3. Public Task (Article 6(1)(e))**
+
 - Processing necessary for tasks in the public interest
 - e.g., public health monitoring, service improvement
 
 **4. Legitimate Interests (Article 6(1)(f))**
+
 - Processing necessary for legitimate interests
 - Balanced against participants' rights and interests
 - Not used for sensitive personal data
@@ -175,14 +191,17 @@ We process data under one or more of the following legal bases (GDPR Article 6):
 For sensitive personal data (health, race, religion, etc.), we use (GDPR Article 9):
 
 **1. Explicit Consent (Article 9(2)(a))**
+
 - Clear, specific consent for processing sensitive data
 
 **2. Public Health (Article 9(2)(h) & (i))**
+
 - Processing necessary for public health purposes
 - Health/social care provision
 - Conducted under duty of confidentiality
 
 **3. Research (Article 9(2)(j))**
+
 - Processing necessary for research in public interest
 - Subject to appropriate safeguards
 
@@ -195,6 +214,7 @@ Participants have the following rights under GDPR:
 ### 5.1 Right to Be Informed
 
 Participants must be informed:
+
 - What data is collected
 - Why it's collected
 - How it will be used
@@ -207,42 +227,47 @@ Participants must be informed:
 ### 5.2 Right of Access
 
 Participants can request:
+
 - Confirmation that we process their data
 - Copy of their data
 - Information about processing
 
-**How to request:** Contact organization administrator
+**How to request:** Contact organisation administrator
 **Response time:** Within 30 days
 **Cost:** Free (unless excessive/repeated requests)
 
 ### 5.3 Right to Rectification
 
 Participants can request:
+
 - Correction of inaccurate data
 - Completion of incomplete data
 
-**Implementation:** Contact organization administrator
+**Implementation:** Contact organisation administrator
 **Response time:** Within 30 days
 
 ### 5.4 Right to Erasure ("Right to be Forgotten")
 
 Participants can request deletion if:
+
 - Data no longer necessary
 - Consent is withdrawn
 - Data processed unlawfully
 - Legal obligation to delete
 
 **Exceptions:**
+
 - Legal claims/proceedings
 - Public interest in health
 - Research in public interest (with safeguards)
 
-**Implementation:** Contact organization administrator
+**Implementation:** Contact organisation administrator
 **Response time:** Within 30 days
 
 ### 5.5 Right to Restrict Processing
 
 Participants can request restriction if:
+
 - Accuracy is contested
 - Processing is unlawful (but they don't want deletion)
 - We no longer need the data, but they need it for legal claims
@@ -254,10 +279,12 @@ Participants can request restriction if:
 ### 5.6 Right to Data Portability
 
 Participants can request:
+
 - Their data in machine-readable format (CSV, JSON)
-- Transfer to another organization (where feasible)
+- Transfer to another organisation (where feasible)
 
 **Applies when:**
+
 - Processing based on consent or contract
 - Processing is automated
 
@@ -267,6 +294,7 @@ Participants can request:
 ### 5.7 Right to Object
 
 Participants can object to processing based on:
+
 - Legitimate interests
 - Public interest
 - Research purposes
@@ -285,27 +313,30 @@ Participants can object to processing based on:
 ### 6.1 Data Controller
 
 **Responsibilities:**
+
 - Ensure compliance with data protection laws
 - Approve high-risk processing activities
 - Respond to regulatory inquiries
 - Maintain accountability documentation
 
-**Who:** Organization administrator or designated role
+**Who:** Organisation administrator or designated role
 
 ### 6.2 Data Protection Officer (DPO)
 
 **Responsibilities:**
+
 - Advise on data protection compliance
 - Monitor compliance with policy
 - Conduct DPIAs and audits
 - Liaise with regulatory authorities
 - Handle data subject requests and complaints
 
-**Who:** As appointed by organization (if required)
+**Who:** As appointed by organisation (if required)
 
 ### 6.3 Survey Creators
 
 **Responsibilities:**
+
 - Design surveys with data minimization in mind
 - Provide clear privacy notices
 - Choose appropriate legal basis
@@ -315,9 +346,10 @@ Participants can object to processing based on:
 
 **Access:** Can download their own survey data
 
-### 6.4 Organization Owners
+### 6.4 Organisation Owners
 
 **Responsibilities:**
+
 - Oversee data governance for all surveys
 - Assign data custodians as needed
 - Review and extend retention periods
@@ -325,11 +357,12 @@ Participants can object to processing based on:
 - Respond to data subject requests
 - Investigate data breaches
 
-**Access:** Can download all survey data in organization
+**Access:** Can download all survey data in organisation
 
 ### 6.5 Data Custodians
 
 **Responsibilities:**
+
 - Securely store and manage assigned survey data
 - Follow data security best practices
 - Report data breaches immediately
@@ -340,6 +373,7 @@ Participants can object to processing based on:
 ### 6.6 Editors and Viewers
 
 **Responsibilities:**
+
 - Edit survey structure only (editors)
 - No access to response data
 - Report suspected breaches
@@ -380,7 +414,7 @@ We implement:
 
 **See:** [Data Security Guide](/docs/data-governance-security/)
 
-### 7.2 Organizational Measures
+### 7.2 Organisational Measures
 
 We implement:
 
@@ -415,9 +449,9 @@ We implement:
 
 ### 8.1 Internal Sharing
 
-Data may be shared within the organization with:
+Data may be shared within the organisation with:
 
-- Organization administrators
+- Organisation administrators
 - Survey creators (their own surveys)
 - Data custodians (assigned surveys)
 
@@ -473,7 +507,7 @@ A data breach is any incident that compromises the confidentiality, integrity, o
 
 **Any breach must be reported immediately:**
 
-1. **Report to organization administrator** (within 1 hour)
+1. **Report to organisation administrator** (within 1 hour)
 2. **Report to DPO** (within 1 hour, if applicable)
 3. **Provide details:**
    - What happened
@@ -538,7 +572,7 @@ We conduct DPIAs for:
 DPIAs are reviewed by:
 
 - Data Protection Officer
-- Organization administrator
+- Organisation administrator
 - Relevant stakeholders
 - ICO (if high risk remains after mitigation)
 
@@ -591,7 +625,7 @@ Processing may be extended beyond retention periods for:
 
 **Legal holds:**
 
-- Applied by organization owner only
+- Applied by organisation owner only
 - Require documented justification
 - Reviewed every 6 months
 - Lifted when no longer needed
@@ -622,7 +656,7 @@ All users must complete:
 
 - Survey creators: Privacy by design, consent
 - Data custodians: Secure data handling
-- Organization owners: Compliance oversight
+- Organisation owners: Compliance oversight
 
 ### 12.3 Refresher Training
 
@@ -674,8 +708,8 @@ We track:
 For questions about this policy or data protection:
 
 **Email:** {{ site.data_controller_email | default: site.admin_email | default: "dpo@example.org" }}
-**Phone:** {{ site.organization_phone | default: "Contact via email" }}
-**Post:** {{ site.organization_address | default: "Your Organization Address" }}
+**Phone:** {{ site.organisation_phone | default: "Contact via email" }}
+**Post:** {{ site.organisation_address | default: "Your Organisation Address" }}
 
 ### 14.2 Data Subject Requests
 
@@ -742,13 +776,13 @@ Post: Information Commissioner's Office, Wycliffe House, Water Lane, Wilmslow, C
 
 | Role | Name | Signature | Date |
 |------|------|-----------|------|
-| Data Controller | {{ site.organization_owner \| default: "Name" }} | _________________ | ________ |
+| Data Controller | {{ site.organisation_owner \| default: "Name" }} | _________________ | ________ |
 | DPO (if applicable) | {{ site.dpo_name \| default: "Name" }} | _________________ | ________ |
 
 **Distribution:**
 
 - All CheckTick users (via system notification)
-- Organization website
+- Organisation website
 - Staff handbook
 - New user onboarding
 
@@ -756,4 +790,4 @@ Post: Information Commissioner's Office, Wycliffe House, Water Lane, Wilmslow, C
 
 **This policy is effective from:** {{ site.policy_effective_date | default: "Date of publication" }}
 
-**Note:** Fields marked with `{{ }}` should be configured in CheckTick admin settings or organization profile.
+**Note:** Fields marked with `{{ }}` should be configured in CheckTick admin settings or organisation profile.

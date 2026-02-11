@@ -191,7 +191,7 @@ Users have granular control over which emails they receive. Preferences are mana
 | **Survey created confirmations** | Notification when you create a survey | ❌ Disabled |
 | **Survey deleted confirmations** | Notification when you delete a survey | ❌ Disabled |
 | **Survey published notifications** | Alert when your survey is published | ❌ Disabled |
-| **Team invitations** | Invites to join organizations | ✅ Enabled |
+| **Team invitations** | Invites to join organisations | ✅ Enabled |
 | **Survey invitations** | Invites to collaborate on surveys | ✅ Enabled |
 | **Error notifications** | System errors affecting you (future) | ✅ Enabled |
 | **Critical alerts** | Critical system issues (future) | ✅ Enabled |
@@ -288,7 +288,7 @@ Used for survey-specific emails (survey created):
 - **Overrides** from `Survey.style` field if customized
 - Allows per-survey branding for white-label use cases
 
-Example: A research organization can create multiple surveys with different branding for different departments.
+Example: A research organisation can create multiple surveys with different branding for different departments.
 
 ## Developer Guide
 

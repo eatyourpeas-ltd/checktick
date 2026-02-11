@@ -67,7 +67,7 @@ The {{ platform_name }} API allows for secure, programmatic integration with ext
 
 ### API Security Controls
 
-1. **Appropriate Scoping:** API keys are restricted using the "Principle of Least Privilege." A key generated for a specific survey cannot access data from other surveys or organization settings.
+1. **Appropriate Scoping:** API keys are restricted using the "Principle of Least Privilege." A key generated for a specific survey cannot access data from other surveys or organisation settings.
 2. **Rate Limiting:** To prevent brute-force attacks and ensure service availability, the API implements strict rate limiting at the Northflank ingress layer.
 3. **Audit Logging:** Every API request is logged, including the timestamp, the identity of the API key used, the endpoint accessed, and the IP address.
 4. **IP Whitelisting (Optional):** For high-sensitivity healthcare integrations, we support restricting API access to specific trusted IP ranges.

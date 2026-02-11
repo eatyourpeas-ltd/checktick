@@ -47,7 +47,6 @@ The survey is still open. Once closed, data will be retained for {{ survey.reten
 Now that the legal hold is lifted, assess whether you still need this data:
 
 1. **Do you still need the data?**
-
    - If yes: Take no action, wait for deletion warnings
    - If no: Consider exporting and then deleting the survey
 
@@ -111,8 +110,8 @@ For questions about the legal hold removal:
 
 - Contact {{ removed_by.username }} who removed the hold
 - Review the [Data Governance Overview](/docs/data-governance-overview/)
-- Contact your organization's legal counsel
-- Contact your organization administrator
+- Contact your organisation's legal counsel
+- Contact your organisation administrator
 
 ## Important Reminder
 

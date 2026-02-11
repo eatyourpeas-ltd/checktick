@@ -661,7 +661,7 @@ CheckTick uses **five scheduled tasks**:
 
 1. **Data Governance** (GDPR Required) - Daily deletion warnings and automatic survey cleanup
 2. **Survey Progress Cleanup** (Recommended) - Remove expired incomplete survey sessions
-3. **External Dataset Sync** (Recommended) - Update hospital lists and organizational data
+3. **External Dataset Sync** (Recommended) - Update hospital lists and organisational data
 4. **NHS Data Dictionary Sync** (Recommended) - Scrape standardized NHS codes and values
 5. **Global Question Group Templates Sync** (Optional) - Import reusable question templates
 
@@ -965,7 +965,7 @@ Create custom branding via Django admin:
 1. Go to `/admin/`
 2. Navigate to **Site Branding**
 3. Configure:
-   - **Site Name**: Your organization name
+   - **Site Name**: Your organisation name
    - **Logo**: Upload your logo (SVG recommended)
    - **Primary Color**: Main brand color (hex)
    - **Secondary Color**: Accent color (hex)

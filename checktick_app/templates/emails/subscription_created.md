@@ -17,7 +17,7 @@ Your subscription is now active and you have access to all {{ tier_name }} featu
   {% elif tier == 'enterprise' %}
 - **Everything in Pro** plus:
 - **Custom branding** - White-label your surveys
-- **SSO integration** - Single sign-on for your organization
+- **SSO integration** - Single sign-on for your organisation
 - **Dedicated support** - Direct access to our team
 - **SLA guarantees** - Uptime and support commitments
   {% endif %}

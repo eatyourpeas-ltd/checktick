@@ -17,7 +17,7 @@ category: dspt-6-incidents
 
 ## 2. External Technical Support
 
-| Organization | Service | Contact Method | Account/Ref No. |
+| Organisation | Service | Contact Method | Account/Ref No. |
 | :--- | :--- | :--- | :--- |
 | **Northflank** | Hosting / PaaS | [Support Hotline/URL] | [Account ID] |
 | **AWS** | Database / RDS | [Enterprise Support] | [Account ID] |
@@ -25,7 +25,7 @@ category: dspt-6-incidents
 
 ## 3. Health Sector & Regulatory
 
-| Organization | Purpose | Contact Method |
+| Organisation | Purpose | Contact Method |
 | :--- | :--- | :--- |
 | **NHS England CSOC** | Cyber Operations | 0300 303 5222 / cyberconfidential@nhs.net |
 | **ICO** | Breach Reporting | 0303 123 1113 |
@@ -33,7 +33,7 @@ category: dspt-6-incidents
 
 ## 4. Professional Services
 
-| Organization | Purpose | Contact Method |
+| Organisation | Purpose | Contact Method |
 | :--- | :--- | :--- |
 | **[Firm Name]** | Legal / DPO | [Phone Number] |
 | **[Provider]** | Cyber Insurance | [Policy Number & Hotline] |

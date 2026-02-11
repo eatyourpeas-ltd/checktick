@@ -11,7 +11,7 @@ Instead of manually typing dropdown options for every survey question, you can:
 
 - **Use global datasets** from NHS Data Dictionary and RCPCH APIs
 - **Request new datasets** from authoritative sources
-- **Create custom lists** tailored to your organization
+- **Create custom lists** tailored to your organisation
 - **Publish your lists** to share with the entire CheckTick community
 - **Customize global datasets** to fit your specific needs
 
@@ -41,7 +41,7 @@ See the [complete NHS DD dataset reference](nhs-data-dictionary-datasets.md) for
 
 ### 2. RCPCH NHS Organisations
 
-Organizational data automatically synced from the Royal College of Paediatrics and Child Health API:
+Organisational data automatically synced from the Royal College of Paediatrics and Child Health API:
 
 - Hospitals (England & Wales) - ~500 hospitals
 - NHS Trusts - ~240 trusts
@@ -59,7 +59,7 @@ Organizational data automatically synced from the Royal College of Paediatrics a
 
 ### 3. Community-Published Datasets
 
-Curated lists shared by other organizations using CheckTick:
+Curated lists shared by other organisations using CheckTick:
 
 - Department-specific codes
 - Specialty classifications
@@ -115,7 +115,7 @@ You have two approaches for creating custom datasets:
 
 ### Option 1: Start from Scratch
 
-Best for completely unique lists specific to your organization.
+Best for completely unique lists specific to your organisation.
 
 **Steps:**
 1. Navigate to Django Admin → Datasets
@@ -159,7 +159,7 @@ Share your curated lists with the entire CheckTick community.
 ### When to Publish
 
 Consider publishing when you've created a dataset that:
-- Would benefit other organizations
+- Would benefit other organisations
 - Is high-quality and well-maintained
 - Represents authoritative or curated data for a specific domain
 - Fills a gap in existing global datasets
@@ -173,7 +173,7 @@ Consider publishing when you've created a dataset that:
 
 **What happens:**
 - Your dataset becomes visible to all CheckTick users
-- Your organization is credited as the source
+- Your organisation is credited as the source
 - Others can use it directly or create custom versions
 - You retain full editing rights
 - The dataset cannot be deleted while others depend on it
@@ -218,12 +218,12 @@ Tags help organize and find datasets quickly.
 
 *Individual users can create, customize, and publish datasets. In future releases, this will require a pro account.
 
-**Cannot delete if published with dependents from other organizations
+**Cannot delete if published with dependents from other organisations
 
 **Role clarifications:**
 
 - **VIEWER**: Read-only access - can view datasets but cannot create or modify
-- **CREATOR/ADMIN**: Full dataset management capabilities for their organization
+- **CREATOR/ADMIN**: Full dataset management capabilities for their organisation
 
 ## Related Documentation
 

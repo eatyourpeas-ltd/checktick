@@ -599,22 +599,13 @@ class SurveyViewSet(viewsets.ModelViewSet):
             prev_status != Survey.Status.PUBLISHED and status == Survey.Status.PUBLISHED
         )
 
-        # Enforce encryption requirement for surveys collecting patient data
+        # Enforce encryption requirement for ALL surveys (not just patient data surveys)
         # API users must set up encryption through the web interface before publishing
-        if collects_patient and is_first_publish and not survey.has_any_encryption():
-            # Check if user can collect patient data (FREE tier cannot)
-            from checktick_app.core.tier_limits import check_patient_data_permission
-
-            can_collect, reason = check_patient_data_permission(request.user)
-            if not can_collect:
-                raise serializers.ValidationError(
-                    {
-                        "tier": f"{reason} Your survey contains patient data questions that require encryption.",
-                    }
-                )
+        # Note: Survey count limits are already enforced at survey creation time
+        if is_first_publish and not survey.has_any_encryption():
             raise serializers.ValidationError(
                 {
-                    "encryption": "This survey collects patient data and requires encryption to be set up before publishing. Please use the web interface to configure encryption, then publish via API.",
+                    "encryption": "All surveys require encryption to be set up before publishing. Please use the web interface to configure encryption, then publish via API.",
                 }
             )
         survey.status = status

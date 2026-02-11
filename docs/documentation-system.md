@@ -180,7 +180,7 @@ priority: 5
 Your content here...
 ```
 
-This ensures consistent display and proper organization.
+This ensures consistent display and proper organisation.
 
 ### 2. Hide Supporting Documentation
 

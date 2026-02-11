@@ -29,7 +29,7 @@
   <div class="stat bg-base-100 rounded-box shadow">
     <div class="stat-title">{% trans "Total Surveys" %}</div>
     <div class="stat-value text-accent">{{ total_surveys }}</div>
-    <div class="stat-desc">{% trans "All organizations" %}</div>
+    <div class="stat-desc">{% trans "All organisations" %}</div>
   </div>
 </div>
 
@@ -74,7 +74,7 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="4" class="text-center text-base-content/60">{% trans "No organizations yet" %}</td>
+              <td colspan="4" class="text-center text-base-content/60">{% trans "No organisations yet" %}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -98,7 +98,7 @@
         <table class="table table-sm">
           <thead>
             <tr>
-              <th>{% trans "Organization" %}</th>
+              <th>{% trans "Organisation" %}</th>
               <th>{% trans "Issue" %}</th>
               <th>{% trans "Action" %}</th>
             </tr>
@@ -127,7 +127,7 @@
             {% empty %}
             <tr>
               <td colspan="3" class="text-center text-base-content/60">
-                {% trans "All organizations are in good standing" %} ✓
+                {% trans "All organisations are in good standing" %} ✓
               </td>
             </tr>
             {% endfor %}
@@ -144,7 +144,7 @@
     <h2 class="card-title">{% trans "Quick Actions" %}</h2>
     <div class="flex flex-wrap gap-2">
       <a href="{% url 'core:platform_admin_org_create' %}" class="btn btn-primary">
-        + {% trans "Create Organization" %}
+        + {% trans "Create Organisation" %}
       </a>
       <a href="{% url 'core:platform_admin_org_list' %}?status=pending" class="btn btn-outline">
         {% trans "View Pending Setups" %}
@@ -153,7 +153,7 @@
         {% trans "View Statistics" %}
       </a>
       <a href="{% url 'admin:surveys_organization_changelist' %}" class="btn btn-outline">
-        {% trans "Django Admin → Organizations" %}
+        {% trans "Django Admin → Organisations" %}
       </a>
     </div>
   </div>

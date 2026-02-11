@@ -25,7 +25,7 @@ Your survey data will be retained according to the following schedule:
 
 - You can still **download survey data** at any time
 - Data exports are tracked and logged for audit purposes
-- Organization administrators are notified of all downloads
+- Organisation administrators are notified of all downloads
 
 #### Retention Management
 
@@ -52,7 +52,7 @@ Each reminder will include options to export data or extend retention.
 ### Need Help?
 
 - Review our [Data Governance Policy]({{ site_url }}/docs/data-governance-overview/)
-- Contact your organization administrator
+- Contact your organisation administrator
 - Email support with questions
 
 ---

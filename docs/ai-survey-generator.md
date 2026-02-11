@@ -23,11 +23,11 @@ Instead of writing markdown manually, you can describe your survey requirements 
 
 Access to the AI survey generator is restricted to:
 
-- **Organization administrators** - Can create surveys for their organization
+- **Organisation administrators** - Can create surveys for their organisation
 - **Survey creators** - Can create surveys they own
 - **Individual account holders** - Can create their own surveys
 
-Organization viewers/members cannot use this feature.
+Organisation viewers/members cannot use this feature.
 
 ## How to Use
 
@@ -332,11 +332,12 @@ The feature requires configuration. Contact your instance administrator to enabl
 
 ### "Session creation failed"
 
-Ensure you have appropriate permissions (admin, creator, or individual account holder). Organization viewers cannot access this feature.
+Ensure you have appropriate permissions (admin, creator, or individual account holder). Organisation viewers cannot access this feature.
 
 ### "LLM is not responding"
 
 Check that:
+
 1. Your instance has the LLM_URL configured
 2. Your instance has a valid LLM_API_KEY
 3. The LLM service is operational
@@ -375,9 +376,10 @@ When you use the AI assistant, the following is sent:
 - The system prompt (instructions for the AI)
 
 **Not sent:**
+
 - Patient data
 - Other users' surveys
-- Your organization's other data
+- Your organisation's other data
 - Authentication credentials
 
 ### Data Retention

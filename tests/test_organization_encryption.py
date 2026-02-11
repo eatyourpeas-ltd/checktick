@@ -374,7 +374,7 @@ class TestOrganizationKeyRecoveryView:
     def test_org_owner_can_access_recovery_page(
         self, org_with_master_key, member_user, client
     ):
-        """Test that organization owner can access the recovery page."""
+        """Test that organisation owner can access the recovery page."""
         # Create a survey belonging to a member
         survey = Survey.objects.create(
             owner=member_user,
@@ -394,7 +394,7 @@ class TestOrganizationKeyRecoveryView:
         response = client.get(f"/surveys/{survey.slug}/organization-recovery/")
 
         assert response.status_code == 200
-        assert "Organization Key Recovery" in response.content.decode()
+        assert "Organisation Key Recovery" in response.content.decode()
         assert survey.owner.username in response.content.decode()
 
 
@@ -405,7 +405,7 @@ class TestOrganizationKeyRecoverySecurityChecks:
     def test_regular_member_cannot_access_recovery(
         self, org_with_master_key, member_user, client
     ):
-        """Test that regular organization members cannot perform key recovery."""
+        """Test that regular organisation members cannot perform key recovery."""
         # Create a second member (not owner, not admin)
         other_member = User.objects.create_user(
             username="other_member", email="other@example.com"
@@ -687,7 +687,7 @@ class TestOrganizationKeyRecoveryIntegration:
     def test_org_admin_can_access_recovery_page(
         self, org_with_master_key, member_user, admin_user, client
     ):
-        """Test that organization admin can access the recovery page."""
+        """Test that organisation admin can access the recovery page."""
         # Create a survey belonging to a member
         survey = Survey.objects.create(
             owner=member_user,
@@ -707,7 +707,7 @@ class TestOrganizationKeyRecoveryIntegration:
         response = client.get(f"/surveys/{survey.slug}/organization-recovery/")
 
         assert response.status_code == 200
-        assert "Organization Admin" in response.content.decode()
+        assert "Organisation Admin" in response.content.decode()
 
     def test_non_admin_cannot_access_recovery_page(
         self, org_with_master_key, member_user, non_member_user, client

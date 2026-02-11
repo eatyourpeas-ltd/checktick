@@ -12,14 +12,14 @@ category: dspt-2-staff-responsibilities
 
 ### Senior Information Risk Owner (SIRO) - {{ cto_name }}
 
-* **Accountability:** Overall ownership of the organization’s Information Risk Policy.
-* **Risk Appetite:** Decides the organization's response to identified risks.
+* **Accountability:** Overall ownership of the organisation’s Information Risk Policy.
+* **Risk Appetite:** Decides the organisation's response to identified risks.
 * **Assurance:** Signs off the annual DSPT submission.
 
 ### Caldicott Guardian - {{ cto_name }}
 
 * **Ethics:** Ensures patient-identifiable data is processed according to the 8 Caldicott Principles.
-* **Advocacy:** Acts as the "conscience" of the organization regarding patient confidentiality.
+* **Advocacy:** Acts as the "conscience" of the organisation regarding patient confidentiality.
 
 ### Data Protection Officer (DPO) - {{ cto_name }}
 

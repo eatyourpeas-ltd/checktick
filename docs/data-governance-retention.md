@@ -74,18 +74,18 @@ You can extend retention up to **24 months** (2 years) from closure.
 
 - Can extend retention for **their own surveys**
 - Each survey treated separately
-- No organization-wide permissions needed
+- No organisation-wide permissions needed
 
-**Organization Owners:**
+**Organisation Owners:**
 
-- Can extend retention for **any survey in the organization**
-- Can set organization-wide policies
+- Can extend retention for **any survey in the organisation**
+- Can set organisation-wide policies
 - Receive warnings for all surveys
 
 **Data Custodians:**
 
 - **Cannot extend retention** - Read-only access
-- Must ask survey creator or organization owner
+- Must ask survey creator or organisation owner
 
 **Editors/Viewers:**
 
@@ -214,9 +214,9 @@ You receive automatic warnings at:
 - Warnings for their own surveys
 - One email per survey
 
-**Organization Owners:**
+**Organisation Owners:**
 
-- Warnings for all surveys in organization
+- Warnings for all surveys in organisation
 - Daily digest (not per-survey emails)
 - Summary of upcoming deletions
 
@@ -227,7 +227,7 @@ You receive automatic warnings at:
 **Administrators:**
 
 - Weekly summary of all upcoming deletions
-- Organization-wide statistics
+- Organisation-wide statistics
 
 ### Snoozing Warnings
 
@@ -243,7 +243,7 @@ You **cannot** snooze or dismiss warnings.
 
 - Set email filters
 - Unsubscribe from specific surveys (if you're not responsible)
-- Ask organization owner to reassign data custodian
+- Ask organisation owner to reassign data custodian
 
 ## Deletion Process
 
@@ -269,20 +269,20 @@ When the retention period expires:
 
 - Protects against accidental deletion
 - Allows for "oops" moments
-- Organization owner can restore if needed
+- Organisation owner can restore if needed
 
 ### Recovery During Grace Period
 
 **Who Can Recover:**
 
-- **Organization owners** only
+- **Organisation owners** only
 - System administrators (on request)
 
 **How to Recover:**
 
-1. Contact your organization owner
+1. Contact your organisation owner
 2. Explain why recovery is needed
-3. Organization owner accesses "Deleted Surveys"
+3. Organisation owner accesses "Deleted Surveys"
 4. Clicks "Restore" next to the survey
 5. Survey data is restored with new retention period
 6. Must provide justification for audit trail
@@ -311,7 +311,7 @@ For surveys with patient data encryption, hard deletion includes **cryptographic
    - Password-encrypted survey key
    - Recovery phrase-encrypted survey key
    - OIDC-encrypted survey key (if using SSO)
-   - Organization-encrypted survey key (if applicable)
+   - Organisation-encrypted survey key (if applicable)
 
 2. **Keys are purged** from HashiCorp Vault (if platform key escrow is enabled)
 
@@ -360,7 +360,7 @@ For surveys with patient data encryption, hard deletion includes **cryptographic
 
 **Who Can Place Legal Holds:**
 
-- **Organization owners only**
+- **Organisation owners only**
 - Must provide justification
 - Cannot be applied retroactively to hard-deleted data
 
@@ -372,7 +372,7 @@ For surveys with patient data encryption, hard deletion includes **cryptographic
 - Survey remains closed
 
 **Removing Legal Holds:**
-- Organization owner must remove explicitly
+- Organisation owner must remove explicitly
 - New retention period begins after removal
 - Standard warning schedule resumes
 
@@ -382,22 +382,22 @@ For surveys with patient data encryption, hard deletion includes **cryptographic
 
 **What happens when survey creator leaves?**
 
-If the creator is removed from the organization:
+If the creator is removed from the organisation:
 
-- **Ownership transfers** to organization owner
+- **Ownership transfers** to organisation owner
 - Retention settings **remain unchanged**
-- Organization owner receives future warnings
+- Organisation owner receives future warnings
 - Data custodians remain assigned (if any)
 
 **See:** [Special Cases Guide](/docs/data-governance-special-cases/) for details
 
-### Organization Deletion
+### Organisation Deletion
 
-**What happens when an organization is deleted?**
+**What happens when an organisation is deleted?**
 
-- All surveys in the organization are **immediately soft deleted**
+- All surveys in the organisation are **immediately soft deleted**
 - **30-day grace period** applies
-- Organization owner receives final email
+- Organisation owner receives final email
 - After 30 days: **All data hard deleted**
 
 ## Retention Best Practices
@@ -445,7 +445,7 @@ If the creator is removed from the organization:
 
 - Update your email address
 - Check spam filters
-- Contact organization owner
+- Contact organisation owner
 - Enable notifications
 
 ### Warning Says "Cannot Extend"
@@ -461,7 +461,7 @@ If the creator is removed from the organization:
 
 **Within 30 days:**
 
-- Contact organization owner immediately
+- Contact organisation owner immediately
 - Request recovery
 - Explain situation
 - Provide justification
@@ -475,14 +475,14 @@ If the creator is removed from the organization:
 
 ### Extension Request Rejected
 
-**Organization policies may:**
+**Organisation policies may:**
 
 - Limit maximum retention
 - Require approval for extensions over certain length
 - Prohibit extensions without strong justification
 - Require data protection impact assessment
 
-**Contact your organization owner** to understand policy.
+**Contact your organisation owner** to understand policy.
 
 ## Compliance and Legal
 
@@ -517,9 +517,9 @@ This policy ensures **accountability** (GDPR Article 5):
 
 **For questions about:**
 
-- **Extending retention:** Contact your organization owner
+- **Extending retention:** Contact your organisation owner
 - **Warnings not received:** Check your profile email settings
-- **Recovery:** Contact organization owner (within 30 days only)
+- **Recovery:** Contact organisation owner (within 30 days only)
 - **Policy questions:** See [Data Policy](/docs/data-governance-policy/)
 
 ## Related Guides

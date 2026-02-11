@@ -3,15 +3,15 @@ title: Publishing Question Groups
 category: None
 ---
 
-This guide explains how to publish your question groups as reusable templates that can be shared with your organization or the global CheckTick community.
+This guide explains how to publish your question groups as reusable templates that can be shared with your organisation or the global CheckTick community.
 
 > **Note:** For an overview of question groups and their features, see [Question Groups](/docs/groups-view/). To browse and import templates, see [Question Group Template Library](/docs/question-group-template-library/).
 
 ## Publication Levels
 
-### Organization Templates
+### Organisation Templates
 
-Publish templates visible only to your organization members:
+Publish templates visible only to your organisation members:
 
 - Share validated questionnaires within your team
 - Maintain consistent data collection across projects
@@ -25,13 +25,13 @@ Publish templates visible to all Checktick users:
 - Increase visibility and citations of your work
 - Available immediately after publishing
 
-**Note:** Organization VIEWER role cannot publish templates (view-only access).
+**Note:** Organisation VIEWER role cannot publish templates (view-only access).
 
 ## Publishing a Question Group
 
 1. Go to your survey's question groups page
 2. Click **Publish** next to any question group
-3. Choose publication level (Organization or Global)
+3. Choose publication level (Organisation or Global)
 4. Add attribution information:
    - Author names and ORCID IDs (optional)
    - Publication title and journal
@@ -52,7 +52,7 @@ Access the template library from:
 
 Filter templates by:
 
-- Publication level (Organization/Global)
+- Publication level (Organisation/Global)
 - Tags (categories)
 - Search by name or description
 
@@ -72,7 +72,7 @@ Filter templates by:
 
 ## Managing Your Published Templates
 
-View your published templates in the template library filtered by your organization or username (coming soon).
+View your published templates in the template library filtered by your organisation or username (coming soon).
 
 To update a template:
 - Make changes to your original question group

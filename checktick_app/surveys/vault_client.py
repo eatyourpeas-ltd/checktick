@@ -6,14 +6,14 @@ hierarchical encryption key management.
 
 Architecture:
     Platform Master Key (split-knowledge)
-    └── Organization Keys
+    └── Organisation Keys
         └── Team Keys
             └── Survey KEKs (Key Encryption Keys)
 
 Security Model:
     - Platform master key = vault_component XOR custodian_component
     - Vault stores partial keys only
-    - Custodian component required for organization recovery
+    - Custodian component required for organisation recovery
     - Each level in hierarchy can recover keys below it
 """
 

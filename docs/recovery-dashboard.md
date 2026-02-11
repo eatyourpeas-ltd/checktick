@@ -6,7 +6,7 @@ priority: 6
 
 # Recovery Dashboard Specifications
 
-This document provides detailed specifications for the in-app recovery management dashboard used by organization owners and platform administrators.
+This document provides detailed specifications for the in-app recovery management dashboard used by organisation owners and platform administrators.
 
 ## Overview
 
@@ -26,7 +26,7 @@ The Recovery Dashboard is an administrative interface for managing encryption ke
 |------|-----------------|--------------|
 | **Team Member** | None | Cannot access dashboard |
 | **Team Admin** | Limited | View own team's recoveries (read-only) |
-| **Organization Owner** | Full (org scope) | Manage all org recovery requests |
+| **Organisation Owner** | Full (org scope) | Manage all org recovery requests |
 | **Platform Admin** | Full (all) | Manage all recovery requests + system settings |
 
 ## Dashboard Views
@@ -127,7 +127,7 @@ The Recovery Dashboard is an administrative interface for managing encryption ke
 │ │ Email:       s.jones@nhs.uk                                         ││
 │ │ Account:     Created 15 Jan 2024                                    ││
 │ │ Tier:        Individual                                             ││
-│ │ Organization: NHS Trust West (if applicable)                        ││
+│ │ Organisation: NHS Trust West (if applicable)                        ││
 │ │ Last Login:  28 Nov 2025, 09:15                                     ││
 │ └─────────────────────────────────────────────────────────────────────┘│
 │                                                                         │
@@ -652,7 +652,7 @@ class RecoveryAuditEntry(models.Model):
 
 ### Video Call Recording
 
-- Recording optional (configurable per organization)
+- Recording optional (configurable per organisation)
 - If enabled, recordings encrypted and stored separately
 - Automatic deletion 90 days after request completion
 - Access requires explicit admin action + logging

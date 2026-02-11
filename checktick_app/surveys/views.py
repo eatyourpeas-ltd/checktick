@@ -2541,27 +2541,14 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             prev_status = survey.status
 
             # Check if encryption setup is needed
-            # Only surveys that collect patient data require encryption
+            # ALL surveys require encryption (not just patient data surveys)
+            # Note: Survey count limits are already enforced at survey creation time
             needs_encryption_setup = (
-                collects_patient
-                and prev_status != Survey.Status.PUBLISHED
+                prev_status != Survey.Status.PUBLISHED
                 and not survey.has_any_encryption()
             )
 
             if needs_encryption_setup:
-                # Check if user can collect patient data (FREE tier cannot)
-                from checktick_app.core.tier_limits import check_patient_data_permission
-
-                can_collect, reason = check_patient_data_permission(request.user)
-                if not can_collect:
-                    messages.error(
-                        request,
-                        f"{reason} Your survey contains patient data questions that require encryption.",
-                    )
-                    return render(
-                        request, "surveys/publish_settings.html", {"survey": survey}
-                    )
-
                 # Store pending publish settings in session
                 request.session["pending_publish"] = {
                     "slug": slug,
@@ -2572,6 +2559,11 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
                     "captcha_required": captcha_required,
                     "no_patient_data_ack": no_patient_data_ack,
                 }
+                messages.info(
+                    request,
+                    "All surveys require encryption before publishing. "
+                    "Please set up encryption for your survey.",
+                )
                 return redirect("surveys:encryption_setup", slug=slug)
 
             # Apply settings
@@ -3392,13 +3384,12 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
     prev_status = survey.status
 
     # Determine if we need to redirect to encryption setup
-    # Only surveys that collect patient data require encryption
+    # ALL surveys require encryption (not just patient data surveys)
     # Organization + SSO users: auto-encrypt without setup page
     # Organization + Password users: need setup if no encryption yet
     # Individual + SSO users: need to choose SSO-only vs SSO+recovery
     # Individual + Password users: need setup if no encryption yet
 
-    collects_patient = _survey_collects_patient_data(survey)
     is_org_member = survey.organization is not None
     is_sso_user = hasattr(request.user, "oidc")
     is_first_publish = (
@@ -3407,14 +3398,8 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
     has_encryption = survey.has_any_encryption()
 
     # Auto-encrypt for organization SSO users (no setup page needed)
-    # Only if survey collects patient data
-    if (
-        collects_patient
-        and is_org_member
-        and is_sso_user
-        and is_first_publish
-        and not has_encryption
-    ):
+    # Applies to ALL surveys (not just patient data surveys)
+    if is_org_member and is_sso_user and is_first_publish and not has_encryption:
         import os
 
         # Generate survey encryption key
@@ -3451,8 +3436,8 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
         )
 
     # All other cases: check if encryption setup is needed
-    # Only redirect to setup if survey collects patient data and has no encryption
-    elif collects_patient and is_first_publish and not has_encryption:
+    # Redirect to setup if survey has no encryption on first publish
+    elif is_first_publish and not has_encryption:
         # Store pending publish settings in session
         request.session["pending_publish"] = {
             "slug": slug,

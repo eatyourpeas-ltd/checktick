@@ -35,7 +35,7 @@ This policy defines {{ platform_name }}’s commitment to managing data as a cri
 ### 2.4 Data Transfer
 
 * No patient data is to be transferred via unencrypted channels (e.g., email).
-* Secure data exports are only available to authorized 'Organization Owners' or 'Data Custodians' via authenticated HTTPS sessions.
+* Secure data exports are only available to authorized 'Organisation Owners' or 'Data Custodians' via authenticated HTTPS sessions.
 
 ## 3. Retention & Disposal Schedule
 

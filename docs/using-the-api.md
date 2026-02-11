@@ -11,10 +11,11 @@ This guide provides comprehensive documentation for creating and managing survey
 **Important:** The API enforces tier-based limits for survey creation and collaboration. See the [API Reference](api.md#account-tier-limits) for complete details.
 
 **Quick summary:**
+
 - **FREE tier**: 3 surveys max, no collaborators
 - **PRO tier**: Unlimited surveys, up to 10 editors per survey (no viewers)
-- **ORGANIZATION tier**: Unlimited surveys and collaborators, viewer role available
-- **ENTERPRISE tier**: All ORGANIZATION features plus custom branding and SSO
+- **ORGANISATION tier**: Unlimited surveys and collaborators, viewer role available
+- **ENTERPRISE tier**: All ORGANISATION features plus custom branding and SSO
 
 API requests that exceed tier limits will return `403 Forbidden` errors with upgrade guidance.
 
@@ -35,6 +36,7 @@ Free-text input for short or long answers.
 ```
 
 **Optional fields:**
+
 - `required` (boolean): Whether the question must be answered
 - `help_text` (string): Additional guidance shown to respondents
 
@@ -473,7 +475,7 @@ To seed questions for a survey, use the seed endpoint:
 POST /api/surveys/{survey_id}/seed/
 ```
 
-**Authentication:** Requires JWT token and ownership or organization ADMIN role.
+**Authentication:** Requires JWT token and ownership or organisation ADMIN role.
 
 **Request body:** JSON array of question objects (as shown in examples above).
 
@@ -495,7 +497,7 @@ POST /api/surveys/{survey_id}/seed/
 
 ## Managing Datasets via the API
 
-The DataSet API allows you to create, manage, and share reusable dropdown option lists across your organization. This is useful for standardized lists like NHS specialty codes, trust names, or custom organizational lists.
+The DataSet API allows you to create, manage, and share reusable dropdown option lists across your organisation. This is useful for standardized lists like NHS specialty codes, trust names, or custom organisational lists.
 
 ### Endpoints
 
@@ -508,12 +510,12 @@ The DataSet API allows you to create, manage, and share reusable dropdown option
 ### Permissions
 
 - **VIEWER**: Can list and retrieve datasets (read-only)
-- **CREATOR/ADMIN**: Can create, update, and delete organization datasets
+- **CREATOR/ADMIN**: Can create, update, and delete organisation datasets
 - **NHS DD datasets**: Read-only for all users (cannot be modified)
 
 ### List Datasets
 
-Get all datasets you have access to (global + organization-specific):
+Get all datasets you have access to (global + organisation-specific):
 
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN" \
@@ -531,7 +533,7 @@ Response:
     "is_global": true,
     "is_editable": false,
     "options": ["100", "101", "102", "..."],
-    "organization": null
+    "organisation": null
   },
   {
     "key": "my_custom_list",
@@ -539,8 +541,8 @@ Response:
     "category": "user_created",
     "is_global": false,
     "is_editable": true,
-    "organization": 1,
-    "organization_name": "My Organization"
+    "organisation": 1,
+    "organisation_name": "My Organisation"
   }
 ]
 ```
@@ -556,7 +558,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ### Create Dataset
 
-Create a new dataset for your organization (requires ADMIN or CREATOR role):
+Create a new dataset for your organisation (requires ADMIN or CREATOR role):
 
 ```bash
 curl -X POST \
@@ -572,7 +574,7 @@ curl -X POST \
       "Orthopedics",
       "Pediatrics"
     ],
-    "organization": 1
+    "organisation": 1
   }' \
   https://your-domain.com/api/datasets-v2/
 ```
@@ -582,7 +584,7 @@ curl -X POST \
 - `key`: Unique identifier (lowercase, hyphens/underscores only)
 - `name`: Display name
 - `options`: Array of option strings
-- `organization`: Your organization ID
+- `organisation`: Your organisation ID
 
 **Optional fields:**
 
@@ -600,8 +602,8 @@ Response:
   "source_type": "manual",
   "is_custom": true,
   "is_global": false,
-  "organization": 1,
-  "organization_name": "My Organization",
+  "organisation": 1,
+  "organisation_name": "My Organisation",
   "options": ["Emergency Department", "Cardiology", "Orthopedics", "Pediatrics"],
   "created_by": 5,
   "created_by_username": "admin_user",
@@ -613,7 +615,7 @@ Response:
 
 ### Update Dataset
 
-Update options or metadata (requires ADMIN or CREATOR role in the dataset's organization):
+Update options or metadata (requires ADMIN or CREATOR role in the dataset's organisation):
 
 ```bash
 curl -X PATCH \
@@ -663,16 +665,16 @@ The question will automatically use the options from the dataset. If you customi
 
 ### Access Control
 
-- **Global datasets** (`is_global=true`): Visible to all users and organizations
-- **Organization datasets** (`is_global=false`): Only visible to members of that organization
+- **Global datasets** (`is_global=true`): Visible to all users and organisations
+- **Organisation datasets** (`is_global=false`): Only visible to members of that organisation
 - **NHS DD datasets** (`category=nhs_dd`): Read-only, cannot be modified or deleted
-- Cross-organization access is blocked - users cannot see or modify other organizations' datasets
+- Cross-organisation access is blocked - users cannot see or modify other organisations' datasets
 
 ### Dataset Best Practices
 
 1. **Use clear, descriptive keys** like `nhs_specialty_codes` instead of `list1`
 2. **Keep options up to date** - update datasets rather than hardcoding options in questions
-3. **Create organization-wide lists** for commonly used options across multiple surveys
+3. **Create organisation-wide lists** for commonly used options across multiple surveys
 4. **Don't modify NHS DD datasets** - create custom versions if you need variations
 5. **Use the `description` field** to document the purpose and source of custom lists
 6. **Version control** is automatic - the API increments the version number on each update

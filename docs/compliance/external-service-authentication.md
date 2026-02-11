@@ -5,7 +5,7 @@ category: compliance
 
 # External Service Authentication Policy (Cyber Essentials)
 
-**Last Reviewed:** 08/02/2026 | **Owner:** {{ cto_name }} (CTO)  
+**Last Reviewed:** 08/02/2026 | **Owner:** {{ cto_name }} (CTO)
 **Cyber Essentials Compliance:** Control 5.4 & 5.5 - Authentication for External Services
 
 ## 1. External Services Overview
@@ -18,7 +18,7 @@ These are services **operated and hosted by {{ company_name }}** for customers:
 
 * **CheckTick Web Application** - Django-based SaaS platform hosted on Northflank (Port 443/HTTPS)
   * Service we run for NHS Trusts and healthcare providers
-  * Contains patient and organizational data
+  * Contains patient and organisational data
   * **This is what CE section A5.4/A5.5 refers to**
 
 ### 1.2 External Services WE USE
@@ -144,7 +144,7 @@ Monthly verification: All CheckTick administrative accounts confirmed to have MF
 
 These follow the same 12-character + MFA requirements in our Password Policy, but are NOT covered by CE question A5.4/A5.5 (we don't "run or host" these services).
 
-**Last Verified:** 08/02/2026  
+**Last Verified:** 08/02/2026
 **Next Review:** February 2027 (Annual Cyber Essentials re-certification)
 
 ---

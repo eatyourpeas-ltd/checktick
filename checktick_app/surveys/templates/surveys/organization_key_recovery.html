@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load i18n %}
 
-{% block title %}{% trans "Organization Key Recovery" %} - {{ survey.name }}{% endblock %}
+{% block title %}{% trans "Organisation Key Recovery" %} - {{ survey.name }}{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl mx-auto">
@@ -28,7 +28,7 @@
                         {% trans "Administrative Access" %}
                     </h3>
                     <p class="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                        {% trans "You are about to use organization-level key recovery to access a survey owned by another user. This action is logged for compliance and audit purposes." %}
+                        {% trans "You are about to use organisation-level key recovery to access a survey owned by another user. This action is logged for compliance and audit purposes." %}
                     </p>
                 </div>
             </div>
@@ -49,7 +49,7 @@
                     <dd class="text-sm text-gray-900 dark:text-white">{{ survey_owner.username }}</dd>
                 </div>
                 <div class="flex justify-between">
-                    <dt class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Organization" %}:</dt>
+                    <dt class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Organisation" %}:</dt>
                     <dd class="text-sm text-gray-900 dark:text-white">{{ organization.name }}</dd>
                 </div>
                 <div class="flex justify-between">
@@ -57,11 +57,11 @@
                     <dd class="text-sm text-gray-900 dark:text-white">
                         {% if is_org_owner %}
                             <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-                                {% trans "Organization Owner" %}
+                                {% trans "Organisation Owner" %}
                             </span>
                         {% elif is_org_admin %}
                             <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                                {% trans "Organization Admin" %}
+                                {% trans "Organisation Admin" %}
                             </span>
                         {% endif %}
                     </dd>

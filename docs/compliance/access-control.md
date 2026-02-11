@@ -28,7 +28,7 @@ Access to the production environment is restricted to the founding team.
 
 | Role | Access Level | Permissions |
 | :--- | :--- | :--- |
-| **Organization Owner** | Full Admin | User management, Billing, Data Export, Survey Deletion. |
+| **Organisation Owner** | Full Admin | User management, Billing, Data Export, Survey Deletion. |
 | **Editor** | Survey Mgmt | Create/Edit surveys; Cannot view or export response data. |
 | **Data Custodian** | Data Mgmt | View and Export assigned survey data; Cannot edit survey logic. |
 | **Viewer** | Read Only | View survey metadata; No access to PII/Sensitive data. |
@@ -47,7 +47,7 @@ Upon the departure of any founding partner or future contractor:
 
 As the **Data Processor**, {{ platform_name }} provides the tools for **Data Controllers** (Trusts) to manage their own staff.
 
-* Customers are responsible for removing users who leave their organisation via the 'Organization Settings' dashboard.
+* Customers are responsible for removing users who leave their organisation via the 'Organisation Settings' dashboard.
 * Access is revoked in real-time upon deletion by the Organisation Owner.
 
 ## 5. Access Review Schedule
@@ -59,7 +59,7 @@ As the **Data Processor**, {{ platform_name }} provides the tools for **Data Con
 
 ### 6.1 Multi-Factor Authentication (MFA)
 
-* **Mandatory:** MFA is strictly enforced for all administrative roles and any account with 'Data Custodian' or 'Organization Owner' privileges.
+* **Mandatory:** MFA is strictly enforced for all administrative roles and any account with 'Data Custodian' or 'Organisation Owner' privileges.
 * **Methods:** Support for TOTP (e.g., Google Authenticator) and OIDC-inherited MFA.
 
 ### 6.2 Password Policy (Non-SSO Accounts)
@@ -122,7 +122,7 @@ Access from any device not listed above is an automatic breach of policy. All au
 {{ platform_name }} operates a 'No MFA, No Access' policy for all critical systems:
 
 * **Infrastructure (Northflank):** Every account with access to production clusters or secrets must have TOTP (Time-based One-Time Password) or FIDO2/WebAuthn MFA enabled.
-* **Source Control (GitHub):** 2FA is required for all members of the {{ platform_name }} organization.
+* **Source Control (GitHub):** 2FA is required for all members of the {{ platform_name }} organisation.
 * **Identity Provider (OIDC):** We enforce MFA via our Google/Microsoft corporate identity providers for all staff.
 * **Exceptions:** Any request to bypass MFA (e.g., for automated service accounts) must be formally risk-assessed by the SIRO and documented in our exceptions log. Currently, there are 0 active exceptions.
 * **Session Persistence** Administrative sessions for Northflank and GitHub are configured to require re-authentication after a period of inactivity. We do not use "Stay Logged In" on public or shared networks.
@@ -149,4 +149,4 @@ To maintain the integrity of the {{ platform_name }} environment, all 'Authorize
 4. **Firewall:** Native OS firewalls must be enabled and set to 'Block all unsolicited incoming connections.'
 5. **Protective DNS** All authorized devices must be configured to use a Protective DNS service (e.g., Quad9 9.9.9.9) to block connections to known malicious domains and C2 (Command & Control) servers.
 
-Compliance is verified during our **Quarterly Spot Checks**. Any device failing these requirements is immediately revoked from the GitHub and Northflank organizations.
+Compliance is verified during our **Quarterly Spot Checks**. Any device failing these requirements is immediately revoked from the GitHub and Northflank organisations.

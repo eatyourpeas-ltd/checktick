@@ -24,7 +24,7 @@
 
       <div class="form-control mb-4">
         <label class="label">
-          <span class="label-text">{% trans "Organization Name" %} *</span>
+          <span class="label-text">{% trans "Organisation Name" %} *</span>
         </label>
         <input type="text" name="name"
                value="{% if editing %}{{ org.name }}{% else %}{{ form_data.name }}{% endif %}"
@@ -140,7 +140,7 @@
           <input type="checkbox" name="is_active"
                  {% if org.is_active %}checked{% endif %}
                  class="checkbox checkbox-primary" />
-          <span class="label-text">{% trans "Organization is active" %}</span>
+          <span class="label-text">{% trans "Organisation is active" %}</span>
         </label>
       </div>
       {% endif %}
@@ -150,7 +150,7 @@
         <a href="{% if editing %}{% url 'core:platform_admin_org_detail' org_id=org.id %}{% else %}{% url 'core:platform_admin_org_list' %}{% endif %}"
            class="btn btn-ghost">{% trans "Cancel" %}</a>
         <button type="submit" class="btn btn-primary">
-          {% if editing %}{% trans "Save Changes" %}{% else %}{% trans "Create Organization" %}{% endif %}
+          {% if editing %}{% trans "Save Changes" %}{% else %}{% trans "Create Organisation" %}{% endif %}
         </button>
       </div>
     </form>

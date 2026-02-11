@@ -18,7 +18,7 @@ category: dspt-5-process-reviews
 
 - [x] Processing is only on written instructions from {{ platform_name }}.
 - [x] Duty of confidence for supplier personnel.
-- [x] Appropriate technical and organizational security measures.
+- [x] Appropriate technical and organisational security measures.
 - [x] Sub-processor rules ({{ platform_name }} must be notified of changes).
 - [x] Assistance with data subject rights (DSARs).
 - [x] Deletion or return of data at the end of the contract.

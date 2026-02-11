@@ -40,7 +40,7 @@ As a Data Custodian, you are responsible for:
 
 - Only access data for the stated purpose
 - Do not share data inappropriately
-- Follow your organization's data protection policies
+- Follow your organisation's data protection policies
 
 #### 3. Compliance
 
@@ -68,7 +68,7 @@ If you have questions about this role or your responsibilities:
 
 - Contact {{ granted_by.username }} who assigned you this role
 - Review the [Data Governance Policy]({{ site_url }}/docs/data-governance-overview/)
-- Contact your organization's data protection officer
+- Contact your organisation's data protection officer
 
 ---
 

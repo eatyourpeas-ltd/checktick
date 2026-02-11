@@ -26,7 +26,7 @@ Before downloading data, verify:
 - ✓ You have a **legitimate purpose** for accessing the data
 - ✓ You have **appropriate permissions** (Creator/Owner/Custodian)
 - ✓ Downloading is **necessary** - Can you work with anonymized/aggregated data instead?
-- ✓ You have **approval** from your organization (if required)
+- ✓ You have **approval** from your organisation (if required)
 - ✓ You understand **your obligations** under data protection laws
 
 ### Prepare Your Environment
@@ -45,9 +45,9 @@ Ensure your device is secure:
 
 Download only over secure networks:
 
-- ✓ **Organizational network** - Work VPN or office network
+- ✓ **Organisational network** - Work VPN or office network
 - ✗ **Public WiFi** - Never use coffee shops, airports, hotels
-- ✗ **Home network** - Avoid unless it meets organizational security standards
+- ✗ **Home network** - Avoid unless it meets organisational security standards
 - ✗ **Mobile hotspot** - Avoid unless encrypted and from work device
 
 ## During Download
@@ -93,8 +93,8 @@ Store downloaded data:
 
 **Approved Locations:**
 - ✓ Encrypted work device hard drive
-- ✓ Organization-managed network drive (if encrypted)
-- ✓ Organization-approved secure cloud (e.g., Azure with encryption)
+- ✓ Organisation-managed network drive (if encrypted)
+- ✓ Organisation-approved secure cloud (e.g., Azure with encryption)
 - ✓ Secure server with access controls
 
 **Prohibited Locations:**
@@ -106,7 +106,7 @@ Store downloaded data:
 - ✗ Personal devices (laptops, phones, tablets)
 - ✗ Physical printouts (unless absolutely necessary and secured)
 
-### File Organization
+### File Organisation
 
 Organize files securely:
 
@@ -156,14 +156,17 @@ chmod 700 census_data/     # Full access for owner only
 Layer encryption for maximum security:
 
 **Level 1: Full Disk Encryption**
+
 - Already provided by FileVault/BitLocker
 - Protects if device is stolen
 
 **Level 2: Folder Encryption**
+
 - Use VeraCrypt or similar to create encrypted container
 - Protects even if device is accessed while running
 
 **Level 3: File Encryption**
+
 - CSV files can be encrypted with tools like GPG
 - Protects if file is copied elsewhere
 
@@ -183,17 +186,19 @@ When analyzing data:
 - ✗ **Never screen share** - Without ensuring no sensitive data visible
 - ✗ **Never present** - With raw data on screen in public spaces
 
-### Sharing Within Your Organization
+### Sharing Within Your Organisation
 
 If you must share data with colleagues:
 
 **Approved Methods:**
-- ✓ Secure file share (organization-approved)
-- ✓ Encrypted email (if organization supports it)
+
+- ✓ Secure file share (organisation-approved)
+- ✓ Encrypted email (if organisation supports it)
 - ✓ Hand delivery on encrypted USB (if policy allows)
 - ✓ Through CheckTick itself (add them as data custodian)
 
 **Prohibited Methods:**
+
 - ✗ Unencrypted email
 - ✗ Personal email (Gmail, Yahoo, etc.)
 - ✗ Cloud sharing links (Dropbox, Google Drive, WeTransfer, etc.)
@@ -202,18 +207,20 @@ If you must share data with colleagues:
 - ✗ Physical printouts left unsecured
 
 **Before Sharing:**
+
 1. Verify recipient has legitimate need
 2. Confirm they have appropriate permissions
 3. Use password-protected ZIP (new password, shared separately)
 4. Notify via separate channel (e.g., phone call)
 5. Log the share in your own records
 
-### Sharing Outside Your Organization
+### Sharing Outside Your Organisation
 
 **Generally prohibited** without specific approval.
 
 **If absolutely necessary:**
-1. Get written approval from organization owner
+
+1. Get written approval from organisation owner
 2. Ensure data sharing agreement is signed
 3. Anonymize/pseudonymize data if possible
 4. Use secure transfer method
@@ -231,7 +238,7 @@ Delete data when:
 - ✓ No longer needed for stated purpose
 - ✓ Retention period expires
 - ✓ Participant requests deletion (right to erasure)
-- ✓ You leave the organization
+- ✓ You leave the organisation
 - ✓ Project is cancelled
 
 **Don't keep data "just in case"** - This violates data minimization principles.
@@ -239,6 +246,7 @@ Delete data when:
 ### Secure Deletion Methods
 
 **Simple Delete (Not Sufficient):**
+
 - Moving to Trash/Recycle Bin does not delete
 - Standard "Empty Trash" can be recovered
 - Not acceptable for sensitive data
@@ -246,18 +254,22 @@ Delete data when:
 **Secure File Deletion:**
 
 **On Windows:**
+
 - Use SDelete from Microsoft Sysinternals
 - Or: `cipher /w:C:\folder` (built-in)
 
 **On macOS:**
+
 - Use `srm` command (if available)
 - Or: Disk Utility → Erase Free Space → "Most Secure"
 
 **On Linux:**
+
 - Use `shred -vfz -n 10 survey_data.csv`
 - Or: `wipe -rfq census_data/`
 
 **In Python (for programmatic deletion):**
+
 ```python
 import os
 import random
@@ -313,15 +325,15 @@ If you suspect a breach:
 1. **Stop** - Don't make it worse (e.g., don't forward the email again)
 2. **Contain** - Disconnect device from network if infected
 3. **Preserve evidence** - Don't delete logs or emails
-4. **Notify immediately** - Contact organization owner and Data Protection Officer
+4. **Notify immediately** - Contact organisation owner and Data Protection Officer
 
 **Call, don't email** - Breaches are urgent.
 
 ### Reporting Requirements
 
 **Within 1 hour:**
-- Notify your organization owner
-- Notify Data Protection Officer (if your organization has one)
+- Notify your organisation owner
+- Notify Data Protection Officer (if your organisation has one)
 - Notify IT security team
 
 **Within 24 hours:**
@@ -333,7 +345,7 @@ If you suspect a breach:
   - What you've done to contain it
 
 **Within 72 hours (if required by law):**
-- Your organization must report to regulatory authority (ICO in UK, etc.)
+- Your organisation must report to regulatory authority (ICO in UK, etc.)
 - You must cooperate fully with investigation
 
 ### What NOT to Do
@@ -342,7 +354,7 @@ During a breach:
 
 - ✗ **Don't hide it** - Covering up makes legal consequences worse
 - ✗ **Don't try to "fix" it yourself** - You may destroy evidence
-- ✗ **Don't contact affected individuals** - Organization will handle this
+- ✗ **Don't contact affected individuals** - Organisation will handle this
 - ✗ **Don't discuss publicly** - Including social media
 - ✗ **Don't delete anything** - Even if you think it helps
 
@@ -350,12 +362,12 @@ During a breach:
 
 Data breaches can result in:
 
-- **Personal liability** - Fines up to £17 million or 4% of organizational turnover (GDPR)
+- **Personal liability** - Fines up to £17 million or 4% of organisational turnover (GDPR)
 - **Disciplinary action** - Up to and including termination
 - **Criminal prosecution** - In serious cases
 - **Professional sanctions** - Loss of licenses/certifications
 - **Civil lawsuits** - From affected individuals
-- **Reputational damage** - Both personal and organizational
+- **Reputational damage** - Both personal and organisational
 
 **This is serious.** Follow security practices carefully.
 
@@ -383,7 +395,7 @@ Data breaches can result in:
 - [ ] Securely delete old data
 - [ ] Check retention periods in CheckTick
 - [ ] Audit file permissions
-- [ ] Review organizational security policies
+- [ ] Review organisational security policies
 
 ## Getting Help
 
@@ -392,7 +404,7 @@ Data breaches can result in:
 **For questions about:**
 - Security best practices → Contact IT security team
 - Data protection law → Contact Data Protection Officer
-- Organizational policy → Contact organization owner
+- Organisational policy → Contact organisation owner
 - CheckTick security features → See [Data Policy](/docs/data-governance-policy/)
 
 ### Reporting Issues
@@ -404,14 +416,14 @@ Data breaches can result in:
 - You're unsure if something is a security issue
 
 **Contact:**
-- Organization owner: [Set in organization settings]
-- Data Protection Officer: [Set in organization settings]
-- IT Security: [Your organization's IT security contact]
+- Organisation owner: [Set in organisation settings]
+- Data Protection Officer: [Set in organisation settings]
+- IT Security: [Your organisation's IT security contact]
 
 ### Emergency Contacts
 
 **Outside Business Hours:**
-- Critical breach: Call organization emergency number
+- Critical breach: Call organisation emergency number
 - Device lost/stolen: Call IT security hotline
 - Ransomware: Disconnect device, call IT security
 
@@ -423,7 +435,7 @@ Before downloading data, ensure you have completed:
 
 - [ ] Data protection awareness training
 - [ ] Information security training
-- [ ] Your organization's data handling training
+- [ ] Your organisation's data handling training
 - [ ] CheckTick-specific training (if provided)
 
 ### Ongoing Learning
@@ -432,7 +444,7 @@ Stay informed about:
 
 - Changes to data protection laws
 - New security threats (phishing, ransomware, etc.)
-- Organizational policy updates
+- Organisational policy updates
 - CheckTick feature updates
 
 ### Testing Your Knowledge

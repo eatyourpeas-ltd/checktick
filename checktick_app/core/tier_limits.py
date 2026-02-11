@@ -68,7 +68,7 @@ TIER_LIMITS_CONFIG = {
         can_use_api=True,  # Basic API access for all
         can_export_data=True,  # Can export own data
         can_use_webhooks=False,
-        can_collect_patient_data=False,  # FREE tier cannot collect patient data
+        can_collect_patient_data=False,  # FREE tier cannot use patient_details_encrypted templates (but all surveys are encrypted)
         support_level="community",
     ),
     "pro": TierLimits(
@@ -408,6 +408,14 @@ def check_patient_data_permission(user) -> tuple[bool, str]:
 
     Returns:
         (can_collect, reason) - Boolean and error message if not allowed
+
+    Note:
+        "Patient data collection" means using the patient_details_encrypted template
+        for NHS numbers, clinical data, etc. This is restricted to paid tiers.
+
+        However, ALL surveys (including FREE tier) are encrypted - this just controls
+        whether you can use the special patient data templates that trigger
+        whole-response encryption.
     """
     if not hasattr(user, "profile"):
         return False, "User profile not found"
@@ -417,8 +425,9 @@ def check_patient_data_permission(user) -> tuple[bool, str]:
 
     if not limits.can_collect_patient_data:
         return False, (
-            "Collecting patient data requires a paid subscription. "
-            "Upgrade to Pro (£5/mo) or higher to enable encrypted patient data collection."
+            "Collecting patient data (NHS numbers, clinical information) requires a paid subscription. "
+            "Upgrade to Pro (£5/mo) or higher. Note: All surveys are encrypted, this only controls "
+            "access to specialized patient data templates."
         )
 
     return True, ""

@@ -30,7 +30,7 @@ In addition to the NHS module, we held an internal briefing on:
 
 ## Primary Responsibilities:
 
-1. **Accountability:** Overall ownership of the organization’s information risk policy.
+1. **Accountability:** Overall ownership of the organisation’s information risk policy.
 2. **Culture:** Driving a culture of data security and protection across all operations.
 3. **Assurance:** Providing board-level assurance that information risks are managed effectively.
 4. **Incident Oversight:** Acting as the final decision-maker on reporting data breaches to the ICO/DSPT.

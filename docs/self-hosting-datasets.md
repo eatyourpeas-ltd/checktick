@@ -11,8 +11,8 @@ This guide covers the setup and maintenance of datasets for self-hosted CheckTic
 CheckTick provides three types of datasets for dropdown questions:
 
 1. **NHS Data Dictionary** - Standardized medical codes (scraped from NHS DD website)
-2. **RCPCH NHS Organisations** - Organizational data (synced from RCPCH API)
-3. **User-Created** - Custom lists created by organizations
+2. **RCPCH NHS Organisations** - Organisational data (synced from RCPCH API)
+3. **User-Created** - Custom lists created by organisations
 
 All datasets are stored in the database for fast access and offline capability.
 
@@ -42,7 +42,7 @@ See the [NHS DD Dataset Reference](nhs-data-dictionary-datasets.md) for the comp
 
 ### 2. Sync External API Datasets
 
-Fetch organizational data from RCPCH API (creates datasets on first run):
+Fetch organisational data from RCPCH API (creates datasets on first run):
 
 ```bash
 # Fetch data from RCPCH API (takes 2-3 minutes, creates datasets automatically)
@@ -64,7 +64,7 @@ This creates and populates 7 datasets:
 CheckTick uses **two automated cron jobs** to keep datasets up-to-date:
 
 1. **NHS Data Dictionary Scraping** - Scrapes NHS DD website for standardized codes
-2. **External API Sync** - Syncs organizational data from RCPCH API
+2. **External API Sync** - Syncs organisational data from RCPCH API
 
 Both commands automatically create dataset records on first run, then update them on subsequent runs. No separate seeding commands needed.
 
@@ -101,7 +101,7 @@ See [Self-hosting Scheduled Tasks](/docs/self-hosting-scheduled-tasks/) for full
 
 **What it does:**
 
-- Fetches latest organizational data from RCPCH API
+- Fetches latest organisational data from RCPCH API
 - Updates hospitals, trusts, health boards, etc.
 - Increments version numbers for change tracking
 
@@ -302,7 +302,7 @@ version = IntegerField(default=1)
 is_custom = BooleanField(default=False)
 is_global = BooleanField(default=False)
 parent = ForeignKey('self', null=True)  # For custom versions
-organization = ForeignKey(Organization, null=True)
+organisation = ForeignKey(Organisation, null=True)
 
 # Discovery
 tags = JSONField(default=list)

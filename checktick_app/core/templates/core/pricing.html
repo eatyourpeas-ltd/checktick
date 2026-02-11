@@ -83,7 +83,7 @@
             <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
-            <span class="text-base-content">{% trans "No patient data collection" %}</span>
+            <span class="text-base-content">{% trans "No patient data templates (all surveys encrypted)" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,7 +138,7 @@
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <span class="font-semibold">{% trans "Patient data collection with encryption" %}</span>
+            <span class="font-semibold">{% trans "Patient data templates (NHS numbers, clinical data)" %}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -464,7 +464,7 @@
               <td class="text-center">✓</td>
             </tr>
             <tr>
-              <td class="font-semibold">{% trans "Patient Data Collection" %}</td>
+              <td class="font-semibold">{% trans "Patient Data Templates" %}</td>
               <td class="text-center">—</td>
               <td class="text-center">✓</td>
               <td class="text-center">✓</td>
@@ -617,14 +617,14 @@
       <div class="card bg-base-100 shadow">
         <div class="card-body">
           <h3 class="font-semibold text-lg">{% trans "What's the difference between Individual and Individual Pro?" %}</h3>
-          <p class="text-base-content">{% trans "Individual (free) accounts can have up to 3 active surveys. Individual Pro removes this limit and adds patient data collection with encryption. For team collaboration with multiple users, choose from our Team plans (5-20 members) or Organisation tier for larger teams with advanced features." %}</p>
+          <p class="text-base-content">{% trans "Individual (free) accounts can have up to 3 active surveys (all encrypted). Individual Pro removes the survey limit and adds patient data templates for collecting NHS numbers and clinical information. For team collaboration with multiple users, choose from our Team plans (5-20 members) or Organisation tier for larger teams with advanced features." %}</p>
         </div>
       </div>
 
       <div class="card bg-base-100 shadow">
         <div class="card-body">
           <h3 class="font-semibold text-lg">{% trans "Is my data secure and safe?" %}</h3>
-          <p class="text-base-content">{% trans "Yes. CheckTick uses end-to-end encryption to protect patient and survey data. All sensitive information is encrypted before storage, and only you can decrypt it. The platform is designed specifically for healthcare research with privacy and security as core principles." %}</p>
+          <p class="text-base-content">{% trans "Yes. All CheckTick surveys are encrypted by default using AES-256-GCM encryption. Every survey is protected before storage, and only you can decrypt it with your password or recovery phrase. The platform is designed specifically for healthcare research with privacy and security as core principles." %}</p>
         </div>
       </div>
     </div>

@@ -24,7 +24,7 @@ CheckTick integrates with OIDC providers for seamless clinician authentication:
 #### Supported Providers
 
 - **Google OAuth**: For clinicians with personal Google accounts
-- **Microsoft Azure AD**: For hospital staff with organizational Microsoft 365 accounts
+- **Microsoft Azure AD**: For hospital staff with organisational Microsoft 365 accounts
 - **Multi-provider support**: Same user can authenticate via multiple methods
 
 #### Key Features
@@ -32,7 +32,7 @@ CheckTick integrates with OIDC providers for seamless clinician authentication:
 - **Email-based linking**: OIDC accounts automatically link to existing users via email address
 - **Preserved encryption**: SSO users maintain the same encryption security as traditional users
 - **Dual authentication**: Users can switch between SSO and password authentication
-- **Organization flexibility**: Supports both personal and organizational accounts
+- **Organisation flexibility**: Supports both personal and organisational accounts
 - **External user support**: Handles Azure AD guest accounts and external clinicians
 
 #### User Experience
@@ -61,13 +61,13 @@ This comprehensive guide covers:
 
 There are six key models in `checktick_app.surveys.models`:
 
-- Organization: a container for users and surveys.
-- OrganizationMembership: links a user to an organization with a role.
+- Organisation: a container for users and surveys.
+- OrganisationMembership: links a user to an organisation with a role.
   - Roles: ADMIN, CREATOR, VIEWER
-- Team: a collaboration unit for small groups, optionally hosted within an organization.
+- Team: a collaboration unit for small groups, optionally hosted within an organisation.
 - TeamMembership: links a user to a team with a role.
   - Roles: ADMIN, CREATOR, VIEWER
-- Survey: owned by a user and optionally associated with an organization or team.
+- Survey: owned by a user and optionally associated with an organisation or team.
 - SurveyMembership: links a user to a specific survey with a role.
   - Roles: CREATOR, EDITOR, VIEWER
 
@@ -78,19 +78,19 @@ CheckTick uses a seven-tier account system:
 - **FREE tier**: Individual users with up to 3 active surveys. Cannot share surveys or invite collaborators.
 - **PRO tier**: Individual users with unlimited surveys. Can add editors (up to 10 collaborators per survey) but no viewer role.
 - **TEAM tiers** (Small/Medium/Large): Small group collaboration (5/10/20 members) with team-based surveys and role-based access.
-- **ORGANIZATION tier**: Large team collaboration with unlimited collaborators and full role-based access (Admin, Creator, Viewer).
-- **ENTERPRISE tier**: All ORGANIZATION features plus custom branding, SSO/OIDC, and self-hosted options.
+- **ORGANIsATION tier**: Large team collaboration with unlimited collaborators and full role-based access (Admin, Creator, Viewer).
+- **ENTERPRISE tier**: All ORGANIsATION features plus custom branding, SSO/OIDC, and self-hosted options.
 
 For detailed tier features, see [Account Types & Tiers](getting-started-account-types.md).
 
-### Organization Roles
+### Organisation Roles
 
-Organization-level role semantics:
+Organisation-level role semantics:
 
-- **Owner**: The user who created the organization. Full administrative access.
-- **Org ADMIN**: Can view/edit all surveys that belong to their organization. Can manage organization members, teams, and survey collaborators.
-- **Org CREATOR**: Can create surveys within the organization. Can view/edit their own surveys.
-- **Org VIEWER**: Read-only access to organization surveys. Cannot create or edit surveys.
+- **Owner**: The user who created the organisation. Full administrative access.
+- **Org ADMIN**: Can view/edit all surveys that belong to their organisation. Can manage organisation members, teams, and survey collaborators.
+- **Org CREATOR**: Can create surveys within the organisation. Can view/edit their own surveys.
+- **Org VIEWER**: Read-only access to organisation surveys. Cannot create or edit surveys.
 - **Participant** (no membership): Can only submit responses via public links; cannot access builder or API survey objects.
 
 ### Team Roles
@@ -104,16 +104,16 @@ Team-level role semantics (for Team tier accounts):
 
 Teams can exist:
 
-- **Standalone**: Independent teams (not part of an organization)
-- **Organization-hosted**: Teams within an organization (managed by org admins)
+- **Standalone**: Independent teams (not part of an organisation)
+- **Organisation-hosted**: Teams within an organisation (managed by org admins)
 
-**Access Hierarchy**: Organization admin > Team admin > Team creator > Team viewer
+**Access Hierarchy**: Organisation admin > Team admin > Team creator > Team viewer
 
 ### Survey Collaboration Roles
 
-**Note**: Survey collaboration is available for organization and team surveys. Individual users on PRO tier can add editors only (no viewer role).
+**Note**: Survey collaboration is available for organisation and team surveys. Individual users on PRO tier can add editors only (no viewer role).
 
-Individual surveys within organizations can have collaborators with specific roles through SurveyMembership:
+Individual surveys within organisations can have collaborators with specific roles through SurveyMembership:
 
 | Role | Content Editing | User Management | Survey Creation |
 |------|----------------|-----------------|-----------------|
@@ -152,13 +152,13 @@ Collaboration features are tier-dependent:
 - Limited to team size (5/10/20 members depending on tier)
 - Dashboard integration: Team management interface for admins
 
-**ORGANIZATION & ENTERPRISE Tiers:**
+**ORGANISATION & ENTERPRISE Tiers:**
 
 - Full collaboration features available
 - Survey CREATORs can add users by email and assign roles (CREATOR, EDITOR, VIEWER)
 - Unlimited collaborators per survey
 - Role management: CREATORs can change collaborator roles or remove access
-- Dashboard integration: "Manage collaborators" button shows for organization surveys
+- Dashboard integration: "Manage collaborators" button shows for organisation surveys
 - Permission boundaries: EDITORs can modify content but cannot manage users
 
 This enables teams to collaborate on survey design while maintaining clear boundaries between content editing and access control.
@@ -169,17 +169,17 @@ The central authorization checks live in `checktick_app/surveys/permissions.py`:
 
 ### Survey Permissions
 
-- `can_view_survey(user, survey)` — True if user is the survey owner, an ADMIN of the survey's organization, a member of the survey's team, or has survey membership (CREATOR, EDITOR, or VIEWER)
-- `can_edit_survey(user, survey)` — True if user is the survey owner, an ADMIN of the survey's organization, a team member with ADMIN or CREATOR role, or has survey membership as CREATOR or EDITOR
-- `can_manage_survey_users(user, survey)` — True if the survey belongs to an organization or team AND user is the survey owner, an ADMIN of the survey's organization, a team ADMIN, or has survey membership as CREATOR. Returns False for individual user surveys (surveys without organization or team).
+- `can_view_survey(user, survey)` — True if user is the survey owner, an ADMIN of the survey's organisation, a member of the survey's team, or has survey membership (CREATOR, EDITOR, or VIEWER)
+- `can_edit_survey(user, survey)` — True if user is the survey owner, an ADMIN of the survey's organisation, a team member with ADMIN or CREATOR role, or has survey membership as CREATOR or EDITOR
+- `can_manage_survey_users(user, survey)` — True if the survey belongs to an organisation or team AND user is the survey owner, an ADMIN of the survey's organisation, a team ADMIN, or has survey membership as CREATOR. Returns False for individual user surveys (surveys without organisation or team).
 - `require_can_view(user, survey)` — Raises 403 if not allowed
 - `require_can_edit(user, survey)` — Raises 403 if not allowed
 
 ### Team Permissions
 
-- `can_view_team_survey(user, survey)` — True if user can view a team survey (team membership or organization admin)
-- `can_edit_team_survey(user, survey)` — True if user can edit a team survey (team admin/creator or organization admin)
-- `can_manage_team(user, team)` — True if user is team owner, team admin, or organization admin (for org-hosted teams)
+- `can_view_team_survey(user, survey)` — True if user can view a team survey (team membership or organisation admin)
+- `can_edit_team_survey(user, survey)` — True if user can edit a team survey (team admin/creator or organisation admin)
+- `can_manage_team(user, team)` — True if user is team owner, team admin, or organisation admin (for org-hosted teams)
 - `can_add_team_member(user, team)` — True if user can manage team AND team is under capacity
 - `can_create_survey_in_team(user, team)` — True if user is team member with CREATOR or ADMIN role AND team is under survey limit
 - `get_user_team_role(user, team)` — Returns the user's role in the team (ADMIN, CREATOR, VIEWER, or None)
@@ -205,9 +205,9 @@ The API mirrors the same rules using a DRF permission class and scoped querysets
 
 User management operations (adding/removing collaborators) require `can_manage_survey_users` permission, which is restricted to:
 
-- Organization or team surveys only (surveys with organization or team)
-- Survey CREATORs, organization ADMINs, team ADMINs, and survey owners
-- **Individual users (surveys without organization or team) will receive 403 Forbidden when attempting to manage memberships**
+- Organisation or team surveys only (surveys with organisation or team)
+- Survey CREATORs, organisation ADMINs, team ADMINs, and survey owners
+- **Individual users (surveys without organisation or team) will receive 403 Forbidden when attempting to manage memberships**
 
 Error behavior:
 
@@ -222,11 +222,11 @@ Datasets (prefilled dropdown options) have different permission models depending
 
 - **NHS Data Dictionary (NHS DD)**: Global, read-only datasets managed by the platform. Cannot be edited or deleted.
 - **External API datasets**: Global datasets synced from external sources. Read-only for all users.
-- **User-created datasets**: Created by individual users or organization members, can be personal or organization-owned, and optionally published globally.
+- **User-created datasets**: Created by individual users or organisation members, can be personal or organisation-owned, and optionally published globally.
 
 ### Individual User Dataset Permissions
 
-Individual users (without organization membership) can:
+Individual users (without organisation membership) can:
 
 - **Create datasets**: Create personal datasets
 - **Edit own datasets**: Modify datasets they created
@@ -236,9 +236,9 @@ Individual users (without organization membership) can:
 
 > **Note**: Dataset creation and publishing is available to all tiers. Future versions may require PRO tier for advanced dataset features.
 
-### Organization Dataset Roles
+### Organisation Dataset Roles
 
-For organization-owned datasets:
+For organisation-owned datasets:
 
 | Role | View | Create | Edit | Delete | Publish Globally | Create Custom Version |
 |------|------|--------|------|--------|------------------|----------------------|
@@ -246,7 +246,7 @@ For organization-owned datasets:
 | **CREATOR** | Yes | Yes | Yes | Yes* | Yes | Yes |
 | **VIEWER** | Yes | No | No | No | No | No |
 
-*Cannot delete if published globally and other organizations have created custom versions from it
+*Cannot delete if published globally and other organisations have created custom versions from it
 
 ### Global Dataset Operations
 
@@ -260,9 +260,9 @@ Any authenticated user can:
 Individual users, ADMINs and CREATORs can publish their datasets globally:
 
 1. **Publish action**: Makes a dataset available to all users
-2. **Attribution preserved**: Creator/organization ownership is retained after publishing
+2. **Attribution preserved**: Creator/organisation ownership is retained after publishing
 3. **Protection**: Published datasets with dependents (custom versions from others) cannot be deleted
-4. **Editability**: Original creator/organization can still edit published datasets
+4. **Editability**: Original creator/organisation can still edit published datasets
 
 ### Custom Versions
 
@@ -270,18 +270,18 @@ Authenticated users can create custom versions from any global dataset:
 
 - **Source flexibility**: Can customize NHS DD datasets, external API datasets, or other users' published datasets
 - **Independence**: Custom versions are independent - changes don't affect the parent
-- **Personal or org-owned**: Custom versions belong to the creating user (individual) or their organization
+- **Personal or org-owned**: Custom versions belong to the creating user (individual) or their organisation
 - **Full control**: Custom versions can be edited, deleted, and even published globally
 
 ### Enforcement in the API
 
 Dataset API (`/api/datasets-v2/`) enforces these rules:
 
-- **Listing**: Returns global datasets plus user's organization datasets (if in an org) plus user's personal datasets
+- **Listing**: Returns global datasets plus user's organisation datasets (if in an org) plus user's personal datasets
 - **Retrieve**: Allowed if user can view the dataset
 - **Create**: Allowed for all authenticated users (will require pro account in future)
-- **Update/Delete**: Requires being the creator (individual) or ADMIN/CREATOR in dataset's organization
-- **Publish**: Requires being the creator (individual) or ADMIN/CREATOR in dataset's organization
+- **Update/Delete**: Requires being the creator (individual) or ADMIN/CREATOR in dataset's organisation
+- **Publish**: Requires being the creator (individual) or ADMIN/CREATOR in dataset's organisation
 - **Create custom version**: Allowed for all authenticated users (will require pro account in future)
 
 For detailed usage and examples, see [Dataset Sharing and Customization](dataset-sharing-and-customization.md).
@@ -298,17 +298,17 @@ Additional protections:
 For security and data integrity, account deletion is strictly controlled:
 
 - **User accounts**: Only superusers can delete user accounts via Django Admin (`/admin/auth/user/`)
-- **Organizations**: Only superusers can delete organizations via Django Admin (`/admin/surveys/organization/`)
+- **Organisations**: Only superusers can delete organisations via Django Admin (`/admin/surveys/organisation/`)
 - **Regular users cannot delete their own accounts** to prevent data loss and maintain security
 
 This protects against:
 
 - Accidental deletion of surveys shared with other users
 - Malicious or compromised account actions
-- Loss of audit trails and organizational data
+- Loss of audit trails and organisational data
 - Cascade deletion effects that impact multiple users
 
-Survey creators and organization admins retain full control over survey access and membership management, but cannot perform destructive account-level operations.
+Survey creators and organisation admins retain full control over survey access and membership management, but cannot perform destructive account-level operations.
 
 ### Platform Admin Functions
 
@@ -316,7 +316,7 @@ Platform superusers have access to additional administrative interfaces for comp
 
 | Interface | URL | Purpose |
 |-----------|-----|---------|
-| Django Admin | `/admin/` | User/organization management |
+| Django Admin | `/admin/` | User/organisation management |
 | Platform Admin | `/platform-admin/` | Platform analytics and oversight |
 | **Platform Logs** | `/platform-admin/logs/` | Audit and infrastructure log review |
 
@@ -432,7 +432,7 @@ For detailed encryption documentation, see:
 
 ### Role-Based Access Control (RBAC)
 
-**Organization Roles**: Owner, Admin, Creator, Viewer
+**Organisation Roles**: Owner, Admin, Creator, Viewer
 **Team Roles**: Owner, Admin, Creator, Viewer
 **Survey Roles**: Creator, Editor, Viewer
 
@@ -447,7 +447,7 @@ Core permission checks in `checktick_app/surveys/permissions.py`:
 | `can_view_survey` | View access to surveys |
 | `can_edit_survey` | Edit access to surveys |
 | `can_manage_survey_users` | Manage survey collaborators |
-| `can_manage_org_users` | Manage organization members |
+| `can_manage_org_users` | Manage organisation members |
 | `can_create_datasets` | Create new datasets |
 | `can_edit_dataset` | Edit existing datasets |
 | `can_close_survey` | Close/archive surveys |

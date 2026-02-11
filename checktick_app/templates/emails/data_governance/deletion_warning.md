@@ -54,7 +54,7 @@ If you no longer need this data, you don't need to do anything. The survey will 
 If you have questions or concerns about this deletion:
 
 - Review our [Data Governance Policy]({{ site_url }}/docs/data-governance-overview/)
-- Contact your organization administrator
+- Contact your organisation administrator
 - Email support if you believe this is an error
 
 ---

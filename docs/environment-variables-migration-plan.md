@@ -15,6 +15,7 @@ priority: 101
 This document defines which configuration options should remain as environment variables and which should be migrated to UI-based management via Django management commands and admin interface.
 
 **Guiding Principles:**
+
 1. **Infrastructure & Security** → Environment Variables (`.env` file)
 2. **Branding & Customization** → Management Commands + UI (Django admin/custom views)
 3. **Operational Settings** → Keep flexible (can be env vars with UI overrides)
@@ -24,7 +25,7 @@ This document defines which configuration options should remain as environment v
 CheckTick uses a **3-tier theme cascade** with the following precedence (highest to lowest):
 
 1. **Survey-level themes** (`Survey.style` JSON field) - Overrides all
-2. **Organization-level themes** (`Organization` theme fields) - Overrides platform defaults
+2. **Organisation-level themes** (`Organisation` theme fields) - Overrides platform defaults
 3. **Platform-level themes** (`SiteBranding` model + ENV fallbacks) - Base defaults
 
 ### Implementation Details
@@ -35,17 +36,17 @@ CheckTick uses a **3-tier theme cascade** with the following precedence (highest
 - After migration: `SiteBranding` model (DB) → `context_processors.py` → templates
 - ENV variables become **fallbacks only** if `SiteBranding` not configured
 
-**Organization Level** (already implemented):
+**Organisation Level** (already implemented):
 
-- `Organization` model has theme fields: `default_theme`, `theme_preset_light`, `theme_preset_dark`, `theme_light_css`, `theme_dark_css`
-- Applied in `context_processors.py` if user is organization member
+- `Organisation` model has theme fields: `default_theme`, `theme_preset_light`, `theme_preset_dark`, `theme_light_css`, `theme_dark_css`
+- Applied in `context_processors.py` if user is organisation member
 - Overrides platform defaults
 
 **Survey Level** (already implemented):
 
 - `Survey.style` JSON field contains theme overrides
 - Applied per-survey in views/templates
-- Highest priority - overrides both platform and organization themes
+- Highest priority - overrides both platform and organisation themes
 
 ### Theme CSS Generation
 
@@ -55,7 +56,7 @@ The system uses `generate_theme_css_for_brand()` function (in `checktick_app/cor
 2. Generate CSS variables for runtime theme switching
 3. Allow custom CSS overrides from DaisyUI Theme Generator
 
-This works at all three levels (platform, organization, survey).
+This works at all three levels (platform, organisation, survey).
 
 ---
 
@@ -149,7 +150,7 @@ These settings are infrastructure-level, security-sensitive, or need to be set b
 
 | Variable | Purpose | Why ENV? |
 |----------|---------|----------|
-| `CHECKTICK_DEFAULT_RETENTION_MONTHS` | Default retention period | Policy - organizational default |
+| `CHECKTICK_DEFAULT_RETENTION_MONTHS` | Default retention period | Policy - organisational default |
 | `CHECKTICK_MAX_RETENTION_MONTHS` | Maximum retention allowed | Policy - compliance constraint |
 | `CHECKTICK_DOWNLOAD_LINK_EXPIRY_DAYS` | Export link expiry | Policy - security setting |
 | `CHECKTICK_WARN_BEFORE_DELETION_DAYS` | Warning schedule | Policy - notification timing |

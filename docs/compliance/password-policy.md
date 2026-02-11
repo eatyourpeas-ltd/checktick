@@ -21,14 +21,14 @@ category: dspt-4-managing-access
   - Must be unique (not used on any other system)
   - Protected by biometric authentication (Touch ID/Face ID/Windows Hello) where available
   - Password required immediately after sleep/screen saver
-  
+
 * **Administrator Accounts:**
   - Minimum length: 12 characters (no maximum length restriction)
   - Must be stored in approved password manager (Bitwarden)
   - Authentication via PAM module (pam_tid.so on macOS) using Touch ID/biometrics for sudo operations
   - Never used for day-to-day work activities
 
-* **No Default or Guessable Passwords:** Prohibited patterns include "password", "admin", "12345", organization name, or predictable sequences
+* **No Default or Guessable Passwords:** Prohibited patterns include "password", "admin", "12345", organisation name, or predictable sequences
 
 ### 1.2 Mobile Devices (iOS/Android)
 
@@ -41,7 +41,7 @@ category: dspt-4-managing-access
 
 All cloud service accounts meet one of these Cyber Essentials-compliant configurations:
 
-**Administrative Accounts (Organization Owners, Infrastructure Admin):**
+**Administrative Accounts (Organisation Owners, Infrastructure Admin):**
 
 * Minimum password length: 12 characters (exceeds CE requirement)
 * MFA mandatory (TOTP, Passkeys, or Biometric)

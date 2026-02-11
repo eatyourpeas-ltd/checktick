@@ -26,7 +26,7 @@ The API enforces the same tier-based limits as the web interface:
 
 - **FREE tier**: Maximum 3 surveys
 - **PRO tier**: Unlimited surveys
-- **ORGANIZATION tier**: Unlimited surveys
+- **ORGANISATION tier**: Unlimited surveys
 - **ENTERPRISE tier**: Unlimited surveys
 
 Attempting to create a survey beyond your tier limit will return a `403 Forbidden` error with a message indicating the upgrade path.
@@ -46,10 +46,10 @@ Adding collaborators via `POST /api/survey-memberships/` enforces tier-based res
 - **PRO tier**:
   - Can add EDITOR role (up to 10 collaborators per survey)
   - Cannot add VIEWER role
-- **ORGANIZATION tier**:
+- **ORGANISATION tier**:
   - Can add both EDITOR and VIEWER roles
   - Unlimited collaborators per survey
-- **ENTERPRISE tier**: Same as ORGANIZATION
+- **ENTERPRISE tier**: Same as ORGANISATION
 
 Attempting to add collaborators beyond your tier permissions will return a `403 Forbidden` error with upgrade guidance.
 
@@ -62,12 +62,12 @@ Attempting to add collaborators beyond your tier permissions will return a `403 
 
 // PRO user trying to add viewers
 {
-  "detail": "Adding viewers requires Organization tier. Pro tier supports editors only."
+  "detail": "Adding viewers requires Organisation tier. Pro tier supports editors only."
 }
 
 // PRO user exceeding 10 collaborators
 {
-  "detail": "You've reached the limit of 10 collaborators for this survey on Pro tier. Upgrade to Organization for unlimited collaborators."
+  "detail": "You've reached the limit of 10 collaborators for this survey on Pro tier. Upgrade to Organisation for unlimited collaborators."
 }
 ```
 
@@ -77,8 +77,8 @@ Attempting to add collaborators beyond your tier permissions will return a `403 
   - List: sees own surveys
   - Retrieve/Update/Delete: allowed for own surveys
 - Org ADMIN
-  - List: sees all surveys in their organization(s)
-  - Retrieve/Update/Delete: allowed for surveys in their organization(s)
+  - List: sees all surveys in their organisation(s)
+  - Retrieve/Update/Delete: allowed for surveys in their organisation(s)
 - Org CREATOR/VIEWER
   - List: sees only own surveys
   - Retrieve: allowed for surveys they're a member of
@@ -98,11 +98,11 @@ The DataSet API (`/api/datasets-v2/`) manages shared dropdown option lists for s
   - List/Retrieve: only global datasets (is_global=True)
   - Create/Update/Delete: not allowed
 - **Authenticated users (any role)**
-  - List/Retrieve: global datasets + their organization's datasets
+  - List/Retrieve: global datasets + their organisation's datasets
 - **Org ADMIN and CREATOR**
-  - Create: can create datasets for their organization
-  - Update: can update their organization's datasets (except NHS DD datasets)
-  - Delete: can soft-delete their organization's datasets (except NHS DD datasets)
+  - Create: can create datasets for their organisation
+  - Update: can update their organisation's datasets (except NHS DD datasets)
+  - Delete: can soft-delete their organisation's datasets (except NHS DD datasets)
 - **Org VIEWER**
   - Create/Update/Delete: not allowed (read-only access)
 - **NHS Data Dictionary datasets**
@@ -163,11 +163,11 @@ Returns a list of published question group templates visible to the authenticate
 **Access Control:**
 
 - Users see global templates (publication_level='global')
-- Users see organization-level templates from their own organization(s)
+- Users see organisation-level templates from their own organisation(s)
 
 **Query Parameters:**
 
-- `publication_level` (string): Filter by 'global' or 'organization'
+- `publication_level` (string): Filter by 'global' or 'organisation'
 - `language` (string): Filter by language code (e.g., 'en', 'cy')
 - `tags` (string): Comma-separated list of tags to filter by
 - `search` (string): Search in template name and description
@@ -179,9 +179,9 @@ Returns a list of published question group templates visible to the authenticate
 - `name`: Template name
 - `description`: Template description
 - `markdown`: Markdown representation of questions
-- `publication_level`: 'global' or 'organization'
+- `publication_level`: 'global' or 'organisation'
 - `publisher_username`: Username of publisher
-- `organization_name`: Name of organization (for org-level templates)
+- `organization_name`: Name of organisation (for org-level templates)
 - `attribution`: Attribution metadata
 - `tags`: Array of tags
 - `language`: Language code
@@ -229,7 +229,7 @@ Publishes a question group as a reusable template.
   "question_group_id": 456,
   "name": "Depression Screening (PHQ-9)",
   "description": "Standard 9-item depression screening questionnaire",
-  "publication_level": "organization",
+  "publication_level": "organisation",
   "organization_id": 789,
   "language": "en",
   "tags": ["mental-health", "screening", "validated"],
@@ -321,7 +321,7 @@ If you need to share an imported question group, either:
 
 // 403 Forbidden - Not an org admin
 {
-  "error": "You must be an ADMIN in the organization to publish at organization level"
+  "error": "You must be an ADMIN in the organisation to publish at organisation level"
 }
 
 // 403 Forbidden - Not a superuser

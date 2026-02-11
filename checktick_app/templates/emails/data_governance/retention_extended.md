@@ -23,13 +23,11 @@ Your survey data will now be retained until **{{ new_deletion_date }}** instead 
 ### Updated Timeline
 
 1. **Now - {{ new_deletion_date }}**: Survey data is retained and accessible
-
    - You can download survey data at any time
    - Data custodians can access responses
    - Further extensions possible (up to 24 months total)
 
 2. **Deletion Warnings**: You'll receive new email notifications
-
    - 30 days before the new deletion date
    - 7 days before the new deletion date
    - 1 day before the new deletion date
@@ -95,8 +93,8 @@ For questions about retention extensions:
 
 - Review the [Data Governance Overview](/docs/data-governance-overview/)
 - Contact {{ extended_by.username }} who extended the retention
-- Contact your organization administrator
-- Review your organization's data retention policy
+- Contact your organisation administrator
+- Review your organisation's data retention policy
 
 ---
 

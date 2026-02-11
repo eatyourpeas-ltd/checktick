@@ -33,8 +33,8 @@ The `cleanup_survey_progress` management command runs daily to:
 
 The `sync_external_datasets` management command runs daily to:
 
-1. **Update hospital lists** - Syncs hospitals, NHS trusts, and other organizational data from RCPCH API
-2. **Maintain accuracy** - Ensures dropdown options reflect current NHS organizational structure
+1. **Update hospital lists** - Syncs hospitals, NHS trusts, and other organisational data from RCPCH API
+2. **Maintain accuracy** - Ensures dropdown options reflect current NHS organisational structure
 3. **Enable offline use** - Stores data locally so surveys work without API dependency
 
 **Recommended**: Run this daily to keep external datasets fresh. Datasets are used in prefilled dropdown fields. Without periodic sync, data may become stale (hospitals close, trusts merge, etc.).

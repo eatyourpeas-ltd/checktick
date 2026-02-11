@@ -32,7 +32,7 @@ Teams have capacity limits based on their subscription tier:
 
 There are three membership scopes with separate roles:
 
-### Organisation Membership (OrganizationMembership)
+### Organisation Membership (OrganisationMembership)
 
 - **admin**: Full administrative control over the organisation context, including managing org members, teams, and surveys within the organisation.
 - **creator**: Can create and manage their own surveys; read-only visibility to organisation content is up to app policy, but creators do NOT manage org members or teams.
@@ -189,17 +189,17 @@ Authentication: All endpoints below require JWT. Include "Authorization: Bearer 
 Scope and permissions:
 
 - Queryset is restricted to organisations where the caller is an admin.
-- Create/Update/Delete require admin role in the target organization.
+- Create/Update/Delete require admin role in the target organisation.
 - Delete: additionally prevents an org admin from removing their own admin membership.
 - Unauthorized or out-of-scope access returns 403 Forbidden. Missing/invalid JWT returns 401 Unauthorized.
 
 Serializer fields:
 
-- id, organization, user, username (read-only), role, created_at (read-only)
+- id, organisation, user, username (read-only), role, created_at (read-only)
 
 ### Survey memberships
 
-**Note**: Survey memberships are only available for organization surveys. Individual users cannot create or manage survey memberships.
+**Note**: Survey memberships are only available for organisation surveys. Individual users cannot create or manage survey memberships.
 
 - List: GET /api/survey-memberships/
 - Create: POST /api/survey-memberships/
@@ -210,7 +210,7 @@ Scope and permissions:
 
 - Queryset contains only memberships for surveys the caller can view (owner, org-admin for the survey's org, or the caller is a member of the survey).
 - Create/Update/Delete require manage permission on the survey (owner, org admin for the survey's org, or survey creator).
-- **Individual users (surveys without organization) will receive 403 Forbidden when attempting to manage memberships.**
+- **Individual users (surveys without organisation) will receive 403 Forbidden when attempting to manage memberships.**
 - Unauthorized or out-of-scope access returns 403; missing/invalid JWT returns 401.
 
 Serializer fields:
@@ -245,7 +245,7 @@ Note: The SSR UI allows searching by email and will create or reuse users accord
 
 Membership actions performed via the SSR UI are recorded in AuditLog with:
 
-- actor, scope (organisation or survey), organization/survey context, action (add/update/remove), target_user, metadata (e.g., role), timestamp
+- actor, scope (organisation or survey), organisation/survey context, action (add/update/remove), target_user, metadata (e.g., role), timestamp
 
 These records enable traceability of who changed which memberships and when.
 
@@ -253,7 +253,7 @@ These records enable traceability of who changed which memberships and when.
 
 - JWT is required for API access. Missing/invalid tokens result in 401; valid tokens without sufficient privileges result in 403.
 - SSR uses session auth with CSRF protection and enforces permissions via centralized helpers.
-- Organization admins cannot remove themselves as admins via the UI or the API; requests to remove self-admin are rejected.
+- Organisation admins cannot remove themselves as admins via the UI or the API; requests to remove self-admin are rejected.
 - Sensitive demographics remain encrypted per-survey and are unaffected by membership operations.
 
 ### Account Deletion Security
@@ -262,14 +262,14 @@ For security and data integrity reasons, account deletion is restricted:
 
 - **User account deletion**: Only superusers can delete user accounts through the Django Admin interface (`/admin/`).
 - **Regular users cannot delete their own accounts** to prevent accidental data loss and maintain audit trails.
-- **Organisation deletion**: Only superusers can delete organizations through the Django Admin interface.
-- **Survey deletion**: Survey owners and organization admins can delete surveys they manage, following proper confirmation workflows.
+- **Organisation deletion**: Only superusers can delete organisations through the Django Admin interface.
+- **Survey deletion**: Survey owners and organisation admins can delete surveys they manage, following proper confirmation workflows.
 
-**Rationale**: User and organization deletion can have cascading effects that permanently remove data belonging to multiple users. This restriction ensures:
+**Rationale**: User and organisation deletion can have cascading effects that permanently remove data belonging to multiple users. This restriction ensures:
 
 1. **Data protection**: Prevents accidental loss of surveys and responses that may be shared with other users
 2. **Audit compliance**: Maintains proper audit trails for account management actions
-3. **Security**: Prevents malicious or compromised accounts from destroying organizational data
+3. **Security**: Prevents malicious or compromised accounts from destroying organisational data
 4. **Intentionality**: Ensures deletion decisions are made by administrators with full context
 
 **For users needing account deletion**: Contact your system administrator, who can safely perform the deletion through the admin interface after confirming the impact on shared data.

@@ -5,7 +5,7 @@ category: dspt-7-continuity
 
 # Backup Restoration & Disaster Recovery Log
 
-**Organization:** {{ platform_name }}
+**Organisation:** {{ platform_name }}
 **System:** Northflank Production Cluster (PostgreSQL)
 **Recovery Time Objective (RTO):** 1 Hour
 **Recovery Point Objective (RPO):** 24 Hours

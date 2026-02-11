@@ -51,7 +51,7 @@ A legal hold (also called litigation hold) is a process that preserves all forms
 
 Failure to comply with a legal hold can result in:
 
-- Sanctions against you or your organization
+- Sanctions against you or your organisation
 - Adverse inference in legal proceedings
 - Potential criminal charges for destruction of evidence
 - Civil liability for spoliation
@@ -62,24 +62,21 @@ Failure to comply with a legal hold can result in:
 ## What You Should Do Now
 
 1. **Acknowledge Receipt**
-
    - Confirm you understand this legal hold
    - Contact {{ placed_by.username }} or your legal department
 
 2. **Stop Any Deletion Plans**
-
    - Cancel any pending data exports you planned to delete
    - Do not delete local copies of survey data
    - Notify anyone who might delete this data
 
 3. **Document Everything**
-
    - Keep records of who accesses this survey
    - Log all data exports
    - Save all communications about this survey
 
 4. **Seek Guidance**
-   - Contact your organization's legal counsel
+   - Contact your organisation's legal counsel
    - Ask questions if anything is unclear
    - Get written approval before taking any action
 
@@ -96,8 +93,8 @@ You can still access the survey in read-only mode:
 The legal hold will remain in place until:
 
 - The legal matter is resolved
-- Your legal team authorizes removal
-- {{ placed_by.username }} or organization owner removes the hold
+- Your legal team authorises removal
+- {{ placed_by.username }} or organisation owner removes the hold
 
 You will receive an email notification when the legal hold is removed.
 
@@ -107,9 +104,9 @@ You will receive an email notification when the legal hold is removed.
 
 For questions:
 
-- **Legal matters:** Contact your organization's legal counsel
+- **Legal matters:** Contact your organisation's legal counsel
 - **Technical questions:** Contact {{ placed_by.username }}
-- **Access issues:** Contact your organization administrator
+- **Access issues:** Contact your organisation administrator
 
 **Do not:**
 

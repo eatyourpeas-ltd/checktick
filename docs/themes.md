@@ -89,7 +89,7 @@ checktick_app/
 │   ├── models.py                    # SiteBranding model
 │   └── views.py                     # Theme update handlers
 ├── surveys/
-│   └── models.py                    # Organization, Survey models
+│   └── models.py                    # Organisation, Survey models
 ├── context_processors.py            # Theme cascade logic
 └── templates/
     ├── base.html                    # Main template with theme
@@ -113,17 +113,17 @@ if SiteBranding:
         preset_light = sb.theme_preset_light or preset_light
         preset_dark = sb.theme_preset_dark or preset_dark
 
-# 2. Check for organization-level override
+# 2. Check for organisation-level override
 user_org = None
 if user and user.is_authenticated:
-    # Get user's primary organization
+    # Get user's primary organisation
     user_org = Organization.objects.filter(owner=user).first()
     if not user_org:
         membership = OrganizationMembership.objects.filter(user=user).first()
         if membership:
             user_org = membership.organization
 
-# 3. Apply organization theme if set
+# 3. Apply organisation theme if set
 if user_org and (user_org.theme_preset_light or user_org.theme_preset_dark):
     preset_light = user_org.theme_preset_light or preset_light
     preset_dark = user_org.theme_preset_dark or preset_dark
@@ -152,10 +152,10 @@ class SiteBranding(models.Model):
     # ... font fields, dark mode icon fields
 ```
 
-**Organization** (organization-level):
+**Organisation** (organisation-level):
 
 ```python
-class Organization(models.Model):
+class Organisation(models.Model):
     name = models.CharField(max_length=255)
     owner = models.ForeignKey(User)
     default_theme = models.CharField(max_length=64, blank=True)
@@ -170,7 +170,7 @@ class Organization(models.Model):
 ```python
 class Survey(models.Model):
     owner = models.ForeignKey(User)
-    organization = models.ForeignKey(Organization, null=True, blank=True)
+    organisation = models.ForeignKey(Organisation, null=True, blank=True)
     style = models.JSONField(default=dict)  # Flexible styling
     # style structure:
     # {
@@ -263,7 +263,7 @@ DARK_THEMES = [
 - Generates complete theme CSS for both modes
 - Merges preset with custom CSS overrides
 - Returns `(light_css, dark_css)` tuple
-- Used by SiteBranding and Organization models
+- Used by SiteBranding and Organisation models
 
 `parse_custom_theme_config(config: dict) -> dict`
 
@@ -292,11 +292,11 @@ light_css, dark_css = generate_theme_css_for_brand(
 )
 ```
 
-## Project-Level vs Organization-Level vs Survey-Level Theming
+## Project-Level vs Organisation-Level vs Survey-Level Theming
 
 ### 1. Platform-Level (Global)
 
-- Who: Organization admin (superuser) in the Profile page
+- Who: Organisation admin (superuser) in the Profile page
 - Applies to: Entire site by default
 - What you can configure:
   - **Theme presets**: Choose from 20 light themes and 12 dark themes (daisyUI v5.4.7 presets)
@@ -705,7 +705,7 @@ Relevant files:
 
 ## Branding and customization
 
-This project supports organization branding at the platform level with sensible accessibility defaults and light/dark variants.
+This project supports organisation branding at the platform level with sensible accessibility defaults and light/dark variants.
 
 ### Navbar brand icon
 

@@ -20,7 +20,7 @@ Data governance is the framework that ensures survey data is:
 When you collect survey data, especially in healthcare, you may be handling sensitive or personal information. Good data governance protects:
 
 - **Participants** - Their privacy and confidentiality
-- **Your organization** - From data breaches and compliance violations
+- **Your organisation** - From data breaches and compliance violations
 - **You** - From legal liability and reputational damage
 
 ## Key Principles
@@ -32,15 +32,15 @@ Not everyone can access survey data. Access is strictly controlled based on role
 | Role | Can View Responses | Can Download Data | Can Extend Retention |
 |------|-------------------|-------------------|---------------------|
 | **Survey Creator** | ✅ Own surveys | ✅ Own surveys | ✅ Own surveys |
-| **Organization Owner** | ✅ All org surveys | ✅ All org surveys | ✅ All org surveys |
+| **Organisation Owner** | ✅ All org surveys | ✅ All org surveys | ✅ All org surveys |
 | **Data Custodian*** | ❌ No | ✅ Assigned surveys | ❌ No |
 | **Editor** | ❌ No | ❌ No | ❌ No |
 | **Viewer** | ❌ No | ❌ No | ❌ No |
 
 \* *Optional role - can be assigned per survey for data management delegation*
 
-**Organization Administrative Authority**
-To ensure accountability, every CheckTick Organization must have at least one designated Owner.
+**Organisation Administrative Authority**
+To ensure accountability, every CheckTick Organisation must have at least one designated Owner.
 
 *Provisioning*:
 
@@ -52,7 +52,7 @@ Owners are responsible for removing users who no longer require access (e.g., st
 
 *CheckTick Support:*
 
-CheckTick staff will only intervene in account management upon a verified request from the registered Organization Owner or via a formal legal instruction.
+CheckTick staff will only intervene in account management upon a verified request from the registered Organisation Owner or via a formal legal instruction.
 
 ### 2. Survey Closure
 
@@ -84,7 +84,7 @@ Every data access is logged:
 - Their stated purpose
 - Their IP address
 
-Organization administrators receive email notifications for all data downloads.
+Organisation administrators receive email notifications for all data downloads.
 
 ### 5. User Responsibility
 
@@ -94,7 +94,7 @@ When you download data, you become responsible for:
 - Not sharing it inappropriately
 - Deleting it when no longer needed
 - Reporting any data breaches
-- Complying with your organization's data policies
+- Complying with your organisation's data policies
 
 ## Data Lifecycle
 
@@ -140,23 +140,23 @@ When you download data, you become responsible for:
 In rare cases, a **legal hold** may be placed on survey data:
 
 - Prevents automatic deletion
-- Applied by organization owners or administrators
+- Applied by organisation owners or administrators
 - Requires a documented reason
 - Used when data is subject to legal proceedings or investigations
 - All legal holds are logged and audited
 
 ### Ownership Transfer
 
-If a survey creator leaves the organization:
+If a survey creator leaves the organisation:
 
-- Survey ownership automatically transfers to the organization owner
+- Survey ownership automatically transfers to the organisation owner
 - All permissions and access rights are maintained
 - Both parties are notified via email
 - Audit trail records the transfer
 
 ### Data Custodian Role
 
-Organizations can designate a **Data Custodian** for specific surveys:
+Organisations can designate a **Data Custodian** for specific surveys:
 
 - Can download data but cannot edit the survey
 - Useful for delegating data management
@@ -175,9 +175,9 @@ Organizations can designate a **Data Custodian** for specific surveys:
 - Respond to deletion warnings before deadlines
 - Justify any retention extensions
 
-### As an Organization Owner
+### As an Organisation Owner
 
-- Set clear data policies for your organization
+- Set clear data policies for your organisation
 - Monitor data downloads across all surveys
 - Review retention extensions
 - Ensure appropriate access controls
@@ -187,7 +187,7 @@ Organizations can designate a **Data Custodian** for specific surveys:
 ### As a Data Custodian
 
 - Download data only when authorized
-- Follow your organization's data handling procedures
+- Follow your organisation's data handling procedures
 - Store exports securely
 - Report any security concerns immediately
 - Maintain confidentiality
@@ -202,11 +202,11 @@ If you have questions about data governance:
    - [Data Security](/docs/data-governance-security/) - Security best practices
    - [Data Policy](/docs/data-governance-policy/) - Formal data policy
 
-2. **Contact your organization's data protection officer** (if designated)
+2. **Contact your organisation's data protection officer** (if designated)
 
 3. **For technical issues:** [GitHub Issues](https://github.com/eatyourpeas/checktick/issues)
 
-4. **For security concerns:** Contact your organization administrator immediately
+4. **For security concerns:** Contact your organisation administrator immediately
 
 ## Compliance
 

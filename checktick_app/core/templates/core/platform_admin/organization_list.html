@@ -2,13 +2,13 @@
 {% load static %}
 {% load i18n %}
 
-{% block platform_title %}{% trans "Organizations" %}{% endblock %}
+{% block platform_title %}{% trans "Organisations" %}{% endblock %}
 
 {% block platform_content %}
 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-  <h2 class="text-xl font-semibold">{% trans "Organizations" %}</h2>
+  <h2 class="text-xl font-semibold">{% trans "Organisations" %}</h2>
   <a href="{% url 'core:platform_admin_org_create' %}" class="btn btn-primary">
-    + {% trans "Create Organization" %}
+    + {% trans "Create Organisation" %}
   </a>
 </div>
 
@@ -57,7 +57,7 @@
   </div>
 </div>
 
-<!-- Organizations Table -->
+<!-- Organisations Table -->
 <div class="card bg-base-100 shadow">
   <div class="card-body">
     <div class="overflow-x-auto">
@@ -142,9 +142,9 @@
           <tr>
             <td colspan="8" class="text-center py-8 text-base-content/60">
               {% if search or status_filter or billing_filter %}
-                {% trans "No organizations match your filters" %}
+                {% trans "No organisations match your filters" %}
               {% else %}
-                {% trans "No organizations yet" %}
+                {% trans "No organisations yet" %}
               {% endif %}
             </td>
           </tr>

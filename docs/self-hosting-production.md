@@ -370,7 +370,7 @@ Optional but recommended:
 HCAPTCHA_SITEKEY=<key>
 HCAPTCHA_SECRET=<secret>
 
-# SSO (for organization encryption features)
+# SSO (for organisation encryption features)
 OIDC_RP_CLIENT_ID_GOOGLE=<id>
 OIDC_RP_CLIENT_SECRET_GOOGLE=<secret>
 ```

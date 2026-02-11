@@ -362,10 +362,10 @@ CheckTick Admin System
 #### To Organization Admin on Recovery Completion
 
 **To**: Organization owners
-**Subject**: `[CheckTick Admin] Recovery completed in your organization`
+**Subject**: `[CheckTick Admin] Recovery completed in your organisation`
 
 ```text
-A platform recovery was completed for a user in your organization.
+A platform recovery was completed for a user in your organisation.
 
 User: dr.smith@nhs.uk
 Survey: Diabetes Audit 2025

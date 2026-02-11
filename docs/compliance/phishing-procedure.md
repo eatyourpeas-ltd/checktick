@@ -26,7 +26,7 @@ If a suspicious email is identified:
 Upon receiving a report, the CTO will:
 
 * **Analyze:** Inspect the email headers for spoofing.
-* **Block:** Add the sender's domain or IP to the organization-wide blocklist.
+* **Block:** Add the sender's domain or IP to the organisation-wide blocklist.
 * **Purge:** Search for and remove any similar emails from other team member inboxes.
 
 ## 4. Log of Reports

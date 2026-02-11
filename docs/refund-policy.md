@@ -28,21 +28,21 @@ CheckTick subscriptions are processed through our secure payment provider. All p
 CheckTick offers paid subscriptions for:
 
 * **PRO Tier** (monthly or annual billing)
-  - Unlimited surveys
-  - Up to 10 editors per survey
-  - Community Support
+  * Unlimited surveys
+  * Up to 10 editors per survey
+  * Community Support
 
-* **ORGANIZATION Tier** (monthly or annual billing)
-  - All PRO features
-  - Unlimited collaborators
-  - Viewer roles
-  - Priority support
+* **ORganisaTION Tier** (monthly or annual billing)
+  * All PRO features
+  * Unlimited collaborators
+  * Viewer roles
+  * Priority support
 
 * **ENTERPRISE Tier** (custom pricing and contract)
-  - All ORGANIZATION features
-  - Custom branding
-  - SSO/OIDC authentication
-  - Dedicated support
+  * All ORganisaTION features
+  * Custom branding
+  * SSO/OIDC authentication
+  * Dedicated support
 
 ### 2.2 Billing Cycle
 
@@ -166,22 +166,22 @@ Orders where payments are made via wire transfer are not protected under the Con
 To request a refund:
 
 1. **Contact Support**
-   - Email: [support@checktick.com](support@checktick.com)
-   - Include your account email and subscription details
-   - Explain the reason for your refund request
+   * Email: [support@checktick.com](support@checktick.com)
+   * Include your account email and subscription details
+   * Explain the reason for your refund request
 
 2. **Provide Information**
-   - Transaction ID or receipt
-   - Date of charge
-   - Description of the issue (if applicable)
+   * Transaction ID or receipt
+   * Date of charge
+   * Description of the issue (if applicable)
 
 3. **Review**
-   - We will review your request within 5 business days
-   - We may request additional information to verify your claim
+   * We will review your request within 5 business days
+   * We may request additional information to verify your claim
 
 4. **Decision**
-   - You will receive a decision via email
-   - Approved refunds are processed through our payment provider
+   * You will receive a decision via email
+   * Approved refunds are processed through our payment provider
 
 ### 5.2 Processing Time
 

@@ -50,7 +50,7 @@ For production, see [Deployment Options](#deployment-options) below.
 
 ```
 Platform Master Key (split-knowledge: Vault + Custodian)
-├─ Organization Keys (derived from platform key + org owner passphrase)
+├─ Organisation Keys (derived from platform key + org owner passphrase)
 │  ├─ Team Keys (derived from org key)
 │  │  └─ Survey KEKs (encrypted with team key)
 │  └─ Direct Survey KEKs (for org-level surveys)
@@ -78,7 +78,7 @@ Platform Master Key = Vault Component ⊕ Custodian Component
 | Level | Key Size | Storage | Purpose |
 |-------|----------|---------|---------|
 | Platform Master | 64 bytes | Split (Vault + Offline) | Root of all derivation |
-| Organization | 32 bytes | Derived on-demand | Org-level encryption |
+| Organisation | 32 bytes | Derived on-demand | Org-level encryption |
 | Team | 32 bytes | Derived on-demand | Team-level encryption |
 | Survey KEK | 32 bytes | Vault (encrypted) | Encrypts survey data |
 | User Recovery | 32 bytes | Vault (escrowed) | Emergency recovery |
@@ -87,7 +87,7 @@ Platform Master Key = Vault Component ⊕ Custodian Component
 
 ```
 secret/platform/master-key          # Vault component of platform key
-secret/organizations/{id}/master-key  # Org key metadata
+secret/organisations/{id}/master-key  # Org key metadata
 secret/teams/{id}/team-key          # Team key metadata
 secret/surveys/{id}/kek             # Org/team survey KEKs
 secret/users/{id}/surveys/{id}/recovery-kek  # Individual user recovery keys
@@ -350,11 +350,11 @@ def execute_platform_recovery(recovery_request, admin_user):
     return survey_kek
 ```
 
-### Organization/Team Key Derivation
+### Organisation/Team Key Derivation
 
 ```python
-# Derive organization key
-org_key = vault.derive_organization_key(
+# Derive organisation key
+org_key = vault.derive_organisation_key(
     org_id=org.id,
     org_owner_passphrase=passphrase,
     platform_custodian_component=custodian_component
@@ -379,7 +379,7 @@ vault.encrypt_survey_kek(
 | Method | Purpose |
 |--------|---------|
 | `get_platform_master_key()` | Reconstruct platform key from split components |
-| `derive_organization_key()` | Derive org key from platform key + passphrase |
+| `derive_organisation_key()` | Derive org key from platform key + passphrase |
 | `derive_team_key()` | Derive team key from org key |
 | `escrow_user_survey_kek()` | Store user's KEK for recovery |
 | `recover_user_survey_kek()` | Recover KEK (requires custodian component) |
@@ -405,11 +405,11 @@ When a user forgets both password AND recovery phrase:
 8. **KEK re-encrypted** with user's new password
 9. **Audit trail** recorded for compliance
 
-### Organization Member Recovery
+### Organisation Member Recovery
 
 If org member loses access:
 
-1. Organization owner provides passphrase
+1. Organisation owner provides passphrase
 2. System derives org key
 3. System decrypts survey KEK
 4. User sets new password
@@ -417,7 +417,7 @@ If org member loses access:
 
 ### Catastrophic Recovery
 
-If organization owner forgets passphrase:
+If organisation owner forgets passphrase:
 
 1. Platform admins retrieve custodian component
 2. Business verification (legal documentation)
@@ -592,7 +592,7 @@ Before going live:
 | Operation | Latency |
 |-----------|---------|
 | Platform key reconstruction | ~5ms |
-| Organization key derivation | ~200ms (PBKDF2 200k iterations) |
+| Organisation key derivation | ~200ms (PBKDF2 200k iterations) |
 | Team key derivation | ~200ms |
 | Survey KEK encrypt/decrypt | ~10ms |
 | **Total unlock (team survey)** | **~420ms** |

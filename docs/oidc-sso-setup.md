@@ -4,13 +4,14 @@ category: configuration
 priority: 5
 ---
 
-This guide provides step-by-step instructions for setting up Single Sign-On (SSO) authentication for healthcare organizations using Google OAuth and Microsoft Azure AD.
+This guide provides step-by-step instructions for setting up Single Sign-On (SSO) authentication for healthcare organisations using Google OAuth and Microsoft Azure AD.
 
 ## Overview
 
 CheckTick supports healthcare SSO through:
+
 - **Google OAuth**: For clinicians with personal Google accounts
-- **Microsoft Azure AD**: For hospital staff with organizational Microsoft 365 accounts
+- **Microsoft Azure AD**: For hospital staff with organisational Microsoft 365 accounts
 - **Multi-provider support**: Users can authenticate via either method
 
 ## Prerequisites
@@ -42,7 +43,7 @@ OIDC_OP_JWKS_ENDPOINT_GOOGLE=https://www.googleapis.com/oauth2/v3/certs
 OIDC_OP_JWKS_ENDPOINT_AZURE=https://login.microsoftonline.com/common/discovery/v2.0/keys
 ```
 
-## Azure AD Setup (Microsoft 365 Organizations)
+## Azure AD Setup (Microsoft 365 Organisations)
 
 ### Step 1: Register Application in Azure Portal
 
@@ -52,8 +53,8 @@ OIDC_OP_JWKS_ENDPOINT_AZURE=https://login.microsoftonline.com/common/discovery/v
 4. Configure:
    - **Name**: `CheckTick Healthcare Platform`
    - **Supported account types**:
-     - **Multitenant**: "Accounts in any organizational directory" (for multiple hospitals)
-     - **Single tenant**: "Accounts in this organizational directory only" (for single organization)
+     - **Multitenant**: "Accounts in any organisational directory" (for multiple hospitals)
+     - **Single tenant**: "Accounts in this organisational directory only" (for single organisation)
    - **Redirect URI**:
      - **Type**: Web
      - **URL**: `https://your-checktick-domain.com/oidc/callback/`
@@ -102,7 +103,7 @@ For guest users (external clinicians):
 1. Navigate to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select existing:
    - **Project name**: `CheckTick Healthcare SSO`
-   - **Organization**: Your healthcare organization (if applicable)
+   - **Organisation**: Your healthcare organisation (if applicable)
 
 ### Step 2: Enable APIs
 

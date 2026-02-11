@@ -3,7 +3,7 @@
 {% load i18n %}
 
 {% block title %}
-  {% trans 'Organization Setup' %} - {{ org.name }} - {{ brand.title }}
+  {% trans 'Organisation Setup' %} - {{ org.name }} - {{ brand.title }}
 {% endblock %}
 
 {% block content %}
@@ -21,7 +21,7 @@
 
         <h1 class="text-3xl font-bold text-center mb-2">{% trans 'Welcome to' %} {{ org.name }}</h1>
         <p class="text-center text-base-content/70 mb-8">
-          {% trans 'Complete your account setup to get started with your organization.' %}
+          {% trans 'Complete your account setup to get started with your organisation.' %}
         </p>
 
         {# Billing Summary #}
@@ -42,7 +42,7 @@
               {% elif org.billing_type == 'invoice' %}
                 {% trans 'Invoice billing - your administrator will contact you separately about payment.' %}
               {% elif org.billing_type == 'free' %}
-                {% trans 'Free organization account' %}
+                {% trans 'Free organisation account' %}
               {% endif %}
             </div>
           </div>
@@ -66,7 +66,7 @@
                    required>
             <label class="label">
               <span class="label-text-alt text-base-content/60">
-                {% trans 'This will be your login email and organization contact.' %}
+                {% trans 'This will be your login email and organisation contact.' %}
               </span>
             </label>
           </div>

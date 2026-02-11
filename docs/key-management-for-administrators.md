@@ -6,7 +6,7 @@ priority: 3
 
 # Key Management for Administrators
 
-This guide is for **organization owners** and **team admins** who manage encryption keys and handle recovery requests for their users.
+This guide is for **organisation owners** and **team admins** who manage encryption keys and handle recovery requests for their users.
 
 ## Overview
 
@@ -15,7 +15,7 @@ As an administrator, you have elevated privileges that come with responsibilitie
 | Role | Can Recover | Scope | Audit Requirements |
 |------|-------------|-------|-------------------|
 | **Team Admin** | Team members | Own team only | All actions logged |
-| **Organization Owner** | Any user in org | Entire organization | All actions logged + dual auth for platform recovery |
+| **Organisation Owner** | Any user in org | Entire organisation | All actions logged + dual auth for platform recovery |
 | **Platform Admin** | Any user (with verification) | All users | Dual auth + time delay + SIEM logging |
 
 ## Key Management Hierarchy
@@ -25,11 +25,11 @@ Platform Master Key (split-knowledge)
 ├── Vault Component (stored in HashiCorp Vault)
 └── Custodian Component (offline storage)
     │
-    ├── Organization A Master Key
+    ├── Organisation A Master Key
     │   ├── Team 1 Key → Team 1 Surveys
     │   └── Team 2 Key → Team 2 Surveys
     │
-    └── Organization B Master Key
+    └── Organisation B Master Key
         └── Team 3 Key → Team 3 Surveys
 ```
 
@@ -91,7 +91,7 @@ To change a role:
 
 ### Recovering Team Member Surveys
 
-If a team member loses access to their account (SSO issues, left organization temporarily, etc.):
+If a team member loses access to their account (SSO issues, left organisation temporarily, etc.):
 
 #### Standard Team Recovery (Instant)
 
@@ -118,7 +118,7 @@ If a team member loses access to their account (SSO issues, left organization te
 }
 ```
 
-#### When to Escalate to Organization Admin
+#### When to Escalate to Organisation Admin
 
 Escalate if:
 
@@ -129,13 +129,13 @@ Escalate if:
 
 ---
 
-## Organization Owner Responsibilities
+## Organisation Owner Responsibilities
 
 ### Managing Teams
 
 #### Creating Teams
 
-1. Navigate to **Settings → Organization → Teams**
+1. Navigate to **Settings → Organisation → Teams**
 2. Click **Create Team**
 3. Enter team name and description
 4. Assign a Team Admin
@@ -145,20 +145,20 @@ Escalate if:
 
 When a team is no longer needed:
 
-1. Navigate to **Settings → Organization → Teams**
+1. Navigate to **Settings → Organisation → Teams**
 2. Select the team
 3. Click **Dissolve Team**
 4. Choose what happens to surveys:
    - Move to another team
-   - Move to organization level
+   - Move to organisation level
    - Archive (read-only)
 5. Confirm dissolution
 
 **Warning**: This action cannot be undone. All team members lose access immediately.
 
-### Organization-Level Recovery
+### Organisation-Level Recovery
 
-As organization owner, you can recover any survey in your organization:
+As organisation owner, you can recover any survey in your organisation:
 
 1. Navigate to **Admin → Recovery Dashboard**
 2. Click **New Recovery Request**
@@ -166,7 +166,7 @@ As organization owner, you can recover any survey in your organization:
 4. Select the recovery reason
 5. Click **Initiate Recovery**
 
-For team surveys, recovery is instant. For individual user surveys within your organization, you may need to follow the platform recovery process.
+For team surveys, recovery is instant. For individual user surveys within your organisation, you may need to follow the platform recovery process.
 
 ### Recovery Dashboard
 
@@ -174,7 +174,7 @@ The recovery dashboard shows:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Organization Recovery Dashboard                    [Export CSV] │
+│ Organisation Recovery Dashboard                    [Export CSV] │
 ├─────────────────────────────────────────────────────────────────┤
 │ Summary                                                         │
 │ ├── Pending Requests: 2                                         │
@@ -243,7 +243,7 @@ When a user loses both their password AND recovery phrase, platform recovery is 
 ### Who Can Initiate Platform Recovery?
 
 - The user themselves (via support request)
-- Organization admin (on behalf of unavailable user)
+- Organisation admin (on behalf of unavailable user)
 - Platform admin (for orphaned accounts)
 
 ### Platform Recovery Workflow
@@ -256,7 +256,7 @@ When a user loses both their password AND recovery phrase, platform recovery is 
 2. Support creates recovery ticket
 3. User receives confirmation email with ticket ID
 
-**If organization admin initiates:**
+**If organisation admin initiates:**
 
 1. Navigate to **Admin → Recovery Dashboard**
 2. Click **Request Platform Recovery**
@@ -280,7 +280,7 @@ The user (or their authorized representative) must verify identity:
 | **Photo ID Upload** | Upload clear photo of ID document | Instant |
 | **Video Verification** | Live video call with CheckTick admin | 15-30 mins |
 | **Security Questions** | Answer questions from account setup | Instant |
-| **Employment Verification** | HR confirmation (for NHS/organization users) | 1-2 days |
+| **Employment Verification** | HR confirmation (for NHS/organisation users) | 1-2 days |
 
 **Identity Verification Checklist (for admins reviewing):**
 
@@ -288,7 +288,7 @@ The user (or their authorized representative) must verify identity:
 □ Photo ID matches account name
 □ Photo ID is not expired
 □ Photo ID shows clear, unaltered image
-□ Email domain matches organization (if applicable)
+□ Email domain matches organisation (if applicable)
 □ Video call completed (face matches ID)
 □ Security questions answered correctly (2 of 3 minimum)
 □ No suspicious activity on account
@@ -327,7 +327,7 @@ After dual authorization, a mandatory waiting period begins:
 |------|-----------|
 | Individual | 48 hours |
 | Pro | 24 hours |
-| Organization | 24 hours |
+| Organisation | 24 hours |
 | Enterprise | Custom (typically 24 hours) |
 
 **During time delay:**
@@ -368,7 +368,7 @@ After time delay completes:
 
 5. **Notification sent**
    - User receives confirmation email
-   - Organization admin notified (if applicable)
+   - Organisation admin notified (if applicable)
    - Audit entry created
 
 ### Custodian Component Management
@@ -518,9 +518,9 @@ For HIPAA compliance:
 2. **Document recovery reasons**: Always provide clear justification
 3. **Monitor audit logs**: Check weekly for unusual activity
 4. **Train team members**: Ensure they understand encryption basics
-5. **Escalate when unsure**: Better to ask organization admin than make mistakes
+5. **Escalate when unsure**: Better to ask organisation admin than make mistakes
 
-### For Organization Owners
+### For Organisation Owners
 
 1. **Establish clear policies**: Document when recovery is appropriate
 2. **Designate backup admins**: At least 2 people who can authorize
@@ -585,7 +585,7 @@ For HIPAA compliance:
 **For urgent recovery issues:**
 
 - Email: support@checktick.uk
-- Include: Organization name, user email, survey ID, ticket number
+- Include: Organisation name, user email, survey ID, ticket number
 
 **For security concerns:**
 

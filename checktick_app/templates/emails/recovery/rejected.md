@@ -20,9 +20,9 @@
 
 {% trans "If you believe this rejection was made in error, you can:" %}
 
-1. {% trans "Contact your organization administrator" %}
+1. {% trans "Contact your organisation administrator" %}
 2. {% trans "Submit a new recovery request with additional information" %}
-3. {% trans "Verify your identity through your organization's IT support" %}
+3. {% trans "Verify your identity through your organisation's IT support" %}
 
 ---
 

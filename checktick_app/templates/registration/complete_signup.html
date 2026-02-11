@@ -54,7 +54,7 @@
             <label class="label cursor-pointer justify-start gap-3 p-4 border border-base-300 rounded-lg hover:border-primary break-words">
               <input type="radio" name="account_type" value="org" class="radio radio-primary shrink-0" />
               <div class="min-w-0">
-                <span class="label-text font-semibold">{% trans "Organization Account" %}</span>
+                <span class="label-text font-semibold">{% trans "Organisation Account" %}</span>
                 <p class="text-sm opacity-70">{% trans "Collaborate with team members and colleagues" %}</p>
                 <div class="text-xs text-info mt-1">
                   {% trans "Organisation can recover encryption keys" %}
@@ -72,7 +72,7 @@
           <div>
             <strong>{% trans "Not sure which to choose?" %}</strong>
             <p class="mt-1">
-              {% trans "Individual accounts are great for personal use, while organization accounts are perfect for teams and healthcare institutions." %}
+              {% trans "Individual accounts are great for personal use, while organisation accounts are perfect for teams and healthcare institutions." %}
               <a href="{% url 'core:docs_page' slug='getting-started' %}#account-types"
                  target="_blank"
                  class="link underline font-medium">

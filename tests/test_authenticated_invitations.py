@@ -53,6 +53,10 @@ def org(owner):
 @pytest.fixture
 def authenticated_survey(owner, org):
     """Survey with authenticated visibility."""
+    import os
+
+    from checktick_app.surveys.utils import generate_bip39_phrase
+
     s = Survey.objects.create(
         name="Authenticated Survey",
         slug="auth-survey",
@@ -62,6 +66,12 @@ def authenticated_survey(owner, org):
         visibility=Survey.Visibility.AUTHENTICATED,
         allow_any_authenticated=False,  # Invite-only mode
     )
+
+    # Add encryption (required for all surveys)
+    kek = os.urandom(32)
+    recovery_words = generate_bip39_phrase(12)
+    s.set_dual_encryption(kek, "test_password", recovery_words)
+
     # Add a question group to make survey valid
     g = QuestionGroup.objects.create(name="Questions", owner=owner)
     s.question_groups.add(g)

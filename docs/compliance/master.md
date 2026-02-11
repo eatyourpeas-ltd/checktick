@@ -6,7 +6,7 @@ priority: 1
 
 # Data Security & Protection Master Index (Board Approved)
 
-**Organization:** {{ platform_name }}
+**Organisation:** {{ platform_name }}
 **Version:** 2025.1
 **Board Approval Date:** 29/12/2025
 **Review Cycle:** Annual

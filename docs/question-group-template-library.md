@@ -10,6 +10,7 @@ The template library lets you discover, browse, and import validated questionnai
 ## Who can access
 
 Any authenticated user can:
+
 - Browse the global template library
 - Search and filter templates
 - Import templates into their surveys
@@ -19,30 +20,35 @@ Users can only import into surveys they own.
 ## Browsing templates
 
 Access the library from:
+
 - Survey dashboard: "Browse Question Group Template Library" button
 - Direct URL: `/surveys/templates/`
 
 The library shows:
+
 - **Template name**: Title of the question group
 - **Description**: Brief overview of what the template measures
 - **Questions**: Number of questions in the template
 - **Language**: Primary language of the template
-- **Level**: Publication level (Global or Organization)
+- **Level**: Publication level (Global or Organisation)
 - **Imports**: Count of how many times the template has been imported
 - **Attribution**: Icon indicating if the template has formal attribution (authors, citations)
 
 ## Searching and filtering
 
 ### Search
+
 - Search box finds matches in template name, description, and tags
 - Search is case-insensitive and matches partial words
 
 ### Filters
+
 - **Language**: Filter by language code (en, cy, fr, etc.)
-- **Publication Level**: Show only Global or Organization templates
+- **Publication Level**: Show only Global or Organisation templates
 - **Order by**: Sort by name, imports, or date created
 
 ### Tags
+
 - Click any tag to filter templates by that category
 - Common tags: PHQ-9, GAD-7, Depression, Anxiety, Screening, etc.
 
@@ -57,6 +63,7 @@ The library shows:
 ### What gets imported
 
 When you import a template:
+
 - **All questions** from the template are imported as a complete question group
 - Questions maintain their original:
   - Question text and help text
@@ -76,6 +83,7 @@ When you import a template:
 ## Template details page
 
 Click "View Details" on any template to see:
+
 - Full description
 - Complete question preview in markdown format
 - Publisher information
@@ -92,12 +100,14 @@ Click "View Details" on any template to see:
 ## Attribution
 
 Some templates represent published, validated instruments (e.g., PHQ-9, GAD-7). These templates include:
+
 - **Authors**: Original developers of the instrument
 - **Citation**: How to cite the original work
 - **License**: Usage rights and restrictions
 - **URL**: Link to original publication or licensing information
 
 When you import an attributed template:
+
 - Attribution information is preserved
 - You should cite the original work in any publications
 - Check the license for usage restrictions
@@ -105,8 +115,9 @@ When you import an attributed template:
 
 ## Publishing your own templates
 
-Organization admins can publish question groups from their surveys as templates. Published templates can be:
-- **Organization-level**: Visible only to your organization members
+Organisation admins can publish question groups from their surveys as templates. Published templates can be:
+
+- **Organisation-level**: Visible only to your organisation members
 - **Global**: Visible to all CheckTick users
 
 For detailed instructions on publishing templates, including attribution requirements and copyright protection, see [Publishing Question Groups](/docs/publish-question-groups/).
@@ -114,6 +125,7 @@ For detailed instructions on publishing templates, including attribution require
 ## Specialist templates vs. question group templates
 
 The template library contains **question group templates** - complete questionnaires with multiple questions. This is different from **specialist templates** (Patient Details, Professional Details) which are:
+
 - Single composite questions with multiple fields
 - Added individually through the "Special Templates" tab in the question builder
 - Not imported from the library
@@ -122,20 +134,24 @@ The template library contains **question group templates** - complete questionna
 ## Troubleshooting
 
 ### "No surveys available" message
+
 - You need to create at least one survey before you can import templates
 - Go to the survey dashboard and click "Create New Survey"
 
 ### Import button disabled
+
 - Ensure you're logged in
 - Check that you own at least one survey
 - Verify the template hasn't been deleted
 
 ### Cannot find a template
+
 - Check your search terms and filters
 - Try clearing all filters
-- Some templates may be organization-level and only visible to specific users
+- Some templates may be organisation-level and only visible to specific users
 
 ### Questions appear in wrong order
+
 - Questions are imported in the order defined in the template
 - You can reorder questions after import using the question group builder
 - Use the Groups View to reorder entire question groups

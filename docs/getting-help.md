@@ -46,7 +46,7 @@ GitHub Discussions is our community forum for:
 - "How do I create multi-language surveys?"
 - "What's the best way to handle patient consent?"
 - "Why isn't my Docker setup working?"
-- "How do I configure OIDC with my organization?"
+- "How do I configure OIDC with my organisation?"
 - "What question types work best for clinical audits?"
 
 #### Sharing and Community

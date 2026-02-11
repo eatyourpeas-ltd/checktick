@@ -25,8 +25,8 @@ All payments are processed securely through our UK-based payment provider.
 
 | Plan | Monthly Price | Annual Price | Key Features |
 |------|---------------|--------------|--------------|
-| **Free** | £0 | £0 | Up to 3 active surveys, unlimited responses, personal encryption |
-| **Pro** | £5 | £50 (save £10) | Unlimited surveys, collaboration features, email support |
+| **Free** | £0 | £0 | Up to 3 active surveys (all encrypted), unlimited responses, no patient data templates |
+| **Pro** | £5 | £50 (save £10) | Unlimited encrypted surveys, patient data collection, collaboration, email support |
 
 ---
 

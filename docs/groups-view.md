@@ -12,7 +12,7 @@ A question group is a named collection of questions that:
 
 - **Organizes questions logically** - Group related questions together for easier management
 - **Enables repeating sections** - Create "collections" that participants can fill out multiple times (e.g., "Add another medication", "Add family member")
-- **Can be published and shared** - Publish validated questionnaires as reusable templates for your organization or the entire CheckTick community
+- **Can be published and shared** - Publish validated questionnaires as reusable templates for your organisation or the entire CheckTick community
 - **Maintains question order** - Questions within a group stay together and maintain their sequence
 - **Supports attribution** - When importing validated instruments, attribution information is preserved
 
@@ -29,7 +29,7 @@ The Groups View page lets you:
 ### 2. Publishing Templates
 
 Share your question groups with others:
-- **Organization templates** - Share validated questionnaires within your team
+- **Organisation templates** - Share validated questionnaires within your team
 - **Global templates** - Contribute to the community library of validated instruments
 - **Attribution support** - Include proper citations for published instruments (PHQ-9, GAD-7, etc.)
 - **Copyright protection** - Prevent republishing of imported templates
@@ -51,7 +51,7 @@ See [Question Group Template Library](/docs/question-group-template-library/) fo
 ### Who can access
 
 - Owner of the survey
-- Organization ADMINs of the survey's organization
+- Organisation ADMINs of the survey's organisation
 
 Viewers, participants, or outsiders cannot access or modify this page.
 

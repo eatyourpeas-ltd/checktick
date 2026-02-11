@@ -96,7 +96,7 @@ For questions about this ownership transfer:
 - Contact {{ new_owner.username }} if you need access to the data
   {% endif %}
 - Review the [Data Governance Overview](/docs/data-governance-overview/)
-- Contact your organization administrator
+- Contact your organisation administrator
 
 ---
 

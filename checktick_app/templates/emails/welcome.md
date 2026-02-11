@@ -9,7 +9,7 @@ Thank you for joining {{ brand_title }}! We're excited to have you on board.
 Your account has been successfully created. Here's what you can do next:
 
 - **Create your first survey** - Build custom surveys with our drag-and-drop interface
-- **Invite team members** - Collaborate with your organization
+- **Invite team members** - Collaborate with your organisation
 - **Explore documentation** - Learn about all the features available
 
 ### Quick Links

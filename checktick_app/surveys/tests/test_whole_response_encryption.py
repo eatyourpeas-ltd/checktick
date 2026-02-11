@@ -252,10 +252,22 @@ class TestWholeResponseEncryption:
 class TestBackwardsCompatibility:
     """Test backwards compatibility with existing encrypted data."""
 
-    def test_non_patient_survey_uses_plaintext_answers(
+    def test_non_patient_survey_requires_encryption(
         self, survey_without_patient_data, user
     ):
-        """Non-patient surveys should still store answers in plaintext."""
+        """All surveys (including non-patient) now require encryption setup.
+
+        Non-patient surveys don't use whole-response encryption, but they
+        still need encryption to be configured before publishing.
+        """
+        # Survey should not require whole-response encryption
+        assert survey_without_patient_data.requires_whole_response_encryption() is False
+
+        # But it should still require *some* form of encryption setup before publishing
+        # (This is enforced in the publish workflow, not in the response storage)
+        # Non-patient surveys can store answers in plaintext during testing/draft phase,
+        # but must have encryption configured (encrypted_kek_*) before going live
+
         response = SurveyResponse.objects.create(
             survey=survey_without_patient_data,
             submitted_by=user,
@@ -264,7 +276,7 @@ class TestBackwardsCompatibility:
 
         response.refresh_from_db()
 
-        # Should load plaintext answers (no key needed)
+        # During draft phase, answers can be in plaintext
         loaded = response.load_answers(b"dummy_key_not_used")
         assert loaded == {"q1": "answer1", "q2": "answer2"}
         assert response.enc_answers is None

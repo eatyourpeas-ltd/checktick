@@ -42,17 +42,19 @@ A **legal hold** (also called "litigation hold") prevents automatic deletion of 
 
 ### 1.3 Who Can Apply Legal Holds
 
-**Only Organization Owners** can apply legal holds.
+**Only Organisation Owners** can apply legal holds.
 
 **Why this restriction:**
+
 - Legal holds have significant data protection implications
 - Require understanding of legal obligations
-- Need organizational authority
+- Need organisational authority
 - Accountability and audit trail
 
 **Survey Creators and Data Custodians:**
+
 - Cannot apply legal holds themselves
-- Must request through organization owner
+- Must request through organisation owner
 - Provide justification and context
 
 ### 1.4 How to Apply a Legal Hold
@@ -60,6 +62,7 @@ A **legal hold** (also called "litigation hold") prevents automatic deletion of 
 **Step 1: Assess Need**
 
 Determine if a legal hold is appropriate:
+
 - Is there genuine legal requirement?
 - Has legal counsel advised retention?
 - Is the data relevant to proceedings?
@@ -67,7 +70,7 @@ Determine if a legal hold is appropriate:
 
 **Step 2: Navigate to Survey**
 
-1. Log in as Organization Owner
+1. Log in as Organisation Owner
 2. Go to "Surveys" → Find the survey
 3. Click "Data Management" tab
 4. Look for "Legal Hold" section
@@ -77,6 +80,7 @@ Determine if a legal hold is appropriate:
 Click "Apply Legal Hold" and provide:
 
 **Required Information:**
+
 - **Reason:** Specific legal basis (e.g., "Employment tribunal case ET/12345/2025")
 - **Reference:** Case number, investigation ID, or complaint reference
 - **Expected Duration:** Estimate how long hold will be needed
@@ -84,21 +88,23 @@ Click "Apply Legal Hold" and provide:
 - **Review Date:** When hold should be reviewed (default: 6 months)
 
 **Example:**
+
 ```text
 Reason: Employment tribunal proceedings
-Reference: ET/12345/2025 - Smith v Organization
+Reference: ET/12345/2025 - Smith v Organisation
 Expected Duration: 12-18 months
-Requesting Party: Organization legal counsel (email: legal@org.uk)
+Requesting Party: Organisation legal counsel (email: legal@org.uk)
 Review Date: 2025-12-01
 ```
 
 **Step 4: Confirm and Notify**
 
 After applying hold:
+
 - Survey data retention is frozen
 - Automatic deletion warnings stop
 - Legal hold badge appears on survey
-- Organization administrators notified
+- Organisation administrators notified
 - Hold logged for audit trail
 
 ### 1.5 Effect of Legal Hold
@@ -106,34 +112,39 @@ After applying hold:
 **While a legal hold is active:**
 
 **Data Retention:**
+
 - Automatic deletion is **prevented**
 - Retention period is **frozen** (not counting down)
 - Data remains accessible for download
 - Warnings are **paused**
 
 **Survey Status:**
+
 - Survey remains **closed**
 - No new responses can be added
 - Survey structure can still be viewed
 - Data exports are still possible
 
 **User Access:**
+
 - Existing permissions remain unchanged
 - Survey creators can still download their data
-- Organization owners can download
+- Organisation owners can download
 - Data custodians can download (if assigned)
 
 **Visibility:**
+
 - "Legal Hold" badge visible on survey list
-- Hold details visible to organization owners only
+- Hold details visible to organisation owners only
 - Survey creators see "Retention frozen - Legal hold active"
 - Audit log records hold status
 
 ### 1.6 Reviewing Legal Holds
 
 **Mandatory Review:**
+
 - Legal holds must be reviewed every **6 months**
-- Organization owner receives reminder
+- Organisation owner receives reminder
 - Must confirm hold is still necessary
 - Update expected duration if changed
 
@@ -148,6 +159,7 @@ After applying hold:
    - **Update details** - If circumstances changed
 
 **Questions to ask:**
+
 - Are proceedings still active?
 - Has the case been resolved?
 - Has the authority closed the investigation?
@@ -157,6 +169,7 @@ After applying hold:
 ### 1.7 Removing Legal Holds
 
 **When to Remove:**
+
 - Legal proceedings concluded
 - Investigation closed
 - Complaint resolved
@@ -173,12 +186,14 @@ After applying hold:
 **Effect of Removal:**
 
 **Immediate:**
+
 - Legal hold badge removed
 - Retention period **resumes** from where it was frozen
 - New deletion warnings calculated
-- Organization administrators notified
+- Organisation administrators notified
 
 **Example:**
+
 - Survey closed: January 1, 2025
 - Legal hold applied: March 1, 2025 (60 days after closure)
 - Time elapsed before hold: 60 days
@@ -188,8 +203,9 @@ After applying hold:
 - New deletion date: July 1, 2026 (120 days from March 1, 2026)
 
 **If retention already expired:**
+
 - Survey data **not automatically deleted**
-- Organization owner must decide: extend retention or delete
+- Organisation owner must decide: extend retention or delete
 - Must act within 30 days
 
 ### 1.8 Legal Hold Audit Trail
@@ -197,6 +213,7 @@ After applying hold:
 All legal hold actions are logged:
 
 **Recorded Information:**
+
 - Who applied the hold (name, email, timestamp)
 - Reason and reference provided
 - Expected duration
@@ -206,7 +223,8 @@ All legal hold actions are logged:
 - Total duration of hold
 
 **Access to audit trail:**
-- Organization owners: Full access
+
+- Organisation owners: Full access
 - Data Protection Officer: Full access
 - System administrators: Full access
 - Survey creators: Summary only ("Legal hold was active from [date] to [date]")
@@ -217,7 +235,8 @@ All legal hold actions are logged:
 
 ### 2.1 What is Ownership Transfer?
 
-**Ownership transfer** occurs when the survey creator leaves the organization or can no longer fulfill their responsibilities. Ownership automatically or manually transfers to ensure:
+**Ownership transfer** occurs when the survey creator leaves the organisation or can no longer fulfill their responsibilities. Ownership automatically or manually transfers to ensure:
+
 - Continued data governance
 - Compliance with retention policies
 - Access for legitimate purposes
@@ -226,46 +245,51 @@ All legal hold actions are logged:
 ### 2.2 When Ownership Transfers
 
 **Automatic Transfer:**
+
 - Survey creator's account is **deactivated**
-- Survey creator leaves the organization
+- Survey creator leaves the organisation
 - Survey creator's access is **revoked**
 
 **Manual Transfer:**
+
 - Survey creator requests transfer (e.g., changing roles)
-- Organization reorganization
+- Organisation reorganisation
 - Project reassignment
 - Data custodian promoted to owner
 
 ### 2.3 Automatic Transfer Process
 
 **Trigger Event:**
+
 - User account deactivation
-- Organization membership removal
+- Organisation membership removal
 - Account deletion
 
 **Automatic Actions:**
 
 1. **Identify affected surveys** - All surveys where user is creator
-2. **Determine new owner** - Default: Organization owner
+2. **Determine new owner** - Default: Organisation owner
 3. **Transfer ownership** - Update database records
 4. **Notify parties:**
    - New owner (email notification)
-   - Organization administrators
+   - Organisation administrators
    - Data custodians (if assigned)
 5. **Update audit log** - Record transfer details
 
 **Data Preservation:**
+
 - All survey data remains intact
 - Retention settings **unchanged**
 - Legal holds remain active
 - Data custodians remain assigned
 
 **Example Timeline:**
+
 ```text
-Day 0: Alice (survey creator) leaves organization
+Day 0: Alice (survey creator) leaves organisation
   → Account deactivated
   → System identifies 5 surveys owned by Alice
-  → Ownership transfers to Bob (organization owner)
+  → Ownership transfers to Bob (organisation owner)
 
 Day 0: Bob receives email:
   "You are now the owner of 5 surveys previously owned by Alice.
@@ -284,13 +308,15 @@ Day 1-30: Bob reviews surveys
 **Step 1: Requester Initiates**
 
 **Survey Creator (current owner):**
+
 1. Go to survey → "Settings" → "Ownership"
 2. Click "Transfer Ownership"
-3. Select new owner (must be organization member)
+3. Select new owner (must be organisation member)
 4. Provide reason for transfer
 5. Click "Request Transfer"
 
-**Organization Owner (forced transfer):**
+**Organisation Owner (forced transfer):**
+
 1. Go to "Surveys" → Find survey
 2. Click "..." menu → "Transfer Ownership"
 3. Select new owner
@@ -300,6 +326,7 @@ Day 1-30: Bob reviews surveys
 **Step 2: New Owner Accepts (if requested by creator)**
 
 New owner receives email:
+
 1. Click "Review Transfer Request"
 2. See survey details and reason
 3. Click "Accept" or "Decline"
@@ -315,6 +342,7 @@ New owner receives email:
 ### 2.5 Post-Transfer Responsibilities
 
 **New Owner Must:**
+
 - Review survey data and purpose
 - Check retention expiry date
 - Decide if extension needed
@@ -323,12 +351,14 @@ New owner receives email:
 - Ensure compliance with data policy
 
 **New Owner Should:**
+
 - Understand original survey purpose
 - Maintain continuity of data governance
 - Honor original consent/privacy notices
 - Continue compliance obligations
 
 **New Owner Must NOT:**
+
 - Use data for purposes incompatible with original intent
 - Share data beyond original scope
 - Re-identify anonymized data
@@ -339,21 +369,24 @@ New owner receives email:
 **Scenario:** Ownership transferred multiple times.
 
 **Tracking:**
+
 - Audit log records all transfers
 - Each transfer timestamped
 - Reasons documented
 - Chain of custody maintained
 
 **Example:**
+
 ```text
 Survey #12345 Ownership History:
 1. Created by: Alice (Jan 1, 2025)
-2. Transferred to: Bob (Mar 15, 2025) - "Alice left organization"
+2. Transferred to: Bob (Mar 15, 2025) - "Alice left organisation"
 3. Transferred to: Carol (Jun 1, 2025) - "Project reassignment"
 4. Current owner: Carol
 ```
 
 **Data Protection Considerations:**
+
 - Original consent/privacy notice still applies
 - Purpose limitation must be respected
 - If purpose changes significantly, may need new consent
@@ -365,12 +398,14 @@ Survey #12345 Ownership History:
 ### 3.1 What is a Data Custodian?
 
 A **data custodian** is a user who:
+
 - Has **download access** to specific survey data
 - **Cannot edit** the survey
 - **Cannot extend** retention periods
 - Acts as a **trusted delegate** for data management
 
 **Purpose:**
+
 - Delegate data access without full ownership
 - Separate survey editing from data access
 - Support collaborative research/analysis
@@ -381,21 +416,25 @@ A **data custodian** is a user who:
 **Appropriate Uses:**
 
 **Scenario 1: Collaborative Research**
+
 - Survey creator (Principal Investigator)
 - Data custodian (Research Assistant)
 - Custodian analyzes data, creator manages survey
 
 **Scenario 2: IT/Data Team**
+
 - Survey creator (Clinical Team)
 - Data custodian (Data Analyst)
 - Custodian produces reports, creator owns data
 
-**Scenario 3: Organizational Handover**
+**Scenario 3: Organisational Handover**
+
 - Survey creator (Departing Staff)
 - Data custodian (Incoming Staff)
 - Custodian learns during handover, then becomes owner
 
 **Scenario 4: Backup/Contingency**
+
 - Survey creator (Primary Researcher)
 - Data custodian (Backup Person)
 - Custodian can download if creator unavailable
@@ -408,14 +447,15 @@ A **data custodian** is a user who:
 ### 3.3 Assigning Data Custodians
 
 **Who Can Assign:**
+
 - Survey creators (their own surveys)
-- Organization owners (any survey in organization)
+- Organisation owners (any survey in organisation)
 
 **How to Assign:**
 
 1. Go to survey → "Settings" → "Data Access"
 2. Click "Add Data Custodian"
-3. Search for user (must be organization member)
+3. Search for user (must be organisation member)
 4. Select user
 5. Provide **justification** (required):
    - Why does this person need data access?
@@ -424,6 +464,7 @@ A **data custodian** is a user who:
 6. Click "Add"
 
 **Example Justification:**
+
 ```text
 Dr. Sarah Jones is the data analyst for this project. She will:
 - Produce quarterly statistical reports
@@ -433,6 +474,7 @@ Access needed for duration of project (estimated 18 months).
 ```
 
 **Notification:**
+
 - Data custodian receives email
 - Must acknowledge responsibilities
 - Access granted after acknowledgment
@@ -440,12 +482,14 @@ Access needed for duration of project (estimated 18 months).
 ### 3.4 Data Custodian Permissions
 
 **Can Do:**
+
 - ✓ Download survey data (same process as creators)
 - ✓ View survey structure and questions
 - ✓ See download history (their own downloads)
 - ✓ View retention expiry date
 
 **Cannot Do:**
+
 - ✗ Edit survey structure
 - ✗ Close or reopen survey
 - ✗ Extend retention periods
@@ -457,6 +501,7 @@ Access needed for duration of project (estimated 18 months).
 ### 3.5 Data Custodian Responsibilities
 
 **Data Custodians Must:**
+
 - Follow all data security best practices
 - Use data only for stated purpose
 - Store data securely
@@ -472,15 +517,17 @@ Access needed for duration of project (estimated 18 months).
 ### 3.6 Removing Data Custodians
 
 **When to Remove:**
+
 - Access no longer needed
 - Project completed
 - Custodian changes roles
-- Custodian leaves organization
+- Custodian leaves organisation
 - Data breach or policy violation
 
 **Who Can Remove:**
+
 - Survey creators (their own surveys)
-- Organization owners (any survey)
+- Organisation owners (any survey)
 - Automatic removal if custodian account deactivated
 
 **How to Remove:**
@@ -491,6 +538,7 @@ Access needed for duration of project (estimated 18 months).
 4. Confirm removal
 
 **Effect:**
+
 - Immediate loss of download access
 - Custodian notified by email
 - Must delete any downloaded data (unless org owner approves retention)
@@ -501,13 +549,15 @@ Access needed for duration of project (estimated 18 months).
 All custodian actions are logged:
 
 **Recorded:**
+
 - Assignment (who, when, why)
 - Downloads (what, when, purpose stated)
 - Removal (who removed, when, why)
 
 **Accessible to:**
+
 - Survey creators: Full audit trail
-- Organization owners: Full audit trail
+- Organisation owners: Full audit trail
 - Data custodians: Their own actions only
 
 ---
@@ -519,12 +569,14 @@ All custodian actions are logged:
 **Scenario:** Survey ownership transferred, but original creator still needs data access.
 
 **Solution:**
+
 1. Transfer ownership to new person
 2. Assign original creator as data custodian
 3. Original creator retains download access
 4. New owner controls retention and governance
 
 **Example:**
+
 - Alice creates survey, collects data
 - Alice promoted, Bob takes over project
 - Ownership transfers to Bob
@@ -537,32 +589,36 @@ All custodian actions are logged:
 **Allowed:** Yes, surveys can have multiple data custodians.
 
 **Best Practices:**
+
 - Clearly define each custodian's role
 - Document who is responsible for what
 - Avoid unnecessary duplication of access
 - Review custodian list regularly
 
 **Example:**
+
 - Survey: Patient Satisfaction Survey
 - Creator: Dr. Smith (Clinical Lead)
 - Custodian 1: Dr. Jones (Data Analyst) - Statistical analysis
 - Custodian 2: Sarah Brown (Quality Manager) - Regulatory reporting
 - Custodian 3: IT Team (Database Manager) - Technical support
 
-### 4.3 Organization Deletion
+### 4.3 Organisation Deletion
 
-**Scenario:** Entire organization is deleted.
+**Scenario:** Entire organisation is deleted.
 
 **Effect:**
+
 - All surveys **soft deleted immediately**
-- 30-day grace period for organization owner
-- Organization owner receives final notification
+- 30-day grace period for organisation owner
+- Organisation owner receives final notification
 - After 30 days: **All data hard deleted**
 
 **Recovery:**
+
 - Contact system administrators within 30 days
 - Provide justification
-- May require new organization creation
+- May require new organisation creation
 - Data restored if within grace period
 
 ### 4.4 Data Subject Deletion Request
@@ -570,8 +626,9 @@ All custodian actions are logged:
 **Scenario:** Participant requests deletion under "right to be forgotten."
 
 **Process:**
-1. Participant contacts organization
-2. Organization owner verifies identity
+
+1. Participant contacts organisation
+2. Organisation owner verifies identity
 3. Locate participant's response(s)
 4. Assess if deletion is required (legal grounds)
 5. Delete response immediately (overrides retention)
@@ -585,13 +642,15 @@ All custodian actions are logged:
 **Generally not allowed** - 24-month maximum is strict.
 
 **Rare Exceptions:**
+
 - Legal hold (data preserved as long as needed)
 - Regulatory requirement (documented legal obligation)
 - Approved research ethics extension (with appropriate safeguards)
 
 **Approval Required:**
+
 - Data Protection Officer
-- Organization owner
+- Organisation owner
 - System administrator (technical implementation)
 - Documented justification and legal basis
 
@@ -600,9 +659,11 @@ All custodian actions are logged:
 **Scenario:** Survey data soft deleted, but needed within 30 days.
 
 **Who Can Restore:**
-- Organization owner only
+
+- Organisation owner only
 
 **How to Restore:**
+
 1. Go to "Deleted Surveys"
 2. Find survey in list
 3. Click "Restore"
@@ -611,11 +672,13 @@ All custodian actions are logged:
 6. Confirm restoration
 
 **Limitations:**
+
 - Must be within 30 days of soft deletion
 - Total retention (original + new) cannot exceed 24 months from original closure
 - Restoration is logged and reported
 
 **After Restoration:**
+
 - Survey data accessible again
 - New retention period begins
 - Standard warnings resume
@@ -628,19 +691,22 @@ All custodian actions are logged:
 ### Questions About Special Cases
 
 **Legal Holds:**
+
 - Consult legal counsel before applying
-- Contact organization owner if you think one is needed
+- Contact organisation owner if you think one is needed
 - DPO can advise on data protection implications
 
 **Ownership Transfer:**
-- Contact organization owner for assistance
+
+- Contact organisation owner for assistance
 - Review with IT/admin if technical issues
 - Consult DPO if data protection concerns
 
 **Data Custodians:**
+
 - Survey creators can assign (their own surveys)
-- Organization owners can assign (any survey)
-- Contact organization owner if unclear
+- Organisation owners can assign (any survey)
+- Contact organisation owner if unclear
 
 ### Related Documentation
 
@@ -655,10 +721,11 @@ All custodian actions are logged:
 ## Remember
 
 **Special cases are exceptional, not routine.**
+
 - Use legal holds sparingly and appropriately
 - Transfer ownership only when necessary
 - Assign data custodians based on genuine need
 - Document all special case actions
 - Review regularly to ensure ongoing justification
 
-**When in doubt, ask your organization owner or Data Protection Officer.**
+**When in doubt, ask your organisation owner or Data Protection Officer.**

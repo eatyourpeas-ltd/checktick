@@ -29,10 +29,20 @@ def test_publish_settings_get_requires_view_permission(django_user_model):
 
 @pytest.mark.django_db
 def test_publish_settings_put_requires_edit_permission(django_user_model):
+    import os
+
+    from checktick_app.surveys.utils import generate_bip39_phrase
+
     owner = django_user_model.objects.create_user(username="owner2", password="x")
     viewer = django_user_model.objects.create_user(username="viewer2", password="x")
     client = APIClient()
     survey = Survey.objects.create(owner=owner, name="S1", slug="s1")
+
+    # Add encryption (required for all surveys)
+    kek = os.urandom(32)
+    recovery_words = generate_bip39_phrase(12)
+    survey.set_dual_encryption(kek, "test_password", recovery_words)
+
     # Grant viewer membership to viewer
     SurveyMembership.objects.create(
         user=viewer, survey=survey, role=SurveyMembership.Role.VIEWER
@@ -158,26 +168,26 @@ def test_encryption_required_for_patient_data_surveys(django_user_model):
 
 
 @pytest.mark.django_db
-def test_non_patient_data_surveys_can_publish_without_encryption(django_user_model):
-    """API should allow publishing surveys without patient data even if no encryption."""
+def test_all_surveys_require_encryption_before_publishing(django_user_model):
+    """API should require encryption for ALL surveys (not just patient data surveys)."""
     owner = django_user_model.objects.create_user(username="owner6", password="x")
     client = APIClient()
     client.force_authenticate(owner)
-    survey = Survey.objects.create(
-        owner=owner, name="Non-Patient Survey", slug="s-non-patient"
-    )
+    survey = Survey.objects.create(owner=owner, name="Regular Survey", slug="s-regular")
 
     # No patient data groups - just a regular survey
+    # But still requires encryption!
 
     url = f"/api/surveys/{survey.id}/publish/"
 
-    # Should succeed without encryption
+    # Should FAIL without encryption (change from previous behavior)
     resp = client.put(
         url, {"status": "published", "visibility": "authenticated"}, format="json"
     )
-    assert resp.status_code == 200
-    assert resp.data["status"] == "published"
+    assert resp.status_code == 400
+    assert "encryption" in resp.data
+    assert "web interface" in resp.data["encryption"].lower()
 
-    # Verify survey was published
+    # Verify survey was NOT published
     survey.refresh_from_db()
-    assert survey.status == Survey.Status.PUBLISHED
+    assert survey.status == Survey.Status.DRAFT

@@ -19,7 +19,7 @@ By creating an account, accessing, or using CheckTick, you confirm that:
 * You will comply with these Terms and all applicable laws
 * All information you provide is accurate and up-to-date
 
-If you are using the Service on behalf of an organization, you represent that you have authority to bind that organization to these Terms.
+If you are using the Service on behalf of an organisation, you represent that you have authority to bind that organisation to these Terms.
 
 ## 2. Account Types and Tiers
 
@@ -40,7 +40,7 @@ CheckTick offers four account tiers:
 * Email support
 * Requires paid subscription
 
-### 2.3 ORGANIZATION Tier
+### 2.3 ORganisaTION Tier
 
 * All PRO features
 * Unlimited collaborators per survey
@@ -51,7 +51,7 @@ CheckTick offers four account tiers:
 
 ### 2.4 ENTERPRISE Tier
 
-* All ORGANIZATION features
+* All ORganisaTION features
 * Custom branding and theming
 * SSO/OIDC authentication
 * Dedicated support
@@ -71,7 +71,7 @@ Tier features and limits may be adjusted with reasonable notice to users.
 ### 3.2 Encryption Keys
 
 * **Individual Accounts**: You are solely responsible for safeguarding your encryption keys. Loss of encryption keys will result in permanent loss of encrypted data. CheckTick cannot recover lost encryption keys for individual accounts.
-* **Organization Accounts**: Your organization manages encryption keys and may recover them for authorized members.
+* **Organisation Accounts**: Your organisation manages encryption keys and may recover them for authorized members.
 * You acknowledge that CheckTick cannot decrypt data without the appropriate encryption keys.
 
 ### 3.3 Account Termination
@@ -195,7 +195,7 @@ If you are collecting patient data or health-related information:
 CheckTick acts as a **data processor** for survey data you collect. This means:
 
 * We process data only on your instructions (as the data controller)
-* We provide appropriate technical and organizational security measures
+* We provide appropriate technical and organisational security measures
 * We assist you in responding to data subject rights requests
 * We notify you of any data breaches affecting your survey data
 * We delete or return your data when you request it

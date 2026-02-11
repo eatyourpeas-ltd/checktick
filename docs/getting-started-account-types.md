@@ -172,8 +172,8 @@ Teams support three roles:
 
 ***Key Characteristics***
 
-- **Data ownership:** Organization owns surveys, members can access based on roles
-- **Key management:** Organization can recover lost encryption keys
+- **Data ownership:** Organisation owns surveys, members can access based on roles
+- **Key management:** Organisation can recover lost encryption keys
 - **Recovery:** Admins can help recover access to encrypted data
 - **Collaboration:** Full - add both editors and viewers with unlimited collaborators
 - **Audit trail:** All actions are logged for compliance
@@ -191,7 +191,7 @@ Teams support three roles:
 
 ***Features***
 
-- Everything in ORGANIZATION, plus:
+- Everything in ORganisaTION, plus:
 - **Custom branding** - configure logo, themes, and fonts
 - **Self-hosted option** - run on your own infrastructure
 - **SSO/OIDC integration** - enterprise authentication
@@ -201,8 +201,8 @@ Teams support three roles:
 
 ***Key Characteristics***
 
-- **Data ownership:** Organization owns all data (or self-hosted)
-- **Key management:** Organization-managed or self-hosted
+- **Data ownership:** Organisation owns all data (or self-hosted)
+- **Key management:** Organisation-managed or self-hosted
 - **Recovery:** Full administrative controls
 - **Collaboration:** Full team features with unlimited scale
 - **Branding:** Web UI at `/branding/` or CLI via `python manage.py configure_branding`
@@ -305,27 +305,27 @@ When running CheckTick in self-hosted mode (with `SELF_HOSTED=true` in settings)
 
 - Large healthcare systems
 - Government institutions
-- Organizations with strict data residency requirements
+- Organisations with strict data residency requirements
 - Institutions requiring custom branding
 - Self-hosted deployments
 
-## Organization Roles Explained
+## Organisation Roles Explained
 
-Organizations (ORGANISATION and ENTERPRISE tiers) support role-based access control:
+Organisations (ORGANISATION and ENTERPRISE tiers) support role-based access control:
 
 ### Admin
 
-- **Full control** over the organization
+- **Full control** over the organisation
 - Can add/remove members and change their roles
-- Can access all organization surveys
-- Can manage organization settings
-- Can recover encryption keys for the organization
+- Can access all organisation surveys
+- Can manage organisation settings
+- Can recover encryption keys for the organisation
 
 ### Creator
 
 - Can create and manage their own surveys
 - Can be granted access to specific surveys by admins
-- Cannot manage organization members
+- Cannot manage organisation members
 - Can collaborate on surveys they're invited to
 
 ### Viewer
@@ -333,7 +333,7 @@ Organizations (ORGANISATION and ENTERPRISE tiers) support role-based access cont
 - Read-only access to surveys they're invited to (ORGANISATION/ENTERPRISE tiers only)
 - Can view survey results and responses
 - Cannot create or edit surveys
-- Cannot manage organization members
+- Cannot manage organisation members
 - **Note:** Viewer role is not available in FREE or PRO tiers
 
 ## Security and Encryption Differences
@@ -354,14 +354,14 @@ Organizations (ORGANISATION and ENTERPRISE tiers) support role-based access cont
 > - ⚠️ All security responsibility on individual user
 >
 
-### Organization Tier Security (ORGANISATION/ENTERPRISE)
+### Organisation Tier Security (ORGANISATION/ENTERPRISE)
 
 **Encryption Model:**
 
-- Organization manages master encryption keys
-- Individual survey keys derived from organization keys
+- Organisation manages master encryption keys
+- Individual survey keys derived from organisation keys
 - Administrative key escrow and recovery
-- **Organization can recover lost access**
+- **Organisation can recover lost access**
 
 **Enhanced Security Features:**
 
@@ -386,11 +386,11 @@ You can upgrade from one tier to another as your needs grow:
 
 - Enables full team collaboration with viewer roles
 - Unlimited collaborators per survey
-- Organization-managed encryption keys
+- Organisation-managed encryption keys
 - Administrative key recovery options
-- All existing surveys transfer to organization
+- All existing surveys transfer to organisation
 
-### ORGANIZATION → ENTERPRISE
+### ORganisaTION → ENTERPRISE
 
 - Available for self-hosted deployments
 - Adds custom branding capabilities
@@ -412,14 +412,14 @@ You can upgrade from one tier to another as your needs grow:
 - All existing surveys are preserved
 - Survey data and responses remain intact
 - You maintain full access
-- Encryption keys are migrated if moving to ORGANIZATION tier
+- Encryption keys are migrated if moving to ORganisaTION tier
 
 **Your access:**
 
 - New tier features become available immediately
 - You can start using collaboration features (if applicable)
-- You can invite team members (ORGANIZATION/ENTERPRISE)
-- You get administrative key recovery options (ORGANIZATION/ENTERPRISE)
+- You can invite team members (ORganisaTION/ENTERPRISE)
+- You get administrative key recovery options (ORganisaTION/ENTERPRISE)
 
 **Team building (ORGANISATION/ENTERPRISE):**
 
@@ -430,10 +430,10 @@ You can upgrade from one tier to another as your needs grow:
 
 ### Important Notes About Upgrading
 
-- ⚠️ **Some upgrades are permanent** - moving to ORGANIZATION tier changes key management
+- ⚠️ **Some upgrades are permanent** - moving to ORganisaTION tier changes key management
 - **No data loss** - all your surveys and responses are preserved
-- **Enhanced security** - organization key management is more robust (ORGANIZATION/ENTERPRISE)
-- **Better compliance** - audit trails and administrative oversight (ORGANIZATION/ENTERPRISE)
+- **Enhanced security** - organisation key management is more robust (ORganisaTION/ENTERPRISE)
+- **Better compliance** - audit trails and administrative oversight (ORganisaTION/ENTERPRISE)
 - **FREE → PRO is reversible** if you reduce your survey count to 3 or fewer
 
 ## Getting Help
@@ -447,7 +447,7 @@ You can upgrade from one tier to another as your needs grow:
 ### For ORGANISATION and ENTERPRISE Tiers
 
 - All FREE/PRO resources, plus:
-- Organization admin training materials
+- Organisation admin training materials
 - [User Management Guide](./user-management.md)
 - [Authentication Setup](./authentication-and-permissions.md)
 - [Branding Configuration Guide](./branding-and-theme-settings.md) (ENTERPRISE only)
@@ -462,9 +462,9 @@ You can upgrade from one tier to another as your needs grow:
 - **Audit trails:** Limited to basic system logs
 - **Key management:** No institutional oversight
 
-### ORGANIZATION and ENTERPRISE Tiers
+### ORganisaTION and ENTERPRISE Tiers
 
-- **HIPAA/GDPR:** Organization-level compliance support
+- **HIPAA/GDPR:** Organisation-level compliance support
 - **Data retention:** Administrative controls and policies
 - **Audit trails:** Comprehensive logging for all actions
 - **Key management:** Professional-grade key escrow and recovery
@@ -485,10 +485,10 @@ You can upgrade from one tier to another as your needs grow:
 2. Upgrade to PRO from your Profile page
 3. Create unlimited surveys
 
-**For ORGANIZATION Tier:**
+**For ORganisaTION Tier:**
 
 1. Contact sales or upgrade from PRO
-2. Set up your organization name
+2. Set up your organisation name
 3. Read the [User Management Guide](./user-management.md)
 4. Invite your team members
 5. Create collaborative surveys

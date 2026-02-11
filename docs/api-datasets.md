@@ -180,7 +180,7 @@ curl -X POST https://checktick.example.com/api/datasets/hospitals_england_wales/
   "parent": "hospitals_england_wales",
   "parent_name": "Hospitals (England & Wales)",
   "organization": 5,
-  "organization_name": "Our Organization",
+  "organization_name": "Our Organisation",
   "tags": ["hospitals"],
   "options": {
     "RXX01": "Guy's Hospital",
@@ -216,7 +216,7 @@ Content-Type: application/json
 **Restrictions:**
 
 - Cannot update NHS DD datasets (read-only)
-- Can only update datasets your organization owns
+- Can only update datasets your organisation owns
 - User must be ADMIN or CREATOR
 
 **Example:**
@@ -235,7 +235,7 @@ curl -X PATCH https://checktick.example.com/api/datasets/our_custom_list/ \
 
 ### Publish Dataset Globally
 
-Make an organization-owned dataset available to all users.
+Make an organisation-owned dataset available to all users.
 
 ```http
 POST /api/datasets/{key}/publish/
@@ -244,8 +244,8 @@ Authorization: Bearer <token>
 
 **Requirements:**
 
-- User must be ADMIN or CREATOR in the dataset's organization
-- Dataset must be organization-owned (not already global)
+- User must be ADMIN or CREATOR in the dataset's organisation
+- Dataset must be organisation-owned (not already global)
 - Cannot publish NHS DD datasets
 
 **Example:**
@@ -264,7 +264,7 @@ curl -X POST https://checktick.example.com/api/datasets/our_specialty_codes/publ
   "is_global": true,
   "published_at": "2024-11-16T14:30:00Z",
   "organization": 5,
-  "organization_name": "Our Organization"
+  "organization_name": "Our Organisation"
 }
 ```
 
@@ -336,9 +336,9 @@ curl https://checktick.example.com/api/datasets/available-tags/
 
 **Role Definitions:**
 
-- **Individual User**: Authenticated user not part of any organization
-- **Org VIEWER**: Read-only access to organization datasets
-- **Org CREATOR/ADMIN**: Full dataset management for their organization
+- **Individual User**: Authenticated user not part of any organisation
+- **Org VIEWER**: Read-only access to organisation datasets
+- **Org CREATOR/ADMIN**: Full dataset management for their organisation
 
 **Note:** Dataset creation and management is not subject to tier limits. All authenticated users can create custom datasets for their own use.
 

@@ -36,7 +36,7 @@ Data governance is the framework that ensures survey data is:
 When you collect survey data, especially in healthcare, you may be handling sensitive or personal information. Good data governance protects:
 
 - **Participants** - Their privacy and confidentiality
-- **Your organization** - From data breaches and compliance violations
+- **Your organisation** - From data breaches and compliance violations
 - **You** - From legal liability and reputational damage
 
 ### Key Principles
@@ -48,7 +48,7 @@ Not everyone can access survey data. Access is strictly controlled based on role
 | Role | Can View Responses | Can Download Data | Can Extend Retention |
 |------|-------------------|-------------------|---------------------|
 | **Survey Creator** | ✅ Own surveys | ✅ Own surveys | ✅ Own surveys |
-| **Organization Owner** | ✅ All org surveys | ✅ All org surveys | ✅ All org surveys |
+| **Organisation Owner** | ✅ All org surveys | ✅ All org surveys | ✅ All org surveys |
 | **Data Custodian*** | ❌ No | ✅ Assigned surveys | ❌ No |
 | **Editor** | ❌ No | ❌ No | ❌ No |
 | **Viewer** | ❌ No | ❌ No | ❌ No |
@@ -85,7 +85,7 @@ Every data access is logged:
 - Their stated purpose
 - Their IP address
 
-Organization administrators receive email notifications for all data downloads.
+Organisation administrators receive email notifications for all data downloads.
 
 #### 5. User Responsibility
 
@@ -95,7 +95,7 @@ When you download data, you become responsible for:
 - Not sharing it inappropriately
 - Deleting it when no longer needed
 - Reporting any data breaches
-- Complying with your organization's data policies
+- Complying with your organisation's data policies
 
 ### Data Lifecycle
 
@@ -150,7 +150,7 @@ This policy ensures that survey data collected through CheckTick is:
 2. Protected against unauthorized access
 3. Retained only as long as necessary
 4. Used only for its stated purpose
-5. Managed with appropriate technical and organizational measures
+5. Managed with appropriate technical and organisational measures
 
 ### Scope
 
@@ -170,11 +170,11 @@ CheckTick processes survey data under the following legal bases (where applicabl
 - **Legal obligation** - Compliance with applicable laws
 - **Legitimate interests** - Research, quality improvement, service evaluation
 
-Organizations using CheckTick are responsible for ensuring they have appropriate legal basis for their specific use cases.
+Organisations using CheckTick are responsible for ensuring they have appropriate legal basis for their specific use cases.
 
 ### Data Controller Responsibilities
 
-The **organization owner** acts as the data controller and is responsible for:
+The **organisation owner** acts as the data controller and is responsible for:
 
 1. Determining the lawful basis for data collection
 2. Ensuring participants are informed about data use
@@ -190,7 +190,7 @@ CheckTick (as platform provider) acts as a data processor and commits to:
 
 1. Processing data only on documented instructions
 2. Ensuring confidentiality of personnel
-3. Implementing appropriate technical and organizational measures
+3. Implementing appropriate technical and organisational measures
 4. Assisting with data subject rights requests
 5. Assisting with security breaches and impact assessments
 6. Deleting or returning data when instructed
@@ -234,22 +234,22 @@ CheckTick implements a hierarchical permission system with clearly defined roles
 - Cannot access other users' surveys (unless also an org owner)
 - Cannot bypass retention limits
 
-#### Organization Owner
+#### Organisation Owner
 
-**Who**: The owner of an organization account
+**Who**: The owner of an organisation account
 
 **Permissions**:
 
-- All permissions of Survey Creator for ALL organization surveys
+- All permissions of Survey Creator for ALL organisation surveys
 - Assign data custodians
 - Place legal holds
 - Transfer survey ownership
-- View audit logs for all organization surveys
-- Manage organization members
+- View audit logs for all organisation surveys
+- Manage organisation members
 
 **Restrictions**:
 
-- Cannot access surveys from other organizations
+- Cannot access surveys from other organisations
 - Subject to same retention limits (except legal holds)
 
 #### Data Custodian
@@ -308,7 +308,7 @@ CheckTick implements a hierarchical permission system with clearly defined roles
 ### Permission Hierarchy
 
 ```
-Organization Owner
+Organisation Owner
     ├── Full access to all org surveys
     ├── Can assign any role
     └── Can place legal holds
@@ -452,7 +452,7 @@ Every data export creates an audit log entry with:
 - **Where** - IP address
 - **How** - Export format
 
-Organization owners receive email notifications for all data exports:
+Organisation owners receive email notifications for all data exports:
 
 ```
 Subject: Data Export: Diabetes Survey
@@ -474,7 +474,7 @@ You can download data multiple times:
 - No limit on number of exports
 - Each export creates a new audit log entry
 - Must provide a purpose statement each time
-- Organization owners notified for each download
+- Organisation owners notified for each download
 
 This allows:
 
@@ -518,7 +518,7 @@ Survey Closed → [6 months] → Automatic Deletion
 At each warning milestone, emails are sent to:
 
 - Survey creator
-- Organization owner
+- Organisation owner
 - All assigned data custodians
 
 **Email content**:
@@ -580,7 +580,7 @@ Good justifications:
 
 - Can extend multiple times (up to 24 months total)
 - Each extension requires new justification
-- Organization owners can review all extensions
+- Organisation owners can review all extensions
 - Audit log records all extension requests
 
 ### Maximum Retention Period
@@ -644,7 +644,7 @@ This is useful for:
 
 ### Retention Policy Override
 
-Only **organization owners** can place a **legal hold** to prevent automatic deletion (see Special Cases section).
+Only **organisation owners** can place a **legal hold** to prevent automatic deletion (see Special Cases section).
 
 ---
 
@@ -813,11 +813,11 @@ If data is lost, stolen, or accessed by unauthorized person:
 1. **Immediate actions** (within minutes):
    - Disconnect affected device from network
    - Change passwords
-   - Notify organization IT security team
+   - Notify organisation IT security team
 
 2. **Within 24 hours**:
    - Document incident (what, when, how)
-   - Notify organization data protection officer
+   - Notify organisation data protection officer
    - Notify survey participants if required
    - Notify regulatory bodies if required (e.g., ICO for UK)
 
@@ -840,7 +840,7 @@ Before downloading data, ensure:
 - [ ] You have appropriate authorization (ethics approval, data sharing agreement)
 - [ ] You have secure storage available (encrypted location)
 - [ ] You understand your data protection responsibilities
-- [ ] You know your organization's data security policies
+- [ ] You know your organisation's data security policies
 - [ ] You have access to secure analysis environment
 - [ ] You know who to contact in case of security incident
 - [ ] You understand retention and destruction requirements
@@ -886,7 +886,7 @@ Legal holds should only be used in specific circumstances:
 
 #### Who Can Place a Legal Hold?
 
-Only **organization owners** can place legal holds.
+Only **organisation owners** can place legal holds.
 
 **Why this restriction?**
 
@@ -923,13 +923,13 @@ When a legal hold is active:
 - **Warnings suppressed** - no deletion warning emails sent
 - **No retention limit** - can be held indefinitely
 - **Audit trail updated** - all holds logged
-- **Organization notified** - org owner receives confirmation email
+- **Organisation notified** - org owner receives confirmation email
 
 #### Reviewing and Lifting Legal Holds
 
 Legal holds should be reviewed regularly:
 
-1. **Monthly review**: Organization owner checks all active holds
+1. **Monthly review**: Organisation owner checks all active holds
 2. **Verify continued need**: Contact legal counsel to confirm hold still required
 3. **Lift hold when appropriate**:
    - Navigate to survey dashboard
@@ -953,7 +953,7 @@ All legal hold actions are logged:
 - When it was lifted (if applicable)
 - Reason for lifting
 
-Organization owners can view legal hold reports showing:
+Organisation owners can view legal hold reports showing:
 
 - All active legal holds
 - Hold duration
@@ -962,20 +962,20 @@ Organization owners can view legal hold reports showing:
 
 ### Ownership Transfer
 
-When a survey creator leaves the organization or changes roles, survey ownership may need to be transferred.
+When a survey creator leaves the organisation or changes roles, survey ownership may need to be transferred.
 
 #### Automatic Transfer
 
-Surveys automatically transfer to the **organization owner** when:
+Surveys automatically transfer to the **organisation owner** when:
 
 - Survey creator's account is deactivated
-- Survey creator leaves the organization (membership revoked)
+- Survey creator leaves the organisation (membership revoked)
 - Survey creator requests transfer
 
 **Automatic transfer process**:
 
 1. System detects creator account deactivation
-2. Ownership transfers to organization owner
+2. Ownership transfers to organisation owner
 3. Both parties notified via email (if possible)
 4. Audit log records transfer
 5. All permissions preserved
@@ -999,7 +999,7 @@ Survey creators can manually transfer ownership:
 
 1. Navigate to survey dashboard
 2. Click "Transfer Ownership"
-3. Select new owner (must be organization member)
+3. Select new owner (must be organisation member)
 4. Provide reason for transfer
 5. New owner receives notification and must accept
 
@@ -1026,12 +1026,12 @@ Survey creators can manually transfer ownership:
 - No longer receives deletion warnings
 - Can be removed entirely by new owner
 
-#### Organization Dissolution
+#### Organisation Dissolution
 
-If an organization is deleted:
+If an organisation is deleted:
 
 - All surveys automatically transfer to individual survey creators
-- Organization-level encryption removed (if applicable)
+- Organisation-level encryption removed (if applicable)
 - Each creator becomes independent owner
 - All creators notified
 
@@ -1051,7 +1051,7 @@ The **Data Custodian** role allows delegation of data management without grantin
 ❌ **Not appropriate for**:
 
 - Survey editors (use Editor role)
-- People who should view responses in UI (use organization membership)
+- People who should view responses in UI (use organisation membership)
 - General collaborators (use Viewer role)
 
 #### Assigning a Data Custodian
@@ -1059,7 +1059,7 @@ The **Data Custodian** role allows delegation of data management without grantin
 1. Navigate to survey dashboard
 2. Click "Manage Users"
 3. Click "Assign Data Custodian"
-4. Enter email address or select from organization members
+4. Enter email address or select from organisation members
 5. Optionally provide note explaining why
 6. Click "Assign"
 
@@ -1068,7 +1068,7 @@ The **Data Custodian** role allows delegation of data management without grantin
 Subject: You've been assigned as Data Custodian
 
 Survey: Diabetes Survey
-Organization: NHS Trust Research
+Organisation: NHS Trust Research
 Assigned by: john.smith@example.com
 
 As Data Custodian, you can:
@@ -1104,7 +1104,7 @@ You cannot:
 
 #### Removing Data Custodians
 
-Survey creators or organization owners can remove custodians:
+Survey creators or organisation owners can remove custodians:
 
 1. Navigate to survey dashboard
 2. Click "Manage Users"
@@ -1119,14 +1119,14 @@ Subject: Data Custodian access removed
 You no longer have Data Custodian access to:
 
 Survey: Diabetes Survey
-Organization: NHS Trust Research
+Organisation: NHS Trust Research
 Removed by: john.smith@example.com
 Date: 2025-02-01
 ```
 
 ### Emergency Data Access
 
-In rare circumstances, organization owners may need emergency access to survey data.
+In rare circumstances, organisation owners may need emergency access to survey data.
 
 #### Emergency Access Scenarios
 
@@ -1137,7 +1137,7 @@ In rare circumstances, organization owners may need emergency access to survey d
 
 #### Emergency Access Procedure
 
-1. **Organization owner** can access any organization survey
+1. **Organisation owner** can access any organisation survey
 2. Emergency access automatically logged
 3. Survey creator notified (if possible)
 4. Requires documented justification post-access
@@ -1145,7 +1145,7 @@ In rare circumstances, organization owners may need emergency access to survey d
 **Emergency access audit entry**:
 ```
 Emergency data access
-User: admin@example.com (Organization Owner)
+User: admin@example.com (Organisation Owner)
 Survey: Diabetes Survey
 Time: 2025-02-01 15:30:00
 Reason: Creator unavailable, urgent data needed for incident investigation
@@ -1167,7 +1167,7 @@ Participants have the right to request deletion of their data if:
 
 #### Withdrawal Process
 
-1. Participant contacts survey creator/organization
+1. Participant contacts survey creator/organisation
 2. Verify identity (ensure request is genuine)
 3. Locate response (using timestamp, email, or other identifier)
 4. Delete specific response:
@@ -1213,7 +1213,7 @@ class Survey(models.Model):
     # Core fields
     name = models.CharField(max_length=255)
     owner = models.ForeignKey(User, on_delete=models.PROTECT)
-    organization = models.ForeignKey(Organization, null=True, on_delete=models.SET_NULL)
+    organisation = models.ForeignKey(Organisation, null=True, on_delete=models.SET_NULL)
 
     # Lifecycle
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
@@ -1283,7 +1283,7 @@ def require_data_access(view_func):
         # Check permissions
         if not (
             request.user == survey.owner or
-            request.user == survey.organization.owner or
+            request.user == survey.organisation.owner or
             survey.data_custodians.filter(user=request.user).exists()
         ):
             raise PermissionDenied("You do not have data access permission.")
@@ -1310,7 +1310,7 @@ class Survey(models.Model):
 
         return (
             user == self.owner or
-            user == self.organization.owner or
+            user == self.organisation.owner or
             self.data_custodians.filter(user=user).exists()
         )
 
@@ -1318,14 +1318,14 @@ class Survey(models.Model):
         """Check if user can extend retention period."""
         return (
             user == self.owner or
-            user == self.organization.owner
+            user == self.organisation.owner
         )
 
     def can_place_legal_hold(self, user):
         """Check if user can place legal hold."""
         return (
-            self.organization and
-            user == self.organization.owner
+            self.organisation and
+            user == self.organisation.owner
         )
 ```
 
@@ -1378,8 +1378,8 @@ def send_deletion_warning(survey, days_remaining):
     """Send warning email to survey owner, org owner, and custodians."""
     recipients = [survey.owner.email]
 
-    if survey.organization:
-        recipients.append(survey.organization.owner.email)
+    if survey.organisation:
+        recipients.append(survey.organisation.owner.email)
 
     for custodian in survey.data_custodians.all():
         recipients.append(custodian.user.email)
@@ -1464,7 +1464,7 @@ def export_csv(request, survey_slug):
     )
 
     # Send notification to org owner
-    if survey.organization:
+    if survey.organisation:
         notify_data_export(survey, request.user, 'csv', purpose)
 
     # Generate CSV
@@ -1544,7 +1544,7 @@ def log_audit_event(user, survey, action, reason='', metadata=None):
 ```python
 def notify_data_export(survey, user, format, purpose):
     """Notify org owner of data export."""
-    if not survey.organization:
+    if not survey.organisation:
         return
 
     send_mail(
@@ -1560,7 +1560,7 @@ IP: {get_client_ip(request)}
 View full audit log: {settings.SITE_URL}/surveys/{survey.slug}/audit/
         ''',
         from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[survey.organization.owner.email],
+        recipient_list=[survey.organisation.owner.email],
     )
 ```
 
@@ -1600,9 +1600,9 @@ AUDIT_LOG_RETENTION_YEARS = 7
 - Respond to deletion warnings before deadlines
 - Justify any retention extensions
 
-### As an Organization Owner
+### As an Organisation Owner
 
-- Set clear data policies for your organization
+- Set clear data policies for your organisation
 - Monitor data downloads across all surveys
 - Review retention extensions
 - Ensure appropriate access controls
@@ -1612,7 +1612,7 @@ AUDIT_LOG_RETENTION_YEARS = 7
 ### As a Data Custodian
 
 - Download data only when authorized
-- Follow your organization's data handling procedures
+- Follow your organisation's data handling procedures
 - Store exports securely
 - Report any security concerns immediately
 - Maintain confidentiality
@@ -1623,9 +1623,9 @@ AUDIT_LOG_RETENTION_YEARS = 7
 
 If you have questions about data governance:
 
-1. **Contact your organization's data protection officer** (if designated)
+1. **Contact your organisation's data protection officer** (if designated)
 2. **For technical issues:** [GitHub Issues](https://github.com/eatyourpeas/checktick/issues)
-3. **For security concerns:** Contact your organization administrator immediately
+3. **For security concerns:** Contact your organisation administrator immediately
 
 ---
 

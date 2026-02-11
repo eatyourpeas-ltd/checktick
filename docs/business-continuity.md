@@ -15,24 +15,26 @@ CheckTick's encryption system is designed with redundancy and recovery in mind. 
 - Recovery scenarios by subscription tier
 - Vault unavailability procedures
 - Key personnel changes
-- Organization dissolution
+- Organisation dissolution
 - Data backup and restoration
 
 ## Recovery Scenarios by Tier
 
 ### Free Tier
 
-**Data Location**: Browser local storage only
+**Data Location**: Encrypted in database (all surveys are encrypted)
 
 **Disaster Scenarios:**
 
 | Scenario | Impact | Recovery |
 |----------|--------|----------|
-| Browser data cleared | Data lost | No recovery possible |
-| Device lost/stolen | Data lost | No recovery possible |
-| Browser crash | Possible data loss | Check browser recovery |
+| Forgot password | Can't unlock surveys | Use recovery phrase |
+| Lost recovery phrase | Backup option unavailable | Use password (still works) |
+| Lost both password AND phrase | Can't unlock surveys | Platform recovery (48-96 hours) |
 
-**Recommendation**: Free tier is not suitable for important data. Upgrade to Individual or higher for encryption and recovery.
+**Note**: All Free tier surveys are encrypted with the same protection as paid tiers. Free tier is limited to 3 surveys and cannot use patient data templates, but data security is equivalent across all tiers.
+
+**Recommendation**: Free tier is suitable for general surveys. Upgrade to Pro or higher for unlimited surveys and access to patient data templates.
 
 ### Individual Tier
 
@@ -66,24 +68,24 @@ Same as Individual, with faster recovery:
 
 ### Team Tiers
 
-**Data Location**: Encrypted with team key, backed up with organization key
+**Data Location**: Encrypted with team key, backed up with organisation key
 
 **Disaster Scenarios:**
 
 | Scenario | Impact | Recovery Path |
 |----------|--------|---------------|
 | Team member loses SSO | Can't access team surveys | Re-authenticate SSO |
-| Team admin unavailable | Can't manage team | Organization owner takes over |
-| Team key corrupted | Team surveys inaccessible | Restore from organization key |
-| Entire team loses access | All team surveys locked | Organization admin recovery |
+| Team admin unavailable | Can't manage team | Organisation owner takes over |
+| Team key corrupted | Team surveys inaccessible | Restore from organisation key |
+| Entire team loses access | All team surveys locked | Organisation admin recovery |
 
 **Recovery Hierarchy:**
 
 1. Team admin recovery (instant)
-2. Organization owner recovery (instant)
-3. Platform recovery (if organization also unavailable)
+2. Organisation owner recovery (instant)
+3. Platform recovery (if organisation also unavailable)
 
-### Organization Tier
+### Organisation Tier
 
 **Data Location**: Hierarchical encryption (platform → org → team → survey)
 
@@ -91,10 +93,10 @@ Same as Individual, with faster recovery:
 
 | Scenario | Impact | Recovery Path |
 |----------|--------|---------------|
-| Organization owner leaves | Management gap | Transfer ownership first |
-| Organization key compromised | All org data at risk | Rotate keys immediately |
+| Organisation owner leaves | Management gap | Transfer ownership first |
+| Organisation key compromised | All org data at risk | Rotate keys immediately |
 | Multiple admins unavailable | Recovery bottleneck | Emergency contact list |
-| Organization dissolves | Orphaned data | See "Organization Dissolution" section |
+| Organisation dissolves | Orphaned data | See "Organisation Dissolution" section |
 
 ### Enterprise Tier
 
@@ -246,11 +248,11 @@ While Vault is unavailable:
 
 **If they've already left:**
 
-1. Organization owner assigns new team admin
+1. Organisation owner assigns new team admin
 2. Review audit logs for any concerning activity
 3. Consider rotating team encryption key
 
-### Organization Owner Leaves
+### Organisation Owner Leaves
 
 **Before they leave:**
 
@@ -277,9 +279,9 @@ While Vault is unavailable:
 4. Update dual authorization list
 5. Document handover in audit trail
 
-## Organization Dissolution
+## Organisation Dissolution
 
-When an organization ceases to exist:
+When an organisation ceases to exist:
 
 ### Planned Dissolution
 
@@ -287,18 +289,18 @@ When an organization ceases to exist:
 2. **Export data** that needs to be retained
 3. **Transfer surveys** to individual accounts if needed
 4. **Archive** read-only copies for compliance
-5. **Delete** organization and keys after retention period
+5. **Delete** organisation and keys after retention period
 
 ### Unplanned Dissolution
 
-If organization disappears suddenly (bankruptcy, etc.):
+If organisation disappears suddenly (bankruptcy, etc.):
 
 1. **Users contact CheckTick support**
 2. **Verify user identity** (standard verification)
-3. **Verify organization status** (legal documentation)
+3. **Verify organisation status** (legal documentation)
 4. **Platform recovery** for individual user data
 5. **Surveys transferred** to individual accounts
-6. **Organization keys** securely destroyed
+6. **Organisation keys** securely destroyed
 
 ### Data Retention After Dissolution
 
@@ -383,19 +385,19 @@ alerts:
   - name: high_recovery_rate
     condition: recovery_requests_per_day > 5
     severity: warning
-    notify: security@organization.uk
+    notify: security@organisation.uk
 
   - name: critical_recovery_rate
     condition: recovery_requests_per_day > 10
     severity: critical
     notify:
-      - security@organization.uk
-      - cto@organization.uk
+      - security@organisation.uk
+      - cto@organisation.uk
 
   - name: verification_failures
     condition: failed_verifications_per_user > 3
     severity: warning
-    notify: security@organization.uk
+    notify: security@organisation.uk
 ```
 
 ### Investigating Unusual Activity
@@ -450,7 +452,7 @@ Maintain an emergency contact list:
 | Vault data corruption | 4 hours | 24 hours (daily backup) |
 | Complete infrastructure loss | 24 hours | 24 hours |
 | Key personnel unavailable | 4 hours | N/A |
-| Organization dissolution | 30 days | N/A |
+| Organisation dissolution | 30 days | N/A |
 
 ### Achieving RTO/RPO
 

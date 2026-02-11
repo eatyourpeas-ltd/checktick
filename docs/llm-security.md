@@ -283,7 +283,7 @@ The LLM is trained to stay in its role and ignore such attempts.
 
 1. **Authentication required** - Only logged-in users can access
 2. **Permission checks** - Must have survey creation permissions:
-   - Organization admins
+   - Organisation admins
    - Survey creators
    - Individual account users (for own surveys only)
 
@@ -310,7 +310,7 @@ The LLM is trained to stay in its role and ignore such attempts.
    - Dashboard for administrators
 
 5. **Cost controls:**
-   - Maximum API spend per organization
+   - Maximum API spend per organisation
    - Usage quotas based on subscription tier
    - Throttling for high-volume users
 

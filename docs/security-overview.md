@@ -47,7 +47,7 @@ CheckTick is committed to **UK Data Sovereignty**; we intentionally prioritize U
 
 CheckTick implements a hierarchical permission model:
 
-- **Organization level**: Owner, Admin, Creator, Viewer roles
+- **Organisation level**: Owner, Admin, Creator, Viewer roles
 - **Team level**: Owner, Admin, Creator, Viewer roles
 - **Survey level**: Creator (owner), Editor, Viewer roles
 

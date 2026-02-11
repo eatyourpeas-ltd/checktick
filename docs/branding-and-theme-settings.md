@@ -4,7 +4,7 @@ category: configuration
 priority: 1
 ---
 
-This guide explains CheckTick's 3-tier theme system and how to customize the appearance at different levels. Whether you're a platform admin (Enterprise tier), organization owner, or survey creator, you can control the look and feel of your CheckTick instance.
+This guide explains CheckTick's 3-tier theme system and how to customize the appearance at different levels. Whether you're a platform admin (Enterprise tier), organisation owner, or survey creator, you can control the look and feel of your CheckTick instance.
 
 ## Overview: 3-Tier Theme Hierarchy
 
@@ -17,8 +17,8 @@ CheckTick uses a **cascading theme system** with three levels:
 └─────────────────────────────────────┘
               ↓ Overrides
 ┌─────────────────────────────────────┐
-│  2. Organization Theme              │  ← Org owner sets (affects org members)
-│     (Per-organization)              │
+│  2. Organisation Theme              │  ← Org owner sets (affects org members)
+│     (Per-organisation)              │
 └─────────────────────────────────────┘
               ↓ Overrides
 ┌─────────────────────────────────────┐
@@ -40,7 +40,7 @@ Different users can control different levels:
 | Level | Who Can Configure | Where | Affects |
 |-------|------------------|-------|---------|
 | **Platform** | Superusers only | Django Admin or environment variables | All users (default) |
-| **Organization** | Organization owners | Profile page | All organization members |
+| **Organisation** | Organisation owners | Profile page | All organisation members |
 | **Survey** | Survey creators | Survey dashboard | Survey pages only |
 
 ## Platform Branding Configuration (Enterprise Tier)
@@ -172,7 +172,7 @@ Platform administrators set the default theme for the entire CheckTick deploymen
 ### Who Can Configure
 
 - **Superusers only** - Users with Django admin access
-- Regular users and organization owners cannot change platform defaults
+- Regular users and organisation owners cannot change platform defaults
 
 ### Where to Configure
 
@@ -203,20 +203,20 @@ pastel (default), nord, light, cupcake, bumblebee, emerald, retro, cyberpunk, va
 **12 Dark Themes:**
 dim (default), dark, synthwave, halloween, forest, aqua, black, luxury, dracula, night, coffee, business
 
-## 2. Organization-Level Themes (Organization Owners)
+## 2. Organisation-Level Themes (Organisation Owners)
 
-Organization owners can customize their organization's appearance, overriding platform defaults for all members.
+Organisation owners can customize their organisation's appearance, overriding platform defaults for all members.
 
 ### Who Can Configure
 
-- **Organization owners only** - The user who created the organization
-- Organization members and survey creators cannot change organization themes
+- **Organisation owners only** - The user who created the organisation
+- Organisation members and survey creators cannot change organisation themes
 
 ### Where to Configure
 
-1. Log in as organization owner
+1. Log in as organisation owner
 2. Navigate to `/profile`
-3. Scroll to "Organization Theme" section
+3. Scroll to "Organisation Theme" section
 4. Click "Edit Theme" button
 
 ### What You Can Configure
@@ -236,25 +236,25 @@ Organization owners can customize their organization's appearance, overriding pl
 3. Choose a dark theme from the second dropdown
 4. Click "Save"
 
-**Example:** Select "pastel" for light mode and "luxury" for dark mode to give your organization a professional look.
+**Example:** Select "pastel" for light mode and "luxury" for dark mode to give your organisation a professional look.
 
 ### How to Reset to Platform Defaults
 
-If you want your organization to use the platform's default theme again:
+If you want your organisation to use the platform's default theme again:
 
 1. Navigate to `/profile`
-2. Scroll to "Organization Theme" section
+2. Scroll to "Organisation Theme" section
 3. Click "Reset to Defaults" button
 4. Confirm
 
-This clears all custom organization theme settings and falls back to the platform theme.
+This clears all custom organisation theme settings and falls back to the platform theme.
 
 ### Viewing Current Theme
 
 The profile page shows your current theme status:
 
 - **"Platform Default"** - Using the deployment's default theme
-- **Theme name** (e.g., "corporate") - Using a custom organization theme
+- **Theme name** (e.g., "corporate") - Using a custom organisation theme
 
 ## 3. Survey-Level Themes (Survey Creators)
 
@@ -264,7 +264,7 @@ Survey creators can customize individual surveys with unique branding and colors
 
 - **Survey owners** - The user who created the survey
 - **Survey creators** - Users with creator role on the survey
-- Organization admins cannot override survey themes (surveys retain autonomy)
+- Organisation admins cannot override survey themes (surveys retain autonomy)
 
 ### Where to Configure
 
@@ -312,7 +312,7 @@ For advanced customization beyond preset themes, use the daisyUI Theme Generator
 
 **Use custom CSS when:**
 
-- Your organization has specific brand colors
+- Your organisation has specific brand colors
 - Preset themes don't match your color scheme
 - You need precise control over colors, borders, shadows
 
@@ -341,7 +341,7 @@ For advanced customization beyond preset themes, use the daisyUI Theme Generator
    - The generated code contains CSS variable declarations
 
 5. **Paste into CheckTick:**
-   - For organizations: Paste into "Advanced: Custom CSS" fields in profile
+   - For organisations: Paste into "Advanced: Custom CSS" fields in profile
    - For surveys: Paste into survey style form
    - Paste light theme variables in "Light theme CSS"
    - Paste dark theme variables in "Dark theme CSS"
@@ -398,29 +398,29 @@ When multiple theme levels are configured, CheckTick uses this precedence:
 ### Precedence Order (Highest to Lowest)
 
 1. **Survey theme** - Applies only on survey pages
-2. **Organization theme** - Applies to all org members (except on survey pages with custom themes)
+2. **Organisation theme** - Applies to all org members (except on survey pages with custom themes)
 3. **Platform theme** - Default for all users
 
 ### Example Scenarios
 
-**Scenario 1: Platform + Organization**
+**Scenario 1: Platform + Organisation**
 
 - Platform set to: pastel (light), dim (dark)
-- Organization set to: coporate (light), luxury (dark)
-- **Result:** Organization members see corporate/luxury, non-members see pastel/dim
+- Organisation set to: coporate (light), luxury (dark)
+- **Result:** Organisation members see corporate/luxury, non-members see pastel/dim
 
 **Scenario 2: All Three Levels**
 
 - Platform: lofi/dim
-- Organization: corporate/luxury
+- Organisation: corporate/luxury
 - Survey: cupcake/forest
 - **Result:** Survey pages show cupcake/forest, other pages show corporate/luxury
 
-**Scenario 3: Organization Reset**
+**Scenario 3: Organisation Reset**
 
-- Organization previously had custom theme
+- Organisation previously had custom theme
 - Owner clicks "Reset to Defaults"
-- **Result:** Organization members now see platform theme (lofi/dim)
+- **Result:** Organisation members now see platform theme (lofi/dim)
 
 ## Where to Look in the Code
 
@@ -486,7 +486,7 @@ The build process:
 **Check your role:**
 
 - Platform themes: Must be superuser
-- Organization themes: Must be organization owner
+- Organisation themes: Must be organisation owner
 - Survey themes: Must be survey owner/creator
 
 ### Icons Not Showing
@@ -529,9 +529,9 @@ The build process:
 - Test both light and dark modes
 - Document any custom CSS for future reference
 
-### For Organization Owners
+### For Organisation Owners
 
-- Consider your organization's brand colors
+- Consider your organisation's brand colors
 - Test themes with actual users before rolling out
 - Keep accessibility in mind (contrast ratios)
 - Use "Reset to Defaults" if unsure about changes

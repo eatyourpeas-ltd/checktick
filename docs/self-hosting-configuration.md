@@ -68,7 +68,7 @@ Customize the appearance of your CheckTick instance:
 
 ```bash
 # Site title (appears in browser tab and header)
-BRAND_TITLE=Your Organization Surveys
+BRAND_TITLE=Your Organisation Surveys
 
 # Theme name (currently only 'checktick' available)
 BRAND_THEME=checktick
@@ -96,7 +96,7 @@ HCAPTCHA_SECRET=your-secret-key
 
 #### SSO Authentication
 
-Enable Google or Microsoft 365 login for organization encryption features:
+Enable Google or Microsoft 365 login for organisation encryption features:
 
 **Google:**
 
@@ -183,7 +183,7 @@ CHECKTICK_DOWNLOAD_LINK_EXPIRY_DAYS=7
 CHECKTICK_WARN_BEFORE_DELETION_DAYS=30,7,1
 ```
 
-**Note:** These are optional settings with sensible defaults. Most deployments don't need to change these values. Adjust only if your organization has specific compliance requirements.
+**Note:** These are optional settings with sensible defaults. Most deployments don't need to change these values. Adjust only if your organisation has specific compliance requirements.
 
 See the [Data Governance Overview](data-governance-overview.md) for details on how these settings affect survey lifecycle and data retention.
 

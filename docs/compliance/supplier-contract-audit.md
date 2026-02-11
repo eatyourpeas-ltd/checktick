@@ -29,7 +29,7 @@ category: dspt-10-suppliers
 
 Each contract listed above has been verified to contain the following mandatory security requirements:
 
-* **Security Measures:** Obligation to implement appropriate technical and organizational measures (Encryption, MFA, etc.).
+* **Security Measures:** Obligation to implement appropriate technical and organisational measures (Encryption, MFA, etc.).
 * **Breach Notification:** Requirement to notify {{ platform_name }} without undue delay after becoming aware of a personal data breach.
 * **Sub-processing:** Restrictions on appointing sub-processors without prior written authorization/notification.
 * **Audit Rights:** Provision for {{ platform_name }} (or a third party) to audit compliance or receive audit reports (e.g., SOC2/ISO 27001).

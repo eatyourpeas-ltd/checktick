@@ -32,7 +32,7 @@
   <!-- Billing Type Breakdown -->
   <div class="card bg-base-100 shadow">
     <div class="card-body">
-      <h3 class="card-title">{% trans "Organizations by Billing Type" %}</h3>
+      <h3 class="card-title">{% trans "Organisations by Billing Type" %}</h3>
       <div class="space-y-3 mt-4">
         {% for label, count in billing_stats.items %}
         <div class="flex items-center justify-between">
@@ -50,7 +50,7 @@
   <!-- Status Breakdown -->
   <div class="card bg-base-100 shadow">
     <div class="card-body">
-      <h3 class="card-title">{% trans "Organizations by Status" %}</h3>
+      <h3 class="card-title">{% trans "Organisations by Status" %}</h3>
       <div class="space-y-3 mt-4">
         {% for label, count in status_stats.items %}
         <div class="flex items-center justify-between">
@@ -70,13 +70,13 @@
   <!-- Top by Members -->
   <div class="card bg-base-100 shadow">
     <div class="card-body">
-      <h3 class="card-title">{% trans "Top Organizations by Members" %}</h3>
+      <h3 class="card-title">{% trans "Top Organisations by Members" %}</h3>
       <div class="overflow-x-auto">
         <table class="table table-sm">
           <thead>
             <tr>
               <th>#</th>
-              <th>{% trans "Organization" %}</th>
+              <th>{% trans "Organisation" %}</th>
               <th class="text-right">{% trans "Members" %}</th>
             </tr>
           </thead>
@@ -105,13 +105,13 @@
   <!-- Top by Surveys -->
   <div class="card bg-base-100 shadow">
     <div class="card-body">
-      <h3 class="card-title">{% trans "Top Organizations by Surveys" %}</h3>
+      <h3 class="card-title">{% trans "Top Organisations by Surveys" %}</h3>
       <div class="overflow-x-auto">
         <table class="table table-sm">
           <thead>
             <tr>
               <th>#</th>
-              <th>{% trans "Organization" %}</th>
+              <th>{% trans "Organisation" %}</th>
               <th class="text-right">{% trans "Surveys" %}</th>
             </tr>
           </thead>

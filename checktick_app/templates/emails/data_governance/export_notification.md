@@ -20,7 +20,7 @@ A data export has been created for survey **"{{ survey.name }}"**.
 
 ### Why am I receiving this?
 
-As an organization administrator, you receive notifications for all data exports to maintain oversight and ensure compliance with data protection policies.
+As an organisation administrator, you receive notifications for all data exports to maintain oversight and ensure compliance with data protection policies.
 
 ### What to do
 
@@ -30,7 +30,7 @@ This is an informational notice. No action is required unless:
 - The export was unexpected or unauthorized
 - You have concerns about data security
 
-If you have concerns, contact your organization's data protection officer or the user who created the export.
+If you have concerns, contact your organisation's data protection officer or the user who created the export.
 
 ### Data Protection Reminders
 

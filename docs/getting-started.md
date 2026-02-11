@@ -9,7 +9,7 @@ Welcome to CheckTick! This guide will help you get started with creating surveys
 ## Table of Contents
 
 - [What is CheckTick?](#what-is-checktick)
-- [Account Types](#account-types) - Individual vs Organization
+- [Account Types](#account-types) - Individual vs Organisation
 - [Quick Start](#quick-start) - Create your first survey
 - [Using the API](#using-the-api) - Programmatic access
 - [Next Steps](#next-steps)
@@ -62,20 +62,20 @@ A personal account for solo users.
 **Limitations**:
 - No team collaboration (can't assign other users)
 - Single owner per survey
-- No organization-level encryption
+- No organisation-level encryption
 - No shared survey groups
 
 **Pricing**: Free (for self-hosted) or see hosted pricing
 
 ---
 
-### Organization Accounts
+### Organisation Accounts
 
 **What is it?**
-A team account for groups, organizations, or institutions.
+A team account for groups, organisations, or institutions.
 
 **Best for**:
-- Healthcare organizations
+- Healthcare organisations
 - Research teams
 - Educational institutions
 - Clinical departments
@@ -84,39 +84,39 @@ A team account for groups, organizations, or institutions.
 **Features**:
 - Everything in Individual accounts, plus:
 - **Team collaboration**: Multiple users with different roles
-- **Organization-level encryption**: Centralized data protection
+- **Organisation-level encryption**: Centralized data protection
 - **Shared survey groups**: Organize surveys by project/department
 - **User management**: Assign owners, editors, viewers, data custodians
 - **Centralized audit logs**: Track all team activity
-- **Group ownership**: Surveys can be owned by organization
+- **Group ownership**: Surveys can be owned by organisation
 
-**User roles in organizations**:
+**User roles in organisations**:
 
 | Role | Create Surveys | View Data | Download Data | Manage Users |
 |------|---------------|-----------|---------------|--------------|
-| **Organization Owner** | ✅ | ✅ | ✅ | ✅ |
+| **Organisation Owner** | ✅ | ✅ | ✅ | ✅ |
 | **Survey Owner** | ✅ | ✅ (own surveys) | ✅ (own surveys) | ✅ (own surveys) |
 | **Editor** | ✅ (if permitted) | ❌ | ❌ | ❌ |
 | **Viewer** | ❌ | ❌ | ❌ | ❌ |
 | **Data Custodian** | ❌ | ❌ | ✅ (assigned surveys) | ❌ |
 
-**Pricing**: Contact for organization pricing
+**Pricing**: Contact for organisation pricing
 
 ---
 
-### Choosing Between Individual and Organization
+### Choosing Between Individual and Organisation
 
-| Factor | Individual | Organization |
+| Factor | Individual | Organisation |
 |--------|-----------|-------------|
 | **Team size** | Just you | 2+ people |
 | **Data sharing** | Manual export/sharing | Built-in collaboration |
 | **Access control** | Single owner | Role-based permissions |
-| **Encryption** | Personal passphrase | Organization-wide passphrase |
+| **Encryption** | Personal passphrase | Organisation-wide passphrase |
 | **Audit requirements** | Basic logs | Comprehensive audit trails |
-| **Cost** | Free (self-hosted) | Organization pricing |
+| **Cost** | Free (self-hosted) | Organisation pricing |
 
 **Can I upgrade later?**
-Yes, you can convert an individual account to an organization account. Your existing surveys will be migrated.
+Yes, you can convert an individual account to an organisation account. Your existing surveys will be migrated.
 
 ---
 
@@ -128,7 +128,7 @@ Yes, you can convert an individual account to an organization account. Your exis
 2. Click "Sign Up"
 3. Choose account type:
    - **Individual**: Just fill in your details
-   - **Organization**: Provide organization name and details
+   - **Organisation**: Provide organisation name and details
 4. Verify your email
 5. Log in
 
@@ -581,7 +581,7 @@ curl -X POST "$API_BASE/surveys/" \
 To prevent abuse, the API has rate limits:
 
 - **Individual accounts**: 100 requests/hour
-- **Organization accounts**: 1,000 requests/hour
+- **Organisation accounts**: 1,000 requests/hour
 
 Rate limit headers in response:
 ```
@@ -673,10 +673,10 @@ Want to run CheckTick on your own infrastructure?
 
 ### Workflow 2: Multi-Site Research Study
 
-1. Create organization account
+1. Create organisation account
 2. Add team members (researchers at each site)
 3. Create survey with research questions
-4. Enable organization encryption
+4. Enable organisation encryption
 5. Share survey link with each site
 6. Sites collect responses
 7. Principal investigator exports data monthly
@@ -779,7 +779,7 @@ See [Internationalisation Guide](i18n.md)
 ## Summary
 
 You now know:
-- ✅ The difference between Individual and Organization accounts
+- ✅ The difference between Individual and Organisation accounts
 - ✅ How to create your first survey
 - ✅ How to collect and export data
 - ✅ How to use the API for automation

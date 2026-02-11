@@ -61,8 +61,12 @@ def participant(django_user_model):
 def basic_survey(survey_owner, test_organization):
     """Create a basic survey with one question.
 
-    Uses an organization to bypass encryption setup during testing.
+    All surveys now require encryption before publishing.
     """
+    import os
+
+    from checktick_app.surveys.utils import generate_bip39_phrase
+
     survey = Survey.objects.create(
         owner=survey_owner,
         name="Test Survey",
@@ -71,6 +75,12 @@ def basic_survey(survey_owner, test_organization):
         visibility=Survey.Visibility.AUTHENTICATED,
         organization=test_organization,
     )
+
+    # Add encryption (required for all surveys)
+    kek = os.urandom(32)
+    recovery_words = generate_bip39_phrase(12)
+    survey.set_dual_encryption(kek, "test_password", recovery_words)
+
     # Add a basic question
     SurveyQuestion.objects.create(
         survey=survey,
