@@ -248,6 +248,46 @@ Navigate to **Admin → Audit Logs** to view all key management events:
 
 When a user loses both their password AND recovery phrase, platform recovery is required.
 
+### Rate Limiting and Abuse Prevention
+
+To prevent abuse and detect suspicious activity, platform recovery enforces strict rate limits:
+
+| Limit Type | Threshold | Action |
+|------------|-----------|--------|
+| **Per User** | Max 3 requests per 90 days | 4th request requires executive approval |
+| **Per Organisation** | Max 5 requests per day | Excess requests flagged for review |
+| **System-wide** | Max 50 requests per day | Admin notification + security review |
+| **Identity Verification** | Max 5 attempts per request | Account flagged after excessive failures |
+| **Failed Authorizations** | Max 3 rejections per user | Escalate to security team |
+
+**Automated Alerts:**
+
+```
+🚨 Recovery Rate Alert
+───────────────────────────────────────
+Organisation: NHS Trust Example
+Recovery requests today: 12 (threshold: 5)
+Unusual activity detected
+
+Breakdown:
+├─ Same IP address: 8 requests
+├─ Same admin approver: 10 requests
+└─ Similar justifications: 7 requests
+
+Recommended Action:
+1. Review audit logs for pattern
+2. Contact organisation admin
+3. Verify identity of requesters
+4. Consider temporary hold on new requests
+```
+
+**DoS Protection:**
+
+- IP-based rate limiting: Max 10 requests per hour per IP
+- CAPTCHA required after 3 failed identity verifications
+- Exponential backoff for repeated rejections
+- Email notification throttling: Max 5 per user per day
+
 ### Who Can Initiate Platform Recovery?
 
 - The user themselves (via support request)

@@ -19,8 +19,10 @@ The main documentation includes:
 | File | Purpose |
 |------|---------|
 | `setup_vault.py` | Vault initialization script (creates secrets engine, policies, AppRole) |
+| `verify-production-security.sh` | Production security verification script (checks TLS, token config, audit logs) |
 | `northflank-deployment.yaml` | Kubernetes manifest for Northflank deployments |
-| `vault-tls.crt` / `vault-tls.key` | TLS certificates (if using custom TLS) |
+| `generate-tls.sh` | Generate self-signed TLS certificates for testing |
+| `vault-cert.pem` / `vault-key.pem` | TLS certificates (if using custom TLS) |
 
 ## Quick Start
 
@@ -54,3 +56,23 @@ This configures:
 - Split-knowledge platform master key
 
 Save the output to your `.env` file.
+
+## Production Security Verification
+
+After setup, verify your production configuration:
+
+```bash
+export VAULT_ADDR=https://your-vault-url:8200
+export VAULT_TOKEN=<approle-token>  # NOT root token
+
+cd vault/
+./verify-production-security.sh
+```
+
+This checks:
+- Root token revoked
+- TLS configuration
+- Token TTL settings
+- Audit logging enabled
+- Platform master key exists
+- SecretID rotation policy

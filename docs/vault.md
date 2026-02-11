@@ -11,6 +11,7 @@ CheckTick uses HashiCorp Vault for secure encryption key management and ethical 
 ## Overview
 
 Vault provides:
+
 - **Key Escrow**: Secure storage for user encryption keys (enables recovery when users forget credentials)
 - **Split-Knowledge Security**: Platform master key split between Vault and offline custodian
 - **Audit Logging**: Immutable audit trail for compliance
@@ -213,6 +214,7 @@ vault operator init -key-shares=4 -key-threshold=3
 ```
 
 **Output (save immediately!):**
+
 ```
 Unseal Key 1: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 Unseal Key 2: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -265,6 +267,7 @@ python setup_vault.py
 ```
 
 This creates:
+
 - KV v2 secrets engine
 - CheckTick policies
 - AppRole authentication
@@ -490,6 +493,7 @@ curl -s https://your-vault-url/v1/sys/health | jq
 ### Alerts
 
 Configure alerts for:
+
 - Vault sealed (`vault_core_unsealed == 0`)
 - High request latency (> 1s at p99)
 - Authentication failures
@@ -521,6 +525,134 @@ aws s3 cp ${BACKUP_DIR}/vault-${DATE}.* s3://your-bucket/vault-backups/
 find ${BACKUP_DIR} -mtime +30 -delete
 ```
 
+### Backup Security
+
+**Critical**: Vault backups contain sensitive key material and must be secured properly.
+
+#### Encryption at Rest
+
+```bash
+#!/bin/bash
+# vault-backup-encrypted.sh
+
+BACKUP_DIR=/backups/vault
+DATE=$(date +%Y%m%d_%H%M%S)
+ENCRYPTION_KEY=/secure/vault-backup-key.gpg
+
+# Create snapshot
+vault operator raft snapshot save ${BACKUP_DIR}/vault-${DATE}.snap
+
+# Encrypt with GPG
+gpg --encrypt --recipient vault-backup@checktick.uk \
+    --output ${BACKUP_DIR}/vault-${DATE}.snap.gpg \
+    ${BACKUP_DIR}/vault-${DATE}.snap
+
+# Remove unencrypted backup
+rm ${BACKUP_DIR}/vault-${DATE}.snap
+
+# Upload encrypted backup
+aws s3 cp ${BACKUP_DIR}/vault-${DATE}.snap.gpg \
+    s3://your-bucket/vault-backups/ \
+    --server-side-encryption AES256
+
+# Cleanup old backups (keep 30 days)
+find ${BACKUP_DIR} -name "*.gpg" -mtime +30 -delete
+aws s3 ls s3://your-bucket/vault-backups/ | \
+    awk '{if ($1 < "'$(date -d '30 days ago' +%Y-%m-%d)'") print $4}' | \
+    xargs -I {} aws s3 rm s3://your-bucket/vault-backups/{}
+```
+
+#### S3 Bucket Security
+
+**Required S3 bucket policy**:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyUnencryptedObjectUploads",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::your-bucket/vault-backups/*",
+      "Condition": {
+        "StringNotEquals": {
+          "s3:x-amz-server-side-encryption": "AES256"
+        }
+      }
+    },
+    {
+      "Sid": "DenyInsecureTransport",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::your-bucket/vault-backups/*",
+        "arn:aws:s3:::your-bucket"
+      ],
+      "Condition": {
+        "Bool": {
+          "aws:SecureTransport": "false"
+        }
+      }
+    }
+  ]
+}
+```
+
+#### IAM Permissions
+
+Create dedicated IAM user for backups (least privilege):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::your-bucket/vault-backups/*",
+        "arn:aws:s3:::your-bucket"
+      ]
+    }
+  ]
+}
+```
+
+#### Backup Verification
+
+Test restoration **quarterly**:
+
+```bash
+# Download encrypted backup
+aws s3 cp s3://your-bucket/vault-backups/vault-LATEST.snap.gpg /tmp/
+
+# Decrypt
+gpg --decrypt /tmp/vault-LATEST.snap.gpg > /tmp/vault-restore.snap
+
+# Spin up test Vault instance
+docker run -d --name vault-test -p 8201:8200 hashicorp/vault:1.21.1
+
+# Initialize and restore
+vault operator init -key-shares=1 -key-threshold=1
+vault operator unseal <test-key>
+vault operator raft snapshot restore -force /tmp/vault-restore.snap
+
+# Verify keys are accessible
+vault kv get secret/platform/master-key
+
+# Cleanup
+docker stop vault-test && docker rm vault-test
+rm /tmp/vault-*.snap*
+```
+
 ### Restore Procedure
 
 ```bash
@@ -541,26 +673,137 @@ vault operator unseal <key3>
 
 ---
 
+## Network Security
+
+### Firewall Rules
+
+**Vault should only be accessible to CheckTick webapp**. Configure firewall rules:
+
+```bash
+# Docker network isolation
+docker network create --internal vault-network
+docker run --network vault-network vault
+docker run --network vault-network checktick-web
+```
+
+### IP Whitelisting
+
+For production deployments, restrict Vault access by IP:
+
+**Northflank**: Use Private Networking
+
+1. Enable Private Network in project settings
+2. Deploy Vault with private service only (no public port)
+3. CheckTick webapp accesses via internal DNS: `vault.checktick-private.svc.cluster.local`
+
+**AWS/Cloud**: Security Group Rules
+
+```bash
+# Only allow CheckTick webapp security group
+aws ec2 authorize-security-group-ingress \
+  --group-id sg-vault \
+  --protocol tcp \
+  --port 8200 \
+  --source-group sg-checktick-webapp
+```
+
+**Self-Hosted**: iptables
+
+```bash
+# Allow only from webapp server IP
+iptables -A INPUT -p tcp --dport 8200 -s <webapp-ip> -j ACCEPT
+iptables -A INPUT -p tcp --dport 8200 -j DROP
+```
+
+### TLS Configuration
+
+**Production must use TLS**. Two deployment patterns:
+
+#### Option 1: TLS Termination at Load Balancer (Recommended)
+
+- Load balancer handles TLS (simpler)
+- Vault configured with `tls_disable = true`
+- Internal traffic HTTP only (acceptable if network is isolated)
+- Set `VAULT_TLS_VERIFY=false` in CheckTick `.env`
+
+#### Option 2: End-to-End TLS (Maximum Security)
+
+- Vault configured with TLS certificates
+- CheckTick validates Vault certificate
+- Set `VAULT_TLS_VERIFY=true` in CheckTick `.env`
+
+**Generate self-signed cert for testing**:
+
+```bash
+cd vault/
+./generate-tls.sh
+```
+
+**Vault config with TLS**:
+
+```hcl
+listener "tcp" {
+  address       = "0.0.0.0:8200"
+  tls_disable   = false
+  tls_cert_file = "/vault/config/vault-cert.pem"
+  tls_key_file  = "/vault/config/vault-key.pem"
+}
+```
+
+**CheckTick environment variables**:
+
+```bash
+VAULT_ADDR=https://vault.internal:8200
+VAULT_TLS_VERIFY=true  # Enable certificate verification
+# For self-signed certs, provide CA:
+# VAULT_CACERT=/path/to/ca.pem
+```
+
+### Mutual TLS (mTLS) - Enterprise
+
+For highest security, require client certificates:
+
+```hcl
+listener "tcp" {
+  address              = "0.0.0.0:8200"
+  tls_disable          = false
+  tls_cert_file        = "/vault/config/vault-cert.pem"
+  tls_key_file         = "/vault/config/vault-key.pem"
+  tls_client_ca_file   = "/vault/config/client-ca.pem"
+  tls_require_and_verify_client_cert = true
+}
+```
+
+---
+
 ## Security Best Practices
 
 ### ✅ Do
 
-- Store `PLATFORM_CUSTODIAN_COMPONENT` in multiple offline locations
-- Rotate `VAULT_SECRET_ID` every 90 days
-- Use strong org owner passphrases (20+ characters)
-- Audit Vault access logs regularly
-- Keep unseal keys in separate physical locations
-- Enable TLS in production (or use TLS-terminating load balancer)
-- Revoke root token after initial setup
+- **Network**: Restrict Vault to private network / IP whitelist
+- **TLS**: Enable TLS verification (`VAULT_TLS_VERIFY=true`) in production
+- **Credentials**: Store `VAULT_ROLE_ID` and `VAULT_SECRET_ID` in secure secret manager (not .env files)
+- **Rotation**: Rotate `VAULT_SECRET_ID` every 90 days (automated via CI/CD)
+- **Custodian Shares**: Store in multiple offline locations (password managers + physical safe)
+- **Passphrases**: Use 20+ character org owner passphrases
+- **Audit Logs**: Review Vault audit logs weekly, integrate with SIEM
+- **Unseal Keys**: Keep in separate physical locations
+- **Root Token**: Revoke immediately after setup and verify revocation
+- **Backups**: Encrypt backups at rest with GPG before cloud storage
+- **Testing**: Test backup restoration quarterly
 
 ### ❌ Don't
 
 - Commit `.env` file to version control
 - Share custodian component via email/chat
 - Use weak passphrases
-- Log decrypted keys
+- Log decrypted keys in application logs
 - Store all unseal keys in one location
 - Use root token for application access
+- Expose Vault on public internet without IP whitelist
+- Disable TLS verification in production
+- Store `VAULT_SECRET_ID` in CI/CD logs or container environment variables (visible via `docker inspect`)
+- Skip backup encryption
 
 ---
 
@@ -587,6 +830,8 @@ vault operator unseal <key3>
 1. Verify `VAULT_ROLE_ID` and `VAULT_SECRET_ID`
 2. Check AppRole exists: `vault read auth/approle/role/checktick-app`
 3. Generate new secret_id if expired:
+4.
+
    ```bash
    vault write -f auth/approle/role/checktick-app/secret-id
    ```
@@ -594,6 +839,7 @@ vault operator unseal <key3>
 ### Key Not Found
 
 Run setup script:
+
 ```bash
 python vault/setup_vault.py
 ```
@@ -604,17 +850,59 @@ python vault/setup_vault.py
 
 Before going live:
 
+### Infrastructure
+
 - [ ] Vault deployed and unsealed
-- [ ] TLS enabled (or behind TLS load balancer)
-- [ ] Root token revoked
-- [ ] Unseal keys stored in 4 separate locations
-- [ ] Custodian component stored offline (3+ locations)
-- [ ] AppRole credentials in `.env`
-- [ ] Audit logging enabled
-- [ ] Backup procedure tested
-- [ ] Monitoring and alerts configured
-- [ ] Network access restricted
+- [ ] TLS enabled (or behind TLS load balancer with `VAULT_TLS_VERIFY=false`)
+- [ ] TLS verification enabled if end-to-end TLS (`VAULT_TLS_VERIFY=true`)
+- [ ] Network access restricted (private network or IP whitelist)
+- [ ] Unseal keys stored in 4 separate physical/digital locations
+- [ ] Custodian shares split and stored offline (4 locations, need 3 to recover)
+
+### Authentication & Authorization
+
+- [ ] Root token revoked and verified with `vault token lookup <token>` (should fail)
+- [ ] AppRole credentials secured (not in version control)
+- [ ] `VAULT_ROLE_ID` and `VAULT_SECRET_ID` in secure secret manager
+- [ ] VAULT_SECRET_ID rotation policy documented (90-day cycle)
+- [ ] Token TTL configured: 1h access, 8h max
+
+### Audit & Monitoring
+
+- [ ] Audit logging enabled and verified (`/vault/logs/audit.log`)
+- [ ] Log rotation configured (logrotate or equivalent)
+- [ ] SIEM integration configured (Elasticsearch/Splunk)
+- [ ] Alerts configured for:
+  - [ ] Vault sealed events
+  - [ ] Failed authentication (>5/min)
+  - [ ] Recovery requests (>5/day)
+  - [ ] Excessive token generation
+  - [ ] P99 latency >1s
+- [ ] Monitoring dashboard deployed (Grafana/Prometheus)
+
+### Backup & Recovery
+
+- [ ] Automated backup procedure tested
+- [ ] Backups encrypted with GPG before cloud storage
+- [ ] S3 bucket security policy enforces encryption
+- [ ] IAM permissions follow least privilege
+- [ ] Backup restoration tested successfully
+- [ ] Quarterly backup test scheduled
+
+### Application Integration
+
 - [ ] `test_vault_connection` passes
+- [ ] Platform recovery workflow tested with test shares
+- [ ] Rate limiting enabled (recovery requests, authentication)
+- [ ] Environment variables documented (not in code)
+
+### Documentation
+
+- [ ] Disaster recovery runbook completed
+- [ ] Custodian share distribution logged (who has which shares)
+- [ ] Unseal key distribution logged
+- [ ] On-call procedures documented
+- [ ] Incident response playbook reviewed
 
 ---
 
