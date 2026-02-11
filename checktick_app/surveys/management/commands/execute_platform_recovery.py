@@ -18,7 +18,6 @@ Security:
     - Must be run from secure terminal (not webapp)
 """
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
@@ -95,7 +94,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.MIGRATE_LABEL("Recovery Request:"))
         self.stdout.write(f"  Request Code: {recovery_request.request_code}")
         self.stdout.write(f"  User: {recovery_request.user.email}")
-        self.stdout.write(f"  Survey: {recovery_request.survey.title}")
+        self.stdout.write(f"  Survey: {recovery_request.survey.name}")
         self.stdout.write(f"  Status: {recovery_request.get_status_display()}")
         self.stdout.write(f"  Submitted: {recovery_request.submitted_at}")
         self.stdout.write("")
