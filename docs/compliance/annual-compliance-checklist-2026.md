@@ -49,6 +49,12 @@ priority: 2
   - Verify all software in register matches actual deployments
   - Remove decommissioned tools from register
   - Update version numbers and support status
+- [x] **VAULT_SECRET_ID Rotation (Q1)** - Quarterly 90-day rotation [Key Rotation Policy](/docs/key-management-for-administrators/#key-rotation-policy)
+  - Generate new secret ID: `vault write -f auth/approle/role/checktick-app/secret-id`
+  - Update .env file with new VAULT_SECRET_ID
+  - Restart webapp: `docker compose restart web`
+  - Verify webapp can authenticate to Vault
+  - Document completion date in Infrastructure Technical Change Log
 - [x] **Business Continuity Plan Review** - Annual review and update [Business Continuity Plan](/compliance/business-continuity-plan/)
 - [x] **Risk Register Review** - Board-level annual review [Risk Register](/compliance/risk-register/)
 - [x] **Vulnerability Management Policy Review** - SIRO approval [Vulnerability Management Policy](/compliance/vulnerability-management-policy/)
@@ -92,7 +98,7 @@ priority: 2
   - Verify user/admin separation on cloud services
   - Document completion in Infrastructure Technical Change Log
 - [X] **External Service Authentication Review (Cyber Essentials)** - Annual verification per CE Control 5.4 & 5.5 [External Service Authentication](/compliance/external-service-authentication/)
-  
+
   **Organisation Compliance (CE Scope - Staff Admin Access):**
   - Verify MFA enabled for all staff administrative accounts (CheckTick backend/admin portal)
   - Confirm 12-character minimum passwords on staff admin accounts (exceeds CE 8-char requirement)
@@ -100,7 +106,7 @@ priority: 2
   - Verify django-axes brute force protection functioning (5 failed attempts lockout)
   - Confirm rate limiting active (10 attempts/minute per IP)
   - Review staff authentication logs for suspicious patterns (past 12 months)
-  
+
   **Application Maintenance (DSPT Scope - Customer/User Authentication):**
   - Verify MFA enforcement for customer Organisation Owner and Data Custodian roles
   - Review RBAC role assignments for least privilege
@@ -188,6 +194,12 @@ priority: 2
   - Verify all software in register matches actual deployments
   - Remove decommissioned tools from register
   - Update version numbers and support status
+- [ ] **VAULT_SECRET_ID Rotation (Q2)** - Quarterly 90-day rotation [Key Rotation Policy](/docs/key-management-for-administrators/#key-rotation-policy)
+  - Generate new secret ID: `vault write -f auth/approle/role/checktick-app/secret-id`
+  - Update .env file with new VAULT_SECRET_ID
+  - Restart webapp: `docker compose restart web`
+  - Verify webapp can authenticate to Vault
+  - Document completion date in Infrastructure Technical Change Log
 - [ ] **DPIA Annual Review** - Review all existing DPIAs (minimum annually) [DPIA Procedure](/compliance/dpia-procedure/)
   - Survey Platform DPIA
   - Any new feature DPIAs from previous year
@@ -293,6 +305,12 @@ priority: 2
   - Verify all software in register matches actual deployments
   - Remove decommissioned tools from register
   - Update version numbers and support status
+- [ ] **VAULT_SECRET_ID Rotation (Q3)** - Quarterly 90-day rotation [Key Rotation Policy](/docs/key-management-for-administrators/#key-rotation-policy)
+  - Generate new secret ID: `vault write -f auth/approle/role/checktick-app/secret-id`
+  - Update .env file with new VAULT_SECRET_ID
+  - Restart webapp: `docker compose restart web`
+  - Verify webapp can authenticate to Vault
+  - Document completion date in Infrastructure Technical Change Log
 - [ ] **Mid-Year Training Refresh Check** - Verify no training expirations
 - [ ] **Incident Response Plan Review** - Mid-year review and update if needed [Incident Response Plan](/compliance/incident-response-plan/)
 - [ ] **Data Rights Request Tracker Review** - Verify no pending SARs [Data Rights Request Tracker](/compliance/data-rights-request-tracker/)
@@ -320,6 +338,22 @@ priority: 2
   - Review communication templates
   - Document lessons learned
   - Update action log
+- [ ] **Annual Custodian Share Rotation** - Cryptographic key rotation [Key Rotation Policy](/docs/key-management-for-administrators/#key-rotation-policy)
+  - **Assemble Custodians**: Coordinate availability of 3 of 4 custodians for current share retrieval
+  - **Test Current Shares**: Run `test_custodian_reconstruction` with 3 existing shares to verify before rotation
+  - **Generate New Platform Master Key**: Execute `vault/setup_vault.py` to generate new vault and custodian components
+  - **Split New Component**: Run `split_custodian_component` to create 4 new shares (3-of-4 threshold)
+  - **Distribute New Shares**: Securely deliver shares to same 4 custodians (align with Vault unseal key holders)
+  - **Test New Shares**: Run `test_custodian_reconstruction` with 3 new shares to verify reconstruction
+  - **Destroy Old Shares**: Securely overwrite/destroy all 4 old shares and any backups
+  - **Update Vault Component**: Update Vault secret store with new vault component
+  - **Document Rotation**: Record in Key Management Log with date, participants, and verification results
+  - **Dual Authorization**: Require SIRO + CTO sign-off on rotation completion
+- [ ] **Vault Encryption Key Rotation** (Optional) - Rotate Vault's internal barrier key [Key Rotation Policy](/docs/key-management-for-administrators/#key-rotation-policy)
+  - Ensure Vault is unsealed
+  - Execute: `vault operator rotate`
+  - Verify Vault remains operational after rotation
+  - Document completion in Infrastructure Technical Change Log
 - [ ] **Supplier Register Review** - Mid-year update
 - [ ] **Information Asset Register (ROPA) Review** - Verify current processing activities
 
@@ -373,6 +407,12 @@ priority: 2
   - Verify all software in register matches actual deployments
   - Remove decommissioned tools from register
   - Update version numbers and support status
+- [ ] **VAULT_SECRET_ID Rotation (Q4)** - Quarterly 90-day rotation [Key Rotation Policy](/docs/key-management-for-administrators/#key-rotation-policy)
+  - Generate new secret ID: `vault write -f auth/approle/role/checktick-app/secret-id`
+  - Update .env file with new VAULT_SECRET_ID
+  - Restart webapp: `docker compose restart web`
+  - Verify webapp can authenticate to Vault
+  - Document completion date in Infrastructure Technical Change Log
 - [ ] **Annual Training Season Begins** - Initiate annual training renewals
   - NHS Data Security Awareness (Level 1) - All staff
   - GDPR Training refresher
