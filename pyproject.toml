@@ -38,6 +38,7 @@ hvac = "^2.4.0"
 pillow = "^12.1.1"
 qrcode = "^8.0"
 django-otp = "^1.6.3"
+ marshmallow = "^3.26.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"
