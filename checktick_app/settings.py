@@ -749,7 +749,9 @@ OIDC_LOGOUT_REDIRECT_URL = "/"  # Where to go after logout
 VAULT_ADDR = env("VAULT_ADDR", default="https://vault.checktick.internal:8200")
 VAULT_ROLE_ID = env("VAULT_ROLE_ID", default="")
 VAULT_SECRET_ID = env("VAULT_SECRET_ID", default="")
-PLATFORM_CUSTODIAN_COMPONENT = env("PLATFORM_CUSTODIAN_COMPONENT", default="")
+# Note: PLATFORM_CUSTODIAN_COMPONENT removed for security
+# Platform recovery now requires 3 custodian shares via management command
+# See: python manage.py execute_platform_recovery --help
 
 # Two-Factor Authentication
 # Require 2FA for all password users (disabled during tests)

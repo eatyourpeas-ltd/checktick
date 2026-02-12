@@ -29,7 +29,7 @@ class Command(BaseCommand):
             f'  VAULT_SECRET_ID: {"✓ Set" if settings.VAULT_SECRET_ID else "✗ Not Set"}'
         )
         self.stdout.write(
-            f'  PLATFORM_CUSTODIAN_COMPONENT: {"✓ Set" if settings.PLATFORM_CUSTODIAN_COMPONENT else "✗ Not Set"}'
+            "  PLATFORM_CUSTODIAN: Split into shares (not in environment)"
         )
         self.stdout.write("")
 
@@ -98,44 +98,13 @@ class Command(BaseCommand):
 
             # Test platform key access
             self.stdout.write(self.style.MIGRATE_LABEL("Platform Key Test:"))
-
-            if not settings.PLATFORM_CUSTODIAN_COMPONENT:
-                self.stdout.write(
-                    self.style.WARNING("  ⚠ PLATFORM_CUSTODIAN_COMPONENT not set")
-                )
-                self.stdout.write(
-                    self.style.WARNING("  Cannot test platform key reconstruction")
-                )
-            else:
-                try:
-                    custodian_component = bytes.fromhex(
-                        settings.PLATFORM_CUSTODIAN_COMPONENT
-                    )
-                    platform_key = vault.get_platform_master_key(custodian_component)
-
-                    if len(platform_key) == 64:
-                        self.stdout.write(
-                            self.style.SUCCESS(
-                                "  ✓ Platform master key reconstructed successfully"
-                            )
-                        )
-                        self.stdout.write(f"  Key length: {len(platform_key)} bytes")
-                    else:
-                        self.stdout.write(
-                            self.style.ERROR(
-                                f"  ✗ Invalid key length: {len(platform_key)} bytes (expected 64)"
-                            )
-                        )
-
-                except Exception as e:
-                    self.stdout.write(
-                        self.style.ERROR(f"  ✗ Failed to get platform key: {e}")
-                    )
-                    self.stdout.write(
-                        self.style.WARNING(
-                            "  Has the Vault been initialized with setup_vault.py?"
-                        )
-                    )
+            self.stdout.write("  ℹ️  Platform key reconstruction test skipped")
+            self.stdout.write(
+                "  Custodian component now split into Shamir shares (not in environment)"
+            )
+            self.stdout.write(
+                "  Use: python manage.py execute_platform_recovery --help"
+            )
 
             self.stdout.write("")
             self.stdout.write(self.style.SUCCESS("━" * 60))

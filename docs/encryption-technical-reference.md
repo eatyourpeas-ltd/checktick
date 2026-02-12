@@ -39,6 +39,9 @@ CheckTick implements a security-first approach to handling sensitive patient dat
 - [Compliance and Regulations](#compliance-and-regulations)
 - [Migration and Upgrade Path](#migration-and-upgrade-path)
 - [Technical Reference](#technical-reference)
+  - [Encryption Utilities](#encryption-utilities)
+  - [Key Verification](#key-verification)
+  - [Platform-Level Emergency Recovery](#platform-level-emergency-recovery)
 - [Testing](#testing)
 - [Related Documentation](#related-documentation)
 
@@ -2499,6 +2502,444 @@ def verify_key(key: bytes, digest: bytes, salt: bytes) -> bool:
     except Exception:
         return False
 ```
+
+### Platform-Level Emergency Recovery
+
+CheckTick implements a **two-layer split-knowledge security architecture** for emergency user recovery scenarios where both the user's password and recovery phrase are lost. This section documents the platform-level key recovery workflow used by administrators.
+
+#### Architecture Overview
+
+The platform recovery system uses **Shamir's Secret Sharing** at two distinct layers:
+
+**Layer 1: Vault Infrastructure (Unsealing)**
+- HashiCorp Vault stores the "Vault Component" of the platform master key
+- Vault itself is sealed and requires **3 of 4 Vault unseal keys** to become operational
+- Unseal keys distributed to trusted custodians using Shamir threshold cryptography
+- This layer protects infrastructure access to stored secrets
+
+**Layer 2: Platform Master Key (Custodian Component)**
+- Platform Master Key = XOR(Vault Component, Custodian Component)
+- Custodian Component split into **4 shares with 3-of-4 threshold** using Shamir Secret Sharing
+- Shares distributed to the same custodians who hold Vault unseal keys
+- This layer protects the application-level ability to decrypt organizational keys
+
+**Why Two Layers?**
+
+The dual-layer approach provides defense-in-depth:
+
+1. **Infrastructure Protection**: Vault unsealing controls access to stored encrypted keys
+2. **Application Protection**: Even with Vault access, custodian shares required for recovery operations
+3. **Aligned Security Model**: Both layers use Shamir 3-of-4, simplifying custodian responsibilities
+4. **Separation of Duties**: No single custodian can perform recovery alone
+
+#### Platform Master Key Reconstruction
+
+The platform's hierarchical key system flows from the Platform Master Key:
+
+```
+Platform Master Key (PMK) = XOR(Vault Component, Custodian Component)
+         ↓
+Organization Master Keys (OMK) - encrypted with PMK, stored in Vault
+         ↓
+Team Keys (TK) - encrypted with OMK
+         ↓
+Survey KEKs - encrypted with TK
+         ↓
+User Recovery Keys - derived from KEKs
+         ↓
+Encrypted Survey Data
+```
+
+**Emergency Recovery Scenario:**
+
+When a user loses both their password and recovery phrase, administrators must:
+
+1. Assemble 3 of 4 custodian shares to reconstruct the Custodian Component
+2. Retrieve Vault Component from HashiCorp Vault (requires unsealed Vault)
+3. XOR the components to derive Platform Master Key
+4. Decrypt organization keys → team keys → survey KEK
+5. Re-encrypt survey KEK with new user recovery credentials
+
+#### Custodian Component Management
+
+The Custodian Component is a **64-byte (512-bit) cryptographic secret** that must be split after initial Vault setup.
+
+**Initial Setup (Production Deployment):**
+
+When `vault/setup_vault.py` completes, it outputs:
+
+```
+================================================================================
+PLATFORM CUSTODIAN COMPONENT - SPLIT INTO SHARES IMMEDIATELY
+================================================================================
+
+Custodian Component (hex):
+a1b2c3d4e5f6...
+
+⚠️  CRITICAL SECURITY STEP - DO THIS NOW:
+
+Run the following command to split this into 4 shares (3 required):
+
+    docker compose exec web python manage.py split_custodian_component \
+        --custodian-component a1b2c3d4e5f6... \
+        --shares 4 \
+        --threshold 3
+
+Then:
+1. Distribute shares to the same 4 custodians who received Vault unseal keys
+2. Delete this terminal output
+3. Do NOT store the full component anywhere
+```
+
+**Splitting Command:**
+
+```bash
+# Split custodian component into 4 shares (3 required for reconstruction)
+docker compose exec web python manage.py split_custodian_component \
+    --custodian-component a1b2c3d4e5f67890abcdef1234567890... \
+    --shares 4 \
+    --threshold 3
+```
+
+**Output:**
+
+```
+Custodian Component Split Successfully
+======================================
+
+Shares (3 of 4 required):
+
+Share 1/4:
+01-a8f3c2d1b4e5f6a7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1...
+
+Share 2/4:
+02-b9a4d3e2c5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2...
+
+Share 3/4:
+03-c0b5e4f3d6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3...
+
+Share 4/4:
+04-d1c6f5a4e7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4...
+
+⚠️  SECURITY INSTRUCTIONS:
+
+1. Distribute each share to a different custodian
+2. Align with Vault unseal key custodians (same 4 people)
+3. Store shares securely offline (password manager, sealed envelope, etc.)
+4. Delete this terminal output after distribution
+5. NEVER store the original custodian component
+6. Test reconstruction with: test_custodian_reconstruction
+
+Threshold: 3 of 4 shares required
+Any 3 shares can reconstruct the custodian component
+```
+
+**Testing Reconstruction:**
+
+After distributing shares, verify they reconstruct correctly:
+
+```bash
+# Test that shares reconstruct to match original component
+docker compose exec web python manage.py test_custodian_reconstruction \
+    "01-a8f3c2d1..." \
+    "02-b9a4d3e2..." \
+    "03-c0b5e4f3..." \
+    --original a1b2c3d4e5f67890abcdef1234567890...
+```
+
+**Output:**
+
+```
+Testing Custodian Component Reconstruction
+==========================================
+
+Using 3 shares for reconstruction...
+
+Reconstructed Component (hex):
+a1b2c3d4e5f67890abcdef1234567890...
+
+Original Component (hex):
+a1b2c3d4e5f67890abcdef1234567890...
+
+✅ SUCCESS: Reconstructed component matches original!
+
+The shares are valid and can be used for emergency recovery.
+```
+
+#### Emergency Recovery Workflow
+
+When a user needs emergency recovery after losing both password and recovery phrase:
+
+**Prerequisites:**
+
+- Vault must be unsealed (requires 3 of 4 Vault unseal keys)
+- Recovery request created in database with status `PENDING_PLATFORM_RECOVERY`
+- 3 custodians must be available to provide custodian shares
+
+**Step 1: Create Recovery Request**
+
+Administrator creates recovery request in Django admin or via API:
+
+```python
+from checktick_app.surveys.models import RecoveryRequest
+
+recovery_request = RecoveryRequest.objects.create(
+    user=lost_access_user,
+    survey=locked_survey,
+    status="PENDING_PLATFORM_RECOVERY",
+    requested_by=admin_user,
+    justification="User lost both password and recovery phrase after device loss"
+)
+```
+
+**Step 2: Gather Custodian Shares**
+
+Contact 3 of the 4 custodians securely (in-person or via secure channel) to obtain their shares:
+
+- Custodian A provides: `01-a8f3c2d1...`
+- Custodian B provides: `02-b9a4d3e2...`
+- Custodian C provides: `03-c0b5e4f3...`
+
+**Step 3: Execute Platform Recovery**
+
+Run the recovery command with 3 custodian shares:
+
+```bash
+docker compose exec web python manage.py execute_platform_recovery \
+    --recovery-request-id 123 \
+    --custodian-share "01-a8f3c2d1..." \
+    --custodian-share "02-b9a4d3e2..." \
+    --custodian-share "03-c0b5e4f3..." \
+    --new-password "TempPassword123!" \
+    --audit-approved-by "admin@example.com"
+```
+
+**What Happens:**
+
+1. **Validate Request**: Checks recovery request exists and status is `PENDING_PLATFORM_RECOVERY`
+2. **Reconstruct Custodian**: Uses Shamir reconstruction on 3 shares to rebuild Custodian Component
+3. **Retrieve Vault Component**: Fetches from HashiCorp Vault (requires Vault to be unsealed)
+4. **Derive Platform Master Key**: `PMK = XOR(Vault Component, Custodian Component)`
+5. **Walk Key Hierarchy**: Decrypt Organization Key → Team Key → Survey KEK
+6. **Re-encrypt KEK**: Encrypt survey KEK with user's new password
+7. **Update Database**: Save new `kek_encrypted_password`, mark request as `COMPLETED`
+8. **Audit Log**: Record recovery event with custodian count and approver
+9. **Notify User**: Email user with new temporary password and instructions
+
+**Output:**
+
+```
+Platform Recovery Execution
+===========================
+
+Recovery Request: #123
+User: john.doe@hospital.nhs.uk
+Survey: Patient Demographics Q4 2024
+
+✅ Custodian component reconstructed from 3 shares
+✅ Platform master key derived
+✅ Organization key decrypted
+✅ Team key decrypted
+✅ Survey KEK recovered
+✅ KEK re-encrypted with new password
+✅ Audit log created
+✅ Recovery request marked COMPLETED
+
+The user can now unlock their survey with the new temporary password.
+Advise them to change it and generate a new recovery phrase immediately.
+```
+
+#### Management Commands Reference
+
+CheckTick provides three management commands for custodian component lifecycle:
+
+**1. split_custodian_component**
+
+Splits custodian component into Shamir shares during initial setup.
+
+```bash
+docker compose exec web python manage.py split_custodian_component \
+    --custodian-component <64-byte-hex> \
+    [--shares N] \
+    [--threshold M]
+```
+
+**Arguments:**
+- `--custodian-component`: 64-byte (128 hex chars) custodian component from Vault setup
+- `--shares`: Number of shares to create (default: 4)
+- `--threshold`: Number of shares required for reconstruction (default: 3)
+
+**Requirements:**
+- Custodian component must be exactly 64 bytes (128 hex characters)
+- Threshold must be ≤ shares
+- Recommended: 4 shares with 3-of-4 threshold
+
+**Security Notes:**
+- Run this command ONLY during initial production setup
+- Never store the full custodian component after splitting
+- Distribute shares to different custodians immediately
+- Use same custodians as Vault unseal key holders
+
+---
+
+**2. test_custodian_reconstruction**
+
+Verifies that distributed shares can reconstruct the original custodian component.
+
+```bash
+docker compose exec web python manage.py test_custodian_reconstruction \
+    <share-1> \
+    <share-2> \
+    <share-3> \
+    [--original <64-byte-hex>]
+```
+
+**Arguments:**
+- `share-1`, `share-2`, `share-3`: Any 3 of the 4 custodian shares
+- `--original`: Optional original custodian component for validation
+
+**Use Cases:**
+- Verify shares after initial distribution
+- Audit share validity periodically
+- Test reconstruction before emergency (recommended annually)
+- Confirm shares after custodian rotation
+
+**Output:**
+- Displays reconstructed component in hex
+- If `--original` provided, compares and reports match/mismatch
+- ✅ Success: Shares are valid and can be used for recovery
+- ❌ Failure: Shares corrupted or incorrect
+
+---
+
+**3. execute_platform_recovery**
+
+Performs emergency user recovery using custodian shares.
+
+```bash
+docker compose exec web python manage.py execute_platform_recovery \
+    --recovery-request-id <id> \
+    --custodian-share <share-1> \
+    --custodian-share <share-2> \
+    --custodian-share <share-3> \
+    --new-password <temporary-password> \
+    --audit-approved-by <admin-email>
+```
+
+**Arguments:**
+- `--recovery-request-id`: Database ID of recovery request (status must be `PENDING_PLATFORM_RECOVERY`)
+- `--custodian-share`: Provide this flag 3 times with 3 different shares
+- `--new-password`: Temporary password for user to unlock survey
+- `--audit-approved-by`: Email/identifier of administrator authorizing recovery
+
+**Prerequisites:**
+- HashiCorp Vault must be unsealed
+- Recovery request must exist with status `PENDING_PLATFORM_RECOVERY`
+- Must have 3 valid custodian shares
+- Administrator must have proper authorization
+
+**Process:**
+1. Reconstructs custodian component from shares
+2. Retrieves Vault component from HashiCorp Vault
+3. Derives platform master key via XOR
+4. Walks key hierarchy to recover survey KEK
+5. Re-encrypts KEK with new password
+6. Updates user's access credentials
+7. Creates audit log entry
+8. Marks recovery request as completed
+
+**Security Controls:**
+- Operation logged to audit trail with custodian count
+- Recovery request status prevents duplicate recoveries
+- User notified via email after successful recovery
+- Requires multi-custodian authorization (3 shares)
+
+#### Shamir Implementation Details
+
+CheckTick uses a custom Shamir's Secret Sharing implementation optimized for 64-byte custodian components.
+
+**Implementation:** `checktick_app/surveys/shamir.py`
+
+**Key Properties:**
+
+- **Prime Field**: RFC 3526 MODP Group 2 (1024-bit safe prime)
+- **Field Size**: Large enough for 512-bit (64-byte) secrets
+- **Polynomial**: Random degree-2 polynomial for 3-of-4 threshold
+- **Reconstruction**: Lagrange interpolation in finite field
+- **Share Format**: `<id>-<256-char-hex>` (e.g., `01-a8f3c2d1...`)
+
+**Functions:**
+
+```python
+from checktick_app.surveys.shamir import split_secret, reconstruct_secret
+
+# Split 64-byte secret into 4 shares (3 required)
+shares = split_secret(
+    secret_bytes=custodian_component_bytes,
+    threshold=3,
+    total_shares=4
+)
+# Returns: ["01-a8f3c2...", "02-b9a4d3...", "03-c0b5e4...", "04-d1c6f5..."]
+
+# Reconstruct secret from any 3 shares
+reconstructed = reconstruct_secret([
+    "01-a8f3c2...",
+    "02-b9a4d3...",
+    "03-c0b5e4..."
+])
+# Returns: original 64-byte custodian component
+```
+
+**Security Properties:**
+
+- **Information-Theoretic Security**: 2 shares reveal NO information about secret
+- **Threshold Enforcement**: Requires exactly 3 shares for reconstruction
+- **Deterministic**: Same shares always reconstruct to same secret
+- **Share Independence**: Knowledge of 2 shares doesn't help guess the 3rd
+
+#### Security Considerations
+
+**Custodian Selection:**
+
+- Choose custodians in different roles/departments to prevent collusion
+- Prefer custodians with security clearance and training
+- Align with Vault unseal key custodians for operational simplicity
+- Ensure geographic or organizational separation where possible
+
+**Share Storage:**
+
+- Store in password managers with 2FA enabled
+- Or use physical storage (sealed envelope in safe)
+- NEVER store shares in code repositories, Slack, email, etc.
+- Each custodian should only have access to their own share
+
+**Operational Security:**
+
+- Emergency recovery requires physical/secure gathering of 3 custodians
+- Use out-of-band communication channels (phone, in-person) to request shares
+- Immediately rotate custodian component if shares potentially compromised
+- Log all recovery operations with full audit trail
+- Test reconstruction annually without using full custodian component
+
+**Rotation:**
+
+If custodian component needs rotation (e.g., custodian leaves organization):
+
+1. Assemble 3 existing shares to reconstruct current component
+2. Use `vault/setup_vault.py` to generate new component (requires full Vault re-initialization)
+3. Split new component and distribute to new custodians
+4. Destroy old shares securely
+
+**Defense-in-Depth:**
+
+The two-layer architecture ensures:
+
+- Vault compromise alone doesn't allow recovery (need custodian shares)
+- Custodian share compromise alone doesn't help (need Vault access)
+- Both layers using Shamir provides consistent security model
+- Administrative recovery requires cooperation of multiple parties
+
+For complete custodian management procedures, see [Key Management for Administrators](/docs/key-management-for-administrators/).
 
 ## Testing
 

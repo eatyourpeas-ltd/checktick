@@ -2,13 +2,15 @@
 
 # Development environment startup script for CheckTick
 # This script starts the local Docker Compose development environment
-# Usage: ./s/dev [--code] [--help]
-#   --code    Also opens VS Code after starting containers
-#   --help    Show this help message
+# Usage: ./s/dev [--code] [--init-vault] [--help]
+#   --code        Also opens VS Code after starting containers
+#   --init-vault  Initialize Vault on first run (creates AppRole, policies, platform key)
+#   --help        Show this help message
 
 set -e
 
 OPEN_VSCODE=false
+INIT_VAULT=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -17,17 +19,27 @@ while [[ $# -gt 0 ]]; do
             OPEN_VSCODE=true
             shift
             ;;
+        --init-vault)
+            INIT_VAULT=true
+            shift
+            ;;
         --help)
             echo "CheckTick Development Environment Startup"
             echo ""
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --code    Also opens VS Code after starting containers"
-            echo "  --help    Show this help message"
+            echo "  --code        Also opens VS Code after starting containers"
+            echo "  --init-vault  Initialize Vault (run once on first setup)"
+            echo "  --help        Show this help message"
             echo ""
             echo "Environment Variables:"
             echo "  OPEN_VSCODE=true    Alternative to --code flag"
+            echo ""
+            echo "First Time Setup:"
+            echo "  ./s/dev --init-vault"
+            echo "  This will set up Vault with AppRole credentials and platform keys."
+            echo "  Save the output VAULT_ROLE_ID and VAULT_SECRET_ID to your .env file."
             exit 0
             ;;
         *)
@@ -54,27 +66,214 @@ fi
 
 # Build and start the development environment
 echo "🏗️  Building and starting containers..."
-docker-compose up --build -d
+docker compose -f docker-compose.dev.yml up --build -d
 
-if [[ "$OPEN_VSCODE" == "true" ]]; then
-    echo "💻 Opening VS Code..."
-    if command -v code &> /dev/null; then
-        code .
+# Wait for Vault to be ready
+echo "🔐 Waiting for Vault to be ready..."
+VAULT_READY=false
+for i in {1..60}; do
+    if docker compose -f docker-compose.dev.yml exec -T vault wget -q --spider --proxy off "http://127.0.0.1:8200/v1/sys/health?standbyok=true&uninitcode=200" 2>/dev/null; then
+        VAULT_READY=true
+        break
+    fi
+    echo -n "."
+    sleep 1
+done
+echo ""
+
+if [[ "$VAULT_READY" == "false" ]]; then
+    echo "⚠️  Vault did not start within 60 seconds"
+    echo "   Check logs with: docker compose -f docker-compose.dev.yml logs vault"
+    exit 1
+fi
+
+echo "✅ Vault is running"
+
+# Check if Vault is initialized (first time setup needed)
+VAULT_STATUS=$(docker compose -f docker-compose.dev.yml exec -T vault sh -c 'VAULT_ADDR=http://127.0.0.1:8200 vault status -format=json' 2>/dev/null || echo '{"initialized":false}')
+VAULT_INITIALIZED=$(echo "$VAULT_STATUS" | grep -o '"initialized":[^,}]*' | cut -d':' -f2 | tr -d ' ')
+
+if [[ "$VAULT_INITIALIZED" != "true" ]]; then
+    echo ""
+    echo "⚠️  Vault needs initialization (first time setup)"
+    echo "   Run: ./s/dev --init-vault"
+    echo ""
+    echo "   This creates:"
+    echo "   - Unseal keys (4 keys, need 3 to unseal)"
+    echo "   - Root token for initial setup"
+    echo "   - AppRole credentials for CheckTick"
+    echo ""
+
+    if [[ "$INIT_VAULT" != "true" ]]; then
+        echo "💡 Vault will remain sealed until initialized"
+    fi
+elif [[ "$INIT_VAULT" == "true" ]]; then
+    echo "ℹ️  Vault is already initialized"
+    echo "   Skipping initialization - setup has already been run"
+    echo ""
+    INIT_VAULT=false
+fi
+
+# Initialize Vault if requested and not yet done
+if [[ "$INIT_VAULT" == "true" ]] && [[ "$VAULT_INITIALIZED" != "true" ]]; then
+    echo ""
+    echo "🔐 Initializing Vault (first time setup)..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Initialize Vault with Shamir secret sharing
+    echo "📝 Initializing Vault with 4 unseal keys (need 3 to unseal)..."
+    INIT_OUTPUT=$(docker compose -f docker-compose.dev.yml exec -T vault sh -c 'VAULT_ADDR=http://127.0.0.1:8200 vault operator init -key-shares=4 -key-threshold=3 -format=json')
+
+    # Save output to temp file for easier parsing
+    echo "$INIT_OUTPUT" > /tmp/vault_init.json
+
+    # Extract keys and token using Python for reliable JSON parsing
+    UNSEAL_KEYS=$(python3 -c "import json; data=json.load(open('/tmp/vault_init.json')); print('\n'.join(data['unseal_keys_b64']))")
+    ROOT_TOKEN=$(python3 -c "import json; data=json.load(open('/tmp/vault_init.json')); print(data['root_token'])")
+
+    # Split keys into individual variables
+    UNSEAL_KEY_1=$(echo "$UNSEAL_KEYS" | sed -n '1p')
+    UNSEAL_KEY_2=$(echo "$UNSEAL_KEYS" | sed -n '2p')
+    UNSEAL_KEY_3=$(echo "$UNSEAL_KEYS" | sed -n '3p')
+    UNSEAL_KEY_4=$(echo "$UNSEAL_KEYS" | sed -n '4p')
+
+    echo ""
+    echo "🔑 Vault Initialized! Save these credentials securely:"
+    echo ""
+    echo "Unseal Key 1: $UNSEAL_KEY_1"
+    echo "Unseal Key 2: $UNSEAL_KEY_2"
+    echo "Unseal Key 3: $UNSEAL_KEY_3"
+    echo "Unseal Key 4: $UNSEAL_KEY_4"
+    echo ""
+    echo "Root Token: $ROOT_TOKEN"
+    echo ""
+    echo "⚠️  IMPORTANT: Store these keys in a password manager NOW!"
+    echo "    You need 3 keys to unseal Vault after restart"
+    echo ""
+
+    # Unseal Vault
+    echo "🔓 Unsealing Vault with 3 keys..."
+    docker compose -f docker-compose.dev.yml exec -T vault sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault operator unseal '$UNSEAL_KEY_1'" > /dev/null
+    docker compose -f docker-compose.dev.yml exec -T vault sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault operator unseal '$UNSEAL_KEY_2'" > /dev/null
+    docker compose -f docker-compose.dev.yml exec -T vault sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault operator unseal '$UNSEAL_KEY_3'" > /dev/null
+    echo "✅ Vault unsealed"
+    echo ""
+
+    # Clean up temp file
+    rm -f /tmp/vault_init.json
+
+    # Run CheckTick setup
+    echo "⚙️  Setting up CheckTick Vault configuration..."
+
+    # Check if Python and hvac are available
+    if ! command -v python3 &> /dev/null; then
+        echo "❌ Python 3 is required to initialize Vault"
+        exit 1
+    fi
+
+    if ! python3 -c "import hvac" 2>/dev/null; then
+        echo "📦 Installing hvac package..."
+        pip3 install hvac
+    fi
+
+    # Run setup script with root token
+    export VAULT_ADDR=http://localhost:8200
+    export VAULT_TOKEN=$ROOT_TOKEN
+    export VAULT_TLS_VERIFY_SETUP=false
+
+    python3 vault/setup_vault.py
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "✅ Vault initialized successfully!"
+    echo ""
+    echo "📝 NEXT STEPS - Complete setup in order:"
+    echo ""
+    echo "1️⃣  Add to your .env file (in the project root):"
+    echo ""
+    echo "   VAULT_ADDR=http://vault:8200"
+    echo "   VAULT_TLS_VERIFY=false"
+    echo "   VAULT_ROLE_ID=<copy_from_output_above>"
+    echo "   VAULT_SECRET_ID=<copy_from_output_above>"
+    echo ""
+    echo "2️⃣  Split the custodian component (from output above):"
+    echo ""
+    echo "   python manage.py split_custodian_component \\"
+    echo "     --custodian-component=<paste_hex_from_above>"
+    echo ""
+    echo "   This creates 4 shares - store them securely:"
+    echo "   - Share 1: Your password manager"
+    echo "   - Share 2: Backup password manager"
+    echo "   - Share 3: Physical secure location"
+    echo "   - Share 4: Encrypted cloud backup"
+    echo ""
+    echo "3️⃣  Restart the development environment:"
+    echo ""
+    echo "   docker compose -f docker-compose.dev.yml restart web"
+    echo ""
+    echo "4️⃣  Test the connection:"
+    echo ""
+    echo "   docker compose -f docker-compose.dev.yml exec web \\"
+    echo "     python manage.py test_vault_connection"
+    echo ""
+    echo "5️⃣  Revoke the root token (security best practice):"
+    echo ""
+    echo "   docker compose -f docker-compose.dev.yml exec vault sh -c \\"
+    echo "     \"VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=$ROOT_TOKEN vault token revoke -self\""
+    echo ""
+    echo "   ⚠️  After this, CheckTick uses AppRole credentials only."
+    echo "   💡 To make admin changes later, unseal Vault and generate a new root token."
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+else
+    # Check if Vault is sealed (needs unsealing after restart)
+    VAULT_SEALED=$(echo "$VAULT_STATUS" | grep -o '"sealed":[^,}]*' | cut -d':' -f2 | tr -d ' ')
+
+    if [[ "$VAULT_SEALED" == "true" ]]; then
+        echo ""
+        echo "🔒 Vault is sealed - it needs to be unsealed after restart"
+        echo ""
+        echo "To unseal, you need 3 of your 4 unseal keys:"
+        echo ""
+        echo "docker compose -f docker-compose.dev.yml exec vault sh"
+        echo "export VAULT_ADDR=http://127.0.0.1:8200"
+        echo "vault operator unseal <key1>"
+        echo "vault operator unseal <key2>"
+        echo "vault operator unseal <key3>"
+        echo ""
+        echo "💡 Tip: Keep your unseal keys in a password manager"
+        echo ""
     else
-        echo "⚠️  VS Code command 'code' not found in PATH"
-        echo "   Make sure VS Code is installed and the 'code' command is available"
+        echo "✅ Vault is ready and unsealed"
     fi
 fi
 
 echo ""
-echo "✅ Development environment is starting up!"
-echo "📝 The containers will automatically:"
-echo "   - Set up PostgreSQL database"
-echo "   - Install npm dependencies"
-echo "   - Build CSS assets"
-echo "   - Run database migrations"
-echo "   - Start Django development server on http://localhost:8000"
+echo "✅ Development environment is ready!"
+echo ""
+echo "📝 Services:"
+echo "   - CheckTick: http://localhost:8000"
+echo "   - Vault UI: http://localhost:8200"
+echo "   - PostgreSQL: localhost:5432"
+echo ""
+echo "🔐 Vault Status:"
+if [[ "$VAULT_INITIALIZED" != "true" ]]; then
+    echo "   ⚠️  Not initialized - run: ./s/dev --init-vault"
+elif [[ "$VAULT_SEALED" == "true" ]]; then
+    echo "   🔒 Sealed - needs unsealing (see instructions above)"
+else
+    echo "   ✅ Ready and unsealed"
+fi
 echo ""
 if [[ "$OPEN_VSCODE" != "true" ]]; then
-    echo "💡 Tip: Use '--code' flag to automatically open VS Code next time"
+    echo "💡 Tip: Use './s/dev --code' to automatically open VS Code"
+fi
+
+# Open VS Code if requested
+if [[ "$OPEN_VSCODE" == "true" ]]; then
+    echo ""
+    echo "📂 Opening VS Code..."
+    code .
 fi

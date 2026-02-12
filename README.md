@@ -1,7 +1,7 @@
 # CheckTick
 
 ![GitHub License](https://img.shields.io/github/license/eatyourpeas/checktick?style=for-the-badge&color=5fcfdd)
-![Swagger Validator](https://img.shields.io/swagger/valid/3.0?specUrl=https%3A%2F%2Fchecktick.uk%2Fapi%2Fschema&style=for-the-badge)
+![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-5fcfdd?style=for-the-badge&logo=openapiinitiative&logoColor=white)
 ![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/eatyourpeas/checktick?style=for-the-badge&color=5fcfdd)
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io-5fcfdd?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/eatyourpeas/checktick/pkgs/container/checktick)
 
@@ -88,11 +88,19 @@ Local with Docker (recommended):
    cp .env.example .env
    ```
 
-2. Build and start services - a convenience `s` folder of bash scripts supports build of the containers.
+2. Build and start services - a convenience `s` folder of bash scripts supports build of the containers. The dev set up includes the creation of a Hashicorp Vault and volume. To set this up there are two scripts:
+
+   ```bash
+   s/dev --init-vault
+   ```
+
+   and then:
 
    ```bash
    s/dev
    ```
+
+   The initialisation step will print the keys to the console and an explainer with easy to follow steps for local dev.
 
 3. Open <https://localhost:8000>
 

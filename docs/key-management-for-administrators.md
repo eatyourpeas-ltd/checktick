@@ -23,7 +23,12 @@ As an administrator, you have elevated privileges that come with responsibilitie
 ```
 Platform Master Key (split-knowledge)
 ├── Vault Component (stored in HashiCorp Vault)
-└── Custodian Component (offline storage)
+└── Custodian Component (Shamir 3-of-4 threshold)
+    │
+    ├── Share 1 (Admin 1) ← Also has Vault Unseal Key 1
+    ├── Share 2 (Admin 2) ← Also has Vault Unseal Key 2
+    ├── Share 3 (Physical Safe) ← Also has Vault Unseal Key 3
+    └── Share 4 (Cloud Backup) ← Also has Vault Unseal Key 4
     │
     ├── Organisation A Master Key
     │   ├── Team 1 Key → Team 1 Surveys
@@ -33,7 +38,10 @@ Platform Master Key (split-knowledge)
         └── Team 3 Key → Team 3 Surveys
 ```
 
-**Key Principle**: Higher-level keys can decrypt lower-level keys, but not vice versa.
+**Key Principle**:
+- Higher-level keys can decrypt lower-level keys, but not vice versa
+- Custodian shares use same distribution as Vault unseal keys (aligned security model)
+- Need any 3 of 4 shares for platform recovery (same threshold as Vault unsealing)
 
 ---
 
@@ -240,6 +248,46 @@ Navigate to **Admin → Audit Logs** to view all key management events:
 
 When a user loses both their password AND recovery phrase, platform recovery is required.
 
+### Rate Limiting and Abuse Prevention
+
+To prevent abuse and detect suspicious activity, platform recovery enforces strict rate limits:
+
+| Limit Type | Threshold | Action |
+|------------|-----------|--------|
+| **Per User** | Max 3 requests per 90 days | 4th request requires executive approval |
+| **Per Organisation** | Max 5 requests per day | Excess requests flagged for review |
+| **System-wide** | Max 50 requests per day | Admin notification + security review |
+| **Identity Verification** | Max 5 attempts per request | Account flagged after excessive failures |
+| **Failed Authorizations** | Max 3 rejections per user | Escalate to security team |
+
+**Automated Alerts:**
+
+```
+🚨 Recovery Rate Alert
+───────────────────────────────────────
+Organisation: NHS Trust Example
+Recovery requests today: 12 (threshold: 5)
+Unusual activity detected
+
+Breakdown:
+├─ Same IP address: 8 requests
+├─ Same admin approver: 10 requests
+└─ Similar justifications: 7 requests
+
+Recommended Action:
+1. Review audit logs for pattern
+2. Contact organisation admin
+3. Verify identity of requesters
+4. Consider temporary hold on new requests
+```
+
+**DoS Protection:**
+
+- IP-based rate limiting: Max 10 requests per hour per IP
+- CAPTCHA required after 3 failed identity verifications
+- Exponential backoff for repeated rejections
+- Email notification throttling: Max 5 per user per day
+
 ### Who Can Initiate Platform Recovery?
 
 - The user themselves (via support request)
@@ -348,14 +396,22 @@ After dual authorization, a mandatory waiting period begins:
 
 After time delay completes:
 
-1. **Platform admin retrieves custodian component**
-   - Stored in secure offline location
-   - Requires physical access (not in database/environment)
-   - Two-person retrieval recommended
+1. **Platform admin gathers custodian shares**
+   - Contact 3 of 4 share custodians
+   - Collect shares (Admin 1, Admin 2, Physical Safe, or Cloud Backup)
+   - Shares retrieved digitally from password managers or physically from safe
 
-2. **Platform master key reconstructed**
-   - Vault component + Custodian component = Platform key
-   - Happens in memory only, never persisted
+2. **Execute recovery via management command**
+   - SSH into production server
+   - Run: `python manage.py execute_platform_recovery <request_id> --custodian-share-1=<share1> --custodian-share-2=<share2> --custodian-share-3=<share3>`
+   - Custodian component reconstructed in memory (never persisted)
+   - Command validates all checks passed
+
+3. **Platform master key reconstructed**
+   - Vault component retrieved from Vault automatically
+   - Custodian component reconstructed from 3 shares
+   - XOR combination happens in memory only
+   - Full platform key exists briefly, then cleared
 
 3. **User's KEK retrieved from Vault**
    - Platform key decrypts the escrowed key
@@ -373,27 +429,79 @@ After time delay completes:
 
 ### Custodian Component Management
 
-The custodian component is the offline portion of the platform master key.
+The custodian component is the offline portion of the platform master key, split into 4 shares using Shamir's Secret Sharing.
 
 #### Storage Requirements
 
-- ✅ Secure physical location (safe, lockbox)
-- ✅ Fireproof and waterproof storage
-- ✅ Limited access (2-3 designated individuals maximum)
-- ✅ Access log maintained
-- ✅ Backup copy in separate secure location
+**Custodian shares are distributed across 4 locations:**
+- ✅ Admin 1's password manager (Share 1)
+- ✅ Admin 2's password manager (Share 2)
+- ✅ Physical safe - fireproof, waterproof (Share 3)
+- ✅ Encrypted cloud backup (Share 4 - spare)
 
-#### Retrieval Procedure
+**Security model:**
+- Need any 3 of 4 shares to reconstruct custodian component
+- Same distribution as Vault unseal keys (aligned security)
+- No single point of failure
+- Shares never stored in application environment
 
-1. **Verify authorization**: Confirm dual-authorized recovery request
-2. **Two-person rule**: Two designated individuals retrieve together
-3. **Log access**: Record date, time, individuals, recovery ticket ID
-4. **Use immediately**: Don't store in digital systems
-5. **Return to storage**: Immediately after use
+#### Initial Setup: Splitting the Custodian Component
+
+When setting up CheckTick for the first time, split the custodian component from `vault/setup_vault.py`:
+
+```bash
+# After running vault/setup_vault.py, you get a custodian component
+# Split it into 4 shares:
+python manage.py split_custodian_component \
+  --custodian-component=<64-byte-hex-from-setup>
+
+# Output:
+# Share 1: 801-abc123def456...
+# Share 2: 802-xyz789ghi012...
+# Share 3: 803-jkl345mno678...
+# Share 4: 804-pqr901stu234...
+```
+
+Securely distribute shares to designated custodians and **remove the original custodian component from your .env file**.
+
+#### Retrieval Procedure for Recovery
+
+When executing platform recovery:
+
+1. **Verify authorization**: Confirm dual-authorized recovery request exists
+2. **Gather shares**: Obtain 3 of 4 shares from custodians
+3. **Execute recovery**: Run management command with shares
+4. **Reconstruct temporarily**: Shares combine in memory only
+5. **Complete recovery**: User regains access, shares cleared from memory
+6. **Return to storage**: Shares remain with custodians (not returned to physical safe)
+
+**Example recovery execution:**
+
+```bash
+# Retrieve 3 shares from custodians
+# Share 1 from Admin 1, Share 2 from Admin 2, Share 3 from physical safe
+
+python manage.py execute_platform_recovery ABC-123-XYZ \
+  --custodian-share-1="801-abc123def456..." \
+  --custodian-share-2="802-xyz789ghi012..." \
+  --custodian-share-3="803-jkl345mno678..." \
+  --executor=admin@checktick.uk
+
+# Custodian component reconstructed in memory
+# Recovery executed
+# Memory cleared immediately
+```
+
+**Security features:**
+- Shares only in memory during execution
+- Never persisted to disk or logs
+- Automatic memory clearing after use
+- Full audit trail of share usage
+- Alerts sent to all admins when shares are used
 
 #### Rotation Schedule
 
-Rotate the custodian component:
+Rotate the custodian shares:
 
 - After any suspected compromise
 - Annually (as part of security review)
@@ -401,11 +509,208 @@ Rotate the custodian component:
 
 **Rotation Process:**
 
-1. Generate new platform master key
-2. Re-encrypt all escrowed keys with new platform key
-3. Securely destroy old custodian component
-4. Store new custodian component in secure location
-5. Update Vault with new vault component
+1. Generate new platform master key (via `vault/setup_vault.py`)
+2. Split new custodian component into 4 shares (`split_custodian_component`)
+3. Re-encrypt all escrowed keys with new platform key (migration script)
+4. Distribute new shares to custodians
+5. Securely destroy old shares (all 4 shares + any backups)
+6. Update Vault with new vault component
+7. Test recovery with new shares
+
+---
+
+## Key Rotation Policy
+
+Different keys in CheckTick's security architecture have different rotation requirements. This section clarifies which keys need regular rotation and which don't.
+
+### Keys That Require Regular Rotation
+
+#### 1. VAULT_SECRET_ID (Every 90 Days) ⏰
+
+**What It Is**: AppRole secret ID used by the Django webapp to authenticate to Vault.
+
+**Why Rotate**: Limits exposure window if webapp credentials are compromised.
+
+**How To Rotate**:
+
+```bash
+# 1. Generate new secret ID in Vault
+vault write -f auth/approle/role/checktick-app/secret-id
+
+# 2. Update .env file with new VAULT_SECRET_ID
+# 3. Restart webapp: docker compose restart web
+```
+
+**Frequency**: Every 90 days (set calendar reminder)
+
+**Priority**: **HIGH** - This is your most important regular rotation
+
+---
+
+#### 2. Custodian Component Shares (Annually or After Compromise) 🔐
+
+**What It Is**: The 4 Shamir shares that reconstruct the custodian component (part of platform master key).
+
+**Why Rotate**:
+- After any suspected compromise
+- When designated custodians change
+- Annual security review requirement
+
+**How To Rotate**: See [Rotation Schedule](#rotation-schedule) above for full 7-step process.
+
+**Frequency**:
+- **Mandatory**: After compromise or custodian changes
+- **Recommended**: Annually as part of security audit
+
+**Priority**: **MEDIUM** - Important but less frequent than VAULT_SECRET_ID
+
+---
+
+#### 3. Vault's Internal Encryption Key (Optional - Annually) 🔄
+
+**What It Is**: Vault's "barrier key" that encrypts all data at rest within Vault itself.
+
+**Why Rotate**: Compliance requirements, annual security reviews.
+
+**How To Rotate**:
+
+```bash
+# Vault handles re-encryption automatically
+vault operator rotate
+```
+
+**Requirements**:
+- Vault must be unsealed
+- No impact on application - Vault handles everything internally
+- Does NOT require re-encrypting application data
+- Does NOT require new unseal keys
+
+**Frequency**: Annually (optional, for compliance)
+
+**Priority**: **LOW** - Nice to have for compliance, but Vault handles it transparently
+
+---
+
+### Keys That Rarely Need Rotation
+
+#### 4. Vault Unseal Keys (Only After Major Security Events) ⚠️
+
+**What They Are**: The 4 Shamir-split keys needed to unseal Vault after restart (3 of 4 required).
+
+**When To Rotate**:
+- Custodian leaves organization without proper handover
+- Multiple unseal keys suspected compromised
+- Changing threshold requirements (e.g., 3-of-4 to 4-of-6)
+- Major security incident affecting infrastructure
+
+**How To Rotate**:
+
+```bash
+# REQUIRES ALL CURRENT UNSEAL KEYS
+vault operator rekey
+```
+
+⚠️ **WARNING**: This is disruptive - generates entirely new unseal keys and invalidates all existing ones.
+
+**Frequency**: Only after major security events
+
+**Priority**: **CRITICAL** (when needed) - But rarely needed
+
+---
+
+### Keys That Generally Don't Need Rotation
+
+#### 5. Organization Master Keys ❌ (No Routine Rotation)
+
+**What They Are**: Per-organization encryption keys that encrypt team keys.
+
+**Why Not Rotate**:
+- Encrypted with platform master key (which uses custodian shares)
+- Rotation requires re-encrypting all team keys
+- Only rotate if specific compromise suspected
+
+**Exception**: Rotate only when:
+- Organization key specifically compromised
+- Compliance requires it (rare)
+- Organization security incident
+
+---
+
+#### 6. Team Keys ❌ (No Routine Rotation)
+
+**What They Are**: Team-shared encryption keys for team surveys.
+
+**Why Not Rotate**:
+- SSO-based access control (revoke access by removing from team)
+- Rotation requires re-encrypting all team surveys
+- Operationally disruptive for active teams
+
+**Exception**: Rotate only when:
+- Team member with key access leaves under suspicious circumstances
+- Team-specific security incident
+- Compliance audit requires it
+
+**Alternative**: Instead of rotating, remove compromised user from team (instant revocation).
+
+---
+
+#### 7. Survey KEKs (Key Encryption Keys) ❌ (No Routine Rotation)
+
+**What They Are**: Per-survey encryption keys that encrypt patient data.
+
+**Why Not Rotate**:
+- Each survey already has unique key (isolation by design)
+- Password/recovery phrase protect access
+- Rotation requires re-encrypting all survey responses
+
+**Exception**: Rotate only when:
+- Specific survey's KEK known to be compromised
+- User reports unauthorized access to specific survey
+
+**Alternative**: For unauthorized access concerns, audit logs + investigate rather than blanket rotation.
+
+---
+
+### Summary: Rotation Schedule
+
+| Key Type | Frequency | Method | Priority |
+|----------|-----------|--------|----------|
+| **VAULT_SECRET_ID** | **Every 90 days** | `vault write` + restart | **HIGH** |
+| **Custodian shares** | **Annually** or after compromise | Full re-initialization | **MEDIUM** |
+| **Vault encryption key** | Annually (optional) | `vault operator rotate` | **LOW** |
+| **Vault unseal keys** | Only after major incident | `vault operator rekey` | **CRITICAL*** |
+| Organization keys | Only if compromised | Re-encrypt hierarchy | N/A |
+| Team keys | Only if compromised | Re-encrypt team data | N/A |
+| Survey KEKs | Only if compromised | Re-encrypt survey | N/A |
+
+\* Priority is CRITICAL when needed, but it's rarely needed.
+
+---
+
+### Automation and Reminders
+
+Set up calendar reminders for routine rotations:
+
+- **Every 90 days**: Rotate VAULT_SECRET_ID
+- **Annually (same date each year)**:
+  - Rotate custodian shares
+  - Optionally rotate Vault encryption key
+  - Test custodian share reconstruction
+  - Audit custodian access logs
+
+**Recommended Annual Date**: Choose your organization's security audit date or fiscal year-end.
+
+---
+
+### Rotation Best Practices
+
+1. **Document All Rotations**: Record date, who performed it, and reason in audit log
+2. **Test Before and After**: Always verify functionality after rotation
+3. **Dual Authorization**: Require two administrators for custodian share rotation
+4. **Secure Disposal**: Use cryptographic erasure for old secrets (not just deletion)
+5. **Update Documentation**: Keep custodian lists and distribution records current
+6. **Communication**: Notify relevant administrators before scheduled rotations
+7. **Rollback Plan**: Document how to roll back if rotation causes issues
 
 ---
 
@@ -531,12 +836,16 @@ For HIPAA compliance:
 
 ### For Platform Admins
 
-1. **Never bypass time delays**: Even in emergencies
-2. **Always require dual authorization**: No exceptions
-3. **Verify identity thoroughly**: When in doubt, request more evidence
-4. **Log everything**: Actions not logged didn't happen (legally)
-5. **Rotate custodian component**: Follow rotation schedule
-6. **Monitor recovery rates**: Investigate unusual patterns
+1. **Never bypass security controls**: Follow all procedures even in emergencies
+2. **Always require dual authorization**: No exceptions for recovery
+3. **Use management commands**: Never store custodian shares in webapp environment
+4. **Verify identity thoroughly**: When in doubt, request more evidence
+5. **Log everything**: Actions not logged didn't happen (legally)
+6. **Rotate custodian shares**: Follow rotation schedule (annually or after compromise)
+7. **Monitor recovery rates**: Investigate unusual patterns (>1% of users)
+8. **Test recovery process**: Annual dry-run ensures shares work when needed
+9. **Distribute shares wisely**: Align with Vault unseal key custodians
+10. **Clear memory**: Shares should never persist after recovery completes
 
 ---
 
@@ -563,12 +872,23 @@ For HIPAA compliance:
 3. Verify audit backend configuration in Vault
 4. Check network connectivity between services
 
-### Custodian Component Not Working
+### Custodian Shares Not Working
 
-1. Verify component hasn't been rotated
-2. Check component matches current vault component
-3. Ensure correct format (64-byte hex string)
-4. Contact CheckTick support if issues persist
+1. Verify shares are complete and unmodified
+2. Ensure using exactly 3 shares (not 2 or 4)
+3. Check shares match current generation (not rotated)
+4. Confirm using correct share format (starts with 80X-)
+5. Test with `--dry-run` flag first
+6. Contact CheckTick support if issues persist
+
+### Recovery Command Fails
+
+1. Check SSH access to production server
+2. Verify Django application is running
+3. Ensure Vault is unsealed and accessible
+4. Confirm recovery request exists and is approved
+5. Check all 3 shares are provided correctly
+6. Review error logs: `docker logs checktick-web`
 
 ---
 

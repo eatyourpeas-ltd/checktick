@@ -70,7 +70,9 @@ class VaultClient:
 
         # Create new client and authenticate
         try:
-            client = hvac.Client(url=self.vault_addr, verify=False)
+            # Enable TLS verification by default; disable only for development
+            verify_tls = os.getenv("VAULT_TLS_VERIFY", "true").lower() == "true"
+            client = hvac.Client(url=self.vault_addr, verify=verify_tls)
 
             # Authenticate with AppRole
             auth_response = client.auth.approle.login(
