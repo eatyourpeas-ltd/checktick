@@ -236,20 +236,24 @@ def checkout_success(request: HttpRequest) -> HttpResponse:
     can_manage_teams = False
     account_tier = request.user.profile.account_tier
 
-    if account_tier in ["team", "organisation", "enterprise"]:
+    # Check for team tiers (team_small, team_medium, team_large)
+    if account_tier.startswith("team_") or account_tier in [
+        "organization",
+        "enterprise",
+    ]:
         # Check if user owns any team
         if Team.objects.filter(owner=request.user).exists():
             can_manage_teams = True
         # Check if user is admin of any team
         elif TeamMembership.objects.filter(user=request.user, role="admin").exists():
             can_manage_teams = True
-        # Check if user is org admin (org/enterprise tiers)
-        elif account_tier in ["organisation", "enterprise"]:
-            from checktick_app.surveys.models import Organisation
+        # Check if user is org admin (organization/enterprise tiers)
+        elif account_tier in ["organization", "enterprise"]:
+            from checktick_app.surveys.models import Organization
 
-            user_orgs = Organisation.objects.filter(
-                organisationmembership__user=request.user,
-                organisationmembership__role="admin",
+            user_orgs = Organization.objects.filter(
+                organizationmembership__user=request.user,
+                organizationmembership__role="admin",
             )
             if user_orgs.exists():
                 can_manage_teams = True
@@ -404,6 +408,47 @@ def checkout_complete(request: HttpRequest) -> HttpResponse:
             mandate_id=mandate_id,
         )
 
+        # For team tiers, create the team immediately (don't wait for webhook)
+        # This ensures the user can access team management features right away
+        # Wrapped in try/except to ensure subscription isn't lost if team creation fails
+        if tier.startswith("team_"):
+            from checktick_app.surveys.models import Team, TeamMembership
+
+            try:
+                # Check if team already exists
+                existing_team = Team.objects.filter(owner=request.user).first()
+                if not existing_team:
+                    # Determine team size from tier
+                    size_map = {
+                        "team_small": Team.Size.SMALL,
+                        "team_medium": Team.Size.MEDIUM,
+                        "team_large": Team.Size.LARGE,
+                    }
+                    team_size = size_map.get(tier, Team.Size.SMALL)
+
+                    # Create team
+                    team = Team.objects.create(
+                        name=f"{request.user.username}'s Team",
+                        owner=request.user,
+                        size=team_size,
+                        subscription_id=subscription_id,
+                    )
+
+                    # Add owner as team admin
+                    TeamMembership.objects.create(
+                        team=team, user=request.user, role=TeamMembership.Role.ADMIN
+                    )
+
+                    logger.info(
+                        f"Created team {team.id} for {request.user.username} (tier: {tier})"
+                    )
+            except Exception as e:
+                # Log error but don't fail checkout - webhook will retry team creation
+                logger.error(
+                    f"Failed to auto-create team for {request.user.username} during checkout: {e}. "
+                    f"Webhook will retry team creation."
+                )
+
         # Clear session data
         request.session.pop("checkout_session_token", None)
         request.session.pop("checkout_tier", None)
@@ -425,7 +470,9 @@ def checkout_complete(request: HttpRequest) -> HttpResponse:
         return redirect("core:pricing")
 
 
-@csrf_exempt
+# Safe: External webhook from GoCardless - CSRF tokens not applicable for server-to-server calls.
+# Security provided by HMAC-SHA256 signature verification (see verify_gocardless_webhook_signature).
+@csrf_exempt  # nosemgrep: python.django.security.audit.csrf-exempt.no-csrf-exempt
 @require_http_methods(["POST"])
 @ratelimit(key="ip", rate="100/m", block=True)
 def payment_webhook(request: HttpRequest) -> HttpResponse:

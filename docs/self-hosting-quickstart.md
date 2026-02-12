@@ -168,6 +168,37 @@ After initial setup, you can create additional superuser accounts in two ways:
 
 Regular users (non-superusers) can sign up through the web interface at `/signup/` once your instance is running. They don't need command-line access.
 
+**Demo Accounts for Testing (Development/Staging Only):**
+
+For testing different account tiers without going through billing, use the demo accounts command:
+
+```bash
+# Create all demo accounts
+docker compose exec web python manage.py create_demo_accounts
+
+# Create only a specific tier
+docker compose exec web python manage.py create_demo_accounts --tier team_small
+
+# Reset and recreate all demo accounts
+docker compose exec web python manage.py create_demo_accounts --reset
+```
+
+This creates 7 demo accounts with different tiers:
+
+- `demo-free@example.com` - Free tier
+- `demo-pro@example.com` - PRO tier with encryption
+- `demo-team-small@example.com` - Team (5 members) with pre-created team
+- `demo-team-medium@example.com` - Team (10 members) with pre-created team
+- `demo-team-large@example.com` - Team (20 members) with pre-created team
+- `demo-org@example.com` - Organization tier with pre-created organization
+- `demo-enterprise@example.com` - Enterprise tier with custom branding
+
+**Password for all accounts:** `demo123!pass`
+
+All accounts require 2FA setup on first login (even though billing is bypassed).
+
+> ⚠️ **SECURITY WARNING**: This command is for **development and staging only**. It is blocked in production by checking the `ENVIRONMENT` variable. Set `ENVIRONMENT=production` before going live to prevent creation of accounts with known passwords. Always run with `--reset` before going live to delete all demo accounts.
+
 ### 5. Access Your Instance
 
 Visit `http://localhost:8000` (or your domain) and log in with your admin credentials.
@@ -180,6 +211,33 @@ Visit `http://localhost:8000` (or your domain) and log in with your admin creden
 - [Configuration Guide](/docs/self-hosting-configuration/) - Branding, authentication, email providers
 - [Theming & UI Customization](/docs/themes/) - Theme presets, custom CSS, and daisyUI configuration
 - [Backup & Restore](/docs/self-hosting-backup/) - Database backups and disaster recovery
+
+## Before Going Live (Production Checklist)
+
+When preparing to accept real users and go into production:
+
+1. **Set environment variable:**
+   ```bash
+   ENVIRONMENT=production
+   ```
+   This disables demo account creation to prevent security vulnerabilities.
+
+2. **Delete all demo accounts:**
+   ```bash
+   docker compose exec web python manage.py create_demo_accounts --reset
+   ```
+   This removes all `demo-*@example.com` accounts with known passwords.
+
+3. **Review security settings:**
+   - Ensure `DEBUG=False` in production
+   - Verify `SECRET_KEY` is secure and not shared
+   - Check `ALLOWED_HOSTS` is properly configured
+   - Enable SSL/TLS (see [Production Setup](/docs/self-hosting-production/))
+
+4. **Test authentication:**
+   - Verify 2FA is working
+   - Test password reset emails
+   - Confirm email notifications are sending
 
 ## Troubleshooting
 

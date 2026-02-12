@@ -10,6 +10,7 @@ from checktick_app.surveys.models import (
     Organization,
     OrganizationMembership,
     SurveyMembership,
+    Team,
     TeamMembership,
 )
 
@@ -111,12 +112,17 @@ def branding(request):
     can_create_datasets_flag = False
     if user and user.is_authenticated:
         can_manage_any_users = (
-            OrganizationMembership.objects.filter(
+            # Organization ownership or admin membership
+            Organization.objects.filter(owner=user).exists()
+            or OrganizationMembership.objects.filter(
                 user=user, role=OrganizationMembership.Role.ADMIN
             ).exists()
+            # Team ownership or admin membership
+            or Team.objects.filter(owner=user).exists()
             or TeamMembership.objects.filter(
                 user=user, role=TeamMembership.Role.ADMIN
             ).exists()
+            # Survey creator role
             or SurveyMembership.objects.filter(
                 user=user, role=SurveyMembership.Role.CREATOR
             ).exists()
