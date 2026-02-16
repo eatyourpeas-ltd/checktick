@@ -7,6 +7,7 @@ This folder contains infrastructure files for HashiCorp Vault deployment.
 **For complete documentation, see: [docs/vault.md](/docs/vault.md)**
 
 The main documentation includes:
+
 - Architecture and key hierarchy
 - Deployment options (Northflank, Docker Compose, Kubernetes)
 - Initialization and setup
@@ -20,6 +21,7 @@ The main documentation includes:
 |------|---------|
 | `setup_vault.py` | Vault initialization script (creates secrets engine, policies, AppRole) |
 | `verify-production-security.sh` | Production security verification script (checks TLS, token config, audit logs) |
+| `unseal_vault.sh` | Helper to decrypt unseal keys on the command line - requires yubikeys |
 | `northflank-deployment.yaml` | Kubernetes manifest for Northflank deployments |
 | `generate-tls.sh` | Generate self-signed TLS certificates for testing |
 | `vault-cert.pem` / `vault-key.pem` | TLS certificates (if using custom TLS) |

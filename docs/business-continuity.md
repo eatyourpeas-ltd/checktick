@@ -235,6 +235,469 @@ While Vault is unavailable:
 | New survey creation | ⚠️ Depends | Works if not using Vault for key storage |
 | Audit logging to Vault | ❌ Blocked | Logs queued locally, sync after recovery |
 
+## Decrypting Vault Unseal Keys and Custodian Shares
+
+### Overview
+
+CheckTick uses **YubiKey hardware security keys** to protect the most sensitive cryptographic material:
+
+- **Vault Unseal Keys**: Required to unseal HashiCorp Vault after restart
+- **Custodian Component Shares**: Required for emergency platform recovery
+
+**Storage Architecture:**
+
+- **2 shares encrypted with YubiKeys** (requires physical possession + PIN)
+- **1 share in physical safe** (plaintext backup)
+- **1 share in cold storage** (offsite plaintext backup)
+
+**Recovery Threshold**: Any 3 of 4 shares can unseal Vault or reconstruct the custodian component.
+
+### Prerequisites
+
+Before attempting decryption:
+
+1. **Hardware Required:**
+   - YubiKey 1 (Custodian A)
+   - YubiKey 2 (Custodian B)
+   - Access to physical safe (for share 3)
+
+2. **Software Required:**
+
+```bashmacOS
+brew install opensc ykmanUbuntu/Debian
+sudo apt install opensc-pkcs11 yubikey-manager
+```
+
+1. **Files Required:**
+   - Download encrypted shares from Bitwarden:
+     - `vault_unseal_share1.enc` + `vault_unseal_share1.key.enc`
+     - `vault_unseal_share2.enc` + `vault_unseal_share2.key.enc`
+     - `custodian_component_share1.enc` + `custodian_component_share1.key.enc`
+     - `custodian_component_share2.enc` + `custodian_component_share2.key.enc`
+
+2. **Credentials Required:**
+   - YubiKey 1 PIN (6-8 digits)
+   - YubiKey 2 PIN (6-8 digits)
+   - Physical safe access
+
+### Scenario 1: Unsealing Vault After Restart
+
+**When Vault Restarts** (planned maintenance, server reboot, or crash), it enters a **sealed state** and requires 3 of 4 unseal keys to become operational.
+
+#### Using the Automated Script
+
+The fastest way to unseal Vault is using the provided script:
+
+```bashNavigate to vault directory
+cd vaultRun unsealing script
+./unseal_vault.sh
+```
+
+**Script Workflow:**
+
+1. **Prompts for YubiKey 1**
+   - Insert YubiKey 1
+   - Press Enter
+   - Enter PIN when prompted
+   - Script decrypts vault_unseal_share1
+
+2. **Prompts for YubiKey 2**
+   - Remove YubiKey 1
+   - Insert YubiKey 2
+   - Press Enter
+   - Enter PIN when prompted
+   - Script decrypts vault_unseal_share2
+
+3. **Prompts for physical safe share**
+   - Retrieve share 3 from physical safe
+   - Script displays all 3 decrypted shares
+
+4. **Apply shares to Vault**
+
+```bash
+# SSH to Vault server
+#Unseal with each share
+vault operator unseal
+Paste share 1vault operator unseal
+Paste share 2vault operator unseal
+Paste share 3Vault is now unsealed
+```
+
+#### Manual Decryption (If Script Unavailable)
+
+If the script is not available, decrypt shares manually:
+
+**Step 1: Decrypt Share 1 with YubiKey 1**
+
+```bash
+# Insert YubiKey 1Decrypt the AES key
+pkcs11-tool --module /usr/local/lib/libykcs11.dylib
+--slot 0 --id 03 --decrypt --mechanism RSA-PKCS
+--input vault_unseal_share1.key.enc
+--output aes_key1.bin
+--login
+Enter YubiKey 1 PINDecrypt the share
+openssl enc -d -aes-256-cbc -pbkdf2
+-in vault_unseal_share1.enc
+-pass file:aes_key1.binSave the output, then clean up
+shred -u aes_key1.bin
+```
+
+**Step 2: Decrypt Share 2 with YubiKey 2**
+
+```bash
+# Remove YubiKey 1, insert YubiKey 2Decrypt the AES key
+pkcs11-tool --module /usr/local/lib/libykcs11.dylib
+--slot 0 --id 03 --decrypt --mechanism RSA-PKCS
+--input vault_unseal_share2.key.enc
+--output aes_key2.bin
+--login
+Enter YubiKey 2 PINDecrypt the share
+openssl enc -d -aes-256-cbc -pbkdf2
+-in vault_unseal_share2.enc
+-pass file:aes_key2.binSave the output, then clean up
+shred -u aes_key2.bin
+```
+
+**Step 3: Retrieve Share 3 from Physical Safe**
+
+- Open physical safe at primary location
+- Retrieve `vault_unseal_share3.txt` (plaintext)
+
+**Step 4: Apply to Vault**
+
+```bash
+vault operator unseal <share-1>
+vault operator unseal <share-2>
+vault operator unseal <share-3>
+```
+
+#### Vault Unsealing Timeframe
+
+| Step | Duration | Notes |
+|------|----------|-------|
+| Gather custodians | 15-60 min | Depends on availability |
+| Decrypt shares | 5-10 min | Using script |
+| Apply to Vault | 2-5 min | Manual entry |
+| **Total** | **25-75 min** | Typical: 30-45 min |
+
+### Scenario 2: Platform Emergency Recovery
+
+**When Required**: User has lost both their password AND recovery phrase and needs emergency access to their encrypted surveys.
+
+**Prerequisites:**
+
+- Vault must be unsealed (see Scenario 1 if needed)
+- Recovery request created in Django admin (status: `PENDING_PLATFORM_RECOVERY`)
+- Authorization from appropriate administrator
+
+#### Using the Automated Script
+
+```bash
+#Navigate to scripts directory
+cd s
+# Run platform key unsealing script
+./unseal-platform-key.sh
+```
+
+**Script Workflow:**
+
+1. Decrypts custodian_component_share1 with YubiKey 1
+2. Decrypts custodian_component_share2 with YubiKey 2
+3. Prompts for share 3 from physical safe
+4. Displays all 3 shares for use in recovery command
+
+**Execute Platform Recovery:**
+
+```bash
+docker compose exec web python manage.py execute_platform_recovery
+--recovery-request-id <id>
+--custodian-share "<share-1-from-script>"
+--custodian-share "<share-2-from-script>"
+--custodian-share "<share-3-from-safe>"
+--new-password "TempPassword123!"
+--audit-approved-by "admin@example.com"
+```
+
+**What Happens:**
+
+1. Reconstructs custodian component from 3 shares (Shamir's Secret Sharing)
+2. Retrieves Vault component from HashiCorp Vault
+3. XORs components to derive Platform Master Key
+4. Decrypts organisation key → team key → survey KEK
+5. Re-encrypts survey KEK with user's new temporary password
+6. Updates database and creates audit log
+7. Notifies user of recovery completion
+
+#### Platform Recovery Timeframe
+
+| Step | Duration | Notes |
+|------|----------|-------|
+| Verify identity | 24-48 hours | User verification process |
+| Time delay | 48 hours | Security cooling-off period |
+| Gather custodians | 15-60 min | Coordinate availability |
+| Decrypt shares | 5-10 min | Using script |
+| Execute recovery | 2-5 min | Run management command |
+| **Total** | **3-5 days** | Includes verification + delay |
+
+### Scenario 3: YubiKey Unavailable
+
+If a YubiKey is lost, damaged, or the PIN is locked:
+
+**Option 1: Use Remaining YubiKey + Physical Backups**
+
+```bash
+# You still have YubiKey 1 (or 2)
+# Use it to decrypt one share
+./unseal_vault.sh  # Will work with 1 YubiKeyThen use physical backups for shares 3 and 4:
+# - Share 3: Physical safe at primary location
+# - Share 4: Cold storage at secondary locationApply 3 shares to Vault
+vault operator unseal <share-from-yubikey>
+vault operator unseal <share-3-from-safe>
+vault operator unseal <share-4-from-cold-storage>
+```
+
+**Option 2: Use All Physical Backups**
+
+If both YubiKeys are unavailable:
+
+```bash
+# Retrieve shares from physical locations:
+# - Share 2: Physical safe (was originally encrypted, now keep plaintext backup)
+# - Share 3: Physical safe
+# - Share 4: Cold storageApply any 3 shares to Vault
+vault operator unseal <share-2>
+vault operator unseal <share-3>
+vault operator unseal <share-4>
+```
+
+**After Recovery:**
+
+1. Order replacement YubiKey(s)
+2. Generate new PIV keys on replacement YubiKey
+3. Re-encrypt shares with new public keys
+4. Update Bitwarden with new encrypted files
+5. Test decryption with new YubiKey before destroying old shares
+
+### Scenario 4: Both YubiKeys Compromised
+
+**If YubiKeys are stolen with PINs potentially known:**
+
+**Immediate Actions (within 4 hours):**
+
+1. **Revoke compromised YubiKeys:**
+
+Disable PIV certificates immediately
+(Requires physical access to YubiKeys - if stolen, skip to step 2)
+
+1. **Rotate custodian component:**
+   - Reconstruct current component from physical backups
+   - Generate new component using `vault/setup_vault.py`
+   - Split new component with new YubiKeys
+   - Re-encrypt all organizational keys
+
+2. **Audit all key access:**
+
+Check audit logs for suspicious activity:
+
+```bash
+docker compose exec web python manage.py shell
+from checktick_app.core.models import AuditLog
+recent_access = AuditLog.objects.filter(
+action='KEY_ACCESS',
+created_at__gte=timezone.now() - timedelta(days=7)
+)
+```
+
+1. **Notify affected users:**
+   - Email all organization users
+   - Recommend password changes
+   - Consider rotating survey encryption keys
+
+**Long-term Actions (within 1 week):**
+
+1. Purchase new YubiKeys (2 primary + 2 backup)
+2. Generate new PIV keys
+3. Re-split custodian component
+4. Distribute new shares to custodians
+5. Update documentation
+
+### Troubleshooting Decryption Issues
+
+#### YubiKey Not Detected
+
+```bash
+# Check YubiKey is recognized
+ykman list
+```
+
+If not found:
+
+1. Unplug and re-insert YubiKey
+2. Try different USB port
+3. Check USB-C adapter (if using USB-A YubiKey)
+4. Install/update ykman:
+
+```bash
+brew install ykman  # macOS
+sudo apt install yubikey-manager  # Ubuntu
+```
+
+#### PIN Locked (Too Many Wrong Attempts)
+
+Use PUK to reset PIN (have 3 attempts before PUK locks)
+
+```bash
+ykman piv access change-pin
+--pin <wrong-pin>
+--new-pin <new-pin>
+--puk <puk-code>
+```
+
+If PUK is also locked:
+
+- PIV application is permanently locked on this YubiKey
+- Use other YubiKey or physical backup shares
+- Order replacement YubiKey and re-encrypt shares
+
+#### Decryption Returns Gibberish
+
+**Possible Causes:**
+
+- Wrong YubiKey used (share 1 requires YubiKey 1, share 2 requires YubiKey 2)
+- Corrupted encrypted file
+- Wrong encryption format (old vs new)
+
+**Solutions:**
+
+1. Verify you're using correct YubiKey
+Check YubiKey serial number:
+
+```bash
+ykman info
+```
+
+2. Re-download encrypted files from Bitwarden
+May have been corrupted during download3. Try other YubiKey
+Maybe shares were re-encrypted and documentation not updated4. Use physical backup shares instead
+Retrieve from safe or cold storage
+
+#### pkcs11-tool Command Not Found
+
+Install OpenSC package
+
+```bash
+brew install openscUbuntu/Debian:
+sudo apt install opensc-pkcs11Verify:
+pkcs11-tool --version
+```
+
+#### Wrong pkcs11 Library Path
+
+The library path differs by system:
+
+macOS Intel:
+
+```bash
+--module /usr/local/lib/libykcs11.dylibmacOS Apple Silicon:
+--module /opt/homebrew/lib/libykcs11.dylibUbuntu/Debian:
+--module /usr/lib/x86_64-linux-gnu/opensc-pkcs11.soFind your path:
+find /usr -name "libykcs11." 2>/dev/null
+find /opt -name "libykcs11." 2>/dev/null
+```
+
+The unsealing scripts auto-detect the correct path.
+
+### Testing Decryption (Quarterly Recommended)
+
+**Test without unsealing production Vault:**
+
+1. Verify YubiKeys work:
+
+```bash
+ykman info  # For each YubiKey2. Test decryption of one share
+./vault/unseal_vault.sh
+```
+
+Stop after seeing first decrypted share
+Don't apply to production Vault3. Verify physical backups accessible
+Check you can open safe and locate shares4. Document results
+Note any issues found
+Update emergency contact list if needed
+
+**Full Disaster Recovery Drill (Annually):**
+
+1. Set up isolated test Vault instance
+2. Encrypt test shares with production YubiKeys
+3. Practice full unsealing procedure
+4. Measure time taken
+5. Identify any blockers or delays
+6. Update procedures based on findings
+
+### Security Best Practices
+
+**YubiKey Storage:**
+
+- Store YubiKey 1 and YubiKey 2 in separate secure locations
+- Never store both YubiKeys together
+- Keep YubiKeys on person or in locked drawer when not in use
+
+**PIN Security:**
+
+- Use 6-8 digit random PINs (not birthdays or patterns)
+- Store PINs separately from YubiKeys (password manager or sealed envelope)
+- Never write PIN on YubiKey or store together
+- Change PIN if you suspect it was observed
+
+**Physical Backup Storage:**
+
+- Safe at primary location (Share 3)
+- Bank safety deposit box or offsite safe (Share 4)
+- At least 50 miles apart (disaster protection)
+- Access controlled and logged
+
+**Custodian Availability:**
+
+- Maintain 24/7 contact information for both custodians
+- Ensure custodians are in different time zones or departments
+- Have backup plan if custodian on vacation/sick
+- Document handover procedures for custodian changes
+
+**Regular Audits:**
+
+- Quarterly: Verify YubiKeys functional, PINs known
+- Quarterly: Check physical backup locations accessible
+- Annually: Full disaster recovery drill
+- After any custodian change: Re-test entire process
+
+### Emergency Contact Procedure
+
+**If decryption needed urgently:**
+
+1. **Identify scenario** (Vault restart vs platform recovery)
+2. **Contact custodians:**
+   - Custodian A: [Name] - [Phone] - [Email]
+   - Custodian B: [Name] - [Phone] - [Email]
+3. **Coordinate meeting** (in-person preferred for security)
+4. **Follow appropriate script** (`unseal_vault.sh` or `unseal-platform-key.sh`)
+5. **Document in audit log** (who performed decryption, when, why)
+
+**Escalation if custodians unavailable:**
+
+1. Contact backup custodian (if designated)
+2. Use physical backup shares (requires accessing safe + cold storage)
+3. For life-threatening emergency: Contact CheckTick support for guidance
+
+### Recovery Time Objectives (Updated)
+
+| Scenario | RTO Target | Dependencies |
+|----------|-----------|--------------|
+| Vault unsealing (custodians available) | 30-60 min | YubiKeys + safe access |
+| Vault unsealing (custodians unavailable) | 2-4 hours | Physical backup retrieval |
+| Platform recovery (total) | 3-5 days | Includes verification + time delay |
+| YubiKey replacement | 1-2 weeks | Hardware shipping time |
+| Complete key rotation (compromise) | 4-8 hours | All custodians + admin coordination |
+
 ## Key Personnel Changes
 
 ### Team Admin Leaves
@@ -423,24 +886,25 @@ If recovery rates spike:
 
 Maintain an emergency contact list:
 
-```markdown
 ## CheckTick Emergency Contacts
 
 ### Platform Support
+
 - Email: support@checktick.uk
 - Emergency: emergency@checktick.uk
 
 ### Internal Contacts
+
 - Primary Admin: [name] - [phone] - [email]
 - Secondary Admin: [name] - [phone] - [email]
 - Custodian Key Holder 1: [name] - [phone]
 - Custodian Key Holder 2: [name] - [phone]
 
 ### External Contacts
+
 - HashiCorp Support: [if Enterprise]
 - Northflank Support: [if using Northflank]
 - Legal/Compliance: [name] - [email]
-```
 
 ## Recovery Time Objectives
 
@@ -505,6 +969,7 @@ The Platform Admin Logs dashboard (`/platform-admin/logs/`) provides:
 - **Statistics**: Quick overview cards showing event counts
 
 This interface consolidates logs that would otherwise require:
+
 - Direct database queries for audit logs
 - Hosting provider dashboard access for infrastructure logs
 - Manual correlation between application and infrastructure events

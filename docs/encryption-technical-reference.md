@@ -1308,6 +1308,7 @@ class ExportService:
 ```
 
 **Security Properties:**
+
 - Survey responses decrypted only when survey is unlocked in session
 - CSV file optionally re-encrypted with separate download password
 - Scrypt KDF (n=2^14, r=8, p=1) for password derivation
@@ -1419,18 +1420,21 @@ def hard_delete(self) -> None:
 4. **Secure by Default**: Uses `secrets.token_bytes()` for cryptographically secure random data
 
 **What Gets Overwritten:**
+
 - Password-encrypted KEK (`encrypted_kek_password`)
 - Recovery phrase-encrypted KEK (`encrypted_kek_recovery`)
 - OIDC-encrypted KEK (`encrypted_kek_oidc`) - if using SSO
 - Organisation-encrypted KEK (`encrypted_kek_org`) - if using org-level encryption
 
 **What Gets Deleted:**
+
 - All survey responses (with encrypted data)
 - All data export records
 - Vault-escrowed keys (if platform key escrow is enabled)
 - Survey metadata and configuration
 
 **What Gets Retained:**
+
 - Audit log entries (who deleted, when, what keys were erased)
 - Aggregate statistics (if anonymized)
 - Organisation-level summary data (response counts, not content)
@@ -1540,6 +1544,7 @@ OIDC provides **authentication** (proving who you are), while the encryption key
 ### OIDC Benefits for CheckTick
 
 #### 1. Enhanced Security
+
 - **MFA/2FA** handled by identity provider (Google, Microsoft, Okta, etc.)
 - **No password storage** in CheckTick (one less attack vector)
 - **Single Sign-On (SSO)** for organisational users
@@ -1547,6 +1552,7 @@ OIDC provides **authentication** (proving who you are), while the encryption key
 - **Audit trail** from both OIDC provider and CheckTick
 
 #### 2. Better User Experience
+
 - **One login** for multiple services
 - **MFA already configured** at identity provider
 - **Password reset** handled by identity provider
@@ -1554,6 +1560,7 @@ OIDC provides **authentication** (proving who you are), while the encryption key
 - **Familiar login flow** (e.g., "Sign in with Google")
 
 #### 3. Enterprise Readiness
+
 - **Works with existing enterprise identity systems** (Azure AD, Okta, Auth0)
 - **Role mapping** from OIDC claims to CheckTick permissions
 - **Group membership** automatically synchronized
@@ -1860,6 +1867,7 @@ def survey_responses(request: HttpRequest, slug: str) -> HttpResponse:
 ### Migration Strategy
 
 #### Phase 1: Add OIDC Support (Backward Compatible)
+
 ```python
 # Support both legacy and OIDC users
 # New users can choose OIDC
@@ -1867,6 +1875,7 @@ def survey_responses(request: HttpRequest, slug: str) -> HttpResponse:
 ```
 
 #### Phase 2: Migrate Existing Users to OIDC
+
 ```python
 @login_required
 def migrate_to_oidc(request: HttpRequest):
@@ -2079,6 +2088,7 @@ OIDC_PROVIDERS = {
 ### ✅ Completed Features
 
 **Option 2: Individual Users (Dual Encryption)** - **PRODUCTION READY**
+
 - Password + recovery phrase dual-path encryption ✅
 - 12-word BIP39-compatible recovery phrases ✅
 - Forward secrecy session model ✅
@@ -2088,6 +2098,7 @@ OIDC_PROVIDERS = {
 - Comprehensive test coverage (46/46 unit + 7/7 integration tests) ✅
 
 **OIDC Integration** - **PRODUCTION READY**
+
 - OpenID Connect authentication with Google, Microsoft, Azure providers ✅
 - Automatic survey unlocking for OIDC-authenticated users ✅
 - OIDC identity-based key derivation with user-specific salts ✅
@@ -2121,6 +2132,7 @@ Survey Encryption Key (KEK)
 ```
 
 #### Benefits
+
 - **User Control**: Individual users maintain primary access via Option 2
 - **Administrative Recovery**: Organisation admins can recover user data
 - **Compliance**: HIPAA/GDPR compliant with proper audit trails
@@ -2138,6 +2150,7 @@ class Survey(models.Model):
 ```
 
 **Key Storage:**
+
 ```python
 # At survey creation
 survey_kek = os.urandom(32)  # Master encryption key
@@ -2162,6 +2175,7 @@ shares = create_secret_shares(survey_kek, threshold=3, total=5)
 3. **Catastrophic Loss**: 3 designated admins combine recovery shares → reconstruct KEK
 
 **Audit Logging:**
+
 ```python
 # Log all key access
 AuditLog.objects.create(
@@ -2204,6 +2218,7 @@ Survey Encryption Key (KEK)
 ⚠️ **Risk**: If user loses both password AND recovery code → permanent data loss
 
 **Mitigations:**
+
 - Clear warnings at survey creation
 - Force download of recovery code file
 - Email recovery code (encrypted with user's public key)
@@ -2213,6 +2228,7 @@ Survey Encryption Key (KEK)
 #### Implementation Details
 
 **Database Schema:**
+
 ```python
 class Survey(models.Model):
     # Current fields remain
@@ -2226,6 +2242,7 @@ class Survey(models.Model):
 ```
 
 **Key Storage:**
+
 ```python
 # At survey creation
 survey_kek = os.urandom(32)
@@ -2298,6 +2315,7 @@ def get_encryption_strategy(user: User, survey: Survey) -> str:
 ### Clear Communication at Signup
 
 **For Organisation Members:**
+
 ```
 ✅ Your organisation can recover lost encryption keys
 ✅ Organisation admins can access data if you're unavailable
@@ -2306,6 +2324,7 @@ def get_encryption_strategy(user: User, survey: Survey) -> str:
 ```
 
 **For Individual Users:**
+
 ```
 ⚠️ You are solely responsible for your encryption keys
 ⚠️ Lost keys = permanent data loss (no recovery possible)
@@ -2319,6 +2338,7 @@ def get_encryption_strategy(user: User, survey: Survey) -> str:
 ### ✅ Phase 1: Dual Encryption (COMPLETED - October 2025)
 
 **Option 2: Individual Users with Dual Paths**
+
 - Password + BIP39 recovery phrase ✅
 - AES-GCM authenticated encryption ✅
 - Forward secrecy session security ✅
@@ -2329,6 +2349,7 @@ def get_encryption_strategy(user: User, survey: Survey) -> str:
 ### ✅ Phase 2: OIDC Authentication (COMPLETED - October 2025)
 
 **OIDC Integration Features:**
+
 - OpenID Connect authentication with multiple providers ✅
 - Google, Microsoft, Azure, and custom OIDC provider support ✅
 - Automatic survey unlocking for OIDC-authenticated users ✅
@@ -2342,6 +2363,7 @@ def get_encryption_strategy(user: User, survey: Survey) -> str:
 ### 🚀 Phase 3: Organisation Key Management (FUTURE)
 
 **Option 1: Organisation Users with Key Escrow**
+
 - User encryption (primary access) via Option 2 + OIDC
 - Organisation recovery via AWS KMS/Azure Key Vault
 - Optional multi-party recovery shares
@@ -2512,12 +2534,14 @@ CheckTick implements a **two-layer split-knowledge security architecture** for e
 The platform recovery system uses **Shamir's Secret Sharing** at two distinct layers:
 
 **Layer 1: Vault Infrastructure (Unsealing)**
+
 - HashiCorp Vault stores the "Vault Component" of the platform master key
 - Vault itself is sealed and requires **3 of 4 Vault unseal keys** to become operational
 - Unseal keys distributed to trusted custodians using Shamir threshold cryptography
 - This layer protects infrastructure access to stored secrets
 
 **Layer 2: Platform Master Key (Custodian Component)**
+
 - Platform Master Key = XOR(Vault Component, Custodian Component)
 - Custodian Component split into **4 shares with 3-of-4 threshold** using Shamir Secret Sharing
 - Shares distributed to the same custodians who hold Vault unseal keys
@@ -2765,16 +2789,19 @@ docker compose exec web python manage.py split_custodian_component \
 ```
 
 **Arguments:**
+
 - `--custodian-component`: 64-byte (128 hex chars) custodian component from Vault setup
 - `--shares`: Number of shares to create (default: 4)
 - `--threshold`: Number of shares required for reconstruction (default: 3)
 
 **Requirements:**
+
 - Custodian component must be exactly 64 bytes (128 hex characters)
 - Threshold must be ≤ shares
 - Recommended: 4 shares with 3-of-4 threshold
 
 **Security Notes:**
+
 - Run this command ONLY during initial production setup
 - Never store the full custodian component after splitting
 - Distribute shares to different custodians immediately
@@ -2795,16 +2822,19 @@ docker compose exec web python manage.py test_custodian_reconstruction \
 ```
 
 **Arguments:**
+
 - `share-1`, `share-2`, `share-3`: Any 3 of the 4 custodian shares
 - `--original`: Optional original custodian component for validation
 
 **Use Cases:**
+
 - Verify shares after initial distribution
 - Audit share validity periodically
 - Test reconstruction before emergency (recommended annually)
 - Confirm shares after custodian rotation
 
 **Output:**
+
 - Displays reconstructed component in hex
 - If `--original` provided, compares and reports match/mismatch
 - ✅ Success: Shares are valid and can be used for recovery
@@ -2827,18 +2857,21 @@ docker compose exec web python manage.py execute_platform_recovery \
 ```
 
 **Arguments:**
+
 - `--recovery-request-id`: Database ID of recovery request (status must be `PENDING_PLATFORM_RECOVERY`)
 - `--custodian-share`: Provide this flag 3 times with 3 different shares
 - `--new-password`: Temporary password for user to unlock survey
 - `--audit-approved-by`: Email/identifier of administrator authorizing recovery
 
 **Prerequisites:**
+
 - HashiCorp Vault must be unsealed
 - Recovery request must exist with status `PENDING_PLATFORM_RECOVERY`
 - Must have 3 valid custodian shares
 - Administrator must have proper authorization
 
 **Process:**
+
 1. Reconstructs custodian component from shares
 2. Retrieves Vault component from HashiCorp Vault
 3. Derives platform master key via XOR
@@ -2849,6 +2882,7 @@ docker compose exec web python manage.py execute_platform_recovery \
 8. Marks recovery request as completed
 
 **Security Controls:**
+
 - Operation logged to audit trail with custodian count
 - Recovery request status prevents duplicate recoveries
 - User notified via email after successful recovery
@@ -2941,6 +2975,484 @@ The two-layer architecture ensures:
 
 For complete custodian management procedures, see [Key Management for Administrators](/docs/key-management-for-administrators/).
 
+### YubiKey-Based Custodian Key Management
+
+CheckTick uses **YubiKey hardware security keys** to protect the custodian component shares and Vault unseal keys, providing physical security for the platform's most sensitive cryptographic material.
+
+#### Architecture Overview
+
+The custodian shares and Vault unseal keys are encrypted and stored such that:
+
+- **Physical Security**: Decryption requires physical possession of specific YubiKeys
+- **PIN Protection**: Each YubiKey requires a PIN to perform decryption operations
+- **Dual-Path Storage**: Encrypted shares stored in Bitwarden + physical safe backups
+- **No Single Point of Failure**: Multiple YubiKeys and backup locations prevent loss
+
+#### YubiKey Setup
+
+Each custodian receives **one YubiKey** configured with PIV (Personal Identity Verification) for cryptographic operations.
+
+**YubiKey Model**: YubiKey 5 Series (USB-C with NFC support recommended)
+
+**Initial Configuration** (per YubiKey):
+
+```bash
+# 1. Reset PIV application to factory defaults
+ykman piv reset
+
+# 2. Set new Management Key (protect PIV configuration)
+ykman piv access change-management-key --generate --protect
+
+# 3. Set PIN (required for decryption operations)
+ykman piv access change-pin
+# Default PIN: 123456 → Change to strong 6-8 digit PIN
+
+# 4. Set PUK (PIN Unblocking Key)
+ykman piv access change-puk
+# Default PUK: 12345678 → Change to strong 8 digit code
+
+# 5. Generate RSA-2048 key in PIV slot 9d (Key Management)
+ykman piv keys generate --algorithm RSA2048 9d pubkey1.pem
+
+# 6. Create self-signed certificate (required for slot usage)
+ykman piv certificates generate --subject "CN=Vault Share Key 1" 9d pubkey1.pem
+```
+
+**Security Properties**:
+
+- Private key generated **on YubiKey** and never exported
+- PIN required for each decryption operation (FIPS-140-2 compliant)
+- PUK allows PIN reset if forgotten (before 3 failed attempts)
+- After 3 wrong PIN attempts: YubiKey locks (requires PUK)
+- After 3 wrong PUK attempts: PIV application permanently locked
+
+#### Encrypting Custodian Shares
+
+After splitting the custodian component into 4 shares using `split_custodian_component`, each share is encrypted with a custodian's YubiKey.
+
+**Why Hybrid Encryption?**
+
+Shamir shares can be large (>200 bytes), exceeding RSA-2048's encryption limit (~214 bytes). We use **hybrid encryption**:
+
+1. Generate random AES-256 key
+2. Encrypt share with AES key (no size limit)
+3. Encrypt AES key with YubiKey's RSA public key (small, fits)
+4. Store both encrypted files together
+
+**Encryption Process** (per share):
+
+```bash
+# Prerequisites:
+# - custodian_component_share1.txt contains the first Shamir share
+# - pubkey1.pem is the public key from YubiKey 1
+
+# 1. Generate random AES-256 key
+openssl rand -out aes_key.bin 32
+
+# 2. Encrypt the Shamir share with AES
+cat custodian_component_share1.txt | \
+  openssl enc -aes-256-cbc -salt -pbkdf2 \
+  -pass file:aes_key.bin \
+  -out custodian_component_share1.enc
+
+# 3. Encrypt the AES key with YubiKey's public key
+openssl pkeyutl -encrypt \
+  -pubin -inkey pubkey1.pem \
+  -in aes_key.bin \
+  -out custodian_component_share1.key.enc
+
+# 4. Securely delete the plaintext AES key
+shred -u aes_key.bin
+
+# Result: Two files per share
+# - custodian_component_share1.enc (AES-encrypted share)
+# - custodian_component_share1.key.enc (RSA-encrypted AES key)
+```
+
+**Repeat for all 4 shares**:
+
+- Share 1 → YubiKey 1 → `custodian_component_share1.{enc,key.enc}`
+- Share 2 → YubiKey 2 → `custodian_component_share2.{enc,key.enc}`
+- Share 3 → Physical safe (plaintext or password-encrypted)
+- Share 4 → Cold storage backup (plaintext or password-encrypted)
+
+**Similarly for Vault Unseal Keys**:
+
+The 4 Vault unseal keys are encrypted the same way:
+
+- Unseal Key 1 → YubiKey 1 → `vault_unseal_share1.{enc,key.enc}`
+- Unseal Key 2 → YubiKey 2 → `vault_unseal_share2.{enc,key.enc}`
+- Unseal Key 3 → Physical safe
+- Unseal Key 4 → Cold storage backup
+
+#### Storage Locations
+
+**Encrypted Files** (all 8 files):
+
+- Stored in **Bitwarden** as file attachments
+- Accessible to authorized administrators
+- Protected by Bitwarden's encryption + YubiKey requirement
+
+**Plaintext Backups** (shares 3 & 4 for each key set):
+
+- Physical safe at primary location
+- Cold storage at secondary location (bank safety deposit box recommended)
+- Written instructions for emergency recovery
+
+**YubiKeys**:
+
+- YubiKey 1: Custodian A (primary administrator)
+- YubiKey 2: Custodian B (secondary administrator)
+- Physical possession + PIN knowledge required
+
+#### Decryption Process
+
+To decrypt a custodian share or Vault unseal key using a YubiKey:
+
+```bash
+# Prerequisites:
+# - YubiKey inserted
+# - pkcs11-tool installed (from opensc package)
+# - Encrypted files downloaded from Bitwarden
+
+# 1. Decrypt the AES key using YubiKey's private key
+pkcs11-tool --module /usr/local/lib/libykcs11.dylib \
+  --slot 0 \
+  --id 03 \
+  --decrypt \
+  --mechanism RSA-PKCS \
+  --input custodian_component_share1.key.enc \
+  --output aes_key_recovered.bin \
+  --login
+# You'll be prompted for YubiKey PIN
+
+# 2. Decrypt the share using the recovered AES key
+openssl enc -d -aes-256-cbc -pbkdf2 \
+  -in custodian_component_share1.enc \
+  -pass file:aes_key_recovered.bin
+# Prints the plaintext Shamir share
+
+# 3. Securely delete the recovered AES key
+shred -u aes_key_recovered.bin
+```
+
+**macOS Note**: The pkcs11 library path may differ:
+
+- Intel Mac: `/usr/local/lib/libykcs11.dylib`
+- Apple Silicon: `/opt/homebrew/lib/libykcs11.dylib`
+
+#### Automated Unsealing Scripts
+
+Two helper scripts automate the decryption workflow for emergency scenarios:
+
+**1. `vault/unseal_vault.sh` - Unseal HashiCorp Vault**
+
+Located at: `vault/unseal_vault.sh`
+
+Purpose: Decrypt 3 Vault unseal keys to restore Vault access after restart.
+
+Usage:
+
+```bash
+cd vault
+./unseal_vault.sh
+```
+
+Workflow:
+
+1. Prompts for YubiKey 1 insertion and PIN
+2. Decrypts Vault unseal share 1
+3. Prompts for YubiKey 2 insertion and PIN
+4. Decrypts Vault unseal share 2
+5. Prompts for share 3 from physical safe
+6. Displays all 3 shares for manual entry into `vault operator unseal`
+
+**2. `scripts/unseal-platform-key.sh` - Reconstruct Platform Key**
+
+Located at: `scripts/unseal-platform-key.sh`
+
+Purpose: Decrypt 3 custodian component shares for emergency platform recovery.
+
+Usage:
+
+```bash
+cd scripts
+./unseal-platform-key.sh
+```
+
+Workflow:
+
+1. Prompts for YubiKey 1 insertion and PIN
+2. Decrypts custodian component share 1
+3. Prompts for YubiKey 2 insertion and PIN
+4. Decrypts custodian component share 2
+5. Prompts for share 3 from physical safe
+6. Displays all 3 shares for use with `execute_platform_recovery`
+
+**Script Security Features**:
+
+- Encrypted credentials stored temporarily in session variables
+- Variables cleared from memory on exit
+- No intermediate plaintext files created on disk
+- YubiKey PIN required for each operation
+- Auto-detects pkcs11 library location (macOS Intel/Apple Silicon)
+
+#### Emergency Recovery Scenarios
+
+**Scenario 1: Vault Restart (Routine)**
+
+When Vault restarts, it enters a sealed state and requires 3 unseal keys:
+
+```bash
+# 1. Run unsealing script
+./vault/unseal_vault.sh
+
+# 2. SSH to Vault server
+ssh vault-server
+
+# 3. Unseal with each key (paste from script output)
+vault operator unseal
+# Paste share 1
+
+vault operator unseal
+# Paste share 2
+
+vault operator unseal
+# Paste share 3
+
+# Vault is now unsealed and operational
+```
+
+**Scenario 2: User Lost Both Password and Recovery Phrase**
+
+When a user needs emergency recovery via `execute_platform_recovery`:
+
+```bash
+# 1. Create recovery request in Django admin
+# Status: PENDING_PLATFORM_RECOVERY
+
+# 2. Gather custodian shares
+./scripts/unseal-platform-key.sh
+# Follow prompts to decrypt shares 1 and 2 with YubiKeys
+
+# 3. Execute platform recovery
+docker compose exec web python manage.py execute_platform_recovery \
+  --recovery-request-id 123 \
+  --custodian-share "" \
+  --custodian-share "" \
+  --custodian-share "" \
+  --new-password "TempPassword123!" \
+  --audit-approved-by "admin@example.com"
+```
+
+**Scenario 3: YubiKey Lost or Damaged**
+
+If a YubiKey is lost, damaged, or PIN permanently locked:
+
+1. Use remaining YubiKey + 2 physical backups (shares 3 & 4)
+2. Reconstruct custodian component with `test_custodian_reconstruction`
+3. Generate new YubiKey for replacement custodian
+4. Re-encrypt shares with new YubiKey public key
+5. Update Bitwarden with new encrypted files
+6. Revoke access to compromised YubiKey (if stolen)
+
+**Scenario 4: Complete YubiKey Compromise**
+
+If both YubiKeys are compromised (stolen with PINs):
+
+1. Immediately rotate custodian component:
+   - Reconstruct current component from physical backups
+   - Run `vault/setup_vault.py` to generate new component
+   - Split new component with new YubiKeys
+   - Re-encrypt all organizational keys with new platform master key
+2. Revoke compromised YubiKeys in PIV registry
+3. Audit all recent key access events
+4. Notify affected users to rotate survey encryption keys
+
+#### YubiKey Best Practices
+
+**Physical Security**:
+
+- Store YubiKeys in separate secure locations (not together)
+- Use tamper-evident bags for physical transport
+- Never leave YubiKeys unattended in workstations
+- Custodian A and B should not share physical workspace
+
+**PIN Security**:
+
+- Choose 6-8 digit random PINs (not birthdays, sequences)
+- Store PINs separately from YubiKeys (password manager or sealed envelope)
+- Never write PIN on YubiKey itself
+- Change PIN if suspected of being observed
+
+**Operational Security**:
+
+- Test unsealing process quarterly without real emergency
+- Verify YubiKey functionality after firmware updates
+- Keep backup YubiKeys with same keys in separate secure location
+- Document custodian contact procedures for 24/7 availability
+
+**Backup YubiKeys**:
+
+Consider purchasing 2 additional YubiKeys as backups:
+
+- Backup YubiKey 1: Same keys as primary YubiKey 1, stored in safe
+- Backup YubiKey 2: Same keys as primary YubiKey 2, stored separately
+
+To clone a YubiKey:
+
+```bash
+# Export public key from primary
+ykman piv keys export 9d primary_pubkey.pem
+
+# On backup YubiKey: Import same private key (requires specialized tools)
+# Note: YubiKey PIV doesn't support key export by design
+# Alternative: Generate new keys and re-encrypt all shares
+```
+
+**Recommended Approach**: Generate unique keys per YubiKey and maintain 4 distinct custodians with separate YubiKeys. This avoids key duplication security risks.
+
+#### Integration with Platform Recovery
+
+The YubiKey system integrates seamlessly with the platform recovery workflow:
+
+```
+Emergency User Recovery Flow:
+├─ Step 1: Administrator creates RecoveryRequest (status: PENDING_PLATFORM_RECOVERY)
+├─ Step 2: Contact Custodian A (has YubiKey 1)
+├─ Step 3: Contact Custodian B (has YubiKey 2)
+├─ Step 4: Run unseal-platform-key.sh
+│   ├─ Decrypt share 1 with YubiKey 1 + PIN
+│   ├─ Decrypt share 2 with YubiKey 2 + PIN
+│   └─ Retrieve share 3 from physical safe
+├─ Step 5: Execute platform recovery command with 3 shares
+│   ├─ Reconstruct custodian component (Shamir)
+│   ├─ XOR with Vault component → Platform Master Key
+│   ├─ Decrypt organization key → team key → survey KEK
+│   └─ Re-encrypt KEK with user's new password
+└─ Step 6: Notify user of recovery completion
+```
+
+#### Compliance and Audit
+
+**HIPAA/GDPR Compliance**:
+
+- Physical key requirement satisfies multi-factor authentication
+- PIN protection prevents unauthorized use of stolen keys
+- Audit trail logs all YubiKey decryption operations
+- Separation of duties enforced (requires multiple custodians)
+
+**Audit Events Logged**:
+
+- YubiKey PIN entry attempts (logged by YubiKey firmware)
+- Successful decryption operations (logged by pkcs11-tool)
+- Emergency recovery executions (logged by Django AuditLog)
+- Custodian share access (logged in recovery request metadata)
+
+**Annual Security Review**:
+
+1. Test YubiKey unsealing process end-to-end
+2. Verify all custodians can access their YubiKeys and PINs
+3. Check physical backup locations are secure and accessible
+4. Review audit logs for any unauthorized access attempts
+5. Rotate custodian component if any security concerns
+
+#### Cost Considerations
+
+**Hardware Costs** (USD, approximate):
+
+- YubiKey 5C NFC: $55 each × 4 = $220
+- Backup YubiKeys (optional): $55 each × 2 = $110
+- Physical safe: $100-500
+- Bank safety deposit box: $50-200/year
+
+**Total Initial Investment**: ~$500-800
+**Annual Recurring**: ~$50-200 (deposit box rental)
+
+**Value Proposition**:
+
+- Hardware security module (HSM) equivalent would cost $5,000-50,000
+- Cloud KMS services charge per-operation fees
+- YubiKey provides offline security (no internet dependency)
+- One-time purchase, no ongoing licensing fees
+
+#### Troubleshooting
+
+**YubiKey Not Detected**:
+
+```bash
+# Check YubiKey is recognized
+ykman list
+
+# If not found, try:
+# 1. Unplug and re-insert YubiKey
+# 2. Install/update ykman: brew install ykman
+# 3. Check USB-C cable/adapter if using USB-A YubiKey
+```
+
+**PIN Locked**:
+
+```bash
+# Use PUK to reset PIN
+ykman piv access change-pin --pin  --new-pin  --puk
+
+# If PUK is also locked: PIV application is permanently locked
+# Must use other YubiKeys or physical backup shares
+```
+
+**Decryption Fails**:
+
+```bash
+# Verify certificate is present
+yubico-piv-tool -a status
+
+# Check slot 9d has certificate
+yubico-piv-tool -a read-certificate -s 9d
+
+# If missing, YubiKey was reset - must use physical backups
+```
+
+**pkcs11-tool Not Found**:
+
+```bash
+# Install OpenSC
+# macOS:
+brew install opensc
+
+# Ubuntu/Debian:
+sudo apt install opensc-pkcs11
+
+# Verify installation:
+pkcs11-tool --version
+```
+
+#### Migration from Existing Setup
+
+If you already have Vault unseal keys and custodian components in other formats:
+
+**From Plaintext Shares**:
+
+```bash
+# 1. Set up 2 new YubiKeys with PIV keys
+# 2. Encrypt existing shares with new YubiKey public keys
+# 3. Store encrypted files in Bitwarden
+# 4. Move plaintext shares to physical safe (shares 3 & 4)
+# 5. Test decryption with unsealing scripts
+# 6. Delete plaintext shares from original locations
+```
+
+**From Password-Protected Files**:
+
+```bash
+# 1. Decrypt existing files with password
+# 2. Encrypt with YubiKey public keys (follow encryption process above)
+# 3. Update storage locations in documentation
+# 4. Test recovery workflow
+# 5. Securely delete password-protected files
+```
+
+This YubiKey-based approach provides enterprise-grade physical security for CheckTick's most critical cryptographic material while remaining cost-effective and operationally practical for small teams.
+
 ## Testing
 
 CheckTick includes comprehensive test coverage for encryption with **production-ready validation**:
@@ -2959,6 +3471,7 @@ docker compose exec web python manage.py test checktick_app.surveys.tests.test_u
 ```
 
 **Coverage:**
+
 - Dual encryption setup and unlock ✅
 - Password and recovery phrase validation ✅
 - BIP39 phrase generation and normalization ✅
@@ -2974,6 +3487,7 @@ docker compose exec web python manage.py test tests.test_encryption_integration
 ```
 
 **End-to-End Validation:**
+
 1. **Complete Password Unlock Workflow** - Clinicians unlock with passwords ✅
 2. **Recovery Phrase Workflow** - BIP39 backup method works end-to-end ✅
 3. **Session Timeout Security** - 30-minute timeout enforced ✅

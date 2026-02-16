@@ -1,0 +1,97 @@
+#!/bin/bash
+# unseal_platform_key - Decrypt platform custodian component shares
+
+set -e
+
+echo "=========================================="
+echo "  Platform Key Unsealing Helper"
+echo "=========================================="
+echo ""
+echo "This script decrypts the platform encryption key custodian shares."
+echo "You will need:"
+echo "  - YubiKey 1 (Team Member A)"
+echo "  - YubiKey 2 (Team Member B)"
+echo "  - Share 3 from physical safe"
+echo ""
+echo "Prerequisites:"
+echo "  - platform_share1.enc and platform_share1.key.enc (downloaded from Bitwarden)"
+echo "  - platform_share2.enc and platform_share2.key.enc (downloaded from Bitwarden)"
+echo ""
+read -p "Press Enter when ready..."
+
+# Detect PKCS11 module location
+if [ -f "/usr/local/lib/libykcs11.dylib" ]; then
+    PKCS11_MODULE="/usr/local/lib/libykcs11.dylib"
+elif [ -f "/opt/homebrew/lib/libykcs11.dylib" ]; then
+    PKCS11_MODULE="/opt/homebrew/lib/libykcs11.dylib"
+else
+    echo "Error: Could not find libykcs11.dylib"
+    echo "Install with: brew install opensc"
+    exit 1
+fi
+
+echo ""
+echo "Step 1/3: Decrypting platform share 1"
+echo "-------------------------------------------"
+echo "Insert YubiKey 1 and press Enter..."
+read
+
+pkcs11-tool --module "$PKCS11_MODULE" \
+  --slot 0 --id 03 --decrypt --mechanism RSA-PKCS \
+  --input platform_share1.key.enc \
+  --output aes_key1.bin --login
+
+SHARE1=$(openssl enc -d -aes-256-cbc -pbkdf2 \
+  -in platform_share1.enc -pass file:aes_key1.bin)
+shred -u aes_key1.bin
+
+echo "✓ Share 1 decrypted"
+
+echo ""
+echo "Step 2/3: Decrypting platform share 2"
+echo "-------------------------------------------"
+echo "Remove YubiKey 1, insert YubiKey 2, and press Enter..."
+read
+
+pkcs11-tool --module "$PKCS11_MODULE" \
+  --slot 0 --id 03 --decrypt --mechanism RSA-PKCS \
+  --input platform_share2.key.enc \
+  --output aes_key2.bin --login
+
+SHARE2=$(openssl enc -d -aes-256-cbc -pbkdf2 \
+  -in platform_share2.enc -pass file:aes_key2.bin)
+shred -u aes_key2.bin
+
+echo "✓ Share 2 decrypted"
+
+echo ""
+echo "Step 3/3: Manual input required"
+echo "-------------------------------------------"
+echo "Retrieve share 3 from the physical safe"
+echo ""
+
+echo ""
+echo "=========================================="
+echo "  DECRYPTED PLATFORM KEY SHARES"
+echo "=========================================="
+echo ""
+echo "Share 1: $SHARE1"
+echo ""
+echo "Share 2: $SHARE2"
+echo ""
+echo "Share 3: [Retrieved from physical safe]"
+echo ""
+echo "=========================================="
+echo ""
+echo "Next steps:"
+echo "1. SSH to Northflank"
+echo "2. Use these shares to reconstruct the platform encryption key"
+echo "3. [Your specific platform key reconstruction process]"
+echo ""
+echo "Press Enter to clear shares from memory and exit..."
+read
+
+# Clear sensitive variables
+unset SHARE1 SHARE2
+
+echo "✓ Shares cleared from memory"
