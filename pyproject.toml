@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "checktick"
-version = "0.2.4"
+version = "0.2.5"
 description = "Secure, server-rendered survey platform for medical audit and research"
 authors = ["CheckTick Maintainers <simon@eatyourpeas.co.uk>"]
 readme = "README.md"
@@ -10,7 +10,7 @@ packages = [
 
  [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
-django = "~5.2.11"
+django = "~5.2.12"
 django-environ = "^0.11.2"
 psycopg2-binary = "^2.9.9"
 jinja2 = "^3.1.4"
