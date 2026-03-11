@@ -223,6 +223,69 @@ class TestLLMReadOnlyOperations:
         LLM_API_KEY="test",
         LLM_AUTH_TYPE="bearer",
     )
+    def test_llm_handles_unbraced_branch_targets(
+        self, client, users, org_survey, monkeypatch
+    ):
+        """LLM may output branch targets without curly braces; parser should accept them."""
+        client.force_login(users["survey_creator"])
+        url = reverse("surveys:bulk_upload", kwargs={"slug": org_survey.slug})
+
+        # Create session first
+        client.post(
+            url, data={"action": "new_session"}, HTTP_X_REQUESTED_WITH="XMLHttpRequest"
+        )
+
+        # Mock LLM response containing branch lines without curly braces
+        def mock_chat(conversation_history, temperature=None):
+            return """I will help you create a patient survey.
+
+```markdown
+# Intro {intro}
+
+## Consent {intro-consent}
+(text)
+? when equals "Yes" -> follow-up
+? when equals "No" -> intro-exit
+
+# Follow up {follow-up}
+## Feedback {follow-up-feedback}
+(text)
+
+# Exit {intro-exit}
+## Thanks {intro-exit-thanks}
+(text)
+```"""
+
+        monkeypatch.setattr(
+            ConversationalSurveyLLM,
+            "chat",
+            lambda self, history, temp=None: mock_chat(history, temp),
+        )
+
+        # Send message
+        resp = client.post(
+            url,
+            data={
+                "action": "send_message",
+                "message": "Create a patient demographics survey",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        assert resp.status_code == 200
+        data = json.loads(resp.content)
+        assert data["status"] == "success"
+        # Parser should accept unbraced targets after normalization
+        assert data.get("markdown_valid") is True
+        assert not data.get("validation_errors")
+
+    @pytest.mark.django_db
+    @override_settings(
+        LLM_ENABLED=True,
+        LLM_URL="http://test",
+        LLM_API_KEY="test",
+        LLM_AUTH_TYPE="bearer",
+    )
     def test_llm_send_message_does_not_modify_survey(
         self, client, users, org_survey, monkeypatch
     ):

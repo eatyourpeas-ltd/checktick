@@ -7467,6 +7467,7 @@ def _handle_llm_send_message(request: HttpRequest, survey: Survey) -> JsonRespon
             },
         )
 
+        phase = "implementation" if markdown else "planning"
         return JsonResponse(
             {
                 "status": "success",
@@ -7475,6 +7476,8 @@ def _handle_llm_send_message(request: HttpRequest, survey: Survey) -> JsonRespon
                 "markdown_valid": markdown_valid,
                 "validation_errors": validation_errors,
                 "timestamp": timezone.now().isoformat(),
+                "phase": phase,
+                "llm_phase": phase,
             }
         )
 
@@ -7601,6 +7604,7 @@ def _handle_llm_send_message(request: HttpRequest, survey: Survey) -> JsonRespon
             },
         )
 
+        phase = "implementation" if markdown else "planning"
         return JsonResponse(
             {
                 "status": "success",
@@ -7609,6 +7613,8 @@ def _handle_llm_send_message(request: HttpRequest, survey: Survey) -> JsonRespon
                 "markdown_valid": markdown_valid,
                 "validation_errors": validation_errors,
                 "timestamp": timezone.now().isoformat(),
+                "phase": phase,
+                "llm_phase": phase,
             }
         )
 
@@ -7681,21 +7687,60 @@ def _handle_llm_ai_chat(
         import json
 
         try:
-            # Send session_id first
-            yield f"data: {json.dumps({'session_id': str(session.id)})}\n\n"
+            # Log conversation context for debugging
+            try:
+                convo = session.get_conversation_for_llm()
+            except Exception:
+                convo = session.conversation_history
+            logger.info(
+                "LLM stream start: session_id=%s messages=%d",
+                session.id,
+                len(convo) if convo is not None else 0,
+            )
+
+            # Send session_id first and indicate we're in planning phase
+            yield f"data: {json.dumps({'session_id': str(session.id), 'phase': 'planning', 'llm_phase': 'planning'})}\n\n"
 
             # Get LLM response stream
             llm_client = ConversationalSurveyLLM()
             full_response = ""
 
+            # Log the system prompt length and model
+            logger.info(
+                "Invoking LLM.chat_stream: endpoint=%s model=%s system_prompt_len=%d",
+                llm_client.endpoint,
+                settings.LLM_MODEL,
+                len(llm_client.system_prompt or ""),
+            )
+
             for chunk in llm_client.chat_stream(session.get_conversation_for_llm()):
+                # Log each chunk for debugging (truncated)
+                try:
+                    preview = (chunk or "")[:200]
+                except Exception:
+                    preview = "<unprintable>"
+                logger.info(
+                    "LLM chunk (session=%s): %s",
+                    session.id,
+                    preview,
+                )
+
                 if chunk:
                     full_response += chunk
-                    # Send each chunk as SSE
-                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+                    # Send each chunk as SSE (still planning)
+                    yield f"data: {json.dumps({'chunk': chunk, 'phase': 'planning', 'llm_phase': 'planning'})}\n\n"
 
             if not full_response:
-                yield f"data: {json.dumps({'error': 'Failed to get response from AI'})}\n\n"
+                # LLM returned no content; send a friendly done message instead of an error
+                msg = "The AI did not return content. Please try again."
+                # persist assistant message so session history shows it
+                session.add_message("assistant", msg)
+                final_phase = "planning"
+                logger.warning(
+                    "LLM returned empty response (session=%s). Persisted assistant_message.",
+                    session.id,
+                )
+                yield f"data: {json.dumps({'done': True, 'assistant_message': msg, 'markdown': None, 'phase': final_phase, 'llm_phase': final_phase})}\n\n"
                 return
 
             # Add complete assistant response to history
@@ -7703,6 +7748,11 @@ def _handle_llm_ai_chat(
 
             # Try to extract markdown
             markdown = llm_client.extract_markdown(full_response)
+            logger.debug(
+                "LLM full_response length=%d markdown_found=%s",
+                len(full_response or ""),
+                bool(markdown),
+            )
 
             if markdown:
                 # Sanitize
@@ -7714,9 +7764,18 @@ def _handle_llm_ai_chat(
                     # Update session with valid markdown
                     session.current_markdown = markdown
                     session.save()
-                except BulkParseError:
+                    logger.info(
+                        "Valid markdown saved to session %s (len=%d)",
+                        session.id,
+                        len(markdown),
+                    )
+                except BulkParseError as e:
                     # Markdown extraction found but invalid - include in response anyway
-                    pass
+                    logger.warning(
+                        "Extracted markdown failed parser for session %s: %s",
+                        session.id,
+                        str(e),
+                    )
 
             # Log audit
             AuditLog.objects.create(
@@ -7732,8 +7791,9 @@ def _handle_llm_ai_chat(
                 },
             )
 
-            # Send final metadata
-            yield f"data: {json.dumps({'done': True, 'markdown': markdown})}\n\n"
+            # Send final metadata; set phase to 'implementation' when markdown is present
+            final_phase = "implementation" if markdown else "planning"
+            yield f"data: {json.dumps({'done': True, 'markdown': markdown, 'phase': final_phase, 'llm_phase': final_phase})}\n\n"
 
         except Exception as e:
             logger.exception("Error in LLM chat stream: %s", e)

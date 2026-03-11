@@ -349,13 +349,27 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                         {"type": "categories", "labels": q["options"][:]}
                     ]
                 else:
-                    try:
-                        min_v = int(q["kv"].get("min", "1"))
-                        max_v = int(q["kv"].get("max", "5"))
-                    except ValueError:
+                    def _parse_int_kv(key: str, default: str) -> int:
+                        raw = q["kv"].get(key, default)
+                        # remove surrounding quotes and whitespace
+                        raw = _unquote_value((raw or "")).strip()
+                        # normalize common unicode minus to ascii hyphen
+                        raw = raw.replace("\u2212", "-")
+                        # allow integer strings like '1' or floats like '1.0'
+                        if re.match(r"^[-+]?\d+$", raw):
+                            return int(raw)
+                        try:
+                            f = float(raw)
+                            if f.is_integer():
+                                return int(f)
+                        except Exception:
+                            pass
                         raise BulkParseError(
                             f"Likert number requires integer min/max for question '{q['title']}'"
                         )
+
+                    min_v = _parse_int_kv("min", "1")
+                    max_v = _parse_int_kv("max", "5")
                     if min_v >= max_v:
                         raise BulkParseError(
                             f"Likert number min must be < max for question '{q['title']}'"
@@ -418,6 +432,40 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
         raise BulkParseError("Markdown is empty")
 
     raw_lines = md_text.splitlines()
+
+    # Normalize AI output: if branch lines use '-> target' without curly braces,
+    # wrap the target in braces so the downstream parser can resolve it.
+    def _slugify_target(value: str) -> str:
+        import unicodedata
+
+        base = (
+            unicodedata.normalize("NFKD", (value or ""))
+            .encode("ascii", "ignore")
+            .decode("ascii")
+        )
+        base = re.sub(r"[^a-zA-Z0-9\s-]", " ", base).lower().strip()
+        base = re.sub(r"[\s_-]+", "-", base).strip("-")
+        return base or "target"
+
+    normalized_lines: List[str] = []
+    for raw in raw_lines:
+        line = raw
+        if "->" in line:
+            parts = line.split("->", 1)
+            left = parts[0]
+            right = parts[1].strip()
+            # If right already contains a brace-delimited id, leave as-is
+            if not ("{" in right and "}" in right):
+                # Remove surrounding quotes if present
+                if (right.startswith('"') and right.endswith('"')) or (
+                    right.startswith("'") and right.endswith("'")
+                ):
+                    right = right[1:-1].strip()
+                slug = _slugify_target(right)
+                line = f"{left}-> {{{slug}}}"
+        normalized_lines.append(line)
+
+    raw_lines = normalized_lines
     cleaned_lines: List[str] = []
     pending_repeat: Dict[int, int | None] = {}  # depth -> max or None
     repeats: List[Dict[str, int | None]] = []

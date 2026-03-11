@@ -10,11 +10,23 @@ import logging
 from pathlib import Path
 import re
 from typing import Dict, List, Optional
+import os
+import uuid
+from datetime import datetime
 
 from django.conf import settings
 import requests
 
 logger = logging.getLogger(__name__)
+
+
+def _pick_first_key(d: Dict, keys: List[str]) -> tuple[Optional[str], Optional[str]]:
+    """Return first non-empty value from d for keys and the key name."""
+    for k in keys:
+        v = d.get(k)
+        if v:
+            return v, k
+    return None, None
 
 
 def load_system_prompt_from_docs() -> str:
@@ -333,15 +345,27 @@ class ConversationalSurveyLLM:
                 response.raise_for_status()
                 data = response.json()
 
-                # Handle OpenAI-compatible response format
+                # Handle OpenAI-compatible response format with fallbacks for
+                # provider-specific fields (e.g., 'reasoning', 'analysis').
                 content = None
-                if "choices" in data:
-                    content = data["choices"][0]["message"]["content"]
-                elif "content" in data:
-                    content = data["content"]
+                content_source = None
+                if "choices" in data and len(data["choices"]) > 0:
+                    choice = data["choices"][0]
+                    msg = choice.get("message") or {}
+                    content, content_source = _pick_first_key(
+                        msg, ["content", "reasoning", "analysis", "explanation"]
+                    )
+                    if not content:
+                        content, content_source = _pick_first_key(choice, ["text"])
+                    if not content:
+                        content, content_source = _pick_first_key(data, ["text"])
                 else:
-                    logger.error(f"Unexpected response format: {data.keys()}")
-                    return None
+                    content, content_source = _pick_first_key(
+                        data, ["content", "reasoning", "analysis", "text"]
+                    )
+
+                if content_source:
+                    logger.debug("LLM response content extracted from key: %s", content_source)
 
                 # Strip markdown code fences if present
                 if content:
@@ -353,6 +377,19 @@ class ConversationalSurveyLLM:
                         content = content[3:].strip()
                     if content.endswith("```"):
                         content = content[:-3].strip()
+
+                # Optional debug dump of full response
+                if os.environ.get("LLM_DEBUG_DUMP"):
+                    try:
+                        now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+                        dump_id = uuid.uuid4().hex[:8]
+                        filename = f"/tmp/llm_response_{now}_{dump_id}.json"
+                        diag = {"timestamp": now, "response": data}
+                        with open(filename, "w", encoding="utf-8") as fh:
+                            json.dump(diag, fh, ensure_ascii=False, indent=2)
+                        logger.warning("Wrote LLM debug dump: %s", filename)
+                    except Exception:
+                        logger.exception("Failed to write LLM debug dump")
 
                 return content
 
@@ -414,26 +451,49 @@ class ConversationalSurveyLLM:
                 response.raise_for_status()
                 data = response.json()
 
-                # Handle OpenAI-compatible response format
+                # Handle OpenAI-compatible response format with fallbacks
                 content = None
-                if "choices" in data:
-                    content = data["choices"][0]["message"]["content"]
-                elif "content" in data:
-                    content = data["content"]
+                content_source = None
+                if "choices" in data and len(data.get("choices", [])) > 0:
+                    choice = data["choices"][0]
+                    msg = choice.get("message") or {}
+                    content, content_source = _pick_first_key(
+                        msg, ["content", "reasoning", "analysis", "explanation"]
+                    )
+                    if not content:
+                        content, content_source = _pick_first_key(choice, ["text"])
+                    if not content:
+                        content, content_source = _pick_first_key(data, ["text"])
                 else:
-                    logger.error(f"Unexpected response format: {data.keys()}")
-                    return None
+                    content, content_source = _pick_first_key(
+                        data, ["content", "reasoning", "analysis", "text"]
+                    )
+
+                if content_source:
+                    logger.debug("LLM response content extracted from key: %s", content_source)
 
                 # Strip markdown code fences if present
                 if content:
                     content = content.strip()
-                    # Remove ```markdown and ``` wrappers
                     if content.startswith("```markdown"):
                         content = content[len("```markdown") :].strip()
                     elif content.startswith("```"):
                         content = content[3:].strip()
                     if content.endswith("```"):
                         content = content[:-3].strip()
+
+                # Optional debug dump
+                if os.environ.get("LLM_DEBUG_DUMP"):
+                    try:
+                        now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+                        dump_id = uuid.uuid4().hex[:8]
+                        filename = f"/tmp/llm_response_{now}_{dump_id}.json"
+                        diag = {"timestamp": now, "response": data}
+                        with open(filename, "w", encoding="utf-8") as fh:
+                            json.dump(diag, fh, ensure_ascii=False, indent=2)
+                        logger.warning("Wrote LLM debug dump: %s", filename)
+                    except Exception:
+                        logger.exception("Failed to write LLM debug dump")
 
                 return content
 
@@ -470,28 +530,52 @@ class ConversationalSurveyLLM:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         try:
+            logger.debug(
+                "LLM streaming request: endpoint=%s model=%s temperature=%s",
+                self.endpoint,
+                settings.LLM_MODEL,
+                temperature,
+            )
+
+            payload = {
+                "model": settings.LLM_MODEL,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": 2000,
+                "stream": True,
+            }
+
+            # Log outgoing payload (truncated) for debugging — do not log secrets.
+            try:
+                payload_preview = json.dumps(payload)[:1000]
+            except Exception:
+                payload_preview = "<unserializable>"
+            logger.debug("LLM outgoing payload (truncated): %s", payload_preview)
+
             response = requests.post(
                 self.endpoint,
                 headers=headers,
-                json={
-                    "model": settings.LLM_MODEL,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": 2000,
-                    "stream": True,
-                },
+                json=payload,
                 timeout=self.timeout,
                 stream=True,
             )
 
             response.raise_for_status()
-
             # Process the streaming response - stream everything as-is
+            saw_content = False
+            line_no = 0
             for line in response.iter_lines():
                 if not line:
                     continue
 
                 line = line.decode("utf-8")
+                line_no += 1
+                # Log SSE data_str (truncated) for debugging
+                try:
+                    preview = line[:200]
+                except Exception:
+                    preview = "<unprintable>"
+                logger.debug("LLM stream line %d: %s", line_no, preview)
 
                 # Skip SSE comments and empty lines
                 if line.startswith(":") or not line.strip():
@@ -500,6 +584,7 @@ class ConversationalSurveyLLM:
                 # Parse SSE data
                 if line.startswith("data: "):
                     data_str = line[6:]
+                    logger.debug("LLM stream data_str (truncated): %s", data_str[:200])
 
                     # Check for end of stream
                     if data_str == "[DONE]":
@@ -507,17 +592,137 @@ class ConversationalSurveyLLM:
 
                     try:
                         data = json.loads(data_str)
+
+                        # OpenAI-compatible streaming deltas
                         if "choices" in data and len(data["choices"]) > 0:
-                            delta = data["choices"][0].get("delta", {})
+                            choice = data["choices"][0]
+                            # Prefer 'delta' streaming content
+                            delta = choice.get("delta", {})
                             chunk = delta.get("content", "")
+                            # Also accept alternative delta keys some providers use
+                            if not chunk:
+                                chunk = (
+                                    delta.get("reason")
+                                    or delta.get("reasoning")
+                                    or delta.get("analysis")
+                                    or delta.get("explanation")
+                                    or delta.get("text")
+                                    or ""
+                                )
+
+                            # Some servers send full message object in stream
+                            if not chunk and "message" in choice:
+                                msg = choice.get("message", {})
+                                chunk = msg.get("content", "")
+                                # Fallback to other fields the provider may use
+                                if not chunk:
+                                    chunk = (
+                                        msg.get("reasoning")
+                                        or msg.get("analysis")
+                                        or msg.get("explanation")
+                                        or choice.get("text")
+                                        or ""
+                                    )
 
                             if chunk:
-                                # Stream each character
+                                saw_content = True
+                                logger.debug(
+                                    "LLM stream yielded chunk (len=%d)", len(chunk)
+                                )
                                 for char in chunk:
                                     yield char
+                                continue
+
+                        # Ollama-style or other providers may send direct 'content' field
+                        if "content" in data and isinstance(data["content"], str):
+                            saw_content = True
+                            logger.debug(
+                                "LLM stream yielded content field (len=%d)",
+                                len(data["content"]),
+                            )
+                            for char in data["content"]:
+                                yield char
+                            continue
 
                     except json.JSONDecodeError:
                         continue
+
+            # If no streaming deltas were received, attempt to parse non-streaming/full response body
+            if not saw_content:
+                try:
+                    # Some endpoints return a non-streaming JSON payload even when stream=True
+                    data = response.json()
+                    content = None
+                    content_source = None
+                    if isinstance(data, dict):
+                        if "choices" in data and len(data["choices"]) > 0:
+                            msg = data["choices"][0].get("message") or {}
+                            content, content_source = _pick_first_key(
+                                msg, ["content", "reasoning", "analysis", "explanation"]
+                            )
+                            if not content:
+                                content, content_source = _pick_first_key(data["choices"][0], ["text"])
+                        else:
+                            content, content_source = _pick_first_key(
+                                data, ["content", "reasoning", "analysis", "text"]
+                            )
+
+                    if content:
+                        logger.debug(
+                            "LLM streaming fallback received full content (len=%d)",
+                            len(content),
+                        )
+                        logger.debug("LLM fallback content extracted from key: %s", content_source)
+                        for char in content:
+                            yield char
+                        return
+                    else:
+                        # Optionally dump full response if debugging enabled
+                        try:
+                            body = response.text
+                        except Exception:
+                            body = "<unreadable>"
+
+                        if os.environ.get("LLM_DEBUG_DUMP"):
+                            try:
+                                now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+                                dump_id = uuid.uuid4().hex[:8]
+                                filename = f"/tmp/llm_response_{now}_{dump_id}.json"
+                                diag = {
+                                    "timestamp": now,
+                                    "status_code": getattr(response, "status_code", None),
+                                    "headers": (
+                                        dict(response.headers)
+                                        if hasattr(response, "headers")
+                                        else {}
+                                    ),
+                                    "body": body,
+                                    "payload_preview": (
+                                        payload_preview
+                                        if "payload_preview" in locals()
+                                        else None
+                                    ),
+                                }
+                                with open(filename, "w", encoding="utf-8") as fh:
+                                    json.dump(diag, fh, ensure_ascii=False, indent=2)
+                                logger.warning(
+                                    "Wrote full LLM HTTP response for diagnosis: %s",
+                                    filename,
+                                )
+                            except Exception as e:
+                                logger.error(
+                                    "Failed to write diagnostic LLM response file: %s", e
+                                )
+
+                        logger.warning(
+                            "LLM stream produced no content. HTTP %s response body (truncated): %s",
+                            getattr(response, "status_code", "<no-status>"),
+                            (body or "")[:1000],
+                        )
+                        return
+                except Exception:
+                    # Fall through - nothing we can do here
+                    pass
 
         except requests.RequestException as e:
             logger.error(f"LLM streaming request failed: {e}")
