@@ -349,6 +349,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                         {"type": "categories", "labels": q["options"][:]}
                     ]
                 else:
+
                     def _parse_int_kv(key: str, default: str) -> int:
                         raw = q["kv"].get(key, default)
                         # remove surrounding quotes and whitespace

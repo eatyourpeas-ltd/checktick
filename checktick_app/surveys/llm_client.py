@@ -5,14 +5,14 @@ This module provides a secure interface to the RCPCH Ollama LLM service
 for AI-assisted healthcare survey design.
 """
 
+from datetime import datetime
 import json
 import logging
+import os
 from pathlib import Path
 import re
 from typing import Dict, List, Optional
-import os
 import uuid
-from datetime import datetime
 
 from django.conf import settings
 import requests
@@ -365,7 +365,9 @@ class ConversationalSurveyLLM:
                     )
 
                 if content_source:
-                    logger.debug("LLM response content extracted from key: %s", content_source)
+                    logger.debug(
+                        "LLM response content extracted from key: %s", content_source
+                    )
 
                 # Strip markdown code fences if present
                 if content:
@@ -470,7 +472,9 @@ class ConversationalSurveyLLM:
                     )
 
                 if content_source:
-                    logger.debug("LLM response content extracted from key: %s", content_source)
+                    logger.debug(
+                        "LLM response content extracted from key: %s", content_source
+                    )
 
                 # Strip markdown code fences if present
                 if content:
@@ -661,7 +665,9 @@ class ConversationalSurveyLLM:
                                 msg, ["content", "reasoning", "analysis", "explanation"]
                             )
                             if not content:
-                                content, content_source = _pick_first_key(data["choices"][0], ["text"])
+                                content, content_source = _pick_first_key(
+                                    data["choices"][0], ["text"]
+                                )
                         else:
                             content, content_source = _pick_first_key(
                                 data, ["content", "reasoning", "analysis", "text"]
@@ -672,7 +678,10 @@ class ConversationalSurveyLLM:
                             "LLM streaming fallback received full content (len=%d)",
                             len(content),
                         )
-                        logger.debug("LLM fallback content extracted from key: %s", content_source)
+                        logger.debug(
+                            "LLM fallback content extracted from key: %s",
+                            content_source,
+                        )
                         for char in content:
                             yield char
                         return
@@ -690,7 +699,9 @@ class ConversationalSurveyLLM:
                                 filename = f"/tmp/llm_response_{now}_{dump_id}.json"
                                 diag = {
                                     "timestamp": now,
-                                    "status_code": getattr(response, "status_code", None),
+                                    "status_code": getattr(
+                                        response, "status_code", None
+                                    ),
                                     "headers": (
                                         dict(response.headers)
                                         if hasattr(response, "headers")
@@ -711,7 +722,8 @@ class ConversationalSurveyLLM:
                                 )
                             except Exception as e:
                                 logger.error(
-                                    "Failed to write diagnostic LLM response file: %s", e
+                                    "Failed to write diagnostic LLM response file: %s",
+                                    e,
                                 )
 
                         logger.warning(
