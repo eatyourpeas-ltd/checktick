@@ -194,6 +194,7 @@
               <h3 class="font-semibold flex items-center gap-2">
                 {% include "components/icons/llm.html" with classes="w-5 h-5" %}
                 <span>{% trans "AI Conversation" %}</span>
+                <span id="llm-phase-badge" class="badge badge-outline badge-info ml-2" aria-live="polite">Planning</span>
               </h3>
               <button type="button" id="new-session-btn" class="btn btn-sm btn-outline">
                 {% trans "New Session" %}

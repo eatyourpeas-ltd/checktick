@@ -4,7 +4,7 @@
   const countBadge = document.getElementById("bulk-structure-count");
   const openModalButton = document.getElementById("bulk-import-open-modal");
   const openModalButtonTop = document.getElementById(
-    "bulk-import-open-modal-top"
+    "bulk-import-open-modal-top",
   );
   const confirmDialog = document.getElementById("bulk-import-confirm");
   const cancelModalButton = document.getElementById("bulk-import-cancel");
@@ -194,7 +194,7 @@
       if (repeatMatch) {
         pendingRepeat.set(
           depth,
-          repeatMatch[1] ? parseInt(repeatMatch[1], 10) : null
+          repeatMatch[1] ? parseInt(repeatMatch[1], 10) : null,
         );
         continue;
       }
@@ -204,7 +204,7 @@
         const { title, id: groupId } = extractTitleAndId(
           rawTitle,
           `group-${groups.length + 1}`,
-          groupIds
+          groupIds,
         );
         let description = "";
         for (let j = i + 1; j < normalized.length; j += 1) {
@@ -242,12 +242,12 @@
           warnings.push(
             `Question “${
               rawTitle || "Untitled"
-            }” appears before any group heading. It will be imported into an auto-created group.`
+            }” appears before any group heading. It will be imported into an auto-created group.`,
           );
           const { id: fallbackGroupId } = extractTitleAndId(
             "Ungrouped",
             `group-${groups.length + 1}`,
-            groupIds
+            groupIds,
           );
           currentGroup = {
             title: "Ungrouped",
@@ -266,7 +266,7 @@
         } = extractTitleAndId(
           rawTitle,
           `${currentGroup.id}-${currentGroup.questions.length + 1}`,
-          questionIds
+          questionIds,
         );
         const question = {
           title: title || "Untitled question",
@@ -295,7 +295,7 @@
             question.type = lookahead.slice(1, -1).trim();
           } else if (/^\?\s*/.test(lookahead)) {
             const branchMatch = lookahead.match(
-              /^\?\s*when\s+(.+?)\s*->\s*\{([^{}]+)\}\s*$/i
+              /^\?\s*when\s+(.+?)\s*->\s*\{([^{}]+)\}\s*$/i,
             );
             if (branchMatch) {
               const condition = branchMatch[1].trim();
@@ -478,7 +478,7 @@
 
               const targetBadge = createMetaBadge(
                 "branch",
-                `{${branch.targetRaw}}`
+                `{${branch.targetRaw}}`,
               );
 
               row.appendChild(when);
@@ -537,6 +537,7 @@
   const tabAI = document.getElementById("tab-ai");
   const manualContent = document.getElementById("manual-tab-content");
   const aiContent = document.getElementById("ai-tab-content");
+  const phaseBadge = document.getElementById("llm-phase-badge");
   const chatMessages = document.getElementById("chat-messages");
   const userMessageInput = document.getElementById("user-message-input");
   const sendMessageBtn = document.getElementById("send-message-btn");
@@ -551,6 +552,25 @@
   let conversationHistory = [];
   let sessionId = null;
 
+  const setPhaseBadge = (phase) => {
+    if (!phaseBadge) return;
+    const p = (phase || "").toString().toLowerCase();
+    phaseBadge.classList.remove("badge-info", "badge-success", "badge-outline");
+    if (p === "planning") {
+      phaseBadge.classList.add("badge-info");
+      phaseBadge.textContent = "Planning";
+    } else if (p === "implementation") {
+      phaseBadge.classList.add("badge-success");
+      phaseBadge.textContent = "Implementation";
+    } else {
+      phaseBadge.classList.add("badge-outline");
+      phaseBadge.textContent = p ? p : "Idle";
+    }
+  };
+
+  // initialize badge
+  setPhaseBadge("planning");
+
   // Get session history elements
   const tabHistory = document.getElementById("tab-history");
   const historyContent = document.getElementById("history-tab-content");
@@ -560,10 +580,10 @@
   const tabMarkdownInput = document.getElementById("tab-markdown-input");
   const tabFormatReference = document.getElementById("tab-format-reference");
   const markdownInputContent = document.getElementById(
-    "markdown-input-content"
+    "markdown-input-content",
   );
   const formatReferenceContent = document.getElementById(
-    "format-reference-content"
+    "format-reference-content",
   );
 
   // Store current survey markdown
@@ -710,8 +730,8 @@
               }</p>
               <div class="flex gap-2 mt-2 text-xs text-base-content/60">
                 <span>${session.message_count} message${
-        session.message_count !== 1 ? "s" : ""
-      }</span>
+                  session.message_count !== 1 ? "s" : ""
+                }</span>
                 ${
                   session.has_markdown
                     ? '<span class="text-success">• Has markdown</span>'
@@ -865,7 +885,7 @@
   };
 
   // Simple markdown to HTML converter for chat messages
-  const renderMarkdown = (text) => {
+  const renderMarkdownCore = (text) => {
     if (!text) return "";
 
     // Escape HTML first
@@ -895,6 +915,30 @@
       .replace(/\n/g, "<br>");
 
     return html;
+  };
+
+  const renderMarkdown = (text) => {
+    if (!text) return "";
+
+    // If the assistant included a 'Thinking Process' section, show it
+    // as a pale inline alert inside the speech bubble to distinguish it
+    // from the final conversational text.
+    const thinkingIndex = text.search(/Thinking Process:?/i);
+    let reasoningHtml = "";
+    if (thinkingIndex !== -1) {
+      const mainText = text.slice(0, thinkingIndex).trim();
+      const reasoningText = text
+        .slice(thinkingIndex)
+        .replace(/^[\s\S]*?:\s*/i, "");
+      const mainHtml = renderMarkdownCore(mainText);
+      const reasoningCore = renderMarkdownCore(reasoningText);
+      if (reasoningCore) {
+        reasoningHtml = `<div class=\"alert alert-info text-sm mt-2\">${reasoningCore}</div>`;
+      }
+      return mainHtml + reasoningHtml;
+    }
+
+    return renderMarkdownCore(text);
   };
 
   // Update markdown output in Manual Input tab
@@ -993,7 +1037,7 @@
       let fullResponse = "";
       let currentMarkdown = "";
 
-      // Use fetch with streaming
+      // Use fetch and handle both SSE (streaming) and non-streaming JSON responses.
       const response = await fetch(window.location.href, {
         method: "POST",
         headers: {
@@ -1013,102 +1057,159 @@
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
+      const contentType = (
+        response.headers.get("content-type") || ""
+      ).toLowerCase();
 
-      while (true) {
-        const { done, value } = await reader.read();
+      // If the server returned a JSON payload (non-streaming), handle it simply.
+      if (contentType.includes("application/json")) {
+        const json = await response.json();
+        if (json.error) {
+          throw new Error(json.error || "AI returned an error");
+        }
 
-        if (done) break;
+        // Prefer explicit markdown field when provided by server
+        const payloadText = json.markdown || json.content || json.message || "";
+        const { conversation, markdown } = separateConversationAndMarkdown(
+          payloadText || "",
+        );
 
-        // Decode the chunk
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
+        // Update chat bubble with conversational text (if any)
+        if (conversation) {
+          bubble.innerHTML = renderMarkdown(conversation);
+        }
 
-        // Process complete SSE messages (each ends with \n\n)
-        let boundary;
-        while ((boundary = buffer.indexOf("\n\n")) !== -1) {
-          const message = buffer.substring(0, boundary);
-          buffer = buffer.substring(boundary + 2);
+        // Only update manual input if we have markdown
+        const markdownToUse = json.markdown || markdown;
+        if (markdownToUse) {
+          updateMarkdownOutput(markdownToUse);
+          conversationHistory.push({ role: "assistant", content: payloadText });
+        } else {
+          // Assistant is asking clarifying questions — don't try to parse.
+          conversationHistory.push({ role: "assistant", content: payloadText });
+        }
 
-          // Each SSE message should start with "data: "
-          if (message.startsWith("data: ")) {
-            const jsonStr = message.substring(6).trim();
-            if (!jsonStr) continue;
+        // Update phase badge if server included it
+        setPhaseBadge(
+          json.phase ||
+            json.llm_phase ||
+            (markdownToUse ? "implementation" : "planning"),
+        );
+        // Done with non-streaming flow
+      } else {
+        // Streaming SSE path
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let streamErrorOccurred = false;
 
-            try {
-              const data = JSON.parse(jsonStr);
+        while (true) {
+          const { done, value } = await reader.read();
 
-              if (data.error) {
-                throw new Error(data.error);
-              }
+          if (done) break;
 
-              if (data.session_id) {
-                sessionId = data.session_id;
-              }
+          // Decode the chunk
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
 
-              if (data.chunk) {
-                fullResponse += data.chunk;
-                bubble.textContent = fullResponse;
+          // Process complete SSE messages (each ends with \n\n)
+          let boundary;
+          while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+            const message = buffer.substring(0, boundary);
+            buffer = buffer.substring(boundary + 2);
+
+            // Each SSE message should start with "data: "
+            if (message.startsWith("data: ")) {
+              const jsonStr = message.substring(6).trim();
+              if (!jsonStr) continue;
+
+              try {
+                const data = JSON.parse(jsonStr);
+
+                if (data.error) {
+                  // Display server-side error message in the chat UI without
+                  // throwing to avoid noisy console parse errors.
+                  const srvErr = document.createElement("div");
+                  srvErr.className = "alert alert-error text-sm mt-2";
+                  srvErr.textContent = `AI error: ${data.error}`;
+                  chatMessages.appendChild(srvErr);
+                  scrollChatToBottom();
+                  streamErrorOccurred = true;
+                  break;
+                }
+
+                if (data.session_id) {
+                  sessionId = data.session_id;
+                }
+
+                if (data.chunk) {
+                  fullResponse += data.chunk;
+                  bubble.textContent = fullResponse;
+                  scrollChatToBottom();
+                }
+
+                if (data.markdown) {
+                  currentMarkdown = data.markdown;
+                }
+                // Update phase badge when provided in SSE messages
+                if (data.phase || data.llm_phase) {
+                  setPhaseBadge(data.phase || data.llm_phase);
+                }
+
+                if (data.done) {
+                  // Use assistant_message if provided by the server, otherwise
+                  // fall back to the accumulated streamed chunks.
+                  const finalText = data.assistant_message || fullResponse;
+
+                  // Separate conversation from markdown
+                  const { conversation, markdown } =
+                    separateConversationAndMarkdown(finalText);
+
+                  // Update chat bubble with rendered conversational text
+                  if (conversation) {
+                    bubble.innerHTML = renderMarkdown(conversation);
+                  } else {
+                    bubble.innerHTML = renderMarkdown(
+                      "I've updated the survey markdown.",
+                    );
+                  }
+
+                  // Update conversation history with final assistant text
+                  conversationHistory.push({
+                    role: "assistant",
+                    content: finalText,
+                  });
+
+                  // Only update manual input if we have markdown (from SSE or extracted)
+                  const markdownToUse =
+                    data.markdown || currentMarkdown || markdown;
+                  if (markdownToUse) {
+                    updateMarkdownOutput(markdownToUse);
+                  }
+
+                  // Update phase badge if provided
+                  if (data.phase || data.llm_phase) {
+                    setPhaseBadge(data.phase || data.llm_phase);
+                  }
+                }
+              } catch (e) {
+                // Avoid logging large LLM payloads; log concise error for debugging
+                console.error("Error parsing SSE data:", e.message || e);
+                // Show a friendly error to the user in the chat UI
+                const errEl = document.createElement("div");
+                errEl.className = "alert alert-error text-sm mt-2";
+                errEl.textContent = `AI response error: ${e.message || "unexpected response"}`;
+                chatMessages.appendChild(errEl);
                 scrollChatToBottom();
+                streamErrorOccurred = true;
+                break;
               }
-
-              if (data.markdown) {
-                currentMarkdown = data.markdown;
-              }
-
-              if (data.done) {
-                console.log("Full LLM response:", fullResponse);
-
-                // Separate conversation from markdown
-                const { conversation, markdown } =
-                  separateConversationAndMarkdown(fullResponse);
-
-                console.log("Extracted conversation:", conversation);
-                console.log("Extracted markdown:", markdown);
-
-                // Update chat bubble with rendered conversational text
-                if (conversation) {
-                  bubble.innerHTML = renderMarkdown(conversation);
-                } else {
-                  // If no conversation, show a generic message
-                  bubble.innerHTML = renderMarkdown(
-                    "I've updated the survey markdown."
-                  );
-                }
-
-                // Update conversation history with full response
-                conversationHistory.push({
-                  role: "assistant",
-                  content: fullResponse,
-                });
-
-                // Update markdown in manual input tab
-                if (markdown) {
-                  console.log("Updating manual input with markdown:", markdown);
-                  updateMarkdownOutput(markdown);
-                }
-
-                // Update markdown in manual input tab
-                const markdownToUse = currentMarkdown || markdown;
-                if (markdownToUse) {
-                  console.log(
-                    "Updating manual input with markdown:",
-                    markdownToUse
-                  );
-                  updateMarkdownOutput(markdownToUse);
-                }
-              }
-            } catch (e) {
-              console.error(
-                "Error parsing SSE data:",
-                e,
-                "JSON string:",
-                jsonStr
-              );
             }
           }
+          if (streamErrorOccurred) break;
+        }
+        if (streamErrorOccurred) {
+          // Abort streaming handling early
         }
       }
     } catch (error) {
