@@ -927,7 +927,9 @@
     let reasoningHtml = "";
     if (thinkingIndex !== -1) {
       const mainText = text.slice(0, thinkingIndex).trim();
-      const reasoningText = text.slice(thinkingIndex).replace(/^[\s\S]*?:\s*/i, "");
+      const reasoningText = text
+        .slice(thinkingIndex)
+        .replace(/^[\s\S]*?:\s*/i, "");
       const mainHtml = renderMarkdownCore(mainText);
       const reasoningCore = renderMarkdownCore(reasoningText);
       if (reasoningCore) {
