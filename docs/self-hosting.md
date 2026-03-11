@@ -570,6 +570,38 @@ LOG_TO_FILE=True
 LOG_FILE_PATH=/var/log/checktick/app.log
 ```
 
+##### LLM debug dumps (development only)
+
+When using the AI Assistant integration you can enable an optional debug dump that writes the full LLM HTTP response to disk for diagnosis.
+
+Environment variable:
+
+```bash
+LLM_DEBUG_DUMP=1
+```
+
+What it does:
+- Writes a JSON diagnostic file to `/tmp/llm_response_<timestamp>_<id>.json` when an LLM call produces unexpected or empty streaming output.
+- The dump contains the HTTP response body, headers, status code and a small payload preview to help triage provider-specific issues.
+
+When to use:
+- Enable only temporarily during debugging of streaming or parsing issues (for example, when the AI appears to return content under non-standard keys).
+
+Risks and mitigation:
+- Dumps may contain user-provided text and potentially sensitive information. Do NOT enable in production or leave enabled long-term.
+- After reproducing the issue, delete dump files from `/tmp` and remove the `LLM_DEBUG_DUMP` env var.
+
+Quick inspect/remove commands:
+
+```bash
+ls -1 /tmp/llm_response_*.json | tail -n 20
+jq . /tmp/llm_response_<timestamp>_<id>.json
+rm /tmp/llm_response_*.json
+```
+
+Alternative diagnostics:
+- Prefer enabling `LOG_LEVEL=DEBUG` and inspecting application logs first; the `llm_client` module logs which response key provided content which is often sufficient and less risky than raw dumps.
+
 ### Email Provider Configuration
 
 #### Gmail
