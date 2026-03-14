@@ -24,20 +24,16 @@ def oidc_debug_view(request):
 def oidc_success_view(request):
     """Simple success page after OIDC authentication."""
     if request.user.is_authenticated:
-        return HttpResponse(
-            f"""
+        return HttpResponse(f"""
         <h1>OIDC Authentication Successful!</h1>
         <p>Welcome, {request.user.email}!</p>
         <p>User ID: {request.user.id}</p>
         <p>Username: {request.user.username}</p>
         <a href="/surveys/">Go to Surveys</a>
-        """
-        )
+        """)
     else:
-        return HttpResponse(
-            """
+        return HttpResponse("""
         <h1>Authentication Failed</h1>
         <p>You are not logged in.</p>
         <a href="/accounts/login/">Try Again</a>
-        """
-        )
+        """)

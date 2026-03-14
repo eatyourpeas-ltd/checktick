@@ -11,7 +11,7 @@ For rotating Shamir shares only (Option A), use rotate_platform_key_shares inste
 
 Usage:
     python manage.py create_platform_key_version --version v2 [--activate]
-    
+
 Security Notes:
     - The custodian component will be written to a file and must be split across
       YubiKeys/paper/USB using Shamir's Secret Sharing

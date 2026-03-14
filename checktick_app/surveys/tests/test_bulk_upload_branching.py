@@ -16,8 +16,7 @@ from checktick_app.surveys.views import _bulk_upload_example_md
 
 TEST_PASSWORD = "x"
 
-BULK_MD = textwrap.dedent(
-    """
+BULK_MD = textwrap.dedent("""
     # Intro {intro}
     Introduction copy
 
@@ -33,8 +32,7 @@ BULK_MD = textwrap.dedent(
 
     ## Feedback {follow-up-feedback}
     (text)
-    """
-).strip()
+    """).strip()
 
 
 @pytest.mark.django_db

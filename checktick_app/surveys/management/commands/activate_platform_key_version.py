@@ -6,7 +6,7 @@ version will be automatically retired.
 
 Usage:
     python manage.py activate_platform_key_version --version v2
-    
+
 Notes:
     - Only one version can be active at a time
     - Retired versions are still used for decrypting old surveys
