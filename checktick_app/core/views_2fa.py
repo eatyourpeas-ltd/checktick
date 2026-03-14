@@ -441,6 +441,10 @@ class TwoFactorLoginView(auth_views.LoginView):
     they are redirected to the 2FA verification page.
     """
 
+    from checktick_app.core.forms import EmailAuthenticationForm
+
+    authentication_form = EmailAuthenticationForm
+
     def form_valid(self, form):
         """Handle successful login form submission."""
         user = form.get_user()
