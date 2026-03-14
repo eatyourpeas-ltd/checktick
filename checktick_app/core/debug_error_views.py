@@ -43,8 +43,7 @@ def trigger_lockout(request: HttpRequest) -> HttpResponse:
 
 def error_test_menu(request: HttpRequest) -> HttpResponse:
     """Show a menu of error pages to test."""
-    return HttpResponse(
-        """
+    return HttpResponse("""
         <!DOCTYPE html>
         <html>
         <head>
@@ -88,5 +87,4 @@ def error_test_menu(request: HttpRequest) -> HttpResponse:
             </div>
         </body>
         </html>
-        """
-    )
+        """)
