@@ -49,7 +49,9 @@ class SignupForm(UserCreationForm):
         user = User()
         user.username = email
         user.email = email
-        user.set_password(self.cleaned_data["password1"])  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+        user.set_password(  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            self.cleaned_data["password1"]
+        )
         # Password is already validated by UserCreationForm.clean_password2() before save() is called.
         if commit:
             user.save()
