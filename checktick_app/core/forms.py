@@ -1,11 +1,21 @@
 from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.utils.translation import gettext_lazy as _
 
 from .models import SiteBranding, UserEmailPreferences, UserLanguagePreference
 
 User = get_user_model()
+
+
+class EmailAuthenticationForm(AuthenticationForm):
+    """Login form that prompts for email address instead of username."""
+
+    username = forms.EmailField(
+        label=_("Email address"),
+        widget=forms.EmailInput(attrs={"autocomplete": "email"}),
+    )
 
 
 class SignupForm(UserCreationForm):
@@ -25,7 +35,8 @@ class SignupForm(UserCreationForm):
 
             login_url = reverse("login")
             raise forms.ValidationError(
-                mark_safe(
+                mark_safe(  # nosemgrep: python.django.security.audit.avoid-mark-safe.avoid-mark-safe
+                    # login_url comes from reverse() and contains no user input; safe to embed as an href.
                     f"An account with this email already exists. "
                     f'<a href="{login_url}" class="link link-primary font-medium">Sign in instead</a> '
                     f"or use a different email address."
@@ -38,7 +49,10 @@ class SignupForm(UserCreationForm):
         user = User()
         user.username = email
         user.email = email
-        user.set_password(self.cleaned_data["password1"])
+        user.set_password(  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            self.cleaned_data["password1"]
+        )
+        # Password is already validated by UserCreationForm.clean_password2() before save() is called.
         if commit:
             user.save()
         return user

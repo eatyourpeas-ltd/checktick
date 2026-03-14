@@ -1,21 +1,27 @@
 """
 Management command to create demo accounts with different tiers for testing.
 
-Creates users with activated subscriptions (bypassing billing) but still requiring 2FA.
-Use this to quickly set up accounts for demos without going through the payment flow.
+Creates users with activated subscriptions (bypassing billing).
+Use this to quickly set up accounts for demos or pen tests without going through the payment flow.
 
 Usage:
     python manage.py create_demo_accounts
+    python manage.py create_demo_accounts --delete   # remove all demo accounts
 
 Demo accounts created:
+    - demo-free@example.com (FREE tier)
     - demo-pro@example.com (PRO tier)
     - demo-team-small@example.com (TEAM_SMALL tier with team)
     - demo-team-medium@example.com (TEAM_MEDIUM tier with team)
+    - demo-team-large@example.com (TEAM_LARGE tier with team)
     - demo-org@example.com (ORGANIZATION tier with organization)
     - demo-enterprise@example.com (ENTERPRISE tier with organization)
 
 All users have password: demo123!pass
-All users will need to set up 2FA on first login
+
+2FA behaviour:
+    - DEBUG=True  (development): 2FA is BYPASSED - login with email + password only.
+    - DEBUG=False (production):  2FA is ENFORCED - users must set up TOTP on first login.
 """
 
 from datetime import timedelta
@@ -95,7 +101,7 @@ DEMO_ACCOUNTS = [
 
 
 class Command(BaseCommand):
-    help = "Create demo accounts with different tiers (bypasses billing, requires 2FA)"
+    help = "Create demo accounts with different tiers (bypasses billing). 2FA is enforced in production but bypassed in DEBUG mode. Use --delete to remove all demo accounts."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -122,8 +128,47 @@ class Command(BaseCommand):
             ],
             help="Create only accounts with this specific tier",
         )
+        parser.add_argument(
+            "--delete",
+            action="store_true",
+            help="Delete all demo accounts and all their associated data (safe to run in any environment)",
+        )
+
+    def _delete_demo_accounts(self):
+        """Delete all demo accounts and their associated data.
+
+        Uses Django's CASCADE to remove owned surveys, responses, teams, orgs, etc.
+        Safe to run in any environment.
+        """
+        from checktick_app.surveys.models import Organization, Team
+
+        demo_users = User.objects.filter(
+            email__startswith="demo-", email__endswith="@example.com"
+        )
+
+        if not demo_users.exists():
+            self.stdout.write("No demo accounts found.")
+            return
+
+        with transaction.atomic():
+            # Delete teams and orgs owned by demo users first (some may not CASCADE via user FK)
+            team_count = Team.objects.filter(owner__in=demo_users).delete()[0]
+            org_count = Organization.objects.filter(owner__in=demo_users).delete()[0]
+            user_count = demo_users.delete()[0]
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Deleted {user_count} demo user(s), {team_count} team(s), {org_count} organisation(s) "
+                f"and all associated surveys/responses (via cascade)."
+            )
+        )
 
     def handle(self, *args, **options):
+        # --delete is safe in any environment - handle it before the production guard
+        if options["delete"]:
+            self._delete_demo_accounts()
+            return
+
         # Check environment - NEVER allow in production
         import os
 
@@ -195,7 +240,7 @@ class Command(BaseCommand):
                 user, created = User.objects.get_or_create(
                     email=email,
                     defaults={
-                        "username": email.split("@")[0],  # username from email prefix
+                        "username": email,  # matches SignupForm convention: username == email
                     },
                 )
 
@@ -309,7 +354,16 @@ class Command(BaseCommand):
         )
         self.stdout.write("\nAccount credentials:")
         self.stdout.write(f"  Password (all accounts): {DEMO_PASSWORD}")
-        self.stdout.write("\nNOTE: All accounts require 2FA setup on first login")
+        if settings.DEBUG:
+            self.stdout.write(
+                self.style.WARNING(
+                    "\nNOTE: Running in DEBUG mode — 2FA is BYPASSED. Login with email + password only."
+                )
+            )
+        else:
+            self.stdout.write(
+                "\nNOTE: Running in production mode — 2FA is ENFORCED. Users must set up TOTP on first login."
+            )
         self.stdout.write("\nDemo accounts created:")
 
         for account in accounts_to_create:
@@ -318,6 +372,9 @@ class Command(BaseCommand):
         self.stdout.write("\nTo log in:")
         self.stdout.write("  1. Visit the login page")
         self.stdout.write("  2. Use the email and password above")
-        self.stdout.write("  3. Set up 2FA with your authenticator app")
+        if settings.DEBUG:
+            self.stdout.write("  3. No 2FA required (DEBUG mode)")
+        else:
+            self.stdout.write("  3. Set up TOTP 2FA with your authenticator app")
         self.stdout.write("  4. Start using the account!")
         self.stdout.write("\n" + "=" * 70)
