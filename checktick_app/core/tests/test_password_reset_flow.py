@@ -19,9 +19,10 @@ class TestPasswordResetFlow:
         initial_password = secrets.token_urlsafe(12)
         new_password = secrets.token_urlsafe(16)
         unique_id = secrets.token_hex(8)
+        email = f"alice_{unique_id}@example.com"
         user = User.objects.create_user(
-            username=f"alice_{unique_id}",
-            email=f"alice_{unique_id}@example.com",
+            username=email,
+            email=email,
             password=initial_password,
         )
         resp = client.post(reverse("password_reset"), {"email": user.email})
@@ -57,8 +58,8 @@ class TestPasswordResetFlow:
         )
         assert post2.status_code == 302
         assert post2.url == reverse("password_reset_complete")
-        # Can login with new password
+        # Can login with new password (username field holds the email address)
         login = client.post(
-            "/accounts/login/", {"username": user.username, "password": new_password}
+            "/accounts/login/", {"username": user.email, "password": new_password}
         )
         assert login.status_code == 302
