@@ -210,7 +210,7 @@ class Command(BaseCommand):
 
         headers = {}
         if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
+            headers["Ocp-Apim-Subscription-Key"] = f"{api_key}"
 
         try:
             response = requests.get(url, headers=headers, timeout=30)
