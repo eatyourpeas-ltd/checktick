@@ -71,35 +71,21 @@
             </label>
           </div>
 
-          {# Password #}
+          {# Password — label and placeholder are intentionally neutral to avoid  #}
+          {# revealing via the UI whether this email address has an existing account. #}
           <div class="form-control">
             <label class="label" for="password">
               <span class="label-text font-semibold">
-                {% if existing_user %}
-                  {% trans 'Your Password' %}
-                {% else %}
-                  {% trans 'Create Password' %}
-                {% endif %}
+                {% trans 'Password' %}
               </span>
             </label>
             <input type="password"
                    id="password"
                    name="password"
                    class="input input-bordered w-full"
-                   {% if existing_user %}
-                   placeholder="{% trans 'Enter your existing password' %}"
-                   {% else %}
                    placeholder="{% trans 'Minimum 8 characters' %}"
                    minlength="8"
-                   {% endif %}
                    required>
-            {% if existing_user %}
-              <label class="label">
-                <span class="label-text-alt text-warning">
-                  {% trans 'An account with this email already exists. Enter your password to link this organization to your account.' %}
-                </span>
-              </label>
-            {% endif %}
           </div>
 
           {# Terms and Conditions #}

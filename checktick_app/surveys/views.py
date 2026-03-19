@@ -4748,6 +4748,16 @@ def org_users(request: HttpRequest, org_id: int) -> HttpResponse:
         if not target_user and user_id:
             target_user = get_object_or_404(User, id=user_id)
         role = request.POST.get("role")
+        if action == "add" and not target_user:
+            # Surface an explicit error rather than silently doing nothing.
+            # A silent no-op would leak account existence: success → user exists,
+            # silence → user does not exist.
+            messages.error(
+                request,
+                "No user found with that email address. "
+                "Ask them to create an account first or send an invitation from the user management hub.",
+            )
+            return redirect("surveys:org_users", org_id=org.id)
         if action == "add" and target_user:
             mem, created = OrganizationMembership.objects.update_or_create(
                 organization=org,
@@ -4837,6 +4847,15 @@ def survey_users(request: HttpRequest, slug: str) -> HttpResponse:
         role = request.POST.get("role")
         if role and role not in dict(SurveyMembership.Role.choices):
             return HttpResponse(status=400)
+
+        if action == "add" and not target_user:
+            # Explicit error rather than silent no-op (see org_users for rationale).
+            messages.error(
+                request,
+                "No user found with that email address. "
+                "Ask them to create an account first or send an invitation from the user management hub.",
+            )
+            return redirect("surveys:survey_users", slug=survey.slug)
 
         # Check tier limits for collaboration
         if action == "add" and target_user:

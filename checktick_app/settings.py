@@ -480,7 +480,14 @@ CORS_URLS_REGEX = r"^/api/schema$"  # Only allow CORS on the schema endpoint
 # Axes configuration for brute-force protection
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 1  # hour
-AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]  # Lock by username AND IP
+# Use a list-of-lists so axes tracks each dimension independently.
+# Users authenticate with their email address; Django's AuthenticationForm submits
+# it under the field name "username", so axes tracks it as the "username" credential.
+# AXES_USERNAME_FORM_FIELD defaults to "username", matching our EmailAuthenticationForm.
+# [["username"]] locks an email address after AXES_FAILURE_LIMIT failures regardless
+# of the attacker's IP, preventing bypass via IP rotation.
+# [["ip_address"]] additionally rate-limits credential-stuffing from a single IP.
+AXES_LOCKOUT_PARAMETERS = [["username"], ["ip_address"]]
 # Disable axes for OIDC callbacks to avoid interference
 AXES_NEVER_LOCKOUT_WHITELIST = True
 AXES_IP_WHITELIST = ["127.0.0.1", "localhost"]
