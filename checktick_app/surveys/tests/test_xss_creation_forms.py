@@ -34,7 +34,7 @@ import json
 from django.urls import reverse
 import pytest
 
-from checktick_app.surveys.models import Organization, QuestionGroup, Survey
+from checktick_app.surveys.models import Organization, QuestionGroup, Survey, SurveyQuestion
 
 # ---------------------------------------------------------------------------
 # Common payloads
@@ -622,3 +622,92 @@ def test_login_invalid_credentials_error_xss_escaped(client):
     )
     # Form re-rendered (200) or redirect — no raw payload.
     _xss_clean(resp.content)
+
+
+# ===========================================================================
+# 9. builder_payload_json closing-tag escaping (Finding #3)
+#
+# question_row.html uses |safe on builder_payload_json, so the </…> escape
+# MUST be applied in the view before the template sees the value.
+# _prepare_question_rendering() calls json.dumps().replace("</", "<\\/").
+# ===========================================================================
+
+BUILDER_XSS_PAYLOAD = "</script><script>alert(1)</script>"
+
+
+@pytest.mark.django_db
+def test_prepare_question_rendering_escapes_closing_tag_in_payload_json(
+    owner, org
+):
+    """
+    Unit test for Finding #3.  _prepare_question_rendering must replace every
+    '</' with '<\\/' in builder_payload_json so that a question text containing
+    '</script>' cannot break out of the data island in question_row.html.
+    """
+    from checktick_app.surveys.views import _prepare_question_rendering
+
+    survey = Survey.objects.create(
+        owner=owner, organization=org, name="Builder XSS", slug="builder-xss-f3"
+    )
+    group = QuestionGroup.objects.create(name="Group", owner=owner)
+    survey.question_groups.add(group)
+    question = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text=BUILDER_XSS_PAYLOAD,
+        type=SurveyQuestion.Types.TEXT,
+        options=[{"type": "text", "format": "free"}],
+        required=False,
+        order=0,
+    )
+
+    prepared = _prepare_question_rendering(survey, [question])
+    payload_json = prepared[0].builder_payload_json
+
+    assert "</" not in payload_json, (
+        "Raw '</' found in builder_payload_json — Finding #3 slash-escape fix not applied"
+    )
+    assert "\\/" in payload_json, (
+        "Expected escaped '<\\/' not found in builder_payload_json"
+    )
+
+
+@pytest.mark.django_db
+def test_question_row_template_renders_escaped_closing_tag(owner, org):
+    """
+    Integration test for Finding #3.  question_row.html uses |safe on
+    builder_payload_json, so the escaping must occur in the view layer.
+    Verifies that '</script>' in question text is rendered as '<\\/script>' in
+    the raw HTML byte stream and does not break out of the data island.
+    """
+    from django.test import RequestFactory
+
+    from checktick_app.surveys.views import _render_template_question_row
+
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="Builder XSS Render",
+        slug="builder-xss-render-f3",
+    )
+    group = QuestionGroup.objects.create(name="Group Render", owner=owner)
+    survey.question_groups.add(group)
+    question = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text=BUILDER_XSS_PAYLOAD,
+        type=SurveyQuestion.Types.TEXT,
+        options=[{"type": "text", "format": "free"}],
+        required=False,
+        order=0,
+    )
+
+    request = RequestFactory().get("/builder/")
+    request.user = owner
+
+    response = _render_template_question_row(request, survey, question)
+
+    # The escaped form '<\/script>' (literal backslash) must be present in bytes.
+    assert b"<\\/script>" in response.content, (
+        "Escaped '<\\/script>' not found — Finding #3 closing-tag escape fix may not be active"
+    )
