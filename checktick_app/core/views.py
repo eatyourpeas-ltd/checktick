@@ -879,28 +879,34 @@ def org_setup(request, token: str):
             messages.error(request, _("Email is required."))
             return render(request, "core/org_setup.html", {"org": org})
 
-        # Check if user exists
+        # Look up the user — but always run the password hasher first to normalise
+        # response timing.  Without this, the "user not found" path returns
+        # significantly faster (no hash work) and leaks account-existence via
+        # a timing side-channel.
         existing_user = User.objects.filter(email__iexact=email).first()
 
         if existing_user:
-            # Existing user - check password
+            # Existing user — verify their password.
             from django.contrib.auth import authenticate
 
             user = authenticate(request, username=email, password=password)
             if not user:
+                # Do NOT reveal that an account already exists; use a uniform message.
                 messages.error(
                     request,
-                    _(
-                        "An account with this email already exists. Please enter your password to continue."
-                    ),
+                    _("Invalid email or password. Please try again."),
                 )
                 return render(
                     request,
                     "core/org_setup.html",
-                    {"org": org, "email": email, "existing_user": True},
+                    {"org": org, "email": email},
                 )
         else:
-            # New user - create account
+            # Run the default password hasher once so the response time is the same
+            # whether or not the email corresponds to an existing account.
+            User().set_password(password)
+
+            # New user — create account.
             if not password or len(password) < 8:
                 messages.error(request, _("Password must be at least 8 characters."))
                 return render(
