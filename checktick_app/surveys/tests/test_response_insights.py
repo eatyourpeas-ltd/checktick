@@ -383,3 +383,82 @@ class TestResponseInsightsEdgeCases:
 
         # Should not error
         assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestResponseInsightsXSSEscaping:
+    """
+    Verify that respondent-supplied answer text cannot inject HTML/JS through
+    the response insights dashboard. (Finding #4)
+
+    The attack: a respondent answers an MC question with a malicious string
+    such as '</script><script>alert(1)</script>' or "' onmouseover='alert(1)'".
+    The fix: options_json uses json.dumps with '</' escaping; the template
+    uses a double-quoted data attribute with no |safe filter so Django
+    auto-escaping also applies; and option.label is rendered without |safe.
+    """
+
+    XSS_CLOSING_TAG = "</script><script>alert(1)</script>"
+    XSS_SINGLE_QUOTE = "' onmouseover='alert(1)' x='"
+
+    def _make_survey_with_malicious_response(self, user, slug, label):
+        from checktick_app.surveys.models import (
+            QuestionGroup,
+            Survey,
+            SurveyQuestion,
+            SurveyResponse,
+        )
+
+        survey = Survey.objects.create(
+            name="XSS Insights Survey",
+            slug=slug,
+            owner=user,
+        )
+        group = QuestionGroup.objects.create(name="Group", owner=user)
+        survey.question_groups.add(group)
+        question = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Pick an option",
+            type="mc_single",
+            order=0,
+            options={"choices": ["Safe Option", label]},
+        )
+        # Store a malicious respondent answer directly in the DB.
+        SurveyResponse.objects.create(
+            survey=survey,
+            answers={str(question.id): label},
+        )
+        return survey
+
+    def test_closing_tag_in_answer_absent_from_dashboard(self, user):
+        """
+        A '</script>' in a respondent answer must not appear raw in the
+        dashboard HTML (data-chart-data attribute or option label span).
+        """
+        survey = self._make_survey_with_malicious_response(
+            user, "xss-insight-f4-close", self.XSS_CLOSING_TAG
+        )
+        client = Client()
+        client.login(username="insightsuser", password=TEST_PASSWORD)  # noqa: S106
+        response = client.get(f"/surveys/{survey.slug}/dashboard/")
+        assert response.status_code == 200
+        assert (
+            b"</script><script>" not in response.content
+        ), "Raw XSS closing-tag payload found in dashboard HTML — Finding #4 escape not active"
+
+    def test_single_quote_in_answer_not_raw_in_html(self, user):
+        """
+        A single-quote attribute-break payload in a respondent answer must
+        not appear unescaped in the dashboard HTML.
+        """
+        survey = self._make_survey_with_malicious_response(
+            user, "xss-insight-f4-quote", self.XSS_SINGLE_QUOTE
+        )
+        client = Client()
+        client.login(username="insightsuser", password=TEST_PASSWORD)  # noqa: S106
+        response = client.get(f"/surveys/{survey.slug}/dashboard/")
+        assert response.status_code == 200
+        assert (
+            b"' onmouseover='" not in response.content
+        ), "Raw single-quote XSS payload found in dashboard HTML — attribute escaping not working"

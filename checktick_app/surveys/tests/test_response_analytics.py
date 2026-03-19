@@ -334,3 +334,66 @@ class TestComputeResponseAnalytics:
         blue_opt = next(o for o in dist.options if o["label"] == "Blue")
         assert red_opt["count"] == 1
         assert blue_opt["count"] == 1
+
+
+class TestAnswerDistributionOptionsJson:
+    """
+    Unit tests for the XSS-safe options_json property (Finding #4 fix).
+
+    options_json serialises option data using json.dumps and escapes '</' to
+    '<\\/' so that a respondent-supplied label cannot break out of a
+    <script>-type context or a data attribute rendered without HTML-escaping.
+    """
+
+    CLOSING_TAG_PAYLOAD = "</script><script>alert(1)</script>"
+
+    def test_closing_tag_escaped_in_options_json(self):
+        """'</' must be replaced with '<\\/' to prevent script-tag injection."""
+        dist = AnswerDistribution(
+            question_id=1,
+            question_text="Q",
+            question_type="mc_single",
+            total_responses=1,
+            options=[
+                {
+                    "label": self.CLOSING_TAG_PAYLOAD,
+                    "count": 1,
+                    "percent": 100.0,
+                }
+            ],
+        )
+        result = dist.options_json
+        assert (
+            "</" not in result
+        ), "Raw '</' found in options_json — Finding #4 closing-tag escape not applied"
+        assert "\\/" in result, "Expected '<\\/' not found in options_json after escape"
+
+    def test_single_quote_produces_valid_parseable_json(self):
+        """Single quotes in labels must not break JSON validity."""
+        import json as _json
+
+        label = "' onmouseover='alert(1)'"
+        dist = AnswerDistribution(
+            question_id=1,
+            question_text="Q",
+            question_type="mc_single",
+            total_responses=1,
+            options=[{"label": label, "count": 1, "percent": 100.0}],
+        )
+        parsed = _json.loads(dist.options_json)
+        assert parsed[0]["label"] == label
+
+    def test_double_quote_json_encoded_in_options_json(self):
+        """Double quotes in labels must be JSON-encoded so the value round-trips."""
+        import json as _json
+
+        label = '" onmouseover="alert(1)'
+        dist = AnswerDistribution(
+            question_id=1,
+            question_text="Q",
+            question_type="mc_single",
+            total_responses=1,
+            options=[{"label": label, "count": 1, "percent": 100.0}],
+        )
+        parsed = _json.loads(dist.options_json)
+        assert parsed[0]["label"] == label

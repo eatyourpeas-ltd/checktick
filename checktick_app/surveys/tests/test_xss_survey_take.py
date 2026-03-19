@@ -340,6 +340,61 @@ def test_branching_config_condition_value_escaped_in_attribute(client, owner, or
     ), "Script break-out sequence found in branching-config"
 
 
+@pytest.mark.django_db
+def test_branching_config_single_quote_does_not_break_attribute(client, owner, org):
+    """
+    Finding #5 — the original vulnerability used a *single-quoted* HTML
+    attribute: data-branching-config='{{ branching_config|safe }}'.  A
+    condition value containing a single quote would break the attribute
+    boundary.  The fix switches to a *double-quoted* attribute with no |safe
+    filter, so Django auto-escaping applies and single quotes are rendered
+    as &#x27; (or left alone — they are safe inside double-quoted attrs).
+
+    This test stores a condition value that is the exact Finding #5 payload
+    (a single-quote break-out) and verifies that the raw form never appears
+    in the rendered page.
+    """
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="Branching Single Quote Survey",
+        slug="branching-sq-survey",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.PUBLIC,
+    )
+    q1 = SurveyQuestion.objects.create(
+        survey=survey,
+        text="Q1",
+        type=SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE,
+        options=[{"value": "yes", "label": "Yes"}, {"value": "no", "label": "No"}],
+        required=False,
+        order=0,
+    )
+    q2 = SurveyQuestion.objects.create(
+        survey=survey,
+        text="Q2",
+        type=SurveyQuestion.Types.TEXT,
+        required=False,
+        order=1,
+    )
+    SurveyQuestionCondition.objects.create(
+        question=q1,
+        operator=SurveyQuestionCondition.Operator.EQUALS,
+        value=SINGLE_QUOTE_BREAK,
+        target_question=q2,
+        action=SurveyQuestionCondition.Action.SHOW,
+    )
+
+    resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    # The raw single-quote attribute break-out must not appear.
+    assert b"' onmouseover='" not in resp.content, (
+        "Single-quote attribute break-out found in data-branching-config — "
+        "Finding #5 attribute-quoting fix may not be active"
+    )
+
+
 # ===========================================================================
 # 5. Saved partial answers reflected via json_script
 # ===========================================================================

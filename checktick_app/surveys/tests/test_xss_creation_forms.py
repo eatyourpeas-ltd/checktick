@@ -34,7 +34,12 @@ import json
 from django.urls import reverse
 import pytest
 
-from checktick_app.surveys.models import Organization, QuestionGroup, Survey
+from checktick_app.surveys.models import (
+    Organization,
+    QuestionGroup,
+    Survey,
+    SurveyQuestion,
+)
 
 # ---------------------------------------------------------------------------
 # Common payloads
@@ -45,6 +50,11 @@ ATTR_BREAK = '" onmouseover="alert(1)" x="'
 STYLE_BREAK = "</style><script>alert(1)</script><style>"
 # Fonts go into a <style> block; this payload tries to break out.
 FONT_BREAK = "Arial</style><script>alert(2)</script><style>sans-serif"
+# The exact pentest payload from Finding #1, stored directly in the DB to test
+# the template auto-escaping layer independently of the view-layer allowlist.
+FONT_XSS_STORED = "</style><script>alert(document.cookie)</script><style>x{"
+# After Django auto-escaping, < becomes &lt; and > becomes &gt;.
+FONT_XSS_ESCAPED = b"&lt;/style&gt;&lt;script&gt;"
 
 RAW_SCRIPT_OPEN = b"<script>alert"
 ESCAPED_LT = b"&lt;"
@@ -498,6 +508,110 @@ def test_login_page_does_not_inject_next_param(client):
     login_url = reverse("login")
     resp = client.get(f"{login_url}?next={SCRIPT_TAG}")
     assert resp.status_code == 200
+
+
+# ===========================================================================
+# 8. Template auto-escaping of font CSS variables (Finding #1 — layer 2)
+#
+# The view-layer allowlist (survey_style_update) is the primary defence.
+# But data pre-dating that fix, or values written directly to survey.style
+# or SiteBranding, could still reach the templates.  These tests confirm
+# that removing |safe from all three base templates means Django auto-escaping
+# neutralises any malicious font value before it reaches the browser.
+# ===========================================================================
+
+
+@pytest.mark.django_db
+def test_base_minimal_escapes_stored_font_xss(client, owner, org):
+    """
+    base_minimal.html is used for public survey-take pages (detail.html when
+    not in preview mode).  On the public take route, brand.font_heading comes
+    from the branding context processor (which reads SiteBranding), not from
+    per-survey style overrides.  A malicious font_heading stored directly in
+    SiteBranding must be HTML-escaped by Django's auto-escaping and must not
+    break out of the <style> block.
+    """
+    from checktick_app.core.models import SiteBranding
+
+    # Store the payload directly in SiteBranding so the context processor injects it.
+    SiteBranding.objects.filter(pk=1).delete()
+    SiteBranding.objects.create(pk=1, font_heading=FONT_XSS_STORED)
+
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="Font XSS Base Minimal Test",
+        slug="font-xss-base-minimal",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.PUBLIC,
+    )
+    resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert (
+        b"</style><script>" not in resp.content
+    ), "Raw XSS payload in base_minimal.html — |safe not fully removed from font variable"
+    assert (
+        FONT_XSS_ESCAPED in resp.content
+    ), "Expected HTML-escaped font value not found — auto-escaping may be broken in base_minimal.html"
+
+
+@pytest.mark.django_db
+def test_base_html_escapes_stored_font_xss(auth_client, survey):
+    """
+    base.html is used by authenticated pages including the survey dashboard.
+    A malicious font_heading stored directly in survey.style must be
+    HTML-escaped when the dashboard renders — not emitted raw into the
+    <style> block where it would execute for every authenticated visitor.
+    """
+    # Write the payload directly into the DB, bypassing the view-layer allowlist.
+    survey.style = {"font_heading": FONT_XSS_STORED, "font_body": "Georgia, serif"}
+    survey.save(update_fields=["style"])
+
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert (
+        b"</style><script>" not in resp.content
+    ), "Raw XSS payload in base.html — |safe not fully removed from font variable"
+    assert (
+        FONT_XSS_ESCAPED in resp.content
+    ), "Expected HTML-escaped font value not found — auto-escaping may be broken in base.html"
+
+
+@pytest.mark.django_db
+def test_admin_base_site_escapes_stored_font_xss(client, django_user_model):
+    """
+    admin/base_site.html is used by every Django admin page.  Its brand CSS
+    variables come from the SiteBranding model via the branding context
+    processor.  A malicious font_heading stored directly in SiteBranding must
+    be HTML-escaped and must not break out of the admin <style> block.
+    """
+    from checktick_app.core.models import SiteBranding
+
+    # Write the payload directly into SiteBranding (no view-layer validation here).
+    SiteBranding.objects.filter(pk=1).delete()
+    SiteBranding.objects.create(
+        pk=1,
+        font_heading=FONT_XSS_STORED,
+        font_body="Georgia, serif",
+    )
+
+    admin_user = django_user_model.objects.create_user(
+        username="xss_admin_font@example.com",
+        email="xss_admin_font@example.com",
+        password="secureadminpass123!",
+        is_staff=True,
+        is_superuser=True,
+    )
+    client.force_login(admin_user)
+
+    resp = client.get("/admin/")
+    assert resp.status_code == 200
+    assert (
+        b"</style><script>" not in resp.content
+    ), "Raw XSS payload in admin/base_site.html — |safe not fully removed from font variable"
+    assert (
+        FONT_XSS_ESCAPED in resp.content
+    ), "Expected HTML-escaped font value not found — auto-escaping may be broken in admin/base_site.html"
     _xss_clean(resp.content)
 
 
@@ -513,3 +627,90 @@ def test_login_invalid_credentials_error_xss_escaped(client):
     )
     # Form re-rendered (200) or redirect — no raw payload.
     _xss_clean(resp.content)
+
+
+# ===========================================================================
+# 9. builder_payload_json closing-tag escaping (Finding #3)
+#
+# question_row.html uses |safe on builder_payload_json, so the </…> escape
+# MUST be applied in the view before the template sees the value.
+# _prepare_question_rendering() calls json.dumps().replace("</", "<\\/").
+# ===========================================================================
+
+BUILDER_XSS_PAYLOAD = "</script><script>alert(1)</script>"
+
+
+@pytest.mark.django_db
+def test_prepare_question_rendering_escapes_closing_tag_in_payload_json(owner, org):
+    """
+    Unit test for Finding #3.  _prepare_question_rendering must replace every
+    '</' with '<\\/' in builder_payload_json so that a question text containing
+    '</script>' cannot break out of the data island in question_row.html.
+    """
+    from checktick_app.surveys.views import _prepare_question_rendering
+
+    survey = Survey.objects.create(
+        owner=owner, organization=org, name="Builder XSS", slug="builder-xss-f3"
+    )
+    group = QuestionGroup.objects.create(name="Group", owner=owner)
+    survey.question_groups.add(group)
+    question = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text=BUILDER_XSS_PAYLOAD,
+        type=SurveyQuestion.Types.TEXT,
+        options=[{"type": "text", "format": "free"}],
+        required=False,
+        order=0,
+    )
+
+    prepared = _prepare_question_rendering(survey, [question])
+    payload_json = prepared[0].builder_payload_json
+
+    assert (
+        "</" not in payload_json
+    ), "Raw '</' found in builder_payload_json — Finding #3 slash-escape fix not applied"
+    assert (
+        "\\/" in payload_json
+    ), "Expected escaped '<\\/' not found in builder_payload_json"
+
+
+@pytest.mark.django_db
+def test_question_row_template_renders_escaped_closing_tag(owner, org):
+    """
+    Integration test for Finding #3.  question_row.html uses |safe on
+    builder_payload_json, so the escaping must occur in the view layer.
+    Verifies that '</script>' in question text is rendered as '<\\/script>' in
+    the raw HTML byte stream and does not break out of the data island.
+    """
+    from django.test import RequestFactory
+
+    from checktick_app.surveys.views import _render_template_question_row
+
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="Builder XSS Render",
+        slug="builder-xss-render-f3",
+    )
+    group = QuestionGroup.objects.create(name="Group Render", owner=owner)
+    survey.question_groups.add(group)
+    question = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text=BUILDER_XSS_PAYLOAD,
+        type=SurveyQuestion.Types.TEXT,
+        options=[{"type": "text", "format": "free"}],
+        required=False,
+        order=0,
+    )
+
+    request = RequestFactory().get("/builder/")
+    request.user = owner
+
+    response = _render_template_question_row(request, survey, question)
+
+    # The escaped form '<\/script>' (literal backslash) must be present in bytes.
+    assert (
+        b"<\\/script>" in response.content
+    ), "Escaped '<\\/script>' not found — Finding #3 closing-tag escape fix may not be active"
