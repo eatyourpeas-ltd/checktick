@@ -353,7 +353,8 @@ class TestAuthenticatedInvitationPublishing:
             {
                 "action": "publish",
                 "visibility": "authenticated",
-                # allow_any_authenticated not included
+                # allow_any_authenticated not included — invite-only mode, so emails required
+                "invite_emails": "invited@example.com",
                 "no_patient_data_ack": "on",
             },
         )

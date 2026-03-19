@@ -1200,6 +1200,8 @@ class TestPublishViaEncryptionSetup:
             {
                 "action": "publish",
                 "visibility": "authenticated",
+                # invite-only mode — emails required by server-side guard
+                "invite_emails": "invited@example.com",
                 "no_patient_data_ack": "on",
             },
         )
