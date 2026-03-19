@@ -41,7 +41,7 @@ from checktick_app.surveys.models import (
 
 # Common XSS payloads that cover the most common injection patterns.
 SCRIPT_TAG = "<script>alert('xss')</script>"
-SCRIPT_BREAK_OUT = '</script><script>alert(1)</script>'
+SCRIPT_BREAK_OUT = "</script><script>alert(1)</script>"
 ATTR_BREAK_OUT = '" onmouseover="alert(1)" data-x="'
 SINGLE_QUOTE_BREAK = "' onmouseover='alert(1)' x='"
 
@@ -140,20 +140,20 @@ def public_survey_with_questions(public_survey):
 def _assert_no_raw_xss(content: bytes, payload: str = SCRIPT_TAG) -> None:
     """Assert that the raw XSS payload does not appear verbatim in HTML output."""
     # The opening <script> of the payload must not appear raw.
-    assert b"<script>alert" not in content, (
-        "Raw <script>alert found in response — XSS payload not escaped"
-    )
+    assert (
+        b"<script>alert" not in content
+    ), "Raw <script>alert found in response — XSS payload not escaped"
     # </script> from break-out payload must not appear raw either.
-    assert b"</script><script>" not in content, (
-        "Script break-out sequence found in response"
-    )
+    assert (
+        b"</script><script>" not in content
+    ), "Script break-out sequence found in response"
 
 
 def _assert_xss_escaped(content: bytes) -> None:
     """Assert that at least the escaped form of < is present (proving encoding ran)."""
-    assert ESCAPED_LT in content or b"\\u003C" in content or b"&lt;" in content, (
-        "Expected to find HTML-escaped characters but found neither &lt; nor \\u003C"
-    )
+    assert (
+        ESCAPED_LT in content or b"\\u003C" in content or b"&lt;" in content
+    ), "Expected to find HTML-escaped characters but found neither &lt; nor \\u003C"
 
 
 # ===========================================================================
@@ -196,7 +196,9 @@ def test_question_text_xss_escaped(client, public_survey_with_questions):
 
 
 @pytest.mark.django_db
-def test_mc_option_value_xss_escaped_in_radio_input(client, public_survey_with_questions):
+def test_mc_option_value_xss_escaped_in_radio_input(
+    client, public_survey_with_questions
+):
     """
     Multiple-choice option values are rendered as the value= attribute of
     <input type="radio">. A payload like <script>... must appear as &lt;script&gt;,
@@ -223,9 +225,9 @@ def test_mc_option_attr_break_out_escaped(client, public_survey_with_questions):
     )
     assert resp.status_code == 200
     # Raw unescaped double-quote followed by space+on... would be the break-out.
-    assert b'" onmouseover="' not in resp.content, (
-        "Attribute break-out sequence found in response"
-    )
+    assert (
+        b'" onmouseover="' not in resp.content
+    ), "Attribute break-out sequence found in response"
 
 
 @pytest.mark.django_db
@@ -329,13 +331,13 @@ def test_branching_config_condition_value_escaped_in_attribute(client, owner, or
     assert resp.status_code == 200
 
     # The raw double-quote break-out must not appear.
-    assert b'" onmouseover="evil' not in resp.content, (
-        "Attribute break-out via condition value found in branching-config"
-    )
+    assert (
+        b'" onmouseover="evil' not in resp.content
+    ), "Attribute break-out via condition value found in branching-config"
     # The </script><script> break-out must not appear raw.
-    assert b"</script><script>" not in resp.content, (
-        "Script break-out sequence found in branching-config"
-    )
+    assert (
+        b"</script><script>" not in resp.content
+    ), "Script break-out sequence found in branching-config"
 
 
 # ===========================================================================
@@ -381,13 +383,13 @@ def test_saved_answers_xss_encoded_via_json_script(client, owner, org):
     assert resp.status_code == 200
 
     # The raw <script> tag must not appear in the response.
-    assert RAW_SCRIPT_OPEN not in resp.content, (
-        "Raw XSS payload found in saved_answers output — json_script not applied"
-    )
+    assert (
+        RAW_SCRIPT_OPEN not in resp.content
+    ), "Raw XSS payload found in saved_answers output — json_script not applied"
     # Django's json_script encodes < as \\u003C inside the JSON element.
-    assert b"\\u003C" in resp.content or b"\\u003c" in resp.content, (
-        "Expected json_script Unicode-escaped output not found for < character"
-    )
+    assert (
+        b"\\u003C" in resp.content or b"\\u003c" in resp.content
+    ), "Expected json_script Unicode-escaped output not found for < character"
 
 
 @pytest.mark.django_db
@@ -425,9 +427,9 @@ def test_saved_answers_double_quote_encoded_via_json_script(client, owner, org):
     resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
     # The literal injection key must not appear as a separate JSON key.
-    assert b'"injected"' not in resp.content, (
-        "JSON injection via saved_answers double-quote not encoded"
-    )
+    assert (
+        b'"injected"' not in resp.content
+    ), "JSON injection via saved_answers double-quote not encoded"
 
 
 # ===========================================================================
@@ -585,9 +587,9 @@ def test_closed_page_does_not_reflect_reason_param(client, owner, org):
     resp = client.get(f"{url}?reason={SCRIPT_TAG}")
     assert resp.status_code == 200
     # The payload must not appear raw in the page.
-    assert RAW_SCRIPT_OPEN not in resp.content, (
-        "XSS payload from ?reason= parameter was reflected into the page"
-    )
+    assert (
+        RAW_SCRIPT_OPEN not in resp.content
+    ), "XSS payload from ?reason= parameter was reflected into the page"
 
 
 # ===========================================================================

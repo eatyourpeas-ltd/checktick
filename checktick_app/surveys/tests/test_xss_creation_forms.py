@@ -52,15 +52,15 @@ ESCAPED_LT = b"&lt;"
 
 def _xss_clean(content: bytes) -> None:
     """Assert no raw XSS payload appears verbatim in `content`."""
-    assert RAW_SCRIPT_OPEN not in content, (
-        "Raw <script>alert found in response — XSS payload not escaped"
-    )
-    assert b"</script><script>" not in content, (
-        "Script break-out sequence found in response"
-    )
-    assert b'" onmouseover="' not in content, (
-        "Attribute break-out sequence found in response"
-    )
+    assert (
+        RAW_SCRIPT_OPEN not in content
+    ), "Raw <script>alert found in response — XSS payload not escaped"
+    assert (
+        b"</script><script>" not in content
+    ), "Script break-out sequence found in response"
+    assert (
+        b'" onmouseover="' not in content
+    ), "Attribute break-out sequence found in response"
 
 
 # ===========================================================================
@@ -159,7 +159,9 @@ def test_survey_create_duplicate_slug_error_xss_escaped(auth_client, survey):
 
 
 @pytest.mark.django_db
-def test_survey_create_xss_in_name_stored_and_escaped_on_dashboard(auth_client, owner, org):
+def test_survey_create_xss_in_name_stored_and_escaped_on_dashboard(
+    auth_client, owner, org
+):
     """
     A survey created with an XSS payload in its name must have that name
     HTML-escaped wherever it is displayed — including the dashboard title,
@@ -219,9 +221,7 @@ def test_dashboard_survey_name_escapejs_in_inline_script(auth_client, owner, org
         slug="escapejs-test",
         status=Survey.Status.DRAFT,
     )
-    resp = auth_client.get(
-        reverse("surveys:dashboard", kwargs={"slug": survey.slug})
-    )
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
     _xss_clean(resp.content)
     # escapejs encodes < as \u003C
@@ -258,7 +258,9 @@ def test_update_survey_title_stores_xss_safely(auth_client, survey):
 
 
 @pytest.mark.django_db
-def test_update_survey_title_response_json_does_not_contain_raw_html(auth_client, survey):
+def test_update_survey_title_response_json_does_not_contain_raw_html(
+    auth_client, survey
+):
     """
     The JSON response from update-title echoes back the stored title.
     The response content-type is application/json; the title value is a
@@ -353,7 +355,9 @@ def test_group_create_name_xss_escaped_in_groups_page(auth_client, survey):
 
 
 @pytest.mark.django_db
-def test_group_edit_strips_html_tags_from_name_and_description(auth_client, survey, owner):
+def test_group_edit_strips_html_tags_from_name_and_description(
+    auth_client, survey, owner
+):
     """
     survey_group_edit() applies strip_tags() to both name and description
     before saving.
@@ -362,7 +366,9 @@ def test_group_edit_strips_html_tags_from_name_and_description(auth_client, surv
     survey.question_groups.add(group)
 
     resp = auth_client.post(
-        reverse("surveys:survey_group_edit", kwargs={"slug": survey.slug, "gid": group.id}),
+        reverse(
+            "surveys:survey_group_edit", kwargs={"slug": survey.slug, "gid": group.id}
+        ),
         data={"name": SCRIPT_TAG, "description": SCRIPT_TAG},
     )
     assert resp.status_code == 302
@@ -380,7 +386,9 @@ def test_group_edit_name_xss_escaped_on_dashboard(auth_client, survey, owner):
     group = QuestionGroup.objects.create(name="Safe Group 2", owner=owner)
     survey.question_groups.add(group)
     auth_client.post(
-        reverse("surveys:survey_group_edit", kwargs={"slug": survey.slug, "gid": group.id}),
+        reverse(
+            "surveys:survey_group_edit", kwargs={"slug": survey.slug, "gid": group.id}
+        ),
         data={"name": SCRIPT_TAG, "description": SCRIPT_TAG},
     )
     dash = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))

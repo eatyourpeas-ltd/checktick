@@ -6,9 +6,9 @@ All data returned is non-encrypted (question answers only).
 Demographics/IMD require separate unlock and are handled elsewhere.
 """
 
-import json
 from collections import Counter
 from dataclasses import dataclass, field
+import json
 from typing import Any
 
 from django.db.models import QuerySet

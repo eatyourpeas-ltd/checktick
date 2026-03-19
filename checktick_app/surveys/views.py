@@ -4260,8 +4260,13 @@ def survey_style_update(request: HttpRequest, slug: str) -> HttpResponse:
             if val:
                 # Validate font values against a strict CSS font-stack allowlist to
                 # prevent CSS break-out XSS (pen-test Finding #1).
-                if key in ("font_heading", "font_body") and not _SAFE_FONT_RE.match(val):
-                    messages.error(request, "Invalid font value. Only alphanumeric characters, spaces, commas, hyphens, and quotes are allowed.")
+                if key in ("font_heading", "font_body") and not _SAFE_FONT_RE.match(
+                    val
+                ):
+                    messages.error(
+                        request,
+                        "Invalid font value. Only alphanumeric characters, spaces, commas, hyphens, and quotes are allowed.",
+                    )
                     return redirect("surveys:dashboard", slug=slug)
                 style[key] = val
             elif key in style:
@@ -5426,6 +5431,7 @@ def survey_group_create(request: HttpRequest, slug: str) -> HttpResponse:
     name = request.POST.get("name", "").strip() or "New Group"
     # Strip HTML tags to prevent stored XSS via group names
     from django.utils.html import strip_tags
+
     name = strip_tags(name).strip() or "New Group"
     g = QuestionGroup.objects.create(name=name, owner=request.user)
     survey.question_groups.add(g)
@@ -5441,6 +5447,7 @@ def survey_group_edit(request: HttpRequest, slug: str, gid: int) -> HttpResponse
     require_can_edit(request.user, survey)
     group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)
     from django.utils.html import strip_tags
+
     raw_name = request.POST.get("name", group.name)
     group.name = strip_tags(raw_name).strip() or group.name
     raw_desc = request.POST.get("description", group.description)
