@@ -34,7 +34,12 @@ import json
 from django.urls import reverse
 import pytest
 
-from checktick_app.surveys.models import Organization, QuestionGroup, Survey, SurveyQuestion
+from checktick_app.surveys.models import (
+    Organization,
+    QuestionGroup,
+    Survey,
+    SurveyQuestion,
+)
 
 # ---------------------------------------------------------------------------
 # Common payloads
@@ -542,12 +547,12 @@ def test_base_minimal_escapes_stored_font_xss(client, owner, org):
     )
     resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
-    assert b"</style><script>" not in resp.content, (
-        "Raw XSS payload in base_minimal.html — |safe not fully removed from font variable"
-    )
-    assert FONT_XSS_ESCAPED in resp.content, (
-        "Expected HTML-escaped font value not found — auto-escaping may be broken in base_minimal.html"
-    )
+    assert (
+        b"</style><script>" not in resp.content
+    ), "Raw XSS payload in base_minimal.html — |safe not fully removed from font variable"
+    assert (
+        FONT_XSS_ESCAPED in resp.content
+    ), "Expected HTML-escaped font value not found — auto-escaping may be broken in base_minimal.html"
 
 
 @pytest.mark.django_db
@@ -564,12 +569,12 @@ def test_base_html_escapes_stored_font_xss(auth_client, survey):
 
     resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
-    assert b"</style><script>" not in resp.content, (
-        "Raw XSS payload in base.html — |safe not fully removed from font variable"
-    )
-    assert FONT_XSS_ESCAPED in resp.content, (
-        "Expected HTML-escaped font value not found — auto-escaping may be broken in base.html"
-    )
+    assert (
+        b"</style><script>" not in resp.content
+    ), "Raw XSS payload in base.html — |safe not fully removed from font variable"
+    assert (
+        FONT_XSS_ESCAPED in resp.content
+    ), "Expected HTML-escaped font value not found — auto-escaping may be broken in base.html"
 
 
 @pytest.mark.django_db
@@ -601,12 +606,12 @@ def test_admin_base_site_escapes_stored_font_xss(client, django_user_model):
 
     resp = client.get("/admin/")
     assert resp.status_code == 200
-    assert b"</style><script>" not in resp.content, (
-        "Raw XSS payload in admin/base_site.html — |safe not fully removed from font variable"
-    )
-    assert FONT_XSS_ESCAPED in resp.content, (
-        "Expected HTML-escaped font value not found — auto-escaping may be broken in admin/base_site.html"
-    )
+    assert (
+        b"</style><script>" not in resp.content
+    ), "Raw XSS payload in admin/base_site.html — |safe not fully removed from font variable"
+    assert (
+        FONT_XSS_ESCAPED in resp.content
+    ), "Expected HTML-escaped font value not found — auto-escaping may be broken in admin/base_site.html"
     _xss_clean(resp.content)
 
 
@@ -636,9 +641,7 @@ BUILDER_XSS_PAYLOAD = "</script><script>alert(1)</script>"
 
 
 @pytest.mark.django_db
-def test_prepare_question_rendering_escapes_closing_tag_in_payload_json(
-    owner, org
-):
+def test_prepare_question_rendering_escapes_closing_tag_in_payload_json(owner, org):
     """
     Unit test for Finding #3.  _prepare_question_rendering must replace every
     '</' with '<\\/' in builder_payload_json so that a question text containing
@@ -664,12 +667,12 @@ def test_prepare_question_rendering_escapes_closing_tag_in_payload_json(
     prepared = _prepare_question_rendering(survey, [question])
     payload_json = prepared[0].builder_payload_json
 
-    assert "</" not in payload_json, (
-        "Raw '</' found in builder_payload_json — Finding #3 slash-escape fix not applied"
-    )
-    assert "\\/" in payload_json, (
-        "Expected escaped '<\\/' not found in builder_payload_json"
-    )
+    assert (
+        "</" not in payload_json
+    ), "Raw '</' found in builder_payload_json — Finding #3 slash-escape fix not applied"
+    assert (
+        "\\/" in payload_json
+    ), "Expected escaped '<\\/' not found in builder_payload_json"
 
 
 @pytest.mark.django_db
@@ -708,6 +711,6 @@ def test_question_row_template_renders_escaped_closing_tag(owner, org):
     response = _render_template_question_row(request, survey, question)
 
     # The escaped form '<\/script>' (literal backslash) must be present in bytes.
-    assert b"<\\/script>" in response.content, (
-        "Escaped '<\\/script>' not found — Finding #3 closing-tag escape fix may not be active"
-    )
+    assert (
+        b"<\\/script>" in response.content
+    ), "Escaped '<\\/script>' not found — Finding #3 closing-tag escape fix may not be active"

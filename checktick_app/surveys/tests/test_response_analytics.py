@@ -363,12 +363,10 @@ class TestAnswerDistributionOptionsJson:
             ],
         )
         result = dist.options_json
-        assert "</" not in result, (
-            "Raw '</' found in options_json — Finding #4 closing-tag escape not applied"
-        )
-        assert "\\/" in result, (
-            "Expected '<\\/' not found in options_json after escape"
-        )
+        assert (
+            "</" not in result
+        ), "Raw '</' found in options_json — Finding #4 closing-tag escape not applied"
+        assert "\\/" in result, "Expected '<\\/' not found in options_json after escape"
 
     def test_single_quote_produces_valid_parseable_json(self):
         """Single quotes in labels must not break JSON validity."""

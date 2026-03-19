@@ -443,9 +443,9 @@ class TestResponseInsightsXSSEscaping:
         client.login(username="insightsuser", password=TEST_PASSWORD)  # noqa: S106
         response = client.get(f"/surveys/{survey.slug}/dashboard/")
         assert response.status_code == 200
-        assert b"</script><script>" not in response.content, (
-            "Raw XSS closing-tag payload found in dashboard HTML — Finding #4 escape not active"
-        )
+        assert (
+            b"</script><script>" not in response.content
+        ), "Raw XSS closing-tag payload found in dashboard HTML — Finding #4 escape not active"
 
     def test_single_quote_in_answer_not_raw_in_html(self, user):
         """
@@ -459,6 +459,6 @@ class TestResponseInsightsXSSEscaping:
         client.login(username="insightsuser", password=TEST_PASSWORD)  # noqa: S106
         response = client.get(f"/surveys/{survey.slug}/dashboard/")
         assert response.status_code == 200
-        assert b"' onmouseover='" not in response.content, (
-            "Raw single-quote XSS payload found in dashboard HTML — attribute escaping not working"
-        )
+        assert (
+            b"' onmouseover='" not in response.content
+        ), "Raw single-quote XSS payload found in dashboard HTML — attribute escaping not working"
