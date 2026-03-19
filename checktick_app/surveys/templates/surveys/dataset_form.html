@@ -115,7 +115,7 @@
   </form>
 </div>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
   const nameInput = document.getElementById('datasetName');
   const keyInput = document.getElementById('datasetKey');

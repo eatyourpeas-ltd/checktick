@@ -98,4 +98,4 @@
   }
 </style>
 
-<script src="{% static 'js/branching-visualizer.js' %}" defer></script>
+<script src="{% static 'js/branching-visualizer.js' %}" nonce="{{ request.csp_nonce }}" defer></script>

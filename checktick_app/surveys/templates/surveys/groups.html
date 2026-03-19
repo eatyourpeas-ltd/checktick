@@ -255,7 +255,7 @@
 {% endblock %}
 
 {% block extra_js %}
-  <script src="{% static 'js/sortable.min.js' %}" integrity="sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc" crossorigin="anonymous"></script>
-  <script src="{% static 'js/groups.js' %}?v={{ build.commit|default:build.timestamp }}"></script>
-  <script src="{% static 'js/groups-page.js' %}?v={{ build.commit|default:build.timestamp }}"></script>
+  <script src="{% static 'js/sortable.min.js' %}" nonce="{{ request.csp_nonce }}" integrity="sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc" crossorigin="anonymous"></script>
+  <script src="{% static 'js/groups.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}"></script>
+  <script src="{% static 'js/groups-page.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}"></script>
 {% endblock %}

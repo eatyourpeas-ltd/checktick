@@ -278,7 +278,7 @@
   {% endif %}
 </div>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 // Auto-submit form when select dropdowns change
 document.querySelectorAll('[data-auto-submit]').forEach(el => {
   el.addEventListener('change', () => {

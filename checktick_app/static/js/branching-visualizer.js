@@ -4,6 +4,21 @@
  */
 
 (function () {
+  /**
+   * Escape a plain-text string for safe insertion into HTML.
+   * Use this whenever untrusted data (question text, condition values, etc.)
+   * needs to appear inside an innerHTML assignment.
+   */
+  function escHtml(str) {
+    if (str === null || str === undefined) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#x27;");
+  }
+
   const visualizers = document.querySelectorAll(".branching-visualizer");
 
   visualizers.forEach((visualizer) => {
@@ -149,7 +164,7 @@
     async function loadData() {
       try {
         const response = await fetch(
-          `/surveys/${surveySlug}/builder/api/branching-data/`
+          `/surveys/${surveySlug}/builder/api/branching-data/`,
         );
         if (response.ok) {
           const data = await response.json();
@@ -329,7 +344,7 @@
           0,
           group.startY,
           getCanvasWidth(),
-          group.endY - group.startY
+          group.endY - group.startY,
         );
 
         // Draw group label on the left side
@@ -373,21 +388,21 @@
               badgeX + badgeWidth,
               badgeY,
               badgeX + badgeWidth,
-              badgeY + radius
+              badgeY + radius,
             );
             ctx.lineTo(badgeX + badgeWidth, badgeY + badgeHeight - radius);
             ctx.quadraticCurveTo(
               badgeX + badgeWidth,
               badgeY + badgeHeight,
               badgeX + badgeWidth - radius,
-              badgeY + badgeHeight
+              badgeY + badgeHeight,
             );
             ctx.lineTo(badgeX + radius, badgeY + badgeHeight);
             ctx.quadraticCurveTo(
               badgeX,
               badgeY + badgeHeight,
               badgeX,
-              badgeY + badgeHeight - radius
+              badgeY + badgeHeight - radius,
             );
             ctx.lineTo(badgeX, badgeY + radius);
             ctx.quadraticCurveTo(badgeX, badgeY, badgeX + radius, badgeY);
@@ -408,7 +423,7 @@
             ctx.fillText(
               countText,
               iconX + iconSize + 2,
-              badgeY + badgeHeight / 2
+              badgeY + badgeHeight / 2,
             );
           }
         }
@@ -429,7 +444,7 @@
           (c) =>
             c.action === "jump_to" ||
             c.action === "skip" ||
-            c.action === "end_survey"
+            c.action === "end_survey",
         );
 
         // Draw vertical line to next question (if not last)
@@ -447,7 +462,7 @@
               nodeRadius,
               elseSummary,
               q.full_text || q.text,
-              nextQ.full_text || nextQ.text
+              nextQ.full_text || nextQ.text,
             );
             if (labelInfo) {
               labelsToRender.push(labelInfo);
@@ -466,7 +481,7 @@
           if (cond.target_question && nodePositions[cond.target_question]) {
             const toPos = nodePositions[cond.target_question];
             const targetQ = questions.find(
-              (tq) => tq.id === cond.target_question
+              (tq) => tq.id === cond.target_question,
             );
             // Pass index to stagger multiple branches from same question
             const branchLabelInfo = drawBranchingLine(
@@ -477,7 +492,7 @@
               cond.summary || "",
               nodeRadius,
               q.full_text || q.text,
-              targetQ ? targetQ.full_text || targetQ.text : "next question"
+              targetQ ? targetQ.full_text || targetQ.text : "next question",
             );
             if (branchLabelInfo) {
               labelsToRender.push(branchLabelInfo);
@@ -492,7 +507,7 @@
           label.labelX,
           label.labelY,
           label.labelText,
-          label.color
+          label.color,
         );
       });
 
@@ -504,7 +519,7 @@
             (c) =>
               c.action === "jump_to" ||
               c.action === "skip" ||
-              c.action === "end_survey"
+              c.action === "end_survey",
           )
           .map((c) => {
             if (!c.summary) return null;
@@ -544,7 +559,7 @@
         nodeRadius,
         elseSummary,
         sourceQuestionText = "",
-        targetQuestionText = ""
+        targetQuestionText = "",
       ) {
         const elseColor = "#6b7280"; // Gray for default/else path
         const branchOffset = 40; // Go to the right
@@ -656,7 +671,7 @@
           hasConditions,
           qConditions,
           q.group_name,
-          pos.x // Pass node's x position for badge placement
+          pos.x, // Pass node's x position for badge placement
         );
       });
 
@@ -669,7 +684,7 @@
           (c) =>
             c.action === "jump_to" ||
             c.action === "skip" ||
-            c.action === "end_survey"
+            c.action === "end_survey",
         );
 
         // Draw line from last question to end survey
@@ -783,7 +798,7 @@
       hasConditions,
       nodeConditions,
       groupName,
-      nodeX
+      nodeX,
     ) {
       // Draw text label to the right of the node (and any right-side branches)
       ctx.fillStyle = hasConditions ? colors.primary : colors.accent;
@@ -836,7 +851,7 @@
           y - badgeHeight / 2,
           badgeWidth,
           badgeHeight,
-          radius
+          radius,
         );
         ctx.fill();
 
@@ -856,7 +871,7 @@
       conditionSummary = "",
       nodeRadius = 8,
       sourceQuestionText = "",
-      targetQuestionText = ""
+      targetQuestionText = "",
     ) {
       // Color-code by action type using theme colors
       const actionColors = {
@@ -1012,8 +1027,8 @@
           showTooltip(
             e.clientX - rect.left,
             e.clientY - rect.top,
-            `<div class="font-semibold mb-1">Q${questionNumber}</div>` +
-              `<div class="text-base-content/70">${fullText}</div>`
+            `<div class="font-semibold mb-1">Q${escHtml(questionNumber)}</div>` +
+              `<div class="text-base-content/70">${escHtml(fullText)}</div>`,
           );
           canvas.style.cursor = "pointer";
           return;
@@ -1032,8 +1047,8 @@
             showTooltip(
               e.clientX - rect.left,
               e.clientY - rect.top,
-              `<div class="font-semibold mb-1">Q${questionNumber}</div>` +
-                `<div class="text-base-content/70">${fullText}</div>`
+              `<div class="font-semibold mb-1">Q${escHtml(questionNumber)}</div>` +
+                `<div class="text-base-content/70">${escHtml(fullText)}</div>`,
             );
             canvas.style.cursor = "pointer";
             return;
@@ -1053,7 +1068,7 @@
           let explanation;
           if (branch.isElse) {
             // Else/default flow line - simple "otherwise" message
-            explanation = `Otherwise, continue to <strong>${branch.targetQuestion}</strong>`;
+            explanation = `Otherwise, continue to <strong>${escHtml(branch.targetQuestion)}</strong>`;
           } else {
             // Regular branch line
             const actionVerbs = {
@@ -1062,22 +1077,23 @@
               skip: "skip to",
               end_survey: "end the survey",
             };
-            const actionVerb = actionVerbs[branch.action] || branch.action;
+            const actionVerb =
+              actionVerbs[branch.action] || escHtml(branch.action);
             const targetText =
               branch.action === "end_survey"
                 ? ""
-                : `<strong>${branch.targetQuestion}</strong>`;
+                : `<strong>${escHtml(branch.targetQuestion)}</strong>`;
 
             explanation =
               branch.action === "end_survey"
-                ? `If ${branch.summary}, ${actionVerb}`
-                : `If ${branch.summary}, ${actionVerb} ${targetText}`;
+                ? `If ${escHtml(branch.summary)}, ${actionVerb}`
+                : `If ${escHtml(branch.summary)}, ${actionVerb} ${targetText}`;
           }
 
           showTooltip(
             e.clientX - rect.left,
             e.clientY - rect.top,
-            `<div class="text-base-content">${explanation}</div>`
+            `<div class="text-base-content">${explanation}</div>`,
           );
           canvas.style.cursor = "pointer";
           return;

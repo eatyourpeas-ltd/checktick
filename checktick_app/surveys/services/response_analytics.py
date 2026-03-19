@@ -6,6 +6,7 @@ All data returned is non-encrypted (question answers only).
 Demographics/IMD require separate unlock and are handled elsewhere.
 """
 
+import json
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
@@ -23,6 +24,11 @@ class AnswerDistribution:
     total_responses: int
     options: list[dict[str, Any]] = field(default_factory=list)
     # Each option: {"label": str, "count": int, "percent": float}
+
+    @property
+    def options_json(self) -> str:
+        """Safe JSON serialisation of options — escapes </ to prevent script break-out."""
+        return json.dumps(self.options, separators=(",", ":")).replace("</", "<\\/")
 
 
 @dataclass

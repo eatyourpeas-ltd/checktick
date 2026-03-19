@@ -120,7 +120,7 @@
         </div>
       </div>
 
-      <script>
+      <script nonce="{{ request.csp_nonce }}">
       // Show/hide recovery warning based on selected encryption choice
       document.addEventListener('DOMContentLoaded', function() {
         const form = document.getElementById('encryption-form');

@@ -272,7 +272,7 @@
 
 {# Template dropdown moved below with HR and label per UX #}
 
-<form id="survey-form" method="post" class="space-y-4 mt-6" aria-labelledby="survey-title" data-survey-form data-survey-slug="{{ survey.slug }}" data-branching-config='{{ branching_config|safe }}'>
+<form id="survey-form" method="post" class="space-y-4 mt-6" aria-labelledby="survey-title" data-survey-form data-survey-slug="{{ survey.slug }}" data-branching-config="{{ branching_config }}">
   {% csrf_token %}
 
   {% for q in questions %}
@@ -642,14 +642,15 @@
 {% endfor %}
 
 <script src="{% static 'js/sortable.min.js' %}"
+  nonce="{{ request.csp_nonce }}"
   integrity="sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc"
   crossorigin="anonymous"></script>
-<script src="{% static 'js/orderable.js' %}"></script>
+<script src="{% static 'js/orderable.js' %}" nonce="{{ request.csp_nonce }}"></script>
 {# Load professional fields script if we have group-level OR question-level professional details #}
-<script src="{% static 'js/professional-fields.js' %}"></script>
-<script src="{% static 'js/followup-fields.js' %}"></script>
+<script src="{% static 'js/professional-fields.js' %}" nonce="{{ request.csp_nonce }}"></script>
+<script src="{% static 'js/followup-fields.js' %}" nonce="{{ request.csp_nonce }}"></script>
 {# Load branching logic script #}
-<script src="{% static 'js/branching.js' %}"></script>
+<script src="{% static 'js/branching.js' %}" nonce="{{ request.csp_nonce }}"></script>
 
 <script nonce="{{ request.csp_nonce }}">
   // Update displayed value for Likert scale range sliders
@@ -668,8 +669,9 @@
     });
 
     {% if show_progress and not is_preview and saved_answers %}
+    {{ saved_answers|json_script:"saved-answers-data" }}
     // Restore saved answers
-    const savedAnswers = {{ saved_answers|safe }};
+    const savedAnswers = JSON.parse(document.getElementById('saved-answers-data').textContent);
     Object.entries(savedAnswers).forEach(([questionId, value]) => {
       if (!value) return; // Skip empty values
 

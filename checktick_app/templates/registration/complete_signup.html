@@ -115,7 +115,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
   function updateOrgNameState() {
     const simpleRadio = document.querySelector('input[name="account_type"][value="simple"]');
     const orgRadio = document.querySelector('input[name="account_type"][value="org"]');
