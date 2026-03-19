@@ -132,10 +132,10 @@ class TestAuthenticatedPublication:
         assert response.status_code == 200
         assert b"What is your name?" in response.content
 
-    def test_authenticated_draft_survey_returns_404(
+    def test_authenticated_draft_survey_returns_403(
         self, client, basic_survey, participant
     ):
-        """DRAFT surveys should not be accessible even to authenticated users."""
+        """DRAFT surveys should return 403 Forbidden for non-owners."""
         basic_survey.status = Survey.Status.DRAFT
         basic_survey.visibility = Survey.Visibility.AUTHENTICATED
         basic_survey.save()
@@ -144,9 +144,7 @@ class TestAuthenticatedPublication:
         url = reverse("surveys:take", kwargs={"slug": basic_survey.slug})
         response = client.get(url)
 
-        # Should redirect to closed page
-        assert response.status_code == 302
-        assert "/closed/" in response.url
+        assert response.status_code == 403
 
     def test_authenticated_closed_survey_returns_404(
         self, client, basic_survey, participant
@@ -253,8 +251,8 @@ class TestPublicPublication:
         # Should be accessible
         assert response.status_code == 200
 
-    def test_public_draft_survey_not_accessible(self, client, basic_survey):
-        """DRAFT PUBLIC surveys should return 404."""
+    def test_public_draft_survey_returns_403(self, client, basic_survey):
+        """DRAFT PUBLIC surveys should return 403 Forbidden."""
         basic_survey.status = Survey.Status.DRAFT
         basic_survey.visibility = Survey.Visibility.PUBLIC
         basic_survey.save()
@@ -262,9 +260,7 @@ class TestPublicPublication:
         url = reverse("surveys:take", kwargs={"slug": basic_survey.slug})
         response = client.get(url)
 
-        # Should redirect to closed page
-        assert response.status_code == 302
-        assert "/closed/" in response.url
+        assert response.status_code == 403
 
     def test_public_survey_submission_creates_response(self, client, basic_survey):
         """Anonymous users should be able to submit PUBLIC surveys."""
@@ -752,3 +748,477 @@ class TestDashboardPublishButton:
         assert "Edit Publication" in content
         # Check for edit icon SVG
         assert 'viewBox="0 0 24 24"' in content
+
+
+# ============================================================================
+# Publication Pathway Tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestPublishPathway:
+    """Tests that the publish POST actually transitions a survey to PUBLISHED."""
+
+    def test_direct_publish_sets_status_to_published(
+        self, client, survey_owner, basic_survey
+    ):
+        """POST to publish_settings should set status=PUBLISHED when survey already has encryption."""
+        # basic_survey fixture already has encryption configured
+        client.force_login(survey_owner)
+
+        response = client.post(
+            reverse("surveys:publish_settings", kwargs={"slug": basic_survey.slug}),
+            {
+                "action": "publish",
+                "visibility": "authenticated",
+                "allow_any_authenticated": "on",
+                "no_patient_data_ack": "on",
+            },
+        )
+
+        # Should redirect (success path)
+        assert response.status_code == 302
+
+        basic_survey.refresh_from_db()
+        assert basic_survey.status == Survey.Status.PUBLISHED
+        assert basic_survey.published_at is not None
+        assert basic_survey.visibility == Survey.Visibility.AUTHENTICATED
+        assert basic_survey.allow_any_authenticated is True
+
+    def test_publish_sets_visibility_correctly(
+        self, client, survey_owner, basic_survey
+    ):
+        """Published survey should store the visibility chosen at publish time."""
+        client.force_login(survey_owner)
+
+        client.post(
+            reverse("surveys:publish_settings", kwargs={"slug": basic_survey.slug}),
+            {
+                "action": "publish",
+                "visibility": "public",
+                "no_patient_data_ack": "on",
+            },
+        )
+
+        basic_survey.refresh_from_db()
+        assert basic_survey.status == Survey.Status.PUBLISHED
+        assert basic_survey.visibility == Survey.Visibility.PUBLIC
+
+    def test_publish_without_encryption_redirects_to_encryption_setup(
+        self, client, survey_owner, test_organization
+    ):
+        """Publishing a survey with no encryption should redirect to encryption_setup."""
+        # Create a survey without encryption
+        survey = Survey.objects.create(
+            name="No Encryption Survey",
+            slug="no-enc-survey",
+            owner=survey_owner,
+            organization=test_organization,
+            status=Survey.Status.DRAFT,
+            visibility=Survey.Visibility.PUBLIC,
+        )
+        group = QuestionGroup.objects.create(name="Questions", owner=survey_owner)
+        survey.question_groups.add(group)
+
+        client.force_login(survey_owner)
+
+        response = client.post(
+            reverse("surveys:publish_settings", kwargs={"slug": survey.slug}),
+            {
+                "action": "publish",
+                "visibility": "authenticated",
+                "allow_any_authenticated": "on",
+                "no_patient_data_ack": "on",
+            },
+        )
+
+        # Should redirect to encryption setup
+        assert response.status_code == 302
+        assert "encryption" in response.url
+
+        # Survey must still be DRAFT — not published until encryption is set up
+        survey.refresh_from_db()
+        assert survey.status == Survey.Status.DRAFT
+
+        # Pending publish info (including visibility and allow_any_authenticated)
+        # should be saved in the session for _apply_pending_publish_settings later
+        pending = client.session.get("pending_publish", {})
+        assert pending.get("slug") == survey.slug
+        assert pending.get("visibility") == "authenticated"
+        assert pending.get("allow_any_authenticated") is True
+
+    def test_publish_without_encryption_saves_invite_emails_in_session(
+        self, client, survey_owner, test_organization
+    ):
+        """invite_emails must be persisted in the session so they are sent after encryption setup."""
+        survey = Survey.objects.create(
+            name="Invite Pending Survey",
+            slug="invite-pending",
+            owner=survey_owner,
+            organization=test_organization,
+            status=Survey.Status.DRAFT,
+            visibility=Survey.Visibility.AUTHENTICATED,
+        )
+        group = QuestionGroup.objects.create(name="Questions", owner=survey_owner)
+        survey.question_groups.add(group)
+
+        client.force_login(survey_owner)
+
+        client.post(
+            reverse("surveys:publish_settings", kwargs={"slug": survey.slug}),
+            {
+                "action": "publish",
+                "visibility": "authenticated",
+                "invite_emails": "invited@example.com",
+                "no_patient_data_ack": "on",
+            },
+        )
+
+        pending = client.session.get("pending_publish", {})
+        assert pending.get("invite_emails") == "invited@example.com"
+
+    def test_draft_survey_with_invite_emails_redirects_to_encryption_not_dashboard(
+        self, client, survey_owner, test_organization
+    ):
+        """
+        Regression test: when a DRAFT survey (no encryption) is published with invite
+        emails, the response must redirect to encryption-setup — NOT to the dashboard.
+        """
+        survey = Survey.objects.create(
+            name="Email Draft Survey",
+            slug="email-draft-survey",
+            owner=survey_owner,
+            organization=test_organization,
+            status=Survey.Status.DRAFT,
+            visibility=Survey.Visibility.AUTHENTICATED,
+        )
+        group = QuestionGroup.objects.create(name="Questions", owner=survey_owner)
+        survey.question_groups.add(group)
+
+        client.force_login(survey_owner)
+
+        response = client.post(
+            reverse("surveys:publish_settings", kwargs={"slug": survey.slug}),
+            {
+                "action": "publish",
+                "visibility": "authenticated",
+                "invite_emails": "someone@example.com\nanother@example.com",
+                "no_patient_data_ack": "on",
+            },
+        )
+
+        # Must redirect to encryption setup, not the dashboard.
+        assert response.status_code == 302
+        assert "encryption" in response.url, (
+            f"Expected redirect to encryption setup but got: {response.url}. "
+            "Survey with no encryption must go through encryption setup before publishing."
+        )
+
+        # Survey must still be DRAFT — not published until encryption is configured.
+        survey.refresh_from_db()
+        assert survey.status == Survey.Status.DRAFT
+
+        # invite_emails must be in the session so they are sent after encryption setup.
+        pending = client.session.get("pending_publish", {})
+        assert "someone@example.com" in pending.get("invite_emails", "")
+
+    def test_token_survey_without_emails_blocked(
+        self, client, survey_owner, basic_survey
+    ):
+        """Token survey publish must be rejected server-side if no emails are provided."""
+        basic_survey.visibility = Survey.Visibility.TOKEN
+        basic_survey.save()
+
+        client.force_login(survey_owner)
+
+        response = client.post(
+            reverse("surveys:publish_settings", kwargs={"slug": basic_survey.slug}),
+            {
+                "action": "publish",
+                "visibility": "token",
+                "invite_emails": "",  # No emails
+                "no_patient_data_ack": "on",
+            },
+        )
+
+        # Should re-render the form with an error, not redirect
+        assert response.status_code == 200
+
+        basic_survey.refresh_from_db()
+        assert basic_survey.status == Survey.Status.DRAFT
+
+    def test_authenticated_invite_only_survey_without_emails_blocked(
+        self, client, survey_owner, basic_survey
+    ):
+        """Authenticated invite-only survey publish must be rejected if no emails are provided."""
+        client.force_login(survey_owner)
+
+        response = client.post(
+            reverse("surveys:publish_settings", kwargs={"slug": basic_survey.slug}),
+            {
+                "action": "publish",
+                "visibility": "authenticated",
+                "invite_emails": "",  # No emails
+                # allow_any_authenticated NOT checked → invite-only mode
+                "no_patient_data_ack": "on",
+            },
+        )
+
+        assert response.status_code == 200
+
+        basic_survey.refresh_from_db()
+        assert basic_survey.status == Survey.Status.DRAFT
+
+    def test_authenticated_allow_any_survey_without_emails_allowed(
+        self, client, survey_owner, basic_survey
+    ):
+        """Authenticated+allow_any survey can be published without emails (open to all logged-in users)."""
+        client.force_login(survey_owner)
+
+        response = client.post(
+            reverse("surveys:publish_settings", kwargs={"slug": basic_survey.slug}),
+            {
+                "action": "publish",
+                "visibility": "authenticated",
+                "allow_any_authenticated": "on",
+                "invite_emails": "",  # No emails required when allow_any is on
+                "no_patient_data_ack": "on",
+            },
+        )
+
+        assert response.status_code == 302
+
+        basic_survey.refresh_from_db()
+        assert basic_survey.status == Survey.Status.PUBLISHED
+
+
+# ============================================================================
+# Draft Survey Access Control (403 Forbidden)
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestDraftSurveyForbidden:
+    """DRAFT surveys must return 403 — not a redirect — for all participant access."""
+
+    def test_anonymous_user_gets_403_on_draft_survey(self, client, basic_survey):
+        """Anonymous users receive 403 when trying to access a DRAFT survey."""
+        basic_survey.status = Survey.Status.DRAFT
+        basic_survey.save()
+
+        url = reverse("surveys:take", kwargs={"slug": basic_survey.slug})
+        response = client.get(url)
+
+        assert response.status_code == 403
+
+    def test_authenticated_user_gets_403_on_draft_survey(
+        self, client, basic_survey, participant
+    ):
+        """Authenticated non-owner users receive 403 on a DRAFT survey."""
+        basic_survey.status = Survey.Status.DRAFT
+        basic_survey.save()
+
+        client.login(username="participant@example.com", password=TEST_PASSWORD)
+        url = reverse("surveys:take", kwargs={"slug": basic_survey.slug})
+        response = client.get(url)
+
+        assert response.status_code == 403
+
+    def test_draft_survey_with_authenticated_visibility_returns_403(
+        self, client, basic_survey, participant
+    ):
+        """Authenticated-visibility DRAFT surveys return 403 (not a /closed/ redirect)."""
+        basic_survey.status = Survey.Status.DRAFT
+        basic_survey.visibility = Survey.Visibility.AUTHENTICATED
+        basic_survey.save()
+
+        client.login(username="participant@example.com", password=TEST_PASSWORD)
+        url = reverse("surveys:take", kwargs={"slug": basic_survey.slug})
+        response = client.get(url)
+
+        assert response.status_code == 403
+
+    def test_closed_survey_still_redirects_to_closed_page(
+        self, client, basic_survey, participant
+    ):
+        """CLOSED surveys (were published, now ended) should still redirect to /closed/ — not 403."""
+        basic_survey.status = Survey.Status.CLOSED
+        basic_survey.visibility = Survey.Visibility.PUBLIC
+        basic_survey.save()
+
+        url = reverse("surveys:take", kwargs={"slug": basic_survey.slug})
+        response = client.get(url)
+
+        assert response.status_code == 302
+        assert "/closed/" in response.url
+
+
+# ============================================================================
+# Full publish-through-encryption-setup integration tests
+#
+# These tests exercise the path that actually runs in production for a NEW
+# survey (no prior encryption): publish_settings POST → encryption_setup POST
+# → assert survey.status == PUBLISHED.
+#
+# The other tests in this file use `basic_survey` which already has encryption
+# pre-configured, so they bypass this path entirely (needs_encryption_setup=False).
+# That is why they pass even when the real-world flow is broken.
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestPublishViaEncryptionSetup:
+    """
+    End-to-end tests that simulate a *first-time* publish of a survey that has
+    no encryption yet.  The full flow is:
+
+        1. POST /surveys/<slug>/publish/ → stores pending_publish in session,
+           redirects to /surveys/<slug>/encryption-setup/
+        2. POST /surveys/<slug>/encryption-setup/ with password → calls
+           _apply_pending_publish_settings → survey.status = PUBLISHED, saves
+        3. Assert survey.status == PUBLISHED in the database
+
+    These are the tests that would catch the bug where the survey remained
+    DRAFT after publication because _apply_pending_publish_settings was never
+    (or incorrectly) called.
+    """
+
+    @pytest.fixture
+    def unencrypted_survey(self, survey_owner, test_organization):
+        """A survey with NO encryption — requires encryption setup on first publish."""
+        survey = Survey.objects.create(
+            name="New Survey",
+            slug="new-survey",
+            owner=survey_owner,
+            organization=test_organization,
+            status=Survey.Status.DRAFT,
+            visibility=Survey.Visibility.AUTHENTICATED,
+        )
+        QuestionGroup.objects.create(name="Questions", owner=survey_owner)
+        return survey
+
+    def test_publish_new_survey_sets_status_to_published(
+        self, client, survey_owner, unencrypted_survey
+    ):
+        """
+        Full path: no-encryption survey → publish_settings POST → encryption_setup
+        POST with password → survey ends up PUBLISHED.
+
+        This is the path that real users hit. If _apply_pending_publish_settings
+        is not called (or broken), the survey stays DRAFT and this test fails.
+        """
+        client.force_login(survey_owner)
+
+        # Step 1: submit publish settings.  No encryption → redirects to setup.
+        step1 = client.post(
+            reverse(
+                "surveys:publish_settings", kwargs={"slug": unencrypted_survey.slug}
+            ),
+            {
+                "action": "publish",
+                "visibility": "authenticated",
+                "allow_any_authenticated": "on",
+                "no_patient_data_ack": "on",
+            },
+        )
+        assert step1.status_code == 302, "Expected redirect to encryption setup"
+        assert "encryption" in step1.url
+
+        # Session must contain the pending publish data
+        pending = client.session.get("pending_publish", {})
+        assert pending.get("slug") == unencrypted_survey.slug
+        assert pending.get("visibility") == "authenticated"
+        assert pending.get("allow_any_authenticated") is True
+
+        # Survey must still be DRAFT at this point
+        unencrypted_survey.refresh_from_db()
+        assert unencrypted_survey.status == Survey.Status.DRAFT
+
+        # Step 2: complete the encryption setup with a password.
+        step2 = client.post(
+            reverse(
+                "surveys:encryption_setup", kwargs={"slug": unencrypted_survey.slug}
+            ),
+            {
+                "password": "SuperSecurePass123",
+                "password_confirm": "SuperSecurePass123",
+            },
+        )
+        assert step2.status_code == 302, "Expected redirect to encryption display"
+
+        # Survey must now be PUBLISHED — this is the critical assertion.
+        unencrypted_survey.refresh_from_db()
+        assert unencrypted_survey.status == Survey.Status.PUBLISHED, (
+            "Survey is still DRAFT after encryption setup completed. "
+            "_apply_pending_publish_settings was not called or did not save."
+        )
+        assert unencrypted_survey.visibility == Survey.Visibility.AUTHENTICATED
+        assert unencrypted_survey.allow_any_authenticated is True
+        assert unencrypted_survey.published_at is not None
+
+    def test_publish_new_survey_public_visibility(
+        self, client, survey_owner, unencrypted_survey
+    ):
+        """Full path for a PUBLIC survey — visibility must be persisted via pending_publish."""
+        client.force_login(survey_owner)
+
+        client.post(
+            reverse(
+                "surveys:publish_settings", kwargs={"slug": unencrypted_survey.slug}
+            ),
+            {
+                "action": "publish",
+                "visibility": "public",
+                "no_patient_data_ack": "on",
+            },
+        )
+
+        client.post(
+            reverse(
+                "surveys:encryption_setup", kwargs={"slug": unencrypted_survey.slug}
+            ),
+            {
+                "password": "SuperSecurePass123",
+                "password_confirm": "SuperSecurePass123",
+            },
+        )
+
+        unencrypted_survey.refresh_from_db()
+        assert unencrypted_survey.status == Survey.Status.PUBLISHED
+        assert unencrypted_survey.visibility == Survey.Visibility.PUBLIC
+
+    def test_pending_publish_cleared_after_encryption_setup(
+        self, client, survey_owner, unencrypted_survey
+    ):
+        """pending_publish session key must be removed after encryption setup completes."""
+        client.force_login(survey_owner)
+
+        client.post(
+            reverse(
+                "surveys:publish_settings", kwargs={"slug": unencrypted_survey.slug}
+            ),
+            {
+                "action": "publish",
+                "visibility": "authenticated",
+                "no_patient_data_ack": "on",
+            },
+        )
+
+        # pending_publish is in session at this point
+        assert "pending_publish" in client.session
+
+        client.post(
+            reverse(
+                "surveys:encryption_setup", kwargs={"slug": unencrypted_survey.slug}
+            ),
+            {
+                "password": "SuperSecurePass123",
+                "password_confirm": "SuperSecurePass123",
+            },
+        )
+
+        # After encryption setup, pending_publish must be gone
+        assert "pending_publish" not in client.session, (
+            "pending_publish was not removed from the session after encryption setup. "
+            "This would allow a second encryption setup call to fail silently."
+        )

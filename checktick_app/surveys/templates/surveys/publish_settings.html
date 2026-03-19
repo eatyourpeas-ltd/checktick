@@ -317,6 +317,9 @@
   const inviteEmailsSection = document.getElementById('invite-emails-section');
   const allowAnyAuthenticatedSection = document.getElementById('allow-any-authenticated-section');
   const publishForm = document.getElementById('publish-form');
+  const publishBtn = document.getElementById('publish-btn');
+  const inviteEmailsTextarea = document.querySelector('textarea[name="invite_emails"]');
+  const allowAnyAuthenticatedCheckbox = document.querySelector('input[name="allow_any_authenticated"]');
 
   function updatePatientDataWarning() {
     const requiresAck = ['public', 'unlisted', 'token'].includes(visibilitySelect.value);
@@ -345,13 +348,48 @@
     }
   }
 
+  /**
+   * Disable the Publish button when the survey requires specific recipients
+   * but none have been entered.
+   *
+   * Rules:
+   *  - token:          always requires emails (no "allow any" option)
+   *  - authenticated:  requires emails UNLESS "allow any authenticated" is checked
+   *  - all others:     no restriction
+   */
+  function updatePublishButton() {
+    if (!publishBtn) return; // button only present for DRAFT surveys
+    const visibility = visibilitySelect.value;
+    const hasEmails = inviteEmailsTextarea && inviteEmailsTextarea.value.trim().length > 0;
+    const allowAny = allowAnyAuthenticatedCheckbox && allowAnyAuthenticatedCheckbox.checked;
+
+    let needsEmails = false;
+    if (visibility === 'token') {
+      needsEmails = !hasEmails;
+    } else if (visibility === 'authenticated') {
+      needsEmails = !allowAny && !hasEmails;
+    }
+
+    publishBtn.disabled = needsEmails;
+    publishBtn.title = needsEmails
+      ? '{% trans "Add at least one recipient email address before publishing" %}'
+      : '';
+  }
+
   function updateVisibility() {
     updatePatientDataWarning();
     updateInviteEmailsSection();
     updateAllowAnyAuthenticatedSection();
+    updatePublishButton();
   }
 
   visibilitySelect.addEventListener('change', updateVisibility);
+  if (inviteEmailsTextarea) {
+    inviteEmailsTextarea.addEventListener('input', updatePublishButton);
+  }
+  if (allowAnyAuthenticatedCheckbox) {
+    allowAnyAuthenticatedCheckbox.addEventListener('change', updatePublishButton);
+  }
   updateVisibility();
 
   // Handle close survey confirmation
@@ -381,8 +419,11 @@
     const actionButton = document.activeElement;
     const action = actionButton && actionButton.name === 'action' ? actionButton.value : 'publish';
 
-    // Only intercept if there are emails and action is publish or save
-    if (inviteEmails && (action === 'publish' || action === 'save')) {
+    // Only intercept for async email modal when the survey is already published (action='save').
+    // For action='publish' (first-time publication of a DRAFT survey), the form must submit
+    // normally so Django can redirect to encryption setup if needed. Invite emails are stored
+    // in the pending_publish session and sent after encryption setup via _send_pending_invites.
+    if (inviteEmails && action === 'save') {
       e.preventDefault();
 
       // First submit the form to save survey settings (without emails to avoid sync processing)

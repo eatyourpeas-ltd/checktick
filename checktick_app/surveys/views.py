@@ -519,6 +519,39 @@ def survey_list(request: HttpRequest) -> HttpResponse:
     from .models import LANGUAGE_FLAGS, LANGUAGE_NAMES, SurveyMembership, TeamMembership
 
     user = request.user
+
+    # Collect pending authenticated invitations for this user.
+    # Used for auto-redirect (pure participants) and the template banner.
+    pending_invitations = []
+    if user.is_authenticated:
+        from django.utils import timezone as _tz
+
+        _now = _tz.now()
+        _tokens = (
+            SurveyAccessToken.objects.filter(
+                for_authenticated=True,
+                used_at__isnull=True,
+                note__icontains=f"Invited: {user.email}",
+            )
+            .select_related("survey")
+            .order_by("created_at")
+        )
+        for _tok in _tokens:
+            _s = _tok.survey
+            _live = (
+                _s.status == Survey.Status.PUBLISHED
+                and (_s.start_at is None or _s.start_at <= _now)
+                and (_s.end_at is None or _now <= _s.end_at)
+            )
+            pending_invitations.append({"token": _tok, "survey": _s, "is_live": _live})
+
+        # Auto-redirect pure participants (no owned surveys) to their first live invite.
+        live_invites = [pi for pi in pending_invitations if pi["is_live"]]
+        if live_invites:
+            owns_any = Survey.objects.filter(owner=user).exists()
+            if not owns_any:
+                return redirect("surveys:take", slug=live_invites[0]["survey"].slug)
+
     if not user.is_authenticated:
         return render(
             request,
@@ -716,6 +749,7 @@ def survey_list(request: HttpRequest) -> HttpResponse:
             "grouped_surveys": grouped_surveys,
             "supported_languages": SUPPORTED_SURVEY_LANGUAGES,
             "language_flags": LANGUAGE_FLAGS,
+            "pending_invitations": pending_invitations,
         },
     )
 
@@ -2542,6 +2576,26 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             # Publishing for the first time
             prev_status = survey.status
 
+            # Require at least one recipient email for token/authenticated (invite-only) surveys.
+            allow_any_authenticated = (
+                request.POST.get("allow_any_authenticated") == "on"
+                if visibility == Survey.Visibility.AUTHENTICATED
+                else False
+            )
+            needs_recipients = visibility == Survey.Visibility.TOKEN or (
+                visibility == Survey.Visibility.AUTHENTICATED
+                and not allow_any_authenticated
+            )
+            if needs_recipients and not invite_emails:
+                messages.error(
+                    request,
+                    "Please add at least one recipient email address before publishing "
+                    "an invitation-only survey.",
+                )
+                return render(
+                    request, "surveys/publish_settings.html", {"survey": survey}
+                )
+
             # Check if encryption setup is needed
             # ALL surveys require encryption (not just patient data surveys)
             # Note: Survey count limits are already enforced at survey creation time
@@ -2560,6 +2614,8 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
                     "max_responses": max_responses,
                     "captcha_required": captcha_required,
                     "no_patient_data_ack": no_patient_data_ack,
+                    "allow_any_authenticated": allow_any_authenticated,
+                    "invite_emails": invite_emails,
                 }
                 messages.info(
                     request,
@@ -2577,10 +2633,8 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             survey.no_patient_data_ack = no_patient_data_ack
 
             # Handle allow_any_authenticated for authenticated surveys
+            # (allow_any_authenticated already computed above for validation)
             if visibility == Survey.Visibility.AUTHENTICATED:
-                allow_any_authenticated = (
-                    request.POST.get("allow_any_authenticated") == "on"
-                )
                 survey.allow_any_authenticated = allow_any_authenticated
             else:
                 survey.allow_any_authenticated = False
@@ -3450,6 +3504,12 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
             "max_responses": max_responses,
             "captcha_required": captcha_required,
             "no_patient_data_ack": no_patient_data_ack,
+            "allow_any_authenticated": (
+                request.POST.get("allow_any_authenticated") == "on"
+                if visibility == Survey.Visibility.AUTHENTICATED
+                else False
+            ),
+            "invite_emails": "",
         }
         # Redirect to encryption setup page
         return redirect("surveys:encryption_setup", slug=slug)
@@ -3542,6 +3602,7 @@ def survey_encryption_setup(request: HttpRequest, slug: str) -> HttpResponse:
 
                 # Apply pending publish settings and complete
                 _apply_pending_publish_settings(survey, pending)
+                _send_pending_invites(request, survey, pending)
 
                 # Clear session data
                 if "pending_publish" in request.session:
@@ -3594,6 +3655,7 @@ def survey_encryption_setup(request: HttpRequest, slug: str) -> HttpResponse:
 
                 # Apply pending publish settings
                 _apply_pending_publish_settings(survey, pending)
+                _send_pending_invites(request, survey, pending)
 
                 # Store recovery phrase for display
                 request.session["encryption_display"] = {
@@ -3696,6 +3758,7 @@ def survey_encryption_setup(request: HttpRequest, slug: str) -> HttpResponse:
 
             # Apply pending publish settings
             _apply_pending_publish_settings(survey, pending)
+            _send_pending_invites(request, survey, pending)
 
             # Store KEK and recovery phrase in session for key display page (one-time access)
             request.session["encryption_display"] = {
@@ -3724,6 +3787,63 @@ def survey_encryption_setup(request: HttpRequest, slug: str) -> HttpResponse:
     )
 
 
+def _send_pending_invites(request: HttpRequest, survey: Survey, pending: dict) -> None:
+    """
+    Send invitation emails that were queued before the encryption setup redirect.
+    Called after _apply_pending_publish_settings in survey_encryption_setup.
+    """
+    import threading
+    import uuid
+
+    from django.core.cache import cache
+
+    invite_emails = pending.get("invite_emails", "")
+    if not invite_emails:
+        return
+
+    if survey.visibility not in (
+        Survey.Visibility.TOKEN,
+        Survey.Visibility.AUTHENTICATED,
+    ):
+        return
+
+    email_list = _parse_email_addresses(invite_emails)
+    if not email_list:
+        return
+
+    task_id = str(uuid.uuid4())
+    cache.set(
+        f"email_task_{task_id}",
+        {
+            "status": "processing",
+            "progress": 0,
+            "message": f"Starting to send {len(email_list)} invitation(s)...",
+            "sent_count": 0,
+            "failed_count": 0,
+        },
+        timeout=3600,
+    )
+    thread = threading.Thread(
+        target=_send_invites_background,
+        args=(
+            survey.id,
+            email_list,
+            survey.visibility,
+            survey.end_at,
+            request.user.email if request.user.email else None,
+            request.user.id,
+            task_id,
+            True,  # include_qr_code
+        ),
+    )
+    thread.start()
+    request.session["pending_invites"] = {
+        "slug": survey.slug,
+        "task_id": task_id,
+        "email_count": len(email_list),
+    }
+
+
 def _apply_pending_publish_settings(survey: Survey, pending: dict) -> None:
     """
     Helper function to apply pending publish settings to a survey.
@@ -3741,6 +3861,12 @@ def _apply_pending_publish_settings(survey: Survey, pending: dict) -> None:
     survey.max_responses = pending.get("max_responses")
     survey.captcha_required = pending.get("captcha_required", False)
     survey.no_patient_data_ack = pending.get("no_patient_data_ack", False)
+
+    # Restore allow_any_authenticated from pending settings
+    if survey.visibility == Survey.Visibility.AUTHENTICATED:
+        survey.allow_any_authenticated = pending.get("allow_any_authenticated", False)
+    else:
+        survey.allow_any_authenticated = False
 
     # Set published_at and start_at if first publish
     if survey.status == Survey.Status.PUBLISHED and not survey.published_at:
@@ -3812,6 +3938,9 @@ def survey_take(request: HttpRequest, slug: str) -> HttpResponse:
         from django.utils import timezone
 
         now = timezone.now()
+        if survey.status == Survey.Status.DRAFT:
+            # Unpublished surveys are forbidden to participants
+            return HttpResponseForbidden()
         if survey.status != Survey.Status.PUBLISHED:
             return redirect("surveys:closed", slug=slug)
         elif survey.start_at and survey.start_at > now:
