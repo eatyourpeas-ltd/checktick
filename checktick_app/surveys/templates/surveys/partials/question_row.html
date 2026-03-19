@@ -2,7 +2,7 @@
   {% with 'question-data-'|add:qid as payload_id %}
 {% load survey_extras %}
 <li id="question-row-{{ q.id }}" class="list-none w-full" data-qid="{{ q.id }}">
-  <script id="{{ payload_id }}" type="application/json" data-question-payload hidden style="display:none">{{ q.builder_payload_json|default:"null"|safe }}</script>
+  <div id="{{ payload_id }}" data-question-payload hidden style="display:none" aria-hidden="true">{{ q.builder_payload_json|default:"null"|safe }}</div>
   {% if row_message %}
     <div class="alert alert-success mb-2">{{ row_message }}</div>
   {% endif %}

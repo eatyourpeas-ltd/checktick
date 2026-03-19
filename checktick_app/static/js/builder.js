@@ -910,15 +910,25 @@
           }
 
           const data = await response.json();
+          let optionLines = null;
           if (data.options && Array.isArray(data.options)) {
-            optionsTextarea.value = data.options.join("\n");
+            optionLines = data.options;
+          } else if (
+            data.options &&
+            typeof data.options === "object" &&
+            !Array.isArray(data.options)
+          ) {
+            optionLines = Object.values(data.options);
+          }
+          if (optionLines !== null) {
+            optionsTextarea.value = optionLines.join("\n");
             // Store the dataset key as a data attribute for later retrieval
             optionsTextarea.dataset.prefilledDataset = datasetKey;
             // Also refresh follow-up options
             populateFollowupOptions(optionsTextarea.value, null);
             if (typeof window.showToast === "function") {
               window.showToast(
-                `Loaded ${data.options.length} options`,
+                `Loaded ${optionLines.length} options`,
                 "success"
               );
             }
