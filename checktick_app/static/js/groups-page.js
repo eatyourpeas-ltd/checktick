@@ -191,6 +191,16 @@
       }
     });
     refresh();
+
+    // Confirmation dialogs for destructive form actions (replaces inline onsubmit)
+    document.addEventListener("submit", function (e) {
+      var form = e.target.closest("form[data-confirm-submit]");
+      if (!form) return;
+      var msg = form.dataset.confirmSubmit;
+      if (msg && !window.confirm(msg)) {
+        e.preventDefault();
+      }
+    });
   }
 
   if (document.readyState === "loading") {

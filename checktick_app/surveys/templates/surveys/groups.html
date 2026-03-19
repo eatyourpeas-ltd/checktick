@@ -101,7 +101,7 @@
                           <span class="hidden sm:inline">{% trans 'Publish' %}</span>
                         </a>
                       {% endif %}
-                      <form method="post" action="/surveys/{{ survey.slug }}/groups/{{ g.id }}/delete" onsubmit="return confirm('{% trans 'Delete this group?' %}');" class="shrink-0 ml-auto">
+                      <form method="post" action="/surveys/{{ survey.slug }}/groups/{{ g.id }}/delete" data-confirm-submit="{% trans 'Delete this group?' %}" class="shrink-0 ml-auto">
                         {% csrf_token %}
                         <button class="btn btn-xs btn-warning" type="submit">{% trans 'Delete' %}</button>
                       </form>
@@ -123,7 +123,7 @@
             {% include 'components/icons/repeat.html' with classes='w-4 h-4' %}
             <span>{% trans 'Create repeat from selection' %}</span>
           </button>
-          <form id="remove-repeat-form" method="post" action="/surveys/{{ survey.slug }}/groups/repeat/remove" class="inline" onsubmit="return confirm('{% trans 'Remove selected groups from their repeats?' %}');">
+          <form id="remove-repeat-form" method="post" action="/surveys/{{ survey.slug }}/groups/repeat/remove" class="inline" data-confirm-submit="{% trans 'Remove selected groups from their repeats?' %}">
             {% csrf_token %}
             <input type="hidden" name="group_ids" id="remove-repeat-group-ids" />
             <button id="remove-repeat-btn" class="btn btn-ghost btn-sm inline-flex items-center gap-2" type="submit" disabled>

@@ -133,8 +133,8 @@ def test_question_copy_duplicates_after_original(client):
 
     html = resp.content.decode()
     script_id = f"question-data-{copied.id}"
-    match = re.search(rf'<script id="{script_id}"[^>]*>(.*?)</script>', html, re.DOTALL)
-    assert match, f"Script payload for {script_id} missing in response"
+    match = re.search(rf'<div id="{script_id}"[^>]*>(.*?)</div>', html, re.DOTALL)
+    assert match, f"Payload div for {script_id} missing in response"
     payload_text = match.group(1).strip()
     assert payload_text and payload_text != "null"
     payload = json.loads(payload_text)
@@ -178,8 +178,8 @@ def test_group_question_copy_preserves_group(client):
 
     html = resp.content.decode()
     script_id = f"question-data-{copied.id}"
-    match = re.search(rf'<script id="{script_id}"[^>]*>(.*?)</script>', html, re.DOTALL)
-    assert match, f"Script payload for {script_id} missing in response"
+    match = re.search(rf'<div id="{script_id}"[^>]*>(.*?)</div>', html, re.DOTALL)
+    assert match, f"Payload div for {script_id} missing in response"
     payload_text = match.group(1).strip()
     assert payload_text and payload_text != "null"
     payload = json.loads(payload_text)

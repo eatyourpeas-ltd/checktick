@@ -40,7 +40,7 @@
       forceFallback: true,
       onEnd: function () {
         const ids = Array.from(el.querySelectorAll("[data-qid]")).map(
-          (li) => li.dataset.qid
+          (li) => li.dataset.qid,
         );
         const body = new URLSearchParams({ order: ids.join(",") });
         fetch(
@@ -54,7 +54,7 @@
               "X-Requested-With": "XMLHttpRequest",
             },
             body,
-          }
+          },
         )
           .then((resp) => {
             if (!resp.ok) {
@@ -100,7 +100,7 @@
       const actionSelect = form.querySelector('select[name="action"]');
       const targetFieldset = form.querySelector("[data-target-fieldset]");
       const questionSelect = form.querySelector(
-        '[data-target-select="question"]'
+        '[data-target-select="question"]',
       );
 
       const toggleValueField = () => {
@@ -161,7 +161,7 @@
 
   function focusFirstField(form) {
     const firstField = form.querySelector(
-      "input:not([type=hidden]):not([disabled]), textarea, select"
+      "input:not([type=hidden]):not([disabled]), textarea, select",
     );
     if (firstField && firstField.focus) {
       firstField.focus();
@@ -267,10 +267,10 @@
     // Restore prefilled dataset selection if present
     if (payload.type === "dropdown" && payload.prefilled_dataset) {
       const prefilledCheckbox = form.querySelector(
-        'input[name="use_prefilled_options"]'
+        'input[name="use_prefilled_options"]',
       );
       const prefilledDataset = form.querySelector(
-        'select[name="prefilled_dataset"]'
+        'select[name="prefilled_dataset"]',
       );
 
       if (prefilledCheckbox && prefilledDataset) {
@@ -290,7 +290,7 @@
     if (payload.type === "text") {
       const fmt = payload.text_format || payload.textFormat || "free";
       const fmtInput = form.querySelector(
-        `input[name="text_format"][value="${fmt}"]`
+        `input[name="text_format"][value="${fmt}"]`,
       );
       if (fmtInput) fmtInput.checked = true;
     }
@@ -299,7 +299,7 @@
       const likertMode =
         payload.likert_mode || payload.likertMode || "categories";
       const likertRadio = form.querySelector(
-        `input[name="likert_mode"][value="${likertMode}"]`
+        `input[name="likert_mode"][value="${likertMode}"]`,
       );
       if (likertRadio) {
         likertRadio.checked = true;
@@ -310,7 +310,7 @@
         const maxField = form.querySelector('input[name="likert_max"]');
         const leftField = form.querySelector('input[name="likert_left_label"]');
         const rightField = form.querySelector(
-          'input[name="likert_right_label"]'
+          'input[name="likert_right_label"]',
         );
         if (minField)
           minField.value =
@@ -326,7 +326,7 @@
         if (rightField) rightField.value = payload.likert_right_label || "";
       } else {
         const catsField = form.querySelector(
-          'textarea[name="likert_categories"]'
+          'textarea[name="likert_categories"]',
         );
         if (catsField) {
           if (Array.isArray(payload.likert_categories)) {
@@ -368,10 +368,10 @@
 
       // Yes followup
       const yesCheckbox = form.querySelector(
-        'input[name="yesno_yes_followup"]'
+        'input[name="yesno_yes_followup"]',
       );
       const yesLabel = form.querySelector(
-        'input[name="yesno_yes_followup_label"]'
+        'input[name="yesno_yes_followup_label"]',
       );
       if (yesCheckbox && config.yes) {
         yesCheckbox.checked = config.yes.enabled || false;
@@ -383,7 +383,7 @@
       // No followup
       const noCheckbox = form.querySelector('input[name="yesno_no_followup"]');
       const noLabel = form.querySelector(
-        'input[name="yesno_no_followup_label"]'
+        'input[name="yesno_no_followup_label"]',
       );
       if (noCheckbox && config.no) {
         noCheckbox.checked = config.no.enabled || false;
@@ -400,7 +400,7 @@
           payload.id,
           payload.group_id || null,
           payload.survey_slug || null,
-          payload.images || []
+          payload.images || [],
         );
       }
     } else {
@@ -714,10 +714,10 @@
     const optsSection = form.querySelector('[data-section="options"]');
     const likertSection = form.querySelector('[data-section="likert"]');
     const yesnoFollowupSection = form.querySelector(
-      '[data-section="yesno-followup"]'
+      '[data-section="yesno-followup"]',
     );
     const imageOptionsSection = form.querySelector(
-      '[data-section="image-options"]'
+      '[data-section="image-options"]',
     );
     const likertCat = likertSection
       ? likertSection.querySelector('[data-likert="categories"]')
@@ -736,10 +736,10 @@
 
     // Image upload controls
     const imageUploadContainer = form.querySelector(
-      "[data-image-upload-container]"
+      "[data-image-upload-container]",
     );
     const imageUploadPlaceholder = form.querySelector(
-      "[data-image-upload-placeholder]"
+      "[data-image-upload-placeholder]",
     );
     const imageList = form.querySelector("[data-image-list]");
     const imageUploadInput = form.querySelector("[data-image-upload-input]");
@@ -748,11 +748,11 @@
 
     // Follow-up controls
     const followupContainer = form.querySelector(
-      "[data-options-followup-container]"
+      "[data-options-followup-container]",
     );
     const followupList = form.querySelector("[data-followup-options-list]");
     const refreshFollowupBtn = form.querySelector(
-      "[data-refresh-followup-options]"
+      "[data-refresh-followup-options]",
     );
 
     function refresh() {
@@ -807,7 +807,7 @@
 
       if (isLikert && likertSection) {
         const modeChecked = form.querySelector(
-          'input[name="likert_mode"]:checked'
+          'input[name="likert_mode"]:checked',
         );
         const mode = modeChecked ? modeChecked.value : "categories";
         if (likertCat)
@@ -844,8 +844,8 @@
           return `
           <div class="flex items-start gap-2 p-2 bg-base-100 rounded border border-base-300">
             <input type="checkbox" class="checkbox checkbox-sm mt-1" name="option_${idx}_followup" id="option-${idx}-followup" ${
-            isEnabled ? "checked" : ""
-          } />
+              isEnabled ? "checked" : ""
+            } />
             <div class="flex-1 min-w-0">
               <label for="option-${idx}-followup" class="text-sm font-medium cursor-pointer block truncate" title="${line}">${line}</label>
               <input type="text" name="option_${idx}_followup_label" class="input input-xs input-bordered w-full mt-1" placeholder="Follow-up label..." value="${label}" />
@@ -910,16 +910,26 @@
           }
 
           const data = await response.json();
+          let optionLines = null;
           if (data.options && Array.isArray(data.options)) {
-            optionsTextarea.value = data.options.join("\n");
+            optionLines = data.options;
+          } else if (
+            data.options &&
+            typeof data.options === "object" &&
+            !Array.isArray(data.options)
+          ) {
+            optionLines = Object.values(data.options);
+          }
+          if (optionLines !== null) {
+            optionsTextarea.value = optionLines.join("\n");
             // Store the dataset key as a data attribute for later retrieval
             optionsTextarea.dataset.prefilledDataset = datasetKey;
             // Also refresh follow-up options
             populateFollowupOptions(optionsTextarea.value, null);
             if (typeof window.showToast === "function") {
               window.showToast(
-                `Loaded ${data.options.length} options`,
-                "success"
+                `Loaded ${optionLines.length} options`,
+                "success",
               );
             }
           } else {
@@ -971,8 +981,8 @@
           img.id
         }" title="${img.label || "Image option"}">
           <img src="${img.url}" alt="${
-        img.label || ""
-      }" class="w-16 h-16 object-cover rounded border border-base-300" />
+            img.label || ""
+          }" class="w-16 h-16 object-cover rounded border border-base-300" />
           <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center">
             <button type="button" class="btn btn-circle btn-error btn-xs" data-delete-image="${
               img.id
@@ -1049,7 +1059,7 @@
           if (typeof window.showToast === "function") {
             window.showToast(
               "Save the question first before uploading images",
-              "error"
+              "error",
             );
           }
           return;
@@ -1108,7 +1118,7 @@
           if (typeof window.showToast === "function") {
             window.showToast(
               error.message || "Failed to upload image",
-              "error"
+              "error",
             );
           }
         } finally {
@@ -1155,7 +1165,7 @@
 
           // Remove the image from the list
           const imageEl = imageList.querySelector(
-            `[data-image-id="${imageId}"]`
+            `[data-image-id="${imageId}"]`,
           );
           if (imageEl) {
             imageEl.remove();
@@ -1175,7 +1185,7 @@
           if (typeof window.showToast === "function") {
             window.showToast(
               error.message || "Failed to delete image",
-              "error"
+              "error",
             );
           }
           deleteBtn.disabled = false;
@@ -1213,10 +1223,10 @@
     const questionTypeRadios = document.querySelectorAll('input[name="type"]');
     const addButton = form.querySelector('button[type="submit"]');
     const addButtonText = form.querySelector(
-      '[data-editor-label="submit-add"]'
+      '[data-editor-label="submit-add"]',
     );
     const tabRadios = document.querySelectorAll(
-      'input[name="add_question_tabs"]'
+      'input[name="add_question_tabs"]',
     );
     if (
       !templateRadios.length ||
@@ -1240,7 +1250,7 @@
       if (isTemplateTab) {
         // Special Templates tab
         const isTemplateSelected = Array.from(templateRadios).some(
-          (radio) => radio.checked
+          (radio) => radio.checked,
         );
 
         addButtonText.textContent = "Add Template";
@@ -1270,7 +1280,7 @@
       } else if (isQuestionTab) {
         // Build question tab
         const isQuestionTypeSelected = Array.from(questionTypeRadios).some(
-          (radio) => radio.checked
+          (radio) => radio.checked,
         );
         const hasQuestionText = textInput && textInput.value.trim() !== "";
         const isFormValid = isQuestionTypeSelected && hasQuestionText;
