@@ -5,7 +5,6 @@ from pathlib import Path
 import sys
 
 from csp.constants import NONCE as CSP_NONCE
-
 import environ
 
 # Detect if running tests
