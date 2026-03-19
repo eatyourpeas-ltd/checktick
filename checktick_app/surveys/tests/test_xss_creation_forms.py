@@ -45,6 +45,11 @@ ATTR_BREAK = '" onmouseover="alert(1)" x="'
 STYLE_BREAK = "</style><script>alert(1)</script><style>"
 # Fonts go into a <style> block; this payload tries to break out.
 FONT_BREAK = "Arial</style><script>alert(2)</script><style>sans-serif"
+# The exact pentest payload from Finding #1, stored directly in the DB to test
+# the template auto-escaping layer independently of the view-layer allowlist.
+FONT_XSS_STORED = "</style><script>alert(document.cookie)</script><style>x{"
+# After Django auto-escaping, < becomes &lt; and > becomes &gt;.
+FONT_XSS_ESCAPED = b"&lt;/style&gt;&lt;script&gt;"
 
 RAW_SCRIPT_OPEN = b"<script>alert"
 ESCAPED_LT = b"&lt;"
@@ -498,6 +503,110 @@ def test_login_page_does_not_inject_next_param(client):
     login_url = reverse("login")
     resp = client.get(f"{login_url}?next={SCRIPT_TAG}")
     assert resp.status_code == 200
+
+
+# ===========================================================================
+# 8. Template auto-escaping of font CSS variables (Finding #1 — layer 2)
+#
+# The view-layer allowlist (survey_style_update) is the primary defence.
+# But data pre-dating that fix, or values written directly to survey.style
+# or SiteBranding, could still reach the templates.  These tests confirm
+# that removing |safe from all three base templates means Django auto-escaping
+# neutralises any malicious font value before it reaches the browser.
+# ===========================================================================
+
+
+@pytest.mark.django_db
+def test_base_minimal_escapes_stored_font_xss(client, owner, org):
+    """
+    base_minimal.html is used for public survey-take pages (detail.html when
+    not in preview mode).  On the public take route, brand.font_heading comes
+    from the branding context processor (which reads SiteBranding), not from
+    per-survey style overrides.  A malicious font_heading stored directly in
+    SiteBranding must be HTML-escaped by Django's auto-escaping and must not
+    break out of the <style> block.
+    """
+    from checktick_app.core.models import SiteBranding
+
+    # Store the payload directly in SiteBranding so the context processor injects it.
+    SiteBranding.objects.filter(pk=1).delete()
+    SiteBranding.objects.create(pk=1, font_heading=FONT_XSS_STORED)
+
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="Font XSS Base Minimal Test",
+        slug="font-xss-base-minimal",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.PUBLIC,
+    )
+    resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert b"</style><script>" not in resp.content, (
+        "Raw XSS payload in base_minimal.html — |safe not fully removed from font variable"
+    )
+    assert FONT_XSS_ESCAPED in resp.content, (
+        "Expected HTML-escaped font value not found — auto-escaping may be broken in base_minimal.html"
+    )
+
+
+@pytest.mark.django_db
+def test_base_html_escapes_stored_font_xss(auth_client, survey):
+    """
+    base.html is used by authenticated pages including the survey dashboard.
+    A malicious font_heading stored directly in survey.style must be
+    HTML-escaped when the dashboard renders — not emitted raw into the
+    <style> block where it would execute for every authenticated visitor.
+    """
+    # Write the payload directly into the DB, bypassing the view-layer allowlist.
+    survey.style = {"font_heading": FONT_XSS_STORED, "font_body": "Georgia, serif"}
+    survey.save(update_fields=["style"])
+
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert b"</style><script>" not in resp.content, (
+        "Raw XSS payload in base.html — |safe not fully removed from font variable"
+    )
+    assert FONT_XSS_ESCAPED in resp.content, (
+        "Expected HTML-escaped font value not found — auto-escaping may be broken in base.html"
+    )
+
+
+@pytest.mark.django_db
+def test_admin_base_site_escapes_stored_font_xss(client, django_user_model):
+    """
+    admin/base_site.html is used by every Django admin page.  Its brand CSS
+    variables come from the SiteBranding model via the branding context
+    processor.  A malicious font_heading stored directly in SiteBranding must
+    be HTML-escaped and must not break out of the admin <style> block.
+    """
+    from checktick_app.core.models import SiteBranding
+
+    # Write the payload directly into SiteBranding (no view-layer validation here).
+    SiteBranding.objects.filter(pk=1).delete()
+    SiteBranding.objects.create(
+        pk=1,
+        font_heading=FONT_XSS_STORED,
+        font_body="Georgia, serif",
+    )
+
+    admin_user = django_user_model.objects.create_user(
+        username="xss_admin_font@example.com",
+        email="xss_admin_font@example.com",
+        password="secureadminpass123!",
+        is_staff=True,
+        is_superuser=True,
+    )
+    client.force_login(admin_user)
+
+    resp = client.get("/admin/")
+    assert resp.status_code == 200
+    assert b"</style><script>" not in resp.content, (
+        "Raw XSS payload in admin/base_site.html — |safe not fully removed from font variable"
+    )
+    assert FONT_XSS_ESCAPED in resp.content, (
+        "Expected HTML-escaped font value not found — auto-escaping may be broken in admin/base_site.html"
+    )
     _xss_clean(resp.content)
 
 
