@@ -217,7 +217,7 @@
   {% endif %}
 {% endwith %}
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 // Show contextual help for selected action and update preview
 function setupConditionForm(form) {
   const actionSelect = form.querySelector('[data-condition-action]');

@@ -322,5 +322,5 @@
 
 {% block extra_js %}
   {{ block.super }}
-  <script src="{% static 'js/bulk-upload-preview.js' %}" defer data-initial-tab="{{ initial_tab|default:'manual' }}"></script>
+  <script src="{% static 'js/bulk-upload-preview.js' %}" nonce="{{ request.csp_nonce }}" defer data-initial-tab="{{ initial_tab|default:'manual' }}"></script>
 {% endblock %}

@@ -211,5 +211,5 @@
 {% endblock %}
 
 {% block extra_js %}
-  <script src="{% static 'js/signup.js' %}"></script>
+  <script src="{% static 'js/signup.js' %}" nonce="{{ request.csp_nonce }}"></script>
 {% endblock %}

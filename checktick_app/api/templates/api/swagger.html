@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui.css" />
 <div id="swagger" class="mt-4"></div>
 <script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-bundle.js" crossorigin="anonymous"></script>
-<script>
+<script nonce="{{ request.csp_nonce }}">
   window.ui = SwaggerUIBundle({
     url: "/api/schema",
     dom_id: "#swagger",

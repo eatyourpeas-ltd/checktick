@@ -31,8 +31,8 @@
     {% block head_theme_overrides %}{% endblock %}
     <style>
       :root {
-        --font-heading: {{ brand.font_heading|safe }};
-        --font-body: {{ brand.font_body|safe }};
+        --font-heading: {{ brand.font_heading }};
+        --font-body: {{ brand.font_body }};
       }
       h1,h2,h3,h4,h5,h6,.font-heading { font-family: var(--font-heading) !important; }
       body, .font-body { font-family: var(--font-body) !important; }
@@ -48,8 +48,8 @@
     <div class="container mx-auto px-4 py-8">
       {% block content %}{% endblock %}
     </div>
-    <script src="{% static 'js/theme-toggle.js' %}"></script>
-    <script src="{% static 'js/toast.js' %}?v=2ba505d"></script>
+    <script src="{% static 'js/theme-toggle.js' %}" nonce="{{ request.csp_nonce }}"></script>
+    <script src="{% static 'js/toast.js' %}?v=2ba505d" nonce="{{ request.csp_nonce }}"></script>
   </body>
   <footer class="mt-10 border-t border-base-300 bg-base-200">
       <div class="container mx-auto px-4 py-6">

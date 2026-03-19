@@ -396,7 +396,7 @@
     </form>
 </dialog>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const newPassword = document.getElementById('new_password');
     const confirmPassword = document.getElementById('confirm_password');

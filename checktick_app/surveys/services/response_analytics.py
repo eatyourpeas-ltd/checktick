@@ -8,6 +8,7 @@ Demographics/IMD require separate unlock and are handled elsewhere.
 
 from collections import Counter
 from dataclasses import dataclass, field
+import json
 from typing import Any
 
 from django.db.models import QuerySet
@@ -23,6 +24,11 @@ class AnswerDistribution:
     total_responses: int
     options: list[dict[str, Any]] = field(default_factory=list)
     # Each option: {"label": str, "count": int, "percent": float}
+
+    @property
+    def options_json(self) -> str:
+        """Safe JSON serialisation of options — escapes </ to prevent script break-out."""
+        return json.dumps(self.options, separators=(",", ":")).replace("</", "<\\/")
 
 
 @dataclass

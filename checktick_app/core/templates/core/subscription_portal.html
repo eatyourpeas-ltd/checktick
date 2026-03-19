@@ -238,5 +238,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/subscription-portal.js' %}" defer></script>
+<script src="{% static 'js/subscription-portal.js' %}" nonce="{{ request.csp_nonce }}" defer></script>
 {% endblock %}

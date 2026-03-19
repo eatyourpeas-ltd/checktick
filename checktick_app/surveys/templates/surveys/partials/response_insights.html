@@ -49,7 +49,7 @@ To swap to Plotly later:
             <div class="response-chart"
                  data-question-id="{{ dist.question_id }}"
                  data-question-type="{{ dist.question_type }}"
-                 data-chart-data='{{ dist.options|safe }}'>
+                 data-chart-data="{{ dist.options_json }}">
 
               {# Pure CSS/HTML horizontal bar chart #}
               <div class="space-y-2">

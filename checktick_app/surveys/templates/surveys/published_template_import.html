@@ -112,7 +112,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 // Add loading state to import button on form submission
 document.addEventListener('DOMContentLoaded', function() {
   const form = document.getElementById('import-form');

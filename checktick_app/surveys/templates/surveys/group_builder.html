@@ -319,8 +319,9 @@ Option B" data-options-textarea></textarea>
 </div>
 
 <script src="{% static 'js/sortable.min.js' %}"
+  nonce="{{ request.csp_nonce }}"
   integrity="sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc"
   crossorigin="anonymous"></script>
-<script src="{% static 'js/builder.js' %}?v={{ build.commit|default:build.timestamp }}">
+<script src="{% static 'js/builder.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}">
 </script>
 {% endblock %}

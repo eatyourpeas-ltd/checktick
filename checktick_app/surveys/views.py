@@ -1555,7 +1555,9 @@ def _prepare_question_rendering(
             )
             setattr(q, "builder_payload", payload)
             try:
-                payload_json = json.dumps(payload, separators=(",", ":"))
+                payload_json = json.dumps(payload, separators=(",", ":")).replace(
+                    "</", "<\\/"
+                )
             except TypeError:
                 payload_json = "null"
             setattr(q, "builder_payload_json", payload_json)
@@ -4228,6 +4230,13 @@ def survey_tokens_export_csv(request: HttpRequest, slug: str) -> HttpResponse:
 @login_required
 @require_http_methods(["POST"])
 def survey_style_update(request: HttpRequest, slug: str) -> HttpResponse:
+    import re as _re
+
+    # Safe CSS font-stack: alphanumerics, spaces, commas, hyphens, underscores,
+    # dots, single quotes, and parentheses (for generic families like sans-serif).
+    # Anything outside this allowlist could break out of the <style> block.
+    _SAFE_FONT_RE = _re.compile(r"^[A-Za-z0-9 ,'\-_.()/]+$")
+
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
     style = survey.style or {}
@@ -4249,6 +4258,16 @@ def survey_style_update(request: HttpRequest, slug: str) -> HttpResponse:
         for key in style_fields:
             val = (request.POST.get(key) or "").strip()
             if val:
+                # Validate font values against a strict CSS font-stack allowlist to
+                # prevent CSS break-out XSS (pen-test Finding #1).
+                if key in ("font_heading", "font_body") and not _SAFE_FONT_RE.match(
+                    val
+                ):
+                    messages.error(
+                        request,
+                        "Invalid font value. Only alphanumeric characters, spaces, commas, hyphens, and quotes are allowed.",
+                    )
+                    return redirect("surveys:dashboard", slug=slug)
                 style[key] = val
             elif key in style:
                 # allow clearing by leaving blank
@@ -5410,6 +5429,10 @@ def survey_group_create(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
     name = request.POST.get("name", "").strip() or "New Group"
+    # Strip HTML tags to prevent stored XSS via group names
+    from django.utils.html import strip_tags
+
+    name = strip_tags(name).strip() or "New Group"
     g = QuestionGroup.objects.create(name=name, owner=request.user)
     survey.question_groups.add(g)
     messages.success(request, "Group created.")
@@ -5423,8 +5446,12 @@ def survey_group_edit(request: HttpRequest, slug: str, gid: int) -> HttpResponse
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
     group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)
-    group.name = request.POST.get("name", group.name)
-    group.description = request.POST.get("description", group.description)
+    from django.utils.html import strip_tags
+
+    raw_name = request.POST.get("name", group.name)
+    group.name = strip_tags(raw_name).strip() or group.name
+    raw_desc = request.POST.get("description", group.description)
+    group.description = strip_tags(raw_desc).strip() if raw_desc else group.description
     group.save(update_fields=["name", "description"])
     messages.success(request, "Group updated.")
     return redirect("surveys:dashboard", slug=slug)

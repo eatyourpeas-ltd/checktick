@@ -409,7 +409,7 @@ if not DEBUG:
     USE_X_FORWARDED_HOST = True
 
 # Content Security Policy configuration (django-csp 4.0+ format)
-CSP_CONFIG = {
+CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "default-src": ("'self'",),
         "script-src": (
@@ -452,8 +452,8 @@ CSP_CONFIG = {
     "INCLUDE_NONCE_IN": ["script-src"],  # Add nonce to script-src directive
 }
 # Remove None values from frame-ancestors
-CSP_CONFIG["DIRECTIVES"]["frame-ancestors"] = tuple(
-    x for x in CSP_CONFIG["DIRECTIVES"]["frame-ancestors"] if x is not None
+CONTENT_SECURITY_POLICY["DIRECTIVES"]["frame-ancestors"] = tuple(
+    x for x in CONTENT_SECURITY_POLICY["DIRECTIVES"]["frame-ancestors"] if x is not None
 )
 
 # CORS configuration - allow badge validators and other trusted origins
