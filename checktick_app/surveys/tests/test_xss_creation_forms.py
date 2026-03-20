@@ -34,14 +34,15 @@ import json
 from django.urls import reverse
 import pytest
 
-TEST_PASSWORD = "x"  # noqa: S105
-
 from checktick_app.surveys.models import (
     Organization,
     QuestionGroup,
     Survey,
     SurveyQuestion,
 )
+
+TEST_PASSWORD = "x"  # noqa: S105
+
 
 # ---------------------------------------------------------------------------
 # Common payloads

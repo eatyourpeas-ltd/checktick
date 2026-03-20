@@ -191,7 +191,7 @@ class Command(BaseCommand):
                 )
 
                 if created:
-                    user.set_password(DEV_PASSWORD)  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+                    user.set_password(DEV_PASSWORD)  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password  # fmt: skip
                     user.save()
                     created_count += 1
                     self.stdout.write(
