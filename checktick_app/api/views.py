@@ -1,6 +1,5 @@
 import os
 
-from csp.decorators import csp_exempt
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.shortcuts import render
@@ -688,10 +687,6 @@ class PublishedQuestionGroupViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data, status=201)
 
 
-@csp_exempt()
 def redoc_ui(request):
-    """Render an embedded ReDoc UI pointing at the API schema endpoint.
-
-    CSP is exempted on this route to allow loading ReDoc assets.
-    """
+    """Render an embedded ReDoc UI pointing at the API schema endpoint."""
     return render(request, "api/redoc.html", {})

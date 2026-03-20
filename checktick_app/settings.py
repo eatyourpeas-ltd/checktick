@@ -412,7 +412,6 @@ CONTENT_SECURITY_POLICY = {
         "default-src": ("'self'",),
         "script-src": (
             "'self'",
-            "https://unpkg.com",
             "https://cdn.jsdelivr.net",
             "https://js.hcaptcha.com",  # hCaptcha widget script
             "https://*.hcaptcha.com",  # hCaptcha iframe sources

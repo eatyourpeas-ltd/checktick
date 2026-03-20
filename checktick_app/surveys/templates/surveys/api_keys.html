@@ -46,16 +46,8 @@
             />
             <button
               type="button"
-              class="btn btn-outline btn-sm"
-              onclick="
-                var inp = document.getElementById('new-api-key-value');
-                navigator.clipboard.writeText(inp.value).then(function() {
-                  var btn = event.target.closest('button');
-                  var orig = btn.textContent;
-                  btn.textContent = '{% trans "Copied" %}';
-                  setTimeout(function() { btn.textContent = orig; }, 2000);
-                });
-              "
+              class="btn btn-outline btn-sm js-copy-btn"
+              data-copy-from="new-api-key-value"
               aria-label="{% trans 'Copy API key to clipboard' %}"
             >{% trans 'Copy' %}</button>
           </div>
@@ -175,7 +167,7 @@
                     </td>
                     <td>
                       {% if not key.revoked %}
-                        <form method="post" action="{% url 'surveys:api_key_revoke' key.id %}" onsubmit="return confirm('{% blocktrans with name=key.name %}Revoke API key &quot;{{ name }}&quot;? This cannot be undone.{% endblocktrans %}')">
+                        <form method="post" action="{% url 'surveys:api_key_revoke' key.id %}" class="js-revoke-form" data-key-name="{{ key.name }}">
                           {% csrf_token %}
                           <button type="submit" class="btn btn-error btn-xs">{% trans 'Revoke' %}</button>
                         </form>
@@ -202,4 +194,33 @@
     </div>
 
   {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% trans "Revoke API key" as confirm_label %}
+{% trans "This cannot be undone." as confirm_suffix %}
+{% trans "Copied" as copied_label %}
+<script nonce="{{ request.csp_nonce }}">(function () {
+  document.querySelectorAll('.js-revoke-form').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      var name = form.dataset.keyName;
+      if (!confirm('{{ confirm_label|escapejs }}' + ' "' + name + '"? ' + '{{ confirm_suffix|escapejs }}')) {
+        e.preventDefault();
+      }
+    });
+  });
+
+  document.querySelectorAll('.js-copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var inp = document.getElementById(btn.dataset.copyFrom);
+      if (!inp) return;
+      navigator.clipboard.writeText(inp.value).then(function () {
+        var orig = btn.textContent;
+        btn.textContent = '{{ copied_label|escapejs }}';
+        setTimeout(function () { btn.textContent = orig; }, 2000);
+      });
+    });
+  });
+}());
+</script>
 {% endblock %}

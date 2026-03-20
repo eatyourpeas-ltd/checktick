@@ -34,6 +34,8 @@ import json
 from django.urls import reverse
 import pytest
 
+TEST_PASSWORD = "x"  # noqa: S105
+
 from checktick_app.surveys.models import (
     Organization,
     QuestionGroup,
@@ -714,3 +716,173 @@ def test_question_row_template_renders_escaped_closing_tag(owner, org):
     assert (
         b"<\\/script>" in response.content
     ), "Escaped '<\\/script>' not found — Finding #3 closing-tag escape fix may not be active"
+
+
+# ===========================================================================
+# 10. API Keys page — XSS in key name
+#
+# The api_keys.html template displays user-controlled data in several contexts:
+#
+#  a) key.name  — in a <td> via {{ key.name }}. Django auto-escaping must
+#     prevent an alert() payload from executing.
+#
+#  b) data-key-name attribute on .js-revoke-form — the name is placed in a
+#     data-* attribute via {{ key.name }}.  Django auto-escaping must encode
+#     any quote characters so the attribute cannot be broken.
+#
+#  c) new_raw_key in the one-time reveal — the key is a server-generated
+#     opaque token (ct_live_<urlsafe>), never user-supplied.  Placing it as
+#     a readonly input value="{{ new_raw_key }}" must not introduce risks.
+#
+#  d) new_key_name in the creation banner — the name echoed back must be
+#     auto-escaped (it comes from session, which was set from POST data).
+#
+# These tests cover (a), (b), and (d); (c) is handled by the generate()
+# classmethod which uses secrets.token_urlsafe() so the value is always safe.
+# ===========================================================================
+
+KEY_NAME_XSS = "<script>alert('xss')</script>"
+KEY_NAME_ATTR_BREAK = '" onmouseenter="alert(1)" x="'
+KEY_NAME_SINGLE_QUOTE = "test' onerror='alert(1)"
+
+
+@pytest.fixture
+def pro_user(django_user_model):
+    """A user on the Pro tier (API access allowed) with MFA bypassed."""
+    user = django_user_model.objects.create_user(
+        username="xss_apikey@example.com",
+        email="xss_apikey@example.com",
+        password=TEST_PASSWORD,
+    )
+    user.profile.account_tier = "pro"
+    user.profile.save(update_fields=["account_tier"])
+    return user
+
+
+@pytest.fixture
+def pro_client(client, pro_user, monkeypatch):
+    """Authenticated client for a Pro user with MFA verification stubbed.
+
+    OTPMiddleware installs ``user.is_verified`` as a ``functools.partial``
+    wrapping ``django_otp.middleware.is_verified``.  We patch that module-level
+    function so any call — whether via the partial already installed or a fresh
+    one created during the request — returns True.
+    """
+    import django_otp.middleware as _otp_mw
+
+    monkeypatch.setattr(_otp_mw, "is_verified", lambda user: True)
+    client.force_login(pro_user)
+    return client
+
+
+@pytest.mark.django_db
+def test_api_key_list_key_name_xss_escaped_in_table(pro_client, pro_user):
+    """
+    A stored API key whose name contains an XSS payload must be HTML-escaped
+    when rendered in the key-list table — {{ key.name }} must not emit raw HTML.
+    """
+    from checktick_app.core.models import UserAPIKey
+
+    UserAPIKey.objects.create(
+        user=pro_user,
+        name=KEY_NAME_XSS,
+        key_hash="a" * 64,
+        prefix="ct_live_xxxx",
+    )
+    resp = pro_client.get(reverse("surveys:api_key_list"))
+    assert resp.status_code == 200
+    _xss_clean(resp.content)
+    # The name IS displayed — confirm it appears in encoded form
+    assert b"&lt;script&gt;" in resp.content
+
+
+@pytest.mark.django_db
+def test_api_key_list_key_name_attr_break_escaped_in_data_attribute(
+    pro_client, pro_user
+):
+    """
+    The revoke form uses data-key-name="{{ key.name }}" to pass the name to
+    the confirm() dialog via JS (reading element.dataset.keyName at runtime).
+    A payload designed to break out of an HTML attribute must be escaped by
+    Django auto-escaping so no extra attributes are injected.
+    """
+    from checktick_app.core.models import UserAPIKey
+
+    UserAPIKey.objects.create(
+        user=pro_user,
+        name=KEY_NAME_ATTR_BREAK,
+        key_hash="b" * 64,
+        prefix="ct_live_yyyy",
+    )
+    resp = pro_client.get(reverse("surveys:api_key_list"))
+    assert resp.status_code == 200
+    _xss_clean(resp.content)
+    # The raw attribute-break sequence must not appear verbatim
+    assert b'" onmouseenter="' not in resp.content
+    # Django encodes the leading " as &quot;
+    assert b"&quot;" in resp.content
+
+
+@pytest.mark.django_db
+def test_api_key_list_key_name_single_quote_escaped_in_data_attribute(
+    pro_client, pro_user
+):
+    """
+    Single-quote injection in key.name must not produce an unescaped
+    data-key-name value that a script could exploit.
+    """
+    from checktick_app.core.models import UserAPIKey
+
+    UserAPIKey.objects.create(
+        user=pro_user,
+        name=KEY_NAME_SINGLE_QUOTE,
+        key_hash="c" * 64,
+        prefix="ct_live_zzzz",
+    )
+    resp = pro_client.get(reverse("surveys:api_key_list"))
+    assert resp.status_code == 200
+    _xss_clean(resp.content)
+    # Raw single-quote event handler must not appear
+    assert b"onerror='alert" not in resp.content
+
+
+@pytest.mark.django_db
+def test_api_key_creation_banner_name_xss_escaped(pro_client, pro_user, monkeypatch):
+    """
+    After creating a key the view stores the raw name in the session and
+    re-renders the list page, displaying:
+        Your new API key "<name>" has been created
+    The name comes from POST data and must be HTML-escaped before display.
+    """
+    # Inject the session value directly (avoids the full create flow and
+    # its audit-log / DB overhead) to test the template layer in isolation.
+    session = pro_client.session
+    session["new_api_key"] = "ct_live_test_token"
+    session["new_api_key_name"] = KEY_NAME_XSS
+    session.save()
+
+    resp = pro_client.get(reverse("surveys:api_key_list"))
+    assert resp.status_code == 200
+    _xss_clean(resp.content)
+    # The name must appear escaped, not raw
+    assert b"&lt;script&gt;" in resp.content
+
+
+@pytest.mark.django_db
+def test_api_key_list_no_inline_event_handlers_present(pro_client):
+    """
+    The api_keys.html template must not contain any inline event handlers
+    (onclick / onsubmit / onmouseenter etc.).  These are blocked by the
+    Content Security Policy (no unsafe-inline) and are also an XSS risk
+    when they embed user-controlled data.
+    """
+    import re
+
+    resp = pro_client.get(reverse("surveys:api_key_list"))
+    assert resp.status_code == 200
+    # Match any on<event>= attribute — case-insensitive
+    matches = re.findall(rb"\bon\w+\s*=", resp.content, re.IGNORECASE)
+    assert not matches, (
+        f"Inline event handler(s) found in api_keys page: "
+        f"{[m.decode() for m in matches]}"
+    )
