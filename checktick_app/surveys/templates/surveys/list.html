@@ -50,6 +50,43 @@
     <p><a class="btn btn-primary not-prose" href="/surveys/create/">{% trans "Create survey" %}</a></p>
   {% endif %}
 
+  {# Surveys the user has been invited to complete #}
+  {% if pending_invitations %}
+    <div class="not-prose mb-6">
+      <h2 class="text-xl font-semibold mb-3 flex items-center gap-2">
+        <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+        </svg>
+        {% trans "Surveys to complete" %}
+        <span class="badge badge-primary">{{ pending_invitations|length }}</span>
+      </h2>
+      <ul class="flex flex-col gap-3">
+        {% for item in pending_invitations %}
+          <li class="card bg-base-100 border border-primary/30 shadow-sm">
+            <div class="card-body py-3 px-4 flex flex-row items-center justify-between gap-4">
+              <div>
+                <p class="font-medium">{{ item.survey.name }}</p>
+                {% if item.survey.description %}
+                  <p class="text-sm opacity-70">{{ item.survey.description|truncatechars:80 }}</p>
+                {% endif %}
+                {% if not item.is_live %}
+                  <span class="badge badge-warning badge-sm mt-1">{% trans "Not yet open" %}</span>
+                {% endif %}
+              </div>
+              {% if item.is_live %}
+                <a href="{% url 'surveys:take' slug=item.survey.slug %}" class="btn btn-primary btn-sm whitespace-nowrap">
+                  {% trans "Complete survey" %}
+                </a>
+              {% else %}
+                <span class="btn btn-disabled btn-sm whitespace-nowrap">{% trans "Not yet open" %}</span>
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
   {% if grouped_surveys %}
     {# Grouped survey display #}
 

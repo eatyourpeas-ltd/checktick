@@ -353,7 +353,8 @@ class TestAuthenticatedInvitationPublishing:
             {
                 "action": "publish",
                 "visibility": "authenticated",
-                # allow_any_authenticated not included
+                # allow_any_authenticated not included — invite-only mode, so emails required
+                "invite_emails": "invited@example.com",
                 "no_patient_data_ack": "on",
             },
         )
@@ -686,3 +687,128 @@ class TestAuthenticatedInvitationModels:
         # This is more of a documentation test - the field exists but
         # should only be used when visibility is AUTHENTICATED
         assert survey.visibility != Survey.Visibility.AUTHENTICATED
+
+
+# ============================================================================
+# Survey List Redirect for Invited Participants
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestInvitedUserSurveyListRedirect:
+    """
+    Tests that users who have been invited to complete a survey are automatically
+    redirected to that survey when they visit the survey list / dashboard page.
+    """
+
+    def test_invited_participant_redirected_to_live_survey(
+        self, client, owner, authenticated_survey, existing_user
+    ):
+        """
+        A user with an unused authenticated invitation who owns no surveys
+        should be auto-redirected from /surveys/ to the survey take URL.
+        """
+        authenticated_survey.status = Survey.Status.PUBLISHED
+        authenticated_survey.allow_any_authenticated = False
+        authenticated_survey.save()
+
+        SurveyAccessToken.objects.create(
+            survey=authenticated_survey,
+            token="redirect-test-token",
+            created_by=owner,
+            note=f"Invited: {existing_user.email}",
+            for_authenticated=True,
+            used_at=None,
+        )
+
+        client.force_login(existing_user)
+
+        response = client.get(reverse("surveys:list"))
+
+        assert response.status_code == 302
+        assert authenticated_survey.slug in response.url
+        assert "take" in response.url
+
+    def test_invited_user_who_owns_surveys_is_not_redirected(
+        self, client, owner, authenticated_survey
+    ):
+        """
+        A user who both owns surveys AND has a pending invitation should NOT be
+        auto-redirected — they should see their normal dashboard.
+        """
+        authenticated_survey.status = Survey.Status.PUBLISHED
+        authenticated_survey.allow_any_authenticated = False
+        authenticated_survey.save()
+
+        # owner already owns the survey, so owns_any=True
+        SurveyAccessToken.objects.create(
+            survey=authenticated_survey,
+            token="owner-invite-token",
+            created_by=owner,
+            note=f"Invited: {owner.email}",
+            for_authenticated=True,
+            used_at=None,
+        )
+
+        client.force_login(owner)
+
+        response = client.get(reverse("surveys:list"))
+
+        # Owner should see the survey list, not be redirected to /take/
+        assert response.status_code == 200
+
+    def test_used_invitation_does_not_trigger_redirect(
+        self, client, owner, authenticated_survey, existing_user
+    ):
+        """
+        A token that has already been used (used_at is set) should not cause a redirect.
+        """
+        from django.utils import timezone
+
+        authenticated_survey.status = Survey.Status.PUBLISHED
+        authenticated_survey.allow_any_authenticated = False
+        authenticated_survey.save()
+
+        SurveyAccessToken.objects.create(
+            survey=authenticated_survey,
+            token="used-token",
+            created_by=owner,
+            note=f"Invited: {existing_user.email}",
+            for_authenticated=True,
+            used_at=timezone.now(),  # Already used
+        )
+
+        client.force_login(existing_user)
+
+        response = client.get(reverse("surveys:list"))
+
+        # Should NOT redirect — invitation already used
+        assert response.status_code == 200
+
+    def test_draft_survey_invitation_does_not_redirect(
+        self, client, owner, authenticated_survey, existing_user
+    ):
+        """
+        A pending invitation for a DRAFT (not yet published) survey must not
+        trigger an auto-redirect — the survey is not live.
+        """
+        # Survey is still in DRAFT
+        authenticated_survey.status = Survey.Status.DRAFT
+        authenticated_survey.allow_any_authenticated = False
+        authenticated_survey.save()
+
+        SurveyAccessToken.objects.create(
+            survey=authenticated_survey,
+            token="draft-invite-token",
+            created_by=owner,
+            note=f"Invited: {existing_user.email}",
+            for_authenticated=True,
+            used_at=None,
+        )
+
+        client.force_login(existing_user)
+
+        response = client.get(reverse("surveys:list"))
+
+        # Should see the list page (with a "not yet open" banner), not be redirected
+        assert response.status_code == 200

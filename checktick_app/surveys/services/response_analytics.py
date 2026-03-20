@@ -158,7 +158,13 @@ def _reorder_by_question_options(question, options: list[dict]) -> list[dict]:
     Reorder options to match the question's defined order.
     Falls back to count-sorted order for any options not in the definition.
     """
-    q_options = (question.options or {}).get("choices", [])
+    opts = question.options
+    if isinstance(opts, list):
+        q_options = opts
+    elif isinstance(opts, dict):
+        q_options = opts.get("choices", [])
+    else:
+        q_options = []
     if not q_options:
         return options
 
