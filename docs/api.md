@@ -129,7 +129,7 @@ The DataSet API (`/api/datasets-v2/`) manages shared dropdown option lists for s
 
 ## Encryption requirements for publishing
 
-**Important:** The API enforces encryption requirements for surveys collecting patient data.
+**Important:** The API enforces encryption requirements for all surveys.
 
 - Surveys that collect patient data (using `patient_details_encrypted` question groups) **must have encryption configured** before they can be published via the API.
 - Attempting to publish a patient data survey without encryption will return a `400 Bad Request` error with details.

@@ -1,138 +1,361 @@
 ---
-title: API Authentication Security — Review & Improvement Plan
+title: API Authentication Security — Implementation Plan
 category: security
 priority: 1
 ---
 
-# API Authentication Security — Review & Improvement Plan
+# API Authentication Security — Implementation Plan
 
-> This document summarises findings from the March 2026 penetration test relating to API authentication and sets out the improvement roadmap.
-
-## Current Authentication Model
-
-### Mechanism
-
-- **JWT (Bearer)** via `djangorestframework-simplejwt`
-- Token obtained at `POST /api/token` using email (username) + password
-- Access token: **30 minutes**; Refresh token: **7 days**
-- Refresh token rotation is **off** — a stolen refresh token is valid for its full 7-day lifetime
-- Both `JWTAuthentication` and `SessionAuthentication` are active as DRF backends
-
-### Brute-force / Rate-limit Controls
-
-| Control | Applies to web login | Applies to `/api/token` |
-|---|---|---|
-| `django-axes` (5 fail lockout) | ✅ Yes | ❌ No |
-| `django-ratelimit` | ✅ Yes | ❌ No |
-| DRF throttle (60 anon / 120 user per min) | — | ✅ Yes (but too permissive) |
-
-### MFA / 2FA
-
-- `django_otp` (TOTP) is installed and enforced for web UI sessions via `OTPMiddleware`
-- The `POST /api/token` endpoint **completely bypasses MFA** — a valid password alone issues a bearer token
-
-### Tier Enforcement
-
-- Survey and collaboration limits are checked per-request inside views
-- **FREE tier users are not blocked from obtaining a JWT** — any account, regardless of tier, can call `/api/token`
-- Team and Org role restrictions are not checked at token-issuance time
+> **Origin**: March 2026 penetration test. This document records the findings, the decisions made in response, and the two-phase implementation plan.
 
 ---
 
 ## Pen Test Findings
 
-1. **Brute force on `/api/token`** — `django-axes` is not wired to the DRF token endpoint, so there was no lockout after repeated failed attempts.
-2. **MFA bypass** — An attacker with a valid username and password could obtain a bearer token, entirely bypassing the TOTP requirement enforced for web sessions.
-3. **FREE tier and non-admin team members not blocked** — Any registered user can get a working API token.
+The March 2026 pen test identified three failures in the current JWT (`/api/token`) approach:
+
+1. **Brute force on `/api/token`** — `django-axes` was not wired to the DRF token endpoint. There was no lockout after repeated failed password attempts.
+2. **MFA bypass** — A valid username and password alone issued a bearer token, completely bypassing the TOTP requirement enforced for web sessions.
+3. **No tier or role enforcement at token issuance** — FREE tier users, non-admin team members, and non-admin org members could all obtain valid bearer tokens.
 
 ---
 
-## Target Access Model
+## Decisions Made
+
+Two separate decisions were made in response:
+
+**Decision 1 — Narrow the API scope to read-only**
+
+The API surface is reduced to read-only data retrieval. The only confirmed external integration use case is embedding surveys in or fetching survey data from external systems. All write operations, user management, publication, and response access are confined to the web application. This eliminates the highest-risk surfaces from any authentication compromise.
+
+**Decision 2 — Replace JWT authentication with named, role-scoped API keys**
+
+The `/api/token` endpoint is removed and replaced with named API keys issued through the MFA-protected web UI. MFA gates key issuance, not every API call. This closes the MFA bypass and brute force findings, and makes tier and scope enforcement explicit at the point of key creation.
+
+The `scope_context` field is included in the initial model but the full delegation model (`OrganisationAPIKeyGrant`) is deferred until write endpoints are reintroduced — at read-only scope, the existing queryset filtering is sufficient.
+
+---
+
+## Target API Surface
+
+### Permitted endpoints
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/surveys/` | List surveys accessible to the key |
+| `GET` | `/api/surveys/{id}/` | Survey structure and metadata |
+| `GET` | `/api/surveys/{id}/metrics/responses/` | Aggregate response counts (no PII) |
+| `GET` | `/api/datasets/` | Dataset / dropdown data |
+| `GET` | `/api/datasets/{id}/` | Single dataset |
+| `GET` | `/api/question-group-templates/` | Published question group templates |
+| `GET` | `/api/question-group-templates/{id}/` | Single template |
+| `GET` | `/api/health` | Health check (public) |
+| `GET` | `/api/docs`, `/api/redoc`, `/api/schema` | API documentation (public) |
+
+### Removed endpoints
+
+| Endpoint(s) | Reason |
+|---|---|
+| `POST/PUT/PATCH/DELETE /api/surveys/` | Survey creation, editing, deletion — web app only |
+| `POST /api/surveys/{id}/seed/` | Question seeding — web app only |
+| `POST /api/surveys/{id}/publish/` | Publication — web app only |
+| `GET/POST /api/surveys/{id}/tokens/` | Invite token management — web app only |
+| `POST/PUT/DELETE /api/org-memberships/` | Org membership management — web app only |
+| `POST/PUT/DELETE /api/survey-memberships/` | Survey membership management — web app only |
+| `GET/POST /api/users/` | User listing and lookup — web app only |
+| `POST /api/scoped-users/*/create` | User creation — web app only |
+| `* /api/recovery/` | Key recovery management — web app only |
+
+---
+
+## Target Access Model (API keys)
 
 | Account tier | API access | Who can generate credentials |
 |---|---|---|
 | **FREE** | ❌ None | N/A |
-| **PRO** | ✅ Full | User self-serves (must be MFA-authenticated) |
-| **TEAM Small / Medium / Large** | ✅ Team ADMIN only | Team admin via MFA-authenticated web UI |
-| **ORGANISATION** | ✅ Org admin by default; admin can grant access to named members | Org admin via web UI |
-| **ENTERPRISE** | ✅ As Organisation + SSO token exchange | Org admin / SSO |
+| **PRO** | ✅ Read-only | User self-serves via MFA-verified web session |
+| **TEAM Small / Medium / Large** | ✅ Team ADMIN only by default | Team admin via web UI |
+| **ORGANISATION** | ✅ Org admin by default | Org admin via web UI |
+| **ENTERPRISE** | ✅ As Organisation + SSO token exchange option | Org admin / SSO |
 
 ---
 
-## Recommended Approach: Named API Keys
+## Phase 1 — Endpoint Removal
 
-Rather than retrofitting TOTP codes onto every API call (complex for machine-to-machine use), the recommended model — used by GitHub, Stripe, and the NHS developer portal — is:
+**Goal**: A passing test suite against a correctly narrowed read-only API. No new infrastructure required. Shippable independently of Phase 2.
 
-> **Issue named, scoped API keys through the MFA-protected web UI. Block direct username + password access to `/api/token`.**
+### Step 1 — Delete test files for removed endpoints
 
-This means MFA is "baked in" at key issuance rather than required on every request, which is practical for automated/scripted API consumers.
+These files test only endpoints being removed. Delete them entirely:
 
-### API Key Model
+- `tests/test_api_questions_and_groups.py` — 35 tests, all `POST /api/surveys/{id}/seed/`
+- `tests/test_user_api.py` — 8 tests, all covering `org-memberships`, `survey-memberships`, `scoped-users`
 
-- A `UserAPIKey` model stores a per-user, named key as a **secure hash** (never stored in plaintext)
-- The raw key is shown **once** at creation and never again
-- Keys are **revocable** by the user or an admin at any time
-- Key creation requires a fully MFA-authenticated web session
-- All key creation, use, and revocation is written to the audit log
+### Step 2 — Remove tests for removed endpoints from mixed files
 
-### Organisation-level Delegation
+**`tests/test_api_permissions.py`** — remove these 3 tests, keep the rest:
 
-An `OrganisationAPIKeyGrant` model allows org admins to nominate specific members who may generate API keys:
+- `test_update_forbidden_without_rights` (PATCH endpoint removed)
+- `test_seed_action_permissions` (seed endpoint removed)
+- `test_create_returns_one_time_key` (POST survey creation removed)
 
-- Org admin grants access to a named user in the web UI
-- Only granted users can generate a key
-- Admin can revoke grants at any time
-- Useful for separating "who administers the org" from "who automates against the API"
+**`tests/test_api_editor_permissions.py`** — remove PATCH assertions:
+
+- `test_api_editor_permissions`: remove the PATCH/update assertion; keep the GET retrieve assertion
+- `test_api_viewer_permissions`: remove the PATCH/403 assertion; keep the GET retrieve assertion
+
+**`tests/test_api_access_controls.py`** — remove 6 tests for removed endpoints, keep only `test_healthcheck_public`:
+
+- `test_org_memberships_anonymous_blocked`
+- `test_org_memberships_non_admin_forbidden_on_mutations`
+- `test_survey_memberships_anonymous_blocked`
+- `test_survey_memberships_non_manager_forbidden_on_mutations`
+- `test_scoped_user_create_org_permissions`
+- `test_scoped_user_create_survey_permissions`
+
+**`tests/test_api_cross_org_security.py`** — remove 1 test for a removed endpoint:
+
+- `test_user_cannot_publish_other_org_survey` (publish endpoint removed)
+
+### Step 3 — Restrict `checktick_app/api/views.py`
+
+**`SurveyViewSet`** — convert from `ModelViewSet` to `ReadOnlyModelViewSet`:
+
+- Remove `perform_create`, `perform_destroy`, `create` override
+- Remove `seed` action
+- Remove `publish_settings` action
+- Remove `tokens` action
+- Keep `responses_metrics` action (read-only)
+
+**`DataSetViewSet`** — restrict to read-only:
+
+- Override `http_method_names` to `["get", "head", "options"]`, or convert to `ReadOnlyModelViewSet`
+- Remove `create-custom` action and `available-tags` action if write-only
+- Keep list and retrieve
+
+**`PublishedQuestionGroupViewSet`** — already `ReadOnlyModelViewSet`, no changes needed.
+
+**Remove entirely** (classes and all associated serializers that are only used by them):
+
+- `OrganizationMembershipViewSet` + `OrganizationMembershipSerializer`
+- `SurveyMembershipViewSet` + `SurveyMembershipSerializer`
+- `UserViewSet` + `UserSerializer`
+- `ScopedUserViewSet` + `ScopedUserCreateSerializer`
+- `RecoveryViewSet` and all recovery-related serializers
+
+### Step 4 — Update `checktick_app/api/urls.py`
+
+Remove these router registrations:
+
+```python
+# Remove:
+router.register(r"org-memberships", views.OrganizationMembershipViewSet, ...)
+router.register(r"survey-memberships", views.SurveyMembershipViewSet, ...)
+router.register(r"users", views.UserViewSet, ...)
+router.register(r"scoped-users", views.ScopedUserViewSet, ...)
+router.register(r"recovery", views.RecoveryViewSet, ...)
+```
+
+### Step 5 — Run tests
+
+All remaining tests should pass. The test suite now covers:
+
+- Survey list/retrieve (with org scoping)
+- Response metrics (read-only counts)
+- Cross-org isolation (read-only)
+- Editor/viewer read permissions
+- Healthcheck
+- API docs pages
+- OpenAPI schema
+
+### Step 6 — Update `docs/user-management.md`
+
+Remove the "API endpoints" section (lines covering `org-memberships`, `survey-memberships`, `scoped-users`). Replace with a note that all user management is performed through the web application at `/surveys/manage/users/`, `/surveys/org/<org_id>/users/`, and `/surveys/{slug}/users/`.
 
 ---
 
-## Improvement Roadmap
+## Immediate Hardening (parallel to Phase 1)
 
-### 🔴 Immediate (now — before next pen test)
+These mitigations close the pen test findings on the existing JWT endpoint while Phase 2 is in progress. They do not depend on Phase 1 completing first.
 
-1. **Wire `AxesBackend`** into `AUTHENTICATION_BACKENDS` so `django-axes` lockout applies to `/api/token` as well as the web login form.
-2. **Add a dedicated strict throttle** on `/api/token` — e.g. `5 attempts/minute` per IP, separate from the general `anon`/`user` rates.
-3. **Enable refresh token rotation and blacklisting**:
-   ```python
-   SIMPLE_JWT = {
-       ...
-       "ROTATE_REFRESH_TOKENS": True,
-       "BLACKLIST_AFTER_ROTATION": True,
-   }
-   ```
-   A stolen refresh token can then only be used once before it is invalidated.
+**1. Wire `django-axes` to `/api/token`**
 
-### 🟠 Soon (next sprint)
+In `checktick_app/settings.py`, add `AxesStandaloneBackend` to `AUTHENTICATION_BACKENDS`:
 
-4. **Custom `TokenObtainPairView`** that, after successful authentication, enforces:
-   - Reject FREE tier users with `403 Forbidden` + upgrade message
-   - Reject Team members who are not ADMIN with `403 Forbidden`
-   - Reject Org members who are not ADMIN (unless granted access) with `403 Forbidden`
-5. **Document and communicate** the tier restrictions to existing API users.
+```python
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+```
 
-### 🟡 Planned (this quarter)
+**2. Strict throttle on `/api/token`**
 
-6. **`UserAPIKey` model** — hashed API key storage, expiry, per-key scoping.
-7. **API key management UI** in the web dashboard (generate, name, revoke).
-8. **`OrganisationAPIKeyGrant`** — org admin delegation of API key access.
-9. **Replace `JWTAuthentication`** with `APIKeyAuthentication` as the primary DRF backend. Keep `SessionAuthentication` for Swagger UI.
+Add a `TokenObtainThrottle` class at `5/minute` per IP in `checktick_app/api/throttles.py` and apply it to the token view in `api/urls.py`.
 
-### 🟢 Later (next quarter)
+**3. Enable refresh token rotation**
 
-10. **Remove (or heavily restrict) `/api/token`** in production — username + password token issuance replaced entirely by API keys.
-11. **SSO token exchange** for Enterprise tier — allow OIDC-authenticated sessions to mint API keys without a separate password.
+In `checktick_app/settings.py`:
+
+```python
+SIMPLE_JWT = {
+    ...
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+}
+```
+
+Ensure `rest_framework_simplejwt.token_blacklist` is in `INSTALLED_APPS`.
+
+**4. Tier block at token issuance**
+
+Create a custom `TokenObtainPairView` subclass that checks `user.profile.account_tier` after authentication and returns `403 Forbidden` for FREE tier users. Apply to the `token` URL pattern.
 
 ---
 
-## Should MFA be required on every API call?
+## Phase 2 — JWT → API Key Authentication
 
-**No — but it should gate key issuance.** Adding a TOTP field to every `POST /api/token` request:
+**Goal**: Replace JWT with named, MFA-gated API keys. The `/api/token` endpoint is removed.
 
-- Breaks all existing machine-to-machine integrations
-- Is impractical for automated scripts and CI pipelines
-- Provides limited benefit once `/api/token` is properly rate-limited and restricted to paid tiers
+### Step 1 — `UserAPIKey` model + migration
 
-The correct control is: **you cannot generate an API key unless you are in an MFA-verified web session**. The key then acts as the long-lived credential. This is the same security model used by GitHub PATs, Stripe API keys, and AWS IAM access keys.
+Create `checktick_app/core/models.py` → `UserAPIKey`:
+
+```
+id              UUIDField primary key
+user            FK → User
+name            CharField — human label ("CI pipeline", "ETL script")
+key_hash        CharField(64) — SHA-256 of the raw key; unique; indexed
+prefix          CharField(12) — first 12 chars of raw key, stored plaintext for display
+scope_context   CharField(100, nullable) — reserved; "pro_full" | "team:{id}:{role}" | "org:{id}:{role}"
+created_at      DateTimeField auto_now_add
+last_used_at    DateTimeField null
+expires_at      DateTimeField null — None means no expiry
+revoked         BooleanField default False
+revoked_at      DateTimeField null
+revoked_by      FK → User null
+```
+
+- Raw key format: `ct_live_<secrets.token_urlsafe(40)>`
+- Generated once, shown once, never stored
+- `scope_context` is nullable and unused at Phase 2; wired up in Phase 3 when write endpoints return
+
+Run `manage.py makemigrations` and `manage.py migrate`.
+
+### Step 2 — Write API key authentication tests (TDD)
+
+Create `tests/test_api_key_auth.py` before implementing the backend. Tests should cover:
+
+- Valid key in `Authorization: Bearer ct_live_...` header → 200, correct user resolved
+- Invalid / unknown key → 401
+- Revoked key → 401
+- Expired key (past `expires_at`) → 401
+- No `Authorization` header → 401 (or 403 from permission class)
+- FREE tier user cannot generate a key (web UI gate, not auth layer)
+- Key `last_used_at` is updated on each authenticated request
+
+### Step 3 — Implement `APIKeyAuthentication` backend
+
+Create `checktick_app/api/authentication.py`:
+
+```python
+class APIKeyAuthentication(BaseAuthentication):
+    def authenticate(self, request):
+        header = get_authorization_header(request).decode()
+        if not header.startswith("Bearer ct_live_"):
+            return None  # fall through to next auth class
+        raw_key = header[7:]  # strip "Bearer "
+        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        try:
+            api_key = UserAPIKey.objects.select_related("user").get(
+                key_hash=key_hash,
+                revoked=False,
+            )
+        except UserAPIKey.DoesNotExist:
+            raise AuthenticationFailed("Invalid API key.")
+        if api_key.expires_at and api_key.expires_at < timezone.now():
+            raise AuthenticationFailed("API key has expired.")
+        api_key.last_used_at = timezone.now()
+        api_key.save(update_fields=["last_used_at"])
+        return (api_key.user, api_key)
+```
+
+Update `checktick_app/settings.py`:
+
+```python
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "checktick_app.api.authentication.APIKeyAuthentication",
+        "rest_framework.authentication.SessionAuthentication",  # kept for Swagger UI
+    ],
+    ...
+}
+```
+
+### Step 4 — Rewrite JWT-dependent tests
+
+**`tests/test_api_cross_org_security.py`** — the 5 remaining tests authenticate via `/api/token`. Rewrite each test's `auth` setup to create a `UserAPIKey` fixture and pass the raw key as the `Authorization: Bearer` header. The cross-org isolation assertions themselves are unchanged.
+
+Also rewrite any remaining auth setup in `tests/test_api_permissions.py` and `tests/test_api_editor_permissions.py` if they use `/api/token`.
+
+### Step 5 — API key management web UI
+
+**View**: `checktick_app/surveys/views.py` → `APIKeyListView`, `APIKeyCreateView`, `APIKeyRevokeView`
+**Template**: `templates/surveys/api_keys.html`
+**URL**: `Account → API Keys`
+
+The **Generate new key** button renders only if:
+
+- `request.user.is_verified()` (OTP check via `django_otp`)
+- `user.profile.account_tier` is PRO, TEAM, ORGANISATION, or ENTERPRISE
+- User has not exceeded the key limit for their tier
+
+The raw key is displayed once in a copyable field with a confirmation gate. It cannot be retrieved again. All lifecycle events (create, revoke) are written to the audit log.
+
+### Step 6 — Run tests
+
+All tests should pass, including the new API key auth tests and the rewritten cross-org security tests.
+
+### Step 7 — Remove `/api/token`
+
+Remove the `path("token", ...)` and `path("token/refresh", ...)` URL patterns from `api/urls.py`.
+
+Add a catch-all that returns `410 Gone` with a message pointing to the API keys documentation, so integrations break clearly rather than silently.
+
+Update `docs/api.md` and `docs/authentication-and-permissions.md` to remove all JWT references and describe the API key model.
+
+---
+
+## Phase 3 — Deferred (when write endpoints return)
+
+These items are explicitly deferred because at read-only scope, the existing queryset filtering is sufficient. They become necessary only when write operations are reintroduced.
+
+- `OrganisationAPIKeyGrant` model — admin delegation of key issuance rights
+- `scope_context` activation — wired into `can_edit_survey`, `can_manage_survey_users` permission helpers
+- Org/team admin grant UI — `OrgMemberAPIAccessView`, `org_member_api_access.html`
+- Key expiry email notifications (14- and 7-day warnings)
+- Key rotation UI
+- Platform admin API key dashboard
+- SSO token exchange for Enterprise (OIDC session → API key mint)
+
+---
+
+## Encryption Constraints
+
+All surveys are encrypted before publishing. The API is restricted to survey structure and response count data, neither of which involves encryption material. The full constraints are:
+
+| Operation | API allowed? | Reason |
+|---|---|---|
+| List / read survey structure and metadata | ✅ Yes | No encryption material involved |
+| Read aggregate response counts | ✅ Yes | No PII; count fields only |
+| Read datasets and question group templates | ✅ Yes | |
+| Fetch raw survey responses | ❌ No | Responses are encrypted blobs; decryption requires interactive MFA-verified session |
+| Create, update, delete surveys | ❌ No | Web app only |
+| Publish / unpublish | ❌ No | Web app only; encryption must be set up interactively first |
+| Set up encryption | ❌ No | Recovery phrase display is interactive |
+| Manage memberships or users | ❌ No | Web app only |
+
+**Password change invalidation**: when a user changes their account password, all survey KEKs are re-wrapped. All API keys for that user are also revoked at the same time. The user must re-authenticate via MFA and generate new keys.
 
 ---
 
@@ -140,6 +363,8 @@ The correct control is: **you cannot generate an API key unless you are in an MF
 
 - [API Reference](api.md)
 - [Authentication & Permissions](authentication-and-permissions.md)
+- [Encryption Technical Reference](encryption-technical-reference.md)
+- [User Management](user-management.md)
 - [Audit Logging and Notifications](audit-logging-and-notifications.md)
 - [OIDC SSO Setup](oidc-sso-setup.md)
 - [Pen Test Preparation](PENTEST-PREPARATION.md)
