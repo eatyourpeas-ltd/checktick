@@ -237,6 +237,7 @@ INSTALLED_APPS = [
     "csp",
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "mozilla_django_oidc",
     "django_otp",
     "django_otp.plugins.otp_totp",
@@ -507,6 +508,7 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "checktick_app.api.authentication.APIKeyAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
@@ -521,14 +523,16 @@ REST_FRAMEWORK = {
         "recovery_create": "3/hour",  # Creating recovery requests
         "recovery_approval": "10/hour",  # Admin approval/rejection actions
         "recovery_view": "60/minute",  # Viewing recovery status
+        # Token endpoint - brute force mitigation
+        "token_obtain": "5/minute",
     },
 }
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": False,
-    "BLACKLIST_AFTER_ROTATION": False,
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 # Disable throttling during tests to prevent rate limit errors
