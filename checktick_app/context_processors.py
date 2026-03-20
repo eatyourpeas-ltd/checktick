@@ -122,10 +122,6 @@ def branding(request):
             or TeamMembership.objects.filter(
                 user=user, role=TeamMembership.Role.ADMIN
             ).exists()
-            # Survey creator role
-            or SurveyMembership.objects.filter(
-                user=user, role=SurveyMembership.Role.CREATOR
-            ).exists()
         )
         # TODO: In future, restrict dataset creation to pro individual accounts
         # All authenticated users can create datasets (individual or organization-based)
