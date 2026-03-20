@@ -5,7 +5,6 @@ from rest_framework.schemas import get_schema_view
 
 from . import views
 
-
 router = DefaultRouter()
 router.register(r"surveys", views.SurveyViewSet, basename="survey")
 router.register(r"datasets", views.DataSetViewSet, basename="dataset")

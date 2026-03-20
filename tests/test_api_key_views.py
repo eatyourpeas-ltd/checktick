@@ -10,10 +10,10 @@ Covers:
 - can_manage_any_users context flag is False for survey-only CREATOR role users
 """
 
-import pytest
 from django.contrib.auth import get_user_model
 from django_otp.middleware import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_static.models import StaticDevice
+import pytest
 
 from checktick_app.core.models import UserAPIKey, UserProfile
 from checktick_app.surveys.models import Survey, SurveyMembership
@@ -254,7 +254,9 @@ class TestCanManageAnyUsers:
         """
         owner = make_user("survey_owner", tier=UserProfile.AccountTier.PRO)
         creator = make_user("survey_creator", tier=UserProfile.AccountTier.PRO)
-        survey = Survey.objects.create(name="test survey", slug="test-survey", owner=owner)
+        survey = Survey.objects.create(
+            name="test survey", slug="test-survey", owner=owner
+        )
         SurveyMembership.objects.create(
             user=creator, survey=survey, role=SurveyMembership.Role.CREATOR
         )

@@ -150,7 +150,6 @@ class Command(BaseCommand):
 
         # Import models
         from django.utils import timezone
-
         from django_otp.plugins.otp_totp.models import TOTPDevice
 
         from checktick_app.core.models import UserProfile

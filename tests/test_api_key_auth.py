@@ -13,13 +13,14 @@ Covers:
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-
-TEST_PASSWORD = "x"
 from django.utils import timezone
 import pytest
 
 from checktick_app.core.models import UserAPIKey
 from checktick_app.surveys.models import Survey
+
+TEST_PASSWORD = "x"
+
 
 User = get_user_model()
 
@@ -77,8 +78,8 @@ class TestAPIKeyAuthentication:
         assert key_obj.last_used_at is not None
 
     def test_valid_key_resolves_correct_user(self, client):
-        user, key_obj, raw_key = self.setup_user_with_key("scopeuser")
-        survey = Survey.objects.create(owner=user, name="My Survey", slug="my-survey")
+        user, _, raw_key = self.setup_user_with_key("scopeuser")
+        _ = Survey.objects.create(owner=user, name="My Survey", slug="my-survey")
         resp = client.get("/api/surveys/", **api_key_header(raw_key))
         assert resp.status_code == 200
         slugs = {s["slug"] for s in resp.json()}

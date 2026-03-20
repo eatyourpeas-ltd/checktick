@@ -15,8 +15,6 @@ Architecture:
 - These tests use database fixtures, not external API mocks
 """
 
-import json
-
 from django.contrib.auth import get_user_model
 import pytest
 from rest_framework.test import APIClient

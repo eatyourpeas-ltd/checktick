@@ -9,7 +9,6 @@ from django.contrib.auth.models import AnonymousUser
 from checktick_app.surveys.models import (
     Organization,
     OrganizationMembership,
-    SurveyMembership,
     Team,
     TeamMembership,
 )
