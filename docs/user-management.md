@@ -80,9 +80,9 @@ There are three membership scopes with separate roles:
 
 ## Guardrails
 
-- Organisation admins cannot remove themselves from their own admin role via the SSR UI or the API. Attempts are rejected.
-- Individual users (surveys without organisation or team) cannot access user management endpoints or share their surveys.
-- SSR UI supports email-based lookup and creation for convenience. The API endpoints expect explicit user IDs for membership resources; scoped user creation endpoints exist to create a user in a given org, team, or survey.
+- Organisation admins cannot remove themselves from their own admin role via the SSR UI. Attempts are rejected.
+- Individual users (surveys without organisation or team) cannot share their surveys or invite collaborators.
+- SSR UI supports email-based lookup and creation for convenience; invite an existing user by email or send an invitation link to a new address.
 
 ## Inviting Users
 
@@ -175,71 +175,17 @@ Actions:
 - Survey viewers see a read-only list.
 - Actions are audit-logged.
 
-## API endpoints
+## API
 
-Authentication: All endpoints below require JWT. Include "Authorization: Bearer <access_token>".
+User management operations — inviting members, changing roles, removing collaborators — are **web application only**. There are no API endpoints for these operations.
 
-### Organisation memberships
+Use the web UI at:
 
-- List: GET /api/org-memberships/
-- Create: POST /api/org-memberships/
-- Update: PUT/PATCH /api/org-memberships/{id}/
-- Delete: DELETE /api/org-memberships/{id}/
+- `/surveys/manage/users/` — organisation-level user management (org admins)
+- `/surveys/org/<org_id>/users/` — organisation member list and role management
+- `/surveys/{slug}/users/` — survey collaborator management
 
-Scope and permissions:
-
-- Queryset is restricted to organisations where the caller is an admin.
-- Create/Update/Delete require admin role in the target organisation.
-- Delete: additionally prevents an org admin from removing their own admin membership.
-- Unauthorized or out-of-scope access returns 403 Forbidden. Missing/invalid JWT returns 401 Unauthorized.
-
-Serializer fields:
-
-- id, organisation, user, username (read-only), role, created_at (read-only)
-
-### Survey memberships
-
-**Note**: Survey memberships are only available for organisation surveys. Individual users cannot create or manage survey memberships.
-
-- List: GET /api/survey-memberships/
-- Create: POST /api/survey-memberships/
-- Update: PUT/PATCH /api/survey-memberships/{id}/
-- Delete: DELETE /api/survey-memberships/{id}/
-
-Scope and permissions:
-
-- Queryset contains only memberships for surveys the caller can view (owner, org-admin for the survey's org, or the caller is a member of the survey).
-- Create/Update/Delete require manage permission on the survey (owner, org admin for the survey's org, or survey creator).
-- **Individual users (surveys without organisation) will receive 403 Forbidden when attempting to manage memberships.**
-- Unauthorized or out-of-scope access returns 403; missing/invalid JWT returns 401.
-
-Serializer fields:
-
-- id, survey, user, username (read-only), role, created_at (read-only)
-
-### Scoped user creation
-
-To support flows where an admin/creator wants to add a person who may not yet exist:
-
-- Create user within an org context (org admin only):
-  - POST /api/scoped-users/org/{org_id}/create
-
-- Create user within a survey context (survey owner/org admin/creator):
-  - POST /api/scoped-users/survey/{survey_id}/create
-  - **Only available for organisation surveys. Individual users will receive 403 Forbidden.**
-
-Request schema:
-
-- email (string, required)
-- password (string, optional)
-
-Behavior:
-
-- If a user with the given email already exists, it is reused; otherwise a new user is created with username=email. Password is required only when creating a new user (optional if reusing).
-- On success, returns the user's id/username/email and adds them as a Viewer in the specified scope by default (org Viewer or survey Viewer).
-- Permission checks mirror the membership rules above. Unauthorized attempts receive 403.
-
-Note: The SSR UI allows searching by email and will create or reuse users accordingly, with audit logging. If you need similar behavior via API, use the scoped user creation endpoints described here.
+The read-only REST API (`/api/surveys/`, `/api/datasets/`, etc.) exposes survey structure and datasets but does not expose membership or user data. See [API Reference](api.md) for available endpoints.
 
 ## Audit logging
 
@@ -251,9 +197,9 @@ These records enable traceability of who changed which memberships and when.
 
 ## Security notes
 
-- JWT is required for API access. Missing/invalid tokens result in 401; valid tokens without sufficient privileges result in 403.
+- The REST API requires a valid API key. Missing or invalid keys return 401; valid keys without sufficient privilege return 403.
 - SSR uses session auth with CSRF protection and enforces permissions via centralized helpers.
-- Organisation admins cannot remove themselves as admins via the UI or the API; requests to remove self-admin are rejected.
+- Organisation admins cannot remove themselves as admins via the UI; requests to remove self-admin are rejected.
 - Sensitive demographics remain encrypted per-survey and are unaffected by membership operations.
 
 ### Account Deletion Security
