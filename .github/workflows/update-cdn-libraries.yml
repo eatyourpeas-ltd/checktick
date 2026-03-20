@@ -224,6 +224,8 @@ jobs:
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "ReDoc is up to date"
           fi
+
+      - name: Check versions
         id: check-versions
         run: |
           echo "## Checking for newer library versions..." >> $GITHUB_STEP_SUMMARY
