@@ -28,6 +28,14 @@ urlpatterns = [
     path("", views.survey_list, name="list"),
     # User management hub (must be before slug routes)
     path("manage/users/", views.user_management_hub, name="user_management_hub"),
+    # API key management
+    path("account/api-keys/", views.api_key_list, name="api_key_list"),
+    path("account/api-keys/create/", views.api_key_create, name="api_key_create"),
+    path(
+        "account/api-keys/<uuid:key_id>/revoke/",
+        views.api_key_revoke,
+        name="api_key_revoke",
+    ),
     path(
         "manage/users/resend-invitation/",
         views.resend_invitation,
