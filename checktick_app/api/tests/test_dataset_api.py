@@ -21,21 +21,17 @@ from django.contrib.auth import get_user_model
 import pytest
 from rest_framework.test import APIClient
 
+from checktick_app.core.models import UserAPIKey
 from checktick_app.surveys.models import DataSet
 
 User = get_user_model()
-TEST_PASSWORD = "testpass123"
+TEST_PASSWORD = "x"
 
 
-def auth_hdr(client, username: str, password: str) -> dict:
-    """Helper to get JWT auth header."""
-    resp = client.post(
-        "/api/token",
-        data=json.dumps({"username": username, "password": password}),
-        content_type="application/json",
-    )
-    assert resp.status_code == 200, resp.content
-    return {"HTTP_AUTHORIZATION": f"Bearer {resp.json()['access']}"}
+def auth_hdr(user) -> dict:
+    """Build an API key auth header for the given user."""
+    _, raw_key = UserAPIKey.generate(user=user, name="test")
+    return {"HTTP_AUTHORIZATION": f"Bearer {raw_key}"}
 
 
 @pytest.fixture
@@ -153,7 +149,7 @@ def test_get_dataset_allows_anonymous_access(client):
 @pytest.mark.django_db
 def test_list_datasets_authenticated_allowed(client, authenticated_user):
     """Authenticated users can list all available datasets."""
-    hdrs = auth_hdr(client, "testuser", TEST_PASSWORD)
+    hdrs = auth_hdr(authenticated_user)
     resp = client.get("/api/datasets/", **hdrs)
 
     assert resp.status_code == 200
@@ -164,7 +160,7 @@ def test_list_datasets_authenticated_allowed(client, authenticated_user):
 @pytest.mark.django_db
 def test_get_dataset_authenticated_allowed(client, authenticated_user):
     """Authenticated users can get specific dataset."""
-    hdrs = auth_hdr(client, "testuser", TEST_PASSWORD)
+    hdrs = auth_hdr(authenticated_user)
     resp = client.get("/api/datasets/hospitals_england_wales/", **hdrs)
 
     assert resp.status_code == 200
@@ -180,7 +176,7 @@ def test_get_dataset_authenticated_allowed(client, authenticated_user):
 @pytest.mark.django_db
 def test_list_datasets_returns_all_datasets(client, authenticated_user):
     """List endpoint returns all available datasets."""
-    hdrs = auth_hdr(client, "testuser", TEST_PASSWORD)
+    hdrs = auth_hdr(authenticated_user)
     resp = client.get("/api/datasets/", **hdrs)
 
     data = resp.json()
@@ -191,7 +187,7 @@ def test_list_datasets_returns_all_datasets(client, authenticated_user):
 @pytest.mark.django_db
 def test_list_datasets_response_structure(client, authenticated_user):
     """List datasets returns correctly structured response."""
-    hdrs = auth_hdr(client, "testuser", TEST_PASSWORD)
+    hdrs = auth_hdr(authenticated_user)
     resp = client.get("/api/datasets/", **hdrs)
 
     data = resp.json()
@@ -214,7 +210,7 @@ def test_list_datasets_response_structure(client, authenticated_user):
 @pytest.mark.django_db
 def test_get_dataset_returns_options_from_database(client, authenticated_user):
     """Get dataset endpoint returns options from database."""
-    hdrs = auth_hdr(client, "testuser", TEST_PASSWORD)
+    hdrs = auth_hdr(authenticated_user)
     resp = client.get("/api/datasets/hospitals_england_wales/", **hdrs)
 
     assert resp.status_code == 200
@@ -231,7 +227,7 @@ def test_get_dataset_returns_options_from_database(client, authenticated_user):
 @pytest.mark.django_db
 def test_get_dataset_handles_hierarchical_options(client, authenticated_user):
     """Get dataset handles hierarchical options (e.g., Welsh LHBs with nested orgs)."""
-    hdrs = auth_hdr(client, "testuser", TEST_PASSWORD)
+    hdrs = auth_hdr(authenticated_user)
     resp = client.get("/api/datasets/welsh_lhbs/", **hdrs)
 
     assert resp.status_code == 200
@@ -244,7 +240,7 @@ def test_get_dataset_handles_hierarchical_options(client, authenticated_user):
 @pytest.mark.django_db
 def test_get_dataset_different_dataset_types(client, authenticated_user):
     """Different dataset types return correct data."""
-    hdrs = auth_hdr(client, "testuser", TEST_PASSWORD)
+    hdrs = auth_hdr(authenticated_user)
 
     # Test NHS trusts
     resp = client.get("/api/datasets/nhs_trusts/", **hdrs)
@@ -257,7 +253,7 @@ def test_get_dataset_different_dataset_types(client, authenticated_user):
 @pytest.mark.django_db
 def test_get_dataset_response_structure(client, authenticated_user):
     """Get dataset returns correctly structured response."""
-    hdrs = auth_hdr(client, "testuser", TEST_PASSWORD)
+    hdrs = auth_hdr(authenticated_user)
     resp = client.get("/api/datasets/nhs_trusts/", **hdrs)
 
     data = resp.json()
@@ -279,7 +275,7 @@ def test_get_dataset_response_structure(client, authenticated_user):
 @pytest.mark.django_db
 def test_get_dataset_invalid_key_returns_404(client, authenticated_user):
     """Invalid dataset key returns 404."""
-    hdrs = auth_hdr(client, "testuser", TEST_PASSWORD)
+    hdrs = auth_hdr(authenticated_user)
     resp = client.get("/api/datasets/invalid_key_that_does_not_exist/", **hdrs)
 
     assert resp.status_code == 404
@@ -290,7 +286,7 @@ def test_get_dataset_invalid_key_returns_404(client, authenticated_user):
 @pytest.mark.django_db
 def test_get_dataset_not_found_returns_404(client, authenticated_user):
     """Dataset key not in database returns 404."""
-    hdrs = auth_hdr(client, "testuser", TEST_PASSWORD)
+    hdrs = auth_hdr(authenticated_user)
 
     # Delete all datasets to simulate not found
     DataSet.objects.all().delete()
@@ -347,7 +343,7 @@ def test_inactive_datasets_not_returned(client, authenticated_user):
         options=["Should not appear"],
     )
 
-    hdrs = auth_hdr(client, "testuser", TEST_PASSWORD)
+    hdrs = auth_hdr(authenticated_user)
 
     # Should not appear in list
     resp_list = client.get("/api/datasets/", **hdrs)

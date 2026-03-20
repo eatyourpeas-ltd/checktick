@@ -1,5 +1,3 @@
-# SimpleJWT defaults
-from datetime import timedelta
 import os
 from pathlib import Path
 import sys
@@ -236,8 +234,6 @@ INSTALLED_APPS = [
     "axes",
     "csp",
     "rest_framework",
-    "rest_framework_simplejwt",
-    "rest_framework_simplejwt.token_blacklist",
     "mozilla_django_oidc",
     "django_otp",
     "django_otp.plugins.otp_totp",
@@ -509,7 +505,6 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "checktick_app.api.authentication.APIKeyAuthentication",
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_THROTTLE_CLASSES": [
@@ -519,20 +514,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/minute",
         "user": "120/minute",
-        # Recovery API - strict limits for security-sensitive operations
-        "recovery_create": "3/hour",  # Creating recovery requests
-        "recovery_approval": "10/hour",  # Admin approval/rejection actions
-        "recovery_view": "60/minute",  # Viewing recovery status
-        # Token endpoint - brute force mitigation
-        "token_obtain": "5/minute",
     },
-}
-
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 # Disable throttling during tests to prevent rate limit errors

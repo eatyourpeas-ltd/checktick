@@ -121,13 +121,11 @@ Container deployments:
 API endpoints:
 
 - GET /api/health
-- POST /api/token (JWT obtain)
-- POST /api/token/refresh (JWT refresh)
-- /api/surveys/ (CRUD for authenticated owners)
-- /api/users/ (admin read-only)
+- GET /api/surveys/ (read-only; requires API key)
+- GET /api/datasets/ (read-only; requires API key)
+- GET /api/question-group-templates/ (read-only; requires API key)
 
-API permissions mirror SSR rules: you can list and retrieve surveys you own, and any survey in organisations where you are an ADMIN. Updates/deletes require ownership or org ADMIN.
-See docs/api.md for endpoint-level protections and error semantics.
+API authentication uses named API keys issued through the MFA-protected web UI. See docs/api.md for endpoint details.
 
 Security posture:
 

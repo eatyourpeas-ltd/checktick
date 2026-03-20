@@ -20,8 +20,6 @@ def make_api_key(user) -> str:
 
 def auth_header(raw_key: str) -> dict:
     return {"HTTP_AUTHORIZATION": f"Bearer {raw_key}"}
-    """Build authorization header with JWT token."""
-    return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
 
 
 @pytest.mark.django_db
