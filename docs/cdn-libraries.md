@@ -21,6 +21,7 @@ CheckTick self-hosts critical JavaScript libraries with Subresource Integrity (S
 | SortableJS | 1.15.7 | `checktick_app/static/js/sortable.min.js` | Drag-and-drop reordering |
 | axe-core | 4.11.1 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
 | NHS Frontend | 8.1.0 | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling |
+| ReDoc | 2.1.5 | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation |
 
 ## SRI Hashes
 
@@ -48,6 +49,12 @@ sha384-CEnpkh+ndCKp9F6zlTFMCy3ebmIfIj+HyBbO4hxQz4bVQNq+Id1MPxPF6cZ4QzPA
 
 ```text
 sha384-qWZYzCDfWOMmbbg+HoBYKha59es/145h5uc93F1rxBFwJVruD2lcomcIwUlCwPDF
+```
+
+### ReDoc 2.1.5
+
+```text
+sha384-0GrsyTQc9Oqd8h+b2dbc4XdR2T/DYpy0tLNNstyx+LBMUyiBbcWPbEs9aRmUcaxD
 ```
 
 ## Automatic Updates
@@ -98,6 +105,11 @@ curl -o checktick_app/static/css/nhsuk-frontend.min.css https://cdn.jsdelivr.net
 # Alternative: npm pack (recommended)
 # npm pack nhsuk-frontend@8.1.0 && tar -xzf nhsuk-frontend-8.1.0.tgz -C /tmp && \
 #   cp /tmp/package/dist/nhsuk.min.css checktick_app/static/css/nhsuk-frontend.min.css && rm nhsuk-frontend-8.1.0.tgz
+
+# ReDoc (npm pack recommended - no unpkg/cdnjs alternative needed)
+npm pack redoc@2.1.5 && tar -xzf redoc-2.1.5.tgz -C /tmp && \
+  cp /tmp/package/bundles/redoc.standalone.js checktick_app/static/js/redoc.standalone.min.js && \
+  rm redoc-2.1.5.tgz
 ```
 
 ### 2. Generate SRI Hash
@@ -198,6 +210,7 @@ Since files are self-hosted, CDN outages don't
 | HTMX | unpkg.com | jsdelivr.net |
 | SortableJS | jsdelivr.net | unpkg.com |
 | axe-core | cdnjs.cloudflare.com | unpkg.com |
+| ReDoc | npm registry (redoc) | cdn.redoc.ly |
 
 ## CI Source-of-Truth (npm)
 

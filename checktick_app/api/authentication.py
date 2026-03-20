@@ -11,7 +11,7 @@ class APIKeyAuthentication(BaseAuthentication):
 
     Falls through (returns ``None``) for any token that does not start with the
     ``ct_live_`` prefix, allowing other authentication classes to handle
-    session-based requests and Swagger UI use.
+    session-based requests.
     """
 
     KEY_PREFIX = "ct_live_"

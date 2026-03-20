@@ -27,8 +27,6 @@ urlpatterns = [
         ),
         name="openapi-schema",
     ),
-    # Embedded Swagger UI (CSP exempt)
-    path("docs", views.swagger_ui, name="swagger-ui"),
     # Embedded ReDoc UI (CSP exempt)
     path("redoc", views.redoc_ui, name="redoc-ui"),
     path("", include(router.urls)),

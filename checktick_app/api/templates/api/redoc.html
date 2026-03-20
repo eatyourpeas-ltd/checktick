@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}API Reference (ReDoc){% endblock %}
 {% block content %}
 <div class="prose">
@@ -8,13 +9,13 @@
     <div>
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="w-6 h-6 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       <span>
-        If sections appear empty, some endpoints may require authentication or permissions.
-        Use Swagger UI at <a class="link" href="/api/docs">/api/docs</a> to authorize with a JWT for trying requests.
+        Some endpoints require authentication. Generate an API key from <strong>Account &rarr; API Keys</strong> and pass it as <code>Authorization: Api-Key &lt;your-key&gt;</code>.
       </span>
     </div>
   </div>
 </div>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" />
-<script src="https://cdn.redoc.ly/redoc/v2.1.5/bundles/redoc.standalone.js" crossorigin="anonymous"></script>
+<script src="{% static 'js/redoc.standalone.min.js' %}"
+        integrity="sha384-0GrsyTQc9Oqd8h+b2dbc4XdR2T/DYpy0tLNNstyx+LBMUyiBbcWPbEs9aRmUcaxD"
+        crossorigin="anonymous"></script>
 <redoc spec-url="/api/schema"></redoc>
 {% endblock %}

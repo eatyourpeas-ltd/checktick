@@ -20,6 +20,7 @@ PACKAGES=(
   [htmx.org]="htmx.min.js"
   [sortablejs]="sortable.min.js"
   [axe-core]="axe-core.min.js"
+  [redoc]="redoc.standalone.min.js"
 )
 
 DRY_RUN=0
@@ -118,6 +119,7 @@ update_templates_integrity() {
     "$ROOT_DIR/checktick_app/surveys/templates/surveys/builder.html"
     "$ROOT_DIR/checktick_app/surveys/templates/surveys/groups.html"
     "$ROOT_DIR/checktick_app/surveys/templates/surveys/group_builder.html"
+    "$ROOT_DIR/checktick_app/api/templates/api/redoc.html"
   )
 
   for tpl in "${templates[@]}"; do
@@ -212,6 +214,7 @@ update_dep() {
   # Heuristic: check common locations for minified files
   candidates=(
     "$tmpdir/package/dist/$file"
+    "$tmpdir/package/bundles/${file/standalone.min./standalone.}"
     "$tmpdir/package/$file"
     "$tmpdir/package/build/$file"
     "$tmpdir/package/lib/$file"

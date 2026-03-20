@@ -6,7 +6,6 @@ priority: 1
 
 Use the interactive documentation for the full, always-up-to-date list of endpoints and schemas:
 
-[![Swagger UI](/static/docs/swagger-badge.svg)](/api/docs)
 [![ReDoc](/static/docs/redoc-badge.svg)](/api/redoc)
 [![OpenAPI JSON](/static/docs/openapi-badge.svg)](/api/schema)
 
