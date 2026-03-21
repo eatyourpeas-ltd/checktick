@@ -941,11 +941,11 @@ def test_prepare_question_rendering_escapes_closing_tag_in_payload_json(owner, o
     payload_json = prepared[0].builder_payload_json
 
     assert (
-        "</" not in payload_json
-    ), "Raw '</' found in builder_payload_json — Finding #3 slash-escape fix not applied"
+        "<" not in payload_json
+    ), "Raw '<' found in builder_payload_json — HTML chars must be unicode-escaped"
     assert (
-        "\\/" in payload_json
-    ), "Expected escaped '<\\/' not found in builder_payload_json"
+        "\\u003c" in payload_json
+    ), "Expected \\u003c unicode escape not found in builder_payload_json"
 
 
 @pytest.mark.django_db
@@ -983,10 +983,13 @@ def test_question_row_template_renders_escaped_closing_tag(owner, org):
 
     response = _render_template_question_row(request, survey, question)
 
-    # The escaped form '<\/script>' (literal backslash) must be present in bytes.
+    # The unicode-escaped form must be present instead of raw angle brackets.
     assert (
-        b"<\\/script>" in response.content
-    ), "Escaped '<\\/script>' not found — Finding #3 closing-tag escape fix may not be active"
+        b"<script>" not in response.content
+    ), "Raw <script> tag found in builder question row — unicode escape not applied"
+    assert (
+        b"\\u003c" in response.content
+    ), "Expected \\u003c unicode escape not found in builder question row"
 
 
 # ===========================================================================

@@ -1589,8 +1589,15 @@ def _prepare_question_rendering(
             )
             setattr(q, "builder_payload", payload)
             try:
-                payload_json = json.dumps(payload, separators=(",", ":")).replace(
-                    "</", "<\\/"
+                # Encode <, > and & as JSON Unicode escapes so the blob is
+                # safe to embed in an HTML element with |safe.  This prevents
+                # both closing-tag break-out (</script>) AND opening-tag
+                # injection (<script>) when the browser parses the hidden div.
+                payload_json = (
+                    json.dumps(payload, separators=(",", ":"))
+                    .replace("&", "\\u0026")
+                    .replace("<", "\\u003c")
+                    .replace(">", "\\u003e")
                 )
             except TypeError:
                 payload_json = "null"
