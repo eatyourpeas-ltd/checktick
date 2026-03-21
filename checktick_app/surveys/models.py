@@ -2451,6 +2451,11 @@ class SurveyMembership(models.Model):
         User, on_delete=models.CASCADE, related_name="survey_memberships"
     )
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.VIEWER)
+    can_change_survey_style = models.BooleanField(
+        default=False,
+        help_text="Allow this member to edit the survey's visual style (colours, fonts, branding). "
+        "Only effective on paid tiers; free-tier users are always denied.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

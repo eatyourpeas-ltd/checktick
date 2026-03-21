@@ -366,6 +366,7 @@
 {% endif %}
 
 <div class="mt-6">
+{% if can_change_style %}
   <div class="collapse collapse-arrow bg-base-100 text-base-content">
     <input type="checkbox" id="survey-style-collapse" aria-label="{% trans "Toggle survey style panel" %}" checked="checked" />
     <div class="collapse-title flex items-center gap-3 px-4">
@@ -466,6 +467,12 @@
       </div>
     </div>
   </div>
+{% else %}
+  <div class="alert alert-info mt-2">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="h-6 w-6 shrink-0 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    <span>{% trans "Survey style customisation is available on paid plans. Upgrade your account or ask an admin to grant you style permissions." %}</span>
+  </div>
+{% endif %}
 </div>
 
   {# Group management is available on the Groups page #}

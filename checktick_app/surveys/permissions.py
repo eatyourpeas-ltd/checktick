@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.core.exceptions import PermissionDenied
+from django.db.models import Q
 
 from .models import Organization, OrganizationMembership, Survey, SurveyMembership
 
@@ -56,15 +57,29 @@ def can_manage_org_users(user, org: Organization) -> bool:
 
 
 def can_manage_survey_users(user, survey: Survey) -> bool:
-    # Individual users (surveys without organization) cannot share surveys
-    if not survey.organization_id:
+    if not user.is_authenticated:
         return False
-    # Only survey creators (not editors), org admins, or owner can manage users on a survey
-    if survey.organization_id and is_org_admin(user, survey.organization):
-        return True
+    # Unlinked surveys (no org): only allow the owner IF they have org context.
+    # Pure individual users (no org) cannot share surveys with others.
+    if not survey.organization_id:
+        if survey.owner_id == getattr(user, "id", None):
+            # Allow if this user is an org owner/admin (survey just isn't linked yet)
+            return Organization.objects.filter(
+                Q(owner=user)
+                | Q(
+                    memberships__user=user,
+                    memberships__role=OrganizationMembership.Role.ADMIN,
+                )
+            ).exists()
+        return False
+    # Org-linked surveys: owner, org owner, org admin, or CREATOR-role member.
     if survey.owner_id == getattr(user, "id", None):
         return True
-    # Only CREATOR role can manage users, EDITOR cannot
+    if survey.organization.owner_id == getattr(user, "id", None):
+        return True
+    if is_org_admin(user, survey.organization):
+        return True
+    # CREATOR role members can manage users; EDITOR/VIEWER cannot.
     return SurveyMembership.objects.filter(
         user=user, survey=survey, role=SurveyMembership.Role.CREATOR
     ).exists()
@@ -461,6 +476,54 @@ def require_can_publish_question_group(user, group, level: str) -> None:
 def require_can_import_published_template(user, template) -> None:
     if not can_import_published_template(user, template):
         raise PermissionDenied("You do not have permission to import this template.")
+
+
+# ============================================================================
+# Survey Style Permissions
+# ============================================================================
+
+
+def can_change_survey_style(user, survey: Survey) -> bool:
+    """Check if a user may edit the visual style of a survey.
+
+    Rules (in order):
+    1. Unauthenticated or free-tier users: denied.
+    2. Survey owner on a paid tier: allowed.
+    3. Organisation owner on a paid tier: allowed.
+    4. Organisation admin on a paid tier: allowed.
+    5. SurveyMembership with can_change_survey_style=True: allowed.
+    6. Everyone else: denied.
+    """
+    if not user.is_authenticated:
+        return False
+
+    from checktick_app.core.models import UserProfile
+
+    profile = UserProfile.get_or_create_for_user(user)
+    if profile.get_effective_tier() == UserProfile.AccountTier.FREE:
+        return False
+
+    if survey.owner_id == getattr(user, "id", None):
+        return True
+
+    if survey.organization_id and survey.organization.owner_id == getattr(
+        user, "id", None
+    ):
+        return True
+
+    if survey.organization_id and is_org_admin(user, survey.organization):
+        return True
+
+    return SurveyMembership.objects.filter(
+        user=user, survey=survey, can_change_survey_style=True
+    ).exists()
+
+
+def require_can_change_survey_style(user, survey: Survey) -> None:
+    if not can_change_survey_style(user, survey):
+        raise PermissionDenied(
+            "You do not have permission to change the style of this survey."
+        )
 
 
 def require_can_delete_published_template(user, template) -> None:
