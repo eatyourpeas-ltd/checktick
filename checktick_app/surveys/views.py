@@ -1589,8 +1589,15 @@ def _prepare_question_rendering(
             )
             setattr(q, "builder_payload", payload)
             try:
-                payload_json = json.dumps(payload, separators=(",", ":")).replace(
-                    "</", "<\\/"
+                # Encode <, > and & as JSON Unicode escapes so the blob is
+                # safe to embed in an HTML element with |safe.  This prevents
+                # both closing-tag break-out (</script>) AND opening-tag
+                # injection (<script>) when the browser parses the hidden div.
+                payload_json = (
+                    json.dumps(payload, separators=(",", ":"))
+                    .replace("&", "\\u0026")
+                    .replace("<", "\\u003c")
+                    .replace(">", "\\u003e")
                 )
             except TypeError:
                 payload_json = "null"
@@ -1603,7 +1610,9 @@ def _prepare_question_rendering(
 
 
 def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
-    text = (data.get("text") or "").strip()
+    from django.utils.html import strip_tags as _strip_tags
+
+    text = _strip_tags((data.get("text") or "").strip())
     qtype = (data.get("type") or SurveyQuestion.Types.TEXT).strip()
     if not qtype:
         qtype = SurveyQuestion.Types.TEXT
@@ -1624,6 +1633,7 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
         # Format: option_N_followup=on, option_N_followup_label="custom label"
         options = []
         for idx, opt_text in enumerate(option_lines):
+            opt_text = _strip_tags(opt_text)
             opt_dict: dict[str, Any] = {"label": opt_text, "value": opt_text}
 
             # Check if this option should have a follow-up text input
@@ -2161,6 +2171,14 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
     )
     # Per-survey style overrides for branding on dashboard
     style = survey.style or {}
+    # Sanitize CSS fields at read-time to prevent </style> breakout via |safe.
+    from checktick_app.core.theme_utils import sanitize_css_block as _sanitize_css
+
+    if style.get("theme_css_light") or style.get("theme_css_dark"):
+        style = dict(style)
+        style["theme_css_light"] = _sanitize_css(style.get("theme_css_light") or "")
+        style["theme_css_dark"] = _sanitize_css(style.get("theme_css_dark") or "")
+        survey.style = style  # mutate in-memory only; not saved
     brand_overrides = {
         "title": style.get("title"),
         "icon_url": style.get("icon_url"),
@@ -4223,6 +4241,15 @@ def _handle_participant_submission(
     )
     show_patient_details = patient_group is not None
     show_professional_details = prof_group is not None
+    # Sanitise survey.style CSS in-memory before rendering so that a malicious
+    # theme_css_light/dark cannot break out of the <style> block via |safe.
+    from checktick_app.core.theme_utils import sanitize_css_block as _sanitize_css
+
+    style = dict(survey.style or {})
+    if style.get("theme_css_light") or style.get("theme_css_dark"):
+        style["theme_css_light"] = _sanitize_css(style.get("theme_css_light") or "")
+        style["theme_css_dark"] = _sanitize_css(style.get("theme_css_dark") or "")
+        survey.style = style
     ctx = {
         "survey": survey,
         "questions": qs,
@@ -4395,6 +4422,16 @@ def survey_style_update(request: HttpRequest, slug: str) -> HttpResponse:
                     messages.error(
                         request,
                         "Invalid font value. Only alphanumeric characters, spaces, commas, hyphens, and quotes are allowed.",
+                    )
+                    return redirect("surveys:dashboard", slug=slug)
+                # Validate font_css_url: only allow http:// and https:// protocols
+                # to prevent javascript: / data: URI injection via <link href="...">
+                if key == "font_css_url" and not val.lower().startswith(
+                    ("http://", "https://")
+                ):
+                    messages.error(
+                        request,
+                        "Font stylesheet URL must start with https:// or http://.",
                     )
                     return redirect("surveys:dashboard", slug=slug)
                 style[key] = val
@@ -6158,6 +6195,19 @@ def organization_key_recovery(request: HttpRequest, slug: str) -> HttpResponse:
     return render(request, "surveys/organization_key_recovery.html", context)
 
 
+def _sanitize_csv_value(value: str) -> str:
+    """
+    Prevent CSV formula injection (spreadsheet injection).
+
+    Values beginning with =, @, +, or - are treated as formulas by Excel and
+    LibreOffice.  Prefix them with a single-quote so spreadsheet applications
+    render them as plain text rather than executing them.
+    """
+    if value and value[0] in ("=", "@", "+", "-"):
+        return "'" + value
+    return value
+
+
 def _format_answer_for_export(answer: Any, question_type: str) -> str:
     """
     Format an answer value for CSV export based on question type.
@@ -6183,18 +6233,18 @@ def _format_answer_for_export(answer: Any, question_type: str) -> str:
     # Handle multi-select and orderable questions (lists)
     if question_type in ("mc_multi", "orderable"):
         if isinstance(answer, list):
-            return "; ".join(str(item) for item in answer)
-        return str(answer)
+            return "; ".join(_sanitize_csv_value(str(item)) for item in answer)
+        return _sanitize_csv_value(str(answer))
 
     # Handle single value questions
     if isinstance(answer, list):
         # Shouldn't happen for single-select, but handle gracefully
-        return "; ".join(str(item) for item in answer)
+        return "; ".join(_sanitize_csv_value(str(item)) for item in answer)
     if isinstance(answer, dict):
         # Complex answer structure - serialize
         return json.dumps(answer)
 
-    return str(answer)
+    return _sanitize_csv_value(str(answer))
 
 
 @login_required
@@ -7477,9 +7527,11 @@ def _handle_image_delete(
 @login_required
 @require_http_methods(["POST"])
 def builder_group_create(request: HttpRequest, slug: str) -> HttpResponse:
+    from django.utils.html import strip_tags as _strip_tags_group
+
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
-    name = request.POST.get("name", "").strip() or "New Group"
+    name = _strip_tags_group(request.POST.get("name", "").strip()) or "New Group"
     g = QuestionGroup.objects.create(name=name, owner=request.user)
     questions_qs = survey.questions.select_related("group").all()
     questions = _prepare_question_rendering(survey, questions_qs)

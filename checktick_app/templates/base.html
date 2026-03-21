@@ -292,20 +292,21 @@
         </div>
       </div>
     </footer>
+    <script src="{% static 'js/htmx.min.js' %}"
+            nonce="{{ request.csp_nonce }}"
+            integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz"
+            crossorigin="anonymous"></script>
     <script nonce="{{ request.csp_nonce }}">
-      // Configure HTMX to use CSP nonce for inline scripts
-      window.htmx = window.htmx || {};
-      window.htmx.config = window.htmx.config || {};
+      // Configure HTMX *after* it loads so these properties are written
+      // directly into htmx's live Q.config object (window.htmx is the IIFE
+      // return value; setting config before the script loads writes to a
+      // plain placeholder object that gets replaced on load).
       window.htmx.config.inlineScriptNonce = "{{ request.csp_nonce }}";
       // Disable HTMX history caching to prevent CSP nonce violations:
       // cached page snapshots contain stale nonces that don't match the
       // current request's CSP header, causing inline scripts to be blocked.
       window.htmx.config.historyCacheSize = 0;
     </script>
-    <script src="{% static 'js/htmx.min.js' %}"
-            nonce="{{ request.csp_nonce }}"
-            integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz"
-            crossorigin="anonymous"></script>
     <script src="{% static 'js/theme-toggle.js' %}" nonce="{{ request.csp_nonce }}"></script>
     {# Global toast root for lightweight notifications #}
     <div id="toast-root" class="toast toast-top toast-end z-[1000]" aria-live="polite" aria-atomic="true"></div>

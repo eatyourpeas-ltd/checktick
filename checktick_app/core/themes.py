@@ -12,6 +12,11 @@ from __future__ import annotations
 import re
 from typing import Dict, Optional
 
+from checktick_app.core.theme_utils import (
+    _sanitize_css_value,
+    normalize_daisyui_builder_css,
+)
+
 # DaisyUI theme presets categorized by color scheme
 LIGHT_THEMES = [
     "light",
@@ -101,7 +106,7 @@ def parse_custom_theme_config(config_text: str) -> Optional[Dict[str, str]]:
 
     for match in var_pattern.finditer(config_text):
         var_name = match.group(1).strip()
-        var_value = match.group(2).strip()
+        var_value = _sanitize_css_value(match.group(2).strip())
         theme_vars[var_name] = var_value
 
     # Also extract name and color-scheme if present
@@ -143,7 +148,7 @@ def theme_vars_to_css(
     # Add all CSS variables (skip metadata keys starting with _)
     for var_name, var_value in sorted(theme_vars.items()):
         if not var_name.startswith("_"):
-            css_lines.append(f"{var_name}: {var_value};")
+            css_lines.append(f"{var_name}: {_sanitize_css_value(var_value)};")
 
     return "\n    ".join(css_lines)
 
@@ -196,8 +201,9 @@ def generate_theme_css_for_brand(
         if parsed:
             light_css = theme_vars_to_css(parsed)
         else:
-            # Use as raw CSS
-            light_css = custom_css_light
+            # Normalise raw CSS through the safe extractor instead of
+            # passing arbitrary user input through verbatim.
+            light_css = normalize_daisyui_builder_css(custom_css_light)
     else:
         # Use preset reference
         light_css = get_preset_theme_reference(preset_light)
@@ -208,7 +214,7 @@ def generate_theme_css_for_brand(
         if parsed:
             dark_css = theme_vars_to_css(parsed)
         else:
-            dark_css = custom_css_dark
+            dark_css = normalize_daisyui_builder_css(custom_css_dark)
     else:
         dark_css = get_preset_theme_reference(preset_dark)
 

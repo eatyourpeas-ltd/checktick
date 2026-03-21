@@ -106,7 +106,7 @@ Each action is verified against the user's role at the appropriate level.
 
 ## A03:2021 – Injection
 
-**Risk**: SQL injection, command injection, or other code injection attacks.
+**Risk**: SQL injection, command injection, XSS, or other code injection attacks.
 
 ### Controls Implemented
 
@@ -118,15 +118,87 @@ Each action is verified against the user's role at the appropriate level.
 
 #### Template Injection Prevention
 
-- Django templates with autoescaping enabled
-- User content sanitized before display
-- CSP headers prevent inline script execution
+- Django templates with autoescaping enabled by default
+- User content sanitized before display (see XSS Prevention below)
+- CSP headers restrict inline script execution
 
 #### Command Injection Prevention
 
 - No shell command execution from user input
 - File operations use safe path handling
 - Subprocess calls avoided; pure Python implementations preferred
+
+#### XSS Prevention
+
+Django's template auto-escaping provides the primary defence. Additional sanitization layers protect the surfaces where content is rendered via `|safe` or placed in JSON contexts.
+
+##### Content Security Policy
+
+CheckTick uses `django-csp` (v4+) with per-request nonces to restrict which scripts may execute:
+
+```python
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        "default-src":  ("'self'",),
+        "script-src":   ("'self'", "https://cdn.jsdelivr.net",
+                         "https://js.hcaptcha.com", "https://*.hcaptcha.com",
+                         # Two SHA-256 hashes for known inline snippets
+                         "'sha256-VgCjwSQ...'", "'sha256-Ern26...'",
+                         CSP_NONCE),          # per-request nonce (django-csp 4.0+)
+        "style-src":    ("'self'", "'unsafe-inline'",   # required: HTMX + DaisyUI
+                         "https://fonts.googleapis.com", "https://*.hcaptcha.com"),
+        "font-src":     ("'self'", "https://fonts.gstatic.com", "data:"),
+        "img-src":      ("'self'", "data:"),
+        "connect-src":  ("'self'", "https://hcaptcha.com", "https://*.hcaptcha.com"),
+        "frame-src":    ("'self'", "https://hcaptcha.com", "https://*.hcaptcha.com"),
+        "frame-ancestors": ("'self'",),   # DENY in production
+    }
+}
+```
+
+- Every server-rendered `<script>` tag injects the request-scoped nonce; scripts without it are blocked by the browser.
+- `style-src: 'unsafe-inline'` is intentionally retained because HTMX and DaisyUI rely on inline styles. CSS-context injection is mitigated via server-side sanitization (see below) rather than CSP.
+
+##### Server-Side CSS Sanitization
+
+Survey and organisation branding allows owners to supply custom CSS themes. Three helper functions in `checktick_app/core/theme_utils.py` gate all surfaces where this CSS is rendered:
+
+| Helper | Strips | Applied at |
+|--------|--------|-----------|
+| `sanitize_css_block(css)` | `<` `>` characters | Read-time before rendering theme blocks |
+| `_sanitize_css_value(val)` | `<` `>` `{` `}` `;` `url()` `http(s)://` | Individual CSS property values |
+| `sanitize_font_family(val)` | `{` `}` `;` `url()` protocol prefixes | Font family strings at write-time |
+
+Sanitization is applied at both **write time** (view layer, before storage) and **read time** (context processors and view functions, before template rendering). This defence-in-depth approach means malicious values stored before the fix was deployed are still scrubbed on output.
+
+##### Input Sanitization for Builder Content
+
+Survey question text, option labels, and group names are passed through `django.utils.html.strip_tags()` before storage so that HTML markup cannot be re-emitted via the `|safe` builder payload filter.
+
+Font CSS URL fields reject any value that does not begin with `http://` or `https://`, blocking `javascript:` and `data:` URI injection via `<link>` elements.
+
+##### Survey Answer Storage
+
+Respondent answers are stored in a `JSONField` on `SurveyResponse`. They are rendered back to owners only via:
+
+- **CSV export** (`Content-Disposition: attachment`) — not an HTML surface.
+- **Response insights chart** — option labels are Django-auto-escaped in the template (`{{ option.label }}`); no `|safe` filter is applied.
+- **Progress restore** — loaded via Django's `json_script` filter into a `<script type="application/json">` element; JavaScript restores values using `.value =` (property assignment), never `innerHTML`.
+
+CSV formula injection (values beginning with `=`, `@`, `+`, `-`) is blocked at export time so spreadsheet applications cannot execute embedded formulas.
+
+##### Attack Surface Reference
+
+| Surface | Attack Class | Fix Applied |
+|---------|-------------|-------------|
+| S1–S8: Brand/org theme CSS | CSS injection → style breakout | `sanitize_css_block` + `sanitize_font_family` in context processor and `update_branding` view |
+| S9: Question text (builder) | Stored XSS via `|safe` payload | `strip_tags` in `_parse_builder_question_form` |
+| S10: Option labels (builder) | Stored XSS via `|safe` payload | `strip_tags` on each option label |
+| S11: Group name (builder) | Stored XSS via HTMX response | `strip_tags` in `builder_group_create` |
+| S12: Survey-level theme CSS | CSS injection in dashboard/respondent views | `sanitize_css_block` at read-time in view context |
+| S13: Font CSS URL | `javascript:`/`data:` URI injection | Protocol allowlist in `survey_style_update` |
+| S14: Theme CSS in respondent views | CSS injection against anonymous respondents | `sanitize_css_block` in `survey_take`/`survey_detail` views |
+| S15: CSV formula injection | Spreadsheet formula execution | Formula prefix stripping in `_format_answer_for_export` |
 
 ---
 
@@ -176,12 +248,23 @@ Each action is verified against the user's role at the appropriate level.
 #### HTTP Security Headers
 
 ```python
-# Content Security Policy
-CSP_DEFAULT_SRC = ("'self'",)
-CSP_SCRIPT_SRC = ("'self'",)
-CSP_STYLE_SRC = ("'self'", "'unsafe-inline'")  # Required for HTMX
-CSP_IMG_SRC = ("'self'", "data:")
-CSP_CONNECT_SRC = ("'self'",)
+# Content Security Policy (django-csp 4.0+ dict format)
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        "default-src":     ("'self'",),
+        "script-src":      ("'self'", "https://cdn.jsdelivr.net",
+                            "https://js.hcaptcha.com", "https://*.hcaptcha.com",
+                            "'sha256-...'",   # known inline hashes
+                            CSP_NONCE),       # per-request nonce
+        "style-src":       ("'self'", "'unsafe-inline'",
+                            "https://fonts.googleapis.com", "https://*.hcaptcha.com"),
+        "font-src":        ("'self'", "https://fonts.gstatic.com", "data:"),
+        "img-src":         ("'self'", "data:"),
+        "connect-src":     ("'self'", "https://hcaptcha.com", "https://*.hcaptcha.com"),
+        "frame-src":       ("'self'", "https://hcaptcha.com", "https://*.hcaptcha.com"),
+        "frame-ancestors": ("'self'",),
+    }
+}
 
 # Additional headers
 X_FRAME_OPTIONS = "DENY"
