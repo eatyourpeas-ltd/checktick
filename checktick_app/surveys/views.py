@@ -8829,12 +8829,16 @@ def dataset_list(request: HttpRequest) -> HttpResponse:
     user_orgs = Organization.objects.filter(memberships__user=user)
 
     # Build base queryset: global datasets + datasets from user's organizations + individual user datasets
-    base_datasets = DataSet.objects.filter(
-        Q(is_global=True)
-        | Q(organization__in=user_orgs)
-        | Q(created_by=user, organization__isnull=True),
-        is_active=True,
-    ).select_related("organization", "created_by", "parent")
+    base_datasets = (
+        DataSet.objects.filter(
+            Q(is_global=True)
+            | Q(organization__in=user_orgs)
+            | Q(created_by=user, organization__isnull=True),
+            is_active=True,
+        )
+        .select_related("organization", "created_by", "parent")
+        .distinct()
+    )
 
     # Get all unique tags from base datasets (before filtering) for facets
     all_tags = {}
@@ -8903,7 +8907,10 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
     # Get dataset and check access
     dataset = get_object_or_404(
         DataSet.objects.filter(
-            Q(is_global=True) | Q(organization__in=user_orgs), is_active=True
+            Q(is_global=True)
+            | Q(organization__in=user_orgs)
+            | Q(created_by=user, organization__isnull=True),
+            is_active=True,
         ).select_related("organization", "created_by", "parent"),
         id=dataset_id,
     )
