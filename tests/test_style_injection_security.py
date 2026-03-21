@@ -38,9 +38,9 @@ Attack surfaces identified and tested here:
              injection via unescaped ; } { characters.
 """
 
-import pytest
 from django.contrib.auth.models import User
 from django.test import Client
+import pytest
 
 from checktick_app.core.models import SiteBranding
 from checktick_app.core.theme_utils import normalize_daisyui_builder_css
@@ -50,7 +50,9 @@ from checktick_app.core.themes import (
     theme_vars_to_css,
 )
 
-FIXTURE_CRED = "test-pass-Str0ng!"  # noqa: S105 - test fixture only, not a real credential
+FIXTURE_CRED = (
+    "test-pass-Str0ng!"  # noqa: S105 - test fixture only, not a real credential
+)
 
 # ---------------------------------------------------------------------------
 # Shared attack payloads
@@ -77,12 +79,12 @@ def test_normalize_css_blocks_style_tag_breakout():
     """
     raw = f"--p: {STYLE_BREAKOUT};"
     result = normalize_daisyui_builder_css(raw)
-    assert "</style>" not in result, (
-        "normalize_daisyui_builder_css must strip </style> from CSS values"
-    )
-    assert "<script>" not in result, (
-        "normalize_daisyui_builder_css must strip <script> from CSS values"
-    )
+    assert (
+        "</style>" not in result
+    ), "normalize_daisyui_builder_css must strip </style> from CSS values"
+    assert (
+        "<script>" not in result
+    ), "normalize_daisyui_builder_css must strip <script> from CSS values"
 
 
 def test_normalize_css_blocks_html_tag_in_value():
@@ -212,12 +214,12 @@ def test_generate_theme_css_for_brand_no_raw_passthrough_on_parse_failure():
         custom_css_light=attack,
         custom_css_dark="",
     )
-    assert "<script>" not in light_css, (
-        "generate_theme_css_for_brand must not pass raw unparseable input through as CSS"
-    )
-    assert "</style>" not in light_css, (
-        "generate_theme_css_for_brand must not pass </style> through to rendered output"
-    )
+    assert (
+        "<script>" not in light_css
+    ), "generate_theme_css_for_brand must not pass raw unparseable input through as CSS"
+    assert (
+        "</style>" not in light_css
+    ), "generate_theme_css_for_brand must not pass </style> through to rendered output"
 
 
 def test_generate_theme_css_for_brand_sanitizes_angle_brackets_in_vars():
@@ -259,9 +261,9 @@ def test_rendered_page_blocks_style_breakout_via_sitebranding_light():
     response = client.get("/home")
     assert response.status_code == 200
     content = response.content.decode()
-    assert "<script>alert" not in content, (
-        "Malicious <script> tag from theme_light_css must not appear in rendered page"
-    )
+    assert (
+        "<script>alert" not in content
+    ), "Malicious <script> tag from theme_light_css must not appear in rendered page"
 
 
 @pytest.mark.django_db
@@ -276,9 +278,9 @@ def test_rendered_page_blocks_style_breakout_via_sitebranding_dark():
     response = client.get("/home")
     assert response.status_code == 200
     content = response.content.decode()
-    assert "<script>alert" not in content, (
-        "Malicious <script> tag from theme_dark_css must not appear in rendered page"
-    )
+    assert (
+        "<script>alert" not in content
+    ), "Malicious <script> tag from theme_dark_css must not appear in rendered page"
 
 
 @pytest.mark.django_db
@@ -297,9 +299,9 @@ def test_rendered_page_blocks_css_block_injection_via_sitebranding():
     assert response.status_code == 200
     content = response.content.decode()
     # The literal unbalanced } from the payload should not appear in the CSS output
-    assert "evil.example.com" not in content, (
-        "CSS exfiltration URL must not appear in page – block injection not prevented"
-    )
+    assert (
+        "evil.example.com" not in content
+    ), "CSS exfiltration URL must not appear in page – block injection not prevented"
 
 
 @pytest.mark.django_db
@@ -333,9 +335,9 @@ def test_rendered_page_blocks_style_breakout_via_org_theme(django_db_setup):
     response = client.get("/home")
     assert response.status_code == 200
     content = response.content.decode()
-    assert "<script>alert" not in content, (
-        "Malicious <script> tag from org theme_light_css must not appear in rendered page"
-    )
+    assert (
+        "<script>alert" not in content
+    ), "Malicious <script> tag from org theme_light_css must not appear in rendered page"
 
 
 # ===========================================================================
@@ -378,12 +380,12 @@ def test_update_org_theme_endpoint_sanitizes_light_css():
     assert response.status_code in (200, 302)
 
     org = Organization.objects.get(owner=owner)
-    assert "</style>" not in (org.theme_light_css or ""), (
-        "Stored org.theme_light_css must not contain </style> after POST sanitization"
-    )
-    assert "<script>" not in (org.theme_light_css or ""), (
-        "Stored org.theme_light_css must not contain <script> after POST sanitization"
-    )
+    assert "</style>" not in (
+        org.theme_light_css or ""
+    ), "Stored org.theme_light_css must not contain </style> after POST sanitization"
+    assert "<script>" not in (
+        org.theme_light_css or ""
+    ), "Stored org.theme_light_css must not contain <script> after POST sanitization"
 
 
 @pytest.mark.django_db
@@ -414,9 +416,9 @@ def test_update_org_theme_endpoint_sanitizes_dark_css():
     )
 
     org = Organization.objects.get(owner=owner)
-    assert "</style>" not in (org.theme_dark_css or ""), (
-        "Stored org.theme_dark_css must not contain </style>"
-    )
+    assert "</style>" not in (
+        org.theme_dark_css or ""
+    ), "Stored org.theme_dark_css must not contain </style>"
 
 
 @pytest.mark.django_db
@@ -448,12 +450,12 @@ def test_update_sitebranding_endpoint_sanitizes_light_css():
 
     sb = SiteBranding.objects.first()
     assert sb is not None
-    assert "</style>" not in (sb.theme_light_css or ""), (
-        "Stored SiteBranding.theme_light_css must not contain </style>"
-    )
-    assert "<script>" not in (sb.theme_light_css or ""), (
-        "Stored SiteBranding.theme_light_css must not contain <script>"
-    )
+    assert "</style>" not in (
+        sb.theme_light_css or ""
+    ), "Stored SiteBranding.theme_light_css must not contain </style>"
+    assert "<script>" not in (
+        sb.theme_light_css or ""
+    ), "Stored SiteBranding.theme_light_css must not contain <script>"
 
 
 # ===========================================================================
@@ -482,9 +484,9 @@ def test_rendered_page_blocks_font_heading_block_injection():
     assert response.status_code == 200
     content = response.content.decode()
     # The literal unescaped } from the payload must not appear inside the style block
-    assert "evil.example.com" not in content, (
-        "CSS block injection via font_heading must not reach the rendered page"
-    )
+    assert (
+        "evil.example.com" not in content
+    ), "CSS block injection via font_heading must not reach the rendered page"
 
 
 @pytest.mark.django_db
@@ -500,6 +502,6 @@ def test_rendered_page_blocks_font_body_block_injection():
     content = response.content.decode()
     # Unbalanced } that would close the :root block must be stripped
     # We test via absence of the injected rule body
-    assert "color: red; }" not in content, (
-        "CSS block injection via font_body must not reach the rendered page"
-    )
+    assert (
+        "color: red; }" not in content
+    ), "CSS block injection via font_body must not reach the rendered page"

@@ -617,13 +617,14 @@ def test_builder_question_create_option_labels_stripped(auth_client, survey):
         for opt in (q.options or [])
     )
     assert "<script>" not in all_labels, (
-        "HTML tags must be stripped from option labels; "
-        f"got options: {q.options!r}"
+        "HTML tags must be stripped from option labels; " f"got options: {q.options!r}"
     )
 
 
 @pytest.mark.django_db
-def test_builder_group_question_create_strips_html_from_text(auth_client, survey, owner):
+def test_builder_group_question_create_strips_html_from_text(
+    auth_client, survey, owner
+):
     """
     S9 (grouped path): builder_group_question_create uses the same
     _parse_builder_question_form helper; HTML must be stripped there too.
@@ -650,10 +651,17 @@ def test_builder_question_edit_strips_html_from_text(auth_client, survey):
     """
     S9: builder_question_edit must strip HTML when updating an existing question.
     """
-    q = SurveyQuestion.objects.create(survey=survey, text="Original", type="text", order=0)
+    q = SurveyQuestion.objects.create(
+        survey=survey, text="Original", type="text", order=0
+    )
     auth_client.post(
-        reverse("surveys:builder_question_edit", kwargs={"slug": survey.slug, "qid": q.id}),
-        data={"text": f"</div><img src=x onerror=alert(1)>{BUILDER_SCRIPT}New text", "type": "text"},
+        reverse(
+            "surveys:builder_question_edit", kwargs={"slug": survey.slug, "qid": q.id}
+        ),
+        data={
+            "text": f"</div><img src=x onerror=alert(1)>{BUILDER_SCRIPT}New text",
+            "type": "text",
+        },
     )
     q.refresh_from_db()
     assert "<script>" not in q.text, f"Script tag in edited q.text: {q.text!r}"
@@ -699,7 +707,6 @@ def test_builder_group_create_strips_html_from_name(auth_client, survey):
     S11: builder_group_create must apply strip_tags to the group name before
     storing, consistent with survey_group_create which already does this.
     """
-    from checktick_app.surveys.models import QuestionGroup
 
     auth_client.post(
         reverse("surveys:builder_group_create", kwargs={"slug": survey.slug}),
@@ -708,8 +715,7 @@ def test_builder_group_create_strips_html_from_name(auth_client, survey):
     g = survey.question_groups.order_by("-id").first()
     assert g is not None, "No group was created"
     assert "<script>" not in g.name, (
-        "HTML tags must be stripped from builder group name; "
-        f"got: {g.name!r}"
+        "HTML tags must be stripped from builder group name; " f"got: {g.name!r}"
     )
 
 
@@ -787,9 +793,9 @@ def test_survey_style_rejects_javascript_font_css_url(auth_client, survey):
     )
     survey.refresh_from_db()
     stored = (survey.style or {}).get("font_css_url", "")
-    assert "javascript:" not in stored.lower(), (
-        "javascript: URI was stored as font_css_url — must be rejected or stripped"
-    )
+    assert (
+        "javascript:" not in stored.lower()
+    ), "javascript: URI was stored as font_css_url — must be rejected or stripped"
 
 
 @pytest.mark.django_db
@@ -803,9 +809,9 @@ def test_survey_style_rejects_data_uri_font_css_url(auth_client, survey):
     )
     survey.refresh_from_db()
     stored = (survey.style or {}).get("font_css_url", "")
-    assert "data:" not in stored.lower(), (
-        "data: URI was stored as font_css_url — must be rejected or stripped"
-    )
+    assert (
+        "data:" not in stored.lower()
+    ), "data: URI was stored as font_css_url — must be rejected or stripped"
 
 
 @pytest.mark.django_db
@@ -823,9 +829,9 @@ def test_survey_style_accepts_valid_https_font_css_url(auth_client, survey):
     )
     survey.refresh_from_db()
     stored = (survey.style or {}).get("font_css_url", "")
-    assert stored == legit_url, (
-        f"Valid https font URL was not stored correctly; got: {stored!r}"
-    )
+    assert (
+        stored == legit_url
+    ), f"Valid https font URL was not stored correctly; got: {stored!r}"
 
 
 @pytest.mark.django_db

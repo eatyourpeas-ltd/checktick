@@ -140,37 +140,37 @@ class TestCSVFormulaInjectionPrevention:
     def test_equals_formula_prefix_blocked(self):
         """=SUM(1+1) and similar Excel formulas must be escaped."""
         result = _format_answer_for_export("=SUM(1+1)", "text")
-        assert not result.startswith("="), (
-            "CSV formula injection: answer starting with '=' was not escaped"
-        )
+        assert not result.startswith(
+            "="
+        ), "CSV formula injection: answer starting with '=' was not escaped"
 
     def test_at_formula_prefix_blocked(self):
         """@SUM(...) LibreOffice formula prefix must be escaped."""
         result = _format_answer_for_export("@SUM(A1:A10)", "text")
-        assert not result.startswith("@"), (
-            "CSV formula injection: answer starting with '@' was not escaped"
-        )
+        assert not result.startswith(
+            "@"
+        ), "CSV formula injection: answer starting with '@' was not escaped"
 
     def test_plus_formula_prefix_blocked(self):
         """+1 used as a formula trigger must be escaped."""
         result = _format_answer_for_export("+1 evil", "text")
-        assert not result.startswith("+"), (
-            "CSV formula injection: answer starting with '+' was not escaped"
-        )
+        assert not result.startswith(
+            "+"
+        ), "CSV formula injection: answer starting with '+' was not escaped"
 
     def test_minus_formula_prefix_blocked(self):
         """-1 used as a formula trigger must be escaped."""
         result = _format_answer_for_export("-cmd| 'calc'!Z0", "text")
-        assert not result.startswith("-"), (
-            "CSV formula injection: answer starting with '-' was not escaped"
-        )
+        assert not result.startswith(
+            "-"
+        ), "CSV formula injection: answer starting with '-' was not escaped"
 
     def test_cmd_rce_payload_blocked(self):
         """Classic DDE payload =CMD|'calc'!Z0 must be escaped."""
         result = _format_answer_for_export("=CMD|'calc'!Z0", "text")
-        assert not result.startswith("="), (
-            "CSV formula injection: DDE RCE payload not escaped"
-        )
+        assert not result.startswith(
+            "="
+        ), "CSV formula injection: DDE RCE payload not escaped"
 
     def test_safe_answer_unchanged(self):
         """Normal text answers must not be modified."""
@@ -185,18 +185,18 @@ class TestCSVFormulaInjectionPrevention:
     def test_formula_in_mc_single_escaped(self):
         """Even choice answers (if crafted via raw POST) get formula-escaped."""
         result = _format_answer_for_export("=HYPERLINK(evil)", "mc_single")
-        assert not result.startswith("="), (
-            "CSV formula injection in mc_single answer not escaped"
-        )
+        assert not result.startswith(
+            "="
+        ), "CSV formula injection in mc_single answer not escaped"
 
     def test_formula_in_mc_multi_each_item_escaped(self):
         """Each item in a multi-select list must be individually escaped."""
         result = _format_answer_for_export(["=evil()", "safe", "+bad"], "mc_multi")
         parts = result.split("; ")
         for part in parts:
-            assert not part.startswith("=") and not part.startswith("+"), (
-                f"Formula injection not escaped in mc_multi item: {part!r}"
-            )
+            assert not part.startswith("=") and not part.startswith(
+                "+"
+            ), f"Formula injection not escaped in mc_multi item: {part!r}"
 
 
 class TestCSVExportIntegration(TestCase):

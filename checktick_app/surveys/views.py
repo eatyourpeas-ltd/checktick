@@ -2173,6 +2173,7 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
     style = survey.style or {}
     # Sanitize CSS fields at read-time to prevent </style> breakout via |safe.
     from checktick_app.core.theme_utils import sanitize_css_block as _sanitize_css
+
     if style.get("theme_css_light") or style.get("theme_css_dark"):
         style = dict(style)
         style["theme_css_light"] = _sanitize_css(style.get("theme_css_light") or "")
@@ -4243,6 +4244,7 @@ def _handle_participant_submission(
     # Sanitise survey.style CSS in-memory before rendering so that a malicious
     # theme_css_light/dark cannot break out of the <style> block via |safe.
     from checktick_app.core.theme_utils import sanitize_css_block as _sanitize_css
+
     style = dict(survey.style or {})
     if style.get("theme_css_light") or style.get("theme_css_dark"):
         style["theme_css_light"] = _sanitize_css(style.get("theme_css_light") or "")

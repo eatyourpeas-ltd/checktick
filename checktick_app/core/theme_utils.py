@@ -17,7 +17,11 @@ def _sanitize_css_value(val: str) -> str:
     Valid CSS values for colours, sizes, and font names never need these.
     """
     val = (
-        val.replace("<", "").replace(">", "").replace("{", "").replace("}", "").replace(";", "")
+        val.replace("<", "")
+        .replace(">", "")
+        .replace("{", "")
+        .replace("}", "")
+        .replace(";", "")
     )
     # Strip url() references (with or without a closing paren)
     val = re.sub(r"url\s*\([^)]*\)?", "", val, flags=re.IGNORECASE)
