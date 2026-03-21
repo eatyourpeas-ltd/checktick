@@ -90,11 +90,18 @@ def disable_rate_limiting(settings):
 
 @pytest.fixture
 def owner(django_user_model):
-    return django_user_model.objects.create_user(
+    from checktick_app.core.models import UserProfile
+
+    user = django_user_model.objects.create_user(
         username="xss_mgmt@example.com",
         email="xss_mgmt@example.com",
         password="securepass123",
     )
+    UserProfile.objects.filter(user=user).update(
+        account_tier=UserProfile.AccountTier.PRO
+    )
+    user._state.fields_cache.pop("profile", None)
+    return user
 
 
 @pytest.fixture

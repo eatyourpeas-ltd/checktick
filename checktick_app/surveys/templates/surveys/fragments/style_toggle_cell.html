@@ -1,0 +1,10 @@
+<td id="{{ cell_id }}">
+  <form hx-post="{{ hub_url }}" hx-target="#{{ cell_id }}" hx-swap="outerHTML" class="inline">
+    {% csrf_token %}
+    <input type="hidden" name="scope" value="survey">
+    <input type="hidden" name="action" value="toggle_style_perm">
+    <input type="hidden" name="slug" value="{{ survey_slug }}">
+    <input type="hidden" name="user_id" value="{{ user_id }}">
+    <button type="submit" class="{{ btn_class }}" title="{{ title }}">{{ label }}</button>
+  </form>
+</td>

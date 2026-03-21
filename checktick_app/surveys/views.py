@@ -62,12 +62,14 @@ from .models import (
     SurveyResponse,
 )
 from .permissions import (
+    can_change_survey_style,
     can_create_datasets,
     can_edit_dataset,
     can_edit_survey,
     can_export_survey_data,
     can_manage_org_users,
     can_manage_survey_users,
+    require_can_change_survey_style,
     require_can_create_datasets,
     require_can_edit,
     require_can_edit_dataset,
@@ -862,6 +864,23 @@ def survey_create(request: HttpRequest) -> HttpResponse:
         if form.is_valid():
             survey: Survey = form.save(commit=False)
             survey.owner = request.user
+
+            # Auto-assign to the user's organisation if they are an owner or admin.
+            # This ensures the survey appears in the User Management hub.
+            if not survey.organization_id:
+                user_org = (
+                    Organization.objects.filter(
+                        models.Q(owner=request.user)
+                        | models.Q(
+                            memberships__user=request.user,
+                            memberships__role=OrganizationMembership.Role.ADMIN,
+                        )
+                    )
+                    .distinct()
+                    .first()
+                )
+                if user_org:
+                    survey.organization = user_org
 
             # Handle traditional encryption if requested
             encryption_option = form.cleaned_data.get("encryption_option")
@@ -2212,6 +2231,7 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         "invites_points": invites_points,
         "survey_not_started": survey_not_started,
         "can_manage_users": can_manage_survey_users(request.user, survey),
+        "can_change_style": can_change_survey_style(request.user, survey),
         # Data governance
         "can_export": (
             survey.is_closed and can_export_survey_data(request.user, survey)
@@ -4395,6 +4415,7 @@ def survey_style_update(request: HttpRequest, slug: str) -> HttpResponse:
 
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
+    require_can_change_survey_style(request.user, survey)
     style = survey.style or {}
 
     # Check if this is the full form submission (has any style fields) or just NHS toggle
@@ -5092,6 +5113,23 @@ def survey_users(request: HttpRequest, slug: str) -> HttpResponse:
                 metadata={"role": mem.role},
             )
             messages.success(request, "User removed from survey.")
+        elif action == "toggle_style_perm":
+            # Admins can grant/revoke the per-member style-editing permission.
+            # Requires the requesting user to have manage-users capability.
+            mem = get_object_or_404(SurveyMembership, survey=survey, user=target_user)
+            mem.can_change_survey_style = not mem.can_change_survey_style
+            mem.save(update_fields=["can_change_survey_style"])
+            AuditLog.objects.create(
+                actor=request.user,
+                scope=AuditLog.Scope.SURVEY,
+                survey=survey,
+                action=AuditLog.Action.UPDATE,
+                target_user=mem.user,
+                metadata={
+                    "can_change_survey_style": mem.can_change_survey_style,
+                },
+            )
+            messages.success(request, "Style permission updated.")
         return redirect("surveys:survey_users", slug=survey.slug)
 
     memberships = (
@@ -5192,6 +5230,71 @@ def user_management_hub(request: HttpRequest) -> HttpResponse:
             response = HttpResponse(f"Team '{team_name}' created", status=200)
             response["HX-Refresh"] = "true"
             return response
+
+        # Survey member action operations (toggle style permission or remove)
+        # These use user_id rather than email, so must be handled before the
+        # email-required guard below.
+        if scope == "survey" and request.POST.get("action") in (
+            "toggle_style_perm",
+            "remove",
+        ):
+            slug = request.POST.get("slug") or ""
+            survey = get_object_or_404(Survey, slug=slug)
+            if not can_manage_survey_users(request.user, survey):
+                return HttpResponse(status=403)
+            action = request.POST.get("action")
+            _User = get_user_model()
+            target_user = get_object_or_404(_User, id=request.POST.get("user_id"))
+            if action == "toggle_style_perm":
+                mem = get_object_or_404(
+                    SurveyMembership, survey=survey, user=target_user
+                )
+                mem.can_change_survey_style = not mem.can_change_survey_style
+                mem.save(update_fields=["can_change_survey_style"])
+                AuditLog.objects.create(
+                    actor=request.user,
+                    scope=AuditLog.Scope.SURVEY,
+                    survey=survey,
+                    action=AuditLog.Action.UPDATE,
+                    target_user=target_user,
+                    metadata={"can_change_survey_style": mem.can_change_survey_style},
+                )
+                # Return a minimal HTML fragment so HTMX can swap just the <td>
+                if request.headers.get("HX-Request"):
+                    from django.template.loader import render_to_string
+
+                    on = mem.can_change_survey_style
+                    html = render_to_string(
+                        "surveys/fragments/style_toggle_cell.html",
+                        {
+                            "cell_id": f"style-toggle-{survey.id}-{target_user.id}",
+                            "hub_url": reverse("surveys:user_management_hub"),
+                            "survey_slug": survey.slug,
+                            "user_id": target_user.id,
+                            "btn_class": "btn btn-xs btn-success" if on else "btn btn-xs btn-ghost",
+                            "title": "Revoke style permission" if on else "Grant style permission",
+                            "label": "On" if on else "Off",
+                        },
+                        request=request,
+                    )
+                    return HttpResponse(html, content_type="text/html")
+                messages.success(request, "Style permission updated.")
+            elif action == "remove":
+                mem = SurveyMembership.objects.filter(
+                    survey=survey, user=target_user
+                ).first()
+                if mem:
+                    AuditLog.objects.create(
+                        actor=request.user,
+                        scope=AuditLog.Scope.SURVEY,
+                        survey=survey,
+                        action=AuditLog.Action.REMOVE,
+                        target_user=target_user,
+                        metadata={"role": mem.role},
+                    )
+                    mem.delete()
+                messages.success(request, "User removed from survey.")
+            return redirect("surveys:user_management_hub")
 
         # Validate email for user management operations
         if not email:
@@ -5360,10 +5463,18 @@ def user_management_hub(request: HttpRequest) -> HttpResponse:
                     "User not found - survey invites require existing accounts",
                     status=400,
                 )
+            can_style = request.POST.get("can_change_survey_style") in (
+                "1",
+                "true",
+                "on",
+            )
             smem, created = SurveyMembership.objects.update_or_create(
                 survey=survey,
                 user=user,
-                defaults={"role": role or SurveyMembership.Role.VIEWER},
+                defaults={
+                    "role": role or SurveyMembership.Role.VIEWER,
+                    "can_change_survey_style": can_style,
+                },
             )
             AuditLog.objects.create(
                 actor=request.user,
@@ -5371,7 +5482,10 @@ def user_management_hub(request: HttpRequest) -> HttpResponse:
                 survey=survey,
                 action=AuditLog.Action.ADD if created else AuditLog.Action.UPDATE,
                 target_user=user,
-                metadata={"role": smem.role},
+                metadata={
+                    "role": smem.role,
+                    "can_change_survey_style": smem.can_change_survey_style,
+                },
             )
             response = HttpResponse(f"{user.username} added to survey", status=200)
             response["HX-Refresh"] = "true"
@@ -5392,8 +5506,13 @@ def user_management_hub(request: HttpRequest) -> HttpResponse:
             .filter(organization=org)
             .order_by("user__username")
         )
+        # Include surveys explicitly linked to the org AND surveys owned by the
+        # org owner that were created before the auto-assign logic existed.
         manageable_surveys = (
-            Survey.objects.filter(organization=org)
+            Survey.objects.filter(
+                models.Q(organization=org) | models.Q(owner=org.owner)
+            )
+            .distinct()
             .select_related("organization")
             .order_by("name")
         )

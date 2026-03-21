@@ -305,56 +305,113 @@
           {% include 'components/icons/users.html' with classes='w-5 h-5 text-base-content' %}
           <span>{% trans 'Users by survey' %}</span>
         </h2>
-        <div class="mb-3">
-          <form hx-post="{% url 'surveys:user_management_hub' %}" hx-target="#survey-add-result" hx-swap="innerHTML" method="post" class="flex items-end gap-2 js-reset-on-success">
-            {% csrf_token %}
-            <input type="hidden" name="scope" value="survey" />
-            <label class="form-control">
-              <span class="label"><span class="label-text">{% trans 'Survey slug' %}</span></span>
-              <input type="text" name="slug" class="input input-bordered w-48" placeholder="survey-slug" required />
-            </label>
-            <label class="form-control">
-              <span class="label"><span class="label-text">{% trans 'User email' %}</span></span>
-              <input type="email" name="email" class="input input-bordered" placeholder="user@example.com" required />
-            </label>
-            <label class="form-control">
-              <span class="label"><span class="label-text">{% trans 'Role' %}</span></span>
-              <select name="role" class="select select-bordered">
-                <option value="viewer">
-                  {% trans 'Viewer' %}
-                </option>
-                <option value="creator">
-                  {% trans 'Creator' %}
-                </option>
-              </select>
-            </label>
-            <button type="submit" class="btn btn-primary">{% trans 'Add user to survey' %}</button>
-          </form>
-          <div id="survey-add-result" class="text-sm mt-2 opacity-80"></div>
-        </div>
         <div class="space-y-4">
           {% for item in grouped %}
-            <div>
-              <h3 class="font-semibold">
-                <a class="link underline" href="{% url 'surveys:survey_users' item.survey.slug %}">{{ item.survey.name }}</a>
-                <span class="badge badge-ghost">{% blocktrans count counter=item.members|length %}{{ counter }} member{% plural %}{{ counter }} members{% endblocktrans %}</span>
-              </h3>
-              <ul class="list-disc pl-5">
-                {% for m in item.members %}
-                  <li>
-                    {{ m.user.username }} <span class="badge badge-ghost">{{ m.role }}</span>
-                  </li>
-                {% empty %}
-                  <li class="opacity-70">
-                    {% trans 'No members' %}
-                  </li>
-                {% endfor %}
-              </ul>
+            <div class="border border-base-300 rounded-lg p-4">
+              {# Survey header #}
+              <div class="flex items-center gap-2 mb-3">
+                <a class="font-semibold link link-hover" href="{% url 'surveys:dashboard' item.survey.slug %}">{{ item.survey.name }}</a>
+                <span class="badge badge-ghost badge-sm">{% blocktrans count counter=item.members|length %}{{ counter }} member{% plural %}{{ counter }} members{% endblocktrans %}</span>
+                <span class="badge badge-sm {% if item.survey.status == 'live' %}badge-success{% elif item.survey.status == 'draft' %}badge-warning{% else %}badge-ghost{% endif %}">{{ item.survey.get_status_display }}</span>
+              </div>
+
+              {# Member list #}
+              {% if item.members %}
+              <div class="overflow-x-auto mb-3">
+                <table class="table table-xs w-full">
+                  <thead>
+                    <tr>
+                      <th>{% trans "User" %}</th>
+                      <th>{% trans "Role" %}</th>
+                      <th>{% trans "Style editing" %}</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for m in item.members %}
+                    <tr>
+                      <td>
+                        <span class="font-medium">{{ m.user.username }}</span>
+                        <span class="text-xs opacity-60 ml-1">{{ m.user.email }}</span>
+                      </td>
+                      <td><span class="badge badge-ghost badge-sm">{{ m.get_role_display }}</span></td>
+                      <td id="style-toggle-{{ item.survey.id }}-{{ m.user.id }}">
+                        <form hx-post="{% url 'surveys:user_management_hub' %}" hx-target="#style-toggle-{{ item.survey.id }}-{{ m.user.id }}" hx-swap="outerHTML" class="inline">
+                          {% csrf_token %}
+                          <input type="hidden" name="scope" value="survey" />
+                          <input type="hidden" name="action" value="toggle_style_perm" />
+                          <input type="hidden" name="slug" value="{{ item.survey.slug }}" />
+                          <input type="hidden" name="user_id" value="{{ m.user.id }}" />
+                          <button type="submit" class="btn btn-xs {% if m.can_change_survey_style %}btn-success{% else %}btn-ghost{% endif %}" title="{% if m.can_change_survey_style %}{% trans 'Revoke style permission' %}{% else %}{% trans 'Grant style permission' %}{% endif %}">
+                            {% if m.can_change_survey_style %}{% trans "On" %}{% else %}{% trans "Off" %}{% endif %}
+                          </button>
+                        </form>
+                      </td>
+                      <td>
+                        <form method="post" action="{% url 'surveys:user_management_hub' %}" class="inline" onsubmit="return confirm('{% trans "Remove this user from the survey?" %}')">
+                          {% csrf_token %}
+                          <input type="hidden" name="scope" value="survey" />
+                          <input type="hidden" name="action" value="remove" />
+                          <input type="hidden" name="slug" value="{{ item.survey.slug }}" />
+                          <input type="hidden" name="user_id" value="{{ m.user.id }}" />
+                          <button type="submit" class="btn btn-ghost btn-xs text-error">{% trans "Remove" %}</button>
+                        </form>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              {% else %}
+              <p class="text-sm opacity-60 mb-3">{% trans "No members yet." %}</p>
+              {% endif %}
+
+              {# Add member (collapsible) #}
+              <details class="group">
+                <summary class="btn btn-xs btn-outline gap-1 list-none cursor-pointer select-none inline-flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                  {% trans "Add member" %}
+                </summary>
+                <div class="mt-2 p-3 bg-base-200 rounded-lg">
+                  {% if members %}
+                  <form hx-post="{% url 'surveys:user_management_hub' %}" hx-target="#survey-{{ item.survey.id }}-result" hx-swap="innerHTML" method="post" class="flex flex-wrap items-end gap-3 js-reset-on-success">
+                    {% csrf_token %}
+                    <input type="hidden" name="scope" value="survey" />
+                    <input type="hidden" name="slug" value="{{ item.survey.slug }}" />
+                    <label class="form-control">
+                      <span class="label py-0"><span class="label-text text-xs">{% trans "Member" %}</span></span>
+                      <select name="email" class="select select-bordered select-sm" required>
+                        <option value="" disabled selected>{% trans "— select —" %}</option>
+                        {% for mem in members %}
+                        <option value="{{ mem.user.email }}">{{ mem.user.username }}</option>
+                        {% endfor %}
+                      </select>
+                    </label>
+                    <label class="form-control">
+                      <span class="label py-0"><span class="label-text text-xs">{% trans "Role" %}</span></span>
+                      <select name="role" class="select select-bordered select-sm">
+                        <option value="viewer">{% trans "Viewer" %}</option>
+                        <option value="creator">{% trans "Creator" %}</option>
+                      </select>
+                    </label>
+                    <label class="form-control">
+                      <span class="label py-0"><span class="label-text text-xs">{% trans "Style editing" %}</span></span>
+                      <label class="flex items-center gap-1 h-8 px-1">
+                        <input type="checkbox" name="can_change_survey_style" value="on" class="checkbox checkbox-sm checkbox-accent" />
+                        <span class="text-xs opacity-70">{% trans "Allow" %}</span>
+                      </label>
+                    </label>
+                    <button type="submit" class="btn btn-primary btn-sm self-end">{% trans "Add" %}</button>
+                  </form>
+                  {% else %}
+                  <p class="text-sm opacity-60">{% trans "Add members to the organisation first before assigning them to surveys." %}</p>
+                  {% endif %}
+                  <div id="survey-{{ item.survey.id }}-result" class="text-sm mt-1 opacity-80"></div>
+                </div>
+              </details>
             </div>
           {% empty %}
-            <div class="opacity-70">
-              {% trans 'No surveys yet' %}
-            </div>
+            <div class="opacity-70 text-sm">{% trans "No surveys yet." %}</div>
           {% endfor %}
         </div>
       </div>

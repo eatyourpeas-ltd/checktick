@@ -22,12 +22,26 @@
   <span>{% trans "Survey users" %}: {{ survey.name }}</span>
 </h1>
 <table class="table w-full mb-6">
-  <thead><tr><th>{% trans "User" %}</th><th>{% trans "Role" %}</th>{% if can_manage %}<th>{% trans "Actions" %}</th>{% endif %}</tr></thead>
+  <thead><tr><th>{% trans "User" %}</th><th>{% trans "Role" %}</th><th>{% trans "Style permission" %}</th>{% if can_manage %}<th>{% trans "Actions" %}</th>{% endif %}</tr></thead>
   <tbody>
   {% for m in memberships %}
     <tr>
       <td>{{ m.user.username }}</td>
       <td>{{ m.get_role_display }}</td>
+      <td>
+        {% if can_manage %}
+          <form method="post" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="toggle_style_perm" />
+            <input type="hidden" name="user_id" value="{{ m.user.id }}" />
+            <button type="submit" class="btn btn-xs {% if m.can_change_survey_style %}btn-success{% else %}btn-ghost{% endif %}" title="{% if m.can_change_survey_style %}{% trans 'Revoke style permission' %}{% else %}{% trans 'Grant style permission' %}{% endif %}">
+              {% if m.can_change_survey_style %}{% trans "Allowed" %}{% else %}{% trans "Denied" %}{% endif %}
+            </button>
+          </form>
+        {% else %}
+          {% if m.can_change_survey_style %}<span class="badge badge-success badge-sm">{% trans "Allowed" %}</span>{% else %}<span class="badge badge-ghost badge-sm">{% trans "Denied" %}</span>{% endif %}
+        {% endif %}
+      </td>
       {% if can_manage %}
       <td>
         <form method="post" class="inline">
@@ -40,7 +54,7 @@
       {% endif %}
     </tr>
   {% empty %}
-  <tr><td colspan="3">{% trans "No users." %}</td></tr>
+  <tr><td colspan="4">{% trans "No users." %}</td></tr>
   {% endfor %}
   </tbody>
 </table>
