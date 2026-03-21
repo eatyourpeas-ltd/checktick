@@ -157,7 +157,7 @@ Supported LLM providers:
 - **Azure API Management**: Any APIM-protected endpoint (use `LLM_AUTH_TYPE=apim`)
 - **Custom endpoints**: Any OpenAI-compatible API
 
-When configured, users will see an "AI Assistant" tab in the Text Entry interface that allows them to generate surveys through natural conversation. See [AI-Assisted Survey Generator](/docs/ai-survey-generator/) for usage details.
+When configured, users will see an "AI Assistant" tab in the Outline interface that allows them to generate surveys through natural conversation. See [AI-Assisted Survey Generator](/docs/ai-survey-generator/) for usage details.
 
 #### Data Governance
 

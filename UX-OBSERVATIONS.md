@@ -9,7 +9,7 @@
 ### Current behaviour
 
 `dashboard.html` already contains two alert banners that mention the 3 ways to build a survey
-(Question Builder, Text Entry, AI Assistant):
+(Question Builder, Outline, AI Assistant):
 
 - `alert-info` when the survey has **no questions** ("Get started by adding questions")
 - `alert-warning` when the survey **has questions** ("Edit your questions")
@@ -30,7 +30,7 @@ Suggested card layout (DaisyUI `card` inside a `grid grid-cols-3`):
 | Card | Icon | Title | Sub-text | Link |
 |------|------|-------|----------|------|
 | Visual Builder | builder icon | "Question Builder" | "Click to add or edit questions visually" | `/surveys/<slug>/groups/` |
-| Text Editor | document icon | "Text Entry" | "Write questions in markdown or paste from docs" | `/surveys/<slug>/bulk-upload/?tab=manual` |
+| Text Editor | document icon | "Outline" | "Type or paste questions as a structured outline" | `/surveys/<slug>/bulk-upload/?tab=manual` |
 | AI Assistant | sparkle icon | "AI Assistant" | "Describe your survey and let the AI draft it" | `/surveys/<slug>/bulk-upload/?tab=ai` |
 
 The card grid should appear **directly below the stat row** (today/7-day/trend stats),

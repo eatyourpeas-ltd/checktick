@@ -52,7 +52,7 @@ When a condition is met, you can choose what happens:
 
 You can add multiple conditions to a single question - the survey will check them in order.
 
-#### Using Text Entry (Bulk Import)
+#### Using Outline
 
 You can also define branching logic using markdown syntax. Add conditions using the `->` arrow notation:
 
@@ -131,7 +131,7 @@ Users can add this information once for each medication they take.
 
 The group will now show a repeat badge with the count or ∞ symbol for unlimited.
 
-#### Using Text Entry (Bulk Import)
+#### Using Outline
 
 Mark a collection (group) as repeating using the `REPEAT` keyword:
 
@@ -185,7 +185,7 @@ Follow-up inputs appear immediately below the option when selected, making the c
 
 When editing question options, you can enable a follow-up text field for any option and customize its label.
 
-#### Using Text Entry
+#### Using Outline
 
 Use the `+` symbol on an indented line after an option:
 

@@ -24,17 +24,17 @@
   <div class="space-y-6">
     <!-- Main Tabs Navigation -->
     <div role="tablist" class="tabs tabs-bordered">
-      <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'Text Entry' %}" id="tab-manual" checked />
+      <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'Outline' %}" id="tab-manual" checked />
       <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'AI Assistant' %}" id="tab-ai" />
       <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'Session History' %}" id="tab-history" />
     </div>
 
-    <!-- Manual Input Tab Content -->
+    <!-- Outline Tab Content -->
     <div id="manual-tab-content" class="space-y-6">
-      <!-- Sub-tabs for Manual Input -->
+      <!-- Outline Sub-tabs -->
       <div role="tablist" class="tabs tabs-bordered">
-        <input type="radio" name="manual_subtabs" role="tab" class="tab" aria-label="{% trans 'Text Input' %}" id="tab-markdown-input" checked />
-        <input type="radio" name="manual_subtabs" role="tab" class="tab" aria-label="{% trans 'Format Reference' %}" id="tab-format-reference" />
+        <input type="radio" name="manual_subtabs" role="tab" class="tab" aria-label="{% trans 'Editor' %}" id="tab-markdown-input" checked />
+        <input type="radio" name="manual_subtabs" role="tab" class="tab" aria-label="{% trans 'Format guide' %}" id="tab-format-reference" />
       </div>
 
       <!-- Markdown Input Sub-tab -->
@@ -54,9 +54,9 @@
           <div class="mt-3">
             <button class="btn btn-primary" type="button" id="bulk-import-open-modal">
               {% if has_questions %}
-                {% trans "Edit Survey" %}
+                {% trans "Reimport questions" %}
               {% else %}
-                {% trans "Create survey" %}
+                {% trans "Import questions" %}
               {% endif %}
             </button>
           </div>
@@ -264,15 +264,15 @@
 
   <!-- Right Column: Live Preview (shared across all tabs) -->
   <div class="space-y-6">
-    <!-- Create Survey Button -->
+    <!-- Import Questions Button -->
     <div>
       <button class="btn btn-primary" type="button" id="bulk-import-open-modal-top">
         {% include "components/icons/document.html" with classes="w-5 h-5" %}
         <span>
           {% if has_questions %}
-            {% trans "Edit Survey" %}
+            {% trans "Reimport questions" %}
           {% else %}
-            {% trans "Create survey" %}
+            {% trans "Import questions" %}
           {% endif %}
         </span>
       </button>
@@ -309,9 +309,9 @@
       <button class="btn" type="button" id="bulk-import-cancel">{% trans "Cancel" %}</button>
       <button class="btn btn-primary" type="submit" form="bulk-import-form">
         {% if has_questions %}
-          {% trans "Edit Survey" %}
+          {% trans "Reimport questions" %}
         {% else %}
-          {% trans "Create survey" %}
+          {% trans "Import questions" %}
         {% endif %}
       </button>
     </div>

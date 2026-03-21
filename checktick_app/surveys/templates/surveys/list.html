@@ -161,7 +161,7 @@
           <div class="card-body items-center text-center gap-2 py-5">
             {% include "components/icons/checktick_your_surveys.html" with classes="w-10 h-10 text-primary" %}
             <h2 class="card-title text-xl">{% trans "Create your first survey" %}</h2>
-            <p class="text-sm text-base-content/70 max-w-sm">{% trans "Give your survey a name and description, then build it using the visual builder, text editor, or AI assistant — whichever suits you." %}</p>
+            <p class="text-sm text-base-content/70 max-w-sm">{% trans "Give your survey a name and description, then build it using the visual builder, Outline, or AI assistant — whichever suits you." %}</p>
             {% if survey_count is not None %}
             <p class="text-xs text-base-content/40 mt-1">{{ survey_count }} {% trans "surveys" %}</p>
             {% endif %}
@@ -211,7 +211,7 @@
         {# Secondary nudge #}
         <p class="text-xs text-base-content/60 mt-4">
           {% trans "Once you've created a survey, you can also add questions via" %}
-          <strong>{% trans "Text Entry" %}</strong>
+          <strong>{% trans "Outline" %}</strong>
           {% trans "or the" %}
           <strong>{% trans "AI Assistant" %}</strong>
           {% trans "from the survey dashboard." %}

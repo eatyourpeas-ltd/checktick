@@ -47,7 +47,7 @@ Each template file must contain:
    ---
    ```
 
-2. **Text Content** using the Text Entry format (see [Import Documentation](/docs/import/))
+2. **Text Content** using the Outline format (see [Import Documentation](/docs/import/))
 
 ### Syncing Templates
 

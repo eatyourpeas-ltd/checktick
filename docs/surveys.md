@@ -82,7 +82,7 @@ Question Groups are the building blocks for structuring a survey. They act like 
 
 Questions live inside a single group. When you add a question, the builder automatically associates it with the group you have open. Moving a question to another group updates that association immediately—there is no detached “question bank.” If you delete a group, its questions are also deleted. This ensures that every question always has a clear place in the survey hierarchy.
 
-You can use Text Entry when you already have content drafted. Text Entry lets you specify groups and questions in a single text document: top-level headings become groups, and nested headings/items become questions. After import you can continue refining groups and questions in the Question Builder.
+You can use the Outline when you already have content drafted. The Outline lets you specify groups and questions in a single text document: top-level headings become groups, and nested headings/items become questions. After import you can continue refining groups and questions in the Question Builder.
 
 ## Question types
 
