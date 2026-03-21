@@ -4,78 +4,69 @@ category: getting-started
 priority: 3
 ---
 
-This quick guide shows how to authenticate with JWT and call the API using curl, plus a small Python example.
+This guide shows how to authenticate with an API key and call the read-only API using curl, plus a small Python example.
 
 Prerequisites:
 
 - The app is running (Docker or `python manage.py runserver`)
-- You have a user account (or a superuser)
+- You have a user account on a paid tier (Pro, Team, or Organisation)
+- MFA must be configured on your account before you can create API keys
 - Base URL in examples: `https://localhost:8000`
-- Usernames are equal to email addresses; log in with your email as the username.
 
 ## Interactive documentation
 
- [![Swagger UI](/static/docs/swagger-badge.svg)](/api/docs)
- [![ReDoc](/static/docs/redoc-badge.svg)](/api/redoc)
- [![OpenAPI JSON](/static/docs/openapi-badge.svg)](/api/schema)
+[![ReDoc](/static/docs/redoc-badge.svg)](/api/redoc)
+[![OpenAPI JSON](/static/docs/openapi-badge.svg)](/api/schema)
 
-Tip: In Swagger UI, paste your JWT into browser localStorage under the key `jwt` to auto-authorize requests.
+## Obtaining an API key
 
-## JWT with curl
+API keys are managed through the web interface and require MFA to be active on your account.
 
-1. Obtain a token pair (access and refresh):
+1. Log in and complete MFA verification.
+2. Navigate to **Account → API Keys**.
+3. Click **Generate new key**, give it a descriptive name (e.g. "CI pipeline", "ETL script"), and optionally set an expiry date.
+4. Copy the key immediately — it is shown **once only** and cannot be retrieved again.
 
-```sh
-curl -k -s -X POST -H "Content-Type: application/json" \
-  -d '{"username": "<USER>", "password": "<PASS>"}' \
-  https://localhost:8000/api/token
-```
+API keys are **not available on free tier** accounts. See [account tiers](getting-started-account-types.md) for details.
 
-1. List surveys with Bearer token:
+## Authenticating with curl
 
-```sh
-ACCESS=<paste_access_token>
-curl -k -s -H "Authorization: Bearer $ACCESS" https://localhost:8000/api/surveys/
-```
-
-1. Create a survey with Bearer token:
+Pass the key in the `Authorization` header:
 
 ```sh
-ACCESS=<paste_access_token>
-curl -k -s -H "Authorization: Bearer $ACCESS" \
-  -H "Content-Type: application/json" \
-  -X POST \
-  -d '{"name": "My Survey", "slug": "my-survey"}' \
-  https://localhost:8000/api/surveys/
+API_KEY=ct_live_<your_key>
+
+# List your surveys
+curl -k -s -H "Authorization: Bearer $API_KEY" https://localhost:8000/api/surveys/
 ```
 
-Note: The response includes a `one_time_key_b64` to store securely for demographics decryption.
+Keys are prefixed `ct_live_` so they are identifiable if accidentally exposed.
 
-1. Seed questions (owner or org ADMIN):
+## curl examples
+
+1. List surveys accessible to your key:
 
 ```sh
-SURVEY_ID=<ID>
-ACCESS=<paste_access_token>
-curl -k -s -H "Authorization: Bearer $ACCESS" \
-  -H "Content-Type: application/json" \
-  -X POST \
-  -d '[{"text": "Age?", "type": "text", "order": 1}]' \
-  https://localhost:8000/api/surveys/$SURVEY_ID/seed/
+API_KEY=ct_live_<your_key>
+curl -k -s -H "Authorization: Bearer $API_KEY" https://localhost:8000/api/surveys/
 ```
 
-For detailed documentation on question types, JSON structure, and advanced features like follow-up text inputs, see [Using the API](using-the-api.md).
-
-1. Update survey (owner or org ADMIN):
+2. Get a specific survey:
 
 ```sh
 SURVEY_ID=<ID>
-ACCESS=<paste_access_token>
-curl -k -s -H "Authorization: Bearer $ACCESS" \
-  -H "Content-Type: application/json" \
-  -X PATCH \
-  -d '{"description": "Updated"}' \
-  https://localhost:8000/api/surveys/$SURVEY_ID/
+curl -k -s -H "Authorization: Bearer $API_KEY" https://localhost:8000/api/surveys/$SURVEY_ID/
 ```
+
+3. Get aggregate response metrics (no PII):
+
+```sh
+SURVEY_ID=<ID>
+curl -k -s -H "Authorization: Bearer $API_KEY" \
+  https://localhost:8000/api/surveys/$SURVEY_ID/metrics/responses/
+```
+
+The API is read-only. Survey creation, publishing, and user management are performed through the web interface.
 
 ## Python example (requests)
 
@@ -83,83 +74,33 @@ curl -k -s -H "Authorization: Bearer $ACCESS" \
 import requests
 
 base = "https://localhost:8000"
+api_key = "ct_live_<your_key>"
+
 session = requests.Session()
-session.verify = False  # for local self-signed; do not use in production
+session.verify = False  # for local self-signed certs; remove in production
+session.headers.update({"Authorization": f"Bearer {api_key}"})
 
-# 1) Obtain token pair
-r = session.post(
-  f"{base}/api/token",
-  json={"username": "<USER>", "password": "<PASS>"},
-)
-r.raise_for_status()
-tokens = r.json()
-access = tokens["access"]
+# List surveys
+print(session.get(f"{base}/api/surveys/").json())
 
-headers = {"Authorization": f"Bearer {access}"}
+# Get a specific survey
+survey_id = "<ID>"
+print(session.get(f"{base}/api/surveys/{survey_id}/").json())
 
-# 2) List surveys
-print(session.get(f"{base}/api/surveys/", headers=headers).json())
-
-# 3) Create a survey
-r = session.post(
-  f"{base}/api/surveys/",
-  json={"name": "Quick start", "slug": "quick-start"},
-  headers=headers,
-)
-r.raise_for_status()
-print(r.json())
+# Get response metrics
+print(session.get(f"{base}/api/surveys/{survey_id}/metrics/responses/").json())
 ```
 
 ## Permissions recap
 
-- List shows your surveys and any in orgs where you are an ADMIN.
-- Retrieve/Update/Delete/Seed require ownership or org ADMIN.
-- Authenticated users without rights get 403; non-existent resources return 404.
-
-## Publishing surveys via API
-
-**Important note on encryption:**
-
-Surveys that collect patient data (using question groups with `patient_details_encrypted` template) require encryption to be configured before publishing. The API will reject publish attempts with a `400 Bad Request` if encryption is not set up.
-
-**Recommended workflow for patient data surveys:**
-
-1. Create the survey structure via API:
-
-   ```sh
-   curl -k -s -H "Authorization: Bearer $ACCESS" \
-     -H "Content-Type: application/json" \
-     -X POST \
-     -d '{"name": "Patient Survey", "slug": "patient-survey"}' \
-     https://localhost:8000/api/surveys/
-   ```
-
-2. Add questions and patient data groups via API
-
-3. **Use the web interface** to publish the survey for the first time:
-   - Navigate to the survey dashboard
-   - Click "Publish"
-   - Complete the encryption setup workflow (create recovery phrases, etc.)
-   - This creates the necessary encryption keys
-
-4. After encryption is set up, you can update publish settings via API:
-
-   ```sh
-   curl -k -s -H "Authorization: Bearer $ACCESS" \
-     -H "Content-Type: application/json" \
-     -X PUT \
-     -d '{"status": "published", "visibility": "authenticated"}' \
-     https://localhost:8000/api/surveys/$SURVEY_ID/publish/
-   ```
-
-**For surveys without patient data:** You can publish directly via API without encryption setup.
-
-**Rationale:** The API uses JWT authentication (username/password based), not SSO. Interactive encryption setup—displaying recovery phrases, confirming encryption keys, etc.—is only available through the web interface. This design ensures patient data is always properly protected while keeping the API focused on administrative operations.
+- List returns surveys accessible to the key owner (own surveys and any where they are an org ADMIN).
+- Retrieve requires ownership or org ADMIN role.
+- Users without rights on a resource get 403; non-existent resources return 404.
 
 ## Troubleshooting
 
-- 401 on unsafe methods: missing session or CSRF token.
-- 403 on unsafe methods: authenticated but not authorized for the resource.
-- 400 on publish with "encryption" error: survey collects patient data but has no encryption; use web interface to set up encryption first.
+- 401: missing or invalid API key — check the `Authorization: Bearer ct_live_...` header.
+- 403: authenticated but not authorised for that resource.
+- 404: resource does not exist or is not accessible to your key.
 - CORS errors in browser: CORS is disabled by default; allow origins explicitly in settings.
-- SSL cert complaints with curl/requests: example uses `-k`/`verify=False` for local; remove in production.
+- SSL cert complaints with curl/requests: examples use `-k`/`verify=False` for local development only; remove in production.

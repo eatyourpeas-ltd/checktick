@@ -3,10 +3,26 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
+from django.utils import timezone as _tz
 from django.views.generic import RedirectView
 
+from checktick_app.core.models import UserAPIKey
 from checktick_app.core.views import BrandedPasswordResetView
 from checktick_app.core.views_2fa import TwoFactorLoginView
+
+
+class _PasswordChangeWithKeyRevocation(auth_views.PasswordChangeView):
+    """Revoke all API keys for the user when their password changes."""
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        UserAPIKey.objects.filter(user=self.request.user, revoked=False).update(
+            revoked=True,
+            revoked_at=_tz.now(),
+            revoked_by=self.request.user,
+        )
+        return response
+
 
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="core:home", permanent=False)),
@@ -20,7 +36,7 @@ urlpatterns = [
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
     path(
         "accounts/password_change/",
-        auth_views.PasswordChangeView.as_view(
+        _PasswordChangeWithKeyRevocation.as_view(
             template_name="registration/password_change_form.html"
         ),
         name="password_change",

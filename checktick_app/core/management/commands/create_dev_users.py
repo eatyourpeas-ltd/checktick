@@ -46,6 +46,7 @@ DEV_USERS = [
         "is_superuser": True,
         "is_staff": True,
         "description": "Superuser with full access",
+        # Superusers bypass tier checks; no billing profile needed
     },
     {
         "email": "admin+org_owner@eatyourpeas.co.uk",
@@ -53,6 +54,7 @@ DEV_USERS = [
         "is_staff": False,
         "org_role": "owner",
         "description": "Organization owner",
+        "account_tier": "organization",
     },
     {
         "email": "admin+org_admin@eatyourpeas.co.uk",
@@ -60,6 +62,7 @@ DEV_USERS = [
         "is_staff": False,
         "org_role": "admin",
         "description": "Organization admin",
+        "account_tier": "organization",
     },
     {
         "email": "admin+org_creator@eatyourpeas.co.uk",
@@ -67,6 +70,7 @@ DEV_USERS = [
         "is_staff": False,
         "org_role": "creator",
         "description": "Organization creator",
+        "account_tier": "organization",
     },
     {
         "email": "admin+org_viewer@eatyourpeas.co.uk",
@@ -74,6 +78,7 @@ DEV_USERS = [
         "is_staff": False,
         "org_role": "viewer",
         "description": "Organization viewer",
+        "account_tier": "organization",
     },
     {
         "email": "admin+team_admin@eatyourpeas.co.uk",
@@ -81,6 +86,7 @@ DEV_USERS = [
         "is_staff": False,
         "team_role": "admin",
         "description": "Team admin",
+        "account_tier": "team_small",
     },
     {
         "email": "admin+team_creator@eatyourpeas.co.uk",
@@ -88,6 +94,7 @@ DEV_USERS = [
         "is_staff": False,
         "team_role": "creator",
         "description": "Team creator",
+        "account_tier": "team_small",
     },
     {
         "email": "admin+survey_creator@eatyourpeas.co.uk",
@@ -95,6 +102,7 @@ DEV_USERS = [
         "is_staff": False,
         "survey_role": "creator",
         "description": "Survey creator",
+        "account_tier": "pro",
     },
     {
         "email": "admin+survey_viewer@eatyourpeas.co.uk",
@@ -102,6 +110,8 @@ DEV_USERS = [
         "is_staff": False,
         "survey_role": "viewer",
         "description": "Survey viewer",
+        # Viewers are typically on a free or minimal tier — no API access needed
+        "account_tier": "free",
     },
 ]
 
@@ -139,8 +149,10 @@ class Command(BaseCommand):
         User = get_user_model()
 
         # Import models
+        from django.utils import timezone
         from django_otp.plugins.otp_totp.models import TOTPDevice
 
+        from checktick_app.core.models import UserProfile
         from checktick_app.surveys.models import (
             Organization,
             OrganizationMembership,
@@ -179,7 +191,7 @@ class Command(BaseCommand):
                 )
 
                 if created:
-                    user.set_password(DEV_PASSWORD)
+                    user.set_password(DEV_PASSWORD)  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password  # fmt: skip
                     user.save()
                     created_count += 1
                     self.stdout.write(
@@ -200,6 +212,29 @@ class Command(BaseCommand):
                         confirmed=True,
                     )
                     self.stdout.write("  → 2FA device created")
+
+                # Set account tier and billing status to match the real-world
+                # equivalent for this role (so tier-gated features work in dev)
+                account_tier = user_config.get("account_tier")
+                if account_tier and not user_config.get("is_superuser"):
+                    profile = user.profile
+                    profile.account_tier = account_tier
+                    if account_tier != UserProfile.AccountTier.FREE:
+                        profile.subscription_status = (
+                            UserProfile.SubscriptionStatus.ACTIVE
+                        )
+                        profile.payment_provider = "dev"
+                        profile.payment_customer_id = f"dev_ctm_{user.pk}"
+                        profile.payment_subscription_id = f"dev_sub_{user.pk}"
+                        profile.subscription_current_period_end = (
+                            timezone.now().replace(year=timezone.now().year + 1)
+                        )
+                    else:
+                        profile.subscription_status = (
+                            UserProfile.SubscriptionStatus.NONE
+                        )
+                    profile.save()
+                    self.stdout.write(f"  → Account tier: {account_tier}")
 
                 # Set up organization roles
                 if user_config.get("org_role"):
@@ -317,4 +352,9 @@ class Command(BaseCommand):
             "Add this secret to your authenticator app (Google Authenticator, Authy, etc.)"
         )
         self.stdout.write("The same code works for all dev users.")
+        self.stdout.write("")
+        self.stdout.write("Account tiers (for tier-gated features e.g. API keys):")
+        for u in DEV_USERS:
+            tier = u.get("account_tier", "n/a (superuser)")
+            self.stdout.write(f"  {u['email']:<45} {tier}")
         self.stdout.write("=" * 60)

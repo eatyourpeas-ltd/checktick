@@ -5,12 +5,11 @@ These tests verify that users cannot escalate their own privileges
 or access resources they shouldn't have access to.
 """
 
-import json
-
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 import pytest
 
+from checktick_app.core.models import UserAPIKey
 from checktick_app.surveys.models import (
     Organization,
     OrganizationMembership,
@@ -22,15 +21,10 @@ User = get_user_model()
 TEST_PASSWORD = "test-pass"
 
 
-def auth_hdr(client, username: str, password: str) -> dict:
-    """Helper to get JWT auth headers for API tests."""
-    resp = client.post(
-        "/api/token",
-        data=json.dumps({"username": username, "password": password}),
-        content_type="application/json",
-    )
-    assert resp.status_code == 200, resp.content
-    return {"HTTP_AUTHORIZATION": f"Bearer {resp.json()['access']}"}
+def auth_hdr(user) -> dict:
+    """Helper to get API key auth headers."""
+    _, raw_key = UserAPIKey.generate(user=user, name="test")
+    return {"HTTP_AUTHORIZATION": f"Bearer {raw_key}"}
 
 
 @pytest.mark.django_db
@@ -276,15 +270,9 @@ def test_api_survey_member_cannot_access_other_surveys(client):
     Test that survey membership doesn't grant API access to other surveys.
     """
     # Create users
-    creator1 = User.objects.create_user(
-        username="creator1@test.com", password=TEST_PASSWORD
-    )
-    creator2 = User.objects.create_user(
-        username="creator2@test.com", password=TEST_PASSWORD
-    )
-    editor = User.objects.create_user(
-        username="editor@test.com", password=TEST_PASSWORD
-    )
+    creator1 = User.objects.create_user(username="creator1@test.com")
+    creator2 = User.objects.create_user(username="creator2@test.com")
+    editor = User.objects.create_user(username="editor@test.com")
 
     # Create surveys by different creators
     survey1 = Survey.objects.create(owner=creator1, name="Survey 1", slug="survey-1")
@@ -296,7 +284,7 @@ def test_api_survey_member_cannot_access_other_surveys(client):
     )
 
     # Editor should see only survey1 in API list
-    hdrs = auth_hdr(client, "editor@test.com", TEST_PASSWORD)
+    hdrs = auth_hdr(editor)
     resp = client.get("/api/surveys/", **hdrs)
     assert resp.status_code == 200
     surveys = resp.json()
@@ -309,44 +297,6 @@ def test_api_survey_member_cannot_access_other_surveys(client):
 
     # Editor should NOT be able to access survey2 via API
     resp = client.get(f"/api/surveys/{survey2.id}/", **hdrs)
-    assert resp.status_code == 403
-
-
-@pytest.mark.django_db
-def test_api_survey_member_cannot_manage_memberships(client):
-    """
-    Test that EDITOR users cannot manage survey memberships via API.
-    """
-    # Create users
-    creator = User.objects.create_user(
-        username="creator@test.com", email="creator@test.com", password=TEST_PASSWORD
-    )
-    editor = User.objects.create_user(
-        username="editor@test.com", email="editor@test.com", password=TEST_PASSWORD
-    )
-    target_user = User.objects.create_user(
-        username="target@test.com", email="target@test.com", password=TEST_PASSWORD
-    )
-
-    # Create survey and add editor
-    survey = Survey.objects.create(
-        owner=creator, name="Test Survey", slug="test-survey"
-    )
-    SurveyMembership.objects.create(
-        survey=survey, user=editor, role=SurveyMembership.Role.EDITOR
-    )
-
-    # Editor tries to create a new survey membership via API
-    hdrs = auth_hdr(client, "editor@test.com", TEST_PASSWORD)
-    resp = client.post(
-        "/api/survey-memberships/",
-        data=json.dumps(
-            {"survey": survey.id, "user": target_user.id, "role": "viewer"}
-        ),
-        content_type="application/json",
-        **hdrs,
-    )
-    # Should be forbidden since editor cannot manage survey users
     assert resp.status_code == 403
 
 

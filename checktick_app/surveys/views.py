@@ -10891,3 +10891,151 @@ def validate_postcode(request: HttpRequest) -> HttpResponse:
             f'<span id="postcode-error" role="alert" class="sr-only">Invalid UK post code. Please check and try again.</span>'
             f"</label>"
         )
+
+
+# ---------------------------------------------------------------------------
+# API key management
+# ---------------------------------------------------------------------------
+
+_API_KEY_ALLOWED_TIERS = {
+    "pro",
+    "team_small",
+    "team_medium",
+    "team_large",
+    "organization",
+    "enterprise",
+}
+
+_API_KEY_LIMITS: dict[str, int | None] = {
+    "pro": 5,
+    "team_small": 10,
+    "team_medium": 10,
+    "team_large": 10,
+    "organization": 20,
+    "enterprise": None,  # unlimited
+}
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_key_list(request):
+    from checktick_app.core.models import UserAPIKey
+
+    tier = request.user.profile.account_tier
+    can_use_api = tier in _API_KEY_ALLOWED_TIERS
+    keys = (
+        UserAPIKey.objects.filter(user=request.user)
+        if can_use_api
+        else UserAPIKey.objects.none()
+    )
+    limit = _API_KEY_LIMITS.get(tier)
+    active_count = keys.filter(revoked=False).count()
+    mfa_verified = request.user.is_verified()
+    can_create = (
+        can_use_api and mfa_verified and (limit is None or active_count < limit)
+    )
+    new_raw_key = request.session.pop("new_api_key", None)
+    new_key_name = request.session.pop("new_api_key_name", None)
+    return render(
+        request,
+        "surveys/api_keys.html",
+        {
+            "keys": keys,
+            "can_use_api": can_use_api,
+            "can_create": can_create,
+            "mfa_verified": mfa_verified,
+            "active_count": active_count,
+            "limit": limit,
+            "new_raw_key": new_raw_key,
+            "new_key_name": new_key_name,
+            "now": timezone.now(),
+        },
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_key_create(request):
+    from datetime import timedelta
+
+    from checktick_app.core.models import UserAPIKey
+
+    tier = request.user.profile.account_tier
+    if tier not in _API_KEY_ALLOWED_TIERS:
+        messages.error(request, _("API key access requires a paid account tier."))
+        return redirect("surveys:api_key_list")
+    if not request.user.is_verified():
+        messages.error(
+            request,
+            _("Please complete two-factor authentication to generate an API key."),
+        )
+        return redirect("surveys:api_key_list")
+    limit = _API_KEY_LIMITS.get(tier)
+    active_count = UserAPIKey.objects.filter(user=request.user, revoked=False).count()
+    if limit is not None and active_count >= limit:
+        messages.error(
+            request,
+            _("You have reached the limit of %(limit)s active API keys for your plan.")
+            % {"limit": limit},
+        )
+        return redirect("surveys:api_key_list")
+    name = request.POST.get("name", "").strip()
+    if not name:
+        messages.error(request, _("Please provide a name for the API key."))
+        return redirect("surveys:api_key_list")
+    expires_at = None
+    expires_days_raw = request.POST.get("expires_days", "").strip()
+    if expires_days_raw:
+        try:
+            days = int(expires_days_raw)
+            if days > 0:
+                expires_at = timezone.now() + timedelta(days=days)
+        except (ValueError, TypeError):
+            pass
+    api_key, raw_key = UserAPIKey.generate(
+        user=request.user, name=name, expires_at=expires_at
+    )
+    request.session["new_api_key"] = raw_key
+    request.session["new_api_key_name"] = name
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.ACCOUNT,
+        action=AuditLog.Action.CREATE,
+        metadata={
+            "key_name": name,
+            "key_prefix": api_key.prefix,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+        },
+        severity=AuditLog.Severity.INFO,
+        ip_address=request.META.get("REMOTE_ADDR"),
+        message=f"API key '{name}' created",
+    )
+    return redirect("surveys:api_key_list")
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_key_revoke(request, key_id):
+    from checktick_app.core.models import UserAPIKey
+
+    api_key = get_object_or_404(UserAPIKey, id=key_id, user=request.user)
+    if api_key.revoked:
+        messages.info(request, _("This key has already been revoked."))
+        return redirect("surveys:api_key_list")
+    api_key.revoked = True
+    api_key.revoked_at = timezone.now()
+    api_key.revoked_by = request.user
+    api_key.save(update_fields=["revoked", "revoked_at", "revoked_by"])
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.ACCOUNT,
+        action=AuditLog.Action.REMOVE,
+        metadata={"key_name": api_key.name, "key_prefix": api_key.prefix},
+        severity=AuditLog.Severity.WARNING,
+        ip_address=request.META.get("REMOTE_ADDR"),
+        message=f"API key '{api_key.name}' revoked",
+    )
+    messages.success(
+        request, _("API key '%(name)s' has been revoked.") % {"name": api_key.name}
+    )
+    return redirect("surveys:api_key_list")

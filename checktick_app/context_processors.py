@@ -9,7 +9,6 @@ from django.contrib.auth.models import AnonymousUser
 from checktick_app.surveys.models import (
     Organization,
     OrganizationMembership,
-    SurveyMembership,
     Team,
     TeamMembership,
 )
@@ -121,10 +120,6 @@ def branding(request):
             or Team.objects.filter(owner=user).exists()
             or TeamMembership.objects.filter(
                 user=user, role=TeamMembership.Role.ADMIN
-            ).exists()
-            # Survey creator role
-            or SurveyMembership.objects.filter(
-                user=user, role=SurveyMembership.Role.CREATOR
             ).exists()
         )
         # TODO: In future, restrict dataset creation to pro individual accounts

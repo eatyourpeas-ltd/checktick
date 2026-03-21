@@ -10,12 +10,17 @@ This document explains how users authenticate and what they can access in the sy
 
 CheckTick supports multiple authentication methods for healthcare environments:
 
-### Traditional Authentication
+### API authentication
 
-- Web UI uses Django session authentication with CSRF protection.
-- API uses JWT (Bearer) authentication via SimpleJWT. Obtain a token pair using username/password, then include the access token in the `Authorization: Bearer <token>` header.
-- Anonymous users can access public participant survey pages (SSR) when a survey is live. They cannot access the builder or any API objects.
-- Usernames are equal to email addresses. Use your email as the username when logging in or obtaining tokens.
+The REST API uses **named API keys** issued through the MFA-protected web UI. There is no username/password token endpoint.
+
+- Keys carry the prefix `ct_live_` so they are identifiable if accidentally committed to source control.
+- Each key is shown **once** at creation. It cannot be retrieved again — only revoked and replaced.
+- Keys are stored as SHA-256 hashes; the raw key never touches the database.
+- Keys can optionally have an expiry date. Changing your account password immediately revokes all your keys.
+- FREE tier users cannot generate API keys. PRO, TEAM, ORGANISATION, and ENTERPRISE accounts can.
+
+See [API Reference](api.md) for endpoint details and usage examples.
 
 ### Healthcare SSO (Single Sign-On)
 
@@ -196,23 +201,18 @@ All builder/dashboard/preview endpoints call these helpers before proceeding. Un
 
 ## Enforcement in the API (DRF)
 
-The API mirrors the same rules using a DRF permission class and scoped querysets:
+The API is read-only. All write operations (survey creation, publication, membership management, user administration) are web-UI-only.
 
-- **Listing**: returns only the surveys the user can see (their own, any in orgs where they are ADMIN, any in teams they belong to, plus surveys they are members of via SurveyMembership). Anonymous users see an empty list.
-- **Retrieve**: allowed only if `can_view_survey` is true.
-- **Create**: authenticated users can create surveys. The creator becomes the owner.
-- **Update/Delete/Custom actions**: allowed only if `can_edit_survey` is true (CREATOR and EDITOR roles for survey members, or team ADMIN/CREATOR).
-
-User management operations (adding/removing collaborators) require `can_manage_survey_users` permission, which is restricted to:
-
-- Organisation or team surveys only (surveys with organisation or team)
-- Survey CREATORs, organisation ADMINs, team ADMINs, and survey owners
-- **Individual users (surveys without organisation or team) will receive 403 Forbidden when attempting to manage memberships**
+- **Listing**: returns only the surveys the user can see (their own, any in orgs where they are ADMIN, any in teams they belong to, plus surveys they are members of via SurveyMembership). No key / anonymous requests return an empty list or 401.
+- **Retrieve**: allowed only if `can_view_survey` is true. Returns 403 (not 404) if the object exists but the key holder lacks permission.
+- **Response metrics**: aggregate counts only — no individual responses or PII.
 
 Error behavior:
 
-- 401 Unauthorized: missing/invalid/expired JWT
-- 403 Forbidden: logged in but insufficient permissions on the object (including individual users attempting to share surveys)
+- 401 Unauthorized: missing, invalid, revoked, or expired API key
+- 403 Forbidden: authenticated but insufficient permissions on the object, or FREE tier key holder
+- 404 Not Found: resource doesn't exist
+- 405 Method Not Allowed: any non-GET request (the API is read-only)
 
 ## Dataset Permissions
 
@@ -275,23 +275,12 @@ Authenticated users can create custom versions from any global dataset:
 
 ### Enforcement in the API
 
-Dataset API (`/api/datasets-v2/`) enforces these rules:
+Dataset API (`/api/datasets/`) is **read-only**:
 
-- **Listing**: Returns global datasets plus user's organisation datasets (if in an org) plus user's personal datasets
-- **Retrieve**: Allowed if user can view the dataset
-- **Create**: Allowed for all authenticated users (will require pro account in future)
-- **Update/Delete**: Requires being the creator (individual) or ADMIN/CREATOR in dataset's organisation
-- **Publish**: Requires being the creator (individual) or ADMIN/CREATOR in dataset's organisation
-- **Create custom version**: Allowed for all authenticated users (will require pro account in future)
+- **Listing**: Returns global datasets plus user's organisation datasets (if in an org)
+- **Retrieve**: Allowed if user can view the dataset (global datasets are public to anonymous users)
 
-For detailed usage and examples, see [Dataset Sharing and Customization](dataset-sharing-and-customization.md).
-
-Additional protections:
-
-- Object-level permissions are enforced for detail endpoints (retrieve/update/delete) and custom actions like `seed`. Authenticated users will receive 403 (Forbidden) if they don't have rights on an existing object, rather than 404.
-- Querysets are scoped to reduce exposure: list endpoints only return what you're allowed to see (owned + org-admin).
-- Throttling is enabled (AnonRateThrottle, UserRateThrottle). See `REST_FRAMEWORK.DEFAULT_THROTTLE_RATES` in `settings.py`.
-- CORS is disabled by default (`CORS_ALLOWED_ORIGINS = []`). Enable explicit origins before using the API cross-site.
+All dataset write operations (create, update, delete, publish, custom versions) are performed through the web UI.
 
 ### Account Deletion Restrictions
 
@@ -329,30 +318,25 @@ The **Platform Logs** dashboard is essential for DPST compliance, enabling:
 
 All Platform Admin access is logged in the audit trail. See [Audit Logging and Notifications](audit-logging-and-notifications.md) for dashboard details.
 
-### Using the API with curl (JWT)
+### Using the API with curl (API key)
 
-1. Obtain a token pair (access and refresh):
+1. Generate an API key from **Account → API Keys** in the web UI (requires MFA verification).
 
-```sh
-curl -s -X POST -H "Content-Type: application/json" \
-  -d '{"username": "<USER>", "password": "<PASS>"}' \
-  https://localhost:8000/api/token
-```
-
-1. Call the API with the access token:
+2. Call the API with the key:
 
 ```sh
-ACCESS=<paste_access_token>
-curl -s -H "Authorization: Bearer $ACCESS" https://localhost:8000/api/surveys/
+curl -s -H "Authorization: Bearer ct_live_<your_key>" \
+  https://example.com/api/surveys/
 ```
 
-1. Refresh the access token when it expires:
+3. Check response metrics for a specific survey:
 
 ```sh
-curl -s -X POST -H "Content-Type: application/json" \
-  -d '{"refresh": "<REFRESH_TOKEN>"}' \
-  https://localhost:8000/api/token/refresh
+curl -s -H "Authorization: Bearer ct_live_<your_key>" \
+  https://example.com/api/surveys/42/metrics/responses/
 ```
+
+All API endpoints are read-only (GET only). POST, PUT, PATCH, and DELETE requests return `405 Method Not Allowed`.
 
 ## Participants and sensitive data
 
@@ -390,7 +374,7 @@ CheckTick implements defence-in-depth security across multiple layers:
 | Feature | Implementation | Details |
 |---------|----------------|---------|
 | **Session Security** | Django sessions | CSRF protection, Secure/HttpOnly cookies in production |
-| **JWT Authentication** | SimpleJWT | 30-minute access tokens, 7-day refresh tokens |
+| **API Authentication** | Named API keys | MFA-gated issuance, stored as SHA-256 hash, `ct_live_` prefix, revocable |
 | **SSO/OIDC** | Google OAuth, Azure AD | Email-based linking, supports external/guest accounts |
 | **Brute Force Protection** | django-axes | Account lockout after 5 failed attempts (1-hour cooldown) |
 | **Password Policy** | Django validators | Strong password requirements enforced |
@@ -426,9 +410,7 @@ For detailed encryption documentation, see:
 |-------|-------|---------|
 | **Anonymous API** | 60/minute | Protect public endpoints |
 | **Authenticated API** | 120/minute | Standard user operations |
-| **Recovery Create** | 3/hour | Prevent recovery request spam |
-| **Recovery Approval** | 10/hour | Limit admin approval actions |
-| **Recovery View** | 60/minute | Standard recovery status checks |
+| **Token endpoint** | 5/minute | Per-IP throttle on legacy `/api/token` |
 
 ### Role-Based Access Control (RBAC)
 

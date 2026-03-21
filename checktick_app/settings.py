@@ -1,5 +1,3 @@
-# SimpleJWT defaults
-from datetime import timedelta
 import os
 from pathlib import Path
 import sys
@@ -236,7 +234,6 @@ INSTALLED_APPS = [
     "axes",
     "csp",
     "rest_framework",
-    "rest_framework_simplejwt",
     "mozilla_django_oidc",
     "django_otp",
     "django_otp.plugins.otp_totp",
@@ -415,7 +412,6 @@ CONTENT_SECURITY_POLICY = {
         "default-src": ("'self'",),
         "script-src": (
             "'self'",
-            "https://unpkg.com",
             "https://cdn.jsdelivr.net",
             "https://js.hcaptcha.com",  # hCaptcha widget script
             "https://*.hcaptcha.com",  # hCaptcha iframe sources
@@ -507,7 +503,7 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "checktick_app.api.authentication.APIKeyAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_THROTTLE_CLASSES": [
@@ -517,18 +513,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/minute",
         "user": "120/minute",
-        # Recovery API - strict limits for security-sensitive operations
-        "recovery_create": "3/hour",  # Creating recovery requests
-        "recovery_approval": "10/hour",  # Admin approval/rejection actions
-        "recovery_view": "60/minute",  # Viewing recovery status
     },
-}
-
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": False,
-    "BLACKLIST_AFTER_ROTATION": False,
 }
 
 # Disable throttling during tests to prevent rate limit errors

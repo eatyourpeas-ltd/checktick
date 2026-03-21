@@ -10,7 +10,7 @@ This document provides technical implementation details for developers working o
 
 ---
 
-CheckTick implements a security-first approach to handling sensitive patient data, using per-survey encryption keys with AES-GCM encryption. This document describes the current implementation and planned enhancements for organisational and individual users.
+CheckTick implements a security-first approach to data protection, using per-survey AES-GCM encryption for all surveys. This document describes the current implementation and planned enhancements for organisational and individual users.
 
 > **Encryption Policy**: **ALL surveys are encrypted before publishing**, regardless of subscription tier. This ensures universal data protection across the platform.
 >
@@ -51,7 +51,7 @@ CheckTick implements a **production-ready dual-encryption system** (Option 2 + O
 
 ### Overview
 
-CheckTick protects sensitive demographic data using **dual-path encryption** with:
+CheckTick protects all survey response data using **dual-path encryption** with:
 
 - **Primary Method**: Password-based unlock for daily use
 - **Backup Method**: BIP39 recovery phrase for account recovery
@@ -92,21 +92,27 @@ The dual encryption process:
 
 #### 2. Data Encryption
 
-When patient data is collected in a survey response:
+All survey responses are encrypted before storage. Every published survey has a KEK configured, and all response data — answers and demographics alike — is stored as encrypted blobs:
 
 ```python
-# Sensitive fields (encrypted)
-demographics = {
-    "first_name": "John",
-    "last_name": "Smith",
-    "date_of_birth": "1980-01-01",
-    "nhs_number": "1234567890",
-    "address": "123 Main St"
+# All survey responses: encrypt answers + any demographics together
+full_response = {
+    "answers": {
+        "q1": "mild",
+        "q2": "3 days",
+    },
+    "demographics": {  # present only if survey collects them
+        "first_name": "John",
+        "nhs_number": "1234567890",
+        "date_of_birth": "1980-01-01"
+    }
 }
 
-# Encrypt with survey key
-encrypted_blob = encrypt_sensitive(survey_key, demographics)
-response.enc_demographics = encrypted_blob  # Stored in database
+# Store complete encrypted response
+response.store_complete_response(survey_key, answers, demographics)
+# response.enc_answers contains the encrypted blob
+# response.answers is cleared (empty dict)
+# response.enc_demographics is None (not used for whole-response encryption)
 ```
 
 The encryption process:
@@ -116,41 +122,14 @@ The encryption process:
 3. Encrypts JSON data with AES-GCM
 4. Stores: `salt (16 bytes) | nonce (12 bytes) | ciphertext`
 
-#### 2b. Whole-Response Encryption (Patient Data Surveys)
+**Why whole-response encryption for all surveys:**
 
-When a survey collects patient data (identified by a `patient_details_encrypted` question group), the **entire survey response** is encrypted - not just the demographics:
+- Free-text answers may contain identifying information even in non-patient surveys
+- Consistent encryption model — no plaintext path for any response data
+- Complete protection prevents re-identification attacks
+- Simpler model: all published surveys are encrypted; all responses are encrypted blobs
 
-```python
-# Patient data survey: encrypt ENTIRE response
-if survey.requires_whole_response_encryption():
-    # Combine all data into single encrypted blob
-    full_response = {
-        "answers": {
-            "q1_chest_pain": "mild",
-            "q2_duration": "3 days",
-            "q3_previous_history": "yes",
-            "q4_notes": "Patient describes intermittent pain..."
-        },
-        "demographics": {
-            "first_name": "John",
-            "nhs_number": "1234567890",
-            "date_of_birth": "1980-01-01"
-        }
-    }
-
-    # Store complete encrypted response
-    response.store_complete_response(survey_key, answers, demographics)
-    # response.enc_answers contains the encrypted blob
-    # response.answers is cleared (empty dict)
-    # response.enc_demographics is None (not used)
-```
-
-**Why whole-response encryption for patient data:**
-
-- Clinical observations (symptoms, notes) should be protected alongside identifiers
-- Free-text answers may contain identifying information
-- Complete protection prevents "re-identification" attacks
-- Simpler mental model: "patient data survey = everything encrypted"
+> **Note on `patient_details_encrypted` template**: Surveys that collect structured patient data (NHS numbers, clinical identifiers etc.) via this template still have the same underlying storage model. The distinction is in *what fields are collected*, not in whether encryption is applied — all surveys are encrypted.
 
 #### 3. Data Decryption
 
@@ -1226,9 +1205,9 @@ from checktick_app.surveys.services.export_service import ExportService
 def create_export(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug, owner=request.user)
 
-    # Get KEK from session (survey must be unlocked)
+    # Get KEK from session (survey must be unlocked — all surveys are encrypted)
     survey_key = get_survey_key_from_session(request, slug)
-    if not survey_key and survey.requires_whole_response_encryption():
+    if not survey_key:
         messages.error(request, _("Please unlock survey first to export encrypted data."))
         return redirect("surveys:unlock", slug=slug)
 
@@ -1273,7 +1252,8 @@ class ExportService:
         # ... build headers ...
 
         for response in survey.responses.filter(is_frozen=False):
-            if survey.requires_whole_response_encryption() and survey_key:
+            # All surveys are encrypted; survey_key is always required
+            if survey_key:
                 try:
                     # Decrypt complete response (answers + demographics)
                     full_response = response.load_complete_response(survey_key)
@@ -1284,7 +1264,8 @@ class ExportService:
                     logger.error(f"Failed to decrypt response {response.id}: {e}")
                     continue
             else:
-                # Legacy format: plaintext answers
+                # Legacy format only: pre-encryption surveys with plaintext answers
+                # (surveys created before universal encryption was enforced)
                 answers_dict = response.answers or {}
 
             # ... build CSV row ...
@@ -1953,15 +1934,15 @@ Layer 3: Encryption Key Control
 | **Insider Threat** | Admin could reset password | Cannot reset OIDC identity; org recovery needed |
 | **Lost Credentials** | Manual password reset | Identity provider handles recovery |
 
-### SSO and Patient Data: Passphrase Requirement
+### SSO and Passphrase Requirement
 
-While OIDC auto-unlock is convenient, it's not appropriate for all scenarios. When surveys collect patient data, additional explicit authentication is required:
+While OIDC auto-unlock is convenient, explicit passphrase authentication is required in certain scenarios — particularly on shared clinical devices or where regulations require deliberate intent to access data:
 
 ```python
 # Survey checks if SSO user needs passphrase
 if survey.sso_user_needs_passphrase():
     # User must set up password-based encryption even with SSO
-    # Auto-unlock alone is NOT sufficient for patient data
+    # Auto-unlock alone is NOT sufficient in this configuration
 
     # On first publish:
     # 1. User enters a passphrase (separate from SSO)
@@ -1971,30 +1952,30 @@ if survey.sso_user_needs_passphrase():
     pass
 ```
 
-**Why require passphrase for SSO + patient data:**
+**Why require passphrase for SSO users in sensitive contexts:**
 
-1. **Explicit Intent**: Unlocking patient data should require conscious action, not happen automatically on login
-2. **Device Compromise**: If SSO session is compromised, patient data remains protected
+1. **Explicit Intent**: Unlocking survey data should require conscious action, not happen automatically on login
+2. **Device Compromise**: If SSO session is compromised, survey data remains protected by the passphrase
 3. **Shared Devices**: Clinical workstations may have persistent SSO sessions
-4. **Audit Clarity**: Passphrase entry creates clear "intent to access" audit event
-5. **Regulatory Compliance**: Some frameworks require explicit authentication for PHI access
+4. **Audit Clarity**: Passphrase entry creates a clear "intent to access" audit event
+5. **Regulatory Compliance**: Some frameworks require explicit authentication for sensitive data access
 
 **Configuration in Survey Model:**
 
 ```python
 class Survey(models.Model):
-    # Default: True - SSO users need passphrase for patient data
+    # Default: True - SSO users need passphrase for explicit unlock
     require_passphrase_for_patient_data = models.BooleanField(
         default=True,
-        help_text="Require SSO users to set a passphrase when survey collects patient data"
+        help_text="Require SSO users to set a passphrase for explicit survey unlock (recommended)"
     )
 
     def sso_user_needs_passphrase(self) -> bool:
         """Check if SSO users need to set a passphrase for this survey."""
-        return self.collects_patient_data() and self.require_passphrase_for_patient_data
+        return self.require_passphrase_for_patient_data
 ```
 
-Organisations can disable this requirement if their security policy permits auto-unlock for patient data (e.g., in controlled clinical environments).
+Organisations can disable this requirement if their security policy permits auto-unlock (e.g., in tightly controlled clinical environments where device security is assured).
 
 ### User Experience with OIDC
 

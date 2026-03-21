@@ -15,7 +15,6 @@ env:
   # Library versions - update these when upgrading
   HTMX_VERSION: "2.0.8"
   SORTABLEJS_VERSION: "1.15.7"
-  SWAGGER_UI_VERSION: "5.17.14"
   REDOC_VERSION: "2.1.5"
   AXE_CORE_VERSION: "4.11.1"
 
@@ -32,6 +31,9 @@ jobs:
       axecore_changed: ${{ steps.check-axecore.outputs.changed }}
       axecore_new_hash: ${{ steps.check-axecore.outputs.new_hash }}
       axecore_current_hash: ${{ steps.check-axecore.outputs.current_hash }}
+      redoc_changed: ${{ steps.check-redoc.outputs.changed }}
+      redoc_new_hash: ${{ steps.check-redoc.outputs.new_hash }}
+      redoc_current_hash: ${{ steps.check-redoc.outputs.current_hash }}
 
     steps:
       - name: Checkout repository
@@ -185,7 +187,45 @@ jobs:
             echo "axe-core is up to date"
           fi
 
-      - name: Check for newer versions available
+      - name: Check ReDoc
+        id: check-redoc
+        run: |
+          tmpdir=$(mktemp -d)
+          trap 'rm -rf "$tmpdir"' EXIT
+          pushd "$tmpdir"
+          npm pack redoc@${{ env.REDOC_VERSION }} --silent
+          tarball=$(ls *.tgz | head -n1)
+          tar -xzf "$tarball"
+          file=$(find package/bundles -type f -name 'redoc.standalone.js' -print -quit || true)
+          if [ -z "$file" ]; then
+            echo "No redoc.standalone.js found in package" >&2
+            exit 1
+          fi
+          src="$tmpdir/$file"
+
+          NEW_HASH=$(openssl dgst -sha384 -binary "$src" | openssl base64 -A)
+          echo "new_hash=${NEW_HASH}" >> $GITHUB_OUTPUT
+          popd
+
+          if [ -f checktick_app/static/js/redoc.standalone.min.js ]; then
+            CURRENT_HASH=$(openssl dgst -sha384 -binary checktick_app/static/js/redoc.standalone.min.js | openssl base64 -A)
+            echo "current_hash=${CURRENT_HASH}" >> $GITHUB_OUTPUT
+          else
+            echo "current_hash=" >> $GITHUB_OUTPUT
+          fi
+
+          if [ "${NEW_HASH}" != "${CURRENT_HASH}" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "ReDoc has been updated or is missing"
+            mv -f "$src" checktick_app/static/js/redoc.standalone.min.js
+            # Update integrity hash in redoc.html
+            sed -i "/redoc\.standalone\.min\.js/,/integrity=/{s|integrity=\"sha384-[A-Za-z0-9+/=]*\"|integrity=\"sha384-${NEW_HASH}\"|g}" checktick_app/api/templates/api/redoc.html || true
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "ReDoc is up to date"
+          fi
+
+      - name: Check versions
         id: check-versions
         run: |
           echo "## Checking for newer library versions..." >> $GITHUB_STEP_SUMMARY
@@ -229,9 +269,22 @@ jobs:
             echo "axecore_update_available=false" >> $GITHUB_OUTPUT
           fi
 
+          # Check ReDoc latest version from npm
+          REDOC_LATEST=$(curl -s "https://registry.npmjs.org/redoc" | jq -r '.["dist-tags"].latest')
+          echo "ReDoc: Current pinned = ${{ env.REDOC_VERSION }}, Latest = ${REDOC_LATEST}"
+          echo "redoc_latest=${REDOC_LATEST}" >> $GITHUB_OUTPUT
+
+          if [ "${{ env.REDOC_VERSION }}" != "${REDOC_LATEST}" ]; then
+            echo "- ⚠️ **ReDoc**: Newer version available (${REDOC_LATEST} vs ${{ env.REDOC_VERSION }})" >> $GITHUB_STEP_SUMMARY
+            echo "redoc_update_available=true" >> $GITHUB_OUTPUT
+          else
+            echo "- ✅ **ReDoc**: Up to date (${{ env.REDOC_VERSION }})" >> $GITHUB_STEP_SUMMARY
+            echo "redoc_update_available=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create Pull Request for hash changes
         id: create-pr
-        if: steps.check-htmx.outputs.changed == 'true' || steps.check-sortablejs.outputs.changed == 'true' || steps.check-axecore.outputs.changed == 'true'
+        if: steps.check-htmx.outputs.changed == 'true' || steps.check-sortablejs.outputs.changed == 'true' || steps.check-axecore.outputs.changed == 'true' || steps.check-redoc.outputs.changed == 'true'
         continue-on-error: true
         uses: peter-evans/create-pull-request@v6
         with:
@@ -243,6 +296,7 @@ jobs:
             - HTMX ${{ env.HTMX_VERSION }}: ${{ steps.check-htmx.outputs.changed == 'true' && 'Updated' || 'No change' }}
             - SortableJS ${{ env.SORTABLEJS_VERSION }}: ${{ steps.check-sortablejs.outputs.changed == 'true' && 'Updated' || 'No change' }}
             - axe-core ${{ env.AXE_CORE_VERSION }}: ${{ steps.check-axecore.outputs.changed == 'true' && 'Updated' || 'No change' }}
+            - ReDoc ${{ env.REDOC_VERSION }}: ${{ steps.check-redoc.outputs.changed == 'true' && 'Updated' || 'No change' }}
           branch: update-cdn-libraries
           delete-branch: true
           title: "Update CDN libraries with new SRI hashes"
@@ -258,19 +312,23 @@ jobs:
             | HTMX | ${{ env.HTMX_VERSION }} | ${{ steps.check-htmx.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-htmx.outputs.new_hash }}` |
             | SortableJS | ${{ env.SORTABLEJS_VERSION }} | ${{ steps.check-sortablejs.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-sortablejs.outputs.new_hash }}` |
             | axe-core | ${{ env.AXE_CORE_VERSION }} | ${{ steps.check-axecore.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-axecore.outputs.new_hash }}` |
+            | ReDoc | ${{ env.REDOC_VERSION }} | ${{ steps.check-redoc.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-redoc.outputs.new_hash }}` |
 
             ### Files Updated
             - `checktick_app/static/js/htmx.min.js`
             - `checktick_app/static/js/sortable.min.js`
             - `checktick_app/static/js/axe-core.min.js`
+            - `checktick_app/static/js/redoc.standalone.min.js`
             - `checktick_app/templates/base.html` (HTMX integrity hash)
             - `checktick_app/surveys/templates/surveys/*.html` (SortableJS integrity hashes)
+            - `checktick_app/api/templates/api/redoc.html` (ReDoc integrity hash)
 
             ### Testing Checklist
             Before merging, please verify:
             - [ ] Survey form works correctly (HTMX)
             - [ ] Question reordering works (SortableJS)
             - [ ] Accessibility testing works (axe-core)
+            - [ ] API documentation page renders (ReDoc)
             - [ ] No console errors or CSP violations
             - [ ] Build survey page functions correctly
 
@@ -279,9 +337,10 @@ jobs:
 
             **HTMX** (base.html): `sha384-${{ steps.check-htmx.outputs.new_hash }}`
             **SortableJS** (detail.html, builder.html, groups.html, group_builder.html): `sha384-${{ steps.check-sortablejs.outputs.new_hash }}`
+            **ReDoc** (redoc.html): `sha384-${{ steps.check-redoc.outputs.new_hash }}`
 
       - name: Create per-dependency version issues
-        if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true' || steps.check-versions.outputs.axecore_update_available == 'true'
+        if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true' || steps.check-versions.outputs.axecore_update_available == 'true' || steps.check-versions.outputs.redoc_update_available == 'true'
         uses: actions/github-script@v6
         with:
           script: |
@@ -308,6 +367,14 @@ jobs:
                 current: process.env.AXE_CURRENT,
                 latest: process.env.AXE_LATEST,
                 changelog: 'https://github.com/dequelabs/axe-core/releases'
+              });
+            }
+            if (process.env.REDOC_UPDATE_AVAILABLE === 'true') {
+              deps.push({
+                name: 'ReDoc',
+                current: process.env.REDOC_CURRENT,
+                latest: process.env.REDOC_LATEST,
+                changelog: 'https://github.com/Redocly/redoc/releases'
               });
             }
 
@@ -351,4 +418,7 @@ jobs:
           AXE_UPDATE_AVAILABLE: ${{ steps.check-versions.outputs.axecore_update_available }}
           AXE_CURRENT: ${{ env.AXE_CORE_VERSION }}
           AXE_LATEST: ${{ steps.check-versions.outputs.axecore_latest }}
+          REDOC_UPDATE_AVAILABLE: ${{ steps.check-versions.outputs.redoc_update_available }}
+          REDOC_CURRENT: ${{ env.REDOC_VERSION }}
+          REDOC_LATEST: ${{ steps.check-versions.outputs.redoc_latest }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

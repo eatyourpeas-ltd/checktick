@@ -727,3 +727,72 @@ class Payment(models.Model):
     def get_vat_rate_display(self) -> str:
         """Return formatted VAT rate."""
         return f"{float(self.vat_rate) * 100:.0f}%"
+
+
+class UserAPIKey(models.Model):
+    """Named, MFA-gated API key for read-only API access.
+
+    Raw key format: ``ct_live_<secrets.token_urlsafe(40)>``
+    Generated once, shown once, never stored. Only the SHA-256 hash is kept.
+    """
+
+    import uuid as _uuid
+
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="api_keys"
+    )
+    name = models.CharField(max_length=255, help_text='Human label, e.g. "CI pipeline"')
+    key_hash = models.CharField(
+        max_length=64, unique=True, db_index=True, help_text="SHA-256 of the raw key"
+    )
+    prefix = models.CharField(
+        max_length=12,
+        help_text="First 12 characters of the raw key (stored plaintext for display)",
+    )
+    scope_context = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text='Reserved. Format: "pro_full" | "team:{id}:{role}" | "org:{id}:{role}"',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(
+        null=True, blank=True, help_text="None = no expiry"
+    )
+    revoked = models.BooleanField(default=False)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="revoked_api_keys",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "API Key"
+        verbose_name_plural = "API Keys"
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.prefix}…) — {self.user}"
+
+    @classmethod
+    def generate(cls, user, name: str, expires_at=None) -> tuple["UserAPIKey", str]:
+        """Create a new key. Returns ``(instance, raw_key)``. Show raw_key once."""
+        import hashlib
+        import secrets
+
+        raw_key = f"ct_live_{secrets.token_urlsafe(40)}"
+        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        prefix = raw_key[:12]
+        instance = cls.objects.create(
+            user=user,
+            name=name,
+            key_hash=key_hash,
+            prefix=prefix,
+            expires_at=expires_at,
+        )
+        return instance, raw_key
