@@ -39,6 +39,8 @@ from checktick_app.surveys.models import (
     SurveyQuestionCondition,
 )
 
+TEST_PASSWORD = "x"  # noqa: S105
+
 # Common XSS payloads that cover the most common injection patterns.
 SCRIPT_TAG = "<script>alert('xss')</script>"
 SCRIPT_BREAK_OUT = "</script><script>alert(1)</script>"
@@ -65,7 +67,7 @@ def disable_rate_limiting(settings):
 @pytest.fixture
 def owner(django_user_model):
     return django_user_model.objects.create_user(
-        username="xss_owner@example.com", password="securepass"
+        username="xss_owner@example.com", password=TEST_PASSWORD
     )
 
 
@@ -756,9 +758,7 @@ def test_theme_css_light_injection_blocked_on_public_take(client, owner, org):
     S14a — malicious theme_css_light stored directly in survey.style must not
     appear raw in the respondent-facing take page (survey_take → detail.html).
     """
-    survey = _make_survey_with_css(
-        owner, org, "css-light-take", css_light=CSS_BREAK
-    )
+    survey = _make_survey_with_css(owner, org, "css-light-take", css_light=CSS_BREAK)
     resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
     assert RAW_CSS_SCRIPT not in resp.content, (
@@ -772,9 +772,7 @@ def test_theme_css_dark_injection_blocked_on_public_take(client, owner, org):
     """
     S14b — malicious theme_css_dark must not appear raw in the take page.
     """
-    survey = _make_survey_with_css(
-        owner, org, "css-dark-take", css_dark=CSS_BREAK
-    )
+    survey = _make_survey_with_css(owner, org, "css-dark-take", css_dark=CSS_BREAK)
     resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
     assert RAW_CSS_SCRIPT not in resp.content, (
@@ -806,9 +804,9 @@ def test_theme_css_injection_blocked_on_unlisted_take(client, owner, org):
         )
     )
     assert resp.status_code == 200
-    assert RAW_CSS_SCRIPT not in resp.content, (
-        "Raw CSS injection found in unlisted take page"
-    )
+    assert (
+        RAW_CSS_SCRIPT not in resp.content
+    ), "Raw CSS injection found in unlisted take page"
 
 
 @pytest.mark.django_db
@@ -817,6 +815,7 @@ def test_theme_css_injection_blocked_on_token_take(client, owner, org):
     S14d — malicious theme CSS must also be blocked on the token take route.
     """
     from datetime import timedelta
+
     from django.utils import timezone
 
     style = {"theme_css_light": CSS_BREAK}
@@ -842,6 +841,6 @@ def test_theme_css_injection_blocked_on_token_take(client, owner, org):
         )
     )
     assert resp.status_code == 200
-    assert RAW_CSS_SCRIPT not in resp.content, (
-        "Raw CSS injection found in token take page"
-    )
+    assert (
+        RAW_CSS_SCRIPT not in resp.content
+    ), "Raw CSS injection found in token take page"

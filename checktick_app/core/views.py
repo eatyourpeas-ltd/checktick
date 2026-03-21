@@ -38,7 +38,11 @@ except ImportError:
     UserEmailPreferences = None
 
 try:
-    from .theme_utils import normalize_daisyui_builder_css, _sanitize_css_value, sanitize_font_family
+    from .theme_utils import (
+        _sanitize_css_value,
+        normalize_daisyui_builder_css,
+        sanitize_font_family,
+    )
 except ImportError:
 
     def normalize_daisyui_builder_css(s: str) -> str:
@@ -50,9 +54,10 @@ except ImportError:
 
     def sanitize_font_family(val: str) -> str:  # type: ignore[misc]
         import re as _re
+
         val = val.replace("{", "").replace("}", "").replace(";", "")
-        val = _re.sub(r'url\s*\([^)]*\)?', '', val, flags=_re.IGNORECASE)
-        val = _re.sub(r'https?://\S*', '', val, flags=_re.IGNORECASE)
+        val = _re.sub(r"url\s*\([^)]*\)?", "", val, flags=_re.IGNORECASE)
+        val = _re.sub(r"https?://\S*", "", val, flags=_re.IGNORECASE)
         return val
 
 
@@ -248,8 +253,12 @@ def profile(request):
             sb.icon_url_dark = (request.POST.get("icon_url_dark") or "").strip()
             if request.FILES.get("icon_file_dark"):
                 sb.icon_file_dark = request.FILES["icon_file_dark"]
-            sb.font_heading = sanitize_font_family((request.POST.get("font_heading") or "").strip())
-            sb.font_body = sanitize_font_family((request.POST.get("font_body") or "").strip())
+            sb.font_heading = sanitize_font_family(
+                (request.POST.get("font_heading") or "").strip()
+            )
+            sb.font_body = sanitize_font_family(
+                (request.POST.get("font_body") or "").strip()
+            )
             sb.font_css_url = (request.POST.get("font_css_url") or "").strip()
 
             # Save theme presets
@@ -914,7 +923,9 @@ def org_setup(request, token: str):
         else:
             # Run the default password hasher once so the response time is the same
             # whether or not the email corresponds to an existing account.
-            User().set_password(password)
+            from django.contrib.auth.hashers import make_password
+
+            make_password(password)
 
             # New user — create account.
             if not password or len(password) < 8:
