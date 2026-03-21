@@ -80,9 +80,9 @@ Viewers, participants, or outsiders cannot access or modify this page.
 - Rows that are part of a repeat show a "Repeats" badge and a small remove (✕) control.
 - Removing a group from a repeat will also clean up empty repeats automatically.
 
-## Text Entry syntax (optional)
+## Outline syntax (optional)
 
-You can also create repeats using Text Entry:
+You can also create repeats using the Outline:
 
 - Use `REPEAT-5` above the groups you want to repeat. `-5` means maximum five items; omit to allow unlimited.
 - For one level of nesting, indent the nested repeat line with `>`.
@@ -113,6 +113,6 @@ Vitals
 - [Publishing Question Groups](/docs/publish-question-groups/) - Share your question groups as templates
 - [Question Group Template Library](/docs/question-group-template-library/) - Browse and import templates
 - [Global Templates Index](/docs/question-group-templates-index/) - List of curated global templates
-- [Text Entry Format](/docs/import/) - Text format syntax for importing questions
+- [Outline](/docs/import/) - Text format syntax for importing questions
 - [Collections](/docs/collections/) - Advanced repeat and nesting features
 - [Surveys](/docs/surveys/) - Creating and managing surveys

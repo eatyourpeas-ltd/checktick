@@ -1,10 +1,10 @@
 ---
-title: Text Entry
+title: Outline
 category: features
 priority: 4
 ---
 
-The survey builder supports multiple ways to create survey content: Text Entry (importing from text format) and detailed follow-up question configuration. This is convenient when:
+The survey builder supports multiple ways to create survey content: Outline (importing from text format) and detailed follow-up question configuration. This is convenient when:
 
 - You already have the survey designed in a document and prefer to import the structure instead of dragging and dropping questions in the visual builder.
 - You want to lay out complex flows with repeatable sections or branching logic before wiring the final details in the UI.
@@ -122,7 +122,7 @@ Follow-up text inputs work with:
 
 You can add follow-up text inputs in three ways:
 
-1. **Text Entry** (this document) - Use the `+` syntax shown above
+1. **Outline** (this document) - Use the `+` syntax shown above
 2. **Visual builder** - Check "Enable follow-up text" for each option in the question editor
 3. **API** - Include `followup_text` in the options structure
 
@@ -183,11 +183,11 @@ Please provide your email
 
 ## Preview Viewer
 
-Text Entry also has a real-time preview viewer. As you enter text the view renders it below - this is helpful because a unique identifier for each question and question-group automatically renders in the preview. This is needed if you choose to use the branching notation (see below).
+The Outline also has a real-time preview viewer. As you enter text the view renders it below - this is helpful because a unique identifier for each question and question-group automatically renders in the preview. This is needed if you choose to use the branching notation (see below).
 
 ## Additional Function
 
-You may not want to use this function and Text Entry works without it. You may simply want to convert a Word document to text format and import the questions wholesale - you can add function for repeat questions (such as patients) or conditional branching in the Question Builder afterwards. But if you wish to use advanced features during import, it is possible to use the notation described below for some questions or groups to be iterative or show conditionally depending on answers that users give. This is detailed below.
+You may not want to use this function and the Outline works without it. You may simply want to convert a Word document to text format and import the questions wholesale - you can add function for repeat questions (such as patients) or conditional branching in the Question Builder afterwards. But if you wish to use advanced features during import, it is possible to use the notation described below for some questions or groups to be iterative or show conditionally depending on answers that users give. This is detailed below.
 
 ### Repeatable collections
 
@@ -236,7 +236,7 @@ Notes:
 
 ## Error handling and validation
 
-Text Entry provides comprehensive error detection and reporting at two levels:
+The Outline provides comprehensive error detection and reporting at two levels:
 
 ### Live preview (immediate feedback)
 
@@ -275,7 +275,7 @@ This two-layer validation approach ensures that formatting and syntax errors are
 ## Workflow tips
 
 1. Draft the structure in Markdown using a familiar editor or export from a specification document.
-2. Paste the text into the Text Entry form and review the live preview to confirm IDs, repeat badges, and branch targets look correct.
+2. Paste the text into the Outline form and review the live preview to confirm IDs, repeat badges, and branch targets look correct.
 3. When ready, choose **Create survey**, acknowledge the overwrite warning, and import. The importer recreates question groups, questions, branching conditions, and collections.
 4. Use the visual builder to fine-tune wording, add advanced logic, or connect the imported sections with additional navigation rules.
 

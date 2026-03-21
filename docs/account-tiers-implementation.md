@@ -113,7 +113,7 @@ class Survey(models.Model):
 | **Survey Creation** |
 | Maximum Surveys | 3 | Unlimited | 50 | 50 | 50 | Unlimited | Unlimited |
 | Drag & Drop Builder | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Text Entry for Surveys | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Outline for Surveys | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Survey Templates | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Conditional Logic/Branching | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Question Groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |

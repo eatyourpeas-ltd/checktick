@@ -160,8 +160,8 @@ class TestResponseInsightsDisplay:
         assert "text-success" in content
         assert "text-error" in content
 
-    def test_empty_survey_shows_placeholder(self, user, empty_survey):
-        """Survey with no responses should show placeholder message."""
+    def test_empty_survey_hides_insights(self, user, empty_survey):
+        """Survey with no responses should not show the Response Insights section."""
         client = Client()
         client.login(username="insightsuser", password=TEST_PASSWORD)  # noqa: S106
 
@@ -169,9 +169,9 @@ class TestResponseInsightsDisplay:
 
         content = response.content.decode("utf-8")
 
-        # Should show placeholder message
-        assert "Response Insights" in content
-        assert "will appear here once you receive submissions" in content
+        # Section should be absent when there are no responses
+        assert "Response Insights" not in content
+        assert "will appear here once you receive submissions" not in content
 
 
 @pytest.mark.django_db

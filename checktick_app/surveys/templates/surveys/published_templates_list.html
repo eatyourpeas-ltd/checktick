@@ -1,14 +1,23 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load i18n %}
-{% block title %}{% trans "Question Groups" %} - CheckTick{% endblock %}
+{% block title %}{% trans "Question Bank" %} - CheckTick{% endblock %}
 {% block content %}
 <div class="prose max-w-none">
-  {% include 'components/breadcrumbs.html' with crumb1_label='Question Groups' crumb1_href='/surveys/templates/' crumb1_icon='components/icons/checktick_question_group.html' %}
+  {% include 'components/breadcrumbs.html' with crumb1_label='Question Bank' crumb1_href='/surveys/templates/' crumb1_icon='components/icons/checktick_question_group.html' %}
+
+  {% if request.GET.survey %}
+  <div class="not-prose mb-2">
+    <a href="{% url 'surveys:groups' request.GET.survey %}" class="btn btn-sm btn-ghost gap-1">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+      {% trans "Back to Question Groups" %}
+    </a>
+  </div>
+  {% endif %}
 
   <h1 class="inline-flex items-center gap-2">
     {% include "components/icons/checktick_question_group.html" with classes="w-8 h-8 text-base-content" %}
-    <span>{% trans "Question Groups" %}</span>
+    <span>{% trans "Question Bank" %}</span>
   </h1>
 
   <!-- Explainer Section -->

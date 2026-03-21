@@ -215,7 +215,7 @@ if (p) colors.primary = `hsl(${p})`;
 - `colors.border` - Connecting lines
 - `rgba(59, 130, 246, ...)` - Repeat badges
 
-## Text Entry (Bulk Import)
+## Outline
 
 ### Condition Syntax
 
@@ -407,6 +407,6 @@ When upgrading from earlier versions:
 ## Related Documentation
 
 - [Branching Logic & Repeating Questions](branching-and-repeats.md) - User guide
-- [Import Documentation](import.md) - Text Entry syntax
+- [Import Documentation](import.md) - Outline syntax
 - [API Documentation](api.md) - REST API reference
 - [Collections](collections.md) - Collection system details

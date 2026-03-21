@@ -498,16 +498,16 @@ def test_whitespace_trimmed_from_options(self, client):
 
 ## Testing Bulk Markdown Import
 
-Text Entry allows users to create surveys from text format. Tests verify that the parser correctly handles group and question syntax, follow-up questions, required fields, IDs, and collections.
+The Outline allows users to create surveys from text format. Tests verify that the parser correctly handles group and question syntax, follow-up questions, required fields, IDs, and collections.
 
-### Text Entry Test Files
+### Outline Test Files
 
 - `/test_followup_import.py` - Comprehensive markdown import tests (10 tests)
 
-### Running Text Entry Tests
+### Running Outline Tests
 
 ```bash
-# Run all Text Entry tests
+# Run all Outline tests
 docker compose exec web pytest test_followup_import.py -v
 
 # Run specific test
@@ -689,7 +689,7 @@ def test_followup_data_structure_matches_api_format(test_markdown):
     assert option_with_followup["followup_text"]["enabled"] is True
 ```
 
-### Key Test Patterns for Text Entry
+### Key Test Patterns for Outline
 
 1. **Parse Validation**: Verify markdown parses without errors
 2. **Structure Verification**: Check groups, questions, and options are created correctly
