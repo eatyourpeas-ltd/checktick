@@ -27,6 +27,14 @@ try:
     from checktick_app.core.themes import generate_theme_css_for_brand
 except Exception:  # pragma: no cover - tolerate missing module during migrations
     generate_theme_css_for_brand = None
+try:
+    from checktick_app.core.theme_utils import sanitize_css_block, sanitize_font_family
+except Exception:  # pragma: no cover - tolerate missing module during migrations
+    def sanitize_css_block(css: str) -> str:  # type: ignore[misc]
+        return css.replace("<", "").replace(">", "")
+
+    def sanitize_font_family(val: str) -> str:  # type: ignore[misc]
+        return val.replace("{", "").replace("}", "").replace(";", "")
 
 
 _GIT_CACHE = None
@@ -216,12 +224,12 @@ def branding(request):
                         theme_css_dark = generated_dark
                     except Exception:
                         # Fall back to raw CSS if generation fails
-                        theme_css_light = sb.theme_light_css or brand["theme_css_light"]
-                        theme_css_dark = sb.theme_dark_css or brand["theme_css_dark"]
+                        theme_css_light = sanitize_css_block(sb.theme_light_css or brand["theme_css_light"])
+                        theme_css_dark = sanitize_css_block(sb.theme_dark_css or brand["theme_css_dark"])
                 else:
                     # Fallback if themes module not available
-                    theme_css_light = sb.theme_light_css or brand["theme_css_light"]
-                    theme_css_dark = sb.theme_dark_css or brand["theme_css_dark"]
+                    theme_css_light = sanitize_css_block(sb.theme_light_css or brand["theme_css_light"])
+                    theme_css_dark = sanitize_css_block(sb.theme_dark_css or brand["theme_css_dark"])
 
                 brand.update(
                     {
@@ -230,8 +238,8 @@ def branding(request):
                         "theme_name": sb.default_theme or brand["theme_name"],
                         "theme_preset_light": preset_light,  # Actual daisyUI preset name
                         "theme_preset_dark": preset_dark,  # Actual daisyUI preset name
-                        "font_heading": sb.font_heading or brand["font_heading"],
-                        "font_body": sb.font_body or brand["font_body"],
+                        "font_heading": sanitize_font_family(sb.font_heading or brand["font_heading"]),
+                        "font_body": sanitize_font_family(sb.font_body or brand["font_body"]),
                         "font_css_url": sb.font_css_url or brand["font_css_url"],
                         "theme_css_light": theme_css_light,
                         "theme_css_dark": theme_css_dark,
@@ -295,12 +303,12 @@ def branding(request):
                 theme_css_dark = generated_dark
             except Exception:
                 # Fall back to raw CSS if generation fails
-                theme_css_light = user_org.theme_light_css or brand["theme_css_light"]
-                theme_css_dark = user_org.theme_dark_css or brand["theme_css_dark"]
+                theme_css_light = sanitize_css_block(user_org.theme_light_css or brand["theme_css_light"])
+                theme_css_dark = sanitize_css_block(user_org.theme_dark_css or brand["theme_css_dark"])
         else:
             # Fallback if themes module not available
-            theme_css_light = user_org.theme_light_css or brand["theme_css_light"]
-            theme_css_dark = user_org.theme_dark_css or brand["theme_css_dark"]
+            theme_css_light = sanitize_css_block(user_org.theme_light_css or brand["theme_css_light"])
+            theme_css_dark = sanitize_css_block(user_org.theme_dark_css or brand["theme_css_dark"])
 
         brand.update(
             {

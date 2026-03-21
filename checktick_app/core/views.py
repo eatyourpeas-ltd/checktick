@@ -38,12 +38,22 @@ except ImportError:
     UserEmailPreferences = None
 
 try:
-    from .theme_utils import normalize_daisyui_builder_css
+    from .theme_utils import normalize_daisyui_builder_css, _sanitize_css_value, sanitize_font_family
 except ImportError:
 
     def normalize_daisyui_builder_css(s: str) -> str:
         """No-op fallback if theme utils or migrations are unavailable."""
         return s
+
+    def _sanitize_css_value(s: str) -> str:  # type: ignore[misc]
+        return s.replace("<", "").replace(">", "").replace("{", "").replace("}", "")
+
+    def sanitize_font_family(val: str) -> str:  # type: ignore[misc]
+        import re as _re
+        val = val.replace("{", "").replace("}", "").replace(";", "")
+        val = _re.sub(r'url\s*\([^)]*\)?', '', val, flags=_re.IGNORECASE)
+        val = _re.sub(r'https?://\S*', '', val, flags=_re.IGNORECASE)
+        return val
 
 
 try:
@@ -238,8 +248,8 @@ def profile(request):
             sb.icon_url_dark = (request.POST.get("icon_url_dark") or "").strip()
             if request.FILES.get("icon_file_dark"):
                 sb.icon_file_dark = request.FILES["icon_file_dark"]
-            sb.font_heading = (request.POST.get("font_heading") or "").strip()
-            sb.font_body = (request.POST.get("font_body") or "").strip()
+            sb.font_heading = sanitize_font_family((request.POST.get("font_heading") or "").strip())
+            sb.font_body = sanitize_font_family((request.POST.get("font_body") or "").strip())
             sb.font_css_url = (request.POST.get("font_css_url") or "").strip()
 
             # Save theme presets

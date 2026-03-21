@@ -558,6 +558,276 @@ def test_base_minimal_escapes_stored_font_xss(client, owner, org):
     ), "Expected HTML-escaped font value not found — auto-escaping may be broken in base_minimal.html"
 
 
+# ===========================================================================
+# 9. Builder question endpoints — HTML tag injection via question text (S9)
+#
+# _parse_builder_question_form passes text directly from POST to q.text with
+# no strip_tags call.  A <script> tag stored in q.text surfaces in the
+# builder_payload_json blob rendered with |safe in question_row.html.  The
+# existing replace("</", "<\/") only escapes closing tags; the *opening*
+# <script> tag is present verbatim, meaning the browser creates a real script
+# element when it parses the hidden <div>.
+# ===========================================================================
+
+# Payload that, without strip_tags, will be stored raw in q.text / option labels.
+BUILDER_SCRIPT = "<script>alert('builder-xss')</script>"
+BUILDER_SCRIPT_OPEN = b"<script>alert('builder-xss')"
+
+# Payload for </style> breakout via survey.style CSS fields.
+CSS_BREAKOUT = "</style><script>alert('css-breakout')</script><style>x{color:red}"
+CSS_BREAKOUT_OPEN = b"<script>alert('css-breakout')"
+
+
+@pytest.mark.django_db
+def test_builder_question_create_strips_html_from_text(auth_client, survey):
+    """
+    S9: builder_question_create must strip HTML tags from the question text
+    before storing.  Without the fix, <script> is preserved in q.text and
+    later injected into the builder page via builder_payload_json|safe.
+    """
+    auth_client.post(
+        reverse("surveys:builder_question_create", kwargs={"slug": survey.slug}),
+        data={"text": f"{BUILDER_SCRIPT}Real question?", "type": "text"},
+    )
+    q = survey.questions.order_by("-id").first()
+    assert q is not None, "No question was created"
+    assert "<script>" not in q.text, (
+        "HTML tags must be stripped from question text at write-time; "
+        f"got: {q.text!r}"
+    )
+    assert "</script>" not in q.text
+
+
+@pytest.mark.django_db
+def test_builder_question_create_option_labels_stripped(auth_client, survey):
+    """
+    S10: Option labels submitted via builder_question_create are stored raw.
+    They surface in builder_payload_json|safe.  strip_tags must be applied to
+    each label in _parse_builder_question_form.
+    """
+    options_payload = f"{BUILDER_SCRIPT}Option A\nOption B"
+    auth_client.post(
+        reverse("surveys:builder_question_create", kwargs={"slug": survey.slug}),
+        data={"text": "Pick one", "type": "mc_single", "options": options_payload},
+    )
+    q = survey.questions.order_by("-id").first()
+    assert q is not None, "No question was created"
+    all_labels = " ".join(
+        str(opt.get("label", opt) if isinstance(opt, dict) else opt)
+        for opt in (q.options or [])
+    )
+    assert "<script>" not in all_labels, (
+        "HTML tags must be stripped from option labels; "
+        f"got options: {q.options!r}"
+    )
+
+
+@pytest.mark.django_db
+def test_builder_group_question_create_strips_html_from_text(auth_client, survey, owner):
+    """
+    S9 (grouped path): builder_group_question_create uses the same
+    _parse_builder_question_form helper; HTML must be stripped there too.
+    """
+    from checktick_app.surveys.models import QuestionGroup
+
+    group = QuestionGroup.objects.create(name="Test Group", owner=owner)
+    survey.question_groups.add(group)
+    auth_client.post(
+        reverse(
+            "surveys:builder_group_question_create",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        ),
+        data={"text": f"<b>Bold</b> {BUILDER_SCRIPT}Question", "type": "text"},
+    )
+    q = survey.questions.filter(group=group).order_by("-id").first()
+    assert q is not None, "No question was created in the group"
+    assert "<script>" not in q.text, f"HTML tags in q.text: {q.text!r}"
+    assert "<b>" not in q.text, f"HTML bold tags in q.text: {q.text!r}"
+
+
+@pytest.mark.django_db
+def test_builder_question_edit_strips_html_from_text(auth_client, survey):
+    """
+    S9: builder_question_edit must strip HTML when updating an existing question.
+    """
+    q = SurveyQuestion.objects.create(survey=survey, text="Original", type="text", order=0)
+    auth_client.post(
+        reverse("surveys:builder_question_edit", kwargs={"slug": survey.slug, "qid": q.id}),
+        data={"text": f"</div><img src=x onerror=alert(1)>{BUILDER_SCRIPT}New text", "type": "text"},
+    )
+    q.refresh_from_db()
+    assert "<script>" not in q.text, f"Script tag in edited q.text: {q.text!r}"
+    assert "onerror=" not in q.text, f"onerror attribute in edited q.text: {q.text!r}"
+    assert "<img" not in q.text, f"img tag in edited q.text: {q.text!r}"
+
+
+@pytest.mark.django_db
+def test_builder_group_question_edit_strips_html_from_text(auth_client, survey, owner):
+    """
+    S9 (grouped edit path): builder_group_question_edit must also strip HTML.
+    """
+    from checktick_app.surveys.models import QuestionGroup
+
+    group = QuestionGroup.objects.create(name="Edit Group", owner=owner)
+    survey.question_groups.add(group)
+    q = SurveyQuestion.objects.create(
+        survey=survey, group=group, text="Original", type="text", order=0
+    )
+    auth_client.post(
+        reverse(
+            "surveys:builder_group_question_edit",
+            kwargs={"slug": survey.slug, "gid": group.id, "qid": q.id},
+        ),
+        data={"text": f"{BUILDER_SCRIPT}Edited question", "type": "text"},
+    )
+    q.refresh_from_db()
+    assert "<script>" not in q.text, f"Script tag in group-edited q.text: {q.text!r}"
+
+
+# ===========================================================================
+# 10. Builder group create — HTML tag injection via group name (S11)
+#
+# builder_group_create (the HTMX-backed builder endpoint) does NOT apply
+# strip_tags, unlike the legacy survey_group_create SSR endpoint.  Group
+# names with HTML tags end up in builder_payload_json|safe metadata.
+# ===========================================================================
+
+
+@pytest.mark.django_db
+def test_builder_group_create_strips_html_from_name(auth_client, survey):
+    """
+    S11: builder_group_create must apply strip_tags to the group name before
+    storing, consistent with survey_group_create which already does this.
+    """
+    from checktick_app.surveys.models import QuestionGroup
+
+    auth_client.post(
+        reverse("surveys:builder_group_create", kwargs={"slug": survey.slug}),
+        data={"name": f"{BUILDER_SCRIPT}My Group"},
+    )
+    g = survey.question_groups.order_by("-id").first()
+    assert g is not None, "No group was created"
+    assert "<script>" not in g.name, (
+        "HTML tags must be stripped from builder group name; "
+        f"got: {g.name!r}"
+    )
+
+
+# ===========================================================================
+# 11. survey.style CSS field — </style> breakout via |safe in survey pages (S12)
+#
+# builder.html, dashboard.html, and detail.html all render:
+#   {{ survey.style.theme_css_light|safe }}
+#   {{ survey.style.theme_css_dark|safe }}
+# directly from the survey.style JSONField without sanitization in the view.
+# If malicious CSS is ever written to those fields (via admin, API, or import)
+# it can close the <style> block and inject arbitrary HTML/script.
+# The fix: apply sanitize_css_block() to these fields at read-time in the view
+# before the template context is rendered.
+# ===========================================================================
+
+
+@pytest.mark.django_db
+def test_survey_style_css_injection_not_in_dashboard(auth_client, survey):
+    """
+    S12: A </style><script> payload stored in survey.style.theme_css_light
+    must not appear raw in the survey dashboard page.
+    """
+    survey.style = {"theme_css_light": CSS_BREAKOUT}
+    survey.save(update_fields=["style"])
+
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert CSS_BREAKOUT_OPEN not in resp.content, (
+        "Raw </style><script> payload found in dashboard — "
+        "survey.style.theme_css_light is not sanitized before |safe rendering"
+    )
+
+
+@pytest.mark.django_db
+def test_survey_style_css_injection_not_in_builder(auth_client, survey, owner):
+    """
+    S12: Same as above but for the group_builder page (builder.html template).
+    """
+    from checktick_app.surveys.models import QuestionGroup
+
+    group = QuestionGroup.objects.create(name="CSS Test Group", owner=owner)
+    survey.question_groups.add(group)
+    survey.style = {"theme_css_light": CSS_BREAKOUT}
+    survey.save(update_fields=["style"])
+
+    resp = auth_client.get(
+        reverse("surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id})
+    )
+    assert resp.status_code == 200
+    assert CSS_BREAKOUT_OPEN not in resp.content, (
+        "Raw </style><script> payload found in builder page — "
+        "survey.style.theme_css_light is not sanitized before |safe rendering"
+    )
+
+
+# ===========================================================================
+# 12. font_css_url — javascript: / data: protocol injection (S13)
+#
+# survey_style_update stores font_css_url raw.  It is rendered in templates
+# as <link href="{{ survey.style.font_css_url }}">.  A javascript: or data:
+# URI stored here could be exploited in some browser contexts.
+# The fix: only accept http:// or https:// URLs (or empty string).
+# ===========================================================================
+
+
+@pytest.mark.django_db
+def test_survey_style_rejects_javascript_font_css_url(auth_client, survey):
+    """
+    S13: survey_style_update must not store a javascript: URI as font_css_url.
+    """
+    auth_client.post(
+        reverse("surveys:style_update", kwargs={"slug": survey.slug}),
+        data={"font_css_url": "javascript:alert(document.cookie)"},
+    )
+    survey.refresh_from_db()
+    stored = (survey.style or {}).get("font_css_url", "")
+    assert "javascript:" not in stored.lower(), (
+        "javascript: URI was stored as font_css_url — must be rejected or stripped"
+    )
+
+
+@pytest.mark.django_db
+def test_survey_style_rejects_data_uri_font_css_url(auth_client, survey):
+    """
+    S13: data: URIs must also be rejected as font_css_url values.
+    """
+    auth_client.post(
+        reverse("surveys:style_update", kwargs={"slug": survey.slug}),
+        data={"font_css_url": "data:text/html,<script>alert(1)</script>"},
+    )
+    survey.refresh_from_db()
+    stored = (survey.style or {}).get("font_css_url", "")
+    assert "data:" not in stored.lower(), (
+        "data: URI was stored as font_css_url — must be rejected or stripped"
+    )
+
+
+@pytest.mark.django_db
+def test_survey_style_accepts_valid_https_font_css_url(auth_client, survey):
+    """
+    S13: Legitimate https:// Google Fonts URLs must still be accepted.
+    """
+    legit_url = (
+        "https://fonts.googleapis.com/css2"
+        "?family=IBM+Plex+Sans:wght@400;600&display=swap"
+    )
+    auth_client.post(
+        reverse("surveys:style_update", kwargs={"slug": survey.slug}),
+        data={"font_css_url": legit_url},
+    )
+    survey.refresh_from_db()
+    stored = (survey.style or {}).get("font_css_url", "")
+    assert stored == legit_url, (
+        f"Valid https font URL was not stored correctly; got: {stored!r}"
+    )
+
+
 @pytest.mark.django_db
 def test_base_html_escapes_stored_font_xss(auth_client, survey):
     """

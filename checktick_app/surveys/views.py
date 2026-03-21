@@ -1603,7 +1603,9 @@ def _prepare_question_rendering(
 
 
 def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
-    text = (data.get("text") or "").strip()
+    from django.utils.html import strip_tags as _strip_tags
+
+    text = _strip_tags((data.get("text") or "").strip())
     qtype = (data.get("type") or SurveyQuestion.Types.TEXT).strip()
     if not qtype:
         qtype = SurveyQuestion.Types.TEXT
@@ -1624,6 +1626,7 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
         # Format: option_N_followup=on, option_N_followup_label="custom label"
         options = []
         for idx, opt_text in enumerate(option_lines):
+            opt_text = _strip_tags(opt_text)
             opt_dict: dict[str, Any] = {"label": opt_text, "value": opt_text}
 
             # Check if this option should have a follow-up text input
@@ -2161,6 +2164,13 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
     )
     # Per-survey style overrides for branding on dashboard
     style = survey.style or {}
+    # Sanitize CSS fields at read-time to prevent </style> breakout via |safe.
+    from checktick_app.core.theme_utils import sanitize_css_block as _sanitize_css
+    if style.get("theme_css_light") or style.get("theme_css_dark"):
+        style = dict(style)
+        style["theme_css_light"] = _sanitize_css(style.get("theme_css_light") or "")
+        style["theme_css_dark"] = _sanitize_css(style.get("theme_css_dark") or "")
+        survey.style = style  # mutate in-memory only; not saved
     brand_overrides = {
         "title": style.get("title"),
         "icon_url": style.get("icon_url"),
@@ -4395,6 +4405,16 @@ def survey_style_update(request: HttpRequest, slug: str) -> HttpResponse:
                     messages.error(
                         request,
                         "Invalid font value. Only alphanumeric characters, spaces, commas, hyphens, and quotes are allowed.",
+                    )
+                    return redirect("surveys:dashboard", slug=slug)
+                # Validate font_css_url: only allow http:// and https:// protocols
+                # to prevent javascript: / data: URI injection via <link href="...">
+                if key == "font_css_url" and not val.lower().startswith(
+                    ("http://", "https://")
+                ):
+                    messages.error(
+                        request,
+                        "Font stylesheet URL must start with https:// or http://.",
                     )
                     return redirect("surveys:dashboard", slug=slug)
                 style[key] = val
@@ -7477,9 +7497,11 @@ def _handle_image_delete(
 @login_required
 @require_http_methods(["POST"])
 def builder_group_create(request: HttpRequest, slug: str) -> HttpResponse:
+    from django.utils.html import strip_tags as _strip_tags_group
+
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
-    name = request.POST.get("name", "").strip() or "New Group"
+    name = _strip_tags_group(request.POST.get("name", "").strip()) or "New Group"
     g = QuestionGroup.objects.create(name=name, owner=request.user)
     questions_qs = survey.questions.select_related("group").all()
     questions = _prepare_question_rendering(survey, questions_qs)
