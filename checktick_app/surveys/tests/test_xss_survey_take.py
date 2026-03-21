@@ -714,3 +714,134 @@ def test_thank_you_page_does_not_echo_submitted_answers(client, owner, org):
     resp = client.get(reverse("surveys:thank_you", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
     assert RAW_SCRIPT_OPEN not in resp.content
+
+
+# ===========================================================================
+# 10. Survey theme CSS injection in respondent-facing views  (S14)
+#
+# A survey owner (or anyone who has modified survey.style directly in the DB)
+# can store a malicious CSS payload in theme_css_light / theme_css_dark.
+# detail.html renders these with |safe, so any CSS that contains </style> can
+# break the <style> block and inject arbitrary HTML/JS.
+#
+# These tests confirm that the view layer sanitises the style dict before
+# passing it to the template, so the payloads are stripped from the output.
+# ===========================================================================
+
+CSS_BREAK = "</style><script>alert('S14')</script><style>"
+RAW_CSS_SCRIPT = b"</style><script>alert"
+
+
+def _make_survey_with_css(owner, org, slug, css_light=None, css_dark=None):
+    """Create a published PUBLIC survey with given CSS in survey.style."""
+    style = {}
+    if css_light:
+        style["theme_css_light"] = css_light
+    if css_dark:
+        style["theme_css_dark"] = css_dark
+    return Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="CSS Test Survey",
+        slug=slug,
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.PUBLIC,
+        style=style,
+    )
+
+
+@pytest.mark.django_db
+def test_theme_css_light_injection_blocked_on_public_take(client, owner, org):
+    """
+    S14a — malicious theme_css_light stored directly in survey.style must not
+    appear raw in the respondent-facing take page (survey_take → detail.html).
+    """
+    survey = _make_survey_with_css(
+        owner, org, "css-light-take", css_light=CSS_BREAK
+    )
+    resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert RAW_CSS_SCRIPT not in resp.content, (
+        "Raw </style><script> found in take page — "
+        "theme_css_light CSS injection not sanitised at view layer"
+    )
+
+
+@pytest.mark.django_db
+def test_theme_css_dark_injection_blocked_on_public_take(client, owner, org):
+    """
+    S14b — malicious theme_css_dark must not appear raw in the take page.
+    """
+    survey = _make_survey_with_css(
+        owner, org, "css-dark-take", css_dark=CSS_BREAK
+    )
+    resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert RAW_CSS_SCRIPT not in resp.content, (
+        "Raw </style><script> found in take page — "
+        "theme_css_dark CSS injection not sanitised at view layer"
+    )
+
+
+@pytest.mark.django_db
+def test_theme_css_injection_blocked_on_unlisted_take(client, owner, org):
+    """
+    S14c — malicious theme CSS must also be blocked on the unlisted take route.
+    """
+    style = {"theme_css_light": CSS_BREAK}
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="CSS Unlisted Survey",
+        slug="css-unlisted-take",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.UNLISTED,
+        unlisted_key="secretunlistedkey",
+        style=style,
+    )
+    resp = client.get(
+        reverse(
+            "surveys:take_unlisted",
+            kwargs={"slug": survey.slug, "key": survey.unlisted_key},
+        )
+    )
+    assert resp.status_code == 200
+    assert RAW_CSS_SCRIPT not in resp.content, (
+        "Raw CSS injection found in unlisted take page"
+    )
+
+
+@pytest.mark.django_db
+def test_theme_css_injection_blocked_on_token_take(client, owner, org):
+    """
+    S14d — malicious theme CSS must also be blocked on the token take route.
+    """
+    from datetime import timedelta
+    from django.utils import timezone
+
+    style = {"theme_css_light": CSS_BREAK}
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="CSS Token Survey",
+        slug="css-token-take",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.TOKEN,
+        style=style,
+    )
+    token_obj = SurveyAccessToken.objects.create(
+        survey=survey,
+        token="tok-css-001",
+        created_by=owner,
+        expires_at=timezone.now() + timedelta(days=1),
+    )
+    resp = client.get(
+        reverse(
+            "surveys:take_token",
+            kwargs={"slug": survey.slug, "token": token_obj.token},
+        )
+    )
+    assert resp.status_code == 200
+    assert RAW_CSS_SCRIPT not in resp.content, (
+        "Raw CSS injection found in token take page"
+    )
