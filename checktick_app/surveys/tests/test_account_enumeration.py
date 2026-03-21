@@ -68,7 +68,7 @@ def existing_user(django_user_model):
     return django_user_model.objects.create_user(
         username="existing@example.com",
         email="existing@example.com",
-        password="correct-horse-battery",
+        password="x",  # noqa: S106
     )
 
 
@@ -77,7 +77,7 @@ def org_admin(django_user_model):
     user = django_user_model.objects.create_user(
         username="orgadmin@example.com",
         email="orgadmin@example.com",
-        password="adminpassword",
+        password="x",  # noqa: S106
     )
     # Give org_admin an ORGANIZATION tier so collaboration tier-limits don't
     # block the survey_users happy-path tests.
@@ -266,8 +266,8 @@ class TestOrgSetupEnumeration:
         """
         url = reverse("core:org_setup", args=[org_with_token.setup_token])
 
-        target = "django.contrib.auth.base_user.AbstractBaseUser.set_password"
-        with patch(target) as mock_set_password:
+        target = "checktick_app.core.views.make_password"
+        with patch(target) as mock_make_password:
             client.post(
                 url,
                 {
@@ -278,9 +278,9 @@ class TestOrgSetupEnumeration:
                 },
             )
 
-        # set_password must have been called at least once (the dummy-hash call
+        # make_password must have been called at least once (the dummy-hash call
         # that normalises timing).
-        mock_set_password.assert_called()
+        mock_make_password.assert_called()
 
 
 # ---------------------------------------------------------------------------

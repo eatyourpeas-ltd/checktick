@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, views as auth_views
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
@@ -923,8 +924,6 @@ def org_setup(request, token: str):
         else:
             # Run the default password hasher once so the response time is the same
             # whether or not the email corresponds to an existing account.
-            from django.contrib.auth.hashers import make_password
-
             make_password(password)
 
             # New user — create account.
