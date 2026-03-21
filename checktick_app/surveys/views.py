@@ -5775,6 +5775,8 @@ def survey_group_delete(request: HttpRequest, slug: str, gid: int) -> HttpRespon
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
     group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)
+    # Delete the SurveyQuestion records belonging to this group on this survey
+    survey.questions.filter(group=group).delete()
     # Detach from this survey; optionally delete the group if not used elsewhere
     survey.question_groups.remove(group)
     if not group.surveys.exists():
@@ -9607,15 +9609,15 @@ def published_template_import(request, template_id, slug):
             survey.question_groups.add(new_group)
 
             # Create questions
-            for q_data in group_data.get("questions", []):
+            for idx, q_data in enumerate(group_data.get("questions", []), start=1):
                 SurveyQuestion.objects.create(
                     survey=survey,
                     group=new_group,
-                    text=q_data.get("text", ""),
-                    type=q_data.get("type", "short_text"),
-                    options=q_data.get("options"),
+                    text=q_data.get("title", ""),
+                    type=q_data.get("final_type", "text"),
+                    options=q_data.get("final_options", []),
                     required=q_data.get("required", False),
-                    order=q_data.get("order", 0),
+                    order=idx,
                 )
 
             # Increment import count

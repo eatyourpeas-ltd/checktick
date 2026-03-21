@@ -22,13 +22,147 @@
       {% include "components/icons/checktick_question_group.html" with classes="w-7 h-7" %}
       <span>{% blocktrans %}Question Groups for {{ survey }}{% endblocktrans %}</span>
     </h1>
-    <p class="mt-2 text-sm opacity-80 w-full">
-      {% blocktrans %}Question Groups are reusable sets of questions. Drag to reorder them—this controls the order participants see each section. Need to ask the same questions multiple times? Select groups and click "Create repeat" to let participants add entries (e.g., details for each family member or each hospital visit).{% endblocktrans %}
-    </p>
   </div>
+
+  {# === Step orientation strip: open (step 2 highlighted) when no groups; collapsed when groups exist === #}
+  <div class="not-prose mt-6 max-w-2xl">
+    {% if not groups %}
+      <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-3">{% trans "Where you are" %}</p>
+      <div class="flex flex-col sm:flex-row items-stretch gap-0">
+
+        <div class="flex-1 rounded-t-box sm:rounded-l-box sm:rounded-tr-none bg-primary/5 border border-primary/15 p-4 opacity-60">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="badge badge-primary badge-sm">1</span>
+            <span class="font-semibold text-sm text-base-content">{% trans "Survey" %}</span>
+          </div>
+          <p class="text-xs text-base-content/70">{% trans "The top-level container. Give it a name, description, and visibility settings." %}</p>
+        </div>
+
+        <div class="flex sm:flex-col items-center justify-center px-1 py-2 text-base-content/30 select-none">
+          <span class="hidden sm:block text-lg leading-none">›</span>
+          <span class="sm:hidden text-lg leading-none rotate-90">›</span>
+        </div>
+
+        <div class="flex-1 bg-secondary/20 border-2 border-secondary/50 p-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="badge badge-secondary badge-sm">2</span>
+            <span class="font-semibold text-sm text-base-content">{% trans "Question Groups" %}</span>
+            <span class="badge badge-outline badge-xs text-base-content/50 ml-auto whitespace-nowrap">{% trans "you are here" %}</span>
+          </div>
+          <p class="text-xs text-base-content/70">{% trans "Sections that organise your survey. Create them from scratch or import from the Question Bank." %}</p>
+        </div>
+
+        <div class="flex sm:flex-col items-center justify-center px-1 py-2 text-base-content/30 select-none">
+          <span class="hidden sm:block text-lg leading-none">›</span>
+          <span class="sm:hidden text-lg leading-none rotate-90">›</span>
+        </div>
+
+        <div class="flex-1 rounded-b-box sm:rounded-r-box sm:rounded-bl-none bg-accent/5 border border-accent/15 p-4 opacity-60">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="badge badge-accent badge-sm">3</span>
+            <span class="font-semibold text-sm text-base-content">{% trans "Questions" %}</span>
+          </div>
+          <p class="text-xs text-base-content/70">{% trans "Individual items inside a group — text, multiple choice, dropdowns, scales, and more." %}</p>
+        </div>
+
+      </div>
+    {% else %}
+      <details class="group">
+        <summary class="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-3 cursor-pointer list-none flex items-center gap-1 select-none">
+          <svg class="w-3 h-3 transition-transform group-open:rotate-90 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          {% trans "Survey → Question Groups → Questions" %}
+        </summary>
+        <div class="mt-3 flex flex-col sm:flex-row items-stretch gap-0">
+
+          <div class="flex-1 rounded-t-box sm:rounded-l-box sm:rounded-tr-none bg-primary/10 border border-primary/30 p-4">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="badge badge-primary badge-sm">1</span>
+              <span class="font-semibold text-sm text-base-content">{% trans "Survey" %}</span>
+            </div>
+            <p class="text-xs text-base-content/70">{% trans "The top-level container. Give it a name, description, and visibility settings." %}</p>
+          </div>
+
+          <div class="flex sm:flex-col items-center justify-center px-1 py-2 text-base-content/30 select-none">
+            <span class="hidden sm:block text-lg leading-none">›</span>
+            <span class="sm:hidden text-lg leading-none rotate-90">›</span>
+          </div>
+
+          <div class="flex-1 bg-secondary/10 border border-secondary/30 p-4">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="badge badge-secondary badge-sm">2</span>
+              <span class="font-semibold text-sm text-base-content">{% trans "Question Groups" %}</span>
+            </div>
+            <p class="text-xs text-base-content/70">{% trans "Sections that organise your survey. Each group holds related questions and can be reordered or repeated." %}</p>
+          </div>
+
+          <div class="flex sm:flex-col items-center justify-center px-1 py-2 text-base-content/30 select-none">
+            <span class="hidden sm:block text-lg leading-none">›</span>
+            <span class="sm:hidden text-lg leading-none rotate-90">›</span>
+          </div>
+
+          <div class="flex-1 rounded-b-box sm:rounded-r-box sm:rounded-bl-none bg-accent/10 border border-accent/30 p-4">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="badge badge-accent badge-sm">3</span>
+              <span class="font-semibold text-sm text-base-content">{% trans "Questions" %}</span>
+            </div>
+            <p class="text-xs text-base-content/70">{% trans "Individual items inside a group — text, multiple choice, dropdowns, scales, and more." %}</p>
+          </div>
+
+        </div>
+      </details>
+    {% endif %}
+  </div>
+
+  {# === Empty state: two action cards (no groups yet) === #}
+  {% if not groups %}
+  <div class="not-prose mt-6 max-w-2xl">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+      {# Browse the Question Bank #}
+      <a href="{% url 'surveys:published_templates_list' %}?survey={{ survey.slug }}" class="card bg-base-100 border border-base-300 hover:border-secondary hover:shadow-md transition-all">
+        <div class="card-body gap-2 p-5">
+          <div class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-secondary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <h3 class="font-semibold text-base">{% trans "Browse the Question Bank" %}</h3>
+          </div>
+          <p class="text-sm text-base-content/70">{% trans "Import ready-made groups — from validated clinical tools like PHQ-9 to question sets shared by your organisation." %}</p>
+        </div>
+      </a>
+
+      {# Create from scratch #}
+      {% if can_edit %}
+      <div class="card bg-base-100 border border-base-300">
+        <div class="card-body gap-2 p-5">
+          <div class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            <h3 class="font-semibold text-base">{% trans "Create from scratch" %}</h3>
+          </div>
+          <p class="text-sm text-base-content/70">{% trans "Give your group a name, then add questions one by one in the visual builder." %}</p>
+          <form method="post" action="/surveys/{{ survey.slug }}/groups/create" class="mt-2">
+            {% csrf_token %}
+            <div class="join w-full">
+              <input id="create-group-name" class="input input-bordered join-item flex-1 input-sm" name="name" placeholder="{% trans 'Group name' %}" required />
+              <button id="create-group-submit" class="btn join-item btn-primary btn-sm" type="submit" disabled>{% trans 'Create' %}</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+  {% endif %}
 
   <div class="mt-4">
     <div class="space-y-3">
+      {% if groups %}
+      <p class="text-sm text-base-content/70">
+        {% blocktrans %}Drag to reorder groups — this controls the order participants see each section. Need to ask the same questions multiple times? Select groups and click "Create repeat" to let participants add entries (e.g., details for each family member or each hospital visit).{% endblocktrans %}
+      </p>
       <div class="alert shadow-sm bg-base-100 border-l-4 border-primary">
         <div>
           {% include 'components/icons/repeat.html' with classes='w-5 h-5 text-primary' %}
@@ -37,6 +171,7 @@
           {% trans 'Tip: Select groups by clicking their row or checkbox, then click ‘Create repeat’ to set a name. Selected rows are highlighted and show a small repeat icon.' %}
         </div>
       </div>
+      {% endif %}
       <ul id="groups-draggable" class="orderable-list w-full flex flex-col gap-3" aria-label="Reorder groups" data-reorder-url="/surveys/{{ survey.slug }}/groups/reorder" data-can-edit="{{ can_edit|yesno:'true,false' }}">
         {% for g in groups %}
           {% with info=repeat_info|get_item:g.id %}
@@ -112,9 +247,7 @@
             </li>
           {% endwith %}
         {% empty %}
-          <li class="opacity-70">
-            {% trans 'No groups yet. Create one to get started.' %}
-          </li>
+          {# empty state handled above #}
         {% endfor %}
       </ul>
       <div class="flex flex-wrap gap-2 items-center sticky top-0 z-40 bg-base-200/95 backdrop-blur supports-[backdrop-filter]:bg-base-200/70 py-2">
@@ -138,16 +271,16 @@
         {% endif %}
         <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/dashboard/">{% trans 'Back to dashboard' %}</a>
         <a class="btn btn-ghost btn-sm" href="/docs/groups-view/" target="_blank" rel="noopener noreferrer">{% trans 'Help' %}</a>
-        <a class="btn btn-sm btn-outline" href="{% url 'surveys:published_templates_list' %}">
+        <a class="btn btn-sm btn-outline" href="{% url 'surveys:published_templates_list' %}?survey={{ survey.slug }}">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
-          {% trans 'Browse & Import Templates' %}
+          {% trans 'Browse the Question Bank' %}
         </a>
       </div>
 
-      <!-- Add new question group form -->
-      {% if can_edit %}
+      <!-- Add new question group form (only when groups already exist; empty state has its own form) -->
+      {% if can_edit and groups %}
         <div class="mt-4">
           <form method="post" action="/surveys/{{ survey.slug }}/groups/create" class="inline-flex">
             {% csrf_token %}

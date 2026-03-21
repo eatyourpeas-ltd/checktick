@@ -38,23 +38,35 @@ before the style panel, and be always visible — not only when questions are ab
 
 ---
 
-## 2. Terminology conflict – "Question Groups" in the top navbar vs inside a survey
+## 2. Navbar label for the shared question group library
 
-### Current behaviour
+### The real issue
 
-The navbar item labelled **"Question Groups"** points to the global template library
-(`/surveys/templates/`). Inside a survey, the same term "Question Groups" refers to
-the **sections of that specific survey** (groupings of questions).
+The problem isn't that "Question Groups" means two different things — it's a
+correct noun for both the sections inside a survey *and* the shared importable
+collections. The issue is that the navbar label gives no signal that it points
+to a **shared, browsable pool** that users can import from, rather than their
+own survey sections.
 
-The same phrase means two different things depending on whether you are inside a survey
-or outside one. A new user following the navbar link expecting to find their survey's
-sections will land in the wrong place.
+Question groups range from formally validated clinical instruments (PHQ-9, GAD-7)
+to informal sets shared by users or organisations for reuse. Both are question
+groups — the navbar leads to where those shared ones live.
 
-### What needs to change
+### Decision
 
-Rename the top navbar item from "Question Groups" to **"Template Library"** (or
-"Question Group Library"). The breadcrumb and headings inside that section can stay
-as-is.
+Rename the top navbar item from **"Question Groups"** to **"Question Bank"**.
+
+- The noun *question group* stays correct everywhere it describes the concept.
+- "Question Bank" names the shared pool/destination — familiar to clinical and
+  academic audiences, implies something you draw from rather than just view.
+- Headings and descriptions on the Question Bank page and inside survey pages
+  can continue to use "question group" as the noun.
+
+### Scope of changes
+
+- `base.html` — both mobile dropdown and desktop menu items
+- `published_templates_list.html` — page title, breadcrumb, h1
+- `groups.html` — reference from empty state and collapsed strip updated
 
 ---
 
