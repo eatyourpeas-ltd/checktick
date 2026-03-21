@@ -5271,8 +5271,16 @@ def user_management_hub(request: HttpRequest) -> HttpResponse:
                             "hub_url": reverse("surveys:user_management_hub"),
                             "survey_slug": survey.slug,
                             "user_id": target_user.id,
-                            "btn_class": "btn btn-xs btn-success" if on else "btn btn-xs btn-ghost",
-                            "title": "Revoke style permission" if on else "Grant style permission",
+                            "btn_class": (
+                                "btn btn-xs btn-success"
+                                if on
+                                else "btn btn-xs btn-ghost"
+                            ),
+                            "title": (
+                                "Revoke style permission"
+                                if on
+                                else "Grant style permission"
+                            ),
                             "label": "On" if on else "Off",
                         },
                         request=request,
