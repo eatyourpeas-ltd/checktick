@@ -318,8 +318,14 @@
       setCanvasHeight(requiredHeight);
       canvas.style.display = "block";
 
-      // Ensure canvas fills container width
-      resizeCanvas();
+      // Sync canvas width to container without going through resizeCanvas(),
+      // which calls drawGraph() and would cause infinite recursion.
+      const containerWidth = container.clientWidth;
+      if (canvas.width !== containerWidth * dpr) {
+        canvas.width = containerWidth * dpr;
+        canvas.style.width = containerWidth + "px";
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
 
       // Helper to create a pale background color
       // Use a simple semi-transparent overlay approach for reliability

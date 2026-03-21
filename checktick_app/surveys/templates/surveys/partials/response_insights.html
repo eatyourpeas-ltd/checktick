@@ -139,7 +139,7 @@ FUTURE: To swap to Plotly, replace the bar chart section above with:
      data-options='{{ dist.options|escapejs }}'>
 </div>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('.response-chart-plotly').forEach(function(el) {
     const data = JSON.parse(el.dataset.options);
