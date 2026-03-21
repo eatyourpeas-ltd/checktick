@@ -11,6 +11,13 @@
     <span>{% trans "Datasets" %}</span>
   </h1>
 
+  <div class="not-prose alert alert-info mb-4">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="w-5 h-5 shrink-0 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    <div class="text-sm">
+      {% trans "Datasets are standardised choice lists that power <strong>dropdown questions</strong> in the survey builder. For example, the NHS Data Dictionary provides Ethnic Category codes and Treatment Function Codes — import one and it becomes available in any dropdown question without manual data entry." %}
+    </div>
+  </div>
+
   <div class="not-prose flex flex-wrap gap-2 mb-4">
     {% if can_create %}
       <a class="btn btn-primary" href="{% url 'surveys:dataset_create' %}">{% trans "Create Dataset" %}</a>
