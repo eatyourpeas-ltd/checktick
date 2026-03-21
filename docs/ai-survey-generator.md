@@ -209,7 +209,7 @@ ALLOWED QUESTION TYPES:
 - text number: Numeric input with validation
 - mc_single: Single choice (radio buttons)
 - mc_multi: Multiple choice (checkboxes)
-- dropdown: Select dropdown menu
+- dropdown: Select dropdown menu (optionally linked to a dataset — see DATASETS section below)
 - orderable: Orderable list
 - yesno: Yes/No toggle
 - image: Image choice
@@ -236,6 +236,17 @@ max: 5
 left: Not important
 right: Very important
 ```
+
+DATASETS FOR DROPDOWN QUESTIONS:
+- Link a `dropdown` question to an existing dataset by adding `dataset: <key>` on the line immediately after the `(dropdown)` type line.
+- Example:
+  ## Which referral hospital?*
+  (dropdown)
+  dataset: nhs_trusts
+- Use `dataset:` only for `dropdown` type questions; list manual options (with `-`) for `mc_single`, `mc_multi`, etc.
+- When a user asks for a dropdown that matches an available dataset, ALWAYS prefer `dataset:` over listing manual options.
+- Available dataset keys are injected into this conversation at session start — refer to the AVAILABLE DATASETS message earlier in this conversation.
+- If no datasets are listed in context, still use `dataset: <key>` if the user explicitly names a dataset they expect to exist.
 
 HEALTHCARE BEST PRACTICES:
 - Use 8th grade reading level language

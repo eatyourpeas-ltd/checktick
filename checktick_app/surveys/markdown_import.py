@@ -266,7 +266,9 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                             )
                 else:
                     m = re.match(
-                        r"^(min|max|left|right)\s*:\s*(.*)$", line, re.IGNORECASE
+                        r"^(min|max|left|right|dataset)\s*:\s*(.*)$",
+                        line,
+                        re.IGNORECASE,
                     )
                     if m:
                         key = m.group(1).lower()
@@ -317,6 +319,8 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
             elif t in {"dropdown", "select"}:
                 q["final_type"] = "dropdown"
                 q["final_options"] = _convert_options_to_dicts(q["options"])
+                if q["kv"].get("dataset"):
+                    q["dataset_key"] = q["kv"]["dataset"].strip()
             elif t in {"orderable", "rank", "ranking"}:
                 q["final_type"] = "orderable"
                 q["final_options"] = _convert_options_to_dicts(q["options"])
