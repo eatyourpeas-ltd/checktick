@@ -5,7 +5,9 @@ import pytest
 
 @pytest.mark.django_db
 class TestAdminSuperuserOnly:
-    def test_staff_but_not_superuser_blocked(self, client):
+    def test_staff_but_not_superuser_gets_404(self, client):
+        # Staff accounts without is_superuser must receive 404 — the admin login
+        # form is disabled so no credentials prompt should ever be shown.
         user = User.objects.create_user(
             username="staff", email="s@example.com", password="StrongPass!234"
         )
@@ -14,7 +16,7 @@ class TestAdminSuperuserOnly:
         user.save()
         client.login(username="staff", password="StrongPass!234")
         resp = client.get(reverse("admin:index"))
-        assert resp.status_code in (302, 403)
+        assert resp.status_code == 404
 
     def test_superuser_allowed(self, client):
         User.objects.create_superuser("root", "root@example.com", "StrongPass!234")

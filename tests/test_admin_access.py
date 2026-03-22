@@ -5,20 +5,20 @@ import pytest
 
 @pytest.mark.django_db
 class TestAdminAccess:
-    def test_admin_requires_superuser(self, client):
-        # Anonymous redirected to login (Django admin uses its own /admin/login/)
+    def test_anonymous_user_gets_404(self, client):
+        # The Django admin login form is disabled; unauthenticated visitors must
+        # receive a 404 so the admin's existence is not advertised.
         resp = client.get(reverse("admin:index"))
-        assert resp.status_code in (302, 301)
-        assert ("/admin/login/" in resp.url) or (reverse("login") in resp.url)
+        assert resp.status_code == 404
 
-        # Regular user cannot access admin index
+    def test_regular_user_gets_404(self, client):
+        # A regular authenticated user (non-superuser) must also receive a 404.
         User.objects.create_user(
             username="u1", email="u1@example.com", password="StrongPass!234"
         )
         client.login(username="u1", password="StrongPass!234")
-        resp2 = client.get(reverse("admin:index"))
-        # Django returns 302 to login with next or 403 depending on settings; allow both
-        assert resp2.status_code in (302, 403)
+        resp = client.get(reverse("admin:index"))
+        assert resp.status_code == 404
 
     def test_superuser_can_access_admin(self, client):
         User.objects.create_superuser(
