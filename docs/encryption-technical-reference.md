@@ -2972,16 +2972,16 @@ class UserSurveyKEKEscrow(models.Model):
 def recover_user_survey_kek(user_id, survey_id, admin_id, custodian_component):
     # 1. Query database for escrow metadata
     escrow = UserSurveyKEKEscrow.objects.get(user_id=user_id, survey_id=survey_id)
-    
+
     # 2. Get the platform key version used during escrow
     platform_version = escrow.platform_key_version  # e.g., "v1"
-    
+
     # 3. Retrieve vault component from database for that version
     vault_component = platform_version.vault_component
-    
+
     # 4. Reconstruct platform key using VERSIONED components
     platform_key = xor_bytes(vault_component, custodian_component)
-    
+
     # 5. Decrypt KEK from Vault using reconstructed platform key
     # Works correctly even if currently active version is "v2" or "v3"
 ```
@@ -3601,22 +3601,3 @@ For security-related questions or to report vulnerabilities:
 - **Security Issues**: Please report privately via GitHub Security Advisories
 - **General Questions**: Open a GitHub issue or discussion
 - **Commercial Support**: Contact for healthcare deployment assistance
-
----
-
-## 📋 Current Implementation Summary
-
-**✅ PRODUCTION READY (October 2025)**
-
-CheckTick implements a complete healthcare-grade encryption system with:
-
-- **Triple Encryption Support**: Password + Recovery Phrase + OIDC automatic unlock
-- **OIDC Integration**: Seamless SSO with Google, Microsoft, Azure, and custom providers
-- **Healthcare Compliance**: Designed for clinical workflows with audit trails
-- **Zero-Knowledge Architecture**: Server never stores encryption keys in plaintext
-- **Comprehensive Testing**: 46/46 unit tests + 7/7 integration tests + 8/8 OIDC tests
-
-**🎯 Next Priority**: Organisation key escrow for administrative recovery
-
-**Last Updated**: October 2025
-**Version**: 3.0 (OIDC Integration Release)
