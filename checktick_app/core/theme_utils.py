@@ -1,6 +1,8 @@
 import re
 from typing import Dict
 
+from django.utils.safestring import SafeString, mark_safe
+
 _VAR_LINE_RE = re.compile(r"--(?P<key>[a-zA-Z0-9_-]+)\s*:\s*(?P<val>[^;]+);?")
 
 
@@ -30,17 +32,29 @@ def _sanitize_css_value(val: str) -> str:
     return val
 
 
-def sanitize_font_family(val: str) -> str:
-    """Sanitize a CSS font-family property value.
+def sanitize_font_family(val: str) -> SafeString:
+    """Sanitize a CSS font-family property value and return a SafeString.
 
-    font-family values are rendered inside <style> blocks without |safe so
-    Django auto-escaping handles < and > but NOT ; { }.  Strip those chars
-    here to prevent CSS block injection and also remove any URL references.
+    Font-family values are rendered inside <style> blocks. Stripping the
+    dangerous characters here means the value is safe to output without |safe,
+    and returning SafeString prevents Django from re-escaping the CSS single
+    quotes that surround multi-word font names (e.g. 'DIN Round Pro').
     """
-    val = val.replace("{", "").replace("}", "").replace(";", "")
-    val = re.sub(r"url\s*\([^)]*\)?", "", val, flags=re.IGNORECASE)
-    val = re.sub(r"https?://\S*", "", val, flags=re.IGNORECASE)
-    return val
+    # Unwrap an existing SafeString so we operate on plain text
+    raw = str(val)
+    raw = raw.replace("{", "").replace("}", "").replace(";", "")
+    raw = re.sub(r"url\s*\([^)]*\)?", "", raw, flags=re.IGNORECASE)
+    raw = re.sub(r"https?://\S*", "", raw, flags=re.IGNORECASE)
+    # HTML-encode angle brackets and ampersands to prevent </style> breakout and
+    # entity injection.  Single-quotes are intentionally NOT encoded: they are
+    # valid CSS font-family syntax (e.g. 'DIN Round Pro') and browsers do not
+    # interpret HTML entities inside <style> blocks, so encoding them would break
+    # font rendering.  Angle brackets are the only characters that can close the
+    # <style> block and inject markup.
+    raw = raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return mark_safe(  # nosemgrep: python.django.security.audit.avoid-mark-safe.avoid-mark-safe
+        raw
+    )
 
 
 def sanitize_css_block(css: str) -> str:

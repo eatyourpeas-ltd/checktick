@@ -7708,6 +7708,25 @@ def _clear_existing_bulk_import_content(survey: Survey) -> dict[str, int]:
     }
 
 
+def _inject_datasets_context(session: "LLMConversationSession", survey: Survey) -> None:
+    """Inject available dataset keys as an initial system message in a new LLM session.
+
+    This gives the AI knowledge of the user's accessible datasets so it can emit
+    correct `dataset: <key>` lines when generating dropdown questions.
+    """
+    available = get_available_datasets(organization=survey.organization)
+    if not available:
+        return
+    lines = [f"  - {key}: {name}" for key, name in sorted(available.items())]
+    context_msg = (
+        "AVAILABLE DATASETS FOR THIS SURVEY:\n"
+        "When generating dropdown questions, reference a dataset by adding "
+        "`dataset: <key>` immediately after the `(dropdown)` line instead of listing manual options.\n"
+        "Available dataset keys:\n" + "\n".join(lines)
+    )
+    session.add_message("system", context_msg)
+
+
 def _handle_llm_new_session(request: HttpRequest, survey: Survey) -> JsonResponse:
     """
     Handle LLM new session creation (AJAX only).
@@ -7725,6 +7744,9 @@ def _handle_llm_new_session(request: HttpRequest, survey: Survey) -> JsonRespons
 
     # Create new session
     session = LLMConversationSession.objects.create(survey=survey, user=request.user)
+
+    # Inject available datasets so the AI can reference correct keys in dropdown questions
+    _inject_datasets_context(session, survey)
 
     # Audit log
     AuditLog.objects.create(
@@ -7850,143 +7872,6 @@ def _handle_llm_send_message(request: HttpRequest, survey: Survey) -> JsonRespon
         )
 
 
-def _handle_llm_new_session(request: HttpRequest, survey: Survey) -> JsonResponse:
-    """Handle AJAX request to start a new LLM conversation session."""
-    if not settings.LLM_ENABLED:
-        return JsonResponse(
-            {"status": "error", "message": "AI generation is not available"}, status=400
-        )
-
-    # Deactivate any existing active sessions
-    LLMConversationSession.objects.filter(
-        survey=survey, user=request.user, is_active=True
-    ).update(is_active=False)
-
-    # Create new session
-    session = LLMConversationSession.objects.create(survey=survey, user=request.user)
-
-    # Log audit
-    AuditLog.objects.create(
-        actor=request.user,
-        scope=AuditLog.Scope.SURVEY,
-        survey=survey,
-        action=AuditLog.Action.ADD,
-        target_user=request.user,
-        metadata={"action": "llm_session_started", "session_id": str(session.id)},
-    )
-
-    return JsonResponse(
-        {
-            "status": "success",
-            "session_id": str(session.id),
-            "message": "New conversation started",
-        }
-    )
-
-
-def _handle_llm_send_message(request: HttpRequest, survey: Survey) -> JsonResponse:
-    """Handle AJAX request to send message to LLM."""
-    if not settings.LLM_ENABLED:
-        return JsonResponse(
-            {"status": "error", "message": "AI generation is not available"}, status=400
-        )
-
-    # Get active session
-    session = LLMConversationSession.objects.filter(
-        survey=survey, user=request.user, is_active=True
-    ).first()
-
-    if not session:
-        return JsonResponse(
-            {"status": "error", "message": "No active session"}, status=400
-        )
-
-    user_message = request.POST.get("message", "").strip()
-    if not user_message:
-        return JsonResponse(
-            {"status": "error", "message": "Message cannot be empty"}, status=400
-        )
-
-    # Add user message to history
-    session.add_message("user", user_message)
-
-    try:
-        # Get LLM response
-        llm_client = ConversationalSurveyLLM()
-        llm_response = llm_client.chat(session.get_conversation_for_llm())
-
-        if not llm_response:
-            return JsonResponse(
-                {"status": "error", "message": "Failed to get response from AI"},
-                status=500,
-            )
-
-        # Add assistant response to history
-        session.add_message("assistant", llm_response)
-
-        # Try to extract markdown
-        markdown = llm_client.extract_markdown(llm_response)
-        markdown_valid = False
-        validation_errors = []
-
-        if markdown:
-            # Sanitize
-            markdown = llm_client.sanitize_markdown(markdown)
-
-            # Validate against parser
-            try:
-                parse_bulk_markdown_with_collections(markdown)
-                markdown_valid = True
-
-                # Update session with valid markdown
-                session.current_markdown = markdown
-                session.save()
-
-            except BulkParseError as e:
-                validation_errors.append(str(e))
-
-        # Log audit
-        AuditLog.objects.create(
-            actor=request.user,
-            scope=AuditLog.Scope.SURVEY,
-            survey=survey,
-            action=AuditLog.Action.UPDATE,
-            target_user=request.user,
-            metadata={
-                "action": "llm_message_sent",
-                "session_id": str(session.id),
-                "message_count": len(session.conversation_history),
-                "markdown_valid": markdown_valid,
-            },
-        )
-
-        phase = "implementation" if markdown else "planning"
-        return JsonResponse(
-            {
-                "status": "success",
-                "assistant_message": llm_response,
-                "markdown": markdown if markdown else session.current_markdown,
-                "markdown_valid": markdown_valid,
-                "validation_errors": validation_errors,
-                "timestamp": timezone.now().isoformat(),
-                "phase": phase,
-                "llm_phase": phase,
-            }
-        )
-
-    except ValueError as e:
-        logger.error(f"LLM configuration error: {e}")
-        return JsonResponse(
-            {"status": "error", "message": "AI generation not properly configured"},
-            status=500,
-        )
-    except Exception as e:
-        logger.error(f"LLM chat error: {e}", exc_info=True)
-        return JsonResponse(
-            {"status": "error", "message": "Unexpected error occurred"}, status=500
-        )
-
-
 @login_required
 def _handle_llm_ai_chat(
     request: HttpRequest, survey: Survey, data: dict
@@ -8024,6 +7909,9 @@ def _handle_llm_ai_chat(
         session = LLMConversationSession.objects.create(
             survey=survey, user=request.user
         )
+
+        # Inject available datasets so the AI can reference correct keys in dropdown questions
+        _inject_datasets_context(session, survey)
 
         # Log audit
         AuditLog.objects.create(
@@ -8351,6 +8239,21 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                     if g.get("ref"):
                         group_ref_map[g["ref"]] = grp
                     for q in g["questions"]:
+                        # Look up dataset if specified in markdown (with access control)
+                        dataset = None
+                        dataset_key = q.get("dataset_key")
+                        if dataset_key:
+                            from django.db.models import Q as _Q
+
+                            from .models import DataSet
+
+                            dataset = DataSet.objects.filter(
+                                _Q(is_global=True)
+                                | _Q(organization=survey.organization),
+                                key=dataset_key,
+                                is_active=True,
+                            ).first()
+
                         question = SurveyQuestion.objects.create(
                             survey=survey,
                             group=grp,
@@ -8359,6 +8262,7 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                             options=q["final_options"],
                             required=q.get("required", False),
                             order=next_order,
+                            dataset=dataset,
                         )
                         next_order += 1
                         if q.get("ref"):
@@ -8829,12 +8733,16 @@ def dataset_list(request: HttpRequest) -> HttpResponse:
     user_orgs = Organization.objects.filter(memberships__user=user)
 
     # Build base queryset: global datasets + datasets from user's organizations + individual user datasets
-    base_datasets = DataSet.objects.filter(
-        Q(is_global=True)
-        | Q(organization__in=user_orgs)
-        | Q(created_by=user, organization__isnull=True),
-        is_active=True,
-    ).select_related("organization", "created_by", "parent")
+    base_datasets = (
+        DataSet.objects.filter(
+            Q(is_global=True)
+            | Q(organization__in=user_orgs)
+            | Q(created_by=user, organization__isnull=True),
+            is_active=True,
+        )
+        .select_related("organization", "created_by", "parent")
+        .distinct()
+    )
 
     # Get all unique tags from base datasets (before filtering) for facets
     all_tags = {}
@@ -8903,7 +8811,10 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
     # Get dataset and check access
     dataset = get_object_or_404(
         DataSet.objects.filter(
-            Q(is_global=True) | Q(organization__in=user_orgs), is_active=True
+            Q(is_global=True)
+            | Q(organization__in=user_orgs)
+            | Q(created_by=user, organization__isnull=True),
+            is_active=True,
         ).select_related("organization", "created_by", "parent"),
         id=dataset_id,
     )

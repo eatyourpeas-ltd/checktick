@@ -88,12 +88,29 @@
                 <li><code>text number</code> — {% trans "numeric input" %}</li>
                 <li><code>mc_single</code> — {% trans "multiple choice (single)" %}</li>
                 <li><code>mc_multi</code> — {% trans "multiple choice (multi)" %}</li>
-                <li><code>dropdown</code> — {% trans "select menu (can be pre-populated from a <a href='/surveys/datasets/' class='link'>Dataset</a>)" %}</li>
+                <li><code>dropdown</code> — {% trans "select menu; add a <code>dataset:</code> line to pre-populate from a <a href='/surveys/datasets/' class='link'>Dataset</a>" %}</li>
                 <li><code>orderable</code> — {% trans "orderable list" %}</li>
                 <li><code>yesno</code> — {% trans "yes/no" %}</li>
                 <li><code>image</code> — {% trans "image choice" %}</li>
                 <li><code>likert categories</code> — {% trans "categories listed with <code>-</code>" %}</li>
                 <li><code>likert number</code> — {% trans "provide <code>min</code>/<code>max</code> and optional labels" %}</li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 class="font-semibold">{% trans "Datasets for dropdowns" %}</h3>
+              <p class="text-sm text-base-content/80">{% trans "Use a <code>dataset:</code> line after <code>(dropdown)</code> to pre-populate the options from a saved Dataset. Use the dataset's key (shown on the Datasets page)." %}</p>
+              <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>## Which hospital are you referring from?
+(dropdown)
+dataset: nhs_trusts
+
+## Your specialty
+(dropdown)
+dataset: medical_specialties</code></pre>
+              <ul class="list-disc pl-5 space-y-1 text-sm">
+                <li>{% trans "The dataset key is shown on the <a href='/surveys/datasets/' class='link'>Datasets</a> page" %}</li>
+                <li>{% trans "If the key is not found or you lack access, the question is saved with no options" %}</li>
+                <li>{% trans "You can still add manual <code>-</code> options alongside <code>dataset:</code> — the dataset link takes precedence for rendering" %}</li>
               </ul>
             </div>
 

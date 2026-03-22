@@ -252,6 +252,33 @@ def test_dataset_detail_blocks_other_org(client, users, org2_dataset):
 
 
 @pytest.mark.django_db
+def test_dataset_detail_personal_dataset_visible_to_owner(client, users):
+    """Test that a personal (non-org) dataset is visible to its creator on the detail page.
+
+    Regression test: dataset_detail was missing the personal-dataset filter clause,
+    causing Http404 after dataset_create redirected to dataset_detail.
+    """
+    admin, creator, viewer, outsider = users
+    # outsider has no org membership — qualifies as an individual user
+    personal_dataset = DataSet.objects.create(
+        key="personal_list",
+        name="Personal List",
+        category="user_created",
+        source_type="manual",
+        is_custom=True,
+        organization=None,
+        created_by=outsider,
+        options={"001": "Option A", "002": "Option B"},
+    )
+    client.force_login(outsider)
+    res = client.get(
+        reverse("surveys:dataset_detail", kwargs={"dataset_id": personal_dataset.id})
+    )
+    assert res.status_code == 200
+    assert personal_dataset.name in str(res.content)
+
+
+@pytest.mark.django_db
 def test_dataset_detail_can_edit_flag_admin(client, users, org1, org1_dataset):
     """Test that ADMIN users can edit org datasets."""
     admin, creator, viewer, outsider = users

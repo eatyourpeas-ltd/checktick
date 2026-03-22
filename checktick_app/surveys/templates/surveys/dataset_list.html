@@ -141,16 +141,9 @@
                 {{ dataset.options|length }} {% trans "item" %}{{ dataset.options|length|pluralize }}
               </td>
               <td>
-                <div class="flex gap-1">
-                  <a href="{% url 'surveys:dataset_detail' dataset_id=dataset.id %}" class="btn btn-xs btn-ghost">
-                    {% trans "View" %}
-                  </a>
-                  {% if dataset.is_editable %}
-                    <a href="{% url 'surveys:dataset_edit' dataset_id=dataset.id %}" class="btn btn-xs btn-secondary">
-                      {% trans "Edit" %}
-                    </a>
-                  {% endif %}
-                </div>
+                <a href="{% url 'surveys:dataset_detail' dataset_id=dataset.id %}" class="btn btn-xs btn-ghost">
+                  {% trans "View" %}
+                </a>
               </td>
             </tr>
           {% endfor %}
