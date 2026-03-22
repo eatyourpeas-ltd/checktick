@@ -272,3 +272,5 @@ vault/*.pem
 htmx-new.js
 axecore-new.js
 sortable-new.js
+
+temp_keys/*
