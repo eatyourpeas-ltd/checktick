@@ -54,4 +54,4 @@ Our mail system is configured to perform the following checks on every incoming 
 
 ### 3.3 Quarterly Review
 
-The CTO reviews the 'Spam/Phishing' dashboard of our email provider quarterly to identify if the organization is being targeted by specific campaigns.
+The CTO reviews the 'Spam/Phishing' dashboard of our email provider quarterly to identify if the organisation is being targeted by specific campaigns.

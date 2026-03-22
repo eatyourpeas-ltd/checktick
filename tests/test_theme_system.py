@@ -797,11 +797,12 @@ def test_only_superuser_can_change_platform_theme():
         theme_preset_light="wireframe", theme_preset_dark="business"
     )
 
-    # Regular user cannot access admin interface
+    # Regular user cannot access admin interface — login form is disabled,
+    # non-superusers receive 404 rather than a redirect to the login page.
     client = Client()
     client.force_login(regular_user)
     response = client.get(reverse("admin:core_sitebranding_changelist"))
-    assert response.status_code == 302  # Redirect to login
+    assert response.status_code == 404
 
     # Superuser can access admin interface
     client.force_login(superuser)

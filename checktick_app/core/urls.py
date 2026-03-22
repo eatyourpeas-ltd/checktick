@@ -23,7 +23,7 @@ urlpatterns = [
     path("compliance/<slug:slug>/", views_docs.compliance_page, name="compliance_page"),
     path("branding/", views.configure_branding, name="configure_branding"),
     path("delete-account/", views.delete_account, name="delete_account"),
-    # Organization setup
+    # Organisation setup
     path("org-setup/<str:token>/", views.org_setup, name="org_setup"),
     # Platform Admin (superuser only)
     path(

@@ -65,7 +65,7 @@ class Organization(models.Model):
     Organizations are typically created by platform admins (superusers) for
     enterprise customers with negotiated billing terms. They support:
     - Custom per-seat or flat-rate billing
-    - Multiple teams within the organization
+    - Multiple teams within the organisation
     - Advanced governance features
     - Invoice-based payment collection
     """
@@ -96,7 +96,7 @@ class Organization(models.Model):
         related_name="organizations",
         null=True,
         blank=True,
-        help_text="Owner of the organization (set during checkout completion)",
+        help_text="Owner of the organisation (set during checkout completion)",
     )
 
     # Billing configuration (set by platform admin)
@@ -104,7 +104,7 @@ class Organization(models.Model):
         max_length=20,
         choices=BillingType.choices,
         default=BillingType.PER_SEAT,
-        help_text="How this organization is billed",
+        help_text="How this organisation is billed",
     )
     price_per_seat = models.DecimalField(
         max_digits=10,
@@ -172,7 +172,7 @@ class Organization(models.Model):
     setup_completed_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="When the organization owner completed setup",
+        help_text="When the organisation owner completed setup",
     )
     # Quote workflow fields (for sales-initiated onboarding)
     setup_expires_at = models.DateTimeField(
@@ -193,7 +193,7 @@ class Organization(models.Model):
     )
     is_active = models.BooleanField(
         default=True,
-        help_text="Whether this organization is active",
+        help_text="Whether this organisation is active",
     )
     created_by = models.ForeignKey(
         User,
@@ -201,7 +201,7 @@ class Organization(models.Model):
         null=True,
         blank=True,
         related_name="created_organizations",
-        help_text="Platform admin who created this organization",
+        help_text="Platform admin who created this organisation",
     )
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -222,7 +222,7 @@ class Organization(models.Model):
         choices=DEFAULT_THEME_CHOICES,
         blank=True,
         default="",
-        help_text="Default theme for organization (empty = use platform default)",
+        help_text="Default theme for organisation (empty = use platform default)",
     )
     theme_preset_light = models.CharField(
         max_length=64,

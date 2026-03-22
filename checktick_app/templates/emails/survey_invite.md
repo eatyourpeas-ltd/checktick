@@ -7,7 +7,7 @@ You've been invited to participate in a survey on **{{ brand_title }}**.
 ### Survey Details
 
 - **Survey Name:** {{ survey_name }}
-  {% if organization_name %}- **Organization:** {{ organization_name }}{% endif %}
+  {% if organization_name %}- **Organisation:** {{ organization_name }}{% endif %}
   {% if end_date %}- **Complete by:** {{ end_date }}{% endif %}
 
 ### Your Personal Invite Link

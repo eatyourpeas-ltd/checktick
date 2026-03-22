@@ -69,7 +69,7 @@
     {% if organizations|length > 1 %}
     <div class="form-control w-full">
       <label class="label">
-        <span class="label-text">{% trans "Organization" %}</span>
+        <span class="label-text">{% trans "Organisation" %}</span>
       </label>
       <select name="organization" class="select select-bordered w-full" {% if not is_create %}disabled{% endif %}>
         <option value="">{% trans "Personal (Individual Account)" %}</option>
@@ -78,14 +78,14 @@
         {% endfor %}
       </select>
       <label class="label">
-        <span class="label-text-alt">{% trans "Leave as 'Personal' for an individual dataset, or select an organization" %}</span>
+        <span class="label-text-alt">{% trans "Leave as 'Personal' for an individual dataset, or select an organisation" %}</span>
       </label>
     </div>
     {% elif organizations|length == 1 %}
-    <!-- Auto-select single organization -->
+    <!-- Auto-select single organisation -->
     <input type="hidden" name="organization" value="{{ organizations.0.id }}">
     {% else %}
-    <!-- No organization - individual user -->
+    <!-- No organisation - individual user -->
     <input type="hidden" name="organization" value="">
     {% endif %}
 

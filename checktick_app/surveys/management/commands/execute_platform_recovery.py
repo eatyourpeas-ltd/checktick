@@ -258,7 +258,7 @@ class Command(BaseCommand):
             self.stdout.write("1. Notify user that recovery is complete")
             self.stdout.write("2. User should log in and access survey")
             self.stdout.write("3. User should set new password + recovery phrase")
-            self.stdout.write("4. Notify organization admin (if applicable)")
+            self.stdout.write("4. Notify organisation admin (if applicable)")
             self.stdout.write("")
 
             self.stdout.write(

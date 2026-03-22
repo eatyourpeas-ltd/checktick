@@ -198,15 +198,15 @@ SUBSCRIPTION_TIERS = {
         "description": "Large team with up to 50 members",
     },
     "organization": {
-        "name": "Organization",
+        "name": "Organisation",
         "seats": None,  # Bespoke - depends on number of seats required
         "amount": 0,  # Custom pricing - contact sales
         "amount_ex_vat": 0,
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
-        "max_members": None,  # Configured per organization
-        "description": "Organization with custom seat allocation (£5/seat ex VAT)",
+        "max_members": None,  # Configured per organisation
+        "description": "Organisation with custom seat allocation (£5/seat ex VAT)",
     },
     "enterprise": {
         "name": "Enterprise",

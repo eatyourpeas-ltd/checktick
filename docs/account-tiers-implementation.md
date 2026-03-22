@@ -103,13 +103,13 @@ class Survey(models.Model):
 
 ## Feature Matrix
 
-| Feature | Individual (Free) | Individual Pro | Team Small | Team Medium | Team Large | Organization | Enterprise |
+| Feature | Individual (Free) | Individual Pro | Team Small | Team Medium | Team Large | Organisation | Enterprise |
 |---------|------------------|----------------|------------|-------------|------------|--------------|------------|
 | **Team Management** |
 | Maximum Team Members | 1 | 1 | 5 | 10 | 20 | Unlimited | Unlimited |
 | Team Membership Roles | - | - | ADMIN, CREATOR, VIEWER | ADMIN, CREATOR, VIEWER | ADMIN, CREATOR, VIEWER | - | - |
-| Organization Membership | ❌ | ❌ | Optional parent | Optional parent | Optional parent | ✅ | ✅ |
-| Organization Roles | - | - | - | - | - | ADMIN, CREATOR, VIEWER | ADMIN, CREATOR, VIEWER |
+| Organisation Membership | ❌ | ❌ | Optional parent | Optional parent | Optional parent | ✅ | ✅ |
+| Organisation Roles | - | - | - | - | - | ADMIN, CREATOR, VIEWER | ADMIN, CREATOR, VIEWER |
 | **Survey Creation** |
 | Maximum Surveys | 3 | Unlimited | 50 | 50 | 50 | Unlimited | Unlimited |
 | Drag & Drop Builder | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -140,7 +140,7 @@ class Survey(models.Model):
 | End-to-End Encryption | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Personal Passphrase Encryption | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Team Key Management | ❌ | ❌ | ✅ | ✅ | ✅ | - | - |
-| Organization Key Management | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Organisation Key Management | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Shamir Secret Sharing (Recovery) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Audit Logging | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Data Governance Features | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -364,7 +364,7 @@ class UserProfile(models.Model):
         """
         Check if user can add VIEWER role collaborators.
 
-        Only ORGANIZATION and ENTERPRISE tiers support the VIEWER role.
+        Only ORGANISATION and ENTERPRISE tiers support the VIEWER role.
         PRO tier can only add EDITORs.
 
         Returns:

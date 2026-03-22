@@ -60,7 +60,7 @@ class PublishQuestionGroupForm(forms.ModelForm):
             choices = [
                 (
                     PublishedQuestionGroup.PublicationLevel.ORGANIZATION,
-                    f"Organization ({survey.organization.name})",
+                    f"Organisation ({survey.organization.name})",
                 ),
                 (PublishedQuestionGroup.PublicationLevel.GLOBAL, "Global (all users)"),
             ]
