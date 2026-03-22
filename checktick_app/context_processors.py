@@ -136,6 +136,10 @@ def branding(request):
         can_create_datasets_flag = True
 
     # All defaults are defined in settings.py - this is the single source of truth
+    # font_heading and font_body are marked safe so Django auto-escaping does not
+    # convert the CSS single-quotes (' → &#x27;) inside <style> blocks.
+    # These values come only from settings.py / env vars (admin-controlled), never
+    # from user input, so marking them safe here is correct and auditable.
     brand = {
         "title": settings.BRAND_TITLE or "CheckTick",
         "icon_url": settings.BRAND_ICON_URL,
@@ -144,8 +148,8 @@ def branding(request):
         "icon_title": settings.BRAND_ICON_TITLE,
         "icon_size_class": None,  # Computed below
         "theme_name": settings.BRAND_THEME or "checktick-light",
-        "font_heading": settings.BRAND_FONT_HEADING,
-        "font_body": settings.BRAND_FONT_BODY,
+        "font_heading": sanitize_font_family(settings.BRAND_FONT_HEADING),
+        "font_body": sanitize_font_family(settings.BRAND_FONT_BODY),
         "font_css_url": settings.BRAND_FONT_CSS_URL,
         "theme_css_light": settings.BRAND_THEME_CSS_LIGHT or "",
         "theme_css_dark": settings.BRAND_THEME_CSS_DARK or "",
