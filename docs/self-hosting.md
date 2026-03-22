@@ -15,6 +15,7 @@ Complete guide to deploying and maintaining your own CheckTick instance using Do
 - [Scheduled Tasks](#scheduled-tasks) - Data governance automation
 - [Backup and Restore](#backup-and-restore) - Protecting your data
 - [Customization](#customization) - Themes and branding
+- [Administration](#administration) - Django admin interface
 
 ---
 
@@ -992,16 +993,17 @@ Users can toggle between themes using the theme switcher in the UI.
 
 #### Custom Branding
 
-Create custom branding via Django admin:
+Create custom branding via the branding UI or Django admin:
 
-1. Go to `/admin/`
-2. Navigate to **Site Branding**
-3. Configure:
+1. Log in as a superuser and go to `/branding/` (recommended), or navigate to `/admin/core/sitebranding/`
+2. Configure:
    - **Site Name**: Your organisation name
    - **Logo**: Upload your logo (SVG recommended)
    - **Primary Color**: Main brand color (hex)
    - **Secondary Color**: Accent color (hex)
    - **Favicon**: Upload favicon
+
+See [Django Administration](self-hosting-admin.md) for full details of the admin interface.
 
 #### Custom CSS
 
@@ -1110,6 +1112,32 @@ SERVER_EMAIL=server@yourorg.com
 BRAND_PRIMARY_COLOR=#your-color
 BRAND_LOGO_URL=https://yourorg.com/logo.svg
 ```
+
+---
+
+## Administration
+
+CheckTick includes a Django administration interface at `/admin/` for superuser-level tasks that are not available through the Platform Admin (`/platform-admin/`).
+
+> **Security note:** The Django admin login form is disabled. The URL returns a 404 to any visitor who is not already authenticated as a superuser — it does not advertise its existence or prompt for credentials.
+
+Key functions available only through the Django admin:
+
+- **VAT CSV exports** — required for HMRC VAT returns
+- **Manual account tier and subscription management**
+- **User email and language preferences**
+- **Data export audit trail**
+- **Dataset publishing and NHS Data Dictionary enforcement**
+- **Raw survey and question editing** (support/debugging)
+
+👉 **[Django Administration Documentation](self-hosting-admin.md)**
+
+This covers:
+
+- How access works and how to create a superuser
+- Platform Admin vs Django admin — which to use for what
+- A complete reference table for all registered admin sections
+- Security notes
 
 ---
 

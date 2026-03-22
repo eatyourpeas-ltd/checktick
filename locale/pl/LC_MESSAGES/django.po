@@ -148,8 +148,8 @@ msgstr "Masz dostęp do platformy na poziomie personelu"
 
 #: checktick_app/core/templates/core/profile.html:58
 #, python-format
-msgid "You own %(orgs)s organization"
-msgid_plural "You own %(orgs)s organizations"
+msgid "You own %(orgs)s organisation"
+msgid_plural "You own %(orgs)s organisations"
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
@@ -157,8 +157,8 @@ msgstr[3] ""
 
 #: checktick_app/core/templates/core/profile.html:68
 #, python-format
-msgid "You are an administrator in %(orgs)s organization"
-msgid_plural "You are an administrator in %(orgs)s organizations"
+msgid "You are an administrator in %(orgs)s organisation"
+msgid_plural "You are an administrator in %(orgs)s organisations"
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
@@ -166,8 +166,8 @@ msgstr[3] ""
 
 #: checktick_app/core/templates/core/profile.html:78
 #, python-format
-msgid "You are a member of %(orgs)s organization"
-msgid_plural "You are a member of %(orgs)s organizations"
+msgid "You are a member of %(orgs)s organisation"
+msgid_plural "You are a member of %(orgs)s organisations"
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""

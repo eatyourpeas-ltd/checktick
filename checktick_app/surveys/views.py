@@ -9452,7 +9452,7 @@ def question_group_publish(request, slug, gid):
                 if not survey.organization:
                     messages.error(
                         request,
-                        "Organization-level publishing requires the survey to be associated with an organization.",
+                        "Organisation-level publishing requires the survey to be associated with an organisation.",
                     )
                     return redirect("surveys:group_builder", slug=slug, gid=gid)
                 publication.organization = survey.organization

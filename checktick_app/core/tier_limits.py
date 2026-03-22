@@ -239,7 +239,7 @@ def check_survey_creation_limit(user) -> tuple[bool, str]:
         if effective_tier == "free":
             upgrade_msg = "Upgrade to Pro (£5/mo) for unlimited surveys or Team Small (£25/mo) for team collaboration."
         elif effective_tier.startswith("team_"):
-            upgrade_msg = "Upgrade to Organization tier for unlimited surveys."
+            upgrade_msg = "Upgrade to Organisation tier for unlimited surveys."
         else:
             upgrade_msg = "Upgrade to Pro for unlimited surveys."
 
@@ -322,7 +322,7 @@ def check_collaborators_per_survey_limit(
         return False, (
             f"Survey has reached the limit of {limits.max_collaborators_per_survey} "
             f"collaborators for {effective_tier.title()} tier. "
-            f"Upgrade to Organization for unlimited collaboration."
+            f"Upgrade to Organisation for unlimited collaboration."
         )
 
     return True, ""
@@ -393,7 +393,7 @@ def check_webhook_permission(user) -> tuple[bool, str]:
 
     if not limits.can_use_webhooks:
         return False, (
-            "Webhooks require Organization tier or higher. "
+            "Webhooks require Organisation tier or higher. "
             "Upgrade to enable webhook integrations."
         )
 
@@ -583,7 +583,7 @@ def check_team_survey_limit(team) -> tuple[bool, str]:
     effective_tier = team.owner.profile.get_effective_tier()
     limits = get_tier_limits(effective_tier)
 
-    # No limit (organization or enterprise)
+    # No limit (organisation or enterprise)
     if limits.max_surveys is None:
         return True, ""
 
@@ -595,7 +595,7 @@ def check_team_survey_limit(team) -> tuple[bool, str]:
     if survey_count >= team.max_surveys:
         return False, (
             f"Team has reached the limit of {team.max_surveys} surveys. "
-            f"Upgrade to Organization tier for unlimited surveys."
+            f"Upgrade to Organisation tier for unlimited surveys."
         )
 
     return True, ""
