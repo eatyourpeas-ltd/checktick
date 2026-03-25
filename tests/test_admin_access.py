@@ -27,4 +27,4 @@ class TestAdminAccess:
         client.login(username="admin", password="StrongPass!234")
         resp = client.get(reverse("admin:index"))
         assert resp.status_code == 200
-        assert b"/admin/" in resp.content
+        assert b"/ct-admin/" in resp.content

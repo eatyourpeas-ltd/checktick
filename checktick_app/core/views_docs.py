@@ -631,6 +631,33 @@ def docs_page(request, slug: str):
     )
 
 
+# Whitelist of downloadable compliance files.
+# Maps URL slug -> filename within docs/compliance/.
+# Add new entries here when additional reports are published.
+COMPLIANCE_FILES = {
+    "AD24502-RPT-01 - Eatyourpeas Ltd - Web Application Testing Letter of Attestation v1.0.pdf",
+}
+
+
+@require_GET
+def compliance_file(request, slug: str):
+    """Serve a whitelisted compliance file (e.g. a pentest report PDF)."""
+    from django.http import FileResponse
+
+    if slug not in COMPLIANCE_FILES:
+        raise Http404("File not found")
+
+    filename = COMPLIANCE_FILES[slug]
+    file_path = DOCS_DIR / "compliance" / filename
+
+    if not file_path.exists():
+        raise Http404("File not found")
+
+    response = FileResponse(file_path.open("rb"), content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response
+
+
 def compliance_index(request):
     """Render compliance index showing the DSPT master document."""
     # Look for the master/index compliance doc
