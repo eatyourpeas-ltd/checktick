@@ -635,7 +635,7 @@ def docs_page(request, slug: str):
 # Maps URL slug -> filename within docs/compliance/.
 # Add new entries here when additional reports are published.
 COMPLIANCE_FILES = {
-    "AD24502-RPT-01 - Eatyourpeas Ltd - Web Application Testing Letter of Attestation v1.0.pdf",
+    "pentest-AD24502-RPT-01": "AD24502-RPT-01 - Eatyourpeas Ltd - Web Application Testing Letter of Attestation v1.0.pdf",
 }
 
 
