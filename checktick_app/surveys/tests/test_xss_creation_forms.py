@@ -890,7 +890,7 @@ def test_admin_base_site_escapes_stored_font_xss(client, django_user_model):
     )
     client.force_login(admin_user)
 
-    resp = client.get("/admin/")
+    resp = client.get("/ct-admin/")
     assert resp.status_code == 200
     assert (
         b"</style><script>" not in resp.content
