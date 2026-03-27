@@ -29,7 +29,8 @@ Our technical controls for protecting data against unauthorized access and cyber
 * **Security Architecture:** [Security Overview (OWASP)](https://checktick.uk/docs/security-overview/)
 * **Encryption Standards:** [Encryption Technical Reference](https://checktick.uk/docs/encryption-technical-reference/)
 * **Identity Management:** [Authentication & Permissions](https://checktick.uk/docs/authentication-and-permissions/) | [OIDC Setup](https://checktick.uk/docs/oidc-sso-setup/)
-* **Vulnerability Control:** [Vulnerability Management Policy](/compliance/vulnerability-management-policy/)
+* **Vulnerability Control:** [Vulnerability Management Policy](/compliance/vulnerability-management-policy/) | [Pentest Response AD24502-RPT-01](/compliance/pentest-remediation-response-AD24502/)
+* **Certifications:** <a href="/compliance/files/cyber-essentials-plus/" target="_blank" rel="noopener">Cyber Essentials Plus Certificate (PDF)</a>
 * **Development Standards:** [Documentation for Developers](https://checktick.uk/docs/category/developers/)
 
 ## 3. Operational Resilience & Continuity

@@ -446,6 +446,7 @@ CONTENT_SECURITY_POLICY = {
             "'self'",
             "http://localhost:8000" if DEBUG else None,  # For local development
         ),
+        "base-uri": ("'self'",),
     },
 }
 # Remove None values from frame-ancestors

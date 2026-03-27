@@ -93,7 +93,7 @@ def process_pending_invitations(sender, instance, created, **kwargs):
 
 
 @receiver(user_locked_out)
-def send_lockout_notification(sender, request, username, credentials, **kwargs):
+def send_lockout_notification(sender, request, username, credentials=None, **kwargs):
     """Send email notification when a user account is locked out.
 
     This helps users know their account was targeted (possibly by an attacker)

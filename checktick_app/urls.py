@@ -26,7 +26,7 @@ class _PasswordChangeWithKeyRevocation(auth_views.PasswordChangeView):
 
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="core:home", permanent=False)),
-    path("admin/", admin.site.urls),
+    path("ct-admin/", admin.site.urls),
     # Auth routes (explicit to avoid include conflicts)
     path(
         "accounts/login/",

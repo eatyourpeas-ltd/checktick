@@ -20,6 +20,11 @@ urlpatterns = [
     path("docs/<slug:slug>/", views_docs.docs_page, name="docs_page"),
     # DSPT Compliance documentation (separate from main docs)
     path("compliance/", views_docs.compliance_index, name="compliance_index"),
+    path(
+        "compliance/files/<slug:slug>/",
+        views_docs.compliance_file,
+        name="compliance_file",
+    ),
     path("compliance/<slug:slug>/", views_docs.compliance_page, name="compliance_page"),
     path("branding/", views.configure_branding, name="configure_branding"),
     path("delete-account/", views.delete_account, name="delete_account"),

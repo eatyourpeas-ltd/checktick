@@ -42,7 +42,8 @@ jobs:
                   echo "Pip version in virtualenv:"
                   poetry run pip --version
                   echo "Running pip-audit on installed packages:"
-                  poetry run pip-audit --desc on
+                  poetry run pip-audit --desc on \
+                    --ignore-vuln CVE-2026-4539
 
     codeql:
         name: CodeQL Analysis

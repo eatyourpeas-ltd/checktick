@@ -78,6 +78,7 @@ priority: 2
 
 ### Week 1-2 (Feb 1-15)
 
+- [X] **Cyber Essentials Plus Certification Renewal** - Renew CE+ certification annually; upload new certificate to `docs/compliance/` and update slug in `COMPLIANCE_FILES` in `views_docs.py`. Current certificate: <a href="/compliance/files/cyber-essentials-plus/" target="_blank" rel="noopener">Cyber Essentials Plus Certificate (PDF)</a>
 - [X] **Annual Infrastructure & Firewall Review (Cyber Essentials)** - Annual audit per CE requirements [Infrastructure Technical Change Log](/compliance/infrastructure-technical-change-log/)
   - Verify router security (unique admin password, remote management disabled, UPnP disabled, no port forwarding)
   - Verify all device firewalls enabled with stealth mode
@@ -156,6 +157,7 @@ priority: 2
 
 ### Week 3-4 (Mar 16-31)
 
+- [X] **External Penetration Test (AD24502-RPT-01)** - Annual web application penetration test completed by CyberLab. All 11 findings (AD1–AD11) remediated. [Pentest Remediation Response](/compliance/pentest-remediation-response-AD24502/) | <a href="/compliance/files/pentest-AD24502-RPT-01/" target="_blank" rel="noopener">Letter of Attestation (PDF)</a>
 - [ ] **DSPT Annual Submission** - Complete and submit (if due)
   - Final SIRO sign-off
   - Submit via DSPT portal

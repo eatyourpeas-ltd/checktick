@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "checktick"
-version = "0.2.18"
+version = "0.2.19"
 description = "Secure, server-rendered survey platform for medical audit and research"
 authors = ["CheckTick Maintainers <simon@eatyourpeas.co.uk>"]
 readme = "README.md"
@@ -33,7 +33,7 @@ inflection = "^0.5.1"
 uritemplate = "^4.1.1"
 mozilla-django-oidc = "^4.0.1"
 beautifulsoup4 = "^4.12.0"
-requests = "^2.32.0"
+requests = "^2.33.0"
 hvac = "^2.4.0"
 pillow = "^12.1.1"
 qrcode = "^8.0"
