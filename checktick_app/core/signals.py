@@ -121,7 +121,7 @@ def send_lockout_notification(sender, request, username, credentials=None, **kwa
         send_security_email(
             user=user,
             subject="Security Alert: Account Temporarily Locked",
-            template_name="emails/security/account_lockout.html",
+            template_name="emails/security/account_lockout.md",
             context={
                 "user": user,
                 "ip_address": ip_address,
