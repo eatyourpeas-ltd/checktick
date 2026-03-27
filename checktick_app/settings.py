@@ -490,6 +490,9 @@ AXES_NEVER_LOCKOUT_WHITELIST = True
 AXES_IP_WHITELIST = ["127.0.0.1", "localhost"]
 # Use custom lockout template
 AXES_LOCKOUT_TEMPLATE = "403_lockout.html"
+# django-axes 6+ changed the default lockout response code to 429; override to 403
+# as required by the AD6 pentest remediation (expected: 403 Forbidden on lockout)
+AXES_HTTP_RESPONSE_CODE = 403
 
 # Ratelimit example (used in views)
 RATELIMIT_ENABLE = True
