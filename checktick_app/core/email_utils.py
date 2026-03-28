@@ -7,6 +7,7 @@ theming (for survey-specific emails).
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Dict, Optional
 
 from django.conf import settings
@@ -16,6 +17,63 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 import markdown
 
+
+def _to_css_color(val: str) -> str:
+    """Normalise a raw DaisyUI CSS variable value to a usable CSS colour string.
+
+    Handles:
+    - Already-complete values: hex, rgb(...), hsl(...), oklch(...)
+    - Raw oklch triplet:  "0.6471 0.2222 256.9"  → oklch(0.6471 0.2222 256.9)
+    - Raw HSL triplet:    "221 83% 53%"           → hsl(221, 83%, 53%)
+    """
+    val = val.strip()
+    if not val:
+        return ""
+    if re.match(r"^(#[0-9a-fA-F]{3,8}|rgb|hsl|oklch|oklab)", val):
+        return val
+    # Raw oklch: three numbers, no % signs
+    m = re.match(r"^(\d+\.?\d*)\s+(\d+\.?\d*)\s+(\d+\.?\d*)$", val)
+    if m:
+        return f"oklch({m.group(1)} {m.group(2)} {m.group(3)})"
+    # Raw HSL: "H S% L%"
+    m = re.match(r"^(\d+\.?\d*)\s+(\d+\.?\d*)%\s+(\d+\.?\d*)%$", val)
+    if m:
+        return f"hsl({m.group(1)}, {m.group(2)}%, {m.group(3)}%)"
+    return val
+
+
+def _extract_theme_colors(theme_css: str) -> Dict[str, str]:
+    """Extract DaisyUI colour variables from normalised theme CSS.
+
+    Returns a dict mapping DaisyUI variable names (without --) to CSS colour
+    strings ready to use as inline style values.
+    E.g. {"p": "oklch(0.65 0.22 256)", "a": "oklch(0.77 0.17 165)", ...}
+    """
+    if not theme_css:
+        return {}
+    colors: Dict[str, str] = {}
+    for m in re.finditer(r"--([a-z][a-z0-9]*)\s*:\s*([^;]+);", theme_css):
+        val = _to_css_color(m.group(2).strip())
+        if val:
+            colors[m.group(1)] = val
+    return colors
+
+
+def _make_absolute(url: str, site_url: str) -> str:
+    """Return an absolute URL suitable for use in email HTML.
+
+    Relative URLs (starting with /) are prefixed with SITE_URL.
+    Empty values or values that cannot be made absolute return "".
+    """
+    if not url:
+        return ""
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
+    if site_url:
+        return site_url.rstrip("/") + "/" + url.lstrip("/")
+    return ""
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,44 +82,68 @@ def get_platform_branding() -> Dict[str, Any]:
 
     Returns brand settings from settings.py or SiteBranding model.
     Used for account-related emails (welcome, password change, etc.)
+    Includes colours, fonts, logo URL, and web-font CSS URL.
     """
     from checktick_app.core.models import SiteBranding
 
-    # Default primary color from settings or fallback
+    site_url = getattr(settings, "SITE_URL", "")
     default_primary = getattr(settings, "BRAND_PRIMARY_COLOR", "#3b82f6")
+    default_accent = getattr(settings, "BRAND_ACCENT_COLOR", "#f59e0b")
+    default_secondary = getattr(settings, "BRAND_SECONDARY_COLOR", "#8b5cf6")
 
-    # Try to get from database first
     try:
         branding = SiteBranding.objects.first()
         if branding:
+            theme_colors = _extract_theme_colors(branding.theme_light_css or "")
+            raw_icon = branding.icon_url or getattr(settings, "BRAND_ICON_URL", "")
             return {
                 "title": getattr(settings, "BRAND_TITLE", "CheckTick"),
                 "theme_name": branding.default_theme,
-                "icon_url": branding.icon_url
-                or getattr(settings, "BRAND_ICON_URL", "/static/favicon.ico"),
+                "icon_url": _make_absolute(raw_icon, site_url),
+                "icon_alt": (
+                    getattr(settings, "BRAND_ICON_ALT", "")
+                    or getattr(settings, "BRAND_TITLE", "CheckTick")
+                ),
                 "font_heading": branding.font_heading
                 or getattr(
-                    settings,
-                    "BRAND_FONT_HEADING",
-                    "'IBM Plex Sans', sans-serif",
+                    settings, "BRAND_FONT_HEADING", "'IBM Plex Sans', sans-serif"
                 ),
                 "font_body": branding.font_body
-                or getattr(settings, "BRAND_FONT_BODY", "Merriweather, serif"),
-                "primary_color": default_primary,
+                or getattr(settings, "BRAND_FONT_BODY", "'IBM Plex Sans', sans-serif"),
+                "font_css_url": branding.font_css_url
+                or getattr(settings, "BRAND_FONT_CSS_URL", ""),
+                "primary_color": theme_colors.get("p") or default_primary,
+                "primary_content_color": theme_colors.get("pc") or "#ffffff",
+                "accent_color": theme_colors.get("a") or default_accent,
+                "secondary_color": theme_colors.get("s") or default_secondary,
+                "background_color": theme_colors.get("b1") or "#ffffff",
+                "text_color": theme_colors.get("bc") or "#1a1a1a",
             }
     except Exception:
         pass
 
-    # Fall back to settings
+    # Fall back to settings only
     return {
         "title": getattr(settings, "BRAND_TITLE", "CheckTick"),
         "theme_name": getattr(settings, "BRAND_THEME", "checktick-light"),
-        "icon_url": getattr(settings, "BRAND_ICON_URL", "/static/favicon.ico"),
+        "icon_url": _make_absolute(getattr(settings, "BRAND_ICON_URL", ""), site_url),
+        "icon_alt": (
+            getattr(settings, "BRAND_ICON_ALT", "")
+            or getattr(settings, "BRAND_TITLE", "CheckTick")
+        ),
         "font_heading": getattr(
             settings, "BRAND_FONT_HEADING", "'IBM Plex Sans', sans-serif"
         ),
-        "font_body": getattr(settings, "BRAND_FONT_BODY", "Merriweather, serif"),
+        "font_body": getattr(
+            settings, "BRAND_FONT_BODY", "'IBM Plex Sans', sans-serif"
+        ),
+        "font_css_url": getattr(settings, "BRAND_FONT_CSS_URL", ""),
         "primary_color": default_primary,
+        "primary_content_color": "#ffffff",
+        "accent_color": default_accent,
+        "secondary_color": default_secondary,
+        "background_color": "#ffffff",
+        "text_color": "#1a1a1a",
     }
 
 
@@ -79,12 +161,14 @@ def get_survey_branding(survey) -> Dict[str, Any]:
     style = survey.style or {}
 
     return {
+        **platform_brand,
         "title": style.get("title") or survey.name or platform_brand["title"],
         "theme_name": style.get("theme_name") or platform_brand["theme_name"],
         "icon_url": style.get("icon_url") or platform_brand["icon_url"],
         "font_heading": style.get("font_heading") or platform_brand["font_heading"],
         "font_body": style.get("font_body") or platform_brand["font_body"],
         "primary_color": style.get("primary_color") or platform_brand["primary_color"],
+        "accent_color": style.get("accent_color") or platform_brand["accent_color"],
         "survey_name": survey.name,
         "survey_slug": survey.slug,
     }
