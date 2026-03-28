@@ -6,6 +6,7 @@
     <title>{{ subject }}</title>
     {% if brand.font_css_url %}<link href="{{ brand.font_css_url }}" rel="stylesheet">{% endif %}
     <style>
+        {% if brand.font_face_css %}{{ brand.font_face_css }}{% endif %}
         body {
             margin: 0;
             padding: 0;
