@@ -59,6 +59,42 @@ def _extract_theme_colors(theme_css: str) -> Dict[str, str]:
     return colors
 
 
+def _get_din_font_face_css(site_url: str, font_heading: str) -> str:
+    """Generate inline @font-face CSS for DIN Round Pro with absolute URLs.
+
+    Email clients cannot resolve relative paths for @font-face src. This
+    builds the declarations using SITE_URL so they work in Apple Mail / iOS.
+    Returns an empty string if the font stack does not reference DIN Round Pro
+    or if site_url is not configured.
+    """
+    if not site_url or "DIN Round Pro" not in font_heading:
+        return ""
+    static_url = getattr(settings, "STATIC_URL", "/static/")
+    if not static_url.startswith(("http://", "https://")):
+        static_url = site_url.rstrip("/") + "/" + static_url.lstrip("/")
+    base = static_url.rstrip("/") + "/fonts/"
+    weights = [
+        (300, "dinroundpro_light.otf"),
+        (400, "dinroundpro.otf"),
+        (500, "dinroundpro_medi.otf"),
+        (600, "dinroundpro_medi.otf"),
+        (700, "dinroundpro_bold.otf"),
+        (900, "dinroundpro_black.otf"),
+    ]
+    lines = []
+    for weight, filename in weights:
+        lines.append(
+            f"@font-face {{\n"
+            f"  font-family: 'DIN Round Pro';\n"
+            f"  src: url('{base}{filename}') format('opentype');\n"
+            f"  font-weight: {weight};\n"
+            f"  font-style: normal;\n"
+            f"  font-display: swap;\n"
+            f"}}"
+        )
+    return "\n".join(lines)
+
+
 def _make_absolute(url: str, site_url: str) -> str:
     """Return an absolute URL suitable for use in email HTML.
 
@@ -94,8 +130,21 @@ def get_platform_branding() -> Dict[str, Any]:
     try:
         branding = SiteBranding.objects.first()
         if branding:
-            theme_colors = _extract_theme_colors(branding.theme_light_css or "")
-            raw_icon = branding.icon_url or getattr(settings, "BRAND_ICON_URL", "")
+            # Prefer stored CSS; fall back to settings env var if empty
+            theme_css = (
+                branding.theme_light_css
+                or getattr(settings, "BRAND_THEME_CSS_LIGHT", "")
+                or ""
+            )
+            theme_colors = _extract_theme_colors(theme_css)
+            raw_icon = (
+                branding.icon_url
+                or (branding.icon_file.url if branding.icon_file else "")
+                or getattr(settings, "BRAND_ICON_URL", "")
+            )
+            font_heading = branding.font_heading or getattr(
+                settings, "BRAND_FONT_HEADING", "'IBM Plex Sans', sans-serif"
+            )
             return {
                 "title": getattr(settings, "BRAND_TITLE", "CheckTick"),
                 "theme_name": branding.default_theme,
@@ -104,14 +153,12 @@ def get_platform_branding() -> Dict[str, Any]:
                     getattr(settings, "BRAND_ICON_ALT", "")
                     or getattr(settings, "BRAND_TITLE", "CheckTick")
                 ),
-                "font_heading": branding.font_heading
-                or getattr(
-                    settings, "BRAND_FONT_HEADING", "'IBM Plex Sans', sans-serif"
-                ),
+                "font_heading": font_heading,
                 "font_body": branding.font_body
                 or getattr(settings, "BRAND_FONT_BODY", "'IBM Plex Sans', sans-serif"),
                 "font_css_url": branding.font_css_url
                 or getattr(settings, "BRAND_FONT_CSS_URL", ""),
+                "font_face_css": _get_din_font_face_css(site_url, font_heading),
                 "primary_color": theme_colors.get("p") or default_primary,
                 "primary_content_color": theme_colors.get("pc") or "#ffffff",
                 "accent_color": theme_colors.get("a") or default_accent,
@@ -123,6 +170,12 @@ def get_platform_branding() -> Dict[str, Any]:
         pass
 
     # Fall back to settings only
+    font_heading = getattr(
+        settings, "BRAND_FONT_HEADING", "'IBM Plex Sans', sans-serif"
+    )
+    theme_colors = _extract_theme_colors(
+        getattr(settings, "BRAND_THEME_CSS_LIGHT", "") or ""
+    )
     return {
         "title": getattr(settings, "BRAND_TITLE", "CheckTick"),
         "theme_name": getattr(settings, "BRAND_THEME", "checktick-light"),
@@ -131,19 +184,18 @@ def get_platform_branding() -> Dict[str, Any]:
             getattr(settings, "BRAND_ICON_ALT", "")
             or getattr(settings, "BRAND_TITLE", "CheckTick")
         ),
-        "font_heading": getattr(
-            settings, "BRAND_FONT_HEADING", "'IBM Plex Sans', sans-serif"
-        ),
+        "font_heading": font_heading,
         "font_body": getattr(
             settings, "BRAND_FONT_BODY", "'IBM Plex Sans', sans-serif"
         ),
         "font_css_url": getattr(settings, "BRAND_FONT_CSS_URL", ""),
-        "primary_color": default_primary,
-        "primary_content_color": "#ffffff",
-        "accent_color": default_accent,
-        "secondary_color": default_secondary,
-        "background_color": "#ffffff",
-        "text_color": "#1a1a1a",
+        "font_face_css": _get_din_font_face_css(site_url, font_heading),
+        "primary_color": theme_colors.get("p") or default_primary,
+        "primary_content_color": theme_colors.get("pc") or "#ffffff",
+        "accent_color": theme_colors.get("a") or default_accent,
+        "secondary_color": theme_colors.get("s") or default_secondary,
+        "background_color": theme_colors.get("b1") or "#ffffff",
+        "text_color": theme_colors.get("bc") or "#1a1a1a",
     }
 
 
