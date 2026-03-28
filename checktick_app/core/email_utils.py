@@ -131,9 +131,11 @@ def get_platform_branding() -> Dict[str, Any]:
         branding = SiteBranding.objects.first()
         if branding:
             # Prefer stored CSS; fall back to settings env var if empty
-            theme_css = branding.theme_light_css or getattr(
-                settings, "BRAND_THEME_CSS_LIGHT", ""
-            ) or ""
+            theme_css = (
+                branding.theme_light_css
+                or getattr(settings, "BRAND_THEME_CSS_LIGHT", "")
+                or ""
+            )
             theme_colors = _extract_theme_colors(theme_css)
             raw_icon = (
                 branding.icon_url
