@@ -637,6 +637,13 @@ def docs_page(request, slug: str):
 COMPLIANCE_FILES = {
     "pentest-AD24502-RPT-01": "AD24502-RPT-01 - Eatyourpeas Ltd - Web Application Testing Letter of Attestation v1.0.pdf",
     "cyber-essentials-plus": "003a5aab-e686-4eb8-a296-b240c33236bf_certificate.pdf",
+    # Training certificates (2026)
+    "cto-data-security-awareness-2026": "pdfs/cto-data-security-awareness-2026.pdf",
+    "cto-data-governance-2026": "pdfs/cto-data-governance-2026.pdf",
+    "cto-caldicott-guardian-2026": "pdfs/cto-caldicott-guardian-2026.pdf",
+    "siro-data-security-awareness-2026": "pdfs/siro-data-security-awareness-2026.pdf",
+    "siro-gdpr-2026": "pdfs/siro-gdpr-2026.pdf",
+    "siro-caldicott-guardian-2026": "pdfs/siro-caldicott-guardian-2026.pdf",
 }
 
 

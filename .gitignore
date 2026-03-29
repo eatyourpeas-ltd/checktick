@@ -20,7 +20,6 @@ db.sqlite3
 
 # Compliance - personal data (training certificates contain PII)
 docs/compliance/training-certificates/
-docs/compliance/pdfs/
 
 # Node
 node_modules/
