@@ -9,11 +9,14 @@ category: dspt-3-training
 
 | Staff Name | Role | Course Name | Completion Date | Certificate Ref |
 | :--- | :--- | :--- | :--- | :--- |
-| {{ siro_name }} | SIRO / DPO | NHS Data Security & Protection (Level 1) | [Date] | [Ref #] |
-| {{ siro_name }} | SIRO / DPO | GDPR Training | 9/1/2025 | [Ref #] |
-| {{ siro_name }} | SIRO / DPO | Information Governance | 21/12/2025 | [Ref #] |
-| {{ siro_name }} | SIRO / DPO | Information Security, Data Protection, Freedom of Information | 24/7/2024 | [Ref #] |
-| {{ cto_name }} | CTO | NHS Data Security & Protection (Level 1) | [Date] | [Ref #] |
+| {{ siro_name }} | SIRO / DPO | NHS Data Security & Protection (Level 1) | 16/1/2026 | <a href="/compliance/files/siro-data-security-awareness-2026/" target="_blank" rel="noopener">Certificate (PDF)</a> |
+| {{ siro_name }} | SIRO / DPO | GDPR Training | 9/1/2025 | <a href="/compliance/files/siro-gdpr-2026/" target="_blank" rel="noopener">Certificate (PDF)</a> |
+| {{ siro_name }} | SIRO / DPO | Information Governance | 21/12/2025 | eLFH |
+| {{ siro_name }} | SIRO / DPO | Information Security, Data Protection, Freedom of Information | 24/7/2024 | eLFH |
+| {{ siro_name }} | SIRO / DPO | Caldicott Guardian | 28/3/2026 | <a href="/compliance/files/cto-caldicott-guardian-2026/" target="_blank" rel="noopener">Certificate (PDF)</a> |
+| {{ cto_name }} | CTO | NHS Data Security & Protection (Level 1) | 28/3/2026 | <a href="/compliance/files/cto-data-security-awareness-2026/" target="_blank" rel="noopener">Certificate (PDF)</a> |
+| {{ cto_name }} | CTO | Information Governance | 28/3/2026 | <a href="/compliance/files/cto-data-governance-2026/" target="_blank" rel="noopener">Certificate (PDF)</a> |
+| {{ cto_name }} | CTO | Caldicott Guardian | 28/3/2026 | <a href="/compliance/files/cto-caldicott-guardian-2026/" target="_blank" rel="noopener">Certificate (PDF)</a> |
 
 ## Internal Training Topics Covered (2025):
 

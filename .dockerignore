@@ -7,11 +7,8 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Compliance - Exclude PDFs and certificates only
+# Compliance - Exclude sensitive files only
 # -----------------------------------------------------------------------------
-# Compliance PDFs (large files, not needed at runtime - markdown is sufficient)
-docs/compliance/*.pdf
-
 # Training certificates contain personal data (PII)
 docs/compliance/training-certificates/
 
