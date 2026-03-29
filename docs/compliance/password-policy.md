@@ -5,7 +5,7 @@ category: dspt-4-managing-access
 
 # Staff Password Policy (Cyber Essentials Aligned)
 
-**Last Reviewed:** 29/03/2026 | **Owner:** SIRO {{ cto_name }}
+**Last Reviewed:** 29/03/2026 | **Owner:** SIRO {{ siro_name }}
 **Cyber Essentials Compliance:** Control 4.1 - Password-based Authentication
 
 ## 1. Password Requirements (Technical Controls)

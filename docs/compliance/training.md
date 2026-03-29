@@ -52,8 +52,8 @@ In addition to the NHS module, we held an internal briefing on:
 
 | Name | Role | NHS Data Security L1 | Secure Development | Last Review |
 | :--- | :--- | :--- | :--- | :--- |
-| {{ siro_name }} | SIRO / DPO | ✅ [Date] | ✅ [Date] | [Current Month] |
-| {{ cto_name }} | CTO / Cyber Lead| ✅ [Date] | ✅ [Date] | [Current Month] |
+| {{ siro_name }} | SIRO / DPO | ✅ - | ✅ - | March 2026 |
+| {{ cto_name }} | CTO / Cyber Lead| ✅ - | ✅ - | March 2026 |
 
 ## 2. Activity Schedule
 
