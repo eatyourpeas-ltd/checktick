@@ -14,7 +14,7 @@ category: dspt-6-incidents
 
 | ID | Date | Type | Severity | Description | Action Taken | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| NM-01 | 10/01/2026 | Near-Miss | Low | Automated scan detected an outdated dependency (axe-core). | Updated axe-core 4.10.2 → 4.11.0 and merged via PR. | Closed |
+| NM-01 | 21/01/2026 | Near-Miss | Low | Automated scan detected an outdated dependency (axe-core). | Updated axe-core 4.10.2 → 4.11.0 and merged via PR. | Closed |
 
 **Production Incidents to date: 0**
 **Near-Misses to date: 1 (resolved)**
