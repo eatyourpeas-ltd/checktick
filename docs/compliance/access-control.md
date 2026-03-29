@@ -7,8 +7,10 @@ category: dspt-4-managing-access
 
 **Version:** 1.0
 **Owner:** {{ cto_name }} (CTO)
-**Last Reviewed:** [Insert Date post-July 2024]
+**Last Reviewed:** 26/3/2026
 **Approval:** {{ siro_name }} (SIRO)
+
+This policy applies both to Eatyourpeas Ltd. and the CheckTick platform.
 
 ## 1. Purpose
 
@@ -101,7 +103,7 @@ Privileged access to {{ platform_name }} infrastructure is only permitted from t
 | **CT-DEV-01** | {{ siro_name }} | macOS | FileVault | 29/12/2025 |
 | **CT-DEV-02** | {{ cto_name }} | Windows | BitLocker | 29/12/2025 |
 
-### 9.1 Device Security Requirements
+### 9 Device Security Requirements
 
 Access from any device not listed above is an automatic breach of policy. All authorized devices must:
 
@@ -130,7 +132,7 @@ Access from any device not listed above is an automatic breach of policy. All au
 
 ## 12. Third-Party and Temporary Privileged Access
 
-To mitigate the risk of 'persistent' access by external parties or service accounts:
+Eatyourpeas Ltd follows a Just-in-Time (JIT) and Least Privilege approach for all third-party and privileged access. To mitigate the risk of 'persistent' access by external parties or service accounts:
 
 * **Pre-Approval:** Any third-party access (e.g., for external security audits or emergency vendor support) must be approved by both the SIRO and CTO.
 * **Time-Limiting:** Access is granted for a defined window (e.g., 24 hours). We utilize GitHub's 'Temporary Contributor' or Northflank's granular 'Team Permissions' to ensure access automatically expires or is manually revoked immediately after the activity.
