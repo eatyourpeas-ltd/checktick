@@ -5,7 +5,7 @@ category: dspt-4-managing-access
 
 # Staff Password Policy (Cyber Essentials Aligned)
 
-**Last Reviewed:** 08/02/2026 | **Owner:** SIRO {{ cto_name }}
+**Last Reviewed:** 29/03/2026 | **Owner:** SIRO {{ cto_name }}
 **Cyber Essentials Compliance:** Control 4.1 - Password-based Authentication
 
 ## 1. Password Requirements (Technical Controls)
@@ -58,9 +58,9 @@ All cloud service accounts meet one of these Cyber Essentials-compliant configur
 
 We implement **all three** Cyber Essentials technical control options:
 
-1. ✅ **Multi-factor authentication** - Mandatory on all cloud administrative accounts (12+ char minimum, exceeds CE requirement)
-2. ✅ **12+ character minimum, no maximum** - Enforced on all devices and standard cloud accounts
-3. ✅ **8+ character minimum with deny list** - Enforced on standard user accounts with MFA and NCSC blocklist
+1. **Multi-factor authentication** - Mandatory on all cloud administrative accounts (12+ char minimum, exceeds CE requirement)
+2. **12+ character minimum, no maximum** - Enforced on all devices and standard cloud accounts
+3. **8+ character minimum with deny list** - Enforced on standard user accounts with MFA and NCSC blocklist
 
 ## 2. Password Quality & Construction
 
@@ -84,6 +84,10 @@ We implement **all three** Cyber Essentials technical control options:
 ## 5. Application-Level Password Controls
 
 Our internet-facing services utilize Django-axes to prevent brute-force attacks by locking accounts after 5 failed attempts.
+
+### 5.1 Common Password Deny List
+
+Django's `CommonPasswordValidator` is configured with the **NCSC 100,000 most-used passwords** list (`checktick_app/core/ncsc-passwords.txt`), sourced from the [SecLists NCSC collection](https://github.com/danielmiessler/SecLists/blob/master/Passwords/Common-Credentials/100k-most-used-passwords-NCSC.txt). This replaces Django's built-in ~20,000-entry list and blocks all passwords appearing in the NCSC recommended deny list at the application layer. The list is stored as a plain-text file in the repository and used directly by `AUTH_PASSWORD_VALIDATORS` in `settings.py`.
 
 ## 6. Prohibition of Default Passwords (Cyber Essentials Requirement)
 
