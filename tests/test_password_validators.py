@@ -170,9 +170,9 @@ class TestNCSCCommonPasswordList:
     def test_ncsc_password_list_has_sufficient_entries(self):
         """The NCSC list should contain at least 99,000 entries."""
         lines = [
-            l
-            for l in NCSC_LIST_PATH.read_text(encoding="utf-8").splitlines()
-            if l.strip()
+            line
+            for line in NCSC_LIST_PATH.read_text(encoding="utf-8").splitlines()
+            if line.strip()
         ]
         assert len(lines) >= 99_000, f"Expected ≥99,000 entries, got {len(lines)}"
 
