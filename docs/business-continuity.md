@@ -895,10 +895,10 @@ Maintain an emergency contact list:
 
 ### Internal Contacts
 
-- Primary Admin: [name] - [phone] - [email]
-- Secondary Admin: [name] - [phone] - [email]
-- Custodian Key Holder 1: [name] - [phone]
-- Custodian Key Holder 2: [name] - [phone]
+- Primary Admin: [name] - [phone] - [email] *note these are held privately*
+- Secondary Admin: [name] - [phone] - [email]  *note these are held privately*
+- Custodian Key Holder 1: [name] - [phone] *note these are held privately*
+- Custodian Key Holder 2: [name] - [phone] *note these are held privately*
 
 ### External Contacts
 

@@ -5,23 +5,56 @@ category: dspt-7-continuity
 
 # Backup Isolation & Immutability Procedure
 
-## 1. Protection Against Ransomware
+**Last Reviewed:** March 2026
+**Owner:** CTO
 
-{{ platform_name }} employs 'Logical Air-Gapping' to ensure that a compromise of the production web servers cannot result in the deletion of backups.
+## 1. Protection Against Ransomware and Accidental Deletion
 
-* **Immutable Storage:** Database snapshots are configured with AWS 'Deletion Protection' and S3 Object Lock. Data cannot be overwritten or deleted by the application service accounts.
-* **Network Isolation:** Backups are stored in a separate VPC (Virtual Private Cloud) and are only accessible via restricted administrative roles requiring Multi-Factor Authentication (MFA).
+{{ platform_name }} employs logical isolation to ensure that a compromise of
+production application services cannot result in the deletion or corruption
+of backups.
 
-## 2. 'Offline' Physical Backup
+* **Snapshot Isolation:** Database and Vault snapshots are managed exclusively
+  through the Northflank control plane. Application service accounts operate
+  under least-privilege principles and have no permissions to access, modify,
+  or delete backup snapshots. A compromise of the application layer therefore
+  cannot cascade to the backup layer.
+* **Access Control:** Snapshot restoration is restricted to named administrators
+  (CTO and SIRO) authenticated via MFA-protected Northflank accounts. No
+  automated process or service account has restore permissions.
+* **Vault Key Independence:** The custodian component of the HashiCorp Vault
+  platform master key is stored offline by named administrators using Shamir's
+  Secret Sharing, split across multiple secure locations. This component is
+  never stored within the Northflank environment. Even a complete loss of the
+  Northflank account cannot result in permanent loss of the ability to
+  reconstruct encryption keys, provided custodian shares are intact.
 
-To satisfy the requirement for a backup not permanently connected to the network:
+## 2. Source Code and Configuration Independence
 
-* **Frequency:** Weekly (Every Friday).
-* **Process:** The CTO performs a manual export of the GitHub repository (Source Code) and Infrastructure-as-Code (Terraform) to a FIPS 140-2 encrypted hardware drive.
-* **Storage:** Once the sync is complete, the drive is physically disconnected and stored in a secure fireproof safe.
-* **Purpose:** This provides a "Ground Zero" recovery path if all cloud provider accounts (AWS/Northflank/GitHub) were simultaneously compromised.
+To provide a recovery path independent of the primary hosting provider:
+
+* **GitHub Repository:** All application source code and infrastructure
+  configuration is version-controlled in GitHub, which is operationally
+  independent of Northflank. In the event of a complete Northflank account
+  loss, the application can be redeployed from GitHub to an alternative
+  hosting provider.
+* **Vault Unseal Keys:** Vault unseal keys are distributed across secure
+  offline locations held by named administrators, independent of any
+  cloud provider account.
 
 ## 3. Cloud Syncing Policy
 
-* **Prohibition:** Personal cloud syncing services (OneDrive, Google Drive) are strictly prohibited for the storage of patient data backups or encryption keys.
-* **Compliance:** All automated backups are handled via enterprise-grade, encrypted AWS S3/RDS services which are verified as ISO 27001 compliant.
+* **Prohibition:** Personal cloud syncing services (OneDrive, Google Drive,
+  Dropbox) are strictly prohibited for storage of patient data, backup exports,
+  or encryption keys.
+* **Compliance:** All automated backups are managed via Northflank's
+  platform infrastructure. Northflank maintains SOC 2 Type II compliance.
+  Personal accounts and consumer cloud services are excluded from all
+  backup and data handling processes.
+
+## 4. Pre-Production Note
+
+{{ platform_name }} is currently in pre-production. No clinical patient data
+is held in the system at this time. Backup and isolation procedures are
+documented and tested ahead of live deployment to ensure controls are verified
+before any health data is processed.

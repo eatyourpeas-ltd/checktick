@@ -20,8 +20,6 @@ category: dspt-6-incidents
 | Organisation | Service | Contact Method | Account/Ref No. |
 | :--- | :--- | :--- | :--- |
 | **Northflank** | Hosting / PaaS | [Support Hotline/URL] | [Account ID] |
-| **AWS** | Database / RDS | [Enterprise Support] | [Account ID] |
-| **Cloudflare** | WAF / DNS | [Support Hotline] | [Account ID] |
 
 ## 3. Health Sector & Regulatory
 

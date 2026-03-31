@@ -55,7 +55,7 @@ To prevent the latent storage or accidental execution of malware, the following 
 
 ### 5.2 Handling Network Data
 
-While {{ platform_name }} primarily uses cloud-based storage (GitHub, AWS), any files synchronized to local machines (e.g., via OneDrive or iCloud) are treated as local files and are subject to immediate on-access scanning by the device's resident anti-malware engine.
+While {{ platform_name }} primarily uses cloud-based storage (GitHub), any files synchronized to local machines (e.g., via OneDrive or iCloud) are treated as local files and are subject to immediate on-access scanning by the device's resident anti-malware engine.
 
 ### 5.3 Compliance Verification
 
