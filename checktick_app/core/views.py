@@ -619,17 +619,19 @@ class BrandedPasswordResetView(auth_views.PasswordResetView):
 
     def get_email_options(self):
         opts = super().get_email_options()
-        # Merge in brand context so email templates can use {{ brand.* }}.
+        # Use get_platform_branding() so brand includes colors/fonts needed by base_email.html.
         try:
-            from checktick_app.context_processors import branding as _branding
+            from checktick_app.core.email_utils import get_platform_branding
 
-            ctx = _branding(self.request)
-            brand = ctx.get("brand", {})
+            brand = get_platform_branding()
         except Exception:
             brand = {"title": getattr(settings, "BRAND_TITLE", "CheckTick")}
         extra = opts.get("extra_email_context") or {}
-        # Avoid mutating the original dict in place across requests
-        merged = {**extra, "brand": brand}
+        merged = {
+            **extra,
+            "brand": brand,
+            "site_url": getattr(settings, "SITE_URL", ""),
+        }
         opts["extra_email_context"] = merged
         return opts
 
