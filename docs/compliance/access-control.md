@@ -105,11 +105,11 @@ Privileged access to {{ platform_name }} infrastructure is only permitted from t
 
 ### 9 Device Security Requirements
 
-Access from any device not listed above is an automatic breach of policy. All authorized devices must:
+Access from any device not listed above is an automatic breach of policy. All authorised devices must:
 
 1. Have a 'Lock Screen' timeout of no more than 5 minutes.
 2. Be used exclusively by the assigned System Administrator.
-3. Be wiped remotely (if supported) or have credentials revoked immediately if the device is lost or stolen.
+3. Be wiped remotely or have credentials revoked immediately if the device is lost or stolen.
 
 ## 10. Technical Assurance & Testing
 
