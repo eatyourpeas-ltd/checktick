@@ -33,13 +33,9 @@ class TestPasswordResetFlow:
         assert len(mail.outbox) == 1
         msg = mail.outbox[0]
         assert "Reset your password" in msg.subject
-        # Ensure an HTML alternative is present and includes either the CTA text
-        # or the set-password link (Django's standard redirect target).
+        # Ensure an HTML alternative is present and includes the CTA button.
         assert msg.alternatives, "Expected HTML alternative email"
-        assert any(
-            ("Choose a new password" in alt[0]) or ("set-password" in alt[0])
-            for alt in msg.alternatives
-        )
+        assert any("Reset your password" in alt[0] for alt in msg.alternatives)
         # Extract token URL from email body (Django includes a token URL that redirects)
         m = re.search(r"/accounts/reset/[^\s]+/[^\s/]+/", msg.body)
         assert m, msg.body
