@@ -20,14 +20,14 @@ Required env vars:
 
 from __future__ import annotations
 
+from email.utils import parseaddr
 import logging
 import threading
 import time
-from email.utils import parseaddr
 
-import requests
 from django.conf import settings
 from django.core.mail.backends.base import BaseEmailBackend
+import requests
 
 logger = logging.getLogger(__name__)
 

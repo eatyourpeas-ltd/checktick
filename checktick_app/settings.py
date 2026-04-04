@@ -537,7 +537,8 @@ elif DEBUG:
 else:
     # In production (DEBUG=False), use Microsoft Graph API email backend
     EMAIL_BACKEND = env(
-        "EMAIL_BACKEND", default="checktick_app.core.graph_email_backend.GraphEmailBackend"
+        "EMAIL_BACKEND",
+        default="checktick_app.core.graph_email_backend.GraphEmailBackend",
     )
 
 # Email configuration
