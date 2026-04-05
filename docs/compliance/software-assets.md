@@ -134,6 +134,7 @@ Served from `checktick_app/static/js/` with SHA-384 Subresource Integrity
 | **Ubuntu LTS** | Base OS (Containers) | 22.04 | Northflank |
 | **GitHub** | Version Control / CI | Enterprise Cloud | GitHub |
 | **Gunicorn** | WSGI Server | ^22.0.0 (see above) | Northflank |
+| **Microsoft 365** | email service |  |  |
 
 ---
 
