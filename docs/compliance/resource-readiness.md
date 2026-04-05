@@ -8,7 +8,7 @@ category: dspt-7-continuity
 To ensure a rapid response, the following resources are maintained:
 
 1. **Technical Access:**
-    * Root credentials for AWS/Northflank (Encrypted/Offline).
+    * Root credentials for Northflank (Encrypted/Offline).
     * 2048-bit SSH keys for server access (stored on FIPS 140-2 encrypted hardware).
 2. **Documentation (Offline Access):**
     * PDF copy of the Business Continuity Plan.

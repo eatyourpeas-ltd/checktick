@@ -28,4 +28,4 @@ To prevent "Magecart" style supply chain attacks, we self-host critical JS libra
 ## 4. Secret Scanning (`ggshield`)
 
 * **Implementation:** Handled via pre-commit hooks and CI scans.
-* **Function:** Prevents the accidental commit of API keys, AWS credentials, or encryption secrets.
+* **Function:** Prevents the accidental commit of API keys or encryption secrets.

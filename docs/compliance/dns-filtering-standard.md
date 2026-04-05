@@ -22,5 +22,5 @@ category: dspt-9-it-protection
 
 ## 3. Browser-Level Protection
 
-* **Safe Browsing:** All browsers used for {{ platform_name }} administrative work (GitHub, Northflank, AWS) must have 'Safe Browsing' technology enabled.
+* **Safe Browsing:** All browsers used for {{ platform_name }} administrative work (GitHub, Northflank) must have 'Safe Browsing' technology enabled.
 * **Ad-Blocking:** We utilize reputable content-filtering extensions (e.g., uBlock Origin) to mitigate 'Malvertising' risks.

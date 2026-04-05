@@ -12,9 +12,9 @@ category: dspt-8-unsupported-systems
 
 | Layer | Responsible Party | Update Mechanism | Frequency |
 | :--- | :--- | :--- | :--- |
-| **Cloud Infrastructure** | AWS / Northflank | Automatic Vendor Managed | Immediate |
+| **Cloud Infrastructure** | Northflank | Automatic Vendor Managed | Immediate |
 | **Base OS (Containers)** | {{ platform_name }} (CTO) | Rebuild of Docker/OCI images | Weekly or on Critical Alert |
-| **Database (RDS)** | AWS / {{ platform_name }} | Managed 'Minor Version' Upgrades | Monthly Maintenance Window |
+| **Database (RDS)** | {{ platform_name }} | Managed 'Minor Version' Upgrades | Monthly Maintenance Window |
 | **App Dependencies** | {{ platform_name }} (CTO) | Poetry / GitHub Dependabot | Daily Scans / Weekly PRs |
 
 ## 2. The Patching Lifecycle (Standard Procedure)

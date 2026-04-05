@@ -39,7 +39,7 @@ If the digital service is unavailable for >4 hours:
 ### 3.3 People & Resource Dependencies
 
 * **Remote Operations:** {{ platform_name }} is a remote-first team. If a staff member’s local site (home office) fails (power/internet), they will relocate to a secondary site with 4G/5G backup.
-* **Succession:** If the CTO is unavailable, the SIRO holds emergency "Break-Glass" credentials to the Northflank/AWS consoles to initiate recovery with 3rd party support.
+* **Succession:** If the CTO is unavailable, the SIRO holds emergency "Break-Glass" credentials to the Northflank consoles to initiate recovery with 3rd party support.
 
 ## 4. Communication Plan
 

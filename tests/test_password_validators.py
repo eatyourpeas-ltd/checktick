@@ -1,5 +1,8 @@
 """Tests for custom password validators."""
 
+from pathlib import Path
+
+from django.contrib.auth.password_validation import CommonPasswordValidator
 from django.core.exceptions import ValidationError
 import pytest
 
@@ -145,3 +148,67 @@ class TestNoSequentialCharactersValidator:
         help_text = validator.get_help_text()
         assert "4" in help_text
         assert "sequential" in help_text.lower()
+
+
+NCSC_LIST_PATH = (
+    Path(__file__).resolve().parent.parent / "checktick_app/core/ncsc-passwords.txt"
+)
+
+
+class TestNCSCCommonPasswordList:
+    """Tests that the NCSC 100k deny list is present and wired into CommonPasswordValidator."""
+
+    def test_ncsc_password_list_file_exists(self):
+        """The NCSC password list file must be present in the repository."""
+        assert NCSC_LIST_PATH.exists(), (
+            f"NCSC password list not found at {NCSC_LIST_PATH}. "
+            "Run: curl -fsSL https://raw.githubusercontent.com/danielmiessler/SecLists/"
+            "master/Passwords/Common-Credentials/100k-most-used-passwords-NCSC.txt "
+            "-o checktick_app/core/ncsc-passwords.txt"
+        )
+
+    def test_ncsc_password_list_has_sufficient_entries(self):
+        """The NCSC list should contain at least 99,000 entries."""
+        lines = [
+            line
+            for line in NCSC_LIST_PATH.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(lines) >= 99_000, f"Expected ≥99,000 entries, got {len(lines)}"
+
+    def test_common_password_validator_uses_ncsc_list(self):
+        """CommonPasswordValidator must be configured with the NCSC list path."""
+        from django.conf import settings
+
+        validators = settings.AUTH_PASSWORD_VALIDATORS
+        common = next(
+            (v for v in validators if "CommonPasswordValidator" in v["NAME"]),
+            None,
+        )
+        assert (
+            common is not None
+        ), "CommonPasswordValidator not found in AUTH_PASSWORD_VALIDATORS"
+        assert (
+            "OPTIONS" in common
+        ), "CommonPasswordValidator has no OPTIONS (password_list_path not set)"
+        assert (
+            "password_list_path" in common["OPTIONS"]
+        ), "password_list_path not configured on CommonPasswordValidator"
+        configured_path = Path(common["OPTIONS"]["password_list_path"])
+        assert (
+            configured_path.resolve() == NCSC_LIST_PATH
+        ), f"password_list_path points to {configured_path}, expected {NCSC_LIST_PATH}"
+
+    def test_common_passwords_rejected(self):
+        """Well-known passwords from the NCSC list should be rejected."""
+        validator = CommonPasswordValidator(password_list_path=str(NCSC_LIST_PATH))
+        # These are the first few entries in the NCSC list
+        for bad_password in ("123456", "password", "qwerty", "iloveyou", "abc123"):
+            with pytest.raises(ValidationError, match="too common"):
+                validator.validate(bad_password)
+
+    def test_strong_password_not_rejected(self):
+        """A strong, unique password should not be on the deny list."""
+        validator = CommonPasswordValidator(password_list_path=str(NCSC_LIST_PATH))
+        # Validate raises nothing for a strong password
+        validator.validate("xK9#mP2$vL7@nQ4!")

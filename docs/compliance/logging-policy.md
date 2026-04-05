@@ -13,7 +13,7 @@ This policy covers the generation, protection, and retention of audit logs for a
 
 ## 2. Log Retention Schedule
 
-{{ platform_name }} adopts a 'Retain by Default' posture. Logs are stored securely within our cloud infrastructure (hosting provider/AWS S3).
+{{ platform_name }} adopts a 'Retain by Default' posture. Logs are stored securely within our cloud infrastructure (hosting provider).
 
 | Log Type | Minimum Retention | Purpose |
 | :--- | :--- | :--- |

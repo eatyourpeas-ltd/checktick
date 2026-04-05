@@ -5,25 +5,41 @@ category: dspt-4-managing-access
 
 # IP Address Management (IPAM) Register
 
-**Last Reviewed:** 03/01/2026
-**Owner:** CTO
+**Last Reviewed:** March 2026
+**Owner:** Dr Simon Chapman (CTO)
 
-## 1. Production Infrastructure (Northflank UK)
+## 1. Production Infrastructure (Northflank)
 
 | Asset | Type | IP Address / Range | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Web Production** | Ingress | [Insert Northflank IP] | Public access to {{ platform_name }} |
-| **Worker Egress** | Egress | [Insert Static IP] | Outbound requests to OIDC/Mail |
-| **Database** | Internal | 10.x.x.x (VPC) | Private internal communication |
+| Web Production | Ingress | Assigned by Northflank — recorded in Northflank console | Public access to CheckTick web application |
+| Service Egress | Egress | Assigned by Northflank — recorded in Northflank console | Outbound requests to OIDC providers and mail delivery services |
+| Database | Internal | Northflank private network (not publicly routable) | Internal communication between application and PostgreSQL |
+| Vault | Internal | Northflank private network (not publicly routable) | Internal communication between application and HashiCorp Vault |
 
-## 2. Administrative Access (Founders)
+Specific IP values are recorded in the Northflank console and reviewed
+quarterly by the CTO. Production ingress and egress IPs are noted for
+reference when registering with external services such as NCSC Early Warning.
 
-| Asset | Type | Range / Description | Security Control |
+## 2. Administrative Access (EatYourPeas Ltd Staff)
+
+| Person | Access Method | IP Configuration | Security Control |
 | :--- | :--- | :--- | :--- |
-| **Founder 1 Home** | Static/Dynamic | [Insert Range] | Allowed for GH/NF Admin |
-| **Founder 2 Home** | Static/Dynamic | [Insert Range] | Allowed for GH/NF Admin |
+| Dr Simon Chapman (CTO) | Home broadband (dynamic IP) | No IP restriction — dynamic ISP-assigned address | MFA enforced on all administrative accounts |
+| Dr Serena Haywood (SIRO) | Home broadband (dynamic IP) | No IP restriction — dynamic ISP-assigned address | MFA enforced on all administrative accounts |
+
+EatYourPeas Ltd operates as a fully remote organisation. Both administrators
+connect from home broadband connections with ISP-assigned dynamic IP addresses.
+IP-based access restrictions are not applied as the IP addresses are not
+static. Access to all administrative systems is instead controlled through
+mandatory MFA on individually named accounts, which provides equivalent or
+superior protection — a stolen credential cannot be used without the
+registered hardware authenticator regardless of the source IP address.
 
 ## 3. Review Process
 
-* **Quarterly Audit:** The CTO verifies that only these recorded IPs have administrative access to the Northflank console.
-* **Decommissioning:** When a founder changes location or ISP, the old IP range is removed from the "Allow-List" within 24 hours.
+The CTO reviews all IP ranges and infrastructure networking configuration
+quarterly, confirming that production IP assignments in Northflank are
+current and that no unauthorised ingress rules have been added. Any change
+to production IP assignments is logged in the Infrastructure Technical
+Change Log. Reviews are documented in the Internal Audit and Spot Check Log.

@@ -293,7 +293,12 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
         "OPTIONS": {"min_length": 12},
     },
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+        "OPTIONS": {
+            "password_list_path": BASE_DIR / "checktick_app/core/ncsc-passwords.txt",
+        },
+    },
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
     # Custom validators for healthcare compliance
     {

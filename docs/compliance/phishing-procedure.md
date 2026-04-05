@@ -6,7 +6,7 @@ category: dspt-6-incidents
 # Phishing Escalation & Management Procedure
 
 ## 1. Identification
-xs
+
 Staff are trained to look for common phishing indicators:
 
 * Mismatched sender domains (e.g., `nhs.net.com` instead of `nhs.net`).

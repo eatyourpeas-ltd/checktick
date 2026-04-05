@@ -62,7 +62,7 @@ Security patches are applied based on the severity of the risk:
 
 ## 5. Supply Chain Security
 
-We only use reputable, well-maintained libraries. Our primary infrastructure providers (Northflank and AWS) are verified for:
+We only use reputable, well-maintained libraries. Our primary infrastructure providers (Northflank) are verified for:
 
 * ISO 27001 Certification.
 * Compliance with the NHS Data Security and Protection Toolkit (DSPT) standards for data centers.

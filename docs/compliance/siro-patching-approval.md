@@ -20,7 +20,7 @@ We follow a CVSS-based approach for all internet-connected assets (Servers, Clou
 
 ## 2. Infrastructure & Cloud Updates
 
-* **Managed Services:** We rely on AWS and Northflank for automated patching of physical hardware and base hypervisors.
+* **Managed Services:** We rely on Northflank for automated patching of physical hardware and base hypervisors.
 * **Containers:** Production images are rebuilt and redeployed weekly to incorporate the latest OS security updates.
 
 ## 3. Remote Endpoint Updates

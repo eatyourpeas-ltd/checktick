@@ -39,8 +39,8 @@ Beyond technology, the following resources are required to maintain service cont
 
 * **People:** Availability of at least one Director (CTO or SIRO) with administrative access credentials to perform emergency system recovery.
 * **Connectivity:** High-speed internet access for staff to manage cloud environments via CLI/Web Console.
-* **External Power & Cooling:** {{ platform_name }} relies on the physical infrastructure of AWS (London Region) and Northflank's underlying providers. Both maintain high-availability data centers with redundant power (UPS/Generators) and cooling.
-* **Data Integrity:** Availability of the most recent database snapshots stored in AWS RDS.
+* **External Power & Cooling:** {{ platform_name }} relies on the physical infrastructure of Northflank's underlying providers. Both maintain high-availability data centers with redundant power (UPS/Generators) and cooling.
+* **Data Integrity:** Availability of the most recent database snapshots stored in Northflank RDS.
 
 ---
 
