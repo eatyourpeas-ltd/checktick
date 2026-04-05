@@ -540,21 +540,29 @@ elif DEBUG:
         "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
     )
 else:
-    # In production (DEBUG=False), use SMTP (Mailgun or other provider)
+    # In production (DEBUG=False), use Microsoft Graph API email backend
     EMAIL_BACKEND = env(
-        "EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend"
+        "EMAIL_BACKEND",
+        default="checktick_app.core.graph_email_backend.GraphEmailBackend",
     )
 
 # Email configuration
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@example.com")
 SERVER_EMAIL = env("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
 
-# SMTP settings for production (Mailgun)
-EMAIL_HOST = env("EMAIL_HOST", default="smtp.mailgun.org")
+# SMTP settings (used when EMAIL_BACKEND is the SMTP backend, e.g. self-hosting)
+EMAIL_HOST = env("EMAIL_HOST", default="")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+
+# Microsoft Graph API email settings
+# Used when EMAIL_BACKEND=checktick_app.core.graph_email_backend.GraphEmailBackend
+# Requires an Azure AD App Registration with Mail.Send application permission.
+GRAPH_CLIENT_ID = env("GRAPH_CLIENT_ID", default="")
+GRAPH_CLIENT_SECRET = env("GRAPH_CLIENT_SECRET", default="")
+GRAPH_TENANT_ID = env("GRAPH_TENANT_ID", default="")
 
 # Email timeout
 EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=10)
