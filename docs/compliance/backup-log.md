@@ -12,8 +12,8 @@ category: dspt-7-continuity
 
 ## 1. Backup Schedule Verification
 
-* **Database:** Automated daily backups managed by Northflank (UK-South).
-* **Retention:** 30 days of rolling backups.
+* **Database:** Automated daily snapshots managed by Northflank (UK-South).
+* **Retention:** 120 days.
 * **Encryption:** AES-256 at rest and in transit.
 
 ## 2. Restoration Test Records

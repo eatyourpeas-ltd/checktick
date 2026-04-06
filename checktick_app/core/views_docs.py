@@ -154,6 +154,12 @@ DOC_CATEGORIES = {
         "order": 22,
         "icon": "🤝",
     },
+    # Clinical Safety (DCB0129)
+    "clinical-safety": {
+        "title": "Clinical Safety",
+        "order": 23,
+        "icon": "🏥",
+    },
 }
 
 # Manual overrides for specific files (optional)
@@ -382,6 +388,38 @@ def _discover_doc_pages():
                 }
             )
 
+    # Auto-discover clinical safety documentation in docs/clinical-safety/
+    clinical_safety_dir = DOCS_DIR / "clinical-safety"
+    if clinical_safety_dir.exists():
+        for md_file in sorted(clinical_safety_dir.glob("*.md")):
+            slug = f"clinical-safety-{md_file.stem}"
+            if slug in pages:
+                continue
+            frontmatter = _parse_frontmatter(md_file)
+            if not frontmatter:
+                continue
+            category = frontmatter.get("category")
+            if "category" not in frontmatter:
+                continue
+            if category == "None" or category is None:
+                pages[slug] = md_file
+                continue
+            if category not in categorized:
+                continue
+            title = frontmatter.get("title")
+            if not title:
+                continue
+            priority = frontmatter.get("priority", 999)
+            pages[slug] = md_file
+            categorized[category].append(
+                {
+                    "slug": slug,
+                    "title": title,
+                    "file": md_file,
+                    "priority": priority,
+                }
+            )
+
     # Hide old consolidated files from sidebar (accessible via URL only)
     # These have been consolidated into comprehensive guides but remain accessible for backward compatibility
     hidden_files = [
@@ -493,13 +531,15 @@ def _parse_frontmatter(file_path: Path) -> dict:
 DOC_PAGES, DOC_CATEGORIES_WITH_PAGES = _discover_doc_pages()
 
 
-def _nav_pages(include_dspt=False):
+def _nav_pages(include_dspt=False, section=None):
     """
     Return categorized navigation structure for documentation.
 
     Args:
         include_dspt: If True, include DSPT categories. If False, exclude them.
                       Default False to keep main docs clean.
+        section: If set to 'clinical-safety', return only clinical-safety category pages.
+                 If set to 'dspt', equivalent to include_dspt=True (excludes non-dspt).
 
     Returns a list of categories and standalone items with their pages.
     """
@@ -527,12 +567,20 @@ def _nav_pages(include_dspt=False):
         if not pages_list:  # Skip empty categories
             continue
 
-        # Filter based on include_dspt flag
         is_dspt = cat_key.startswith("dspt-")
-        if is_dspt and not include_dspt:
-            continue
-        if not is_dspt and include_dspt:
-            continue
+        is_clinical_safety = cat_key == "clinical-safety"
+
+        if section == "clinical-safety":
+            if not is_clinical_safety:
+                continue
+        elif section == "dspt" or include_dspt:
+            # DSPT section: exclude clinical-safety and non-dspt categories
+            if not is_dspt:
+                continue
+        else:
+            # Main docs: exclude dspt and clinical-safety categories
+            if is_dspt or is_clinical_safety:
+                continue
 
         cat_info = DOC_CATEGORIES.get(cat_key, {"title": cat_key.title(), "order": 99})
 
@@ -547,8 +595,8 @@ def _nav_pages(include_dspt=False):
             }
         )
 
-    # Add standalone items to nav (only for main docs, not DSPT)
-    if not include_dspt:
+    # Add standalone items to nav (only for main docs, not DSPT or clinical-safety)
+    if not include_dspt and section not in ("dspt", "clinical-safety"):
         nav.extend(standalone_items)
 
     # Sort all items by order
@@ -719,7 +767,7 @@ def compliance_index(request):
         {
             "html": html,
             "active_slug": "master",
-            "pages": _nav_pages(include_dspt=True),
+            "pages": _nav_pages(section="dspt"),
         },
     )
 
@@ -755,50 +803,7 @@ def compliance_page(request, slug: str):
                 content = "\n".join(lines[i + 1 :])
                 break
 
-    # Interpolate platform name
-    platform_name = settings.BRAND_TITLE or "CheckTick"
-    if SiteBranding is not None:
-        try:
-            sb = SiteBranding.objects.first()
-            if sb and sb.title:
-                platform_name = sb.title
-        except Exception:
-            pass
-    content = content.replace("{{ platform_name }}", platform_name)
-
-    # Interpolate governance roles from settings
-    content = content.replace(
-        "{{ dpo_name }}", getattr(settings, "DPO_NAME", "[DPO Name]")
-    )
-    content = content.replace(
-        "{{ dpo_email }}", getattr(settings, "DPO_EMAIL", "dpo@example.com")
-    )
-    content = content.replace(
-        "{{ siro_name }}", getattr(settings, "SIRO_NAME", "[SIRO Name]")
-    )
-    content = content.replace(
-        "{{ siro_email }}", getattr(settings, "SIRO_EMAIL", "siro@example.com")
-    )
-    content = content.replace(
-        "{{ caldicott_name }}",
-        getattr(settings, "CALDICOTT_NAME", "[Caldicott Guardian]"),
-    )
-    content = content.replace(
-        "{{ caldicott_email }}",
-        getattr(settings, "CALDICOTT_EMAIL", "caldicott@example.com"),
-    )
-    content = content.replace(
-        "{{ ig_lead_name }}", getattr(settings, "IG_LEAD_NAME", "[IG Lead]")
-    )
-    content = content.replace(
-        "{{ ig_lead_email }}", getattr(settings, "IG_LEAD_EMAIL", "ig@example.com")
-    )
-    content = content.replace(
-        "{{ cto_name }}", getattr(settings, "CTO_NAME", "[CTO Name]")
-    )
-    content = content.replace(
-        "{{ cto_email }}", getattr(settings, "CTO_EMAIL", "cto@example.com")
-    )
+    content = _interpolate_governance_variables(content)
 
     html = mdlib.markdown(
         content,
@@ -821,7 +826,87 @@ def compliance_page(request, slug: str):
             "html": html,
             "active_slug": slug,
             "doc_title": doc_title,
-            "pages": _nav_pages(include_dspt=True),
+            "pages": _nav_pages(section="dspt"),
+        },
+    )
+
+
+def _interpolate_governance_variables(content: str) -> str:
+    """Replace all governance role placeholders with values from settings."""
+    platform_name = settings.BRAND_TITLE or "CheckTick"
+    if SiteBranding is not None:
+        try:
+            sb = SiteBranding.objects.first()
+            if sb and sb.title:
+                platform_name = sb.title
+        except Exception:
+            pass
+    replacements = {
+        "{{ platform_name }}": platform_name,
+        "{{ dpo_name }}": getattr(settings, "DPO_NAME", "[DPO Name]"),
+        "{{ dpo_email }}": getattr(settings, "DPO_EMAIL", "dpo@example.com"),
+        "{{ siro_name }}": getattr(settings, "SIRO_NAME", "[SIRO Name]"),
+        "{{ siro_email }}": getattr(settings, "SIRO_EMAIL", "siro@example.com"),
+        "{{ caldicott_name }}": getattr(
+            settings, "CALDICOTT_NAME", "[Caldicott Guardian]"
+        ),
+        "{{ caldicott_email }}": getattr(
+            settings, "CALDICOTT_EMAIL", "caldicott@example.com"
+        ),
+        "{{ ig_lead_name }}": getattr(settings, "IG_LEAD_NAME", "[IG Lead]"),
+        "{{ ig_lead_email }}": getattr(settings, "IG_LEAD_EMAIL", "ig@example.com"),
+        "{{ cto_name }}": getattr(settings, "CTO_NAME", "[CTO Name]"),
+        "{{ cto_email }}": getattr(settings, "CTO_EMAIL", "cto@example.com"),
+        "{{ cso_name }}": getattr(settings, "CSO_NAME", "[Clinical Safety Officer]"),
+        "{{ cso_email }}": getattr(settings, "CSO_EMAIL", "cso@example.com"),
+    }
+    for placeholder, value in replacements.items():
+        content = content.replace(placeholder, value)
+    return content
+
+
+def clinical_safety_page(request, slug: str):
+    """Render a clinical safety document by slug."""
+    full_slug = f"clinical-safety-{slug}"
+    if full_slug not in DOC_PAGES:
+        raise Http404("Page not found")
+
+    file_path = DOC_PAGES[full_slug]
+    if not file_path.exists():
+        raise Http404("Page not found")
+
+    content = file_path.read_text(encoding="utf-8")
+    lines = content.split("\n")
+
+    doc_title = slug.replace("-", " ").title()
+    if lines and lines[0].strip() == "---":
+        for i, line in enumerate(lines[1:], 1):
+            if line.strip() == "---":
+                frontmatter = "\n".join(lines[1:i])
+                for fm_line in frontmatter.split("\n"):
+                    if fm_line.startswith("title:"):
+                        doc_title = (
+                            fm_line.split(":", 1)[1].strip().strip('"').strip("'")
+                        )
+                        break
+                content = "\n".join(lines[i + 1 :])
+                break
+
+    content = _interpolate_governance_variables(content)
+
+    html = mdlib.markdown(
+        content,
+        extensions=["fenced_code", "tables", "toc", "pymdownx.tasklist"],
+    )
+
+    return render(
+        request,
+        "core/clinical_safety.html",
+        {
+            "html": html,
+            "active_slug": slug,
+            "doc_title": doc_title,
+            "pages": _nav_pages(section="clinical-safety"),
         },
     )
 

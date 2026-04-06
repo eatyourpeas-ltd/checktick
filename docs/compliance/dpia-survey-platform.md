@@ -24,7 +24,7 @@ Processing is limited to the minimum data required for the survey creator's spec
 | **Unauthorized Access** | High | Role-Based Access Control (RBAC), MFA for admins, and Scoped API keys. |
 | **Data Breach in Transit** | Med | Strict TLS 1.2+ requirement; no insecure HTTP allowed. |
 | **Loss of Encryption Keys** | Med | Distributed Vault Unseal keys and documented recovery procedures. |
-| **Server Failure** | Low | Daily encrypted backups in Northflank UK region; RTO < 1 hour. |
+| **Server Failure** | Low | Daily encrypted backups in Northflank UK region (RPO 24 hours); RTO < 4 hours. |
 
 ### 4. Outcome
 

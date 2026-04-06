@@ -118,6 +118,9 @@ IG_LEAD_EMAIL = env("IG_LEAD_EMAIL", default="ig@example.com")
 # CTO defaults to DPO if not set separately
 CTO_NAME = env("CTO", default=None) or DPO_NAME
 CTO_EMAIL = env("CTO_EMAIL", default=None) or DPO_EMAIL
+# Clinical Safety Officer defaults to DPO if not set separately
+CSO_NAME = env("CSO", default=None) or DPO_NAME
+CSO_EMAIL = env("CSO_EMAIL", default=None) or DPO_EMAIL
 
 # Payment Processing Configuration
 # Use sandbox in DEBUG mode, production otherwise
