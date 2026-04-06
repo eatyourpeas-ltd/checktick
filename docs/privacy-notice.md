@@ -6,13 +6,15 @@ priority: 2
 
 # Privacy Notice
 
-**Last Updated: 4 January 2026**
+**Last Updated: 6 April 2026**
 
 This Privacy Notice explains how Eatyourpeas Ltd ("we", "us", or "our"), trading as CheckTick, collects, uses, stores, and protects your personal information when you use our survey platform and services.
 
 ## 1. Introduction
 
 Eatyourpeas Ltd is committed to protecting your privacy and complying with data protection laws, including the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018.
+
+CheckTick is a non-clinical survey and data collection platform and does not provide diagnostic or decision-support functionality. It is not classified as a medical device. Any future integration with clinical systems would be subject to separate clinical safety assessment and governance processes.
 
 ### 1.1 Key Principles
 
@@ -24,492 +26,209 @@ Eatyourpeas Ltd is committed to protecting your privacy and complying with data 
 
 ### 1.2 Data Controller
 
-For your CheckTick account data, Eatyourpeas Ltd (or the self-hosted instance operator) is the data controller.
+For your CheckTick account data, Eatyourpeas Ltd is the data controller.
 
-Eatyourpeas Ltd is a company registered in England and Wales.
-
-For survey data you collect, **you are the data controller** and Eatyourpeas Ltd (trading as CheckTick) is the data processor. You are responsible for:
-
-* Obtaining appropriate consent from survey respondents
-* Providing privacy notices to respondents
-* Ensuring compliance with data protection laws
-* Determining the lawful basis for processing
+For survey data you collect, **you are the data controller** and Eatyourpeas Ltd (trading as CheckTick) is the data processor.
 
 ## 2. Information We Collect
 
 ### 2.1 Account Information
 
-When you create an account, we collect:
-
-* **Username** (required)
-* **Email address** (required)
-* **Password** (hashed and encrypted)
-* **Account tier** (FREE, PRO, ORGANISATION, ENTERPRISE)
-* **Organisation name** (if creating an organisation account)
-* **IP address** (for security and fraud prevention)
-* **Account creation date and last login**
+* Username
+* Email address
+* Password (hashed)
+* Organisation details
+* IP address
+* Account activity metadata
 
 ### 2.2 Survey Data
 
-When you create surveys and collect responses, we process:
-
-* **Survey questions and configuration**
-* **Survey responses** (encrypted)
-* **Respondent data** (as configured by you in your surveys)
-* **Survey metadata** (creation date, status, settings)
-
-**Important:** Survey data is encrypted using keys you control. For individual accounts, only you can decrypt this data. For organisation accounts, your organisation manages the encryption keys.
+* Survey questions and configuration
+* Survey responses (encrypted)
+* Respondent data as defined by the controller
 
 ### 2.3 Usage Data
 
-We automatically collect:
-
-* **Access logs** (timestamps, IP addresses, actions performed)
-* **Error logs** (for debugging and service improvement)
-* **Browser and device information** (user agent, screen resolution)
-* **Performance metrics** (page load times, response times)
+* Access logs
+* Error logs
+* Device/browser metadata
 
 ### 2.4 Payment Information
 
-When you subscribe to a paid tier:
+Handled by payment provider (**GoCardless**). We do not store bank details.
 
-* **Payment processing** is handled by our secure payment provider
-* We **do not store** your credit card or banking information
-* We receive from our payment provider:
-  - Transaction IDs
-  - Subscription status
-  - Payment status
-  - Billing country (for tax purposes)
+### 2.5 Cookies
 
-### 2.5 Cookies and Similar Technologies
+Used only for:
+* Authentication
+* Session management
+* Security
 
-We use cookies and similar technologies for:
-
-* **Authentication** (keeping you logged in)
-* **Session management** (maintaining your session state)
-* **Preferences** (remembering your theme and language settings)
-* **Security** (preventing CSRF attacks)
-
-We do **not** use cookies for:
-
-* Advertising or marketing
-* Third-party tracking
-* Analytics beyond basic usage statistics
-
-You can control cookie settings in your browser, but some features may not function without essential cookies.
+---
 
 ## 3. How We Use Your Information
 
-### 3.1 To Provide the Service
+* Provide and operate the service
+* Maintain security
+* Improve performance
+* Communicate service updates
 
-We use your information to:
-
-* Create and manage your account
-* Authenticate you and maintain security
-* Store and process your surveys and responses
-* Enable collaboration features (for organisation tier)
-* Provide customer support
-* Process payments and manage subscriptions
-
-**Legal Basis:** Performance of a contract (our Terms of Service)
-
-### 3.2 To Improve the Service
-
-We use aggregated, anonymized data to:
-
-* Monitor and improve service performance
-* Identify and fix bugs
-* Develop new features
-* Understand usage patterns
-
-**Legal Basis:** Legitimate interests (improving our service)
-
-### 3.3 To Communicate With You
-
-We may send you:
-
-* **Transactional emails** (account confirmations, password resets, payment receipts)
-* **Service notifications** (maintenance, security alerts, important updates)
-* **Support responses** (replies to your inquiries)
-
-We will **not** send marketing emails unless you explicitly opt in.
-
-**Legal Basis:** Performance of a contract and legitimate interests
-
-### 3.4 For Security and Fraud Prevention
-
-We use your information to:
-
-* Detect and prevent unauthorized access
-* Investigate security incidents
-* Prevent fraud and abuse
-* Comply with legal obligations
-
-**Legal Basis:** Legitimate interests and legal obligations
+---
 
 ## 4. Data Sharing and Disclosure
 
-### 4.1 We Do Not Sell Your Data
+### 4.1 We Do Not Sell Data
 
-We will never sell, rent, or trade your personal information to third parties for marketing purposes.
+We never sell personal data.
 
 ### 4.2 Service Providers
 
-We share data with trusted service providers who help us operate the Service:
+We use the following processors:
 
-* **Payment Provider** (payment processing)
-  - Purpose: Process subscriptions and payments
-  - Data shared: Email, billing country, transaction information
+* **Northflank** – hosting and infrastructure (UK)
+* **Microsoft 365** – CheckTick email and identity services
+* **Proton Mail** – corporate communications
+* **GoCardless** – payment processing
+* **GitHub** – code repository and CI/CD (no production personal data)
 
-* **Cloud Infrastructure Providers**
-  - Purpose: Host the application and database
-  - Data shared: All service data
-  - Safeguards: Encryption at rest and in transit, access controls
+All providers operate under UK GDPR-compliant Data Processing Agreements.
 
-* **Email Service**
-  - Purpose: Send transactional emails
-  - Data shared: Email addresses, email content
-  - Only used for service-related communications
+All primary service data is hosted within UK data centres. Where limited international processing occurs, appropriate safeguards (e.g. SCCs) are in place.
 
-All service providers are required to protect your data and may only use it for the specified purposes.
-
-### 4.3 Legal Requirements
-
-We may disclose your information if required to:
-
-* Comply with legal obligations or valid legal requests
-* Protect our rights, property, or safety
-* Protect the rights, property, or safety of our users or the public
-* Prevent fraud or abuse
-
-We will notify you of legal requests unless prohibited by law.
-
-### 4.4 Business Transfers
-
-If Eatyourpeas Ltd or CheckTick is acquired or merged with another entity, your data may be transferred to the new owner. We will notify you of any such change and your data will remain subject to this Privacy Notice.
-
-### 4.5 Collaboration Features
-
-If you use ORGANISATION tier collaboration features:
-
-* Your survey data may be visible to authorized team members
-* organisation administrators can manage user access
-* organisation accounts may recover encryption keys on behalf of users
+---
 
 ## 5. Data Security
 
 ### 5.1 Encryption
 
-We implement strong encryption:
+* AES-256-GCM encryption for survey data
+* TLS 1.2+ in transit
 
-* **Survey responses** are encrypted using AES-256 encryption
-* **Encryption keys** are separate from data and controlled by you
-* **Data in transit** is protected with TLS/HTTPS
-* **Passwords** are hashed using industry-standard algorithms
+### 5.2 Key Management
 
-### 5.2 Access Controls
+Encryption keys are managed using a split architecture:
 
-* User data is isolated by account
-* Role-based access control (RBAC) for organisations
-* Multi-factor authentication available (ENTERPRISE tier)
-* Regular access reviews and security audits
+* **HashiCorp Vault (self-hosted, air-gapped)** – master key management
+* **Northflank environment variables** – runtime secrets only
 
-### 5.3 Infrastructure Security
+This ensures no single system can decrypt data independently.
 
+### 5.3 Access Controls
 
-* Regular security updates and patches
-* Firewall protection and intrusion detection
-* Automated backups with encryption
-* Monitoring and logging of security events
+* Role-based access control
+* MFA enforced for administrative accounts
+* SSO supported (Microsoft / Google)
 
-### 5.4 Limitations
+### 5.4 Infrastructure Security
 
-While we implement strong security measures, no system is 100% secure. You are responsible for:
-
-* Keeping your password confidential
-* Safeguarding your encryption keys
-* Using secure networks when accessing the Service
-* Reporting security incidents promptly
-
-## 6. Data Retention
-
-### 6.1 Active Accounts
-
-We retain your data while your account is active and as needed to provide the Service.
-
-### 6.2 Deleted Data
-
-When you delete surveys or responses:
-
-* Data is marked for deletion immediately
-* Data may remain in backups for up to 90 days
-* After 90 days, data is permanently deleted from all systems
-
-### 6.3 Closed Accounts
-
-When you close your account:
-
-* Your account data is anonymized or deleted within 30 days
-* Some data may be retained for legal or compliance purposes
-* Backups containing your data are deleted within 90 days
-
-### 6.4 Legal Retention
-
-We may retain certain data for longer periods when:
-
-* Required by law (e.g., tax records, audit logs)
-* Necessary for legal proceedings
-* Needed to enforce our Terms of Service
-
-See our Data Governance documentation for detailed retention schedules.
-
-## 7. Your Data Rights
-
-Under UK GDPR and the Data Protection Act 2018, you have the following rights:
-
-### 7.1 Right of Access
-
-You can request a copy of your personal data. Use our data export features or contact us for a comprehensive copy.
-
-### 7.2 Right to Rectification
-
-You can update your account information at any time through your account settings.
-
-### 7.3 Right to Erasure ("Right to be Forgotten")
-
-You can request deletion of your account and data. This will permanently delete:
-
-* Your account and profile
-* All surveys you created
-* All responses to your surveys
-
-Note: Encrypted data cannot be recovered after deletion.
-
-### 7.4 Right to Restrict Processing
-
-You can request we limit how we process your data in certain circumstances.
-
-### 7.5 Right to Data Portability
-
-You can export your data in machine-readable formats (CSV, JSON) at any time.
-
-### 7.6 Right to Object
-
-You can object to processing based on legitimate interests. We will cease processing unless we have compelling grounds.
-
-### 7.7 Rights Related to Automated Decision-Making
-
-CheckTick does not use automated decision-making or profiling that produces legal effects.
-
-### 7.8 How to Exercise Your Rights
-
-To exercise any of these rights:
-
-* **Email us** at your configured support email
-* **Use in-app features** for data export and account deletion
-* **Expect a response** within 30 days
-
-We may request verification of your identity before fulfilling requests. We verify identity by requiring the request to come from the registered account email and confirming a recent transaction ID or account detail
-
-## 8. Children's Privacy
-
-CheckTick may be used to collect survey data about children and young people under 18, particularly in healthcare, educational, or research contexts.
-
-**If you collect data about children:**
-
-* You **must obtain appropriate consent** from parents, guardians, or those with parental responsibility
-* For healthcare data, you must follow NHS guidelines and Caldicott Principles regarding children's data
-* You must have proper clinical documentation and ethical approval where required
-* You must comply with Article 8 of GDPR regarding conditions for children's consent
-* For children under 13, parental consent is always required
-* For children aged 13-17, consider the child's age and maturity when obtaining consent
-
-**Your responsibilities as data controller:**
-
-* Ensure consent is documented and can be demonstrated
-* Provide age-appropriate privacy information to children and their guardians
-* Implement appropriate safeguards for children's data
-* Consider the best interests of the child in all processing activities
-* Comply with local safeguarding requirements
-
-CheckTick assumes that users collecting data about children have obtained all necessary consents, approvals, and clinical documentation as required by law and professional standards. Users are solely responsible for ensuring compliance with all applicable child protection and data protection laws.
-
-## 9. International Data Transfers
-
-CheckTick is operated in the UK. If you access the Service from outside the UK:
-
-* Your data may be transferred to and stored in the UK
-* We ensure appropriate safeguards are in place
-* Your data remains protected under UK GDPR standards
-
-For self-hosted instances, data location depends on your hosting provider.
-
-## 10. Your Responsibilities as a Data Controller
-
-When you collect survey data, you are the data controller and must:
-
-### 10.1 Obtain Consent
-
-* Provide clear information about what data you're collecting
-* Explain how you will use the data
-* Obtain explicit consent for sensitive data (health, biometric, etc.)
-
-### 10.2 Provide Privacy Notices
-
-* Tell respondents how you will process their data
-* Explain their rights regarding their data
-* Provide contact information for data requests
-
-### 10.3 Respond to Data Subject Requests
-
-As the data controller, you are responsible for responding to requests from your survey respondents, including:
-
-* **Access requests** - providing copies of their data
-* **Erasure requests** - deleting their data when appropriate
-* **Objection requests** - ceasing processing when they object
-* **Rectification requests** - correcting inaccurate data
-
-You must respond to such requests within 30 days as required by UK GDPR.
-
-### 10.4 Comply with Laws
-
-* Follow GDPR, UK DPA 2018, and other applicable laws
-* Ensure you have a lawful basis for processing
-* Conduct Data Protection Impact Assessments (DPIAs) when required
-* For NHS/healthcare data, comply with NHS data policies and ethics requirements
-
-### 10.5 Secure Data
-
-* Use CheckTick's encryption features
-* Safeguard your encryption keys
-* Limit access to authorized personnel only
-* Report data breaches as required by law
-
-## 11. Information for Survey Respondents
-
-If you have completed a survey created on CheckTick and wish to exercise your data rights, please note:
-
-### 11.1 Who Controls Your Data
-
-The organisation or individual who created and sent you the survey is the **data controller** for your responses. They determine how your data is used and are responsible for responding to your requests.
-
-CheckTick (Eatyourpeas Ltd) is the **data processor** - we store and process the data on behalf of the survey creator, but we do not control how it is used.
-
-### 11.2 How to Exercise Your Rights
-
-**Step 1: Contact the Survey Creator**
-
-Your first point of contact should be the organisation that sent you the survey. They should have provided you with:
-
-* A privacy notice explaining how your data will be used
-* Contact details for data protection queries
-
-**Step 2: Contact CheckTick if Needed**
-
-If you cannot identify or contact the survey creator, or if they are unresponsive to your request, you may contact CheckTick directly at [dpo@checktick.uk](mailto:dpo@checktick.uk).
-
-We will:
-
-* Attempt to identify and contact the survey creator on your behalf
-* Forward your request to them with a deadline to respond
-* Keep you informed of progress
-
-### 11.3 Anonymous vs Pseudonymous Surveys
-
-Your ability to exercise data subject rights depends on whether your response can be identified:
-
-**Pseudonymous Surveys** (your response can be linked to you):
-
-* Surveys requiring login (authenticated)
-* Surveys where you received a personal invitation token
-* You will receive a **Receipt Token** when you submit your response
-* **Save this token** - you will need it to exercise your data rights
-
-**Anonymous Surveys** (your response cannot be linked to you):
-
-* Public surveys open to anyone
-* Unlisted surveys accessible via a shared link (without personal tokens)
-* **No receipt token is issued** to preserve your anonymity
-* We cannot identify which response is yours
-* **Data subject rights cannot be exercised** because there is no identifiable data subject
-
-**Important:** Under GDPR, anonymous data is not personal data. If you submit a truly anonymous response, we cannot later identify it as yours, even if you want us to. This is by design - it protects your privacy.
-
-**Pre-submission warning:** Before submitting an anonymous survey, you will see a notice explaining that your response cannot be linked to you and that data subject rights will not be exercisable.
-
-### 11.4 Receipt Tokens
-
-For pseudonymous surveys, you will receive a **Receipt Token** after submission. This token:
-
-* Is a unique identifier for your response
-* Is **not stored in a way that links it to your identity** - only you have it
-* Must be provided when making any data subject request
-* Allows us to locate your specific response without identifying all responses
-
-**If you lose your receipt token**, we may not be able to identify your response, especially for encrypted surveys. We recommend saving it securely.
-
-### 11.5 Encryption and Data Access
-
-Survey responses on CheckTick are encrypted with keys controlled by the survey creator. This means:
-
-* We cannot access or modify your encrypted data without the survey creator's involvement
-* Deletion or modification requests require the survey creator to action them
-* This encryption protects your data from unauthorized access, including from CheckTick staff
-
-### 11.4 Dispute Resolution
-
-If a survey creator refuses to comply with a legitimate data subject request:
-
-1. **We will investigate** the refusal and request justification from the controller
-2. **We may restrict processing** of the disputed data pending resolution
-3. **We may suspend the controller's account** if they persistently refuse to comply with data protection law
-4. **We will advise you** of your right to complain to the ICO
-
-We take data subject rights seriously. While we must balance our obligations as a processor with the controller's lawful purposes, we will not knowingly facilitate unlawful processing.
-
-### 11.5 Your Right to Complain
-
-If you believe your data protection rights have been violated, you may lodge a complaint with:
-
-* The **survey creator's** Data Protection Officer (if applicable)
-* **CheckTick** at [dpo@checktick.uk](mailto:dpo@checktick.uk)
-* The **Information Commissioner's Office (ICO)** - see Section 14
-
-## 12. Third-Party Links
-
-The Service may contain links to third-party websites or services. We are not responsible for their privacy practices. We encourage you to review their privacy policies.
-
-## 13. Changes to This Privacy Notice
-
-We may update this Privacy Notice from time to time. We will:
-
-* Update the "Last Updated" date at the top
-* Notify you of material changes via email or Service notification
-* Give you opportunity to review changes before they take effect
-
-Continued use of the Service after changes constitutes acceptance.
-
-## 14. Contact Us
-
-For privacy-related questions or to exercise your data rights, contact us:
-
-* **Email:** [support@checktick.uk](support@checktick.uk)
-* **Data Protection Officer:** [dpo@checktick.uk](dpo@checktick.uk)
-* **GitHub Issues:** [https://github.com/eatyourpeas/checktick/issues](https://github.com/eatyourpeas/checktick/issues)
-* **Documentation:** [https://checktick.com/docs/](https://checktick.com/docs/)
-
-## 15. Supervisory Authority
-
-If you believe we have not adequately addressed your privacy concerns, you have the right to lodge a complaint with:
-
-**Information Commissioner's Office (ICO)**
-
-* Website: [https://ico.org.uk](https://ico.org.uk)
-* Helpline: 0303 123 1113
-* Address: Wycliffe House, Water Lane, Wilmslow, Cheshire, SK9 5AF
+* Network isolation
+* Firewall controls
+* Continuous vulnerability scanning
 
 ---
 
-**Last Updated: 4 January 2026**
+## 6. Data Retention
 
-This Privacy Notice is designed to be transparent and help you understand how Eatyourpeas Ltd (trading as CheckTick) handles your personal information. If you have any questions, please don't hesitate to contact us.
+* Active accounts: retained while in use
+* Deleted data: removed within 30 days
+* Backups: retained up to 90 days
+
+---
+
+## 7. Your Rights
+
+You have rights under UK GDPR including:
+
+* Access
+* Rectification
+* Erasure
+* Restriction
+* Portability
+* Objection
+
+Requests: support@checktick.uk
+
+---
+
+## 8. Children's Data
+
+Users collecting children’s data must:
+
+* Obtain appropriate consent
+* Follow safeguarding and NHS guidance
+* Ensure lawful processing
+
+---
+
+## 9. International Transfers
+
+Data is primarily stored in the UK.
+
+Where transfers occur, safeguards include:
+* Standard Contractual Clauses
+* UK GDPR-compliant DPAs
+
+---
+
+## 10. Your Responsibilities (Controllers)
+
+You must:
+
+* Define lawful basis
+* Provide privacy notices
+* Respond to data subject requests
+* Conduct DPIAs where required
+
+---
+
+## 11. Survey Respondents
+
+### 11.1 Controller Responsibility
+
+The survey creator is the data controller.
+
+### 11.2 Your Rights
+
+Contact the survey creator first.
+
+If unresolved, contact: dpo@checktick.uk
+
+### 11.3 Anonymous vs Pseudonymous
+
+Anonymous responses cannot be linked to individuals and rights cannot be exercised.
+
+### 11.4 Receipt Tokens
+
+Used to identify responses without revealing identity.
+
+### 11.5 Dispute Resolution
+
+We may:
+
+* Contact the controller
+* Restrict processing
+* Escalate issues
+
+### 11.6 Complaints
+
+You may complain to:
+
+**Information Commissioner's Office (ICO)**
+https://ico.org.uk
+
+---
+
+## 12. Changes
+
+We will notify users of material changes.
+
+---
+
+## 13. Contact
+
+* support@checktick.uk
+* dpo@checktick.uk
+
+---
+
+**Last Updated: 6 April 2026**
