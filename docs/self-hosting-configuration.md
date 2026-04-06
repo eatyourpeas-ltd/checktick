@@ -129,6 +129,7 @@ EXTERNAL_DATASET_API_KEY=your-rcpch-api-key
 Get your free API key from: https://api.rcpch.ac.uk
 
 This provides access to:
+
 - Hospitals (England & Wales)
 - NHS Trusts
 - Welsh Local Health Boards
@@ -151,6 +152,7 @@ LLM_AUTH_TYPE=apim  # or 'bearer' (default: apim)
 ```
 
 Supported LLM providers:
+
 - **Local Ollama**: `http://localhost:11434/v1/chat/completions` (use `LLM_AUTH_TYPE=bearer`)
 - **OpenAI**: `https://api.openai.com/v1/chat/completions` (use `LLM_AUTH_TYPE=bearer`)
 - **Azure OpenAI**: `https://your-resource.openai.azure.com/openai/deployments/your-model/chat/completions?api-version=2024-02-15-preview` (use `LLM_AUTH_TYPE=bearer`)
@@ -211,20 +213,27 @@ IG_LEAD_EMAIL="ig@yourdomain.com"
 # Chief Technology Officer (optional - defaults to DPO if not set)
 CTO="Dr Jane Smith"
 CTO_EMAIL="cto@yourdomain.com"
+
+# Clinical Safety Officer (optional - defaults to DPO if not set)
+# Must be a registered health professional with DCB0129 clinical safety training
+CSO="Dr Jane Smith"
+CSO_EMAIL="cso@yourdomain.com"
 ```
 
 **Defaults:**
+
 - If not provided, placeholder text like `[DPO Name]` will appear in documentation
-- `CTO` and `CTO_EMAIL` default to the `DPO` values if not separately configured
+- `CTO`, `CTO_EMAIL`, `CSO`, and `CSO_EMAIL` default to the `DPO` values if not separately configured
 - This allows small teams where one person holds multiple roles to configure fewer variables
 
-**Usage:** These variables appear in the DSPT compliance documentation at `/compliance/`. They are used for:
+**Usage:** These variables appear in the DSPT compliance documentation at `/compliance/` and in the Clinical Safety documentation at `/clinical-safety/`. They are used for:
+
 - Policy ownership statements
 - Approval signatures
 - Contact information in procedures
 - Audit trail documentation
 
-**Note:** It is standard NHS practice to publish the names of governance role holders (DPO, Caldicott Guardian, SIRO) in public documentation. Ensure named individuals have consented to being listed.
+**Note:** It is standard NHS practice to publish the names of governance role holders (DPO, Caldicott Guardian, SIRO) in public documentation. Ensure named individuals have consented to being listed. The Clinical Safety Officer (`CSO`) must hold a recognised clinical registration and have completed NHS England Health IT Clinical Safety Training (or equivalent) per DCB0129.
 
 #### Hosting Provider API (Infrastructure Logs)
 
@@ -417,6 +426,7 @@ services:
 ```
 
 **Workers calculation:**
+
 - Formula: `(2 × CPU cores) + 1`
 - Example: 4 core server = 9 workers
 - Threads: 2-4 per worker for I/O-bound apps
@@ -490,6 +500,7 @@ Adjust in `nginx/nginx.conf` as needed for your traffic.
 ### Password Requirements
 
 CheckTick enforces Django's default password validators:
+
 - Minimum 8 characters
 - Cannot be too similar to username
 - Cannot be entirely numeric

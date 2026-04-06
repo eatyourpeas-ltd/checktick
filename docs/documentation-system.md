@@ -70,25 +70,39 @@ The DSPT categories map to the 10 NHS standards:
 
 DSPT docs are stored in `docs/compliance/` and accessed via `/compliance/<slug>/`.
 
+**Clinical Safety Documentation:**
+
+Clinical safety documents (DCB0129) are served from a separate `/clinical-safety/` section. Add markdown files to `docs/clinical-safety/` with the following frontmatter category:
+
+- `clinical-safety` - Clinical safety documents (DCB0129 hazard logs, safety cases, safety notices, DTAC)
+
+Use the `priority` field to control order within the section (lower number = higher in the list). Current documents:
+
+| Priority | Document |
+| :--- | :--- |
+| 1 | Clinical Safety Case Report (DCB0129) |
+| 2 | Digital Technology Assessment Criteria (DTAC v2.0) |
+
+Clinical safety docs are stored in `docs/clinical-safety/` and accessed via `/clinical-safety/<slug>/`.
+
 ### Template Variables
 
-Documentation files support template variable interpolation for platform-specific content. This allows self-hosters to see their own platform name in policy documents.
+Documentation files support template variable interpolation for platform-specific content. This allows self-hosters to see their own platform name and governance role holders in policy documents.
 
 **Supported Variables:**
 
 - `{{ platform_name }}` - Replaced with the platform name from SiteBranding or settings
 
-**Example:**
+Governance role variables (available in `docs/compliance/` and `docs/clinical-safety/`):
 
-```markdown
----
-title: Getting Started
-category: getting-started
-priority: 1
----
+- `{{ dpo_name }}` / `{{ dpo_email }}` — Data Protection Officer (`DPO` / `DPO_EMAIL` env vars)
+- `{{ siro_name }}` / `{{ siro_email }}` — Senior Information Risk Owner (`SIRO` / `SIRO_EMAIL`)
+- `{{ caldicott_name }}` / `{{ caldicott_email }}` — Caldicott Guardian (`CALDICOTT` / `CALDICOTT_EMAIL`)
+- `{{ ig_lead_name }}` / `{{ ig_lead_email }}` — Information Governance Lead (`IG_LEAD` / `IG_LEAD_EMAIL`)
+- `{{ cto_name }}` / `{{ cto_email }}` — Chief Technology Officer (`CTO` / `CTO_EMAIL`; defaults to DPO)
+- `{{ cso_name }}` / `{{ cso_email }}` — Clinical Safety Officer (`CSO` / `CSO_EMAIL`; defaults to DPO)
 
-Welcome to CheckTick! This guide will help you get started...
-```
+See [Self-Hosting Configuration](/docs/self-hosting-configuration/) for the full env var reference.
 
 ### Auto-Discovery
 

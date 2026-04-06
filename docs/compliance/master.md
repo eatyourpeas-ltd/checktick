@@ -33,7 +33,13 @@ Our technical controls for protecting data against unauthorized access and cyber
 * **Certifications:** <a href="/compliance/files/cyber-essentials-plus/" target="_blank" rel="noopener">Cyber Essentials Plus Certificate (PDF)</a>
 * **Development Standards:** [Documentation for Developers](https://checktick.uk/docs/category/developers/)
 
-## 3. Operational Resilience & Continuity
+## 3. Clinical Safety
+
+Clinical risk management in accordance with NHS England DCB0129.
+
+* **Clinical Safety Case:** [Clinical Safety Case Report (DCB0129)](/clinical-safety/clinical-safety-case/)
+
+## 4. Operational Resilience & Continuity
 
 Procedures to ensure data availability and recovery in the event of an incident.
 
@@ -41,7 +47,7 @@ Procedures to ensure data availability and recovery in the event of an incident.
 * **Breach Management:** [Incident Response Plan](/compliance/incident-response-plan/)
 * **Verification Logs:** [Annual DR Test Report](/compliance/annual-disaster-recovery/) | [Backup Log](/compliance/backup-log/)
 
-## 4. Individual Rights & Staff Responsibilities
+## 5. Individual Rights & Staff Responsibilities
 
 How we interact with data subjects and ensure staff competency.
 

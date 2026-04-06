@@ -26,6 +26,12 @@ urlpatterns = [
         name="compliance_file",
     ),
     path("compliance/<slug:slug>/", views_docs.compliance_page, name="compliance_page"),
+    # Clinical Safety documentation (DCB0129)
+    path(
+        "clinical-safety/<slug:slug>/",
+        views_docs.clinical_safety_page,
+        name="clinical_safety_page",
+    ),
     path("branding/", views.configure_branding, name="configure_branding"),
     path("delete-account/", views.delete_account, name="delete_account"),
     # Organisation setup

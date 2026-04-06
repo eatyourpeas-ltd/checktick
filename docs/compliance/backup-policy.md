@@ -22,11 +22,11 @@ snapshot capability with defined retention periods.
 {{ platform_name }} ensures all critical clinical and configuration data is backed
 up automatically:
 
-* **Database (PostgreSQL — Northflank Managed Addon):** Automated weekly snapshots
+* **Database (PostgreSQL — Northflank Managed Addon):** Automated daily snapshots
   managed by Northflank with a 120-day retention period. Snapshots are stored
   within Northflank's isolated backup infrastructure, separate from the live
   service environment.
-* **Encryption Vault (HashiCorp Vault — Northflank Service):** Weekly snapshots
+* **Encryption Vault (HashiCorp Vault — Northflank Service):** Daily snapshots
   of the Vault persistent volume via Northflank's volume backup capability.
   Vault unseal keys and custodian shares are stored offline by named administrators
   independently of the Northflank environment.
@@ -34,9 +34,8 @@ up automatically:
   globally redundant, immutable history of all application code and
   infrastructure configuration.
 
-Note: Backup frequency will be reviewed and increased to daily snapshots prior
-to live clinical deployment, in line with NHS data security expectations for
-production systems processing health data.
+Note: Backup frequency and retention will be reviewed prior to any significant
+change in data volume or clinical deployment scope.
 
 ## 3. Restoration Hierarchy (Order of Operations)
 
