@@ -66,6 +66,29 @@ env = environ.Env(
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+# Read version from pyproject.toml
+def _read_project_version() -> str:
+    try:
+        import tomllib  # Python 3.11+
+    except ImportError:
+        try:
+            import tomli as tomllib  # fallback for older Python
+        except ImportError:
+            return "unknown"
+    try:
+        with open(BASE_DIR / "pyproject.toml", "rb") as f:
+            data = tomllib.load(f)
+        return data.get("tool", {}).get("poetry", {}).get("version") or data.get(
+            "project", {}
+        ).get("version", "unknown")
+    except Exception:
+        return "unknown"
+
+
+PLATFORM_VERSION = _read_project_version()
+
 env_file = BASE_DIR / ".env"
 if env_file.exists():
     environ.Env.read_env(env_file)
@@ -121,6 +144,12 @@ CTO_EMAIL = env("CTO_EMAIL", default=None) or DPO_EMAIL
 # Clinical Safety Officer defaults to DPO if not set separately
 CSO_NAME = env("CSO", default=None) or DPO_NAME
 CSO_EMAIL = env("CSO_EMAIL", default=None) or DPO_EMAIL
+CSO_GMC_NUMBER = env("CSO_GMC_NUMBER", default="GMC 1234567")  # For DCB0129 compliance
+COMPANY_ADDRESS = env("COMPANY_ADDRESS", default="123 Business Street, London, UK")
+COMPANY_NAME = env("COMPANY_NAME", default="CheckTick Ltd")
+COMPANY_REGISTRATION_NUMBER = env("COMPANY_REGISTRATION_NUMBER", default="12345678")
+COMPANY_ODS_CODE = env("COMPANY_ODS_CODE", default="ABC123")  # For NHS organisations
+ICO_NUMBER = env("ICO_NUMBER", default="ZB123456")
 
 # Payment Processing Configuration
 # Use sandbox in DEBUG mode, production otherwise
@@ -150,6 +179,7 @@ VAT_RATE = float(os.environ.get("VAT_RATE", "0.20"))  # 20% UK VAT
 VAT_NUMBER = os.environ.get("VAT_NUMBER", "")  # Your VAT registration number
 COMPANY_NAME = os.environ.get("COMPANY_NAME", "CheckTick Ltd")
 COMPANY_ADDRESS = os.environ.get("COMPANY_ADDRESS", "123 Business Street, London, UK")
+COMPANY_REGISTRATION_NUMBER = os.environ.get("COMPANY_REGISTRATION_NUMBER", "12345678")
 
 # Subscription Tiers Configuration
 # GoCardless uses amounts directly (not price IDs like Paddle)

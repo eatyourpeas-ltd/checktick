@@ -74,7 +74,14 @@ DSPT docs are stored in `docs/compliance/` and accessed via `/compliance/<slug>/
 
 Clinical safety documents (DCB0129) are served from a separate `/clinical-safety/` section. Add markdown files to `docs/clinical-safety/` with the following frontmatter category:
 
-- `clinical-safety` - Clinical safety documents (DCB0129 hazard logs, safety cases, safety notices)
+- `clinical-safety` - Clinical safety documents (DCB0129 hazard logs, safety cases, safety notices, DTAC)
+
+Use the `priority` field to control order within the section (lower number = higher in the list). Current documents:
+
+| Priority | Document |
+| :--- | :--- |
+| 1 | Clinical Safety Case Report (DCB0129) |
+| 2 | Digital Technology Assessment Criteria (DTAC v2.0) |
 
 Clinical safety docs are stored in `docs/clinical-safety/` and accessed via `/clinical-safety/<slug>/`.
 

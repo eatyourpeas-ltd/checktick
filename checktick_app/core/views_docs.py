@@ -859,6 +859,19 @@ def _interpolate_governance_variables(content: str) -> str:
         "{{ cto_email }}": getattr(settings, "CTO_EMAIL", "cto@example.com"),
         "{{ cso_name }}": getattr(settings, "CSO_NAME", "[Clinical Safety Officer]"),
         "{{ cso_email }}": getattr(settings, "CSO_EMAIL", "cso@example.com"),
+        "{{ platform_version }}": getattr(settings, "PLATFORM_VERSION", "unknown"),
+        "{{ company_name }}": getattr(settings, "COMPANY_NAME", "[Company Name]"),
+        "{{ company_address }}": getattr(
+            settings, "COMPANY_ADDRESS", "[Company Address]"
+        ),
+        "{{ company_registration_number }}": getattr(
+            settings, "COMPANY_REGISTRATION_NUMBER", "[Company Registration Number]"
+        ),
+        "{{ company_ods_code }}": getattr(
+            settings, "COMPANY_ODS_CODE", "[Company ODS Code]"
+        ),
+        "{{ cso_gmc_number }}": getattr(settings, "CSO_GMC_NUMBER", "[GMC Number]"),
+        "{{ ico_number }}": getattr(settings, "ICO_NUMBER", "[ICO Number]"),
     }
     for placeholder, value in replacements.items():
         content = content.replace(placeholder, value)
