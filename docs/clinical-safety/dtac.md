@@ -67,7 +67,7 @@ priority: 2
 
 | Code | Question | Response |
 | :--- | :--- | :--- |
-| C2.1 | Compliant with annual DSPT assessment? | **Confirmed.** {{ platform_name }} (Eatyourpeas Ltd) completed the annual NHS Data Security and Protection Toolkit assessment on 6 April 2026. ODS code: {{ company_ods_code }}. Update this entry with the published submission status once ratified by NHSE. |
+| C2.1 | Compliant with annual DSPT assessment? | **Confirmed.** {{ platform_name }} (Eatyourpeas Ltd) completed the annual NHS Data Security and Protection Toolkit assessment on 6 April 2026. ODS code: {{ company_ods_code }}. Status [Standards Met](https://www.dsptoolkit.nhs.uk/OrganisationSearch/P6U6C). |
 | C2.2 | Does the product process personal data (including data of deceased individuals)? | **Yes.** The platform processes health-related survey data which may include patient-identifiable information such as name, date of birth, NHS number, and clinical responses. |
 | C2.2.1 | Evidence of ICO registration | **Provided.** Eatyourpeas Ltd is registered with the Information Commissioner's Office as a data controller. ICO Registration: {{ ico_number }} [certificate](https://ico.org.uk/ESDWebPages/Entry/{{ ico_number }}) |
 | C2.2.2 | Data Protection Impact Assessment (DPIA) | **Provided.** A DPIA has been completed for the {{ platform_name }} survey platform. See [DPIA: Survey Platform](/compliance/dpia-survey-platform/). |
@@ -83,9 +83,9 @@ priority: 2
 | Code | Question | Response |
 | :--- | :--- | :--- |
 | C3.1 | Cyber Essentials Certificate | **Provided.** {{ platform_name }} holds a current **Cyber Essentials Plus** certificate. See [Cyber Essentials Plus Certificate](/compliance/files/cyber-essentials-plus/). |
-| C3.2 | Signed the NHS Cyber Security Charter for Suppliers | > **TODO:** Confirm whether Eatyourpeas Ltd has signed the NHS Cyber Security Charter for NHS Suppliers. If yes, C3.3–C3.6 may be skippable. If not yet signed, complete C3.3–C3.6 below (all are met). |
+| C3.2 | Signed the NHS Cyber Security Charter for Suppliers | Eatyourpeas Ltd has signed the NHS Cyber Security Charter for NHS Suppliers on 6/4/2026 |
 | C3.3 | Summary report of external penetration test (last 12 months) | **Provided.** An external web application penetration test was conducted 16–19 March 2026 by an independent CREST-accredited assessor (reference AD24502). The Letter of Attestation confirming no vulnerabilities scoring 7.0+ (CVSS) is available at [Pentest Attestation AD24502-RPT-01](/compliance/files/pentest-AD24502-RPT-01/). All findings have been fully remediated — see [Pentest Remediation Response](/compliance/pentest-remediation-response-AD24502/). |
-| C3.4 | Adherence to DSIT/NCSC Software Security Code of Practice | **Confirmed.** {{ platform_name }}'s Secure Software Development Lifecycle (SSDLC) policy is aligned to the DSIT/NCSC Software Security Code of Practice. Controls include: mandatory GPG-signed commits; branch protection rules; automated dependency scanning (`pip-audit`); Subresource Integrity (SRI) verification for all third-party JavaScript; automated security testing in CI/CD; and a documented vulnerability management and patching policy. See [SSDLC Policy](/compliance/ssdlc-policy/) and [Security Overview](/docs/security-overview/). |
+| C3.4 | Adherence to DSIT/NCSC Software Security Code of Practice | **Confirmed.** {{ platform_name }}'s Secure Software Development Lifecycle (SSDLC) policy is aligned to the DSIT/NCSC Software Security Code of Practice. Controls include: mandatory GPG-signed commits; branch protection rules; automated dependency scanning (`pip-audit`); Subresource Integrity (SRI) verification for all third-party JavaScript; automated security testing in CI/CD; and a documented vulnerability management and patching policy. See [SSDLC Policy](/compliance/ssdlc-policy/) and [Security Overview](/docs/security-overview/) and [SSCoP](https://checktick.uk/compliance/software-security-assessment/). |
 | C3.5 | Plan for implementing Multi-Factor Authentication (MFA) | **Yes.** MFA is implemented and enforced. All administrative and staff access requires MFA via OIDC SSO (Google / Microsoft 365). Platform users are encouraged to enable 2FA; organisation administrators may enforce 2FA for all members. |
 | C3.5.1 | MFA enabled for supplier privileged access? | **Yes.** All privileged access to Northflank (hosting), GitHub (source code), and the platform admin console requires MFA. No privileged access is possible without MFA authentication. |
 | C3.6 | Logging and reporting requirements defined | **Yes.** Comprehensive audit logging is implemented across all layers: (1) an immutable application-level audit log captures all data access, export, modification, and authentication events with timestamps and user identity; (2) infrastructure-level logging via Northflank; (3) network-level logging via DNS and ingress. Logging policy and retention are documented in [Logging Policy](/compliance/logging-policy/). |
@@ -100,13 +100,13 @@ priority: 2
 | C4.1.1 | Do APIs use international/industry standards? | **Yes.** The API is built on **RESTful HTTP** principles and documented using **OpenAPI 3.0** (accessible at `/api/schema` and via the ReDoc interface at `/api/redoc`). Authentication uses **API key** tokens (via `Authorization: Api-Key` header) conforming to industry standard patterns. Data is returned as **JSON**. |
 | C4.1.2 | Do APIs follow GDS Open API Best Practice? | **Confirmed.** The API follows GDS API technical and data standards: versioned endpoints, consistent JSON responses, standard HTTP status codes, and a published OpenAPI schema. See [API Reference](/docs/api/). |
 | C4.1.3 | Basis on which APIs are made available to third parties | API access is scoped per survey and per organisation, operating on the principle of least privilege. API keys are generated by authenticated users through the MFA-protected web UI and can be revoked at any time. Each key can only access data within the survey(s) explicitly scoped to it. Revoking a user's account immediately revokes all associated keys. Rate limiting is enforced at the Northflank ingress layer. All API access is logged in the immutable audit trail. |
-| C4.2 | Intended to share or receive data from national or local systems? | **Not currently by default.** The platform provides an API that deploying organisations may use to integrate with local EPR or clinical dashboard systems. Out-of-the-box, {{ platform_name }} does not have pre-built integrations with national systems (PDS, NHS login, DAPB3051). |
+| C4.2 | Intended to share or receive data from national or local systems? | **Not currently by default.** The platform provides an API that deploying organisations may use to integrate with local EPR or clinical dashboard systems. Out-of-the-box, {{ platform_name }} does not have pre-built integrations with national systems (PDS, NHS login, DAPB3051). Currently CheckTick only supports GET requests and does not expose survey data |
 | C4.2.1 | Capable of using NHS number to identify patient data? | **Yes.** {{ platform_name }} provides a validated NHS number question type with real-time check-digit validation conforming to the NHS number algorithm. Survey creators may include this as a patient identifier field. The platform stores and exports NHS numbers in their validated format. |
-| C4.2.2 | Integrate with NHS PDS or local record systems? | **No** — not by default. The platform API allows local integrations to be built by deploying organisations. Native PDS lookup integration is not currently implemented. > **TODO:** If PDS integration is planned, document the timeline here. |
+| C4.2.2 | Integrate with NHS PDS or local record systems? | **No.** {{ platform_name }} does not integrate with NHS PDS or any EPR system, and there are no current plans to do so. The platform API is available should a deploying organisation wish to build a local integration, but this is not a built-in feature. See C4.2.3 for the approach to record identification in the absence of PDS integration. |
 | C4.2.3 | Approach to identify records if no PDS integration | Record linkage relies on identifiers collected within surveys as configured by the survey creator. These may include NHS number (with check-digit validation), MRN/local hospital number, name, and date of birth, as determined by the clinical team deploying the survey. Survey creators are responsible for the identifier strategy appropriate to their clinical context, per their own DCB0160 Clinical Risk Management File. |
-| C4.2.4 | Use NHS login to verify identity (if patient-facing)? | **No.** Patient-facing surveys are accessed via a unique secure link. Authentication for clinician and staff accounts uses OIDC SSO (Google / Microsoft 365) or local accounts with 2FA. > **TODO:** If NHS login integration is planned, document the timeline and approach here. |
+| C4.2.4 | Use NHS login to verify identity (if patient-facing)? | **No.** Patient-facing surveys are accessed via a unique secure link and require account creation and login with CAPTCHA and MFA. Authentication for clinician and staff accounts uses OIDC SSO (Google / Microsoft 365) or local accounts with 2FA. Application for NHS Mail has been made and integration is planned. |
 | C4.2.5 | Support DAPB3051 for public health / social care? | **Not applicable** to the current version. |
-| C4.2.6 | Approach to authenticating users (not using NHS login) | Clinician and staff accounts are authenticated via: (1) local username/password with enforced 2FA; or (2) OIDC SSO via Google Workspace or Microsoft 365, with MFA enforced at the identity provider level. Session management follows OWASP best practice (short-lived JWT tokens; secure, HttpOnly cookies; CSRF protection). See [Authentication & Permissions](/docs/authentication-and-permissions/). |
+| C4.2.6 | Approach to authenticating users (not using NHS login) | Clinician and staff accounts are authenticated via: (1) local username/password with enforced 2FA; or (2) OIDC SSO via Google Workspace or Microsoft 365, with MFA enforced at the identity provider level. Post-authentication, sessions are managed server-side using Django's database-backed session framework (30-minute inactivity timeout; expires on browser close) with secure, HttpOnly, SameSite cookies and CSRF protection. See [Authentication & Permissions](/docs/authentication-and-permissions/). |
 
 ---
 
@@ -123,7 +123,7 @@ priority: 2
 | D1.4.1 | Comply with WCAG 2.2 AA or higher? | **Yes** — the platform targets **WCAG 2.1 AA** compliance (with WCAG 2.2 AA improvements in progress). Automated accessibility testing using `axe-core` is integrated into the test suite and runs against all key page templates. See [Accessibility](/docs/accessibility/). |
 | D1.4.2 | Timescale to obtain WCAG 2.2 AA | > **TODO:** Confirm target date for full WCAG 2.2 AA compliance. Current status: WCAG 2.1 AA met; known WCAG 2.2 items under active development. |
 | D1.4.3 | Link to published accessibility statement | [https://checktick.uk/docs/accessibility/](/docs/accessibility/) |
-| D1.5 | Average service availability (past 12 months) | > **TODO:** Insert service availability percentage to two decimal places (e.g. 99.95%) from Northflank uptime monitoring for the 12 months preceding this submission. |
+| D1.5 | Average service availability (past 12 months) | Continuous uptime monitoring via UptimeRobot (5-minute polling) has been in place from 7 April 2026. Live 30-day availability is published at [https://stats.uptimerobot.com/h6PxL9FtVb](https://stats.uptimerobot.com/h6PxL9FtVb). A 12-month figure will be available from April 2027. Northflank infrastructure SLA is 99.9%. |
 
 ---
 
@@ -136,7 +136,7 @@ priority: 2
 | C1.1 | Pre-Acquisition Questionnaire (PAQ) — Medical Device | Not applicable (not a medical device) |
 | C1.2.3 | Clinical Safety Case Report | ✅ [CSC-001 — Clinical Safety Case Report (DCB0129)](/clinical-safety/clinical-safety-case/) |
 | C1.2.4 | Hazard Log | ✅ Embedded in [Clinical Safety Case Report](/clinical-safety/clinical-safety-case/) Section 5 |
-| C2.2.1 | ICO registration certificate | > **TODO:** Attach current ICO certificate (ZB-XXXXXXX) |
+| C2.2.1 | ICO registration certificate | {{ ico_number }} [certificate](https://ico.org.uk/ESDWebPages/Entry/{{ ico_number }}) |
 | C2.2.2 | Data Protection Impact Assessment | ✅ [DPIA: Survey Platform](/compliance/dpia-survey-platform/) |
 | C2.2.4 | Terms and Conditions / EULA | ✅ [Terms of Service](/docs/terms-of-service/) |
 | C3.1 | Cyber Essentials Plus Certificate | ✅ [Certificate (PDF)](/compliance/files/cyber-essentials-plus/) |
@@ -153,15 +153,10 @@ The following items require action before this form is submitted to a procuring 
 | :--- | :--- | :--- |
 | B3 | Document formal evaluations, pilot deployments, or user research | {{ siro_name }} |
 | B4 | Prepare user journey map / data flow diagram | {{ cto_name }} |
-| C2.1 | Update with ratified DSPT submission status once published by NHSE | {{ siro_name }} |
-| C2.2.1 | Insert ICO registration number; attach certificate | {{ siro_name }} |
-| C3.2 | Confirm whether NHS Cyber Security Charter has been or should be signed | {{ cto_name }} |
-| C4.2.2 | Document PDS integration plan/timeline if applicable | {{ cto_name }} |
-| C4.2.4 | Document NHS login integration plan/timeline if applicable | {{ cto_name }} |
+| C4.2.4 | Document NHS login integration plan/timeline - application submitted 6.4.2026 | {{ cto_name }} |
 | D1.1 | Prepare care pathway / user journey documentation | {{ siro_name }} |
 | D1.2 | Document usability testing with intended users | {{ siro_name }} |
 | D1.4.2 | Confirm target date for full WCAG 2.2 AA compliance | {{ cto_name }} |
-| D1.5 | Insert 12-month service availability percentage from Northflank monitoring | {{ cto_name }} |
 
 ---
 
@@ -194,9 +189,9 @@ Digital Health Technologies include software—mobile or web applications or Saa
 
 ### Form Components
 
-1.  **Section A & B:** Company information and Value proposition (Non-assessed context).
-2.  **Section C1-C4:** Core assessment criteria (Assessed sections - Must meet these to pass).
-3.  **Section D:** Usability and Accessibility principles (Scored element).
+1. **Section A & B:** Company information and Value proposition (Non-assessed context).
+2. **Section C1-C4:** Core assessment criteria (Assessed sections - Must meet these to pass).
+3. **Section D:** Usability and Accessibility principles (Scored element).
 
 ---
 
