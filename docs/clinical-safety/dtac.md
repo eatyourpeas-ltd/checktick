@@ -123,7 +123,7 @@ priority: 2
 | D1.4.1 | Comply with WCAG 2.2 AA or higher? | **Yes** — the platform targets **WCAG 2.1 AA** compliance (with WCAG 2.2 AA improvements in progress). Automated accessibility testing using `axe-core` is integrated into the test suite and runs against all key page templates. See [Accessibility](/docs/accessibility/). |
 | D1.4.2 | Timescale to obtain WCAG 2.2 AA | > **TODO:** Confirm target date for full WCAG 2.2 AA compliance. Current status: WCAG 2.1 AA met; known WCAG 2.2 items under active development. |
 | D1.4.3 | Link to published accessibility statement | [https://checktick.uk/docs/accessibility/](/docs/accessibility/) |
-| D1.5 | Average service availability (past 12 months) | Continuous uptime monitoring via UptimeRobot (5-minute polling) has been in place from 7 April 2026. Live 30-day availability is published at [https://stats.uptimerobot.com/h6PxL9FtVb](https://stats.uptimerobot.com/h6PxL9FtVb). A 12-month figure will be available from April 2027. Northflank infrastructure SLA is 99.9%. |
+| D1.5 | Average service availability (past 12 months) | Continuous uptime monitoring via StatusCake (5-minute polling) has been in place from 7 April 2026. Live 30-day availability is published at [https://app.statuscake.com/UptimeStatus.php?tid=7928755](https://app.statuscake.com/UptimeStatus.php?tid=7928755). A 12-month figure will be available from April 2027. Northflank infrastructure SLA is 99.9%. |
 
 ---
 
