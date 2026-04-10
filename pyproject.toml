@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "checktick"
-version = "0.2.28"
+version = "0.2.29"
 description = "Secure, server-rendered survey platform for medical audit and research"
 authors = ["CheckTick Maintainers <simon@eatyourpeas.co.uk>"]
 readme = "README.md"
