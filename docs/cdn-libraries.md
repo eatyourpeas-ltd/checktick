@@ -19,7 +19,7 @@ CheckTick self-hosts critical JavaScript libraries with Subresource Integrity (S
 |---------|---------|------|---------|
 | HTMX | 1.9.12 | `checktick_app/static/js/htmx.min.js` | Dynamic HTML updates without JavaScript |
 | SortableJS | 1.15.7 | `checktick_app/static/js/sortable.min.js` | Drag-and-drop reordering |
-| axe-core | 4.11.1 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
+| axe-core | 4.11.2 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
 | NHS Frontend | 8.1.0 | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling |
 | ReDoc | 2.5.2 | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation |
 
@@ -39,10 +39,10 @@ sha384-EfwldhYywH4qYH9vU8lMn+pd6pcH0kGpPUVJuwyHnj/5felkkIUVxf1wMAEX7rCY
 sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc
 ```
 
-### axe-core 4.11.1
+### axe-core 4.11.2
 
 ```text
-sha384-CEnpkh+ndCKp9F6zlTFMCy3ebmIfIj+HyBbO4hxQz4bVQNq+Id1MPxPF6cZ4QzPA
+sha384-zRVu3r+67m6UWo2ljwGVKxuMOzmMfp2lcxhNVGw0fk2xsbIpJ1mGyY7GV4jPiKu8
 ```
 
 ### NHS Frontend 8.1.0
@@ -93,11 +93,11 @@ curl -o checktick_app/static/js/sortable.min.js https://cdn.jsdelivr.net/npm/sor
 #   cp /tmp/package/Sortable.min.js checktick_app/static/js/sortable.min.js && rm sortablejs-1.15.7.tgz
 
 # axe-core
-curl -o checktick_app/static/js/axe-core.min.js https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.11.1/axe.min.js
+curl -o checktick_app/static/js/axe-core.min.js https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.11.2/axe.min.js
 
 # Alternative: npm pack (recommended)
-# npm pack axe-core@4.11.1 && tar -xzf axe-core-4.11.1.tgz -C /tmp && \
-#   cp /tmp/package/dist/axe.min.js checktick_app/static/js/axe-core.min.js && rm axe-core-4.11.1.tgz
+# npm pack axe-core@4.11.2 && tar -xzf axe-core-4.11.2.tgz -C /tmp && \
+#   cp /tmp/package/axe.min.js checktick_app/static/js/axe-core.min.js && rm axe-core-4.11.2.tgz
 
 # NHS Frontend
 curl -o checktick_app/static/css/nhsuk-frontend.min.css https://cdn.jsdelivr.net/npm/nhsuk-frontend@8.1.0/dist/nhsuk.min.css
