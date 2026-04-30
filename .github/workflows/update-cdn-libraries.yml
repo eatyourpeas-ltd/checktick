@@ -17,7 +17,7 @@ env:
   HTMX_VERSION: "2.0.10"
   SORTABLEJS_VERSION: "1.15.7"
   REDOC_VERSION: "2.5.2"
-  AXE_CORE_VERSION: "4.11.2"
+  AXE_CORE_VERSION: "4.11.3"
 
 jobs:
   check-libraries:

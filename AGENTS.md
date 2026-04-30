@@ -26,6 +26,16 @@ It signposts common workflows and links to the full docs instead of duplicating 
 
 - Any feature or bug fix must be completed by running `s/lint` before committing.
 
+### 4. Bump package version before PR
+
+- For dependency updates, bump `package.json` `version` using semver (`major`/`minor`/`patch`) before raising a PR.
+
+## Dependencies
+
+- For self-hosted JavaScript dependency and SRI updates, use `docs/cdn-libraries.md` as the source of truth.
+- Follow the `npm pack` + SHA-384 SRI workflow in `docs/cdn-libraries.md` (or use `s/update-cdn-assets` where appropriate) when bumping JS packages.
+- Always record dependency/security patch updates in `docs/compliance/vulnerability-patch-log.md` (sometimes referred to as patch vulnerability logs) with date, version change, and verification notes.
+
 ## Notes
 
 - Keep changes minimal and scoped to the request.
