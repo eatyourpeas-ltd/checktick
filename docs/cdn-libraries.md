@@ -17,7 +17,7 @@ CheckTick self-hosts critical JavaScript libraries with Subresource Integrity (S
 
 | Library | Version | File | Purpose |
 |---------|---------|------|---------|
-| HTMX | 1.9.12 | `checktick_app/static/js/htmx.min.js` | Dynamic HTML updates without JavaScript |
+| HTMX | 2.0.10 | `checktick_app/static/js/htmx.min.js` | Dynamic HTML updates without JavaScript |
 | SortableJS | 1.15.7 | `checktick_app/static/js/sortable.min.js` | Drag-and-drop reordering |
 | axe-core | 4.11.2 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
 | NHS Frontend | 8.1.0 | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling |
@@ -27,10 +27,10 @@ CheckTick self-hosts critical JavaScript libraries with Subresource Integrity (S
 
 Current SRI hashes (SHA-384):
 
-### HTMX 1.9.12
+### HTMX 2.0.10
 
 ```text
-sha384-EfwldhYywH4qYH9vU8lMn+pd6pcH0kGpPUVJuwyHnj/5felkkIUVxf1wMAEX7rCY
+sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V
 ```
 
 ### SortableJS 1.15.7
@@ -79,11 +79,11 @@ GitHub Actions workflows automatically check for updates:
 
 ```bash
 # HTMX
-curl -o checktick_app/static/js/htmx.min.js https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js
+curl -o checktick_app/static/js/htmx.min.js https://unpkg.com/htmx.org@2.0.10/dist/htmx.min.js
 
 # Alternative: npm pack (recommended for reproducibility)
-# npm pack htmx.org@1.9.12 && tar -xzf htmx.org-1.9.12.tgz -C /tmp && \
-#   cp /tmp/package/dist/htmx.min.js checktick_app/static/js/htmx.min.js && rm htmx.org-1.9.12.tgz
+# npm pack htmx.org@2.0.10 && tar -xzf htmx.org-2.0.10.tgz -C /tmp && \
+#   cp /tmp/package/dist/htmx.min.js checktick_app/static/js/htmx.min.js && rm htmx.org-2.0.10.tgz
 
 # SortableJS
 curl -o checktick_app/static/js/sortable.min.js https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js
@@ -201,7 +201,7 @@ Since files are self-hosted, CDN outages don't
 
 1. Check CDN status (unpkg, jsDelivr)
 2. Try alternative CDN source
-3. Use npm to download: `npm pack htmx.org@1.9.12`
+3. Use npm to download: `npm pack htmx.org@2.0.10`
 
 ## CDN Sources
 
