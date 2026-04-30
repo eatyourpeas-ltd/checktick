@@ -4,7 +4,8 @@ on:
   schedule:
     # Run weekly on Mondays at 9:30am UTC
     - cron: "30 9 * * 1"
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch:
+    # Allow manual trigger
 
 permissions:
   contents: write
@@ -13,7 +14,7 @@ permissions:
 
 env:
   # Library versions - update these when upgrading
-  HTMX_VERSION: "2.0.8"
+  HTMX_VERSION: "2.0.10"
   SORTABLEJS_VERSION: "1.15.7"
   REDOC_VERSION: "2.5.2"
   AXE_CORE_VERSION: "4.11.2"
@@ -284,7 +285,10 @@ jobs:
 
       - name: Create Pull Request for hash changes
         id: create-pr
-        if: steps.check-htmx.outputs.changed == 'true' || steps.check-sortablejs.outputs.changed == 'true' || steps.check-axecore.outputs.changed == 'true' || steps.check-redoc.outputs.changed == 'true'
+        if: steps.check-htmx.outputs.changed == 'true' ||
+          steps.check-sortablejs.outputs.changed == 'true' ||
+          steps.check-axecore.outputs.changed == 'true' ||
+          steps.check-redoc.outputs.changed == 'true'
         continue-on-error: true
         uses: peter-evans/create-pull-request@v6
         with:
@@ -340,7 +344,10 @@ jobs:
             **ReDoc** (redoc.html): `sha384-${{ steps.check-redoc.outputs.new_hash }}`
 
       - name: Create per-dependency version issues
-        if: steps.check-versions.outputs.htmx_update_available == 'true' || steps.check-versions.outputs.sortablejs_update_available == 'true' || steps.check-versions.outputs.axecore_update_available == 'true' || steps.check-versions.outputs.redoc_update_available == 'true'
+        if: steps.check-versions.outputs.htmx_update_available == 'true' ||
+          steps.check-versions.outputs.sortablejs_update_available == 'true' ||
+          steps.check-versions.outputs.axecore_update_available == 'true' ||
+          steps.check-versions.outputs.redoc_update_available == 'true'
         uses: actions/github-script@v6
         with:
           script: |

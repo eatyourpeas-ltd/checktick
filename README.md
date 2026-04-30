@@ -37,6 +37,7 @@ docker compose -f docker-compose.registry.yml up -d
 ## Documentation
 
 Documentation can be found [here](https://checktick.eatyourpeas.dev/docs/)
+LLM coding agents should start with [AGENTS.md](AGENTS.md) for repo workflow guidance and doc signposts.
 
 ## Getting Help & Contributing
 

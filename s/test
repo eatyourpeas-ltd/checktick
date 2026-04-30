@@ -8,6 +8,7 @@
 #   --a11y        Run only accessibility tests
 #   --no-a11y     Run all tests except accessibility (no Chromium needed)
 #   --unit        Run only unit tests (exclude playwright)
+#   --host-fallback  Run locally via Poetry if Docker web container is not running
 #   --serial      Run tests serially (no parallelization)
 #   --coverage    Run with coverage report
 #   --help        Show this help message
@@ -18,7 +19,8 @@ set -e
 TEST_SCOPE="all"
 PARALLEL=true
 COVERAGE=false
-EXTRA_ARGS=""
+HOST_FALLBACK=false
+EXTRA_ARGS=()
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -47,6 +49,10 @@ while [[ $# -gt 0 ]]; do
             PARALLEL=false
             shift
             ;;
+        --host-fallback)
+            HOST_FALLBACK=true
+            shift
+            ;;
         --coverage)
             COVERAGE=true
             shift
@@ -65,11 +71,13 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Execution Options:"
             echo "  --serial      Run tests serially (no parallelization)"
+            echo "  --host-fallback  Run locally if Docker web container is not running"
             echo "  --coverage    Generate coverage report"
             echo ""
             echo "Examples:"
             echo "  $0                    # Run all tests in parallel"
             echo "  $0 --no-a11y          # Run all tests except accessibility"
+            echo "  $0 --no-a11y --host-fallback  # Fallback to local run when web container is down"
             echo "  $0 --a11y             # Run accessibility tests only"
             echo "  $0 --fast --coverage  # Fast tests with coverage"
             echo "  $0 --serial           # Run all tests without xdist"
@@ -77,23 +85,23 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             # Pass unknown args to pytest
-            EXTRA_ARGS="$EXTRA_ARGS $1"
+            EXTRA_ARGS+=("$1")
             shift
             ;;
     esac
 done
 
 # Build pytest command
-PYTEST_CMD="python -m pytest"
+PYTEST_CMD=(python -m pytest)
 
 # Add parallelization flag
 if [ "$PARALLEL" = true ]; then
-    PYTEST_CMD="$PYTEST_CMD -n auto"
+    PYTEST_CMD+=(-n auto)
 fi
 
 # Add coverage if requested
 if [ "$COVERAGE" = true ]; then
-    PYTEST_CMD="$PYTEST_CMD --cov=checktick_app --cov-report=html --cov-report=term"
+    PYTEST_CMD+=(--cov=checktick_app --cov-report=html --cov-report=term)
 fi
 
 # Add test scope filters
@@ -102,25 +110,51 @@ case $TEST_SCOPE in
         # Run everything
         ;;
     fast)
-        PYTEST_CMD="$PYTEST_CMD -m 'not slow'"
+        PYTEST_CMD+=(-m "not slow")
         ;;
     a11y)
-        PYTEST_CMD="$PYTEST_CMD tests/test_accessibility.py"
+        PYTEST_CMD+=(tests/test_accessibility.py)
         ;;
     no-a11y)
-        PYTEST_CMD="$PYTEST_CMD --ignore=tests/test_accessibility.py"
+        PYTEST_CMD+=(--ignore=tests/test_accessibility.py)
         ;;
     unit)
-        PYTEST_CMD="$PYTEST_CMD --ignore=tests/test_accessibility.py"
+        PYTEST_CMD+=(--ignore=tests/test_accessibility.py)
         ;;
 esac
 
 # Add any extra args
-PYTEST_CMD="$PYTEST_CMD $EXTRA_ARGS"
+if [ ${#EXTRA_ARGS[@]} -gt 0 ]; then
+    PYTEST_CMD+=("${EXTRA_ARGS[@]}")
+fi
+
+# Determine execution mode
+EXEC_PREFIX=()
+if docker compose ps --status running --services 2>/dev/null | grep -q '^web$'; then
+    EXEC_PREFIX=(docker compose exec web)
+else
+    if [ "$HOST_FALLBACK" = true ]; then
+        if command -v poetry >/dev/null 2>&1; then
+            EXEC_PREFIX=(poetry run)
+        else
+            echo "⚠️  Docker web container is not running and Poetry is not available." >&2
+            echo "    Falling back to local Python environment." >&2
+        fi
+    else
+        echo "❌ Docker web container is not running." >&2
+        echo "   Start it with: docker compose up -d" >&2
+        echo "   Or run tests locally with: $0 --host-fallback [other flags]" >&2
+        exit 1
+    fi
+fi
 
 echo "🧪 Running tests..."
-echo "   Command: $PYTEST_CMD"
+echo "   Command: ${EXEC_PREFIX[*]} ${PYTEST_CMD[*]}"
 echo ""
 
 # Run tests
-$PYTEST_CMD
+if [ ${#EXEC_PREFIX[@]} -gt 0 ]; then
+    "${EXEC_PREFIX[@]}" "${PYTEST_CMD[@]}"
+else
+    "${PYTEST_CMD[@]}"
+fi
