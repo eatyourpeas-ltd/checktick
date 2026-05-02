@@ -18,6 +18,17 @@ CheckTick uses a secure payment provider to handle all billing. We offer flexibl
 
 All prices are **inclusive of 20% UK VAT**. Base rate: £5 per seat (ex VAT) = £6 per seat (inc VAT).
 
+### Default Hosted Prices
+
+Hosted pricing defaults are configured in application settings and used for checkout unless overridden by Platform Admin:
+
+- **Individual Pro:** £6/month (inc VAT), £5/month (ex VAT)
+- **Team Small (5 seats):** £30/month (inc VAT), £25/month (ex VAT)
+- **Team Medium (15 seats):** £90/month (inc VAT), £75/month (ex VAT)
+- **Team Large (50 seats):** £300/month (inc VAT), £250/month (ex VAT)
+
+Organisation and Enterprise pricing remain bespoke.
+
 ## Available Plans
 
 ### Individual Plans
@@ -156,6 +167,29 @@ You can:
 - Download invoice PDFs
 - See payment dates and amounts
 - Check payment status
+
+## Platform Admin Pricing Overrides
+
+For hosted deployments, superusers can override default public prices from the Platform Admin panel.
+
+### Access
+
+- Navigate to **Platform Admin** -> **Pricing**
+- URL: `/platform-admin/pricing/`
+- Access is restricted to superusers
+
+### What It Does
+
+- Overrides **Pro**, **Team Small**, **Team Medium**, and **Team Large** prices
+- Stores both **inc VAT** and **ex VAT** amounts
+- Uses settings defaults when an override is disabled or blank
+- Updates the public pricing page and new checkout pricing without a code deploy
+
+### Scope and Limitations
+
+- Overrides affect new subscriptions and displayed prices
+- Existing subscriptions are not retroactively repriced
+- Organisation and Enterprise pricing are managed separately as bespoke plans
 
 ## Upgrading Your Plan
 

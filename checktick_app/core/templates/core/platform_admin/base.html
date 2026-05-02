@@ -50,6 +50,12 @@
               {% trans "Logs" %}
             </a>
           </li>
+          <li>
+            <a href="{% url 'core:platform_admin_pricing' %}"
+               class="btn btn-sm {% if request.resolver_match.url_name == 'platform_admin_pricing' %}btn-primary{% else %}btn-ghost{% endif %}">
+              {% trans "Pricing" %}
+            </a>
+          </li>
         </ul>
       </nav>
     </div>

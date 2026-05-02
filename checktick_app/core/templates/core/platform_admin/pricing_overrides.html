@@ -1,0 +1,154 @@
+{% extends 'core/platform_admin/base.html' %}
+{% load i18n %}
+
+{% block platform_title %}{% trans "Pricing Overrides" %}{% endblock %}
+
+{% block platform_content %}
+<div class="max-w-4xl">
+
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h2 class="text-2xl font-bold">{% trans "Pricing Overrides" %}</h2>
+      <p class="text-base-content/70 mt-1">
+        {% trans "Override the prices configured in settings.py without a code deploy. Amounts are entered in pounds (£). Leave a row blank to fall back to the settings.py default." %}
+      </p>
+    </div>
+  </div>
+
+  <div class="alert alert-info mb-6">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+    </svg>
+    <div class="text-sm">
+      <strong>{% trans "Note:" %}</strong>
+      {% blocktrans %}
+        Active overrides affect what is shown on the public pricing page and what GoCardless charges for new subscriptions.
+        They do <em>not</em> retroactively change existing subscriptions.
+        Deactivating an override reverts the displayed price to the settings.py default.
+      {% endblocktrans %}
+    </div>
+  </div>
+
+  <form method="post" action="{% url 'core:platform_admin_pricing' %}">
+    {% csrf_token %}
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>{% trans "Tier" %}</th>
+                <th class="text-right">{% trans "Default (settings.py)" %}</th>
+                <th class="text-right">{% trans "Effective now" %}</th>
+                <th>{% trans "Override (£ inc. VAT)" %}</th>
+                <th>{% trans "Override (£ ex. VAT)" %}</th>
+                <th class="text-center">{% trans "Active" %}</th>
+                <th>{% trans "Last updated" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in tier_rows %}
+              <tr class="{% if row.has_active_override %}bg-warning/10{% endif %}">
+                <td>
+                  <span class="font-semibold">{{ row.label }}</span>
+                  <br>
+                  <span class="text-xs text-base-content/50">{{ row.key }}</span>
+                </td>
+                <td class="text-right text-base-content/60">
+                  £{{ row.settings_amount_pounds }}
+                  <br>
+                  <span class="text-xs">(ex: £{{ row.settings_amount_ex_vat_pounds }})</span>
+                </td>
+                <td class="text-right font-semibold {% if row.has_active_override %}text-warning{% endif %}">
+                  £{{ row.effective_amount_pounds }}
+                  <br>
+                  <span class="text-xs font-normal">ex: £{{ row.effective_amount_ex_vat_pounds }}</span>
+                </td>
+                <td>
+                  <div class="form-control">
+                    <label class="sr-only" for="{{ row.key }}_amount">{% trans "Inc. VAT price" %}</label>
+                    <div class="input-group input-group-sm">
+                      <span class="bg-base-200 px-2 flex items-center text-sm">£</span>
+                      <input
+                        type="number"
+                        id="{{ row.key }}_amount"
+                        name="{{ row.key }}_amount"
+                        step="0.01"
+                        min="0"
+                        class="input input-sm input-bordered w-28"
+                        placeholder="e.g. 6.00"
+                        value="{{ row.override_amount_pounds }}"
+                        aria-label="{% trans 'Price inc. VAT for' %} {{ row.label }}"
+                      >
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="form-control">
+                    <label class="sr-only" for="{{ row.key }}_amount_ex_vat">{% trans "Ex. VAT price" %}</label>
+                    <div class="input-group input-group-sm">
+                      <span class="bg-base-200 px-2 flex items-center text-sm">£</span>
+                      <input
+                        type="number"
+                        id="{{ row.key }}_amount_ex_vat"
+                        name="{{ row.key }}_amount_ex_vat"
+                        step="0.01"
+                        min="0"
+                        class="input input-sm input-bordered w-28"
+                        placeholder="e.g. 5.00"
+                        value="{{ row.override_amount_ex_vat_pounds }}"
+                        aria-label="{% trans 'Price ex. VAT for' %} {{ row.label }}"
+                      >
+                    </div>
+                  </div>
+                </td>
+                <td class="text-center">
+                  <input
+                    type="checkbox"
+                    name="{{ row.key }}_active"
+                    class="checkbox checkbox-sm"
+                    {% if row.override and row.override.is_active %}checked{% endif %}
+                    aria-label="{% trans 'Activate override for' %} {{ row.label }}"
+                  >
+                </td>
+                <td class="text-xs text-base-content/50">
+                  {% if row.override %}
+                    {{ row.override.updated_at|date:"d M Y H:i" }}
+                    {% if row.override.updated_by %}
+                      <br>{{ row.override.updated_by.username }}
+                    {% endif %}
+                  {% else %}
+                    {% trans "—" %}
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card-actions justify-end mt-4 pt-4 border-t border-base-300">
+          <p class="text-xs text-base-content/50 mr-auto">
+            {% trans "Enter pound values (e.g. 6.00 or 30.00). Tick Active to enable the override. Untick or leave blank to revert to settings.py defaults." %}
+          </p>
+          <button type="submit" class="btn btn-primary">
+            {% trans "Save Overrides" %}
+          </button>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <div class="mt-6 text-sm text-base-content/60">
+    <p>
+      {% blocktrans %}
+        <strong>How it works:</strong> Active overrides are stored in the database and merged with settings.py at request time.
+        The public pricing page and GoCardless checkout both use the effective (merged) prices.
+        The settings.py values remain unchanged and serve as defaults whenever no active override exists.
+      {% endblocktrans %}
+    </p>
+  </div>
+
+</div>
+{% endblock %}

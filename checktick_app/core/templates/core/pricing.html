@@ -119,7 +119,7 @@
       <div class="card-body">
         <h2 class="card-title text-2xl mb-2">{% trans "Individual Pro" %}</h2>
         <div class="mb-4">
-          <span class="text-3xl font-bold">£6</span>
+          <span class="text-3xl font-bold">{{ tier_display.pro }}</span>
           <span class="text-base-content">/{% trans "month" %}</span>
           <p class="text-sm text-base-content">{% trans "Unlimited surveys" %}</p>
           <p class="text-xs text-base-content">{% trans "inc. VAT" %}</p>
@@ -218,20 +218,20 @@
             <span class="label-text font-semibold">{% trans "Select team size:" %}</span>
           </label>
           <select id="team-size-selector" class="select select-bordered w-full">
-            <option value="team_small" data-price="30" data-members="5" data-price-id="{{ price_ids.team_small }}">
-              {% trans "Small" %} - 5 {% trans "members" %} - £30/{% trans "month" %}
+            <option value="team_small" data-price="{{ tier_pounds.team_small }}" data-members="{{ subscription_tiers.team_small.max_members }}" data-price-id="{{ price_ids.team_small }}">
+              {% trans "Small" %} - {{ subscription_tiers.team_small.max_members }} {% trans "members" %} - {{ tier_display.team_small }}/{% trans "month" %}
             </option>
-            <option value="team_medium" data-price="90" data-members="15" data-price-id="{{ price_ids.team_medium }}">
-              {% trans "Medium" %} - 15 {% trans "members" %} - £90/{% trans "month" %}
+            <option value="team_medium" data-price="{{ tier_pounds.team_medium }}" data-members="{{ subscription_tiers.team_medium.max_members }}" data-price-id="{{ price_ids.team_medium }}">
+              {% trans "Medium" %} - {{ subscription_tiers.team_medium.max_members }} {% trans "members" %} - {{ tier_display.team_medium }}/{% trans "month" %}
             </option>
-            <option value="team_large" data-price="300" data-members="50" data-price-id="{{ price_ids.team_large }}">
-              {% trans "Large" %} - 50 {% trans "members" %} - £300/{% trans "month" %}
+            <option value="team_large" data-price="{{ tier_pounds.team_large }}" data-members="{{ subscription_tiers.team_large.max_members }}" data-price-id="{{ price_ids.team_large }}">
+              {% trans "Large" %} - {{ subscription_tiers.team_large.max_members }} {% trans "members" %} - {{ tier_display.team_large }}/{% trans "month" %}
             </option>
           </select>
         </div>
 
         <div class="mb-4">
-          <span class="text-3xl font-bold" id="team-price-display">£30</span>
+          <span class="text-3xl font-bold" id="team-price-display">{{ tier_display.team_small }}</span>
           <span class="text-base-content">/{% trans "month" %}</span>
           <p class="text-sm text-base-content" id="team-members-display">{% trans "Up to" %} 5 {% trans "team members" %}</p>
           <p class="text-xs text-base-content">{% trans "inc. VAT" %}</p>
