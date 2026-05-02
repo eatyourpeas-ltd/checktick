@@ -23,22 +23,22 @@ All payments are processed securely through our UK-based payment provider.
 
 ### Individual Plans
 
-| Plan | Monthly Price | Annual Price | Key Features |
-|------|---------------|--------------|--------------|
-| **Free** | £0 | £0 | Up to 3 active surveys (all encrypted), unlimited responses, no patient data templates |
-| **Pro** | £5 | £50 (save £10) | Unlimited encrypted surveys, patient data collection, collaboration, email support |
+| Plan | Monthly Price (inc VAT) | Key Features |
+|------|--------------------------|--------------|
+| **Free** | £0 | Up to 3 active surveys (all encrypted), unlimited responses, no patient data templates |
+| **Pro** | £6 | Unlimited encrypted surveys, patient data collection, collaboration, email support |
 
 ---
 
 ### Team Plans
 
-Fixed-price plans for small to medium collaborative teams.
+Fixed-price plans for collaborative teams.
 
-| Plan | Monthly Price | Annual Price | Members | Surveys |
-|------|---------------|--------------|---------|---------|
-| **Team Small** | £25 | £250 (save £50) | 5 | 50 |
-| **Team Medium** | £50 | £500 (save £100) | 10 | 50 |
-| **Team Large** | £100 | £1,000 (save £200) | 20 | 50 |
+| Plan | Monthly Price (inc VAT) | Members | Surveys |
+|------|--------------------------|---------|---------|
+| **Team Small** | £30 | 5 | 50 |
+| **Team Medium** | £90 | 15 | 50 |
+| **Team Large** | £300 | 50 | 50 |
 
 All team plans include: Role-based access (Admin/Creator/Viewer), team encryption management.
 
@@ -48,9 +48,9 @@ All team plans include: Role-based access (Admin/Creator/Viewer), team encryptio
 
 Per-seat pricing for larger organisations requiring flexible user counts.
 
-| Component | Monthly Price | Annual Price |
-|-----------|---------------|--------------|
-| **Per user** | £30 | £300 (save £60/user) |
+| Component | Monthly Price |
+|-----------|---------------|
+| **Per user (typical hosted rate)** | £6/user (inc VAT) |
 
 #### Included Features
 
@@ -119,10 +119,19 @@ Enterprise tier provides a fully independent deployment of the CheckTick platfor
 ### Payment Processing
 
 - **Currency:** GBP (£)
-- **Billing Cycles:** Monthly or Annual
-- **Annual Discount:** ~17% (2 months free equivalent)
+- **Billing Cycles:** Monthly (default for hosted tiers)
 - **Payment Methods:** Direct Debit (UK bank accounts), Credit/Debit cards
 - **UK Only:** CheckTick is currently available to UK customers only
+
+## Platform Admin Pricing Overrides
+
+Hosted deployments can override Pro/Team prices in the Platform Admin panel without a code release.
+
+- **Path:** `/platform-admin/pricing/`
+- **Access:** Superuser only
+- **Behavior:** Active overrides change public pricing display and new checkout amounts
+- **Fallback:** Disabling an override reverts to settings defaults
+- **Note:** Existing subscriptions are not retroactively repriced
 
 ### Refund Policy
 
@@ -155,5 +164,5 @@ Optional paid support contracts are available for self-hosted customers.
 **CheckTick**
 *Secure surveys for healthcare and research*
 
-Document version: 1.0
-Last updated: 4 December 2025
+Document version: 1.2
+Last updated: 2 May 2026
