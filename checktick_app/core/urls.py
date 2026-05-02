@@ -87,6 +87,11 @@ urlpatterns = [
         views_platform_admin.platform_logs,
         name="platform_admin_logs",
     ),
+    path(
+        "platform-admin/pricing/",
+        views_platform_admin.pricing_overrides,
+        name="platform_admin_pricing",
+    ),
     # Billing
     path(
         "subscription/", views_billing.subscription_portal, name="subscription_portal"

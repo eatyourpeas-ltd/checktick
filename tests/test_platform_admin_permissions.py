@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 import pytest
 
+from checktick_app.core.models import PricingOverride
 from checktick_app.surveys.models import Organization, OrganizationMembership
 
 User = get_user_model()
@@ -593,4 +594,63 @@ class TestPlatformLogsAccess:
         client.force_login(superuser)
         url = reverse("core:platform_admin_logs")
         response = client.post(url)
+        assert response.status_code == 405
+
+
+# ============================================================================
+# Platform Pricing Access Tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestPlatformPricingAccess:
+    """Test access control and behavior for platform pricing overrides."""
+
+    def test_anonymous_user_redirected_to_login(self, client):
+        """Anonymous users are redirected to login."""
+        url = reverse("core:platform_admin_pricing")
+        response = client.get(url)
+        assert response.status_code == 302
+        assert "login" in response.url.lower()
+
+    def test_regular_user_denied_access(self, client, regular_user):
+        """Regular users cannot access platform pricing page."""
+        client.force_login(regular_user)
+        url = reverse("core:platform_admin_pricing")
+        response = client.get(url)
+        assert response.status_code == 302
+
+    def test_superuser_can_access_pricing(self, client, superuser):
+        """Superusers can access pricing override page."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_pricing")
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b"Pricing Overrides" in response.content
+
+    def test_superuser_can_save_override(self, client, superuser):
+        """Superusers can create/update a pricing override."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_pricing")
+
+        response = client.post(
+            url,
+            {
+                "pro_amount": "7.00",
+                "pro_amount_ex_vat": "5.83",
+                "pro_active": "on",
+            },
+        )
+        assert response.status_code == 302
+
+        override = PricingOverride.objects.get(tier="pro")
+        assert override.amount == 700
+        assert override.amount_ex_vat == 583
+        assert override.is_active is True
+
+    def test_pricing_page_rejects_put(self, client, superuser):
+        """Pricing page should reject unsupported methods."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_pricing")
+        response = client.put(url)
         assert response.status_code == 405

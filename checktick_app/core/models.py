@@ -796,3 +796,69 @@ class UserAPIKey(models.Model):
             expires_at=expires_at,
         )
         return instance, raw_key
+
+
+class PricingOverride(models.Model):
+    """Per-tier price overrides that take precedence over settings.SUBSCRIPTION_TIERS.
+
+    Only tiers with fixed amounts (pro, team_*) are overridable here.
+    Organisation and Enterprise use bespoke per-contract pricing.
+
+    When ``is_active`` is False the entry is ignored and settings.py values apply.
+    """
+
+    OVERRIDABLE_TIERS = [
+        ("pro", "Individual Pro"),
+        ("team_small", "Team (Small)"),
+        ("team_medium", "Team (Medium)"),
+        ("team_large", "Team (Large)"),
+    ]
+
+    tier = models.CharField(
+        max_length=20,
+        unique=True,
+        choices=OVERRIDABLE_TIERS,
+        help_text="Subscription tier this override applies to",
+    )
+    amount = models.IntegerField(
+        help_text="Price inclusive of VAT in pence (e.g. 600 = £6.00)"
+    )
+    amount_ex_vat = models.IntegerField(
+        help_text="Price exclusive of VAT in pence (e.g. 500 = £5.00)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="When inactive, falls back to the value configured in settings.py",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        ordering = ["tier"]
+        verbose_name = "Pricing Override"
+        verbose_name_plural = "Pricing Overrides"
+
+    def __str__(self) -> str:
+        return f"{self.get_tier_display()} override: £{self.amount / 100:.2f} inc VAT"
+
+    @classmethod
+    def get_effective_tiers(cls) -> dict:
+        """Return SUBSCRIPTION_TIERS merged with any active database overrides.
+
+        The returned dict has the same structure as settings.SUBSCRIPTION_TIERS.
+        Active overrides replace ``amount`` and ``amount_ex_vat`` for their tier.
+        """
+        import copy
+
+        tiers = copy.deepcopy(settings.SUBSCRIPTION_TIERS)
+        for override in cls.objects.filter(is_active=True):
+            if override.tier in tiers:
+                tiers[override.tier]["amount"] = override.amount
+                tiers[override.tier]["amount_ex_vat"] = override.amount_ex_vat
+        return tiers

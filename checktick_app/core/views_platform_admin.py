@@ -616,3 +616,98 @@ def platform_logs(request: HttpRequest) -> HttpResponse:
     context["hosting_configured"] = hosting_service.is_available
 
     return render(request, "core/platform_admin/logs.html", context)
+
+
+@superuser_required
+@require_http_methods(["GET", "POST"])
+@ratelimit(key="user", rate="30/h", block=True)
+def pricing_overrides(request: HttpRequest) -> HttpResponse:
+    """Manage per-tier pricing overrides.
+
+    GET  – show current effective prices and any active overrides.
+    POST – save updated prices for one or more tiers, or deactivate overrides.
+    """
+    from django.conf import settings
+
+    from checktick_app.core.models import PricingOverride
+
+    if request.method == "POST":
+        for tier, _label in PricingOverride.OVERRIDABLE_TIERS:
+            amount_str = request.POST.get(f"{tier}_amount", "").strip()
+            amount_ex_vat_str = request.POST.get(f"{tier}_amount_ex_vat", "").strip()
+            is_active = request.POST.get(f"{tier}_active") == "on"
+
+            if not amount_str or not amount_ex_vat_str:
+                # No value submitted for this tier – deactivate any existing override
+                PricingOverride.objects.filter(tier=tier).update(is_active=False)
+                continue
+
+            try:
+                # Accept either pound (e.g. "6.00") or pence (e.g. "600") input
+                amount_raw = float(amount_str)
+                amount_ex_vat_raw = float(amount_ex_vat_str)
+                # If value looks like pounds (< 1000) convert to pence
+                amount = int(amount_raw * 100) if amount_raw < 1000 else int(amount_raw)
+                amount_ex_vat = (
+                    int(amount_ex_vat_raw * 100)
+                    if amount_ex_vat_raw < 1000
+                    else int(amount_ex_vat_raw)
+                )
+            except ValueError:
+                messages.error(request, f"Invalid price value for {tier}.")
+                continue
+
+            PricingOverride.objects.update_or_create(
+                tier=tier,
+                defaults={
+                    "amount": amount,
+                    "amount_ex_vat": amount_ex_vat,
+                    "is_active": is_active,
+                    "updated_by": request.user,
+                },
+            )
+
+        logger.info(f"Pricing overrides updated by {request.user.username}")
+        messages.success(request, "Pricing overrides saved.")
+        return redirect("core:platform_admin_pricing")
+
+    # Build display data: settings defaults alongside any active override
+    effective_tiers = PricingOverride.get_effective_tiers()
+    overrides_by_tier = {o.tier: o for o in PricingOverride.objects.all()}
+
+    tier_rows = []
+    for tier, label in PricingOverride.OVERRIDABLE_TIERS:
+        settings_cfg = settings.SUBSCRIPTION_TIERS.get(tier, {})
+        effective_cfg = effective_tiers.get(tier, {})
+        override = overrides_by_tier.get(tier)
+        tier_rows.append(
+            {
+                "key": tier,
+                "label": label,
+                "settings_amount": settings_cfg.get("amount", 0),
+                "settings_amount_ex_vat": settings_cfg.get("amount_ex_vat", 0),
+                "effective_amount": effective_cfg.get("amount", 0),
+                "effective_amount_ex_vat": effective_cfg.get("amount_ex_vat", 0),
+                "override": override,
+                "has_active_override": override is not None and override.is_active,
+            }
+        )
+
+    def _p(pence: int) -> str:
+        return f"{pence / 100:.2f}"
+
+    # Add pre-formatted pound strings so the template doesn't need arithmetic
+    for row in tier_rows:
+        row["settings_amount_pounds"] = _p(row["settings_amount"])
+        row["settings_amount_ex_vat_pounds"] = _p(row["settings_amount_ex_vat"])
+        row["effective_amount_pounds"] = _p(row["effective_amount"])
+        row["effective_amount_ex_vat_pounds"] = _p(row["effective_amount_ex_vat"])
+        if row["override"]:
+            row["override_amount_pounds"] = _p(row["override"].amount)
+            row["override_amount_ex_vat_pounds"] = _p(row["override"].amount_ex_vat)
+        else:
+            row["override_amount_pounds"] = ""
+            row["override_amount_ex_vat_pounds"] = ""
+
+    context = {"tier_rows": tier_rows}
+    return render(request, "core/platform_admin/pricing_overrides.html", context)

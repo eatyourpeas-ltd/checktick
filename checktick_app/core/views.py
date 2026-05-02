@@ -102,8 +102,27 @@ def pricing(request):
     auto_open_checkout = request.session.pop("auto_open_checkout", False)
     pending_tier = request.session.get("pending_tier", "")
 
+    from checktick_app.core.models import PricingOverride
+
+    effective_tiers = PricingOverride.get_effective_tiers()
+
+    # Pre-compute pound display values for the template (amounts stored as pence)
+    def _to_pounds(pence: int) -> str:
+        pounds = pence / 100
+        return f"£{int(pounds)}" if pounds == int(pounds) else f"£{pounds:.2f}"
+
+    tier_display = {
+        key: _to_pounds(cfg["amount"])
+        for key, cfg in effective_tiers.items()
+        if cfg.get("amount", 0) > 0
+    }
+    # Whole-pound values used by the team selector JS (data-price attribute)
+    tier_pounds = {key: cfg["amount"] // 100 for key, cfg in effective_tiers.items()}
+
     context = {
-        "subscription_tiers": settings.SUBSCRIPTION_TIERS,
+        "subscription_tiers": effective_tiers,
+        "tier_display": tier_display,
+        "tier_pounds": tier_pounds,
         "self_hosted": False,  # Always False here since we redirect above
         "auto_open_checkout": auto_open_checkout,
         "pending_tier": pending_tier,

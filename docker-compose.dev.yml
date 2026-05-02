@@ -13,7 +13,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U checktick"]
+      test: [ "CMD-SHELL", "pg_isready -U checktick" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -52,7 +52,8 @@ services:
           "--spider",
           "--proxy",
           "off",
-          "http://127.0.0.1:8200/v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200",
+          "http://127.0.0.1:8200/v1/sys/health?standbyok=true&uninitcode=200&\
+            sealedcode=200",
         ]
       interval: 5s
       timeout: 3s
@@ -97,7 +98,18 @@ services:
         condition: service_healthy
     volumes:
       - ./:/app
-    command: sh -lc "npm install && npm run build:css && python manage.py migrate --noinput && python manage.py collectstatic --noinput --clear && python manage.py runserver 0.0.0.0:8000"
+    command: >
+      sh -lc " for i in $(seq 1 30); do
+        getent hosts db >/dev/null 2>&1 && break;
+        echo 'Waiting for db DNS...';
+        sleep 1;
+      done; for i in $(seq 1 30); do
+        python -c \"import socket; s=socket.socket(); s.settimeout(1); s.connect(('db', 5432)); s.close()\" >/dev/null 2>&1 && break;
+        echo 'Waiting for db:5432...';
+        sleep 1;
+      done; npm install && npm run build:css && python manage.py migrate
+      --noinput && python manage.py collectstatic --noinput --clear && python
+      manage.py runserver 0.0.0.0:8000 "
 
 volumes:
   db_data:
