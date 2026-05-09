@@ -1,5 +1,6 @@
 # CheckTick
 
+![Version](https://img.shields.io/badge/version-0.2.34-5fcfdd?style=for-the-badge)
 ![GitHub License](https://img.shields.io/github/license/eatyourpeas/checktick?style=for-the-badge&color=5fcfdd)
 ![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-5fcfdd?style=for-the-badge&logo=openapiinitiative&logoColor=white)
 ![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/eatyourpeas/checktick?style=for-the-badge&color=5fcfdd)
@@ -33,6 +34,24 @@ docker compose -f docker-compose.registry.yml up -d
 **📦 Docker Images:** [ghcr.io/eatyourpeas/checktick](https://github.com/eatyourpeas/checktick/pkgs/container/checktick)
 
 **📚 Full Documentation:** See [Self-Hosting Guides](https://checktick.eatyourpeas.dev/docs/self-hosting-quickstart/)
+
+## 📦 Versioning & Deployment
+
+CheckTick uses semantic versioning (MAJOR.MINOR.PATCH). Each version is automatically containerized and deployed to production via Northflank.
+
+- **Version source:** [pyproject.toml](pyproject.toml)
+- **Container tags:** [GitHub Packages Registry](https://github.com/eatyourpeas/checktick/pkgs/container/checktick)
+- **Auto-deployment:** Commits to `main` trigger container builds and auto-pull on Northflank
+
+Pull a specific version:
+```bash
+docker pull ghcr.io/eatyourpeas/checktick:0.2.34
+```
+
+Or use `latest`:
+```bash
+docker pull ghcr.io/eatyourpeas/checktick:latest
+```
 
 ## Documentation
 

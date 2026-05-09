@@ -1,0 +1,54 @@
+name: Update Version Badge
+
+on:
+    push:
+        branches:
+            - main
+        paths:
+            - "pyproject.toml"
+
+jobs:
+    update-badge:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: main
+
+            - name: Extract version from pyproject.toml
+              id: version
+              run: |
+                  VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  echo "Version: $VERSION"
+
+            - name: Update README badge
+              env:
+                  VERSION: ${{ steps.version.outputs.version }}
+              run: |
+                  # Update or add the version badge
+                  if grep -q "Version Badge" README.md; then
+                    # Badge already exists, update it
+                    sed -i "s/badge\/version-[^-]*-/badge\/version-${VERSION}-/" README.md
+                  else
+                    # Add badge after the first line (title)
+                    sed -i "2i ![Version](https://img.shields.io/badge/version-${VERSION}-5fcfdd?style=for-the-badge)" README.md
+                  fi
+
+                  # Verify change
+                  grep "badge/version" README.md || echo "Badge not found after update"
+
+            - name: Commit and push changes
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+
+                  if git diff --quiet; then
+                    echo "No changes to commit"
+                  else
+                    git add README.md
+                    git commit -m "ci: update version badge to ${{ steps.version.outputs.version }}"
+                    git push origin main
+                  fi

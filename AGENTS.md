@@ -26,9 +26,15 @@ It signposts common workflows and links to the full docs instead of duplicating 
 
 - Any feature or bug fix must be completed by running `s/lint` before committing.
 
-### 4. Bump package version before PR
+### 4. Version bumps (CTO/maintainer workflow)
 
-- For dependency updates, bump `package.json` `version` using semver (`major`/`minor`/`patch`) before raising a PR.
+- The Python package version lives in `pyproject.toml` (not `package.json`).
+- When `pyproject.toml` version is bumped and merged to `main`, GitHub Actions automatically:
+  - Updates the version badge in `README.md`
+  - Triggers container builds tagged with the new version
+  - These appear in the [GitHub Packages Registry](https://github.com/eatyourpeas-ltd/checktick/pkgs/container/checktick)
+- See [Versioning & Deployment](README.md#-versioning--deployment) section in README for details.
+- Typically bumped by CTO; agents should follow semver conventions if contributing version changes.
 
 ## Dependencies
 
