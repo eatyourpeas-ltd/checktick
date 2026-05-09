@@ -20,20 +20,24 @@ jobs:
             - name: Extract version from pyproject.toml
               id: version
               run: |
-                  VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
-                  echo "version=$VERSION" >> $GITHUB_OUTPUT
-                  echo "Version: $VERSION"
+                  VERSION=$(python3 - <<'PY'
+                  import tomllib
+                  with open('pyproject.toml', 'rb') as f:
+                    data = tomllib.load(f)
+                  print(data['tool']['poetry']['version'])
+                  PY
+                  )
+                    echo "version=$VERSION" >> $GITHUB_OUTPUT
+                    echo "Version: $VERSION"
 
             - name: Update README badge
               env:
                   VERSION: ${{ steps.version.outputs.version }}
               run: |
-                  # Update or add the version badge
-                  if grep -q "Version Badge" README.md; then
-                    # Badge already exists, update it
-                    sed -i "s/badge\/version-[^-]*-/badge\/version-${VERSION}-/" README.md
+                  # Update existing version badge or add it below the title
+                  if grep -q "img\.shields\.io/badge/version-" README.md; then
+                    sed -i "s|https://img\.shields\.io/badge/version-[^-]*-5fcfdd?style=for-the-badge|https://img.shields.io/badge/version-${VERSION}-5fcfdd?style=for-the-badge|" README.md
                   else
-                    # Add badge after the first line (title)
                     sed -i "2i ![Version](https://img.shields.io/badge/version-${VERSION}-5fcfdd?style=for-the-badge)" README.md
                   fi
 

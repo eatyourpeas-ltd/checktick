@@ -4,16 +4,73 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
-  release:
-    types: [published]
-  workflow_dispatch: # Allow manual triggers
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish container images"
+        type: boolean
+        default: true
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  decide-release:
+    runs-on: ubuntu-latest
+    outputs:
+      should_publish: ${{ steps.decide.outputs.should_publish }}
+      reason: ${{ steps.decide.outputs.reason }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Decide whether to publish
+        id: decide
+        run: |
+          SHOULD_PUBLISH=false
+          REASON=""
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.publish }}" == "true" ]]; then
+              SHOULD_PUBLISH=true
+              REASON="manual-dispatch"
+            else
+              SHOULD_PUBLISH=false
+              REASON="manual-dispatch-disabled"
+            fi
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            SHOULD_PUBLISH=true
+            REASON="tag-push"
+          elif [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            BEFORE_SHA="${{ github.event.before }}"
+            if [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" =~ ^0+$ ]]; then
+              CHANGED=$(git show --pretty='' --name-only "${{ github.sha }}" | grep -Fx "pyproject.toml" || true)
+            else
+              CHANGED=$(git diff --name-only "$BEFORE_SHA" "${{ github.sha }}" | grep -Fx "pyproject.toml" || true)
+            fi
+
+            if [[ -n "$CHANGED" ]]; then
+              SHOULD_PUBLISH=true
+              REASON="main-version-change"
+            else
+              SHOULD_PUBLISH=false
+              REASON="main-no-version-change"
+            fi
+          else
+            SHOULD_PUBLISH=false
+            REASON="unsupported-trigger"
+          fi
+
+          echo "should_publish=$SHOULD_PUBLISH" >> "$GITHUB_OUTPUT"
+          echo "reason=$REASON" >> "$GITHUB_OUTPUT"
+          echo "Publish decision: $SHOULD_PUBLISH ($REASON)"
+
   build-and-push:
+    needs: decide-release
+    if: needs.decide-release.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,6 +93,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract app version from pyproject.toml
+        id: app_version
+        run: |
+          VERSION=$(python3 - <<'PY'
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+          print(data['tool']['poetry']['version'])
+          PY
+          )
+          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "major_minor=$MAJOR_MINOR" >> "$GITHUB_OUTPUT"
+          echo "Resolved app version: $VERSION"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -44,6 +116,9 @@ jobs:
           tags: |
             # Latest tag for main branch
             type=raw,value=latest,enable={{is_default_branch}}
+            # App version tags from pyproject.toml (main branch builds)
+            type=raw,value=${{ steps.app_version.outputs.version }},enable={{is_default_branch}}
+            type=raw,value=${{ steps.app_version.outputs.major_minor }},enable={{is_default_branch}}
             # Version tags for releases
             type=ref,event=tag
             type=semver,pattern={{version}}
@@ -99,3 +174,12 @@ jobs:
             echo "⊘ Northflank credentials not configured, skipping deployment trigger"
             echo "   Required secrets: NORTHFLANK_API_TOKEN, NORTHFLANK_PROJECT_ID, NORTHFLANK_SERVICE_ID"
           fi
+
+  publish-skipped:
+    needs: decide-release
+    if: needs.decide-release.outputs.should_publish != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish skipped
+        run: |
+          echo "Container publish skipped: ${{ needs.decide-release.outputs.reason }}"
