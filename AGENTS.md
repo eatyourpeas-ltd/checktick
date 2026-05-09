@@ -8,6 +8,7 @@ It signposts common workflows and links to the full docs instead of duplicating 
 - Project documentation index: `docs/README.md`
 - Contributing guide: `CONTRIBUTING.md`
 - CDN/SRI update process: `docs/cdn-libraries.md`
+- Versioning and deployment policy: `docs/versioning-and-deployment.md`
 - Testing guides: `docs/testing-webapp.md`, `docs/testing-api.md`, `docs/accessibility.md`
 
 ## Common Agent Workflows
@@ -31,9 +32,9 @@ It signposts common workflows and links to the full docs instead of duplicating 
 - The Python package version lives in `pyproject.toml` (not `package.json`).
 - When `pyproject.toml` version is bumped and merged to `main`, GitHub Actions automatically:
   - Updates the version badge in `README.md`
-  - Triggers container builds tagged with the new version
+  - Enables versioned container publishing via the Docker publish workflow rules
   - These appear in the [GitHub Packages Registry](https://github.com/eatyourpeas-ltd/checktick/pkgs/container/checktick)
-- See [Versioning & Deployment](README.md#-versioning--deployment) section in README for details.
+- See `docs/versioning-and-deployment.md` for full trigger and tagging rules.
 - Typically bumped by CTO; agents should follow semver conventions if contributing version changes.
 
 ## Dependencies
