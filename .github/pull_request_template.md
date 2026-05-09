@@ -145,6 +145,7 @@
 - [ ] Commit messages are clear and descriptive
 - [ ] Related issues linked
 - [ ] Breaking changes documented
+- [ ] Version bump considered (`pyproject.toml`) and release impact assessed
 
 ### Project Specific
 

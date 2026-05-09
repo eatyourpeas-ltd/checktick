@@ -41,7 +41,7 @@ CheckTick uses semantic versioning (MAJOR.MINOR.PATCH). Each version is automati
 
 - **Version source:** [pyproject.toml](pyproject.toml)
 - **Container tags:** [GitHub Packages Registry](https://github.com/eatyourpeas/checktick/pkgs/container/checktick)
-- **Auto-deployment:** Commits to `main` trigger container builds and auto-pull on Northflank
+- **Auto-deployment:** Container publish is triggered by version changes in `pyproject.toml` on `main`, version tags (`v*`), or manual dispatch; Northflank then auto-pulls/restarts from GHCR
 
 Pull a specific version:
 ```bash
