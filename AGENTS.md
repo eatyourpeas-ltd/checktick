@@ -40,7 +40,8 @@ It signposts common workflows and links to the full docs instead of duplicating 
 
 - For self-hosted JavaScript dependency and SRI updates, use `docs/cdn-libraries.md` as the source of truth.
 - Follow the `npm pack` + SHA-384 SRI workflow in `docs/cdn-libraries.md` (or use `s/update-cdn-assets` where appropriate) when bumping JS packages.
-- Always record dependency/security patch updates in `docs/compliance/vulnerability-patch-log.md` (sometimes referred to as patch vulnerability logs) with date, version change, and verification notes.
+- Record routine (non-security) dependency/library updates in `docs/compliance/infrastructure-technical-change-log.md` under "Application Dependency Maintenance (Non-Security)".
+- Record CVE/security remediations in `docs/compliance/vulnerability-patch-log.md` with date, version change, and verification notes.
 
 ## Notes
 

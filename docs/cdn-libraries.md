@@ -254,10 +254,11 @@ What the script does when updating:
 - Downloads the package via `npm pack` into a temp dir and extracts it
 - Locates the expected minified asset and copies it atomically into `checktick_app/static/js/`
 - Computes the SHA-384 SRI and updates matching templates' `integrity` attributes (best-effort)
-- Appends a single-line entry to `docs/compliance/vulnerability-patch-log.md` describing the change
+- Appends a single-line entry to `docs/compliance/infrastructure-technical-change-log.md` for routine (non-security) changes
 
 Notes & pitfalls:
 
 - Package layout varies: if the script cannot find the minified file it will print the list of `*.min.js` files found in the package so you can inspect and copy manually.
 - The script updates a small set of templates by default. Extend the `templates` list in the script if you have other locations where the script tag appears.
-- The script updates `docs/compliance/vulnerability-patch-log.md` automatically when not in `--dry-run` mode. It does not yet update `docs/cdn-libraries.md` automatically — we recommend manually bumping the version and SRI in this document or running the script and then editing the docs to match.
+- The script updates `docs/compliance/infrastructure-technical-change-log.md` automatically when not in `--dry-run` mode for routine maintenance updates. Record CVE/security remediations in `docs/compliance/vulnerability-patch-log.md`.
+- The script does not yet update `docs/cdn-libraries.md` automatically — we recommend manually bumping the version and SRI in this document or running the script and then editing the docs to match.
