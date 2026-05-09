@@ -181,4 +181,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Publish skipped
-        run: echo "Container publish skipped: ${{ needs.decide-release.outputs.reason }}"
+        run: |
+          echo "Container publish skipped: ${{ needs.decide-release.outputs.reason }}"
