@@ -7,12 +7,12 @@ set -euo pipefail
 # - --dry-run to preview changes (no file writes)
 # - --yes to skip interactive confirmation
 # - Computes SHA-384 SRI and can update template `integrity` attributes
-# - Appends an entry to docs/compliance/vulnerability-patch-log.md when an update occurs
+# - Appends an entry to docs/compliance/infrastructure-technical-change-log.md when an update occurs
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 STATIC_DIR="$ROOT_DIR/checktick_app/static/js"
 DOCS_FILE="$ROOT_DIR/docs/cdn-libraries.md"
-LOG_FILE="$ROOT_DIR/docs/compliance/vulnerability-patch-log.md"
+LOG_FILE="$ROOT_DIR/docs/compliance/infrastructure-technical-change-log.md"
 
 # A map of package -> target file (customize as needed)
 declare -A PACKAGES
@@ -160,22 +160,22 @@ PY
   done
 }
 
-append_compliance_log() {
+append_change_log() {
   local pkg=$1
   local old_ver=$2
   local new_ver=$3
   local sri=$4
   local date_str
   date_str=$(date '+%d/%m/%Y')
-  local entry="| $date_str | `$pkg` | $old_ver -> $new_ver | Updated self-hosted asset and SRI (sha384) | Automated Script"
+  local entry="| $date_str | Dr Simon Chapman | Updated self-hosted $pkg ($old_ver -> $new_ver) and regenerated SHA-384 SRI | Routine JavaScript dependency maintenance (no CVE remediation referenced) | Dr Serena Haywood (SIRO) | ✅ Active |"
   if [[ $DRY_RUN -eq 1 ]]; then
     echo "Would append to $LOG_FILE:"
     echo "$entry"
     return
   fi
-  # Append to log file before the closing code block (just add at end)
+  # Append at end of file (maintainers can move into the table section if needed)
   echo "\n$entry" >> "$LOG_FILE"
-  echo "Appended compliance log entry to $LOG_FILE"
+  echo "Appended infrastructure change log entry to $LOG_FILE"
 }
 
 update_dep() {
@@ -259,8 +259,8 @@ update_dep() {
   # Update templates
   update_templates_integrity "$file" "$new_sri"
 
-  # Append compliance log
-  append_compliance_log "$pkg" "$current_ver" "$latest" "$new_sri"
+  # Append infrastructure change log entry
+  append_change_log "$pkg" "$current_ver" "$latest" "$new_sri"
 
   echo "Updated $STATIC_DIR/$file to $pkg@$latest"
   echo "Updated templates and appended compliance log entry."

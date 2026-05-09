@@ -36,7 +36,8 @@ In the event of a high-severity zero-day vulnerability (e.g., in Django or Pytho
 
 ## 4. Record Keeping
 
-All security patches are recorded in the `compliance/vulnerability-patch-log.md` to maintain an audit trail for DSPT compliance.
+- Security patches and CVE remediations are recorded in `compliance/vulnerability-patch-log.md`.
+- Routine non-security dependency maintenance updates are recorded in `compliance/infrastructure-technical-change-log.md` under "Application Dependency Maintenance (Non-Security)".
 
 ## 5. Automated Housekeeping & Maintenance
 

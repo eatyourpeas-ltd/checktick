@@ -115,3 +115,11 @@ once every 12 months.
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | Apr 2026 | Dr Simon Chapman | Microsoft 365 Business Basic tenant provisioned for checktick.uk domain | DCB1596 secure email compliance for health and care communications | Dr Serena Haywood (SIRO) | ✅ Active |
 | Apr 2026 | Dr Simon Chapman | Microsoft Entra app registration created with Mail
+
+### 2d. Application Dependency Maintenance (Non-Security)
+
+Use this section for routine dependency/library updates where no specific CVE or security advisory is being remediated. Security remediations must be recorded in the vulnerability patch log.
+
+| Date | Requestor | Change Description | Business Justification | Approved By | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 09/05/2026 | Dr Simon Chapman | Added split logging policy: non-security dependency updates tracked here; CVE/security remediations tracked in vulnerability patch log | Improve audit clarity by separating maintenance updates from security incidents | Dr Serena Haywood (SIRO) | ✅ Active |

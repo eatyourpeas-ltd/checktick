@@ -19,7 +19,7 @@ CheckTick self-hosts critical JavaScript libraries with Subresource Integrity (S
 |---------|---------|------|---------|
 | HTMX | 2.0.10 | `checktick_app/static/js/htmx.min.js` | Dynamic HTML updates without JavaScript |
 | SortableJS | 1.15.7 | `checktick_app/static/js/sortable.min.js` | Drag-and-drop reordering |
-| axe-core | 4.11.3 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
+| axe-core | 4.11.4 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
 | NHS Frontend | 8.1.0 | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling |
 | ReDoc | 2.5.2 | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation |
 
@@ -39,10 +39,10 @@ sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V
 sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc
 ```
 
-### axe-core 4.11.3
+### axe-core 4.11.4
 
 ```text
-sha384-ZCC+CzYtmcQl5Kc3P96iEgc7ws4aLd064TkQUd85k5wACc0i4CLl7+O5YLV+R9fq
+sha384-JPn8kKVo7BLn9/zcbvarZHaq40amEwymg7J3Uhc7Lb4ds5KZ1kKLagxlEZX5iqWj
 ```
 
 ### NHS Frontend 8.1.0
@@ -254,10 +254,11 @@ What the script does when updating:
 - Downloads the package via `npm pack` into a temp dir and extracts it
 - Locates the expected minified asset and copies it atomically into `checktick_app/static/js/`
 - Computes the SHA-384 SRI and updates matching templates' `integrity` attributes (best-effort)
-- Appends a single-line entry to `docs/compliance/vulnerability-patch-log.md` describing the change
+- Appends a single-line entry to `docs/compliance/infrastructure-technical-change-log.md` for routine (non-security) changes
 
 Notes & pitfalls:
 
 - Package layout varies: if the script cannot find the minified file it will print the list of `*.min.js` files found in the package so you can inspect and copy manually.
 - The script updates a small set of templates by default. Extend the `templates` list in the script if you have other locations where the script tag appears.
-- The script updates `docs/compliance/vulnerability-patch-log.md` automatically when not in `--dry-run` mode. It does not yet update `docs/cdn-libraries.md` automatically — we recommend manually bumping the version and SRI in this document or running the script and then editing the docs to match.
+- The script updates `docs/compliance/infrastructure-technical-change-log.md` automatically when not in `--dry-run` mode for routine maintenance updates. Record CVE/security remediations in `docs/compliance/vulnerability-patch-log.md`.
+- The script does not yet update `docs/cdn-libraries.md` automatically — we recommend manually bumping the version and SRI in this document or running the script and then editing the docs to match.
