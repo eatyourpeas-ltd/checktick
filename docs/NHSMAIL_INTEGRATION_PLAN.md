@@ -15,6 +15,8 @@ This document scaffolds the implementation of NHSmail OIDC integration into Chec
 
 ---
 
+**UPDATE**: currently not to be implemented as must be an NHS commissioned organisation to host this feature
+
 ## Files to Modify
 
 | File | Purpose | Changes |
