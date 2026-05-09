@@ -36,6 +36,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract app version from pyproject.toml
+        id: app_version
+        run: |
+          VERSION=$(python3 - <<'PY'
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+          print(data['tool']['poetry']['version'])
+          PY
+          )
+          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "major_minor=$MAJOR_MINOR" >> "$GITHUB_OUTPUT"
+          echo "Resolved app version: $VERSION"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -44,6 +59,9 @@ jobs:
           tags: |
             # Latest tag for main branch
             type=raw,value=latest,enable={{is_default_branch}}
+            # App version tags from pyproject.toml (main branch builds)
+            type=raw,value=${{ steps.app_version.outputs.version }},enable={{is_default_branch}}
+            type=raw,value=${{ steps.app_version.outputs.major_minor }},enable={{is_default_branch}}
             # Version tags for releases
             type=ref,event=tag
             type=semver,pattern={{version}}
