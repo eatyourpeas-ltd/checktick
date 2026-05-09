@@ -1,7 +1,7 @@
 """
 Custom OIDC Authentication Backend for Clinicians
 
-Integrates Google, Azure, and NHSmail OIDC authentication with the existing
+Integrates Google and Azure OIDC authentication with the existing
 patient data encryption system. Maintains your custom user model
 as the source of truth while enabling SSO convenience.
 
@@ -71,7 +71,7 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
     Features:
     - Links OIDC accounts to existing custom user model
     - Preserves encryption keys tied to stable user IDs
-    - Supports Google, Azure, and NHSmail authentication
+    - Supports both Google and Azure authentication
     - Allows multiple OIDC providers per user
     """
 
@@ -146,17 +146,11 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
                     provider = "google"
                 elif "login.microsoftonline.com" in issuer:
                     provider = "azure"
-                elif "oidc.nhs.uk" in issuer:
-                    provider = "nhsmail"
 
             if provider == "google":
                 return self._get_google_userinfo(access_token)
             elif provider == "azure":
                 return self._get_azure_userinfo(access_token)
-            elif provider == "nhsmail":
-                # NHSmail typically follows standard OIDC; super().get_userinfo
-                # should have worked, but we provide a path for consistency.
-                return super().get_userinfo(access_token, id_token, payload)
             else:
                 logger.warning(f"Unknown OIDC provider: {provider}")
                 raise
@@ -357,8 +351,6 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
             return "google"
         elif "login.microsoftonline.com" in issuer:
             return "azure"
-        elif "oidc.nhs.uk" in issuer:
-            return "nhsmail"
         else:
             return "unknown"
 
