@@ -20,15 +20,15 @@ jobs:
             - name: Extract version from pyproject.toml
               id: version
               run: |
-                VERSION=$(python3 - <<'PY'
-                import tomllib
-                with open('pyproject.toml', 'rb') as f:
-                  data = tomllib.load(f)
-                print(data['tool']['poetry']['version'])
-                PY
-                )
-                  echo "version=$VERSION" >> $GITHUB_OUTPUT
-                  echo "Version: $VERSION"
+                  VERSION=$(python3 - <<'PY'
+                  import tomllib
+                  with open('pyproject.toml', 'rb') as f:
+                    data = tomllib.load(f)
+                  print(data['tool']['poetry']['version'])
+                  PY
+                  )
+                    echo "version=$VERSION" >> $GITHUB_OUTPUT
+                    echo "Version: $VERSION"
 
             - name: Update README badge
               env:
