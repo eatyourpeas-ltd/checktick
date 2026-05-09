@@ -29,3 +29,9 @@ If your workflow prefers API access - there is a full suite of endpoints for sur
 CheckTick has been designed and built for clinicians working in the NHS. The CheckTick team want to foster a community of users that that are building surveys to learn more about the the services they run and the patients they serve. The documentation is comprehensive but can always be improved. If you have any suggestions, for example features you need, or bugs you have found, or if you want to get involved in making CheckTick better, please see the guidelines on how to contribute.
 
 For NHS tips on survey creation check out this [guidance](https://nhsevaluationtoolkit.net/resources/guide-to-questionnaires-for-service-evaluation/)
+
+## Developer & Maintainer References
+
+- [Versioning and Deployment](versioning-and-deployment/)
+- [Documentation System](documentation-system/)
+- [Getting Started with API](getting-started-api/)
