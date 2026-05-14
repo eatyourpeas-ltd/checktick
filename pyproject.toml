@@ -39,6 +39,7 @@ pillow = "^12.2.0"
 qrcode = "^8.0"
 django-otp = "^1.6.3"
  marshmallow = "^3.26.2"
+ urllib3 = ">=2.7.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.3"
