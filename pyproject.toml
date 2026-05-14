@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "checktick"
-version = "0.2.35"
+version = "0.2.36"
 description = "Secure, server-rendered survey platform for medical audit and research"
 authors = ["CheckTick Maintainers <simon@eatyourpeas.co.uk>"]
 readme = "README.md"
@@ -39,6 +39,7 @@ pillow = "^12.2.0"
 qrcode = "^8.0"
 django-otp = "^1.6.3"
  marshmallow = "^3.26.2"
+ urllib3 = ">=2.7.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.3"

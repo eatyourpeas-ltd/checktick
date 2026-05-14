@@ -2,6 +2,8 @@
 
 # Lint fixer for CheckTick
 # Runs Black, Ruff, and isort against the project root with auto-fix behavior
+# Prefers the running Docker web container; falls back to `docker compose run`
+# if no container is running.
 
 set -euo pipefail
 
@@ -9,21 +11,12 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 cd "$REPO_ROOT"
 
-run() {
-  echo "▶ $*"
-  "$@"
-  echo ""
-}
+LINT_CMD="poetry run ruff check --fix . && poetry run black . && poetry run isort . && echo '✅ Linting complete'"
 
-if ! command -v poetry >/dev/null 2>&1; then
-  echo "⚠️  poetry is required to run linting tools." >&2
-  echo "    Install poetry or update the script to use your preferred environment." >&2
-  exit 127
+if docker compose ps --status running --services 2>/dev/null | grep -q '^web$'; then
+  echo "🐳 Running lint in existing web container..."
+  docker compose exec web bash -c "$LINT_CMD"
+else
+  echo "🐳 No running web container found — starting one with docker compose run..."
+  docker compose run --rm web bash -c "$LINT_CMD"
 fi
-
-# Ruff before Black to catch import issues, then Black, and finish with isort for safety.
-run poetry run ruff check --fix .
-run poetry run black .
-run poetry run isort .
-
-echo "✅ Linting complete"
