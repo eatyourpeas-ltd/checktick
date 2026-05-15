@@ -34,6 +34,34 @@ repos:
         # Skip test files (less critical for security)
         exclude: ^tests/
 
+  # Sync README version badge with pyproject.toml version on every version bump
+  - repo: local
+    hooks:
+      - id: update-version-badge
+        name: Update README version badge
+        entry: python3
+        language: system
+        files: '^pyproject\.toml$'
+        pass_filenames: false
+        args:
+          - -c
+          - |
+            import tomllib, re, subprocess
+            with open('pyproject.toml', 'rb') as f:
+                version = tomllib.load(f)['tool']['poetry']['version']
+            with open('README.md', 'r') as f:
+                content = f.read()
+            new_content = re.sub(
+                r'https://img\.shields\.io/badge/version-[^-]+-5fcfdd\?style=for-the-badge',
+                f'https://img.shields.io/badge/version-{version}-5fcfdd?style=for-the-badge',
+                content
+            )
+            if new_content != content:
+                with open('README.md', 'w') as f:
+                    f.write(new_content)
+                subprocess.run(['git', 'add', 'README.md'])
+                print(f'Updated README version badge to {version}')
+
   # Check for hardcoded passwords in Python test files (only in new commits)
   - repo: local
     hooks:
