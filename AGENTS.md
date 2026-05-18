@@ -41,8 +41,11 @@ It signposts common workflows and links to the full docs instead of duplicating 
 
 - For self-hosted JavaScript dependency and SRI updates, use `docs/cdn-libraries.md` as the source of truth.
 - Follow the `npm pack` + SHA-384 SRI workflow in `docs/cdn-libraries.md` (or use `s/update-cdn-assets` where appropriate) when bumping JS packages.
-- Record routine (non-security) dependency/library updates in `docs/compliance/infrastructure-technical-change-log.md` under "Application Dependency Maintenance (Non-Security)".
-- Record CVE/security remediations in `docs/compliance/vulnerability-patch-log.md` with date, version change, and verification notes.
+- **When bumping a CDN library version, three places must all be updated — missing any one will cause the automated check to keep raising a new issue:**
+  1. The version pin in `.github/workflows/update-cdn-libraries.yml`
+  2. The static file in `checktick_app/static/` and the `integrity="sha384-…"` attribute in all templates that reference it
+  3. A row in `docs/compliance/vulnerability-patch-log.md` (security/maintenance) or `docs/compliance/infrastructure-technical-change-log.md` (routine non-security)
+- See `docs/cdn-libraries.md` → **Upgrading Versions** for the full step-by-step checklist.
 
 ## Notes
 
