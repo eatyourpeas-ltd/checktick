@@ -15,13 +15,13 @@ CheckTick self-hosts critical JavaScript libraries with Subresource Integrity (S
 
 ## Libraries
 
-| Library | Version | File | Purpose |
-|---------|---------|------|---------|
-| HTMX | 2.0.10 | `checktick_app/static/js/htmx.min.js` | Dynamic HTML updates without JavaScript |
-| SortableJS | 1.15.7 | `checktick_app/static/js/sortable.min.js` | Drag-and-drop reordering |
-| axe-core | 4.11.4 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
-| NHS Frontend | 8.1.0 | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling |
-| ReDoc | 2.5.2 | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation |
+| Library      | Version | File                                              | Purpose                                 |
+| ------------ | ------- | ------------------------------------------------- | --------------------------------------- |
+| HTMX         | 2.0.10  | `checktick_app/static/js/htmx.min.js`             | Dynamic HTML updates without JavaScript |
+| SortableJS   | 1.15.7  | `checktick_app/static/js/sortable.min.js`         | Drag-and-drop reordering                |
+| axe-core     | 4.11.4  | `checktick_app/static/js/axe-core.min.js`         | WCAG accessibility testing              |
+| NHS Frontend | 8.1.0   | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling               |
+| ReDoc        | 2.5.2   | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation       |
 
 ## SRI Hashes
 
@@ -68,10 +68,9 @@ GitHub Actions workflows automatically check for updates:
 
 ### Workflows
 
-| Workflow | File | Schedule |
-|----------|------|----------|
+| Workflow      | File                                         | Schedule          |
+| ------------- | -------------------------------------------- | ----------------- |
 | CDN Libraries | `.github/workflows/update-cdn-libraries.yml` | Monday 9:30am UTC |
-
 
 ## Manual Update Process
 
@@ -93,11 +92,11 @@ curl -o checktick_app/static/js/sortable.min.js https://cdn.jsdelivr.net/npm/sor
 #   cp /tmp/package/Sortable.min.js checktick_app/static/js/sortable.min.js && rm sortablejs-1.15.7.tgz
 
 # axe-core
-curl -o checktick_app/static/js/axe-core.min.js https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.11.3/axe.min.js
+curl -o checktick_app/static/js/axe-core.min.js https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.11.4/axe.min.js
 
 # Alternative: npm pack (recommended)
-# npm pack axe-core@4.11.3 && tar -xzf axe-core-4.11.3.tgz -C /tmp && \
-#   cp /tmp/package/axe.min.js checktick_app/static/js/axe-core.min.js && rm axe-core-4.11.3.tgz
+# npm pack axe-core@4.11.4 && tar -xzf axe-core-4.11.4.tgz -C /tmp && \
+#   cp /tmp/package/axe.min.js checktick_app/static/js/axe-core.min.js && rm axe-core-4.11.4.tgz
 
 # NHS Frontend
 curl -o checktick_app/static/css/nhsuk-frontend.min.css https://cdn.jsdelivr.net/npm/nhsuk-frontend@8.1.0/dist/nhsuk.min.css
@@ -127,9 +126,11 @@ Update the `integrity` attribute in the relevant templates:
 **HTMX** - `checktick_app/templates/base.html`:
 
 ```html
-<script src="{% static 'js/htmx.min.js' %}"
-        integrity="sha384-NEW_HASH_HERE"
-        crossorigin="anonymous"></script>
+<script
+  src="{% static 'js/htmx.min.js' %}"
+  integrity="sha384-NEW_HASH_HERE"
+  crossorigin="anonymous"
+></script>
 ```
 
 **SortableJS** - Multiple templates:
@@ -140,10 +141,13 @@ Update the `integrity` attribute in the relevant templates:
 - `checktick_app/surveys/templates/surveys/group_builder.html`
 
 ```html
-<script src="{% static 'js/sortable.min.js' %}"
-        integrity="sha384-NEW_HASH_HERE"
-        crossorigin="anonymous"></script>
+<script
+  src="{% static 'js/sortable.min.js' %}"
+  integrity="sha384-NEW_HASH_HERE"
+  crossorigin="anonymous"
+></script>
 ```
+
 **NHS Frontend** - Survey templates with NHS styling enabled:
 
 - `checktick_app/surveys/templates/surveys/detail.html`
@@ -152,11 +156,14 @@ Update the `integrity` attribute in the relevant templates:
 - `checktick_app/surveys/templates/surveys/dashboard.html`
 
 ```html
-<link href="{% static 'css/nhsuk-frontend.min.css' %}"
-      integrity="sha384-NEW_HASH_HERE"
-      crossorigin="anonymous"
-      rel="stylesheet" />
+<link
+  href="{% static 'css/nhsuk-frontend.min.css' %}"
+  integrity="sha384-NEW_HASH_HERE"
+  crossorigin="anonymous"
+  rel="stylesheet"
+/>
 ```
+
 ### 4. Test
 
 Before deploying:
@@ -167,14 +174,27 @@ Before deploying:
 
 ## Upgrading Versions
 
-When upgrading to a new major/minor version:
+When upgrading a library version, **all three of the following must be updated**. Missing any one of them will cause the automated check to keep raising a new issue.
 
-1. Update version numbers in `.github/workflows/update-cdn-libraries.yml`
-2. Run the workflow manually or download files
-3. Generate and update SRI hashes
-4. Review changelog for breaking changes
-5. Test thoroughly in development
-6. Update this documentation
+### 1. Workflow pin — `.github/workflows/update-cdn-libraries.yml`
+
+Update the `env` variable for the library (e.g. `AXE_CORE_VERSION: "4.11.4"`). This is what the weekly check compares against npm to decide whether to raise an issue.
+
+### 2. Static file + SRI hash — templates
+
+Replace the `.min.js` / `.min.css` file in `checktick_app/static/` and update the `integrity="sha384-…"` attribute in all templates that reference it. Use `s/update-cdn-assets` or the manual `npm pack` steps above.
+
+### 3. Compliance log — `docs/compliance/vulnerability-patch-log.md`
+
+Add a row recording the old → new version, the new SRI hash, and the files changed. Security/maintenance patches go here; routine non-security bumps go in `docs/compliance/infrastructure-technical-change-log.md` instead.
+
+---
+
+After completing all three steps:
+
+- Review the library changelog for breaking changes
+- Run `s/test --no-a11y` to verify nothing is broken
+- Commit and open a PR
 
 ## Security Considerations
 
@@ -205,12 +225,12 @@ Since files are self-hosted, CDN outages don't
 
 ## CDN Sources
 
-| Library | Primary CDN | Alternative |
-|---------|-------------|-------------|
-| HTMX | unpkg.com | jsdelivr.net |
-| SortableJS | jsdelivr.net | unpkg.com |
-| axe-core | cdnjs.cloudflare.com | unpkg.com |
-| ReDoc | npm registry (redoc) | cdn.redoc.ly |
+| Library    | Primary CDN          | Alternative  |
+| ---------- | -------------------- | ------------ |
+| HTMX       | unpkg.com            | jsdelivr.net |
+| SortableJS | jsdelivr.net         | unpkg.com    |
+| axe-core   | cdnjs.cloudflare.com | unpkg.com    |
+| ReDoc      | npm registry (redoc) | cdn.redoc.ly |
 
 ## CI Source-of-Truth (npm)
 
@@ -234,16 +254,19 @@ We provide a small helper script at the repository root to make manual updates s
 Usage examples:
 
 Dry run (preview changes, no file writes):
+
 ```bash
 s/update-cdn-assets --dry-run
 ```
 
 Interactive update (pick a package, confirm):
+
 ```bash
 s/update-cdn-assets
 ```
 
 Non-interactive update (accept prompts automatically):
+
 ```bash
 s/update-cdn-assets --yes
 ```
