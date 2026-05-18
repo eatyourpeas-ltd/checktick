@@ -8,10 +8,16 @@
 #   --a11y        Run only accessibility tests
 #   --no-a11y     Run all tests except accessibility (no Chromium needed)
 #   --unit        Run only unit tests (exclude playwright)
-#   --host-fallback  Run locally via Poetry if Docker web container is not running
+#   --host-fallback  Run locally via Poetry instead of Docker (skip container entirely)
 #   --serial      Run tests serially (no parallelization)
 #   --coverage    Run with coverage report
 #   --help        Show this help message
+#
+# Docker behaviour:
+#   If the web container is already running, tests run inside it.
+#   If it is not running, the script will start it (docker compose up -d)
+#   and wait for it to become healthy before running tests.
+#   Pass --host-fallback to skip Docker entirely and run via Poetry.
 
 set -e
 
@@ -71,13 +77,13 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Execution Options:"
             echo "  --serial      Run tests serially (no parallelization)"
-            echo "  --host-fallback  Run locally if Docker web container is not running"
+            echo "  --host-fallback  Run locally via Poetry instead of Docker (skip container)"
             echo "  --coverage    Generate coverage report"
             echo ""
             echo "Examples:"
-            echo "  $0                    # Run all tests in parallel"
+            echo "  $0                    # Run all tests (starts Docker if needed)"
             echo "  $0 --no-a11y          # Run all tests except accessibility"
-            echo "  $0 --no-a11y --host-fallback  # Fallback to local run when web container is down"
+            echo "  $0 --no-a11y --host-fallback  # Run locally via Poetry (no Docker)"
             echo "  $0 --a11y             # Run accessibility tests only"
             echo "  $0 --fast --coverage  # Fast tests with coverage"
             echo "  $0 --serial           # Run all tests without xdist"
@@ -130,22 +136,37 @@ fi
 
 # Determine execution mode
 EXEC_PREFIX=()
-if docker compose ps --status running --services 2>/dev/null | grep -q '^web$'; then
+if [ "$HOST_FALLBACK" = true ]; then
+    # Explicitly requested local run — skip Docker entirely
+    if command -v poetry >/dev/null 2>&1; then
+        EXEC_PREFIX=(poetry run)
+    else
+        echo "⚠️  Poetry is not available. Falling back to local Python environment." >&2
+    fi
+elif docker compose ps --status running --services 2>/dev/null | grep -q '^web$'; then
+    # Container already up
     EXEC_PREFIX=(docker compose exec web)
 else
-    if [ "$HOST_FALLBACK" = true ]; then
-        if command -v poetry >/dev/null 2>&1; then
-            EXEC_PREFIX=(poetry run)
-        else
-            echo "⚠️  Docker web container is not running and Poetry is not available." >&2
-            echo "    Falling back to local Python environment." >&2
-        fi
-    else
-        echo "❌ Docker web container is not running." >&2
-        echo "   Start it with: docker compose up -d" >&2
-        echo "   Or run tests locally with: $0 --host-fallback [other flags]" >&2
+    # Container not running — try to start it
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "❌ Docker is not available and --host-fallback was not specified." >&2
+        echo "   Install Docker or run: $0 --host-fallback [other flags]" >&2
         exit 1
     fi
+    echo "🐳 Web container is not running. Starting it with docker compose up -d ..."
+    docker compose up -d
+    echo "⏳ Waiting for web container to become healthy ..."
+    RETRIES=30
+    until docker compose ps --status running --services 2>/dev/null | grep -q '^web$'; do
+        RETRIES=$((RETRIES - 1))
+        if [ "$RETRIES" -le 0 ]; then
+            echo "❌ Web container did not start in time. Check: docker compose logs web" >&2
+            exit 1
+        fi
+        sleep 2
+    done
+    echo "✅ Web container is ready."
+    EXEC_PREFIX=(docker compose exec web)
 fi
 
 echo "🧪 Running tests..."

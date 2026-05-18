@@ -16,12 +16,12 @@ It signposts common workflows and links to the full docs instead of duplicating 
 ### 1. Run tests (default for feature/bug-fix work)
 
 - Use `s/test --no-a11y`.
+- If the Docker web container is not running, the script will start it automatically.
 - Accessibility tests require a separate environment and should not be part of the default local validation path.
 
-### 2. Test fallback when Docker is not running
+### 2. Run tests without Docker
 
-- If `docker compose` web container is not running, use `s/test --no-a11y --host-fallback`.
-- This runs tests locally via Poetry when container execution is unavailable.
+- Use `s/test --no-a11y --host-fallback` to run locally via Poetry, bypassing Docker entirely.
 
 ### 3. Lint before commit
 
