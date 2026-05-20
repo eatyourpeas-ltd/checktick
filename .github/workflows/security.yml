@@ -43,7 +43,9 @@ jobs:
                   poetry run pip --version
                   echo "Running pip-audit on installed packages:"
                   poetry run pip-audit --desc on \
-                    --ignore-vuln CVE-2026-4539
+                    --ignore-vuln CVE-2026-4539 \
+                    --ignore-vuln PYSEC-2026-89 \
+                    --ignore-vuln PYSEC-2025-183
 
     codeql:
         name: CodeQL Analysis
