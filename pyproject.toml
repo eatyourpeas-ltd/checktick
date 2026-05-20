@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "checktick"
-version = "0.2.37"
+version = "0.2.38"
 description = "Secure, server-rendered survey platform for medical audit and research"
 authors = ["CheckTick Maintainers <simon@eatyourpeas.co.uk>"]
 readme = "README.md"
@@ -26,8 +26,8 @@ djangorestframework = "^3.15.2"
 django-csp = "^4.0"
 gunicorn = "^22.0.0"
 djangorestframework-simplejwt = "^5.3.1"
-markdown = "^3.6"
-pymdown-extensions = "^10.0"
+markdown = ">=3.10.1"
+pymdown-extensions = ">=10.21.3"
 pygments = "^2.18.0"
 inflection = "^0.5.1"
 uritemplate = "^4.1.1"
@@ -40,6 +40,7 @@ qrcode = "^8.0"
 django-otp = "^1.6.3"
  marshmallow = "^3.26.2"
  urllib3 = ">=2.7.0"
+idna = ">=3.15"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.3"
