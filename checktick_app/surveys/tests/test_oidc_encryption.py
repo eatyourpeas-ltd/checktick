@@ -13,7 +13,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from checktick_app.core.models import UserOIDC
-from checktick_app.surveys.models import Survey
+from checktick_app.surveys.models import QuestionGroup, Survey
 
 User = get_user_model()
 TEST_PASSWORD = "x"
@@ -150,6 +150,41 @@ class TestOIDCEncryption(TestCase):
         # Test OIDC unlock
         oidc_kek = self.survey.unlock_with_oidc(self.user)
         assert oidc_kek == kek
+
+    def test_oidc_auto_unlock_on_patient_data_survey(self):
+        """OIDC users can auto-unlock patient data surveys without a passphrase.
+
+        SSO providers enforce MFA/conditional access at the IdP level, which is
+        considered sufficient. A separate passphrase is not required and is not
+        enforced by the application.
+        """
+        # Create a survey with a patient data question group
+        patient_group = QuestionGroup.objects.create(
+            name="Patient Details",
+            owner=self.user,
+            schema={
+                "template": "patient_details_encrypted",
+                "fields": ["first_name", "last_name", "nhs_number", "date_of_birth"],
+            },
+        )
+        patient_survey = Survey.objects.create(
+            name="Patient OIDC Survey",
+            slug="patient-oidc-survey",
+            owner=self.user,
+            status=Survey.Status.DRAFT,
+        )
+        patient_survey.question_groups.add(patient_group)
+
+        # Confirm it detects patient data
+        assert patient_survey.collects_patient_data() is True
+
+        kek = os.urandom(32)
+        patient_survey.set_oidc_encryption(kek, self.user)
+
+        # OIDC auto-unlock should work regardless of patient data content
+        assert patient_survey.can_user_unlock_automatically(self.user) is True
+        unlocked_kek = patient_survey.unlock_with_oidc(self.user)
+        assert unlocked_kek == kek
 
 
 class TestOIDCEncryptionViews(TestCase):

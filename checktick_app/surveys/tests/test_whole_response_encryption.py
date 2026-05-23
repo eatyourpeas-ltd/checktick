@@ -96,25 +96,33 @@ class TestSurveyPatientDataDetection:
 
 @pytest.mark.django_db
 class TestSSOPassphraseRequirement:
-    """Test SSO passphrase requirement for patient data surveys."""
+    """
+    Tests for the sso_user_needs_passphrase model helper.
 
-    def test_default_requires_passphrase_for_patient_data(
+    Note: this flag (require_passphrase_for_patient_data) is not enforced in the
+    application. OIDC users can auto-unlock all surveys, including patient data
+    surveys, without a passphrase. Enterprise SSO providers enforce MFA and
+    conditional access at the IdP level, which is considered sufficient protection.
+    These tests document the model's behaviour only.
+    """
+
+    def test_passphrase_flag_defaults_true_but_is_not_enforced(
         self, survey_with_patient_data
     ):
-        """By default, patient data surveys require passphrase for SSO users."""
+        """require_passphrase_for_patient_data defaults True but is not enforced by views."""
         assert survey_with_patient_data.require_passphrase_for_patient_data is True
+        # sso_user_needs_passphrase() reflects the flag, but the unlock view does
+        # not call it — OIDC auto-unlock proceeds regardless.
         assert survey_with_patient_data.sso_user_needs_passphrase() is True
 
-    def test_can_disable_passphrase_requirement(self, survey_with_patient_data):
-        """Organizations can disable passphrase requirement if security policy permits."""
+    def test_flag_can_be_set_false(self, survey_with_patient_data):
+        """The flag can be set False (has no functional effect currently)."""
         survey_with_patient_data.require_passphrase_for_patient_data = False
         survey_with_patient_data.save()
         assert survey_with_patient_data.sso_user_needs_passphrase() is False
 
-    def test_non_patient_survey_no_passphrase_requirement(
-        self, survey_without_patient_data
-    ):
-        """Non-patient surveys don't require passphrase for SSO users."""
+    def test_non_patient_survey_returns_false(self, survey_without_patient_data):
+        """Non-patient surveys always return False."""
         assert survey_without_patient_data.sso_user_needs_passphrase() is False
 
 

@@ -19,9 +19,10 @@ It signposts common workflows and links to the full docs instead of duplicating 
 - If the Docker web container is not running, the script will start it automatically.
 - Accessibility tests require a separate environment and should not be part of the default local validation path.
 
-### 2. Run tests without Docker
+### 2. Test fallback when Docker is not running
 
-- Use `s/test --no-a11y --host-fallback` to run locally via Poetry, bypassing Docker entirely.
+- If the Docker web container is not running, the script will start it automatically.
+- `s/test --no-a11y --host-fallback` runs via Poetry on the host, but **requires a local PostgreSQL instance on port 5432**. The Docker DB is not exposed to the host, so this will fail unless you have a separate local DB. The script will check and exit clearly if none is found.
 
 ### 3. Lint before commit
 

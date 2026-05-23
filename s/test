@@ -77,7 +77,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Execution Options:"
             echo "  --serial      Run tests serially (no parallelization)"
-            echo "  --host-fallback  Run locally via Poetry instead of Docker (skip container)"
+            echo "  --host-fallback  Run locally via Poetry instead of Docker (requires local DB on port 5432)"
             echo "  --coverage    Generate coverage report"
             echo ""
             echo "Examples:"
@@ -143,6 +143,18 @@ if [ "$HOST_FALLBACK" = true ]; then
     else
         echo "⚠️  Poetry is not available. Falling back to local Python environment." >&2
     fi
+    # Warn early if no local DB is reachable (the DB port is not exposed from Docker)
+    if ! nc -z localhost 5432 2>/dev/null; then
+        echo "⚠️  No database found at localhost:5432." >&2
+        echo "   --host-fallback requires a local PostgreSQL instance running on the host." >&2
+        echo "   The Docker database is not exposed to the host — start the web container" >&2
+        echo "   and omit --host-fallback to run tests inside Docker instead." >&2
+        exit 1
+    fi
+elif ! docker info >/dev/null 2>&1; then
+    echo "❌ Docker daemon is not running." >&2
+    echo "   Start Docker Desktop, or run: $0 --host-fallback [other flags]" >&2
+    exit 1
 elif docker compose ps --status running --services 2>/dev/null | grep -q '^web$'; then
     # Container already up
     EXEC_PREFIX=(docker compose exec web)
