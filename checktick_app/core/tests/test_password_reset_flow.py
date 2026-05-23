@@ -2,19 +2,18 @@ import re
 import secrets
 
 from django.contrib.auth.models import User
-from django.core import mail
 from django.urls import reverse
 import pytest
 
 
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.django_db
 class TestPasswordResetFlow:
     def test_password_reset_pages_render(self, client):
         assert client.get(reverse("password_reset")).status_code == 200
         assert client.get(reverse("password_reset_done")).status_code == 200
         assert client.get(reverse("password_reset_complete")).status_code == 200
 
-    def test_request_reset_sends_email(self, client):
+    def test_request_reset_sends_email(self, client, mailoutbox):
         # Generate passwords and unique identifiers at runtime to avoid conflicts in parallel tests
         initial_password = secrets.token_urlsafe(12)
         new_password = secrets.token_urlsafe(16)
@@ -30,8 +29,8 @@ class TestPasswordResetFlow:
         assert resp.status_code == 302
         assert resp.url == reverse("password_reset_done")
         # Email sent
-        assert len(mail.outbox) == 1
-        msg = mail.outbox[0]
+        assert len(mailoutbox) == 1
+        msg = mailoutbox[0]
         assert "Reset your password" in msg.subject
         # Ensure an HTML alternative is present and includes the CTA button.
         assert msg.alternatives, "Expected HTML alternative email"
