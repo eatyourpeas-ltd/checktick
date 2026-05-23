@@ -205,17 +205,21 @@ When unlocking a survey:
 ### User Experience
 
 **For OIDC Users:**
+
 - Create survey → Automatic encryption setup
-- Access survey → Automatic unlock (no manual key entry)
+- Access survey → Automatic unlock (no manual key entry), including surveys that collect patient data
 - Green success message: "Survey automatically unlocked with your Google/Microsoft account"
+- Optional: choose SSO + Recovery Phrase during encryption setup for a manual fallback
 
 **For Traditional Users:**
+
 - Standard password/recovery phrase workflow unchanged
 - Can upgrade to OIDC authentication to gain automatic unlock
 
 ### Security Model
 
 **Key Derivation:**
+
 ```
 OIDC Key = PBKDF2(
     provider:subject,    # "google:12345" or "azure:user@hospital.org"
@@ -225,12 +229,14 @@ OIDC Key = PBKDF2(
 ```
 
 **Encryption Flow:**
+
 1. Survey KEK encrypts all patient data
 2. KEK is encrypted with OIDC-derived key
 3. Encrypted KEK stored in `survey.encrypted_kek_oidc`
 4. User's salt stored in `UserOIDC.key_derivation_salt`
 
 **Access Control:**
+
 - Only the exact OIDC identity can decrypt
 - Provider + subject must match exactly
 - Different providers/accounts cannot cross-decrypt
@@ -238,17 +244,20 @@ OIDC Key = PBKDF2(
 ### Implementation Details
 
 **Model Changes:**
+
 - `Survey.encrypted_kek_oidc`: OIDC-encrypted survey key
 - `Survey.has_oidc_encryption()`: Check if OIDC unlock available
 - `Survey.unlock_with_oidc(user)`: Automatic unlock method
 - `UserOIDC.key_derivation_salt`: Unique salt per OIDC user
 
 **View Integration:**
+
 - `survey_create`: Automatically adds OIDC encryption for SSO users
 - `survey_unlock`: Attempts automatic unlock before manual methods
 - Audit logging for all unlock methods including OIDC
 
 **Template Updates:**
+
 - Automatic unlock notification for OIDC users
 - Visual indicators for encryption methods available
 - Fallback UI for manual unlock when needed
@@ -256,16 +265,19 @@ OIDC Key = PBKDF2(
 ### Migration and Compatibility
 
 **Existing Surveys:**
+
 - Continue to work with password/recovery phrase
 - OIDC encryption can be added retroactively
 - No disruption to existing workflows
 
 **Mixed Authentication:**
+
 - Users can have both OIDC and password authentication
 - All unlock methods work independently
 - Users can switch between authentication types
 
 **Backward Compatibility:**
+
 - Traditional encryption fully preserved
 - API endpoints unchanged
 - Existing integrations unaffected

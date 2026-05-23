@@ -10,14 +10,14 @@ CheckTick protects your sensitive survey data with encryption. This guide explai
 
 ## Quick Overview
 
-| Subscription Tier | Encryption Features | Recovery Options |
-|-------------------|---------------------|------------------|
-| **Free** | **All surveys encrypted** (no patient data templates) | Password OR Recovery Phrase OR **Verified Identity Recovery** |
-| **Individual** | Password + Recovery Phrase + **Platform Key Escrow** | Password OR Recovery Phrase OR **Verified Identity Recovery** |
-| **Pro** | Enhanced encryption + Vault backup | Password OR Recovery Phrase OR **Verified Identity Recovery** |
-| **Team Small/Medium/Large** | Team-shared keys + Organisation master key | Team admin OR Organisation admin OR Platform recovery |
-| **Organisation** | Hierarchical encryption + Admin recovery | Organisation admin OR **Platform recovery** |
-| **Enterprise** | Custom encryption + Dedicated Vault | Custom recovery procedures + Platform recovery |
+| Subscription Tier           | Encryption Features                                   | Recovery Options                                              |
+| --------------------------- | ----------------------------------------------------- | ------------------------------------------------------------- |
+| **Free**                    | **All surveys encrypted** (no patient data templates) | Password OR Recovery Phrase OR **Verified Identity Recovery** |
+| **Individual**              | Password + Recovery Phrase + **Platform Key Escrow**  | Password OR Recovery Phrase OR **Verified Identity Recovery** |
+| **Pro**                     | Enhanced encryption + Vault backup                    | Password OR Recovery Phrase OR **Verified Identity Recovery** |
+| **Team Small/Medium/Large** | Team-shared keys + Organisation master key            | Team admin OR Organisation admin OR Platform recovery         |
+| **Organisation**            | Hierarchical encryption + Admin recovery              | Organisation admin OR **Platform recovery**                   |
+| **Enterprise**              | Custom encryption + Dedicated Vault                   | Custom recovery procedures + Platform recovery                |
 
 ## The Important Promise
 
@@ -212,15 +212,15 @@ Everything in Individual tier, plus:
 
 ### Differences from Individual
 
-| Feature | Individual | Pro |
-|---------|-----------|-----|
-| Basic encryption | ✅ | ✅ |
-| Platform recovery | ✅ | ✅ |
-| Verification time | 24-48 hours | 12-24 hours |
-| Time delay | 24-48 hours | 24 hours (faster) |
-| Audit retention | 1 year | 2 years |
-| Compliance reports | ❌ | ✅ |
-| Dedicated support | ❌ | ✅ |
+| Feature            | Individual  | Pro               |
+| ------------------ | ----------- | ----------------- |
+| Basic encryption   | ✅          | ✅                |
+| Platform recovery  | ✅          | ✅                |
+| Verification time  | 24-48 hours | 12-24 hours       |
+| Time delay         | 24-48 hours | 24 hours (faster) |
+| Audit retention    | 1 year      | 2 years           |
+| Compliance reports | ❌          | ✅                |
+| Dedicated support  | ❌          | ✅                |
 
 ---
 
@@ -273,15 +273,15 @@ Teams can operate in two modes:
 
 #### SSO and Patient Data Surveys
 
-**Important**: When a survey collects patient data, SSO auto-unlock alone is not sufficient.
+SSO auto-unlock works for **all** surveys, including those that collect patient data. No separate passphrase is required.
 
-Even with SSO, you'll be asked to set a **passphrase** when your survey includes patient demographics (NHS number, date of birth, names, etc.). This adds an extra layer of protection:
+When a survey contains patient demographics (NHS number, date of birth, names, etc.), the entire response is encrypted and automatically unlocked when you sign in via your SSO provider. This is considered sufficient protection because:
 
-- **Why**: Patient data requires explicit intent to access - it shouldn't unlock "automatically" when you log in
-- **How**: You set a passphrase the first time you publish a patient data survey
-- **Using**: Enter your passphrase to unlock the survey (in addition to being signed in via SSO)
+- Enterprise SSO providers (Microsoft Azure AD, Google Workspace) enforce multi-factor authentication, conditional access, and device compliance at the organisational level
+- CheckTick's OIDC key derivation uses the same cryptographic strength as password-based encryption (PBKDF2, 100,000 iterations, unique per-user salt)
+- Requiring a passphrase on top of SSO introduces a meaningful risk of clinicians losing access to patient data — an outcome worse than the marginal security gain
 
-This ensures that even if your SSO session is compromised, patient data remains protected.
+If you prefer an additional recovery mechanism, you can opt in to **SSO + Recovery Phrase** when setting up encryption. This is optional and recommended only for users who want a manual fallback independent of their SSO provider.
 
 #### Whole Survey Encryption
 
@@ -407,6 +407,7 @@ Organisation owners have access to a recovery management dashboard:
 - 🔐 Dual authorization workflow
 
 **Example dashboard view:**
+
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Recovery Requests                              [Filter] │
