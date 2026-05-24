@@ -76,13 +76,13 @@ Platform Master Key = Vault Component ⊕ Custodian Component
 
 ### Key Hierarchy
 
-| Level | Key Size | Storage | Purpose |
-|-------|----------|---------|---------|
+| Level           | Key Size | Storage                 | Purpose                |
+| --------------- | -------- | ----------------------- | ---------------------- |
 | Platform Master | 64 bytes | Split (Vault + Offline) | Root of all derivation |
-| Organisation | 32 bytes | Derived on-demand | Org-level encryption |
-| Team | 32 bytes | Derived on-demand | Team-level encryption |
-| Survey KEK | 32 bytes | Vault (encrypted) | Encrypts survey data |
-| User Recovery | 32 bytes | Vault (escrowed) | Emergency recovery |
+| Organisation    | 32 bytes | Derived on-demand       | Org-level encryption   |
+| Team            | 32 bytes | Derived on-demand       | Team-level encryption  |
+| Survey KEK      | 32 bytes | Vault (encrypted)       | Encrypts survey data   |
+| User Recovery   | 32 bytes | Vault (escrowed)        | Emergency recovery     |
 
 ### Vault Paths
 
@@ -135,11 +135,11 @@ Northflank provides managed container hosting with persistent storage.
 
 #### Step 5: Environment Variables
 
-| Variable | Value |
-|----------|-------|
-| `VAULT_ADDR` | `http://127.0.0.1:8200` |
-| `SKIP_CHOWN` | `true` |
-| `SKIP_SETCAP` | `true` |
+| Variable      | Value                   |
+| ------------- | ----------------------- |
+| `VAULT_ADDR`  | `http://127.0.0.1:8200` |
+| `SKIP_CHOWN`  | `true`                  |
+| `SKIP_SETCAP` | `true`                  |
 
 #### Step 6: Network Configuration
 
@@ -152,6 +152,7 @@ Northflank provides managed container hosting with persistent storage.
 2. Note the **internal URL**: `vault.PROJECT_ID.svc.cluster.local:8200`
 
 3. In CheckTick webapp service → **Environment Variables**:
+
    ```bash
    # If you have TLS configured on Vault:
    VAULT_ADDR=https://vault.PROJECT_ID.svc.cluster.local:8200
@@ -173,7 +174,7 @@ See [Initialization](#initialization) below.
 Create `docker-compose.vault.yml`:
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   vault:
@@ -253,13 +254,13 @@ Initial Root Token: hvs.xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 **Vault Unseal Keys** (for Vault infrastructure):
 
-| Key | Storage Location |
-|-----|------------------|
-| Unseal Key 1 | Admin 1's password manager |
-| Unseal Key 2 | Admin 2's password manager |
-| Unseal Key 3 | Physical safe (printed, sealed) |
-| Unseal Key 4 | Encrypted cloud backup |
-| Root Token | Both admins' password managers (temporary, will be revoked) |
+| Key          | Storage Location                                            |
+| ------------ | ----------------------------------------------------------- |
+| Unseal Key 1 | Admin 1's password manager                                  |
+| Unseal Key 2 | Admin 2's password manager                                  |
+| Unseal Key 3 | Physical safe (printed, sealed)                             |
+| Unseal Key 4 | Encrypted cloud backup                                      |
+| Root Token   | Both admins' password managers (temporary, will be revoked) |
 
 **Note**: Custodian component shares will use the same distribution pattern (see Step 5b).
 
@@ -325,12 +326,12 @@ python manage.py split_custodian_component \
 
 **Distribute shares** (aligned with Vault unseal keys):
 
-| Share | Storage Location |
-|-------|------------------|
+| Share   | Storage Location                                              |
+| ------- | ------------------------------------------------------------- |
 | Share 1 | Admin 1's password manager (same person who has Unseal Key 1) |
 | Share 2 | Admin 2's password manager (same person who has Unseal Key 2) |
-| Share 3 | Physical safe (with Unseal Key 3) |
-| Share 4 | Encrypted cloud backup (with Unseal Key 4) |
+| Share 3 | Physical safe (with Unseal Key 3)                             |
+| Share 4 | Encrypted cloud backup (with Unseal Key 4)                    |
 
 **Threshold**: Need any 3 of 4 shares to perform platform recovery.
 
@@ -343,6 +344,7 @@ CheckTick supports platform key versioning, enabling key rotation without breaki
 #### How Versioning Works
 
 Each platform key version consists of:
+
 - **Vault Component**: Stored in PostgreSQL database (`PlatformKeyVersion` model)
 - **Custodian Component**: Stored offline (YubiKeys/paper/USB) via Shamir shares
 - **Version ID**: String identifier (e.g., "v1", "v2", "v3")
@@ -480,16 +482,16 @@ vault.encrypt_survey_kek(
 
 ### VaultClient Methods
 
-| Method | Purpose |
-|--------|---------|
+| Method                      | Purpose                                        |
+| --------------------------- | ---------------------------------------------- |
 | `get_platform_master_key()` | Reconstruct platform key from split components |
-| `derive_organisation_key()` | Derive org key from platform key + passphrase |
-| `derive_team_key()` | Derive team key from org key |
-| `escrow_user_survey_kek()` | Store user's KEK for recovery |
-| `recover_user_survey_kek()` | Recover KEK (requires custodian component) |
-| `encrypt_survey_kek()` | Encrypt KEK with hierarchy key |
-| `decrypt_survey_kek()` | Decrypt KEK from Vault |
-| `health_check()` | Check Vault connectivity and status |
+| `derive_organisation_key()` | Derive org key from platform key + passphrase  |
+| `derive_team_key()`         | Derive team key from org key                   |
+| `escrow_user_survey_kek()`  | Store user's KEK for recovery                  |
+| `recover_user_survey_kek()` | Recover KEK (requires custodian component)     |
+| `encrypt_survey_kek()`      | Encrypt KEK with hierarchy key                 |
+| `decrypt_survey_kek()`      | Decrypt KEK from Vault                         |
+| `health_check()`            | Check Vault connectivity and status            |
 
 ---
 
@@ -538,12 +540,14 @@ CheckTick supports two platform key rotation strategies:
 ### Option A: Rotate Shamir Shares Only (Recommended)
 
 **Use when:**
+
 - Custodian employee leaves company
 - Suspected compromise of physical shares
 - Routine annual/biennial rotation policy
 - YubiKey hardware replacement
 
 **Benefits:**
+
 - Platform master key remains unchanged
 - Old surveys remain decryptable automatically
 - Only one set of custodian shares needed at a time
@@ -570,11 +574,13 @@ python manage.py split_custodian_component \
 ```
 
 **Database Updates:**
+
 - Vault component updated in `PlatformKeyVersion` table
 - `shares_last_rotated` timestamp updated
 - Version ID remains the same (e.g., "v1")
 
 **Security Notes:**
+
 - Cryptographic key material never changes
 - Old surveys decrypt with existing database records
 - No need to maintain multiple custodian share sets
@@ -582,16 +588,19 @@ python manage.py split_custodian_component \
 ### Option B: Generate New Platform Key (Maximum Security)
 
 **Use when:**
+
 - Cryptographic algorithm weakness discovered
 - Regulatory requirement for key material refresh
 - Complete cryptographic "clean slate" after security incident
 
 **Benefits:**
+
 - Perfect forward secrecy (old key compromise doesn't affect new surveys)
 - Fresh cryptographic material
 - Clear security boundaries between time periods
 
 **Trade-offs:**
+
 - Must maintain **multiple custodian share sets** (one per version)
 - More complex custodian management over time
 - Requires careful documentation of which shares work with which surveys
@@ -616,41 +625,45 @@ python manage.py activate_platform_key_version --version v2
 ```
 
 **Database Updates:**
+
 - New row created in `PlatformKeyVersion` table
 - Version "v2" becomes active
 - Version "v1" automatically retired (but kept for old surveys)
 
 **Custodian Share Management:**
 
-| Version | Status | Custodian Shares | Used For |
-|---------|--------|------------------|----------|
-| v1 | Retired | Keep in safe | Decrypting surveys created before rotation |
-| v2 | Active | Distribute now | New KEK escrows |
+| Version | Status  | Custodian Shares | Used For                                   |
+| ------- | ------- | ---------------- | ------------------------------------------ |
+| v1      | Retired | Keep in safe     | Decrypting surveys created before rotation |
+| v2      | Active  | Distribute now   | New KEK escrows                            |
 
 **Important**: Label custodian share storage clearly:
+
 - "Platform Key v1 - Surveys before 2026-02-19"
 - "Platform Key v2 - Surveys after 2026-02-19"
 
 ### Choosing a Rotation Strategy
 
-| Factor | Option A (Shamir Shares) | Option B (New Key) |
-|--------|--------------------------|---------------------|
-| **Operational Complexity** | ✓ Simple | ✗ Complex |
-| **Custodian Share Sets** | One at a time | Accumulate over time |
-| **Forward Secrecy** | ✗ Same key | ✓ Fresh key |
-| **Old Survey Decryption** | ✓ Automatic | ✓ Requires correct version shares |
-| **Recommended For** | Routine rotation | Security incidents |
-| **Rotation Frequency** | Every 2 years | Only when necessary |
+| Factor                     | Option A (Shamir Shares) | Option B (New Key)                |
+| -------------------------- | ------------------------ | --------------------------------- |
+| **Operational Complexity** | ✓ Simple                 | ✗ Complex                         |
+| **Custodian Share Sets**   | One at a time            | Accumulate over time              |
+| **Forward Secrecy**        | ✗ Same key               | ✓ Fresh key                       |
+| **Old Survey Decryption**  | ✓ Automatic              | ✓ Requires correct version shares |
+| **Recommended For**        | Routine rotation         | Security incidents                |
+| **Rotation Frequency**     | Every 2 years            | Only when necessary               |
 
 **Recommendation**: Use **Option A** for routine rotation, **Option B** only for security incidents or compliance requirements.
 
 ### Rotation Policies
 
 **Recommended Schedule:**
+
 - **Shamir Shares (Option A)**: Every 2 years
 - **Platform Key Material (Option B)**: Only when required
 
 **Triggers for Immediate Rotation:**
+
 - Custodian employee termination
 - Suspected physical share compromise
 - YubiKey reported lost/stolen
@@ -685,37 +698,84 @@ python manage.py activate_platform_key_version --version v1
 
 ## Monitoring
 
-### Health Check Endpoint
+### `/healthz` — Platform Health Endpoint
 
-```python
-from django.http import JsonResponse
-from checktick_app.surveys.vault_client import get_vault_client
-
-def vault_health(request):
-    vault = get_vault_client()
-    health = vault.health_check()
-    status = 200 if not health.get('sealed') and health.get('initialized') else 503
-    return JsonResponse(health, status=status)
-```
-
-### CLI Health Check
+CheckTick exposes a health endpoint at `/healthz` that checks all critical services and returns a structured JSON response. This is the primary mechanism for hosting providers (Northflank, Railway, etc.) to detect degraded state and trigger alerts.
 
 ```bash
-curl -s https://your-vault-url/v1/sys/health | jq
+curl -s https://yourdomain.com/healthz | jq
+```
+
+**Response shape:**
+
+```json
+{
+  "status": "ok",
+  "db": "ok",
+  "vault": "ok",
+  "snomed": "ok"
+}
+```
+
+**HTTP status codes and fields:**
+
+| HTTP | `status`   | `vault` value   | Meaning                     | Suggested action                                                  |
+| ---- | ---------- | --------------- | --------------------------- | ----------------------------------------------------------------- |
+| 200  | `ok`       | `ok`            | Everything is healthy       | No action needed                                                  |
+| 200  | `degraded` | `ok`            | SNOMED db missing           | Run `seed_snomed_datasets` if SNOMED features are needed          |
+| 503  | `degraded` | `sealed`        | Vault sealed after restart  | Unseal using your 3 unseal keys (see below)                       |
+| 503  | `degraded` | `unreachable`   | App cannot reach Vault      | Check `VAULT_ADDR`, network/firewall, Vault container status      |
+| 503  | `degraded` | `uninitialized` | Vault has never been set up | Run `./s/dev --init-vault` (dev) or `vault/setup_vault.py` (prod) |
+| 503  | `error`    | `ok`            | Database is down            | Check PostgreSQL container/service health                         |
+
+> **How alerts work:** your hosting provider's health probe hits `/healthz`. A 503 response marks the instance as unhealthy and triggers the provider's configured notification (email, Slack, PagerDuty). No separate monitoring setup is required — configure your notification channel in your provider dashboard.
+
+**SNOMED note:** `"snomed": "unavailable"` does **not** cause a 503. It appears in the response as informational, and the overall `status` will be `"degraded"` (not `"error"`). Surveys and all non-SNOMED features continue working normally.
+
+### Unsealing Vault After a Restart
+
+Vault seals itself whenever its process restarts (container restart, deploy, reboot). This is by design — it prevents access to keys if the host is compromised. After every restart you must unseal it with 3 of your 4 unseal keys:
+
+```bash
+# Connect to the Vault container
+docker compose exec vault sh
+
+# Inside the container:
+export VAULT_ADDR=http://127.0.0.1:8200
+vault operator unseal <unseal-key-1>
+vault operator unseal <unseal-key-2>
+vault operator unseal <unseal-key-3>
+```
+
+Or for Northflank / remote deployments, use the Vault HTTP API directly:
+
+```bash
+curl -X PUT https://vault.yourdomain.com/v1/sys/unseal \
+  -H "Content-Type: application/json" \
+  -d '{"key": "<unseal-key-1>"}'
+# Repeat 3 times with different keys
+```
+
+After unsealing, `/healthz` will return 200 and the instance will recover automatically.
+
+### CLI Health Check (Vault directly)
+
+```bash
+curl -s https://vault.yourdomain.com/v1/sys/health | jq
 ```
 
 ### Key Metrics
 
-- `vault_core_unsealed` - Should be `1` (unsealed)
-- `vault_token_count` - Active tokens
-- `vault_audit_log_request_total` - Audit events
+- `vault_core_unsealed` — should be `1` (unsealed)
+- `vault_token_count` — active tokens
+- `vault_audit_log_request_total` — audit events
 
 ### Alerts
 
 Configure alerts for:
 
 - Vault sealed (`vault_core_unsealed == 0`)
-- High request latency (> 1s at p99)
+- High request latency (> 1 s at p99)
 - Authentication failures
 - Recovery requests > 5/day (suspicious activity)
 
@@ -1050,9 +1110,7 @@ vault operator unseal <key3>
 1. Verify `VAULT_ROLE_ID` and `VAULT_SECRET_ID`
 2. Check AppRole exists: `vault read auth/approle/role/checktick-app`
 3. Generate new secret_id if expired:
-4.
-
-   ```bash
+4. ```bash
    vault write -f auth/approle/role/checktick-app/secret-id
    ```
 
@@ -1130,13 +1188,13 @@ Before going live:
 
 ### Expected Latency
 
-| Operation | Latency |
-|-----------|---------|
-| Platform key reconstruction | ~5ms |
-| Organisation key derivation | ~200ms (PBKDF2 200k iterations) |
-| Team key derivation | ~200ms |
-| Survey KEK encrypt/decrypt | ~10ms |
-| **Total unlock (team survey)** | **~420ms** |
+| Operation                      | Latency                         |
+| ------------------------------ | ------------------------------- |
+| Platform key reconstruction    | ~5ms                            |
+| Organisation key derivation    | ~200ms (PBKDF2 200k iterations) |
+| Team key derivation            | ~200ms                          |
+| Survey KEK encrypt/decrypt     | ~10ms                           |
+| **Total unlock (team survey)** | **~420ms**                      |
 
 ### Caching
 

@@ -27,10 +27,44 @@ See [Configuration Guide](/docs/self-hosting-configuration/) for full setup deta
 
 ## Prerequisites
 
+CheckTick requires the following infrastructure components. Understand what you need before you start:
+
+| Component                 | Requirement                         | Notes                                                                                |
+| ------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------ |
+| **App container**         | Docker image (pulled automatically) | Runs the Django application                                                          |
+| **PostgreSQL**            | Version 16+                         | Primary data store for all survey data                                               |
+| **Volume: `vault-data`**  | 1 GB minimum, **airgapped**         | Vault Raft storage — must not be shared. See [Vault setup](vault.md)                 |
+| **Volume: `snomed-data`** | 10 GB minimum                       | SNOMED CT SQLite database. Optional, but required for clinical terminology dropdowns |
+
+> ⚠️ The `vault-data` and `snomed-data` volumes must be **separate**. Vault uses Raft storage in its volume and cannot share it with other data.
+
+**System requirements:**
+
 - **Docker** 24.0+ and **Docker Compose** 2.0+
-- **2GB RAM minimum** (4GB recommended)
-- **10GB disk space** for database and media files
+- **2 GB RAM minimum** (4 GB recommended; 8 GB if running the SNOMED seeding process locally)
 - **Domain name** (optional, but recommended for production)
+
+## Environment Variables
+
+All configuration is done via environment variables. Start from the provided template:
+
+```bash
+# Download the template
+curl -O https://raw.githubusercontent.com/eatyourpeas/checktick/main/.env.example
+mv .env.example .env
+```
+
+The template (`example.env` / `.env.example`) contains every supported variable with comments. Open it and work through each section. Add the values to your hosting provider's secrets/environment credentials store — never commit a populated `.env` to version control.
+
+The key sections are:
+
+1. **Security** — `SECRET_KEY`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`
+2. **Database** — `DATABASE_URL` or `POSTGRES_*` variables
+3. **Email** — SMTP credentials for invitations and notifications
+4. **External datasets** — RCPCH API key for NHS dropdown lists
+5. **SNOMED CT** — TRUD API key (see below)
+6. **Vault** — AppRole credentials generated during Vault initialisation
+7. **Branding / SSO / LLM** — optional
 
 ## Quick Start
 
@@ -62,7 +96,7 @@ nano .env
 
 **Minimum required settings:**
 
-```bash
+````bash
 Edit `.env` and configure at minimum:
 
 ```bash
@@ -99,10 +133,11 @@ EMAIL_HOST_PASSWORD=your-app-password
 # Get free API key from: https://api.rcpch.ac.uk
 EXTERNAL_DATASET_API_URL=https://api.rcpch.ac.uk
 EXTERNAL_DATASET_API_KEY=your-rcpch-api-key
-```
+````
 
 > **Note**: Generate a strong `SECRET_KEY` with: `openssl rand -base64 50`
-```
+
+````
 
 > **Note:** CheckTick will start without email configured, but users cannot be invited or reset passwords. Email setup is essential for a working system.
 
@@ -117,7 +152,7 @@ docker compose ps
 
 # View logs
 docker compose logs -f web
-```
+````
 
 ### 4. Create Superuser Account
 
@@ -149,6 +184,7 @@ After initial setup, you can create additional superuser accounts in two ways:
    - Or create a new user and grant superuser status
 
 2. **Via Command Line**:
+
    ```bash
    # Create a new superuser
    docker compose exec web python manage.py createsuperuser
@@ -217,15 +253,19 @@ Visit `http://localhost:8000` (or your domain) and log in with your admin creden
 When preparing to accept real users and go into production:
 
 1. **Set environment variable:**
+
    ```bash
    ENVIRONMENT=production
    ```
+
    This disables demo account creation to prevent security vulnerabilities.
 
 2. **Delete all demo accounts:**
+
    ```bash
    docker compose exec web python manage.py create_demo_accounts --reset
    ```
+
    This removes all `demo-*@example.com` accounts with known passwords.
 
 3. **Review security settings:**
