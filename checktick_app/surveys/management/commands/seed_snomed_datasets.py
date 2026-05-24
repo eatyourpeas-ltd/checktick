@@ -316,7 +316,9 @@ class Command(BaseCommand):
         force = options["force"]
 
         if dry_run:
-            self.stdout.write(self.style.WARNING("🔍 DRY RUN — no changes will be saved"))
+            self.stdout.write(
+                self.style.WARNING("🔍 DRY RUN — no changes will be saved")
+            )
 
         # Check snomed.db is available
         db_path = _get_snomed_db_path()
@@ -350,7 +352,9 @@ class Command(BaseCommand):
 
             if existing and not force:
                 skipped += 1
-                self.stdout.write(f"   ⏭  {key} — already exists (use --force to re-seed)")
+                self.stdout.write(
+                    f"   ⏭  {key} — already exists (use --force to re-seed)"
+                )
                 continue
 
             member_count = _get_member_count(db_path, defn)
@@ -373,7 +377,9 @@ class Command(BaseCommand):
                 "options": [],  # always empty — served live from snomed.db
             }
 
-            count_str = f" ({member_count:,} members)" if member_count is not None else ""
+            count_str = (
+                f" ({member_count:,} members)" if member_count is not None else ""
+            )
 
             if dry_run:
                 action = "UPDATE" if existing else "CREATE"

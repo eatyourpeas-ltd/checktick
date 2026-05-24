@@ -11,17 +11,15 @@ Covers:
 All tests are offline — no real snomed.db required.
 """
 
-import os
+from io import StringIO
 import sqlite3
-import tempfile
 
-import pytest
 from django.core.management import call_command
 from django.test import override_settings
-from io import StringIO
-
+import pytest
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_snomed_db(path: str) -> None:
     """
@@ -29,8 +27,7 @@ def _make_snomed_db(path: str) -> None:
     for the resolver tests.
     """
     conn = sqlite3.connect(path)
-    conn.executescript(
-        """
+    conn.executescript("""
         CREATE TABLE concepts (
             id   TEXT PRIMARY KEY,
             active INTEGER DEFAULT 1
@@ -82,8 +79,7 @@ def _make_snomed_db(path: str) -> None:
             ('rel1', '11111111', '55555555', '116680003', 1);
 
         INSERT INTO metadata VALUES ('release_date', '2026-03-18');
-        """
-    )
+        """)
     conn.commit()
     conn.close()
 
@@ -103,6 +99,7 @@ def reset_thread_local():
     gets a fresh connection pointing at its own db.
     """
     from checktick_app.surveys import snomed_resolver
+
     snomed_resolver._local.conn = None
     yield
     snomed_resolver._local.conn = None
@@ -110,24 +107,36 @@ def reset_thread_local():
 
 # ── SnomedUnavailableError paths ──────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 def test_resolver_raises_when_path_not_set(monkeypatch):
-    from checktick_app.surveys.snomed_resolver import SnomedUnavailableError, _get_db_path
+    from checktick_app.surveys.snomed_resolver import (
+        SnomedUnavailableError,
+        _get_db_path,
+    )
+
     monkeypatch.delenv("SNOMED_DB_PATH", raising=False)
     with override_settings(SNOMED_DB_PATH=""):
-        with pytest.raises(SnomedUnavailableError, match="SNOMED_DB_PATH is not configured"):
+        with pytest.raises(
+            SnomedUnavailableError, match="SNOMED_DB_PATH is not configured"
+        ):
             _get_db_path()
 
 
 @pytest.mark.django_db
 def test_resolver_raises_when_file_missing(tmp_path):
-    from checktick_app.surveys.snomed_resolver import SnomedUnavailableError, _get_db_path
+    from checktick_app.surveys.snomed_resolver import (
+        SnomedUnavailableError,
+        _get_db_path,
+    )
+
     with override_settings(SNOMED_DB_PATH=str(tmp_path / "nonexistent.db")):
         with pytest.raises(SnomedUnavailableError, match="not found"):
             _get_db_path()
 
 
 # ── get_options — refset ──────────────────────────────────────────────────────
+
 
 @pytest.mark.django_db
 def test_get_options_refset_returns_active_members(snomed_db):
@@ -166,6 +175,7 @@ def test_get_options_refset_missing_id_raises(snomed_db):
 
 # ── get_options — descendants ─────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 def test_get_options_descendants_direct_children_fallback(snomed_db):
     """
@@ -188,6 +198,7 @@ def test_get_options_descendants_direct_children_fallback(snomed_db):
 
 
 # ── get_options — not-yet-implemented types ───────────────────────────────────
+
 
 @pytest.mark.django_db
 def test_get_options_ecl_raises_not_implemented(snomed_db):
@@ -221,6 +232,7 @@ def test_get_options_unknown_type_raises(snomed_db):
 
 # ── get_refset_member_count ───────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 def test_get_refset_member_count(snomed_db):
     from checktick_app.surveys.snomed_resolver import get_refset_member_count
@@ -242,6 +254,7 @@ def test_get_refset_member_count_missing_refset(snomed_db):
 
 
 # ── search ────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.django_db
 def test_search_returns_matching_terms(snomed_db):
@@ -276,6 +289,7 @@ def test_search_returns_empty_for_no_match(snomed_db):
 
 
 # ── seed_snomed_datasets command ──────────────────────────────────────────────
+
 
 @pytest.mark.django_db
 def test_seed_command_graceful_exit_no_db():
@@ -348,6 +362,7 @@ def test_seed_command_force_updates_existing(snomed_db):
 
 
 # ── update_snomed_db command ──────────────────────────────────────────────────
+
 
 @pytest.mark.django_db
 def test_update_command_dry_run_no_trud_key(monkeypatch):

@@ -24,9 +24,9 @@ Requirements:
 """
 
 import os
+from pathlib import Path
 import subprocess
 import sys
-from pathlib import Path
 
 from django.conf import settings
 from django.core.management import call_command
@@ -72,7 +72,9 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
 
         if dry_run:
-            self.stdout.write(self.style.WARNING("🔍 DRY RUN — no commands will be executed"))
+            self.stdout.write(
+                self.style.WARNING("🔍 DRY RUN — no commands will be executed")
+            )
 
         # ── Preflight checks ──────────────────────────────────────────────
         trud_api_key = _get_setting("TRUD_API_KEY")
@@ -217,12 +219,12 @@ class Command(BaseCommand):
                 )
                 sys.exit(download_result.returncode)
 
-            self.stdout.write(
-                self.style.SUCCESS("✅ snomed.db rebuilt successfully.")
-            )
+            self.stdout.write(self.style.SUCCESS("✅ snomed.db rebuilt successfully."))
 
             # ── Step 3: refresh DataSet descriptors ───────────────────────
-            self.stdout.write("🔄 Refreshing SNOMED CT dataset descriptors in database...")
+            self.stdout.write(
+                "🔄 Refreshing SNOMED CT dataset descriptors in database..."
+            )
             call_command("seed_snomed_datasets", force=True, dry_run=False)
 
             self.stdout.write(
