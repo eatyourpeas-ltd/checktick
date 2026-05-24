@@ -144,7 +144,7 @@ def search(query: str, limit: int = 50) -> list[str]:
     try:
         rows = conn.execute(
             """
-            SELECT id, term
+            SELECT concept_id, term
             FROM descriptions
             WHERE active = 1
               AND type_id = '900000000000003001'  -- FSN / preferred synonym
@@ -154,7 +154,7 @@ def search(query: str, limit: int = 50) -> list[str]:
             """,
             (f"%{query}%", limit),
         ).fetchall()
-        return [_format_option(str(row["id"]), row["term"]) for row in rows]
+        return [_format_option(str(row["concept_id"]), row["term"]) for row in rows]
     except sqlite3.OperationalError as exc:
         logger.error("SNOMED search failed: %s", exc)
         raise SnomedUnavailableError(

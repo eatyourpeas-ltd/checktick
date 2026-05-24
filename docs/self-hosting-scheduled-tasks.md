@@ -8,7 +8,7 @@ CheckTick requires scheduled tasks for data governance operations, housekeeping,
 
 ## Overview
 
-CheckTick uses seven scheduled tasks:
+CheckTick uses eight scheduled tasks:
 
 ### 1. Data Governance (Required for GDPR)
 
@@ -76,7 +76,44 @@ python manage.py sync_nhs_dd_datasets --force
 python manage.py sync_nhs_dd_datasets --dataset smoking_status_code
 ```
 
-### 5. Global Question Group Templates Sync (Recommended)
+### 5. SNOMED CT Update (Optional — requires TRUD API key)
+
+The `update_snomed_db` management command runs weekly to:
+
+1. **Check for a new release** — calls `sct trud check`, which hits the TRUD API and exits immediately (exit 0) if there is nothing new. The 1.8 GB download only starts if a new release is detected (exit 2).
+2. **Download and rebuild snomed.db** — runs `sct trud download --pipeline`, producing a fresh SQLite database on the `snomed-data` volume.
+3. **Refresh dataset descriptors** — automatically re-runs `seed_snomed_datasets --force` to update member counts and the release date in Postgres.
+
+**Optional**: If `TRUD_API_KEY` is not set the command exits cleanly, so it is safe to schedule unconditionally even in non-SNOMED deployments.
+
+**Schedule**: Weekly is sufficient — SNOMED CT releases approximately monthly. The early-exit check costs almost nothing when there is no update, so running weekly adds negligible overhead.
+
+> **TRUD maintenance windows**: TRUD is offline weekdays 18:00–08:00 UK time (and midnight–06:00). Schedule the job during UK business hours to avoid false failures (e.g. Wednesday 10:00 UTC).
+
+**Initial Setup**: Seed the SNOMED CT dataset descriptors once after building snomed.db:
+
+```bash
+# Build snomed.db from TRUD (takes several minutes — ~1.8 GB download)
+python manage.py update_snomed_db --force
+
+# Or if snomed.db already exists on the volume:
+python manage.py seed_snomed_datasets
+```
+
+**Maintenance**:
+
+```bash
+# Check whether a new SNOMED CT release is available (no download)
+python manage.py update_snomed_db --dry-run
+
+# Force a full download regardless of current state
+python manage.py update_snomed_db --force
+
+# Use an alternative edition (default: uk_monolith)
+python manage.py update_snomed_db --edition uk_drug
+```
+
+### 6. Global Question Group Templates Sync (Recommended)
 
 The `sync_global_question_group_templates` management command runs daily to:
 
@@ -103,7 +140,7 @@ python manage.py sync_global_question_group_templates --dry-run
 python manage.py sync_global_question_group_templates --force
 ```
 
-### 6. Recovery Time Delay Processing (Required if Recovery Enabled)
+### 7. Recovery Time Delay Processing (Required if Recovery Enabled)
 
 The `process_recovery_time_delays` management command runs frequently to:
 
@@ -129,7 +166,7 @@ python manage.py process_recovery_time_delays --verbose
 - CheckTick deployed and running
 - Email configured (for sending deletion warnings)
 
-### 7. Subscription Expiry Processing (Required for Billing)
+### 8. Subscription Expiry Processing (Required for Billing)
 
 The `process_expired_subscriptions` management command runs daily to:
 
@@ -164,7 +201,7 @@ python manage.py process_expired_subscriptions --grace-days=10
 - User can reopen surveys by upgrading again
 - Access to your hosting platform's scheduling features
 
-### 8. Data Subject Request
+### 9. Data Subject Request
 
 The `process_dsr_deadlines` management command runs daily to:
 
@@ -220,7 +257,22 @@ Northflank provides native cron job support, making this the simplest option.
    - **Schedule**: `0 5 * * 0` (runs at 5 AM UTC every Sunday - weekly)
    - **Command**: `python manage.py sync_nhs_dd_datasets`
 
-#### 5. Create Global Templates Sync Cron Job
+#### 5. Create SNOMED CT Update Cron Job (Optional)
+
+> Skip this step if you are not using SNOMED CT (no `TRUD_API_KEY`).
+
+1. Click **"Add Service"** → **"Cron Job"** again
+2. Configure the job:
+   - **Name**: `checktick-snomed-update`
+   - **Docker Image**: Use the same image as your web service (must include the `sct` binary)
+   - **Schedule**: `0 10 * * 3` (runs at 10 AM UTC every Wednesday — inside TRUD business hours)
+   - **Command**: `python manage.py update_snomed_db`
+3. Mount the **`snomed-data`** volume to `/app/data` in this cron job (same as the web service)
+4. Add `TRUD_API_KEY` and `SNOMED_DB_PATH` to the job's environment variables
+
+> **Note:** The job exits immediately (exit 0) if SNOMED CT is already up to date, so running it weekly adds negligible overhead.
+
+#### 6. Create Global Templates Sync Cron Job
 
 1. Click **"Add Service"** → **"Cron Job"** again
 2. Configure the job:
@@ -229,7 +281,7 @@ Northflank provides native cron job support, making this the simplest option.
    - **Schedule**: `0 6 * * *` (runs at 6 AM UTC daily)
    - **Command**: `python manage.py sync_global_question_group_templates`
 
-#### 6. Create Recovery Time Delay Cron Job
+#### 7. Create Recovery Time Delay Cron Job
 
 1. Click **"Add Service"** → **"Cron Job"** again
 2. Configure the job:
@@ -238,7 +290,7 @@ Northflank provides native cron job support, making this the simplest option.
    - **Schedule**: `*/5 * * * *` (runs every 5 minutes)
    - **Command**: `python manage.py process_recovery_time_delays`
 
-#### 7. Copy Environment Variables
+#### 8. Copy Environment Variables
 
 All cron jobs need the same environment variables as your web service:
 
@@ -255,8 +307,9 @@ All cron jobs need the same environment variables as your web service:
 - `DEFAULT_FROM_EMAIL` (for data governance)
 - `SITE_URL` (for email links in data governance)
 - `EXTERNAL_DATASET_API_URL`, `EXTERNAL_DATASET_API_KEY` (for dataset sync - optional, defaults to RCPCH API)
+- `TRUD_API_KEY`, `SNOMED_DB_PATH` (for SNOMED CT update job — optional)
 
-#### 7. Deploy and Test
+#### 9. Deploy and Test
 
 1. Deploy all cron job services
 2. Test them manually via Northflank dashboard: **Jobs** → **Run Now**
@@ -353,6 +406,24 @@ docker compose exec -T web python manage.py sync_global_question_group_templates
 exit $?
 ```
 
+Create `/usr/local/bin/checktick-snomed-update.sh` (optional — only if using SNOMED CT):
+
+```bash
+#!/bin/bash
+# CheckTick SNOMED CT Update Cron Job
+# Runs weekly on Wednesday at 10 AM UTC (inside TRUD business hours)
+# Exits immediately (exit 0) if SNOMED CT is already up to date.
+
+# Set working directory
+cd /path/to/your/checktick-app
+
+# Run the update command
+docker compose exec -T web python manage.py update_snomed_db >> /var/log/checktick/snomed-update.log 2>&1
+
+# Exit with the command's exit code
+exit $?
+```
+
 Make them executable:
 
 ```bash
@@ -360,6 +431,7 @@ chmod +x /usr/local/bin/checktick-data-governance.sh
 chmod +x /usr/local/bin/checktick-progress-cleanup.sh
 chmod +x /usr/local/bin/checktick-dataset-sync.sh
 chmod +x /usr/local/bin/checktick-templates-sync.sh
+chmod +x /usr/local/bin/checktick-snomed-update.sh  # if using SNOMED CT
 ```
 
 #### 2. Add to System Crontab
@@ -382,6 +454,9 @@ Add these lines:
 
 # CheckTick Global Templates Sync - Daily at 6 AM UTC
 0 6 * * * /usr/local/bin/checktick-templates-sync.sh
+
+# CheckTick SNOMED CT Update - Weekly Wednesday 10 AM UTC (optional)
+0 10 * * 3 /usr/local/bin/checktick-snomed-update.sh
 ```
 
 #### 3. Create Log Directory
@@ -433,8 +508,8 @@ metadata:
   name: checktick-data-governance
   namespace: checktick
 spec:
-  schedule: "0 2 * * *"  # 2 AM UTC daily
-  concurrencyPolicy: Forbid  # Don't run if previous job still running
+  schedule: "0 2 * * *" # 2 AM UTC daily
+  concurrencyPolicy: Forbid # Don't run if previous job still running
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
@@ -443,24 +518,24 @@ spec:
         spec:
           restartPolicy: OnFailure
           containers:
-          - name: data-governance
-            image: ghcr.io/eatyourpeas/checktick:latest
-            command:
-            - python
-            - manage.py
-            - process_data_governance
-            envFrom:
-            - configMapRef:
-                name: checktick-config
-            - secretRef:
-                name: checktick-secrets
-            resources:
-              requests:
-                memory: "256Mi"
-                cpu: "100m"
-              limits:
-                memory: "512Mi"
-                cpu: "500m"
+            - name: data-governance
+              image: ghcr.io/eatyourpeas/checktick:latest
+              command:
+                - python
+                - manage.py
+                - process_data_governance
+              envFrom:
+                - configMapRef:
+                    name: checktick-config
+                - secretRef:
+                    name: checktick-secrets
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
 ```
 
 Apply the manifest:
@@ -538,6 +613,7 @@ heroku addons:open scheduler
 ```
 
 In the web interface:
+
 - **Command**: `python manage.py process_data_governance`
 - **Frequency**: Daily at 2:00 AM (UTC)
 
@@ -556,8 +632,8 @@ name: Data Governance Cron
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # 2 AM UTC daily
-  workflow_dispatch:  # Allow manual trigger
+    - cron: "0 2 * * *" # 2 AM UTC daily
+  workflow_dispatch: # Allow manual trigger
 
 jobs:
   run-data-governance:
@@ -777,6 +853,7 @@ print(f"Authenticated: {authenticated}, Anonymous: {anonymous}, Token-based: {to
 ### No Emails Being Sent
 
 **Check email configuration:**
+
 ```bash
 # Test email from Django shell
 python manage.py shell
@@ -785,6 +862,7 @@ python manage.py shell
 ```
 
 **Common issues:**
+
 - Missing `EMAIL_HOST` or `EMAIL_PORT` environment variables
 - Incorrect SMTP credentials
 - Missing `SITE_URL` (emails include survey links)
@@ -792,6 +870,7 @@ python manage.py shell
 ### Surveys Not Being Deleted
 
 **Check for legal holds:**
+
 ```python
 from checktick_app.surveys.models import Survey, LegalHold
 
@@ -804,11 +883,13 @@ Surveys with active legal holds are **intentionally skipped** from automatic del
 ### Command Fails Silently
 
 **Run with verbose output:**
+
 ```bash
 python manage.py process_data_governance --verbose
 ```
 
 **Check Python errors:**
+
 - Database connection issues
 - Missing environment variables
 - Permissions problems
@@ -820,6 +901,7 @@ python manage.py process_data_governance --verbose
 ### Environment Variables
 
 The cron job needs access to:
+
 - **Database credentials** (via `DATABASE_URL`)
 - **Email credentials** (for sending notifications)
 - **Django SECRET_KEY** (for encryption/signing)
@@ -843,6 +925,7 @@ A: The next day's run will process any missed deletions. Surveys won't be delete
 **Q: Can I change the schedule?**
 
 A: Yes, but **daily at 2 AM UTC is recommended** for:
+
 - Off-peak hours (less load)
 - Predictable timing for users
 - Allows overnight processing before business hours
@@ -854,6 +937,7 @@ A: All schedules use **UTC**. Django's `deletion_date` is also stored in UTC, so
 **Q: How long does the command take to run?**
 
 A: Typically **30-60 seconds** for most deployments. Scales with:
+
 - Number of surveys approaching deletion
 - Email sending speed
 - Database query performance
