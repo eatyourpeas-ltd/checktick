@@ -298,7 +298,7 @@ def test_seed_command_graceful_exit_no_db():
     with override_settings(SNOMED_DB_PATH=""):
         call_command("seed_snomed_datasets", stdout=out)
     output = out.getvalue()
-    assert "snomed.db not found" in output
+    assert "skipping SNOMED CT dataset seeding" in output
 
 
 @pytest.mark.django_db
