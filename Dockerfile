@@ -35,8 +35,8 @@ RUN poetry config virtualenvs.create false \
     && poetry install --only main --no-interaction --no-ansi --no-root
 
 # Build CSS
-COPY package.json ./
-RUN npm install --no-audit --no-fund
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
 COPY checktick_app ./checktick_app
 COPY manage.py ./
@@ -46,7 +46,7 @@ COPY docs ./docs
 COPY CONTRIBUTING.md ./
 # Install the current project now that sources are present
 RUN poetry install --only main --no-interaction --no-ansi
-RUN npm run build:css
+RUN NODE_OPTIONS=--max-old-space-size=384 npm run build:css
 
 RUN adduser --disabled-login --gecos "" appuser
 RUN mkdir -p /app/staticfiles /app/media && \
