@@ -4,7 +4,7 @@
 	<img alt="CheckTick" src="checktick_app/static/icons/CheckTick_long-03.svg">
 </picture>
 
-![Version](https://img.shields.io/badge/version-0.4.0-5fcfdd?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-0.4.6-5fcfdd?style=for-the-badge)
 ![GitHub License](https://img.shields.io/github/license/eatyourpeas/checktick?style=for-the-badge&color=5fcfdd)
 ![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-5fcfdd?style=for-the-badge&logo=openapiinitiative&logoColor=white)
 ![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/eatyourpeas/checktick?style=for-the-badge&color=5fcfdd)
