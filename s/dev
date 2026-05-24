@@ -334,9 +334,14 @@ if [[ "$INIT_SNOMED" == "true" ]]; then
         docker compose -f docker-compose.dev.yml exec -T web \
             sct trud download \
                 --edition uk_monolith \
-                --download-dir /app/data \
-                --pipeline \
-                --output /app/data/snomed.db
+                --output-dir /app/data \
+                --data-dir /app/data \
+                --pipeline
+
+        # Rename the release-versioned .db file to the canonical snomed.db
+        echo "   Renaming built database to snomed.db..."
+        docker compose -f docker-compose.dev.yml exec -T web sh -c \
+            'f=$(ls /app/data/*.db 2>/dev/null | grep -v snomed.db | head -1) && [ -n "$f" ] && mv "$f" /app/data/snomed.db && echo "   Renamed: $f → /app/data/snomed.db" || echo "   snomed.db already in place"'
 
         echo ""
         echo "   Running seed_snomed_datasets management command..."
