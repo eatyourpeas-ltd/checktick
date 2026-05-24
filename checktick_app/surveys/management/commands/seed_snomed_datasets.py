@@ -387,14 +387,14 @@ class Command(BaseCommand):
             if stale_keys:
                 if dry_run:
                     for key in stale_keys:
-                        self.stdout.write(f"   [DELETE] {key} — no longer in FEATURED_DATASETS")
+                        self.stdout.write(
+                            f"   [DELETE] {key} — no longer in FEATURED_DATASETS"
+                        )
                 else:
                     stale_qs.delete()
                     pruned = len(stale_keys)
                     for key in stale_keys:
-                        self.stdout.write(
-                            self.style.WARNING(f"   🗑  pruned: {key}")
-                        )
+                        self.stdout.write(self.style.WARNING(f"   🗑  pruned: {key}"))
             else:
                 self.stdout.write("   ✔  No stale SNOMED datasets to prune.")
 
