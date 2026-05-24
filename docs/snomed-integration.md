@@ -97,6 +97,34 @@ A second question type — `snomed_typeahead` — could allow free-text search a
 
 The UK Monolith SNOMED edition contains **460 reference sets**. These range from clinically rich datasets (UK Ethnic Categories, QOF indicators, dm+d drug lists) to highly technical/administrative ones (module dependencies, ePrescribing rules, navigation concepts, Summary Care Record exclusions) that are not meaningful as survey dropdown options.
 
+### Three Sources of Drug Lists
+
+For drugs specifically, there are three complementary sources in `snomed.db`, each serving different use cases:
+
+| Source | How it works | Examples | Best for |
+|---|---|---|---|
+| **Named refsets** | Pre-defined curated lists from NHS England | QOF Epilepsy drugs, COVID extraction, formulary lists | Disease-specific constrained lists — exactly what survey creators need |
+| **dm+d hierarchy** | Descendants of a drug-class concept | All GLP-1 agonists, all insulins, all antiepileptics | Drug class lists without needing a named refset |
+| **ECL expression** | SNOMED Expression Constraint Language query evaluated live | `<< 372938004` (all GLP-1 agonists), combinations | Flexible, precise, user-authored — Phase 2/3 |
+
+**QOF refsets are particularly valuable.** The Quality and Outcomes Framework has ~30+ condition-specific refsets maintained annually by NHS England, which include disease-area drug lists directly relevant to clinical survey creators:
+
+- QOF Epilepsy — antiepileptic medicines used in UK primary care
+- QOF Diabetes — diabetes medications (covers T2DM drug classes)
+- QOF Atrial Fibrillation — anticoagulants and rate control drugs
+- QOF Asthma / COPD — inhaled therapies, bronchodilators
+- QOF Hypertension, Heart Failure, Mental Health, Dementia, and more
+
+These are already in the UK Monolith and will be auto-seeded as descriptor rows. They should be `is_featured = True`.
+
+**dm+d hierarchy queries** cover drug classes where no named refset exists:
+
+- GLP-1 agonists: descendants of `372938004`
+- SGLT2 inhibitors: descendants of `703673008`
+- All insulins: descendants of `67866001`
+
+These are added as `snomed_query_type = "descendants"` descriptor rows — the `SnomedResolver` queries `snomed.db` for all active descendants at render time.
+
 ### Supporting All 460 — With a Featured Flag
 
 Rather than maintaining a hand-picked short list in code, the `seed_snomed_datasets` command will auto-generate a `DataSet` descriptor row for **every refset** found in `snomed.db` (via `sct refset list --json`). 460 Postgres rows is trivial.
@@ -109,47 +137,57 @@ The distinction is managed with an `is_featured` boolean on the descriptor:
 | `False` | Technical, administrative, or specialist | Hidden by default; searchable; can be promoted per request |
 
 This means:
-- Users browsing datasets by default see a curated set of ~20 clinically useful refsets
+- Users browsing datasets by default see a curated set of clinically useful refsets (QOF disease lists, ethnic categories, allergy substances, body sites, drug classes)
 - Any of the 460 can be surfaced via search or admin promotion — no code change needed
 - Real usage patterns will reveal which unlisted refsets are actually wanted
 - The maintainer promotes a refset to `is_featured = True` in the Django admin — immediately visible
 
-The seeding command can apply a heuristic to set `is_featured = True` for refsets whose names match known clinical patterns (e.g. "ethnic", "allerg", "drug", "QOF", "dm+d"), with everything else defaulting to `False`.
+The seeding command applies a heuristic to set `is_featured = True` for refsets whose names match known clinical patterns (e.g. "ethnic", "allerg", "QOF", "dm+d", "GLP", "diabetes", "epilep", "hypertension"), with everything else defaulting to `False`.
 
 ### Member Count and Size Warning
 
-Some refsets are very large (dm+d VMP has ~20,000+ members). The seed command should record the member count from `snomed.db` at seed time:
+Some refsets are very large (dm+d VMP has ~20,000+ members). The seed command should record the member count from `snomed.db` at seed time. The UI steers users to the appropriate interaction based on size:
 
-```python
-snomed_member_count = models.IntegerField(
-    null=True, blank=True,
-    help_text="Number of concepts in this refset at last seed; populated from snomed.db",
-)
-```
+- **< 500 items** → standard dropdown
+- **500–2,000 items** → searchable select (select2 / combobox)
+- **> 2,000 items** → typeahead search required; UI enforces this and prevents use as a plain dropdown
 
-The dataset detail view can then warn when a refset is too large for a dropdown:
-
-- **< 500 items** → suitable as a dropdown
-- **500–2,000 items** → usable but consider searchable select
-- **> 2,000 items** → typeahead/search strongly recommended; flagged in the UI
+This means dm+d VMP (all ~20,000 medicinal products) is available for typeahead questions, while QOF Epilepsy drugs (~30–50 items) work perfectly as a constrained dropdown. Survey creators get both experiences automatically, guided by the data.
 
 ### Initial Featured Refsets
 
-These are proposed as `is_featured = True` at seed time — a starting point to be refined with real user feedback:
+To be confirmed against a live `snomed.db` — the names below are indicative. Actual SCTID/member counts require running `sct refset list` against the UK Monolith:
 
-| Dataset Name | SNOMED Refset/Hierarchy SCTID | Approx Size |
-|---|---|---|
-| UK Ethnic Categories | `999004391000000102` | ~30 |
-| Allergy and intolerance substances | `105590001` (descendants) | ~300 |
-| Common body sites | `123037004` (descendants, filtered) | ~500 |
-| UK Clinical Edition — common findings | Curated UK refset | TBD |
-| UK Clinical Edition — common procedures | Curated UK refset | TBD |
-| dm+d VTM (drug substances) | dm+d VTM refset | ~1,000 |
-| dm+d VMP (medicinal products) | dm+d VMP refset | ~20,000+ ⚠️ typeahead only |
-| Observable entities | `363787002` (filtered) | TBD |
-| Administration methods (drug routes) | `736269009` (descendants) | ~50 |
+| Type | Dataset Name | Source | Approx Size |
+|---|---|---|---|
+| Named refset | UK Ethnic Categories | UK Monolith | ~30 |
+| Named refset | QOF Epilepsy — drug list | QOF module | ~40 |
+| Named refset | QOF Diabetes — drug list | QOF module | ~60 |
+| Named refset | QOF Atrial Fibrillation — drug list | QOF module | ~20 |
+| Named refset | QOF COPD / Asthma — drug list | QOF module | ~50 |
+| Named refset | Allergy/intolerance substances | UK Clinical | ~300 |
+| Named refset | dm+d VTM (all drug substances) | dm+d | ~1,000 |
+| Named refset | dm+d VMP (all medicinal products) | dm+d | ~20,000+ ⚠️ |
+| Hierarchy | GLP-1 agonists | dm+d descendants | ~15 |
+| Hierarchy | SGLT2 inhibitors | dm+d descendants | ~10 |
+| Hierarchy | All insulins | dm+d descendants | ~50 |
+| Hierarchy | Common body sites | SNOMED descendants | ~500 |
+| Hierarchy | Administration methods | SNOMED descendants | ~50 |
 
-> ⚠️ dm+d VMP is too large for a dropdown. It will be `is_featured = True` but the UI will enforce typeahead mode for any dataset with > 2,000 members.
+> ⚠️ dm+d VMP is typeahead-only. The UI enforces this based on `snomed_member_count > 2000`.
+
+> **Note for implementer:** Run `sct refset list --json --db snomed.db | grep -i "QOF\|diabet\|epilep\|atrial\|asthma\|copd\|ethnic\|allerg"` against the UK Monolith to get the actual SCTIDs and member counts before seeding.
+
+### Phase 2/3: User-Authored Drug Lists (ECL)
+
+Survey creators who need a bespoke list — e.g. "all GLP-1 agonists licensed in the UK that are also on our local formulary" — need ECL. This is the `snomed_query_type = "ecl"` path in the model, which evaluates an arbitrary Expression Constraint Language query against `snomed.db` at render time.
+
+ECL is powerful but requires SNOMED knowledge to author safely. The Phase 2/3 roadmap for this:
+
+1. **Phase 2:** Admins can write ECL expressions via the Django admin and expose them as featured datasets — no user-facing UI yet
+2. **Phase 3:** A guided ECL builder UI for technically confident users, with validation and concept preview before saving
+
+This is distinct from the codelist builder (picking individual concepts by search) described in the Phase 2 section below — ECL is class/hierarchy-based, codelists are concept-by-concept.
 
 ---
 
