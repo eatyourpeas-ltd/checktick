@@ -13,16 +13,16 @@ RUN pip install --no-cache-dir poetry==${POETRY_VERSION}
 
 # Install sct binary (SNOMED CT toolchain) — pre-built release, no Rust needed
 ARG SCT_VERSION=v0.3.11
-ARG SCT_REPO=pacharanero/sct
+ARG SCT_REPO=eatyourpeas/sct
 RUN set -eux; \
     ARCH=$(uname -m); \
     case "$ARCH" in \
-        x86_64)  SCT_ARCH="x86_64" ;; \
-        aarch64) SCT_ARCH="aarch64" ;; \
-        *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    x86_64)  SCT_ARCH="x86_64" ;; \
+    aarch64) SCT_ARCH="aarch64" ;; \
+    *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
     esac; \
     curl -fsSL "https://github.com/${SCT_REPO}/releases/download/${SCT_VERSION}/sct-linux-${SCT_ARCH}.tar.gz" \
-        -o /tmp/sct.tar.gz; \
+    -o /tmp/sct.tar.gz; \
     tar -xzf /tmp/sct.tar.gz -C /usr/local/bin sct; \
     chmod +x /usr/local/bin/sct; \
     rm /tmp/sct.tar.gz; \
