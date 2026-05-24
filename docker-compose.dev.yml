@@ -89,6 +89,9 @@ services:
       VAULT_TLS_VERIFY: "false"
       VAULT_ROLE_ID: ${VAULT_ROLE_ID:-}
       VAULT_SECRET_ID: ${VAULT_SECRET_ID:-}
+      # SNOMED CT / TRUD Configuration
+      TRUD_API_KEY: ${TRUD_API_KEY:-}
+      SNOMED_DB_PATH: ${SNOMED_DB_PATH:-/app/data/snomed.db}
     ports:
       - "8000:8000"
     depends_on:
@@ -98,6 +101,7 @@ services:
         condition: service_healthy
     volumes:
       - ./:/app
+      - snomed_data:/app/data
     command: >
       sh -lc " for i in $(seq 1 30); do
         getent hosts db >/dev/null 2>&1 && break;
@@ -114,3 +118,4 @@ services:
 volumes:
   db_data:
   vault_data:
+  snomed_data:

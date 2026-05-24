@@ -138,6 +138,63 @@ This provides access to:
 - Paediatric Diabetes Units
 - Integrated Care Boards (ICBs)
 
+#### SNOMED CT (Clinical Terminology)
+
+**Optional** — enables clinical terminology dropdowns (drugs, conditions, procedures) sourced directly from NHS SNOMED CT releases. CheckTick functions normally without this; SNOMED features are simply unavailable.
+
+```bash
+# Your TRUD API key - get a free account at https://isd.digital.nhs.uk/trud
+# Request access to item 1799: UK SNOMED CT Monolith Edition
+TRUD_API_KEY=your-trud-api-key-here
+
+# Path inside the container where snomed.db will be stored
+# This must be on the snomed-data volume mount point
+SNOMED_DB_PATH=/app/data/snomed.db
+```
+
+**What TRUD is:** the NHS Technology Reference Update Distribution service. Registration is free. You need access to release item **1799 (UK SNOMED CT Monolith Edition)**, which includes International SNOMED, UK Clinical Extension, dm+d (drugs and medicines), and OPCS-4 procedure maps.
+
+**Volume requirement:** `SNOMED_DB_PATH` must be on a persistent volume (see [Volumes](#volumes) below). The seeding process downloads ~1.5 GB of source data and produces a ~1 GB SQLite database — provision at least 10 GB.
+
+**Graceful fallback:** if `TRUD_API_KEY` is absent or `snomed.db` does not exist, all SNOMED dataset types are hidden from survey builders. The `/healthz` endpoint will report `"snomed": "unavailable"` but will still return HTTP 200 (SNOMED is not considered a critical dependency).
+
+To seed the database after deployment, run the management command inside your container:
+
+```bash
+docker compose exec web \
+  sct trud download \
+    --edition uk_monolith \
+    --download-dir /app/data \
+    --pipeline \
+    --output /app/data/snomed.db
+
+docker compose exec web python manage.py seed_snomed_datasets
+```
+
+SNOMED CT is updated twice yearly (April and October). Set up a scheduled task to re-run this command after each release. See [Scheduled Tasks](self-hosting-scheduled-tasks.md) for cron configuration.
+
+---
+
+#### Volumes
+
+CheckTick requires **two persistent volumes** in addition to your PostgreSQL data directory:
+
+| Volume        | Suggested size | Purpose                                        |
+| ------------- | -------------- | ---------------------------------------------- |
+| `vault-data`  | 1 GB           | Vault Raft storage — **airgapped, not shared** |
+| `snomed-data` | 10 GB          | SNOMED CT SQLite database (`snomed.db`)        |
+
+In Docker Compose these are declared as named volumes and referenced in your `docker-compose.yml`. In Northflank, Railway, Render, or other PaaS providers, create them as persistent disks and mount them at the paths shown below:
+
+| Volume        | Mount path in container |
+| ------------- | ----------------------- |
+| `vault-data`  | `/vault/file`           |
+| `snomed-data` | `/app/data`             |
+
+> ⚠️ Do not mount `snomed-data` at the same path as `vault-data`. Vault uses Raft storage in `/vault/file` and must have exclusive access to that directory.
+
+See [Vault Integration](vault.md) for detailed Vault volume setup and initialisation steps.
+
 #### AI-Assisted Survey Generation
 
 **Optional** - Enable AI features for conversational survey creation:

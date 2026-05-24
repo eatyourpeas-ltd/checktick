@@ -2,15 +2,17 @@
 
 # Development environment startup script for CheckTick
 # This script starts the local Docker Compose development environment
-# Usage: ./s/dev [--code] [--init-vault] [--help]
-#   --code        Also opens VS Code after starting containers
-#   --init-vault  Initialize Vault on first run (creates AppRole, policies, platform key)
-#   --help        Show this help message
+# Usage: ./s/dev [--code] [--init-vault] [--init-snomed] [--help]
+#   --code          Also opens VS Code after starting containers
+#   --init-vault    Initialize Vault on first run (creates AppRole, policies, platform key)
+#   --init-snomed   Seed the local SNOMED CT database from TRUD (requires TRUD_API_KEY)
+#   --help          Show this help message
 
 set -e
 
 OPEN_VSCODE=false
 INIT_VAULT=false
+INIT_SNOMED=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -23,23 +25,33 @@ while [[ $# -gt 0 ]]; do
             INIT_VAULT=true
             shift
             ;;
+        --init-snomed)
+            INIT_SNOMED=true
+            shift
+            ;;
         --help)
             echo "CheckTick Development Environment Startup"
             echo ""
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --code        Also opens VS Code after starting containers"
-            echo "  --init-vault  Initialize Vault (run once on first setup)"
-            echo "  --help        Show this help message"
+            echo "  --code          Also opens VS Code after starting containers"
+            echo "  --init-vault    Initialize Vault (run once on first setup)"
+            echo "  --init-snomed   Seed the local SNOMED CT database from TRUD"
+            echo "  --help          Show this help message"
             echo ""
             echo "Environment Variables:"
             echo "  OPEN_VSCODE=true    Alternative to --code flag"
             echo ""
             echo "First Time Setup:"
-            echo "  ./s/dev --init-vault"
-            echo "  This will set up Vault with AppRole credentials and platform keys."
-            echo "  Save the output VAULT_ROLE_ID and VAULT_SECRET_ID to your .env file."
+            echo "  1. ./s/dev --init-vault"
+            echo "     Sets up Vault with AppRole credentials and platform keys."
+            echo "     Save the output VAULT_ROLE_ID and VAULT_SECRET_ID to your .env file."
+            echo ""
+            echo "  2. ./s/dev --init-snomed"
+            echo "     Downloads the UK SNOMED CT monolith from TRUD and builds snomed.db."
+            echo "     Requires TRUD_API_KEY to be set in your .env file."
+            echo "     ⚠️  This process downloads ~1.5 GB and takes several minutes."
             exit 0
             ;;
         *)
@@ -90,8 +102,9 @@ fi
 echo "✅ Vault is running"
 
 # Check if Vault is initialized (first time setup needed)
-VAULT_STATUS=$(docker compose -f docker-compose.dev.yml exec -T vault sh -c 'VAULT_ADDR=http://127.0.0.1:8200 vault status -format=json' 2>/dev/null || echo '{"initialized":false}')
-VAULT_INITIALIZED=$(echo "$VAULT_STATUS" | grep -o '"initialized":[^,}]*' | cut -d':' -f2 | tr -d ' ')
+VAULT_STATUS=$(docker compose -f docker-compose.dev.yml exec -T vault sh -c 'VAULT_ADDR=http://127.0.0.1:8200 vault status -format=json' 2>/dev/null || echo '{"initialized":false,"sealed":true}')
+VAULT_INITIALIZED=$(echo "$VAULT_STATUS" | grep -o '"initialized":[^,}]*' | cut -d':' -f2 | tr -d ' ' || true)
+VAULT_SEALED=$(echo "$VAULT_STATUS" | grep -o '"sealed":[^,}]*' | cut -d':' -f2 | tr -d ' ' || true)
 
 if [[ "$VAULT_INITIALIZED" != "true" ]]; then
     echo ""
@@ -228,30 +241,139 @@ if [[ "$INIT_VAULT" == "true" ]] && [[ "$VAULT_INITIALIZED" != "true" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 else
-    # Check if Vault is sealed (needs unsealing after restart)
-    VAULT_SEALED=$(echo "$VAULT_STATUS" | grep -o '"sealed":[^,}]*' | cut -d':' -f2 | tr -d ' ')
-
     if [[ "$VAULT_SEALED" == "true" ]]; then
         echo ""
         echo "🔒 Vault is sealed - it needs to be unsealed after restart"
         echo ""
-        echo "To unseal, you need 3 of your 4 unseal keys:"
+        echo "   To unseal, you need 3 of your 4 unseal keys:"
         echo ""
-        echo "docker compose -f docker-compose.dev.yml exec vault sh"
-        echo "export VAULT_ADDR=http://127.0.0.1:8200"
-        echo "vault operator unseal <key1>"
-        echo "vault operator unseal <key2>"
-        echo "vault operator unseal <key3>"
+        echo "   docker compose -f docker-compose.dev.yml exec vault sh"
+        echo "   export VAULT_ADDR=http://127.0.0.1:8200"
+        echo "   vault operator unseal <key1>"
+        echo "   vault operator unseal <key2>"
+        echo "   vault operator unseal <key3>"
         echo ""
-        echo "💡 Tip: Keep your unseal keys in a password manager"
+        echo "   💡 Tip: Keep your unseal keys in a password manager"
+        echo "   ⚠️  CheckTick will not be able to decrypt keys until Vault is unsealed"
         echo ""
     else
         echo "✅ Vault is ready and unsealed"
     fi
 fi
 
+# ─── SNOMED CT Setup ────────────────────────────────────────────────────────
+
 echo ""
-echo "✅ Development environment is ready!"
+echo "🏥 Checking SNOMED CT setup..."
+
+# Check if TRUD_API_KEY is configured
+TRUD_API_KEY_SET=false
+if [[ -n "${TRUD_API_KEY}" ]]; then
+    TRUD_API_KEY_SET=true
+else
+    # Try reading from .env file
+    if [[ -f ".env" ]] && grep -q "^TRUD_API_KEY=.\+" .env 2>/dev/null; then
+        TRUD_API_KEY_SET=true
+    fi
+fi
+
+# Check if snomed.db exists in the volume (via the web container)
+SNOMED_DB_EXISTS=false
+if docker compose -f docker-compose.dev.yml exec -T web test -f /app/data/snomed.db 2>/dev/null; then
+    SNOMED_DB_EXISTS=true
+fi
+
+if [[ "$SNOMED_DB_EXISTS" == "true" ]]; then
+    echo "✅ snomed.db found — SNOMED CT features are available"
+else
+    echo "⚠️  snomed.db not found — SNOMED CT features will be unavailable"
+    echo ""
+
+    if [[ "$TRUD_API_KEY_SET" == "false" ]]; then
+        echo "   To enable SNOMED CT features:"
+        echo ""
+        echo "   1️⃣  Add your TRUD API key to .env:"
+        echo "       TRUD_API_KEY=<your_key_from_isd.digital.nhs.uk/trud>"
+        echo ""
+        echo "   2️⃣  Then run:  ./s/dev --init-snomed"
+        echo ""
+        echo "   💡 TRUD registration: https://isd.digital.nhs.uk/trud"
+        echo "      Request access to item 1799 (UK SNOMED CT Monolith)"
+    else
+        if [[ "$INIT_SNOMED" != "true" ]]; then
+            echo "   TRUD_API_KEY is set. To download and build snomed.db, run:"
+            echo ""
+            echo "   ./s/dev --init-snomed"
+            echo ""
+            echo "   ⚠️  This downloads ~1.5 GB and takes several minutes."
+        fi
+    fi
+fi
+
+if [[ "$INIT_SNOMED" == "true" ]]; then
+    if [[ "$SNOMED_DB_EXISTS" == "true" ]]; then
+        echo ""
+        echo "ℹ️  snomed.db already exists — skipping download"
+        echo "   To force a rebuild, delete /app/data/snomed.db inside the container first:"
+        echo "   docker compose -f docker-compose.dev.yml exec web rm /app/data/snomed.db"
+        echo "   Then re-run: ./s/dev --init-snomed"
+    elif [[ "$TRUD_API_KEY_SET" == "false" ]]; then
+        echo ""
+        echo "❌ Cannot seed SNOMED CT: TRUD_API_KEY is not set in .env"
+        echo "   Register at https://isd.digital.nhs.uk/trud and add your key."
+    else
+        echo ""
+        echo "🌍 Seeding SNOMED CT database from TRUD..."
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "   Downloading the UK Monolith edition (~1.5 GB) and building snomed.db."
+        echo "   All files go to the snomed_data volume at /app/data — not the container."
+        echo "   This may take 5–15 minutes depending on your connection."
+        echo ""
+
+        docker compose -f docker-compose.dev.yml exec -T web \
+            sct trud download \
+                --edition uk_monolith \
+                --output-dir /app/data \
+                --data-dir /app/data \
+                --pipeline
+
+        # Rename the release-versioned .db file to the canonical snomed.db
+        echo "   Renaming built database to snomed.db..."
+        docker compose -f docker-compose.dev.yml exec -T web sh -c '
+            db=$(find /app/data -maxdepth 1 -name "uk_sct2mo_*.db" | head -1)
+            if [ -n "$db" ]; then
+                mv "$db" /app/data/snomed.db
+                echo "   Renamed: $db -> /app/data/snomed.db"
+            elif [ -f /app/data/snomed.db ]; then
+                echo "   snomed.db already in place"
+            else
+                echo "   ERROR: No .db file found in /app/data to rename" >&2
+                exit 1
+            fi
+        '
+
+        echo ""
+        echo "   Running seed_snomed_datasets management command..."
+        docker compose -f docker-compose.dev.yml exec -T web \
+            python manage.py seed_snomed_datasets
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "✅ SNOMED CT database seeded successfully!"
+        echo ""
+        echo "   snomed.db is stored in the snomed_data Docker volume."
+        echo "   It will persist across container restarts."
+        echo "   To update when a new SNOMED release is published, run:"
+        echo "   ./s/dev --init-snomed"
+        echo ""
+        SNOMED_DB_EXISTS=true
+    fi
+fi
+
+# ─── Final summary ───────────────────────────────────────────────────────────
+echo ""
+echo "📋 Development environment startup complete"
 echo ""
 echo "📝 Services:"
 echo "   - CheckTick: http://localhost:8000"
@@ -265,6 +387,15 @@ elif [[ "$VAULT_SEALED" == "true" ]]; then
     echo "   🔒 Sealed - needs unsealing (see instructions above)"
 else
     echo "   ✅ Ready and unsealed"
+fi
+echo ""
+echo "🏥 SNOMED CT Status:"
+if [[ "$SNOMED_DB_EXISTS" == "true" ]]; then
+    echo "   ✅ snomed.db ready"
+elif [[ "$TRUD_API_KEY_SET" == "false" ]]; then
+    echo "   ⚠️  Not configured - set TRUD_API_KEY in .env then run: ./s/dev --init-snomed"
+else
+    echo "   ⚠️  Not seeded - run: ./s/dev --init-snomed"
 fi
 echo ""
 if [[ "$OPEN_VSCODE" != "true" ]]; then
