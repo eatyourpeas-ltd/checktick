@@ -91,23 +91,65 @@ A second question type — `snomed_typeahead` — could allow free-text search a
 
 ---
 
-## Curated Refsets to Expose (Initial Set)
+## Curated Refsets and the Full Registry
 
-These are high-value, bounded reference sets suitable for NHS survey dropdowns:
+### How Many Refsets Are There?
 
-| Dataset Key                  | SNOMED Refset/Hierarchy SCTID       | Description                                           | Approx Size |
-| ---------------------------- | ----------------------------------- | ----------------------------------------------------- | ----------- |
-| `snomed_ethnic_category`     | `999004391000000102`                | UK Ethnic Categories (SNOMED version)                 | ~30         |
-| `snomed_allergy_substances`  | `105590001` (descendants)           | Allergy and intolerance substances                    | ~300        |
-| `snomed_body_sites`          | `123037004` (descendants, filtered) | Common body sites                                     | ~500        |
-| `snomed_clinical_findings`   | Curated UK refset                   | Common clinical findings                              | TBD         |
-| `snomed_procedures`          | Curated UK refset                   | Common clinical procedures                            | TBD         |
-| `snomed_dmd_vtm`             | dm+d VTM refset                     | Virtual therapeutic moieties (drugs by substance)     | ~1,000      |
-| `snomed_dmd_vmp`             | dm+d VMP refset                     | Virtual medicinal products (named drug+form+strength) | ~20,000+    |
-| `snomed_observable_entities` | `363787002` (filtered)              | Observable entities for measurement questions         | TBD         |
-| `snomed_admin_methods`       | `736269009` (descendants)           | Administration methods (drug routes)                  | ~50         |
+The UK Monolith SNOMED edition contains **460 reference sets**. These range from clinically rich datasets (UK Ethnic Categories, QOF indicators, dm+d drug lists) to highly technical/administrative ones (module dependencies, ePrescribing rules, navigation concepts, Summary Care Record exclusions) that are not meaningful as survey dropdown options.
 
-> dm+d VMP is large. For dropdown use, it should be scoped by clinical area (e.g. "Respiratory VMP") via additional refset filtering.
+### Supporting All 460 — With a Featured Flag
+
+Rather than maintaining a hand-picked short list in code, the `seed_snomed_datasets` command will auto-generate a `DataSet` descriptor row for **every refset** found in `snomed.db` (via `sct refset list --json`). 460 Postgres rows is trivial.
+
+The distinction is managed with an `is_featured` boolean on the descriptor:
+
+| `is_featured` | Meaning | Default visibility |
+|---|---|---|
+| `True` | Curated, clinically meaningful for NHS surveys | Shown prominently in the dataset browser |
+| `False` | Technical, administrative, or specialist | Hidden by default; searchable; can be promoted per request |
+
+This means:
+- Users browsing datasets by default see a curated set of ~20 clinically useful refsets
+- Any of the 460 can be surfaced via search or admin promotion — no code change needed
+- Real usage patterns will reveal which unlisted refsets are actually wanted
+- The maintainer promotes a refset to `is_featured = True` in the Django admin — immediately visible
+
+The seeding command can apply a heuristic to set `is_featured = True` for refsets whose names match known clinical patterns (e.g. "ethnic", "allerg", "drug", "QOF", "dm+d"), with everything else defaulting to `False`.
+
+### Member Count and Size Warning
+
+Some refsets are very large (dm+d VMP has ~20,000+ members). The seed command should record the member count from `snomed.db` at seed time:
+
+```python
+snomed_member_count = models.IntegerField(
+    null=True, blank=True,
+    help_text="Number of concepts in this refset at last seed; populated from snomed.db",
+)
+```
+
+The dataset detail view can then warn when a refset is too large for a dropdown:
+
+- **< 500 items** → suitable as a dropdown
+- **500–2,000 items** → usable but consider searchable select
+- **> 2,000 items** → typeahead/search strongly recommended; flagged in the UI
+
+### Initial Featured Refsets
+
+These are proposed as `is_featured = True` at seed time — a starting point to be refined with real user feedback:
+
+| Dataset Name | SNOMED Refset/Hierarchy SCTID | Approx Size |
+|---|---|---|
+| UK Ethnic Categories | `999004391000000102` | ~30 |
+| Allergy and intolerance substances | `105590001` (descendants) | ~300 |
+| Common body sites | `123037004` (descendants, filtered) | ~500 |
+| UK Clinical Edition — common findings | Curated UK refset | TBD |
+| UK Clinical Edition — common procedures | Curated UK refset | TBD |
+| dm+d VTM (drug substances) | dm+d VTM refset | ~1,000 |
+| dm+d VMP (medicinal products) | dm+d VMP refset | ~20,000+ ⚠️ typeahead only |
+| Observable entities | `363787002` (filtered) | TBD |
+| Administration methods (drug routes) | `736269009` (descendants) | ~50 |
+
+> ⚠️ dm+d VMP is too large for a dropdown. It will be `is_featured = True` but the UI will enforce typeahead mode for any dataset with > 2,000 members.
 
 ---
 
@@ -164,9 +206,21 @@ snomed_release_date = models.DateField(
     blank=True,
     help_text="Release date of the snomed.db used when this descriptor was created",
 )
+snomed_member_count = models.IntegerField(
+    null=True,
+    blank=True,
+    help_text="Number of concepts in this refset at last seed; used to warn if too large for a dropdown",
+)
+is_featured = models.BooleanField(
+    default=False,
+    db_index=True,
+    help_text="For SNOMED datasets: True = shown prominently in dataset browser; False = hidden by default but searchable",
+)
 ```
 
 > Migration: `0025_dataset_snomed_fields.py`
+>
+> `is_featured` is SNOMED-specific in intent but lives on the base model — it could also be used in future for other terminology systems.
 
 ---
 
