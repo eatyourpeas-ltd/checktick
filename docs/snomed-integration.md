@@ -304,6 +304,45 @@ TRUD has maintenance windows (weekdays 18:00–08:00 UK time, and midnight–06:
 
 The `sct trud download --pipeline` command writes the rebuilt database to the same path atomically, so there is no risk of a partially-written file being read mid-update.
 
+### Container Storage vs Volume — Important Distinction
+
+The web service currently runs on `nf-compute-50` (0.5 vCPU / 1024 MB RAM / 1024 MB ephemeral container storage).
+
+**The final `snomed.db` goes to the volume — not the container storage.** The web service reads it with lightweight SQLite queries at request time, which is well within 1024 MB RAM.
+
+**The build process is the constraint.** `sct trud download --pipeline` produces intermediate files before the final `snomed.db` exists:
+
+| Step | Artifact | Approximate Size |
+|---|---|---|
+| Download RF2 zip | temp download | ~1.5 GB |
+| `sct ndjson` | `.ndjson` intermediate | ~1 GB+ |
+| `sct sqlite` | final `snomed.db` | ~500 MB–1 GB |
+
+Peak disk usage during the build is approximately **3.5 GB** (all three files simultaneously). This exceeds the container's 1024 MB ephemeral storage. **The build process must be directed to write all intermediate and output files to the mounted volume**, not to the container's working directory:
+
+```bash
+# All temp and output files go to the volume, not container ephemeral storage
+sct trud download --edition uk_monolith \
+  --download-dir /app/data \
+  --pipeline \
+  --output /app/data/snomed.db
+```
+
+The `update_snomed_db` management command must pass these flags. With the 10 GB volume, peak usage (~3.5 GB) is comfortably within limits.
+
+**Memory (1024 MB RAM):** Sufficient. `sct` is specifically designed to avoid loading the full dataset into RAM — this is its key advantage over Snowstorm (which required 24 GB Java heap and still ran out of memory on the full UK Monolith). The build process should peak well under 1 GB RAM.
+
+### Compute Spec: Web Service vs Cron Job
+
+The cron job does the heavy lifting (download + build, ~2 minutes). The web service just reads. Give them **different compute specs**:
+
+| Service | Recommended Spec | Reason |
+|---|---|---|
+| Web service | `nf-compute-50` (current) | Read-only SQLite queries; lightweight |
+| `checktick-snomed-update` cron job | `nf-compute-200` (2 vCPU / 4 GB RAM) | Download + build needs headroom; runs at most weekly |
+
+The cron job's higher spec only costs money when it's actually running — Northflank bills by the second for job services, so a 2-minute build on `nf-compute-200` is negligible.
+
 ### Can I Reuse the Existing `vault-data` Volume?
 
 **No.** The `vault-data` volume is used exclusively by the HashiCorp Vault service for encrypted key storage and Raft consensus data. Vault uses Raft's integrated storage backend, which writes its own binary data files directly inside the volume (`/vault/data`). Mixing `snomed.db` into the same volume would be fragile and could interfere with Vault's storage layer.
@@ -312,7 +351,7 @@ The `sct trud download --pipeline` command writes the rebuilt database to the sa
 
 ### Create a New Volume
 
-You need a new dedicated volume. Northflank's minimum volume size is **10 GB** — this is comfortably sufficient for `snomed.db` (~1 GB) with room for the rebuild process (which writes a temporary file before replacing the old one) and future SNOMED releases.
+You need a new dedicated volume. Northflank's minimum volume size is **10 GB** — this is comfortably sufficient given the ~3.5 GB peak during builds and ~1 GB at rest.
 
 **Recommended name:** `snomed-data`
 
@@ -324,7 +363,7 @@ You need a new dedicated volume. Northflank's minimum volume size is **10 GB** �
    - Northflank dashboard → your project → **Volumes** → **New Volume**
    - Name: `snomed-data`
    - Size: `10 GB` (minimum; sufficient for the foreseeable future)
-   - Storage class: standard (no need for SSD — `snomed.db` is read sequentially)
+   - Storage class: standard (no need for SSD — `snomed.db` reads are sequential and infrequent)
 
 2. **Mount to the web service:**
    - Web service → **Volumes** → **Add Volume Mount**
@@ -335,6 +374,7 @@ You need a new dedicated volume. Northflank's minimum volume size is **10 GB** �
    - `checktick-snomed-update` cron job → **Volumes** → **Add Volume Mount**
    - Same volume: `snomed-data`
    - Same mount path: `/app/data`
+   - Set compute spec to `nf-compute-200` for the build headroom
 
 4. **Add environment variables to both services:**
    ```
