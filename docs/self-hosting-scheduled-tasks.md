@@ -323,6 +323,38 @@ All cron jobs need the same environment variables as your web service:
 python manage.py sync_external_datasets
 ```
 
+#### 10. Set Up Job Failure Alerts (Recommended)
+
+Northflank does not send email alerts for cron job failures. Use [healthchecks.io](https://healthchecks.io) (free tier covers 20 checks with email alerts) to get notified when a job fails or doesn't run at all.
+
+**Setup:**
+
+1. Create a free account at [healthchecks.io](https://healthchecks.io)
+2. For each cron job, create a new check:
+   - Set the **name** to match the Northflank job name
+   - Set the **schedule** to match the job's cron expression
+   - Copy the generated ping URL (e.g. `https://hc-ping.com/<uuid>`)
+3. Update each Northflank job's command to ping on success:
+
+```bash
+python manage.py <command> && curl -fsS --retry 3 https://hc-ping.com/<your-uuid> > /dev/null
+```
+
+The `&&` ensures the ping only fires if the management command exits successfully. If the command fails or the job never runs, healthchecks.io emails you.
+
+**Example commands with heartbeat ping:**
+
+| Job | Command |
+|---|---|
+| census-data-governance | `python manage.py process_data_governance && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-progress-cleanup | `python manage.py cleanup_survey_progress && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-data-sync | `python manage.py sync_external_datasets && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-nhsdd-sync | `python manage.py sync_nhs_dd_datasets && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-snomed-update | `python manage.py update_snomed_db && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-templates-sync | `python manage.py sync_global_question_group_templates && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+
+> **App and Vault uptime:** Use an external uptime monitor (e.g. StatusCake, UptimeRobot) pointing at `https://your-domain/healthz`. This endpoint returns `503` if Vault is sealed, the database is unreachable, or SNOMED CT is misconfigured — giving you a single URL to monitor for all critical service health.
+
 **Northflank Advantages:**
 
 - ✅ No extra containers running 24/7
