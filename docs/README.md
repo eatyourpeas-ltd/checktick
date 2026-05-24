@@ -35,3 +35,4 @@ For NHS tips on survey creation check out this [guidance](https://nhsevaluationt
 - [Versioning and Deployment](versioning-and-deployment/)
 - [Documentation System](documentation-system/)
 - [Getting Started with API](getting-started-api/)
+- [SNOMED CT Integration](snomed-integration.md)
