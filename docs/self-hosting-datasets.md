@@ -8,13 +8,14 @@ This guide covers the setup and maintenance of datasets for self-hosted CheckTic
 
 ## Overview
 
-CheckTick provides three types of datasets for dropdown questions:
+CheckTick provides four types of datasets for dropdown questions:
 
 1. **NHS Data Dictionary** - Standardized medical codes (scraped from NHS DD website)
 2. **RCPCH NHS Organisations** - Organisational data (synced from RCPCH API)
-3. **User-Created** - Custom lists created by organisations
+3. **SNOMED CT** - Live clinical terminology served from a local snomed.db (optional — requires TRUD API key)
+4. **User-Created** - Custom lists created by organisations
 
-All datasets are stored in the database for fast access and offline capability.
+NHS DD and RCPCH datasets are stored in the database for fast access and offline capability. SNOMED CT options are served live from a local SQLite file on the `snomed-data` volume — no data is copied into Postgres.
 
 ## Initial Setup
 
@@ -59,14 +60,39 @@ This creates and populates 7 datasets:
 - Paediatric Diabetes Units - ~175 units
 - Integrated Care Boards - 42 ICBs
 
+### 3. Seed SNOMED CT Datasets (Optional)
+
+> **Requires**: `TRUD_API_KEY` and `SNOMED_DB_PATH` set, and `snomed.db` built by the `sct` binary.
+> If SNOMED CT is not configured, skip this step — the command exits cleanly.
+
+```bash
+# Download UK Monolith and build snomed.db (~1.8 GB, takes several minutes)
+docker compose exec web python manage.py update_snomed_db --force
+
+# If snomed.db already exists on the volume, just seed the descriptors:
+docker compose exec web python manage.py seed_snomed_datasets
+```
+
+This creates 22 curated SNOMED CT dataset descriptors, including:
+
+- QOF drug lists (epilepsy, diabetes, AF, asthma/COPD)
+- dm+d drug hierarchies (GLP-1 agonists, SGLT2 inhibitors, insulins, VTM, VMP)
+- QOF disease registers (10 clinical areas)
+- Common body sites and administration routes
+
+**No SNOMED data is stored in Postgres.** The descriptor rows record the refset ID and query type; options are served live from `snomed.db` at request time via `SnomedResolver`.
+
+See [SNOMED CT Integration](snomed-integration.md) for the full architecture and refset strategy.
+
 ## Scheduled Synchronization
 
-CheckTick uses **two automated cron jobs** to keep datasets up-to-date:
+CheckTick uses **three automated cron jobs** to keep datasets up-to-date:
 
 1. **NHS Data Dictionary Scraping** - Scrapes NHS DD website for standardized codes
 2. **External API Sync** - Syncs organisational data from RCPCH API
+3. **SNOMED CT Update** *(optional)* - Checks TRUD for new releases and rebuilds snomed.db
 
-Both commands automatically create dataset records on first run, then update them on subsequent runs. No separate seeding commands needed.
+Both NHS DD and RCPCH commands automatically create dataset records on first run, then update them on subsequent runs. No separate seeding commands needed.
 
 ### NHS Data Dictionary Sync
 
