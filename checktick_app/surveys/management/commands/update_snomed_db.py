@@ -202,9 +202,11 @@ class Command(BaseCommand):
                     "download",
                     "--edition",
                     edition,
-                    "--pipeline",
+                    "--output-dir",
+                    data_dir,
                     "--data-dir",
                     data_dir,
+                    "--pipeline",
                 ],
                 text=True,
                 env={**os.environ, "TRUD_API_KEY": trud_api_key},
@@ -218,6 +220,22 @@ class Command(BaseCommand):
                     )
                 )
                 sys.exit(download_result.returncode)
+
+            # sct writes a release-versioned filename (e.g. uk_sct2mo_42.1.0_….db).
+            # Rename it to the canonical path that SNOMED_DB_PATH points to.
+            versioned_dbs = sorted(Path(data_dir).glob("uk_sct2mo_*.db"))
+            if versioned_dbs:
+                versioned_db = versioned_dbs[-1]
+                target = Path(snomed_db_path)
+                versioned_db.rename(target)
+                self.stdout.write(f"   Renamed {versioned_db.name} → {target.name}")
+            elif not Path(snomed_db_path).exists():
+                self.stdout.write(
+                    self.style.ERROR(
+                        f"❌ No .db file found in {data_dir} after build — rename failed."
+                    )
+                )
+                sys.exit(1)
 
             self.stdout.write(self.style.SUCCESS("✅ snomed.db rebuilt successfully."))
 
