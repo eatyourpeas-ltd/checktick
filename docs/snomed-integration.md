@@ -293,6 +293,96 @@ TRUD has maintenance windows (weekdays 18:00–08:00 UK time, and midnight–06:
 
 ---
 
+## Northflank Deployment
+
+### The `snomed.db` Volume
+
+`snomed.db` for the UK Monolith edition is approximately **500 MB–1 GB** on disk. It must be stored on a persistent volume shared between:
+
+- The **web service** (reads `snomed.db` at request time to serve options)
+- The **`checktick-snomed-update` cron job** (writes a new `snomed.db` on release)
+
+The `sct trud download --pipeline` command writes the rebuilt database to the same path atomically, so there is no risk of a partially-written file being read mid-update.
+
+### Can I Reuse the Existing `vault-data` Volume?
+
+**No.** The `vault-data` volume is used exclusively by the HashiCorp Vault service for encrypted key storage and Raft consensus data. Vault uses Raft's integrated storage backend, which writes its own binary data files directly inside the volume (`/vault/data`). Mixing `snomed.db` into the same volume would be fragile and could interfere with Vault's storage layer.
+
+> **What `vault-data` stores:** Vault Raft data (encrypted key material, audit logs, lease metadata). It does not store application data of any kind and should remain dedicated to Vault.
+
+### Create a New Volume
+
+You need a new dedicated volume. Northflank's minimum volume size is **10 GB** — this is comfortably sufficient for `snomed.db` (~1 GB) with room for the rebuild process (which writes a temporary file before replacing the old one) and future SNOMED releases.
+
+**Recommended name:** `snomed-data`
+
+**Mount path:** `/app/data` (configurable via `SNOMED_DB_PATH`)
+
+#### Setup Steps on Northflank
+
+1. **Create the volume:**
+   - Northflank dashboard → your project → **Volumes** → **New Volume**
+   - Name: `snomed-data`
+   - Size: `10 GB` (minimum; sufficient for the foreseeable future)
+   - Storage class: standard (no need for SSD — `snomed.db` is read sequentially)
+
+2. **Mount to the web service:**
+   - Web service → **Volumes** → **Add Volume Mount**
+   - Volume: `snomed-data`
+   - Mount path: `/app/data`
+
+3. **Mount to the cron job service:**
+   - `checktick-snomed-update` cron job → **Volumes** → **Add Volume Mount**
+   - Same volume: `snomed-data`
+   - Same mount path: `/app/data`
+
+4. **Add environment variables to both services:**
+   ```
+   SNOMED_DB_PATH=/app/data/snomed.db
+   TRUD_API_KEY=<your-trud-api-key>
+   ```
+   > `TRUD_API_KEY` is only strictly needed by the cron job, but having it on both is harmless and simplifies env management.
+
+5. **Install `sct` in the Docker image** (see [Docker Image Changes](#docker-image-changes) below).
+
+6. **Run initial setup** via the Northflank shell on the web service:
+   ```bash
+   python manage.py update_snomed_db
+   python manage.py seed_snomed_datasets
+   ```
+
+### Docker Image Changes
+
+The `sct` binary must be available in the Docker image for the `update_snomed_db` management command to call it. Add to the `Dockerfile`:
+
+```dockerfile
+# Install sct binary for SNOMED CT database generation
+RUN curl -fsSL https://raw.githubusercontent.com/pacharanero/sct/main/install.sh | sh
+ENV PATH="$HOME/.local/bin:$PATH"
+```
+
+Or pin a specific release version for reproducibility (recommended for production):
+
+```dockerfile
+ARG SCT_VERSION=v0.3.9
+RUN curl -fsSL https://raw.githubusercontent.com/pacharanero/sct/main/install.sh \
+    | SCT_VERSION=${SCT_VERSION} SCT_INSTALL_DIR=/usr/local/bin sh
+```
+
+The `sct` binary is only invoked by the management command (not at request time), so it does not need to be in the web process's hot path.
+
+### Cron Job Summary for Northflank
+
+| Service | Schedule | Command | Volume | Purpose |
+|---|---|---|---|---|
+| `checktick-snomed-update` | `0 6 * * 1` | `python manage.py update_snomed_db` | `snomed-data` → `/app/data` | Check TRUD, rebuild `snomed.db` if new release |
+| `checktick-nhs-dd-sync` | `0 5 * * 0` | `python manage.py sync_nhs_dd_datasets` | — | Existing NHS DD scrape |
+| `checktick-dataset-sync` | `0 4 * * *` | `python manage.py sync_external_datasets` | — | Existing RCPCH API sync |
+
+See [Self-hosting Scheduled Tasks](self-hosting-scheduled-tasks.md) for the general cron job setup guide.
+
+---
+
 ## Views and UI Layer
 
 ### Changes to Dataset List View (`dataset_list.html`)
@@ -392,5 +482,5 @@ The `DataSet` model and the UI layer need no further changes — they already ab
 - [Datasets and Dropdowns](datasets-and-dropdowns.md) — user guide
 - [Self-hosting Datasets](self-hosting-datasets.md) — existing setup guide (update with SNOMED section)
 - [Scheduled Tasks](self-hosting-scheduled-tasks.md) — cron job setup
-- [`sct` project](https://github.com/eatyourpeas/sct) — the Rust binary that generates `snomed.db`
+- [`sct` project](https://github.com/pacharanero/sct) — the Rust binary that generates `snomed.db`
 - [NHS TRUD](https://isd.digital.nhs.uk/trud) — source of SNOMED CT releases
