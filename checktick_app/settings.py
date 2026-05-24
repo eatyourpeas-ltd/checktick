@@ -802,6 +802,10 @@ VAULT_SECRET_ID = env("VAULT_SECRET_ID", default="")
 # Platform recovery now requires 3 custodian shares via management command
 # See: python manage.py execute_platform_recovery --help
 
+# SNOMED CT Configuration
+# Path to the snomed.db SQLite file built by the sct binary
+SNOMED_DB_PATH = env("SNOMED_DB_PATH", default="")
+
 # Two-Factor Authentication
 # Require 2FA for all password users (disabled during tests)
 REQUIRE_2FA = env.bool("REQUIRE_2FA", default=not TESTING)

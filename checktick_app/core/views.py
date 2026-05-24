@@ -1,4 +1,6 @@
+import json
 import logging
+import os
 
 from django.conf import settings
 from django.contrib import messages
@@ -6,7 +8,7 @@ from django.contrib.auth import login, views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import translation
 from django.utils.translation import gettext as _
@@ -131,10 +133,77 @@ def pricing(request):
 
 
 def healthz(request):
-    """Lightweight health endpoint for load balancers and readiness probes.
-    Returns 200 OK without auth or redirects.
+    """Health endpoint for load balancers and readiness probes.
+
+    Returns 200 OK with JSON when all critical services are operational.
+    Returns 503 Service Unavailable when any critical service is degraded,
+    so that Northflank / load balancers mark the instance as unhealthy and
+    alert the platform owner.
+
+    Checks:
+    - Database connectivity
+    - Vault reachability and sealed status
+    - SNOMED CT database presence (non-critical: degraded but not 503)
     """
-    return HttpResponse("ok", content_type="text/plain")
+    status = {
+        "status": "ok",
+        "db": "ok",
+        "vault": "ok",
+        "snomed": "ok",
+    }
+    http_status = 200
+
+    # Database check
+    try:
+        from django.db import connection
+
+        connection.ensure_connection()
+    except Exception as e:
+        logger.error("healthz: database check failed: %s", e)
+        status["db"] = "error"
+        status["status"] = "error"
+        http_status = 503
+
+    # Vault check — sealed vault is a critical failure: survey encryption is broken
+    try:
+        from checktick_app.surveys.vault_client import VaultClient
+
+        vault_health = VaultClient().health_check()
+        if vault_health.get("sealed"):
+            logger.warning("healthz: Vault is sealed")
+            status["vault"] = "sealed"
+            status["status"] = "degraded"
+            http_status = 503
+        elif not vault_health.get("initialized"):
+            logger.warning("healthz: Vault is not initialized")
+            status["vault"] = "uninitialized"
+            status["status"] = "degraded"
+            http_status = 503
+        elif vault_health.get("error"):
+            logger.error("healthz: Vault error: %s", vault_health["error"])
+            status["vault"] = "unreachable"
+            status["status"] = "degraded"
+            http_status = 503
+    except Exception as e:
+        logger.error("healthz: Vault check failed: %s", e)
+        status["vault"] = "unreachable"
+        status["status"] = "degraded"
+        http_status = 503
+
+    # SNOMED check — absence is non-critical (features simply unavailable)
+    snomed_db_path = getattr(settings, "SNOMED_DB_PATH", None) or os.environ.get(
+        "SNOMED_DB_PATH", ""
+    )
+    if snomed_db_path and os.path.isfile(snomed_db_path):
+        status["snomed"] = "ok"
+    else:
+        status["snomed"] = "unavailable"
+        # Downgrade overall status only if currently ok, not if already degraded/error
+        if status["status"] == "ok":
+            status["status"] = "degraded"
+        # Do NOT set http_status = 503 for SNOMED — it is optional
+
+    return JsonResponse(status, status=http_status)
 
 
 @login_required
