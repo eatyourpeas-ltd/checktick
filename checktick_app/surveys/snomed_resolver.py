@@ -252,6 +252,4 @@ def _fetch_descendants(root_id: str) -> list[str]:
         ).fetchall()
         return [_format_option(str(row[0]), row[1]) for row in rows]
     except sqlite3.OperationalError as exc:
-        raise SnomedUnavailableError(
-            f"Failed to fetch descendants of {root_id}: {exc}"
-        )
+        raise SnomedUnavailableError(f"Failed to fetch descendants of {root_id}: {exc}")
