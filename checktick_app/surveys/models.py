@@ -4052,6 +4052,7 @@ class DataSet(models.Model):
         ("external_api", "External API"),
         ("user_created", "User Created"),
         ("rcpch", "RCPCH API"),
+        ("snomed", "SNOMED CT"),
     ]
 
     SOURCE_TYPE_CHOICES = [
@@ -4059,6 +4060,7 @@ class DataSet(models.Model):
         ("manual", "Manual Entry"),
         ("imported", "Imported from File"),
         ("scrape", "Web Scraping"),
+        ("snomed_db", "SNOMED CT Database"),
     ]
 
     # Identity
@@ -4200,6 +4202,47 @@ class DataSet(models.Model):
         default=list,
         blank=True,
         help_text="List of tags for categorization and filtering (e.g., ['medical', 'NHS', 'England'])",
+    )
+
+    # SNOMED CT fields — only populated when category = "snomed"
+    SNOMED_QUERY_TYPE_CHOICES = [
+        ("refset", "Named refset — fetch all members of a specific SNOMED refset"),
+        ("descendants", "Hierarchy descendants — all concepts under a root SCTID"),
+        ("ecl", "ECL expression — evaluated live against snomed.db (Phase 2)"),
+        ("mapped", "Mapped codes — e.g. OPCS-4 procedures via SNOMED map"),
+    ]
+    snomed_refset_id = models.CharField(
+        max_length=30,
+        blank=True,
+        db_index=True,
+        help_text="SCTID of the refset or root concept (e.g. '999002391000000104')",
+    )
+    snomed_query_type = models.CharField(
+        max_length=20,
+        choices=SNOMED_QUERY_TYPE_CHOICES,
+        blank=True,
+        help_text="How to query snomed.db for this dataset's options",
+    )
+    snomed_ecl = models.TextField(
+        blank=True,
+        help_text="SNOMED ECL expression — used only when snomed_query_type = 'ecl'",
+    )
+    snomed_release_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Release date of the snomed.db this dataset was seeded from",
+    )
+    snomed_member_count = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of concepts in this dataset at last seed. Drives UI widget choice: "
+        "<500 = dropdown, 500-2000 = searchable select, >2000 = typeahead.",
+    )
+    is_featured = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Show in the default dataset browser. Used to surface curated SNOMED "
+        "datasets without exposing all 460+ refsets.",
     )
 
     # Active flag for soft deletion
