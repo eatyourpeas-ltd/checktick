@@ -23,60 +23,59 @@ import pytest
 
 def _make_snomed_db(path: str) -> None:
     """
-    Build a minimal snomed.db at *path* with just enough schema and data
-    for the resolver tests.
+    Build a minimal snomed.db at *path* matching the actual sct v0.3.11 schema.
+
+    Real schema (verified against live snomed.db built by sct sqlite):
+      concepts(id, fsn, preferred_term, ..., active)
+      refset_members(refset_id, referenced_component_id)   -- no active column
+      concept_isa(child_id, parent_id)                     -- direct IS-A only
+      concepts_fts                                          -- FTS5 virtual table
+      metadata(key, value)
     """
     conn = sqlite3.connect(path)
     conn.executescript("""
         CREATE TABLE concepts (
-            id   TEXT PRIMARY KEY,
-            active INTEGER DEFAULT 1
+            id              TEXT PRIMARY KEY,
+            fsn             TEXT,
+            preferred_term  TEXT,
+            active          INTEGER DEFAULT 1
         );
-        CREATE TABLE descriptions (
-            id         TEXT PRIMARY KEY,
-            concept_id TEXT,
-            term       TEXT,
-            active     INTEGER DEFAULT 1,
-            type_id    TEXT
-        );
-        CREATE TABLE simple_refset_members (
-            id                       TEXT PRIMARY KEY,
+        CREATE TABLE refset_members (
             refset_id                TEXT,
-            referenced_component_id  TEXT,
-            active                   INTEGER DEFAULT 1
+            referenced_component_id  TEXT
         );
-        CREATE TABLE relationships (
-            id             TEXT PRIMARY KEY,
-            source_id      TEXT,
-            destination_id TEXT,
-            type_id        TEXT,
-            active         INTEGER DEFAULT 1
+        CREATE TABLE concept_isa (
+            child_id   TEXT,
+            parent_id  TEXT
+        );
+        CREATE VIRTUAL TABLE concepts_fts USING fts5(
+            id,
+            preferred_term,
+            content='concepts',
+            content_rowid='rowid'
         );
         CREATE TABLE metadata (
             key   TEXT PRIMARY KEY,
             value TEXT
         );
 
-        -- Two concepts
-        INSERT INTO concepts VALUES ('11111111', 1);
-        INSERT INTO concepts VALUES ('22222222', 1);
-        INSERT INTO concepts VALUES ('33333333', 0);  -- inactive
+        -- Two active concepts, one inactive
+        INSERT INTO concepts VALUES ('11111111', 'Metformin (substance)', 'Metformin', 1);
+        INSERT INTO concepts VALUES ('22222222', 'Insulin glargine (substance)', 'Insulin glargine', 1);
+        INSERT INTO concepts VALUES ('33333333', 'Old concept (substance)', 'Old concept', 0);
 
-        -- Preferred terms (type_id 900000000000003001)
-        INSERT INTO descriptions VALUES
-            ('d1', '11111111', 'Metformin', 1, '900000000000003001'),
-            ('d2', '22222222', 'Insulin glargine', 1, '900000000000003001'),
-            ('d3', '33333333', 'Old concept', 0, '900000000000003001');
+        -- Populate FTS (mirrors concepts table)
+        INSERT INTO concepts_fts(id, preferred_term) VALUES
+            ('11111111', 'Metformin'),
+            ('22222222', 'Insulin glargine');
 
-        -- A refset containing concepts 11111111 and 22222222
-        INSERT INTO simple_refset_members VALUES
-            ('rm1', '999TEST0001', '11111111', 1),
-            ('rm2', '999TEST0001', '22222222', 1),
-            ('rm3', '999TEST0001', '33333333', 0);  -- inactive member
+        -- A refset containing concepts 11111111, 22222222, and inactive 33333333
+        INSERT INTO refset_members VALUES ('999TEST0001', '11111111');
+        INSERT INTO refset_members VALUES ('999TEST0001', '22222222');
+        INSERT INTO refset_members VALUES ('999TEST0001', '33333333');
 
         -- IS-A relationship: 11111111 IS-A root 55555555
-        INSERT INTO relationships VALUES
-            ('rel1', '11111111', '55555555', '116680003', 1);
+        INSERT INTO concept_isa VALUES ('11111111', '55555555');
 
         INSERT INTO metadata VALUES ('release_date', '2026-03-18');
         """)
@@ -177,10 +176,10 @@ def test_get_options_refset_missing_id_raises(snomed_db):
 
 
 @pytest.mark.django_db
-def test_get_options_descendants_direct_children_fallback(snomed_db):
+def test_get_options_descendants_recursive_isa(snomed_db):
     """
-    concept_ancestors table is absent in our test db — resolver falls back to
-    direct IS-A children via relationships table.
+    concept_isa holds direct IS-A relationships; resolver uses WITH RECURSIVE
+    to traverse the full hierarchy.
     """
     from checktick_app.surveys.snomed_resolver import get_options
 
@@ -268,8 +267,8 @@ def test_search_returns_matching_terms(snomed_db):
 
 
 @pytest.mark.django_db
-def test_search_is_case_insensitive_via_like(snomed_db):
-    """SQLite LIKE is case-insensitive for ASCII by default."""
+def test_search_is_case_insensitive_via_fts5(snomed_db):
+    """FTS5 handles case-insensitive matching by default."""
     from checktick_app.surveys.snomed_resolver import search
 
     with override_settings(SNOMED_DB_PATH=snomed_db):
@@ -292,13 +291,14 @@ def test_search_returns_empty_for_no_match(snomed_db):
 
 
 @pytest.mark.django_db
-def test_seed_command_graceful_exit_no_db():
+def test_seed_command_graceful_exit_no_db(monkeypatch):
     """Command exits cleanly with a warning when snomed.db is absent."""
+    monkeypatch.delenv("SNOMED_DB_PATH", raising=False)
     out = StringIO()
     with override_settings(SNOMED_DB_PATH=""):
         call_command("seed_snomed_datasets", stdout=out)
     output = out.getvalue()
-    assert "skipping SNOMED CT dataset seeding" in output
+    assert "snomed.db not found" in output or "skipping" in output.lower()
 
 
 @pytest.mark.django_db

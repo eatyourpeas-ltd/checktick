@@ -32,60 +32,52 @@ logger = logging.getLogger(__name__)
 # Curated dataset definitions
 # ---------------------------------------------------------------------------
 # Each entry becomes one DataSet descriptor row.
-# snomed_refset_id: SCTID — use '' for ecl/mapped types (Phase 2).
-# snomed_member_count: left None here; populated from snomed.db at seed time.
+# snomed_refset_id: SCTID of the refset, or ancestor concept for descendants queries.
+# snomed_member_count: populated from snomed.db at seed time.
 # is_featured: True = shown in default dataset browser.
 #
-# SCTIDs below are indicative. Run `sct refset list --json` against a live
-# UK Monolith snomed.db to confirm exact IDs before production seeding.
+# All refset SCTIDs below are verified against sct v0.3.11 UK Monolith Edition.
+# Note: the QOF Supplement (a separate TRUD product) provides additional disease
+# register refsets not included here; those SCTIDs are not present in the Monolith.
 # ---------------------------------------------------------------------------
 
 FEATURED_DATASETS = [
-    # ── Demographics ──────────────────────────────────────────────────────
-    {
-        "key": "snomed_ethnic_category",
-        "name": "Ethnic Category (SNOMED CT)",
-        "description": "UK ethnic categories as SNOMED CT concepts.",
-        "snomed_refset_id": "999004081000000106",
-        "snomed_query_type": "refset",
-        "tags": ["demographics", "ethnicity", "snomed"],
-        "is_featured": True,
-    },
     # ── Drugs — QOF-specific lists ────────────────────────────────────────
+    # Verified refset IDs from UK Monolith (queried via SELECT DISTINCT refset_id):
     {
         "key": "snomed_qof_epilepsy_drugs",
-        "name": "QOF Epilepsy Drug List (SNOMED CT)",
-        "description": "Drugs used to treat epilepsy as defined by QOF business rules.",
-        "snomed_refset_id": "999002391000000104",
+        "name": "QOF Antiepileptic Drug List (SNOMED CT)",
+        "description": "Antiepileptic medication prescribable in general practice (QOF extraction refset).",
+        "snomed_refset_id": "12465301000001101",
         "snomed_query_type": "refset",
         "tags": ["drugs", "epilepsy", "QOF", "snomed"],
         "is_featured": True,
     },
     {
         "key": "snomed_qof_diabetes_drugs",
-        "name": "QOF Diabetes Drug List (SNOMED CT)",
-        "description": "Drugs used to treat diabetes as defined by QOF business rules.",
-        "snomed_refset_id": "999002401000000101",
+        "name": "QOF Diabetic Drug List (SNOMED CT)",
+        "description": "Diabetic drugs for enhanced services general practice extraction.",
+        "snomed_refset_id": "999000851000001109",
         "snomed_query_type": "refset",
         "tags": ["drugs", "diabetes", "QOF", "snomed"],
         "is_featured": True,
     },
     {
-        "key": "snomed_qof_af_drugs",
-        "name": "QOF Atrial Fibrillation Drug List (SNOMED CT)",
-        "description": "Anticoagulant and rate-control drugs for AF as defined by QOF.",
-        "snomed_refset_id": "999002421000000105",
+        "key": "snomed_qof_asthma_copd_drugs",
+        "name": "QOF Asthma / COPD Drug List (SNOMED CT)",
+        "description": "Chronic asthma medication prescribable within general practice (QOF extraction refset).",
+        "snomed_refset_id": "12463601000001108",
         "snomed_query_type": "refset",
-        "tags": ["drugs", "atrial fibrillation", "QOF", "snomed"],
+        "tags": ["drugs", "asthma", "COPD", "QOF", "snomed"],
         "is_featured": True,
     },
     {
-        "key": "snomed_qof_asthma_copd_drugs",
-        "name": "QOF Asthma / COPD Drug List (SNOMED CT)",
-        "description": "Inhaled and systemic drugs for asthma and COPD as defined by QOF.",
-        "snomed_refset_id": "999002411000000103",
+        "key": "snomed_qof_chd_drugs",
+        "name": "QOF CHD Beta-Blocker Drug List (SNOMED CT)",
+        "description": "Beta-adrenoceptor blockers for use in coronary heart disease, prescribable in general practice (QOF).",
+        "snomed_refset_id": "12464101000001102",
         "snomed_query_type": "refset",
-        "tags": ["drugs", "asthma", "COPD", "QOF", "snomed"],
+        "tags": ["drugs", "CHD", "QOF", "snomed"],
         "is_featured": True,
     },
     # ── Drugs — dm+d hierarchy ────────────────────────────────────────────
@@ -119,7 +111,7 @@ FEATURED_DATASETS = [
     {
         "key": "snomed_dmd_vtm",
         "name": "dm+d VTM — All Drug Substances",
-        "description": "All active Virtual Therapeutic Moieties from dm+d (~1,000 concepts). "
+        "description": "All active Virtual Therapeutic Moieties from dm+d (~23,000 concepts). "
         "Use for drug substance-level questions.",
         "snomed_refset_id": "999000561000001109",
         "snomed_query_type": "refset",
@@ -129,23 +121,17 @@ FEATURED_DATASETS = [
     {
         "key": "snomed_dmd_vmp",
         "name": "dm+d VMP — All Medicinal Products",
-        "description": "All active Virtual Medicinal Products from dm+d (~20,000+ concepts). "
+        "description": "All active Virtual Medicinal Products from dm+d (~162,000 concepts). "
         "Typeahead only — too large for a dropdown.",
         "snomed_refset_id": "999000541000001108",
         "snomed_query_type": "refset",
         "tags": ["drugs", "dm+d", "VMP", "snomed"],
         "is_featured": True,
     },
-    # ── Conditions — QOF registers ────────────────────────────────────────
-    {
-        "key": "snomed_qof_diabetes_register",
-        "name": "QOF Diabetes Register (SNOMED CT)",
-        "description": "SNOMED CT codes that define the QOF Diabetes disease register.",
-        "snomed_refset_id": "999002441000000106",
-        "snomed_query_type": "refset",
-        "tags": ["conditions", "diabetes", "QOF", "snomed"],
-        "is_featured": True,
-    },
+    # ── Conditions — QOF disease registers ───────────────────────────────
+    # These refset IDs are present in the UK Monolith Edition.
+    # Additional registers (diabetes, cancer, stroke, mental health) are only
+    # available in the separate QOF Supplement TRUD product, not the Monolith.
     {
         "key": "snomed_qof_epilepsy_register",
         "name": "QOF Epilepsy Register (SNOMED CT)",
@@ -166,11 +152,11 @@ FEATURED_DATASETS = [
     },
     {
         "key": "snomed_qof_chd_register",
-        "name": "QOF CHD / Heart Failure Register (SNOMED CT)",
-        "description": "SNOMED CT codes for the QOF Coronary Heart Disease and Heart Failure register.",
+        "name": "QOF Coronary Heart Disease Register (SNOMED CT)",
+        "description": "SNOMED CT codes for the QOF Coronary Heart Disease register.",
         "snomed_refset_id": "999002471000000100",
         "snomed_query_type": "refset",
-        "tags": ["conditions", "CHD", "heart failure", "QOF", "snomed"],
+        "tags": ["conditions", "CHD", "QOF", "snomed"],
         "is_featured": True,
     },
     {
@@ -192,46 +178,19 @@ FEATURED_DATASETS = [
         "is_featured": True,
     },
     {
-        "key": "snomed_qof_cancer_register",
-        "name": "QOF Cancer Register (SNOMED CT)",
-        "description": "SNOMED CT codes for the QOF Cancer disease register.",
-        "snomed_refset_id": "999002501000000102",
+        "key": "snomed_dementia_diagnoses",
+        "name": "Dementia Diagnoses (SNOMED CT)",
+        "description": "Dementia diagnosis codes (NHS SNOMED CT dementia diagnosis simple reference set).",
+        "snomed_refset_id": "999002771000000107",
         "snomed_query_type": "refset",
-        "tags": ["conditions", "cancer", "QOF", "snomed"],
-        "is_featured": True,
-    },
-    {
-        "key": "snomed_qof_mental_health_register",
-        "name": "QOF Mental Health / Depression Register (SNOMED CT)",
-        "description": "SNOMED CT codes for QOF Mental Health and Depression registers.",
-        "snomed_refset_id": "999002511000000100",
-        "snomed_query_type": "refset",
-        "tags": ["conditions", "mental health", "depression", "QOF", "snomed"],
-        "is_featured": True,
-    },
-    {
-        "key": "snomed_qof_dementia_register",
-        "name": "QOF Dementia Register (SNOMED CT)",
-        "description": "SNOMED CT codes for the QOF Dementia disease register.",
-        "snomed_refset_id": "999002521000000106",
-        "snomed_query_type": "refset",
-        "tags": ["conditions", "dementia", "QOF", "snomed"],
-        "is_featured": True,
-    },
-    {
-        "key": "snomed_qof_stroke_register",
-        "name": "QOF Stroke / TIA Register (SNOMED CT)",
-        "description": "SNOMED CT codes for the QOF Stroke and TIA disease register.",
-        "snomed_refset_id": "999002531000000108",
-        "snomed_query_type": "refset",
-        "tags": ["conditions", "stroke", "TIA", "QOF", "snomed"],
+        "tags": ["conditions", "dementia", "snomed"],
         "is_featured": True,
     },
     # ── Anatomy ───────────────────────────────────────────────────────────
     {
         "key": "snomed_body_sites",
-        "name": "Common Body Sites (SNOMED CT)",
-        "description": "Frequently used anatomical sites (descendants of 123037004 — Body structure).",
+        "name": "Body Structures (SNOMED CT)",
+        "description": "Anatomical body structures (descendants of 123037004 — Body structure).",
         "snomed_refset_id": "123037004",
         "snomed_query_type": "descendants",
         "tags": ["anatomy", "body site", "snomed"],
@@ -240,9 +199,9 @@ FEATURED_DATASETS = [
     {
         "key": "snomed_administration_routes",
         "name": "Drug Administration Routes (SNOMED CT)",
-        "description": "Routes of drug administration (descendants of 284009009 — Route of administration).",
-        "snomed_refset_id": "284009009",
-        "snomed_query_type": "descendants",
+        "description": "Routes of drug administration from dm+d (ePrescribing route of administration refset).",
+        "snomed_refset_id": "999000051000001100",
+        "snomed_query_type": "refset",
         "tags": ["drugs", "administration", "route", "snomed"],
         "is_featured": True,
     },
@@ -310,10 +269,16 @@ class Command(BaseCommand):
             action="store_true",
             help="Re-seed all datasets even if they already exist",
         )
+        parser.add_argument(
+            "--prune",
+            action="store_true",
+            help="Delete DataSet records whose keys are no longer in FEATURED_DATASETS",
+        )
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         force = options["force"]
+        prune = options["prune"]
 
         if dry_run:
             self.stdout.write(
@@ -412,11 +377,33 @@ class Command(BaseCommand):
                     self.style.SUCCESS(f"   ✨ created: {key}{count_str}")
                 )
 
+        pruned = 0
+        if prune:
+            active_keys = {defn["key"] for defn in FEATURED_DATASETS}
+            stale_qs = DataSet.objects.filter(
+                category="snomed", source_type="snomed_db"
+            ).exclude(key__in=active_keys)
+            stale_keys = list(stale_qs.values_list("key", flat=True))
+            if stale_keys:
+                if dry_run:
+                    for key in stale_keys:
+                        self.stdout.write(
+                            f"   [DELETE] {key} — no longer in FEATURED_DATASETS"
+                        )
+                else:
+                    stale_qs.delete()
+                    pruned = len(stale_keys)
+                    for key in stale_keys:
+                        self.stdout.write(self.style.WARNING(f"   🗑  pruned: {key}"))
+            else:
+                self.stdout.write("   ✔  No stale SNOMED datasets to prune.")
+
         if not dry_run:
+            prune_str = f", {pruned} pruned" if prune else ""
             self.stdout.write(
                 self.style.SUCCESS(
                     f"\n🏥 SNOMED CT seeding complete: "
-                    f"{created} created, {updated} updated, {skipped} skipped."
+                    f"{created} created, {updated} updated, {skipped} skipped{prune_str}."
                 )
             )
         else:

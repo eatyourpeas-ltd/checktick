@@ -125,7 +125,7 @@ def get_options(dataset: "DataSet") -> list[str]:
 
 def search(query: str, limit: int = 50) -> list[str]:
     """
-    Full-text search across all active SNOMED concepts.
+    Full-text search across all active SNOMED concepts using FTS5.
 
     Used for typeahead inputs when the option list is too large for a dropdown
     (snomed_member_count > 2000).
@@ -142,19 +142,19 @@ def search(query: str, limit: int = 50) -> list[str]:
     """
     conn = _get_connection()
     try:
+        # FTS5 prefix match: append * for typeahead-style prefix searching
+        fts_query = f'"{query}"*' if query else ""
         rows = conn.execute(
             """
-            SELECT concept_id, term
-            FROM descriptions
-            WHERE active = 1
-              AND type_id = '900000000000003001'  -- FSN / preferred synonym
-              AND term LIKE ?
-            ORDER BY term
+            SELECT id, preferred_term
+            FROM concepts_fts
+            WHERE concepts_fts MATCH ?
+            ORDER BY rank
             LIMIT ?
             """,
-            (f"%{query}%", limit),
+            (fts_query, limit),
         ).fetchall()
-        return [_format_option(str(row["concept_id"]), row["term"]) for row in rows]
+        return [_format_option(str(row["id"]), row["preferred_term"]) for row in rows]
     except sqlite3.OperationalError as exc:
         logger.error("SNOMED search failed: %s", exc)
         raise SnomedUnavailableError(
@@ -167,6 +167,9 @@ def get_refset_member_count(refset_id: str) -> int:
     Return the number of active members in a SNOMED refset.
 
     Used by seed_snomed_datasets to populate snomed_member_count.
+    Members are counted via JOIN with concepts to filter inactive concepts
+    (refset_members itself has no active column — sct only loads active concepts
+    by default, but the JOIN is a belt-and-braces guard).
 
     Args:
         refset_id: SCTID of the refset
@@ -182,8 +185,9 @@ def get_refset_member_count(refset_id: str) -> int:
         row = conn.execute(
             """
             SELECT COUNT(*) as cnt
-            FROM simple_refset_members
-            WHERE refset_id = ? AND active = 1
+            FROM refset_members r
+            JOIN concepts c ON c.id = r.referenced_component_id AND c.active = 1
+            WHERE r.refset_id = ?
             """,
             (refset_id,),
         ).fetchone()
@@ -194,19 +198,21 @@ def get_refset_member_count(refset_id: str) -> int:
 
 
 def _fetch_refset_members(refset_id: str) -> list[str]:
-    """Fetch all active members of a SNOMED refset with their preferred terms."""
+    """
+    Fetch all members of a SNOMED refset with their preferred terms.
+
+    sct schema: refset_members(refset_id, referenced_component_id)
+    Preferred term is on concepts.preferred_term (no separate descriptions table).
+    """
     conn = _get_connection()
     try:
         rows = conn.execute(
             """
-            SELECT r.referenced_component_id, d.term
-            FROM simple_refset_members r
-            JOIN descriptions d
-              ON d.concept_id = r.referenced_component_id
-             AND d.active = 1
-             AND d.type_id = '900000000000003001'
-            WHERE r.refset_id = ? AND r.active = 1
-            ORDER BY d.term
+            SELECT r.referenced_component_id, c.preferred_term
+            FROM refset_members r
+            JOIN concepts c ON c.id = r.referenced_component_id AND c.active = 1
+            WHERE r.refset_id = ?
+            ORDER BY c.preferred_term
             """,
             (refset_id,),
         ).fetchall()
@@ -220,54 +226,30 @@ def _fetch_refset_members(refset_id: str) -> list[str]:
 
 def _fetch_descendants(root_id: str) -> list[str]:
     """
-    Fetch all active descendants of a root concept using the transitive closure table.
+    Fetch all active descendants of a root concept.
 
-    sct builds a concept_ancestors table for efficient hierarchy traversal.
-    Falls back to direct children only if the table is absent.
+    sct schema: concept_isa(child_id, parent_id) — direct IS-A relationships only.
+    Uses a recursive CTE (WITH RECURSIVE) to traverse the full hierarchy.
+    SQLite supports recursive CTEs since v3.8.3 (2014).
     """
     conn = _get_connection()
     try:
-        # Try transitive closure first (available in sct-built databases)
         rows = conn.execute(
             """
-            SELECT c.id, d.term
-            FROM concept_ancestors ca
-            JOIN concepts c ON c.id = ca.concept_id AND c.active = 1
-            JOIN descriptions d
-              ON d.concept_id = c.id
-             AND d.active = 1
-             AND d.type_id = '900000000000003001'
-            WHERE ca.ancestor_id = ?
-            ORDER BY d.term
+            WITH RECURSIVE descendants(id) AS (
+                SELECT child_id FROM concept_isa WHERE parent_id = ?
+                UNION ALL
+                SELECT ci.child_id
+                FROM concept_isa ci
+                JOIN descendants d ON ci.parent_id = d.id
+            )
+            SELECT c.id, c.preferred_term
+            FROM descendants d
+            JOIN concepts c ON c.id = d.id AND c.active = 1
+            ORDER BY c.preferred_term
             """,
             (root_id,),
         ).fetchall()
         return [_format_option(str(row[0]), row[1]) for row in rows]
-    except sqlite3.OperationalError:
-        # Transitive closure table not present — fall back to direct IS-A children
-        logger.warning(
-            "concept_ancestors table not found in snomed.db; falling back to direct children for %s",
-            root_id,
-        )
-        try:
-            rows = conn.execute(
-                """
-                SELECT c.id, d.term
-                FROM relationships r
-                JOIN concepts c ON c.id = r.source_id AND c.active = 1
-                JOIN descriptions d
-                  ON d.concept_id = c.id
-                 AND d.active = 1
-                 AND d.type_id = '900000000000003001'
-                WHERE r.destination_id = ?
-                  AND r.type_id = '116680003'  -- IS-A relationship
-                  AND r.active = 1
-                ORDER BY d.term
-                """,
-                (root_id,),
-            ).fetchall()
-            return [_format_option(str(row[0]), row[1]) for row in rows]
-        except sqlite3.OperationalError as exc:
-            raise SnomedUnavailableError(
-                f"Failed to fetch descendants of {root_id}: {exc}"
-            )
+    except sqlite3.OperationalError as exc:
+        raise SnomedUnavailableError(f"Failed to fetch descendants of {root_id}: {exc}")
