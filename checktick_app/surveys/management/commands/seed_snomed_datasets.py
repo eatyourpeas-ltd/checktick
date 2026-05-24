@@ -321,17 +321,28 @@ class Command(BaseCommand):
             )
 
         # Check snomed.db is available
+        configured_path = getattr(settings, "SNOMED_DB_PATH", None) or os.environ.get(
+            "SNOMED_DB_PATH", ""
+        )
         db_path = _get_snomed_db_path()
         if not db_path:
-            self.stdout.write(
-                self.style.WARNING(
-                    "⚠️  snomed.db not found — skipping SNOMED CT dataset seeding.\n"
-                    "   Set SNOMED_DB_PATH and run 'sct trud download ...' to build snomed.db first."
+            if not configured_path:
+                self.stdout.write(
+                    self.style.WARNING(
+                        "⚠️  SNOMED_DB_PATH is not set — skipping SNOMED CT dataset seeding.\n"
+                        "   Add SNOMED_DB_PATH to your .env and run 'sct trud download ...' to build snomed.db."
+                    )
                 )
-            )
+            else:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"⚠️  snomed.db not found at {configured_path} — skipping SNOMED CT dataset seeding.\n"
+                        "   Run 'sct trud download --edition uk_monolith --pipeline' to build it."
+                    )
+                )
             return
 
-        self.stdout.write(f"🏥 snomed.db found at: {db_path}")
+        self.stdout.write(f"🏥 Seeding SNOMED CT datasets from: {db_path}")
 
         release_date = _get_release_date(db_path)
         if release_date:

@@ -194,7 +194,18 @@ def healthz(request):
         "SNOMED_DB_PATH", ""
     )
     if snomed_db_path and os.path.isfile(snomed_db_path):
-        status["snomed"] = "ok"
+        try:
+            import sqlite3 as _sqlite3
+
+            conn = _sqlite3.connect(f"file:{snomed_db_path}?mode=ro", uri=True)
+            conn.execute("SELECT COUNT(*) FROM concepts LIMIT 1").fetchone()
+            conn.close()
+            status["snomed"] = "ok"
+        except Exception as e:
+            logger.warning("healthz: snomed.db present but not readable: %s", e)
+            status["snomed"] = "error"
+            if status["status"] == "ok":
+                status["status"] = "degraded"
     else:
         status["snomed"] = "unavailable"
         # Downgrade overall status only if currently ok, not if already degraded/error
