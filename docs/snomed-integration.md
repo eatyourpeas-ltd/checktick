@@ -6,7 +6,56 @@ priority: 6
 
 # SNOMED CT Integration
 
-This document covers the design and implementation plan for integrating SNOMED CT terminology into CheckTick's dataset system. SNOMED CT is the NHS standard clinical terminology, distributed via NHS TRUD and processed locally using the [`sct`](https://github.com/eatyourpeas/sct) Rust binary.
+This document covers the design and implementation of SNOMED CT terminology integration in CheckTick. SNOMED CT is the NHS standard clinical terminology, distributed via NHS TRUD and processed locally using the [`sct`](https://github.com/pacharanero/sct) Rust binary.
+
+---
+
+## Implementation Status
+
+### ✅ Phase 1 — Infrastructure (complete, on `feat/snomed-integration`)
+
+| Component | File(s) | Status |
+|---|---|---|
+| `snomed_data` Docker volume | `docker-compose.dev.yml` | ✅ Done |
+| `sct` binary in all images | `Dockerfile`, `Dockerfile.dev`, `Dockerfile.registry` | ✅ Done |
+| `SNOMED_DB_PATH`, `TRUD_API_KEY` env vars | `settings.py`, `.env.example` | ✅ Done |
+| DataSet model fields (6 new fields + choices) | `models.py`, migration `0047` | ✅ Done |
+| `SnomedResolver` service | `surveys/snomed_resolver.py` | ✅ Done |
+| `fetch_dataset()` routing for `category='snomed'` | `surveys/external_datasets.py` | ✅ Done |
+| `/healthz` SNOMED status | `core/views.py` | ✅ Done |
+| `seed_snomed_datasets` command (22 curated datasets) | `management/commands/seed_snomed_datasets.py` | ✅ Done |
+| `update_snomed_db` command (`sct trud check` + rebuild) | `management/commands/update_snomed_db.py` | ✅ Done |
+| Tests (18 passing, offline, mock SQLite) | `tests/test_snomed_integration.py` | ✅ Done |
+| `s/dev` SNOMED walkthrough + vault flow fix | `s/dev` | ✅ Done |
+| Self-hosting docs updated | `self-hosting*.md`, `vault.md`, `scheduled-tasks.md` | ✅ Done |
+
+### 🔲 Phase 2 — Views and Frontend (next session)
+
+| Component | Notes |
+|---|---|
+| Dataset list view — SNOMED badge + live count | `dataset_list.html` shows `options\|length`; needs SNOMED-aware display |
+| Dataset detail view — SNOMED metadata panel | Show refset ID, query type, release date, member count |
+| Survey builder — dropdown/typeahead widget selection | Use `snomed_member_count` thresholds (<500 dropdown, 500–2k searchable, >2k typeahead) |
+| Typeahead API endpoint | New or extended endpoint calling `SnomedResolver.search()` |
+| Survey renderer — SCTID → preferred term resolution | Resolve stored SCTIDs to display terms at render time |
+| `datasets-and-dropdowns.md` update | Document SNOMED datasets for users |
+| Graceful degradation UI | "Unavailable" badge, inline warning in builder, placeholder in renderer |
+
+### 🔲 Phase 3 — User SNOMED Codelists (future)
+
+See [Phase 2: User SNOMED Codelists](#phase-2-user-snomed-codelists) section below.
+
+---
+
+### Key design constraints for Phase 2
+
+- **SCTIDs are stored in responses**, not display terms — they are semantically stable across SNOMED releases
+- **`SnomedUnavailableError` must be caught at the view layer** — never propagate to a 500
+- **`snomed_member_count` drives widget selection** — seeded at `seed_snomed_datasets` time, not queried live per request
+- **`SnomedResolver.search()` is the typeahead backend** — it queries `snomed.db` FTS5 via thread-local connection
+- **The `options` field on SNOMED DataSets is always `[]`** — never write to it; callers must use `fetch_dataset()` which routes through the resolver
+
+---
 
 ## Design Overview
 
