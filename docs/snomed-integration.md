@@ -171,23 +171,58 @@ To be confirmed against a live `snomed.db` — the names below are indicative. A
 | Hierarchy | GLP-1 agonists | dm+d descendants | ~15 |
 | Hierarchy | SGLT2 inhibitors | dm+d descendants | ~10 |
 | Hierarchy | All insulins | dm+d descendants | ~50 |
+| Named refset | QOF Diabetes register (conditions) | QOF module | ~100–400 |
+| Named refset | QOF Epilepsy register (conditions) | QOF module | ~100–400 |
+| Named refset | QOF Hypertension register | QOF module | ~100–400 |
+| Named refset | QOF CHD / Heart Failure register | QOF module | ~100–400 |
+| Named refset | QOF AF register | QOF module | ~100–400 |
+| Named refset | QOF Asthma / COPD register | QOF module | ~100–400 |
+| Named refset | QOF Cancer register | QOF module | ~100–400 |
+| Named refset | QOF Mental Health / Depression register | QOF module | ~100–400 |
+| Named refset | QOF Dementia register | QOF module | ~100–400 |
+| Named refset | QOF Stroke / TIA register | QOF module | ~100–400 |
+| Named refset | Specialty procedure refsets | UK Clinical | TBD |
 | Hierarchy | Common body sites | SNOMED descendants | ~500 |
 | Hierarchy | Administration methods | SNOMED descendants | ~50 |
 
 > ⚠️ dm+d VMP is typeahead-only. The UI enforces this based on `snomed_member_count > 2000`.
 
-> **Note for implementer:** Run `sct refset list --json --db snomed.db | grep -i "QOF\|diabet\|epilep\|atrial\|asthma\|copd\|ethnic\|allerg"` against the UK Monolith to get the actual SCTIDs and member counts before seeding.
+> **Note for implementer:** Run `sct refset list --json --db snomed.db | grep -i "QOF\|diabet\|epilep\|atrial\|asthma\|copd\|ethnic\|allerg\|hypert\|cancer\|mental\|dementia\|stroke"` against the UK Monolith to get the actual SCTIDs and member counts before seeding.
 
-### Phase 2/3: User-Authored Drug Lists (ECL)
+### Conditions and Procedures — Same Architecture, Different Scale
 
-Survey creators who need a bespoke list — e.g. "all GLP-1 agonists licensed in the UK that are also on our local formulary" — need ECL. This is the `snomed_query_type = "ecl"` path in the model, which evaluates an arbitrary Expression Constraint Language query against `snomed.db` at render time.
+The three-tier approach (named refsets → hierarchy descendants → ECL) applies equally to conditions/disease states and procedures. The key differences from drugs:
 
-ECL is powerful but requires SNOMED knowledge to author safely. The Phase 2/3 roadmap for this:
+**Conditions:**
+- QOF condition *registers* define which SNOMED codes count as a diagnosis for QOF purposes — these are the most clinically validated, constrained lists available and sit at ~100–400 concepts each (searchable select territory)
+- Specialty-scoped hierarchy descendants work for typeahead (all diabetic disorders, all epilepsies, all cancers), but the full clinical finding hierarchy is ~400k concepts — never used unscoped
+- ICD-10 mapping is present in the UK Monolith (`snomed_query_type = "mapped"`) — useful for surveys that need to align with HES/hospital coding
+
+**Procedures:**
+- **OPCS-4** is the NHS standard for procedure coding in secondary care (theatre records, HES). The UK Monolith contains a SNOMED-OPCS-4 map. For surveys used in secondary care audit, OPCS-4 procedure codes will often be more recognisable to users than raw SNOMED procedure concepts — worth exposing via `snomed_query_type = "mapped"`
+- Specialty procedure refsets exist in the UK Clinical module (to be confirmed against live `snomed.db`)
+- Full procedure hierarchy is ~80k concepts — typeahead only when unscoped
+
+**Size profile comparison:**
+
+| Category | QOF register | Specialty scoped | Full hierarchy |
+|---|---|---|---|
+| Drugs | ~20–60 | ~100–500 | ~20,000+ (VMP) |
+| Conditions | ~100–400 | ~500–2,000 | ~400,000+ |
+| Procedures | ~50–200 | ~1,000–5,000 | ~80,000+ |
+
+The size thresholds (< 500 → dropdown, 500–2,000 → searchable select, > 2,000 → typeahead) apply uniformly across all three domains.
+
+### Phase 2/3: User-Authored Lists (ECL and Codelists)
+
+Survey creators who need a bespoke list — e.g. "all GLP-1 agonists licensed in the UK that are also on our local formulary", or "the 12 SNOMED codes we use for epilepsy in our service" — need either ECL or hand-picked codelists. Both apply equally to drugs, conditions, and procedures.
+
+**ECL** uses the `snomed_query_type = "ecl"` path, evaluating an arbitrary Expression Constraint Language query against `snomed.db` at render time. ECL is powerful but requires SNOMED knowledge to author safely. The roadmap:
 
 1. **Phase 2:** Admins can write ECL expressions via the Django admin and expose them as featured datasets — no user-facing UI yet
 2. **Phase 3:** A guided ECL builder UI for technically confident users, with validation and concept preview before saving
 
-This is distinct from the codelist builder (picking individual concepts by search) described in the Phase 2 section below — ECL is class/hierarchy-based, codelists are concept-by-concept.
+**Codelists** (hand-picked concept-by-concept) are distinct — see the Phase 2 User SNOMED Codelists section below. ECL is class/hierarchy-based; codelists are concept-by-concept.
 
 ---
 
