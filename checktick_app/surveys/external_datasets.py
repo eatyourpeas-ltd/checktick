@@ -314,6 +314,21 @@ def fetch_dataset(dataset_key: str) -> dict[str, str]:
     try:
         dataset = DataSet.objects.get(key=dataset_key, is_active=True)
 
+        # SNOMED CT datasets: serve options live from snomed.db, not from the options field
+        if dataset.category == "snomed":
+            from .snomed_resolver import SnomedUnavailableError, get_options
+
+            try:
+                return get_options(dataset)
+            except SnomedUnavailableError as exc:
+                logger.warning(
+                    "SNOMED CT unavailable for dataset '%s': %s", dataset_key, exc
+                )
+                raise DatasetFetchError(
+                    f"SNOMED CT database is not available: {exc}. "
+                    "Run 'python manage.py seed_snomed_datasets' after building snomed.db."
+                )
+
         # If it's an API dataset that needs syncing, log a warning
         if dataset.source_type == "api" and dataset.needs_sync:
             logger.warning(
