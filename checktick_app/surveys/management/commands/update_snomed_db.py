@@ -195,6 +195,12 @@ class Command(BaseCommand):
                 )
                 return
 
+            # Redirect TMPDIR to the mounted volume so that sct's intermediate
+            # files (ndjson extraction, SQLite build) do not fill the container's
+            # ephemeral storage and trigger an eviction/OOM kill.
+            tmp_dir = str(Path(data_dir) / "tmp")
+            Path(tmp_dir).mkdir(parents=True, exist_ok=True)
+
             download_result = subprocess.run(
                 [
                     "sct",
@@ -209,7 +215,13 @@ class Command(BaseCommand):
                     "--pipeline",
                 ],
                 text=True,
-                env={**os.environ, "TRUD_API_KEY": trud_api_key},
+                env={
+                    **os.environ,
+                    "TRUD_API_KEY": trud_api_key,
+                    "TMPDIR": tmp_dir,
+                    "TEMP": tmp_dir,
+                    "TMP": tmp_dir,
+                },
             )
 
             if download_result.returncode != 0:
