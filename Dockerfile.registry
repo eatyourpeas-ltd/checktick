@@ -19,7 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir poetry==${POETRY_VERSION}
 
 # Install sct binary (SNOMED CT toolchain) — pre-built release, no Rust needed
-# TARGETARCH is set automatically by Docker BuildKit for multi-platform builds
+# TARGETARCH must be declared to expose the BuildKit automatic platform ARG to RUN steps
+ARG TARGETARCH
 ARG SCT_VERSION=v0.3.11
 ARG SCT_REPO=pacharanero/sct
 RUN set -eux; \
