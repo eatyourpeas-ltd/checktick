@@ -27,22 +27,22 @@ See [Configuration Guide](/docs/self-hosting-configuration/) for full setup deta
 
 ## Prerequisites
 
-CheckTick requires the following infrastructure components. Understand what you need before you start:
+CheckTick requires the following infrastructure. Understand what you need before you start:
 
-| Component                 | Requirement                         | Notes                                                                                |
-| ------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------ |
-| **App container**         | Docker image (pulled automatically) | Runs the Django application                                                          |
-| **PostgreSQL**            | Version 16+                         | Primary data store for all survey data                                               |
-| **Volume: `vault-data`**  | 1 GB minimum, **airgapped**         | Vault Raft storage — must not be shared. See [Vault setup](vault.md)                 |
-| **Volume: `snomed-data`** | 10 GB minimum                       | SNOMED CT SQLite database. Optional, but required for clinical terminology dropdowns |
+| Component | Requirement | Notes |
+|---|---|---|
+| **App container** | Docker image (pulled automatically) | Runs the Django application |
+| **PostgreSQL** | Version 16+ | Primary data store for all survey data |
+| **Volume: `vault-data`** | 1 GB minimum, **airgapped** | Vault Raft storage — must not be shared with any other service. See [Vault setup](vault.md) |
+| **Volume: `snomed-data`** | 10 GB minimum | SNOMED CT SQLite database. Optional — required only for clinical terminology dropdowns |
 
-> ⚠️ The `vault-data` and `snomed-data` volumes must be **separate**. Vault uses Raft storage in its volume and cannot share it with other data.
+> ⚠️ `vault-data` and `snomed-data` must be **separate volumes**. Vault uses Raft storage and cannot share its volume with other data.
 
-**System requirements:**
+**Host system requirements:**
 
 - **Docker** 24.0+ and **Docker Compose** 2.0+
-- **2 GB RAM minimum** (4 GB recommended; 8 GB if running the SNOMED seeding process locally)
-- **Domain name** (optional, but recommended for production)
+- **4 GB RAM** (8 GB recommended if running the SNOMED seeding process on the same host)
+- **Domain name** with TLS certificate (required for production; optional for local dev)
 
 ## Environment Variables
 
@@ -54,17 +54,36 @@ curl -O https://raw.githubusercontent.com/eatyourpeas/checktick/main/.env.exampl
 mv .env.example .env
 ```
 
-The template (`example.env` / `.env.example`) contains every supported variable with comments. Open it and work through each section. Add the values to your hosting provider's secrets/environment credentials store — never commit a populated `.env` to version control.
+`.env.example` contains every supported variable with inline comments. Work through each section and fill in your values. Then copy those values into your hosting provider's secrets/credentials store — **never commit a populated `.env` to version control**.
 
-The key sections are:
+**Required variables — the app will not start without these:**
 
-1. **Security** — `SECRET_KEY`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`
-2. **Database** — `DATABASE_URL` or `POSTGRES_*` variables
-3. **Email** — SMTP credentials for invitations and notifications
-4. **External datasets** — RCPCH API key for NHS dropdown lists
-5. **SNOMED CT** — TRUD API key (see below)
-6. **Vault** — AppRole credentials generated during Vault initialisation
-7. **Branding / SSO / LLM** — optional
+| Variable | Description |
+|---|---|
+| `SECRET_KEY` | Django secret key. Generate with: `openssl rand -base64 50` |
+| `ALLOWED_HOSTS` | Comma-separated domains/IPs, e.g. `yourdomain.com,localhost` |
+| `CSRF_TRUSTED_ORIGINS` | Full HTTPS origins, e.g. `https://yourdomain.com` |
+| `DATABASE_URL` | PostgreSQL connection string, e.g. `postgres://user:pass@host:5432/checktick` |
+| `DEFAULT_FROM_EMAIL` | Sender address for all outbound email |
+| `EMAIL_HOST` / `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | SMTP credentials |
+| `EXTERNAL_DATASET_API_URL` | Set to `https://api.rcpch.ac.uk` |
+| `EXTERNAL_DATASET_API_KEY` | Free key from [api.rcpch.ac.uk](https://api.rcpch.ac.uk) — needed for NHS dropdown lists |
+| `VAULT_ADDR` | URL of your Vault instance |
+| `VAULT_ROLE_ID` / `VAULT_SECRET_ID` | AppRole credentials from Vault initialisation — see [Vault setup](vault.md) |
+
+**Optional but recommended:**
+
+| Variable | Description |
+|---|---|
+| `TRUD_API_KEY` | TRUD API key for SNOMED CT. Free from [isd.digital.nhs.uk/trud](https://isd.digital.nhs.uk/trud). Without this, SNOMED dropdown types are hidden |
+| `SNOMED_DB_PATH` | Path on the `snomed-data` volume — default `/app/data/snomed.db` |
+| `SITE_URL` | Base URL used in email links, e.g. `https://yourdomain.com` |
+| `BRAND_TITLE` / `BRAND_THEME` | Branding customisation |
+| `OIDC_RP_CLIENT_ID_*` / `OIDC_RP_CLIENT_SECRET_*` | Google or Azure SSO — see [SSO setup](oidc-sso-setup.md) |
+| `LLM_URL` / `LLM_API_KEY` | AI-assisted survey generation |
+| `HOSTING_API_TOKEN` / `HOSTING_API_BASE_URL` | Infrastructure log viewer in platform admin |
+
+See [Configuration Guide](self-hosting-configuration.md) for the full reference including data governance, compliance roles, and advanced options.
 
 ## Quick Start
 
@@ -78,13 +97,13 @@ mkdir checktick-app && cd checktick-app
 curl -O https://raw.githubusercontent.com/eatyourpeas/checktick/main/docker-compose.registry.yml
 
 # Download environment template
-curl -O https://raw.githubusercontent.com/eatyourpeas/checktick/main/.env.selfhost
-mv .env.selfhost .env
+curl -O https://raw.githubusercontent.com/eatyourpeas/checktick/main/.env.example
+mv .env.example .env
 ```
 
 ### 2. Configure Environment
 
-Edit `.env` with your settings:
+Copy `.env.example` to `.env` and fill in your values (or use the download step above):
 
 ```bash
 # Generate a secure secret key
@@ -94,52 +113,41 @@ openssl rand -base64 50
 nano .env
 ```
 
-**Minimum required settings:**
-
-````bash
-Edit `.env` and configure at minimum:
+At minimum, set:
 
 ```bash
-# Security (REQUIRED)
+# Security
 SECRET_KEY=your-generated-secret-key
 ALLOWED_HOSTS=yourdomain.com,localhost
+CSRF_TRUSTED_ORIGINS=https://yourdomain.com
 
-# Database (REQUIRED - for included PostgreSQL)
-POSTGRES_PASSWORD=secure-database-password
-# REQUIRED - forms base url for emails
-SITE_URL="https://yourdomain.com"
+# Database
+DATABASE_URL=postgres://checktick:password@db:5432/checktick
+SITE_URL=https://yourdomain.com
 
-# Branding (OPTIONAL - has defaults)
-BRAND_TITLE=Your Survey Platform
-# Theme Configuration (OPTIONAL - has sensible defaults)
-# Set deployment-level default themes - org admins can override in Profile
-# Light theme: choose from 20 options (nord, cupcake, emerald, corporate, etc.)
-# Dark theme: choose from 12 options (business, dark, night, forest, etc.)
-# See docs/themes.md for full list and customization options
-BRAND_THEME_PRESET_LIGHT=nord
-BRAND_THEME_PRESET_DARK=business
-
-# Email Provider (REQUIRED for functionality)
-# Email is essential for user invitations, password resets, and notifications
-# CheckTick will start without email configured, but users cannot be invited or reset passwords
+# Email
 DEFAULT_FROM_EMAIL=no-reply@yourdomain.com
-EMAIL_HOST=smtp.gmail.com
+EMAIL_HOST=smtp.eu.mailgun.org
 EMAIL_PORT=587
 EMAIL_USE_TLS=True
-EMAIL_HOST_USER=your-email@gmail.com
-EMAIL_HOST_PASSWORD=your-app-password
+EMAIL_HOST_USER=postmaster@mg.yourdomain.com
+EMAIL_HOST_PASSWORD=your-smtp-password
 
-# External Datasets (REQUIRED)
-# Get free API key from: https://api.rcpch.ac.uk
+# External Datasets (free key from https://api.rcpch.ac.uk)
 EXTERNAL_DATASET_API_URL=https://api.rcpch.ac.uk
 EXTERNAL_DATASET_API_KEY=your-rcpch-api-key
-````
 
-> **Note**: Generate a strong `SECRET_KEY` with: `openssl rand -base64 50`
+# Vault (generated during vault initialisation — see vault.md)
+VAULT_ADDR=https://vault.yourdomain.com:8200
+VAULT_ROLE_ID=your-role-id
+VAULT_SECRET_ID=your-secret-id
 
-````
+# SNOMED CT (optional — free key from https://isd.digital.nhs.uk/trud)
+TRUD_API_KEY=your-trud-api-key
+SNOMED_DB_PATH=/app/data/snomed.db
+```
 
-> **Note:** CheckTick will start without email configured, but users cannot be invited or reset passwords. Email setup is essential for a working system.
+> **Note:** CheckTick will start without email configured, but users cannot be invited or reset passwords. Vault and email are essential for a working production system.
 
 ### 3. Start CheckTick
 

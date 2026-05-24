@@ -25,10 +25,22 @@ Get CheckTick running on your own infrastructure in minutes using pre-built Dock
 
 ### Prerequisites
 
+CheckTick requires the following infrastructure. Provision all of these before you start:
+
+| Component                 | Requirement                         | Notes                                                                                  |
+| ------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------- |
+| **App container**         | Docker image (pulled automatically) | Runs the Django application                                                            |
+| **PostgreSQL**            | Version 16+                         | Primary data store for all survey data                                                 |
+| **Volume: `vault-data`**  | 1 GB minimum, **airgapped**         | Vault Raft storage — must not be shared. See [Vault setup](vault.md)                   |
+| **Volume: `snomed-data`** | 10 GB minimum                       | SNOMED CT SQLite database. Optional — required only for clinical terminology dropdowns |
+
+> ⚠️ `vault-data` and `snomed-data` must be **separate volumes**. Vault uses Raft storage and cannot share its directory with any other data.
+
+**Host system requirements:**
+
 - **Docker** 24.0+ and **Docker Compose** 2.0+
-- **2GB RAM minimum** (4GB recommended)
-- **10GB disk space** for database and media files
-- **Domain name** (optional, but recommended for production)
+- **4 GB RAM** (8 GB recommended if running the SNOMED seeding process on the same host)
+- **Domain name** with TLS certificate (required for production)
 
 ### 1. Download Deployment Files
 
@@ -40,41 +52,49 @@ mkdir checktick-app && cd checktick-app
 curl -O https://raw.githubusercontent.com/eatyourpeas/checktick/main/docker-compose.registry.yml
 
 # Download environment template
-curl -O https://raw.githubusercontent.com/eatyourpeas/checktick/main/.env.selfhost
-mv .env.selfhost .env
+curl -O https://raw.githubusercontent.com/eatyourpeas/checktick/main/.env.example
+mv .env.example .env
 ```
 
 ### 2. Configure Environment
 
-Edit `.env` with your settings:
+Fill in `.env`. At minimum you need:
 
 ```bash
-# Generate a secure secret key
-openssl rand -base64 50
+# Security
+SECRET_KEY=your-generated-key  # openssl rand -base64 50
+ALLOWED_HOSTS=yourdomain.com,localhost
+CSRF_TRUSTED_ORIGINS=https://yourdomain.com
+SITE_URL=https://yourdomain.com
 
-# Edit configuration
-nano .env
-```
-
-**Minimum required settings:**
-
-```bash
-# Security (REQUIRED)
-SECRET_KEY=your-very-long-random-secret-key-from-above
-ALLOWED_HOSTS=localhost,127.0.0.1,yourdomain.com
-
-# Database (change password!)
+# Database
 POSTGRES_PASSWORD=your-secure-database-password
+DATABASE_URL=postgresql://checktick:your-secure-database-password@db:5432/checktick
 
-# Email (for invitations and notifications)
-EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp.gmail.com
+# Email
+DEFAULT_FROM_EMAIL=no-reply@yourdomain.com
+EMAIL_HOST=smtp.eu.mailgun.org
 EMAIL_PORT=587
 EMAIL_USE_TLS=True
-EMAIL_HOST_USER=your-email@gmail.com
-EMAIL_HOST_PASSWORD=your-app-password
-DEFAULT_FROM_EMAIL=noreply@yourdomain.com
+EMAIL_HOST_USER=postmaster@mg.yourdomain.com
+EMAIL_HOST_PASSWORD=your-smtp-password
+
+# External Datasets (free key from https://api.rcpch.ac.uk)
+EXTERNAL_DATASET_API_URL=https://api.rcpch.ac.uk
+EXTERNAL_DATASET_API_KEY=your-rcpch-api-key
+
+# Vault — generated during vault initialisation (see vault.md)
+VAULT_ADDR=https://vault.yourdomain.com:8200
+VAULT_ROLE_ID=your-role-id
+VAULT_SECRET_ID=your-secret-id
+
+# SNOMED CT — optional, free key from https://isd.digital.nhs.uk/trud
+# Without this, SNOMED terminology dropdowns are simply hidden.
+TRUD_API_KEY=your-trud-api-key
+SNOMED_DB_PATH=/app/data/snomed.db
 ```
+
+See [Configuration Guide](self-hosting-configuration.md) for the full reference including SSO, branding, AI, governance roles, and data retention.
 
 ### 3. Start Services
 
@@ -258,6 +278,7 @@ sudo ufw enable
 **Security Headers:**
 
 Already configured in nginx config:
+
 - HSTS (HTTP Strict Transport Security)
 - X-Frame-Options
 - X-Content-Type-Options
@@ -277,34 +298,41 @@ LOGIN_RATE_LIMIT=5
 
 ### Health Monitoring
 
-CheckTick provides a health endpoint:
+CheckTick exposes a structured JSON health endpoint. A 503 response means a critical service (database or Vault) is degraded — your monitoring tool should alert on this.
 
 ```bash
-# Check health
-curl https://yourdomain.com/healthz
-
-# Should return: ok
+curl -s https://yourdomain.com/healthz | jq
+# Returns: {"status": "ok", "db": "ok", "vault": "ok", "snomed": "ok"}
+# Returns 503 if Vault is sealed or database is unreachable
 ```
 
-Set up monitoring (e.g., UptimeRobot, Pingdom) to check this endpoint every 5 minutes.
+Set up monitoring (e.g., UptimeRobot, Pingdom) to check this endpoint every 5 minutes and alert on any non-200 response. See [Vault monitoring](vault.md#monitoring) for the full status table and suggested actions.
 
 ### Resource Requirements
 
-**Minimum (1-100 users)**:
-- 2GB RAM
+**Minimum (1–100 users)**:
+
+- 4 GB RAM
 - 2 CPU cores
-- 20GB disk
+- PostgreSQL: 20 GB disk
+- `vault-data` volume: 1 GB (airgapped)
+- `snomed-data` volume: 10 GB (optional)
 
-**Recommended (100-1000 users)**:
-- 4GB RAM
+**Recommended (100–1,000 users)**:
+
+- 8 GB RAM
 - 4 CPU cores
-- 50GB disk
+- PostgreSQL: 50 GB disk
+- `vault-data` volume: 1 GB (airgapped)
+- `snomed-data` volume: 10 GB
 
-**Large deployment (1000+ users)**:
-- 8GB+ RAM
+**Large deployment (1,000+ users)**:
+
+- 16 GB+ RAM
 - 8+ CPU cores
-- 100GB+ disk
-- Consider external database (see [Database Options](#database-options))
+- PostgreSQL: 100 GB+ disk — consider external managed DB (see [Database Options](#database-options))
+- `vault-data` volume: 1 GB (airgapped)
+- `snomed-data` volume: 10 GB
 
 ---
 
@@ -582,13 +610,16 @@ LLM_DEBUG_DUMP=1
 ```
 
 What it does:
+
 - Writes a JSON diagnostic file to `/tmp/llm_response_<timestamp>_<id>.json` when an LLM call produces unexpected or empty streaming output.
 - The dump contains the HTTP response body, headers, status code and a small payload preview to help triage provider-specific issues.
 
 When to use:
+
 - Enable only temporarily during debugging of streaming or parsing issues (for example, when the AI appears to return content under non-standard keys).
 
 Risks and mitigation:
+
 - Dumps may contain user-provided text and potentially sensitive information. Do NOT enable in production or leave enabled long-term.
 - After reproducing the issue, delete dump files from `/tmp` and remove the `LLM_DEBUG_DUMP` env var.
 
@@ -601,6 +632,7 @@ rm /tmp/llm_response_*.json
 ```
 
 Alternative diagnostics:
+
 - Prefer enabling `LOG_LEVEL=DEBUG` and inspecting application logs first; the `llm_client` module logs which response key provided content which is often sufficient and less risky than raw dumps.
 
 ### Email Provider Configuration
@@ -653,14 +685,38 @@ EMAIL_HOST_PASSWORD=your-mailgun-password
 DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 ```
 
-### External Dataset API (Optional)
+### External Dataset API
 
-For features that fetch external datasets (e.g., NHS hospitals, trusts):
+Required for NHS dropdown lists (hospitals, trusts, ICBs, etc.):
 
 ```bash
-EXTERNAL_DATASET_API_URL=https://api.rcpch.ac.uk/nhs-organisations/v1
-EXTERNAL_DATASET_API_KEY=  # Usually empty for public APIs
+EXTERNAL_DATASET_API_URL=https://api.rcpch.ac.uk
+EXTERNAL_DATASET_API_KEY=your-rcpch-api-key  # Free from https://api.rcpch.ac.uk
 ```
+
+### SNOMED CT (Clinical Terminology)
+
+Optional — enables clinical terminology dropdowns (drugs, conditions, procedures). Without this, SNOMED dataset types are simply hidden from survey builders.
+
+```bash
+# Free account + item 1799 access from https://isd.digital.nhs.uk/trud
+TRUD_API_KEY=your-trud-api-key
+SNOMED_DB_PATH=/app/data/snomed.db  # Must be on the snomed-data volume
+```
+
+See [Configuration Guide — SNOMED CT](self-hosting-configuration.md#snomed-ct-clinical-terminology) for volume setup, seeding instructions, and update schedule.
+
+### Vault (Encryption Key Management)
+
+Required for survey encryption and ethical data recovery:
+
+```bash
+VAULT_ADDR=https://vault.yourdomain.com:8200
+VAULT_ROLE_ID=your-role-id      # Generated by vault/setup_vault.py
+VAULT_SECRET_ID=your-secret-id  # Generated by vault/setup_vault.py
+```
+
+See [Vault Integration](vault.md) for full initialisation, volume setup, and monitoring.
 
 ### OIDC Single Sign-On (Optional)
 
@@ -986,6 +1042,7 @@ CheckTick uses DaisyUI themes. You can customize colors, fonts, and styling.
 #### Default Themes
 
 Built-in themes available:
+
 - `checktick-light` (default light theme)
 - `checktick-dark` (default dark theme)
 
@@ -1019,7 +1076,11 @@ For advanced customization, you can override CSS:
 }
 
 .survey-header {
-  background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+  background: linear-gradient(
+    to right,
+    var(--primary-color),
+    var(--secondary-color)
+  );
 }
 ```
 
@@ -1039,6 +1100,7 @@ Create `templates/base.html` override to include your CSS.
 #### Logo and Favicon
 
 **Via Admin** (recommended):
+
 1. Go to `/admin/core/sitebranding/`
 2. Upload logo and favicon
 3. Changes apply immediately
@@ -1223,6 +1285,7 @@ services:
 ## Summary
 
 You now have:
+
 - ✅ CheckTick running with Docker
 - ✅ Production deployment with SSL
 - ✅ Database backup strategy
@@ -1230,6 +1293,7 @@ You now have:
 - ✅ Custom branding applied
 
 **Next steps:**
+
 - Configure [Data Governance](data-governance.md)
 - Set up [Encryption](encryption.md)
 - Explore [API Documentation](using-the-api.md)
