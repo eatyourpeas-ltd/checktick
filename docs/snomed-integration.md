@@ -14,32 +14,34 @@ This document covers the design and implementation of SNOMED CT terminology inte
 
 ### ✅ Phase 1 — Infrastructure (complete, on `feat/snomed-integration`)
 
-| Component | File(s) | Status |
-|---|---|---|
-| `snomed_data` Docker volume | `docker-compose.dev.yml` | ✅ Done |
-| `sct` binary in all images | `Dockerfile`, `Dockerfile.dev`, `Dockerfile.registry` | ✅ Done |
-| `SNOMED_DB_PATH`, `TRUD_API_KEY` env vars | `settings.py`, `.env.example` | ✅ Done |
-| DataSet model fields (6 new fields + choices) | `models.py`, migration `0047` | ✅ Done |
-| `SnomedResolver` service | `surveys/snomed_resolver.py` | ✅ Done |
-| `fetch_dataset()` routing for `category='snomed'` | `surveys/external_datasets.py` | ✅ Done |
-| `/healthz` SNOMED status | `core/views.py` | ✅ Done |
-| `seed_snomed_datasets` command (22 curated datasets) | `management/commands/seed_snomed_datasets.py` | ✅ Done |
-| `update_snomed_db` command (`sct trud check` + rebuild) | `management/commands/update_snomed_db.py` | ✅ Done |
-| Tests (18 passing, offline, mock SQLite) | `tests/test_snomed_integration.py` | ✅ Done |
-| `s/dev` SNOMED walkthrough + vault flow fix | `s/dev` | ✅ Done |
-| Self-hosting docs updated | `self-hosting*.md`, `vault.md`, `scheduled-tasks.md` | ✅ Done |
+| Component                                               | File(s)                                               | Status  |
+| ------------------------------------------------------- | ----------------------------------------------------- | ------- |
+| `snomed_data` Docker volume                             | `docker-compose.dev.yml`                              | ✅ Done |
+| `sct` binary in all images                              | `Dockerfile`, `Dockerfile.dev`, `Dockerfile.registry` | ✅ Done |
+| `SNOMED_DB_PATH`, `TRUD_API_KEY` env vars               | `settings.py`, `.env.example`                         | ✅ Done |
+| DataSet model fields (6 new fields + choices)           | `models.py`, migration `0047`                         | ✅ Done |
+| `SnomedResolver` service                                | `surveys/snomed_resolver.py`                          | ✅ Done |
+| `fetch_dataset()` routing for `category='snomed'`       | `surveys/external_datasets.py`                        | ✅ Done |
+| `/healthz` SNOMED status                                | `core/views.py`                                       | ✅ Done |
+| `seed_snomed_datasets` command (22 curated datasets)    | `management/commands/seed_snomed_datasets.py`         | ✅ Done |
+| `update_snomed_db` command (`sct trud check` + rebuild) | `management/commands/update_snomed_db.py`             | ✅ Done |
+| Tests (18 passing, offline, mock SQLite)                | `tests/test_snomed_integration.py`                    | ✅ Done |
+| `s/dev` SNOMED walkthrough + vault flow fix             | `s/dev`                                               | ✅ Done |
+| Self-hosting docs updated                               | `self-hosting*.md`, `vault.md`, `scheduled-tasks.md`  | ✅ Done |
 
-### 🔲 Phase 2 — Views and Frontend (next session)
+### ✅ Phase 2 — Views and Frontend (complete, on `feat/snomed-phase2-views`)
 
-| Component | Notes |
-|---|---|
-| Dataset list view — SNOMED badge + live count | `dataset_list.html` shows `options\|length`; needs SNOMED-aware display |
-| Dataset detail view — SNOMED metadata panel | Show refset ID, query type, release date, member count |
-| Survey builder — dropdown/typeahead widget selection | Use `snomed_member_count` thresholds (<500 dropdown, 500–2k searchable, >2k typeahead) |
-| Typeahead API endpoint | New or extended endpoint calling `SnomedResolver.search()` |
-| Survey renderer — SCTID → preferred term resolution | Resolve stored SCTIDs to display terms at render time |
-| `datasets-and-dropdowns.md` update | Document SNOMED datasets for users |
-| Graceful degradation UI | "Unavailable" badge, inline warning in builder, placeholder in renderer |
+| Component                                                   | File(s)                                                                                | Status  |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------- |
+| Dataset list view — SNOMED badge + live count               | `dataset_list.html`, `views.py`                                                        | ✅ Done |
+| Dataset detail view — SNOMED provenance card + live options | `dataset_detail.html`, `views.py`                                                      | ✅ Done |
+| Graceful degradation UI                                     | `dataset_list.html`, `dataset_detail.html`                                             | ✅ Done |
+| Typeahead API endpoint                                      | `views.snomed_search`, `urls.py`                                                       | ✅ Done |
+| SNOMED snapshot (live → Postgres)                           | `views.dataset_snomed_snapshot`, `urls.py`                                             | ✅ Done |
+| "Request SNOMED Refset" button + issue template             | `dataset_list.html`, `.github/ISSUE_TEMPLATE/snomed_refset_request.yml`                | ✅ Done |
+| Survey builder — dropdown/typeahead widget selection        | Use `snomed_member_count` thresholds (<500 dropdown, 500–2k searchable, >2k typeahead) | 🔲 Next |
+| Survey renderer — SCTID → preferred term resolution         | Resolve stored SCTIDs to display terms at render time                                  | 🔲 Next |
+| `datasets-and-dropdowns.md` update                          | Document SNOMED datasets for users                                                     | 🔲 Next |
 
 ### 🔲 Phase 3 — User SNOMED Codelists (future)
 
@@ -150,11 +152,11 @@ The UK Monolith SNOMED edition contains **460 reference sets**. These range from
 
 For drugs specifically, there are three complementary sources in `snomed.db`, each serving different use cases:
 
-| Source | How it works | Examples | Best for |
-|---|---|---|---|
-| **Named refsets** | Pre-defined curated lists from NHS England | QOF Epilepsy drugs, COVID extraction, formulary lists | Disease-specific constrained lists — exactly what survey creators need |
-| **dm+d hierarchy** | Descendants of a drug-class concept | All GLP-1 agonists, all insulins, all antiepileptics | Drug class lists without needing a named refset |
-| **ECL expression** | SNOMED Expression Constraint Language query evaluated live | `<< 372938004` (all GLP-1 agonists), combinations | Flexible, precise, user-authored — Phase 2/3 |
+| Source             | How it works                                               | Examples                                              | Best for                                                               |
+| ------------------ | ---------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| **Named refsets**  | Pre-defined curated lists from NHS England                 | QOF Epilepsy drugs, COVID extraction, formulary lists | Disease-specific constrained lists — exactly what survey creators need |
+| **dm+d hierarchy** | Descendants of a drug-class concept                        | All GLP-1 agonists, all insulins, all antiepileptics  | Drug class lists without needing a named refset                        |
+| **ECL expression** | SNOMED Expression Constraint Language query evaluated live | `<< 372938004` (all GLP-1 agonists), combinations     | Flexible, precise, user-authored — Phase 2/3                           |
 
 **QOF refsets are particularly valuable.** The Quality and Outcomes Framework has ~30+ condition-specific refsets maintained annually by NHS England, which include disease-area drug lists directly relevant to clinical survey creators:
 
@@ -180,12 +182,13 @@ Rather than maintaining a hand-picked short list in code, the `seed_snomed_datas
 
 The distinction is managed with an `is_featured` boolean on the descriptor:
 
-| `is_featured` | Meaning | Default visibility |
-|---|---|---|
-| `True` | Curated, clinically meaningful for NHS surveys | Shown prominently in the dataset browser |
-| `False` | Technical, administrative, or specialist | Hidden by default; searchable; can be promoted per request |
+| `is_featured` | Meaning                                        | Default visibility                                         |
+| ------------- | ---------------------------------------------- | ---------------------------------------------------------- |
+| `True`        | Curated, clinically meaningful for NHS surveys | Shown prominently in the dataset browser                   |
+| `False`       | Technical, administrative, or specialist       | Hidden by default; searchable; can be promoted per request |
 
 This means:
+
 - Users browsing datasets by default see a curated set of clinically useful refsets (QOF disease lists, ethnic categories, allergy substances, body sites, drug classes)
 - Any of the 460 can be surfaced via search or admin promotion — no code change needed
 - Real usage patterns will reveal which unlisted refsets are actually wanted
@@ -207,32 +210,32 @@ This means dm+d VMP (all ~20,000 medicinal products) is available for typeahead 
 
 To be confirmed against a live `snomed.db` — the names below are indicative. Actual SCTID/member counts require running `sct refset list` against the UK Monolith:
 
-| Type | Dataset Name | Source | Approx Size |
-|---|---|---|---|
-| Named refset | UK Ethnic Categories | UK Monolith | ~30 |
-| Named refset | QOF Epilepsy — drug list | QOF module | ~40 |
-| Named refset | QOF Diabetes — drug list | QOF module | ~60 |
-| Named refset | QOF Atrial Fibrillation — drug list | QOF module | ~20 |
-| Named refset | QOF COPD / Asthma — drug list | QOF module | ~50 |
-| Named refset | Allergy/intolerance substances | UK Clinical | ~300 |
-| Named refset | dm+d VTM (all drug substances) | dm+d | ~1,000 |
-| Named refset | dm+d VMP (all medicinal products) | dm+d | ~20,000+ ⚠️ |
-| Hierarchy | GLP-1 agonists | dm+d descendants | ~15 |
-| Hierarchy | SGLT2 inhibitors | dm+d descendants | ~10 |
-| Hierarchy | All insulins | dm+d descendants | ~50 |
-| Named refset | QOF Diabetes register (conditions) | QOF module | ~100–400 |
-| Named refset | QOF Epilepsy register (conditions) | QOF module | ~100–400 |
-| Named refset | QOF Hypertension register | QOF module | ~100–400 |
-| Named refset | QOF CHD / Heart Failure register | QOF module | ~100–400 |
-| Named refset | QOF AF register | QOF module | ~100–400 |
-| Named refset | QOF Asthma / COPD register | QOF module | ~100–400 |
-| Named refset | QOF Cancer register | QOF module | ~100–400 |
-| Named refset | QOF Mental Health / Depression register | QOF module | ~100–400 |
-| Named refset | QOF Dementia register | QOF module | ~100–400 |
-| Named refset | QOF Stroke / TIA register | QOF module | ~100–400 |
-| Named refset | Specialty procedure refsets | UK Clinical | TBD |
-| Hierarchy | Common body sites | SNOMED descendants | ~500 |
-| Hierarchy | Administration methods | SNOMED descendants | ~50 |
+| Type         | Dataset Name                            | Source             | Approx Size |
+| ------------ | --------------------------------------- | ------------------ | ----------- |
+| Named refset | UK Ethnic Categories                    | UK Monolith        | ~30         |
+| Named refset | QOF Epilepsy — drug list                | QOF module         | ~40         |
+| Named refset | QOF Diabetes — drug list                | QOF module         | ~60         |
+| Named refset | QOF Atrial Fibrillation — drug list     | QOF module         | ~20         |
+| Named refset | QOF COPD / Asthma — drug list           | QOF module         | ~50         |
+| Named refset | Allergy/intolerance substances          | UK Clinical        | ~300        |
+| Named refset | dm+d VTM (all drug substances)          | dm+d               | ~1,000      |
+| Named refset | dm+d VMP (all medicinal products)       | dm+d               | ~20,000+ ⚠️ |
+| Hierarchy    | GLP-1 agonists                          | dm+d descendants   | ~15         |
+| Hierarchy    | SGLT2 inhibitors                        | dm+d descendants   | ~10         |
+| Hierarchy    | All insulins                            | dm+d descendants   | ~50         |
+| Named refset | QOF Diabetes register (conditions)      | QOF module         | ~100–400    |
+| Named refset | QOF Epilepsy register (conditions)      | QOF module         | ~100–400    |
+| Named refset | QOF Hypertension register               | QOF module         | ~100–400    |
+| Named refset | QOF CHD / Heart Failure register        | QOF module         | ~100–400    |
+| Named refset | QOF AF register                         | QOF module         | ~100–400    |
+| Named refset | QOF Asthma / COPD register              | QOF module         | ~100–400    |
+| Named refset | QOF Cancer register                     | QOF module         | ~100–400    |
+| Named refset | QOF Mental Health / Depression register | QOF module         | ~100–400    |
+| Named refset | QOF Dementia register                   | QOF module         | ~100–400    |
+| Named refset | QOF Stroke / TIA register               | QOF module         | ~100–400    |
+| Named refset | Specialty procedure refsets             | UK Clinical        | TBD         |
+| Hierarchy    | Common body sites                       | SNOMED descendants | ~500        |
+| Hierarchy    | Administration methods                  | SNOMED descendants | ~50         |
 
 > ⚠️ dm+d VMP is typeahead-only. The UI enforces this based on `snomed_member_count > 2000`.
 
@@ -243,22 +246,24 @@ To be confirmed against a live `snomed.db` — the names below are indicative. A
 The three-tier approach (named refsets → hierarchy descendants → ECL) applies equally to conditions/disease states and procedures. The key differences from drugs:
 
 **Conditions:**
-- QOF condition *registers* define which SNOMED codes count as a diagnosis for QOF purposes — these are the most clinically validated, constrained lists available and sit at ~100–400 concepts each (searchable select territory)
+
+- QOF condition _registers_ define which SNOMED codes count as a diagnosis for QOF purposes — these are the most clinically validated, constrained lists available and sit at ~100–400 concepts each (searchable select territory)
 - Specialty-scoped hierarchy descendants work for typeahead (all diabetic disorders, all epilepsies, all cancers), but the full clinical finding hierarchy is ~400k concepts — never used unscoped
 - ICD-10 mapping is present in the UK Monolith (`snomed_query_type = "mapped"`) — useful for surveys that need to align with HES/hospital coding
 
 **Procedures:**
+
 - **OPCS-4** is the NHS standard for procedure coding in secondary care (theatre records, HES). The UK Monolith contains a SNOMED-OPCS-4 map. For surveys used in secondary care audit, OPCS-4 procedure codes will often be more recognisable to users than raw SNOMED procedure concepts — worth exposing via `snomed_query_type = "mapped"`
 - Specialty procedure refsets exist in the UK Clinical module (to be confirmed against live `snomed.db`)
 - Full procedure hierarchy is ~80k concepts — typeahead only when unscoped
 
 **Size profile comparison:**
 
-| Category | QOF register | Specialty scoped | Full hierarchy |
-|---|---|---|---|
-| Drugs | ~20–60 | ~100–500 | ~20,000+ (VMP) |
-| Conditions | ~100–400 | ~500–2,000 | ~400,000+ |
-| Procedures | ~50–200 | ~1,000–5,000 | ~80,000+ |
+| Category   | QOF register | Specialty scoped | Full hierarchy |
+| ---------- | ------------ | ---------------- | -------------- |
+| Drugs      | ~20–60       | ~100–500         | ~20,000+ (VMP) |
+| Conditions | ~100–400     | ~500–2,000       | ~400,000+      |
+| Procedures | ~50–200      | ~1,000–5,000     | ~80,000+       |
 
 The size thresholds (< 500 → dropdown, 500–2,000 → searchable select, > 2,000 → typeahead) apply uniformly across all three domains.
 
@@ -488,11 +493,11 @@ The web service currently runs on `nf-compute-50` (0.5 vCPU / 1024 MB RAM / 1024
 
 **The build process is the constraint.** `sct trud download --pipeline` produces intermediate files before the final `snomed.db` exists:
 
-| Step | Artifact | Approximate Size |
-|---|---|---|
-| Download RF2 zip | temp download | ~1.5 GB |
-| `sct ndjson` | `.ndjson` intermediate | ~1 GB+ |
-| `sct sqlite` | final `snomed.db` | ~500 MB–1 GB |
+| Step             | Artifact               | Approximate Size |
+| ---------------- | ---------------------- | ---------------- |
+| Download RF2 zip | temp download          | ~1.5 GB          |
+| `sct ndjson`     | `.ndjson` intermediate | ~1 GB+           |
+| `sct sqlite`     | final `snomed.db`      | ~500 MB–1 GB     |
 
 Peak disk usage during the build is approximately **3.5 GB** (all three files simultaneously). This exceeds the container's 1024 MB ephemeral storage. **The build process must be directed to write all intermediate and output files to the mounted volume**, not to the container's working directory:
 
@@ -512,9 +517,9 @@ The `update_snomed_db` management command must pass these flags. With the 10 GB 
 
 The cron job does the heavy lifting (download + build, ~2 minutes). The web service just reads. Give them **different compute specs**:
 
-| Service | Recommended Spec | Reason |
-|---|---|---|
-| Web service | `nf-compute-50` (current) | Read-only SQLite queries; lightweight |
+| Service                            | Recommended Spec                     | Reason                                               |
+| ---------------------------------- | ------------------------------------ | ---------------------------------------------------- |
+| Web service                        | `nf-compute-50` (current)            | Read-only SQLite queries; lightweight                |
 | `checktick-snomed-update` cron job | `nf-compute-200` (2 vCPU / 4 GB RAM) | Download + build needs headroom; runs at most weekly |
 
 The cron job's higher spec only costs money when it's actually running — Northflank bills by the second for job services, so a 2-minute build on `nf-compute-200` is negligible.
@@ -553,10 +558,12 @@ You need a new dedicated volume. Northflank's minimum volume size is **10 GB** �
    - Set compute spec to `nf-compute-200` for the build headroom
 
 4. **Add environment variables to both services:**
+
    ```
    SNOMED_DB_PATH=/app/data/snomed.db
    TRUD_API_KEY=<your-trud-api-key>
    ```
+
    > `TRUD_API_KEY` is only strictly needed by the cron job, but having it on both is harmless and simplifies env management.
 
 5. **Install `sct` in the Docker image** (see [Docker Image Changes](#docker-image-changes) below).
@@ -589,11 +596,11 @@ The `sct` binary is only invoked by the management command (not at request time)
 
 ### Cron Job Summary for Northflank
 
-| Service | Schedule | Command | Volume | Purpose |
-|---|---|---|---|---|
-| `checktick-snomed-update` | `0 6 * * 1` | `python manage.py update_snomed_db` | `snomed-data` → `/app/data` | Check TRUD, rebuild `snomed.db` if new release |
-| `checktick-nhs-dd-sync` | `0 5 * * 0` | `python manage.py sync_nhs_dd_datasets` | — | Existing NHS DD scrape |
-| `checktick-dataset-sync` | `0 4 * * *` | `python manage.py sync_external_datasets` | — | Existing RCPCH API sync |
+| Service                   | Schedule    | Command                                   | Volume                      | Purpose                                        |
+| ------------------------- | ----------- | ----------------------------------------- | --------------------------- | ---------------------------------------------- |
+| `checktick-snomed-update` | `0 6 * * 1` | `python manage.py update_snomed_db`       | `snomed-data` → `/app/data` | Check TRUD, rebuild `snomed.db` if new release |
+| `checktick-nhs-dd-sync`   | `0 5 * * 0` | `python manage.py sync_nhs_dd_datasets`   | —                           | Existing NHS DD scrape                         |
+| `checktick-dataset-sync`  | `0 4 * * *` | `python manage.py sync_external_datasets` | —                           | Existing RCPCH API sync                        |
 
 See [Self-hosting Scheduled Tasks](self-hosting-scheduled-tasks.md) for the general cron job setup guide.
 
@@ -641,6 +648,7 @@ If `snomed.db` is not present:
 ### What This Is
 
 Users building clinical surveys sometimes need a **hand-picked subset of SNOMED concepts** specific to their service — e.g. "the 15 diagnosis codes used in our paediatric diabetes MDT". This is different from:
+
 - A CheckTick-curated refset (top-down, maintained by the platform)
 - A plain custom dataset (not SNOMED-backed, no SCTIDs)
 
@@ -661,6 +669,7 @@ A SNOMED codelist is a user-authored list of SCTIDs with a name and description,
 `sct` does not currently have a `codelist` subcommand. If it gains one (a feature worth requesting from the maintainer), it could support defining a codelist as a flat file of SCTIDs and then querying, expanding, or validating it against `snomed.db`. CheckTick could import such files directly, which would be a clean integration for technically-inclined users.
 
 A potential workflow:
+
 ```
 # User defines a codelist externally (e.g. using sct or OpenCodelists)
 # and uploads the SCTID list to CheckTick

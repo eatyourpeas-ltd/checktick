@@ -8727,6 +8727,8 @@ def dataset_list(request: HttpRequest) -> HttpResponse:
     """List all datasets available to the user (global + their org datasets)."""
     from django.core.paginator import Paginator
 
+    from .snomed_resolver import SnomedUnavailableError, _get_db_path
+
     user = request.user
 
     # Get organizations where user is a member
@@ -8742,6 +8744,18 @@ def dataset_list(request: HttpRequest) -> HttpResponse:
         )
         .select_related("organization", "created_by", "parent")
         .distinct()
+    )
+
+    # Detect SNOMED availability once for the whole page
+    snomed_available = True
+    try:
+        _get_db_path()
+    except SnomedUnavailableError:
+        snomed_available = False
+
+    # Show a banner only when SNOMED datasets exist but snomed.db is absent
+    snomed_unavailable_warning = (
+        not snomed_available and base_datasets.filter(category="snomed").exists()
     )
 
     # Get all unique tags from base datasets (before filtering) for facets
@@ -8796,6 +8810,8 @@ def dataset_list(request: HttpRequest) -> HttpResponse:
             "available_tags": available_tags,
             "selected_category": category_filter,
             "selected_tags": selected_tags,
+            "snomed_available": snomed_available,
+            "snomed_unavailable_warning": snomed_unavailable_warning,
         },
     )
 
@@ -8803,6 +8819,14 @@ def dataset_list(request: HttpRequest) -> HttpResponse:
 @login_required
 def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
     """View details of a specific dataset."""
+    import logging
+
+    from .snomed_resolver import (
+        SnomedUnavailableError,
+        get_options as snomed_get_options,
+    )
+
+    logger_detail = logging.getLogger(__name__)
     user = request.user
 
     # Get user's organizations
@@ -8827,6 +8851,42 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
         "survey", "group"
     )
 
+    # Handle SNOMED CT datasets: fetch live options from snomed.db
+    snomed_options: list[tuple[str, str]] | None = None
+    snomed_total_count: int | None = None
+    snomed_capped = False
+    snomed_unavailable = False
+    snomed_error: str | None = None
+    SNOMED_DISPLAY_LIMIT = 500
+
+    if dataset.category == "snomed":
+        try:
+            raw_options = snomed_get_options(dataset)
+            snomed_total_count = len(raw_options)
+            if snomed_total_count > SNOMED_DISPLAY_LIMIT:
+                raw_options = raw_options[:SNOMED_DISPLAY_LIMIT]
+                snomed_capped = True
+            # Parse "SCTID | Preferred term" strings into (sctid, term) tuples
+            snomed_options = []
+            for entry in raw_options:
+                if " | " in entry:
+                    sctid, term = entry.split(" | ", 1)
+                    snomed_options.append((sctid.strip(), term.strip()))
+                else:
+                    snomed_options.append((entry, entry))
+        except SnomedUnavailableError as exc:
+            snomed_unavailable = True
+            snomed_error = str(exc)
+            logger_detail.warning(
+                "SNOMED CT unavailable for dataset '%s': %s", dataset.key, exc
+            )
+        except (ValueError, NotImplementedError) as exc:
+            snomed_unavailable = True
+            snomed_error = str(exc)
+            logger_detail.error(
+                "SNOMED options error for dataset '%s': %s", dataset.key, exc
+            )
+
     return render(
         request,
         "surveys/dataset_detail.html",
@@ -8834,6 +8894,11 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
             "dataset": dataset,
             "can_edit": user_can_edit,
             "questions_using": questions_using,
+            "snomed_options": snomed_options,
+            "snomed_total_count": snomed_total_count,
+            "snomed_capped": snomed_capped,
+            "snomed_unavailable": snomed_unavailable,
+            "snomed_error": snomed_error,
         },
     )
 
@@ -9248,6 +9313,129 @@ def dataset_delete(request: HttpRequest, dataset_id: int) -> HttpResponse:
 
     messages.success(request, f"Dataset '{dataset.name}' deleted successfully")
     return redirect("surveys:dataset_list")
+
+
+@login_required
+@require_http_methods(["GET"])
+def snomed_search(request: HttpRequest) -> JsonResponse:
+    """
+    Typeahead search across all active SNOMED CT concepts.
+
+    Used for datasets with snomed_member_count > 2000 where a plain dropdown
+    is unsuitable. Returns JSON suitable for a select2 / combobox widget.
+
+    GET /surveys/datasets/snomed/search/?q=<query>[&limit=<n>]
+
+    Response:
+        {"results": [{"id": "SCTID", "text": "Preferred term"}, ...]}
+    """
+    from .snomed_resolver import SnomedUnavailableError, search as snomed_search_fn
+
+    query = request.GET.get("q", "").strip()
+    try:
+        limit = min(int(request.GET.get("limit", 50)), 200)
+    except (TypeError, ValueError):
+        limit = 50
+
+    if len(query) < 2:
+        return JsonResponse({"results": []})
+
+    try:
+        raw = snomed_search_fn(query, limit=limit)
+    except SnomedUnavailableError as exc:
+        return JsonResponse({"error": str(exc), "results": []}, status=503)
+
+    results = []
+    for entry in raw:
+        if " | " in entry:
+            sctid, term = entry.split(" | ", 1)
+            results.append({"id": sctid.strip(), "text": term.strip()})
+        else:
+            results.append({"id": entry, "text": entry})
+
+    return JsonResponse({"results": results})
+
+
+@login_required
+@require_http_methods(["POST"])
+def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpResponse:
+    """
+    Snapshot a SNOMED CT dataset into a Postgres-backed user_created dataset.
+
+    Creates a new DataSet with category='user_created', source_type='manual',
+    and options populated from the live snomed.db at the time of the request.
+    The snapshot is linked as a child of the original SNOMED dataset via parent.
+    """
+    import uuid
+
+    from .snomed_resolver import (
+        SnomedUnavailableError,
+        get_options as snomed_get_options,
+    )
+
+    user = request.user
+    user_orgs = Organization.objects.filter(memberships__user=user)
+
+    dataset = get_object_or_404(
+        DataSet.objects.filter(
+            Q(is_global=True)
+            | Q(organization__in=user_orgs)
+            | Q(created_by=user, organization__isnull=True),
+            is_active=True,
+            category="snomed",
+        ),
+        id=dataset_id,
+    )
+
+    try:
+        raw_options = snomed_get_options(dataset)
+    except SnomedUnavailableError as exc:
+        messages.error(
+            request,
+            f"Cannot snapshot — SNOMED CT database is unavailable: {exc}",
+        )
+        return redirect("surveys:dataset_detail", dataset_id=dataset_id)
+    except (ValueError, NotImplementedError) as exc:
+        messages.error(request, f"Cannot snapshot — {exc}")
+        return redirect("surveys:dataset_detail", dataset_id=dataset_id)
+
+    # Convert list of "SCTID | Term" strings to {sctid: term} dict
+    options_dict: dict[str, str] = {}
+    for entry in raw_options:
+        if " | " in entry:
+            sctid, term = entry.split(" | ", 1)
+            options_dict[sctid.strip()] = term.strip()
+        else:
+            options_dict[entry] = entry
+
+    # Determine organisation for the snapshot (prefer user's first org, else personal)
+    org = user_orgs.first()
+
+    snapshot_key = f"snomed_snapshot_{dataset.key}_{uuid.uuid4().hex[:8]}"
+    snapshot = DataSet.objects.create(
+        key=snapshot_key,
+        name=f"{dataset.name} (snapshot)",
+        description=(
+            f"Snapshot of SNOMED CT dataset '{dataset.name}' "
+            f"taken on {dataset.snomed_release_date or 'unknown release date'}. "
+            "Options are frozen at snapshot time."
+        ),
+        category="user_created",
+        source_type="manual",
+        options=options_dict,
+        tags=dataset.tags or [],
+        parent=dataset,
+        organization=org,
+        created_by=user,
+        is_global=False,
+        is_active=True,
+    )
+
+    messages.success(
+        request,
+        f"Snapshot created: '{snapshot.name}' with {len(options_dict)} concepts.",
+    )
+    return redirect("surveys:dataset_detail", dataset_id=snapshot.id)
 
 
 # Published Question Group Templates
