@@ -10,10 +10,10 @@ When creating surveys, you often need validated dropdown lists of options. Check
 
 Instead of manually typing options for every dropdown question, datasets let you:
 
-- **Use standardized lists** from NHS Data Dictionary and RCPCH APIs
+- **Use standardised lists** from NHS Data Dictionary and RCPCH APIs
 - **Ensure consistency** across multiple surveys
 - **Save time** by reusing options
-- **Customize global lists** to fit your organisation's specific needs
+- **Customise global lists** to fit your organisation's specific needs
 - **Share your lists** with the entire CheckTick community
 
 ## Types of Datasets
@@ -22,9 +22,28 @@ Instead of manually typing options for every dropdown question, datasets let you
 
 These are available to all CheckTick users:
 
-- **NHS Data Dictionary**: 40+ standardized medical codes (specialties, ethnicities, smoking status, etc.)
+- **NHS Data Dictionary**: 40+ standardised medical codes (specialties, ethnicities, smoking status, etc.)
 - **RCPCH Organisations**: Hospitals, NHS Trusts, Health Boards, Diabetes Units
+- **SNOMED CT Refsets**: Expert-curated clinical terminology lists (QOF drug lists, paediatric condition sets, and more)
 - **Administrative**: UK counties, London boroughs, NHS regions
+
+### SNOMED CT Datasets
+
+CheckTick integrates with SNOMED CT — the NHS standard clinical terminology — to provide expert-curated reference sets (refsets) as dropdown options. Unlike the full SNOMED drug dictionary or anatomy hierarchy, CheckTick only surfaces **validated refsets**: curated subsets assembled by clinical experts for a specific purpose.
+
+Examples of supported refsets:
+
+- QOF Antiepileptic Drug List
+- QOF Diabetic Drug List
+- QOF Asthma / COPD Drug List
+- Paediatric Neurology & Neurodisability Disorders
+- Paediatric Respiratory Conditions
+- Paediatric Endocrine & Metabolic Conditions
+- And more — see [SNOMED CT Integration](/docs/snomed-integration/) for the full list
+
+SNOMED options are always fetched live from a local `snomed.db` database (the NHS TRUD UK Monolith Edition). When a respondent selects a SNOMED option, the stored value is the **SCTID** — a stable, unambiguous identifier that does not change when terminology is updated. The human-readable preferred term is recovered at any time from `snomed.db`.
+
+> **Self-hosted instances**: SNOMED CT requires a separate setup step. See [SNOMED CT Integration](/docs/snomed-integration/) for installation instructions.
 
 ### Organisation Datasets
 
@@ -56,8 +75,9 @@ Use tags to quickly find relevant datasets:
 - `medical` - Clinical codes and classifications
 - `administrative` - Organisational and administrative data
 - `demographic` - Population and demographic information
-- `paediatric` - Pediatric-specific datasets
+- `paediatric` - Paediatric-specific datasets
 - `NHS` - NHS-specific data
+- `snomed` - SNOMED CT refsets
 
 ### Filter by Source
 
@@ -65,6 +85,7 @@ Filter by where the data comes from:
 
 - `nhs_dd` - NHS Data Dictionary datasets
 - `rcpch` - Royal College of Paediatrics data
+- `snomed` - SNOMED CT expert-curated refsets
 - `user_created` - Community-created datasets
 
 ### Search
@@ -98,7 +119,7 @@ Use the search box to find datasets by name or description.
 
 ### Customizing a Global Dataset
 
-If a global dataset is *almost* what you need but requires modifications:
+If a global dataset is _almost_ what you need but requires modifications:
 
 1. Find the global dataset
 2. Click **"Create Custom Version"**
