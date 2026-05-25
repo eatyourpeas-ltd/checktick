@@ -3,7 +3,7 @@
 **Total Strings:** 320 unique English strings
 **Last Updated:** January 2025
 
-This document contains every string that needs translation in the CheckTick application, organized by category. Use this as a reference when creating translations for any language.
+This document contains every string that needs translation in the CheckTick application, organised by category. Use this as a reference when creating translations for any language.
 
 ---
 

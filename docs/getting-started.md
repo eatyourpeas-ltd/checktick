@@ -90,7 +90,7 @@ A team account for groups, organisations, or institutions.
 - Everything in Individual accounts, plus:
 - **Team collaboration**: Multiple users with different roles
 - **Organisation-level encryption**: Centralized data protection
-- **Shared survey groups**: Organize surveys by project/department
+- **Shared survey groups**: organise surveys by project/department
 - **User management**: Assign owners, editors, viewers, data custodians
 - **Centralized audit logs**: Track all team activity
 - **Group ownership**: Surveys can be owned by organisation
@@ -162,7 +162,7 @@ Yes, you can convert an individual account to an organisation account. Your exis
      - Help text
      - Conditional logic (show if...)
 
-4. Organize questions:
+4. organise questions:
    - Drag and drop to reorder
    - Group related questions into sections
    - Add page breaks for multi-page surveys

@@ -50,7 +50,7 @@ python manage.py sync_external_datasets
 
 The `sync_nhs_dd_datasets` management command runs weekly to:
 
-1. **Scrape standardized lists** - Fetches codes and values from NHS Data Dictionary website
+1. **Scrape standardised lists** - Fetches codes and values from NHS Data Dictionary website
 2. **Update existing datasets** - Keeps NHS DD datasets current with official sources
 3. **Maintain accuracy** - Ensures dropdown options match authoritative NHS standards
 

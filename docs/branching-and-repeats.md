@@ -94,7 +94,7 @@ The Survey Map uses a git-graph style to display your survey with square connect
 - **Hover** over questions to see the full question text
 - **Hover** over branch lines to see the full condition details
 
-Questions are organized into their groups, making it easy to see which questions belong together and how they flow.
+Questions are organised into their groups, making it easy to see which questions belong together and how they flow.
 
 ## Repeating Questions
 
@@ -107,7 +107,7 @@ Repeating questions allow users to answer the same set of questions multiple tim
 
 ### How It Works
 
-Questions are organized into **groups**. Any group can be marked as repeating, allowing users to add as many instances as they need (or up to a maximum limit you set).
+Questions are organised into **groups**. Any group can be marked as repeating, allowing users to add as many instances as they need (or up to a maximum limit you set).
 
 For example, a "Medications" group might contain:
 - Medication name

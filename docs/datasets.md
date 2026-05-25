@@ -219,7 +219,7 @@ Consider publishing when you've created a dataset that:
 
 ## Tags and Discovery
 
-Tags help organize and find datasets quickly.
+Tags help organise and find datasets quickly.
 
 ### Common Tag Categories
 

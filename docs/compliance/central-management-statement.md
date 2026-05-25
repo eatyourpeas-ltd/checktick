@@ -9,7 +9,7 @@ category: dspt-9-it-protection
 
 {{ platform_name }} employs a "Policy-as-Management" approach for its endpoint devices (macOS laptops). Due to the small team size, a dedicated MDM (Mobile Device Management) server is not currently deployed. Instead, central control is achieved through:
 
-* **Standardized Build Specs:** A central master document that dictates all security settings.
+* **standardised Build Specs:** A central master document that dictates all security settings.
 * **Administrative Separation:** Staff use standard accounts; the "Admin" keys are held centrally in the corporate password manager.
 
 ## 2. Remote Wipe & Access Control

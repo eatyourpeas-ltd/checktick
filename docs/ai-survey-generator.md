@@ -136,7 +136,7 @@ The AI understands and can generate:
 - **Conditional branching** - Questions that show based on answers
 - **Repeatable collections** - For multiple entries (visits, patients, etc.)
 - **Nested repeat groups** - Up to one level of nesting
-- **Validated scales** - PHQ-9, GAD-7, and other standardized instruments
+- **Validated scales** - PHQ-9, GAD-7, and other standardised instruments
 
 ### Healthcare Best Practices
 

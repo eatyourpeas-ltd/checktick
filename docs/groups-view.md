@@ -4,13 +4,13 @@ category: features
 priority: 6
 ---
 
-Question groups are containers that organize related questions together in your surveys. They help structure your questionnaires logically (e.g., "Demographics", "Medical History", "PHQ-9 Depression Screening") and enable powerful features like repeating sections and template sharing.
+Question groups are containers that organise related questions together in your surveys. They help structure your questionnaires logically (e.g., "Demographics", "Medical History", "PHQ-9 Depression Screening") and enable powerful features like repeating sections and template sharing.
 
 ## What are Question Groups?
 
 A question group is a named collection of questions that:
 
-- **Organizes questions logically** - Group related questions together for easier management
+- **organises questions logically** - Group related questions together for easier management
 - **Enables repeating sections** - Create "collections" that participants can fill out multiple times (e.g., "Add another medication", "Add family member")
 - **Can be published and shared** - Publish validated questionnaires as reusable templates for your organisation or the entire CheckTick community
 - **Maintains question order** - Questions within a group stay together and maintain their sequence

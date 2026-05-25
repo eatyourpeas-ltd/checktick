@@ -108,7 +108,7 @@ Store downloaded data:
 
 ### File Organisation
 
-Organize files securely:
+organise files securely:
 
 **Folder Structure:**
 ```text

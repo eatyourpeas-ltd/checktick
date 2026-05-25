@@ -10,7 +10,7 @@ This guide covers the setup and maintenance of datasets for self-hosted CheckTic
 
 CheckTick provides four types of datasets for dropdown questions:
 
-1. **NHS Data Dictionary** - Standardized medical codes (scraped from NHS DD website)
+1. **NHS Data Dictionary** - standardised medical codes (scraped from NHS DD website)
 2. **RCPCH NHS Organisations** - Organisational data (synced from RCPCH API)
 3. **SNOMED CT** - Live clinical terminology served from a local snomed.db (optional — requires TRUD API key)
 4. **User-Created** - Custom lists created by organisations
@@ -37,7 +37,7 @@ This creates 48 NHS DD datasets including:
 - Ethnic Category (17 options)
 - Smoking Status Code (6 options)
 - Clinical Frailty Scale (9 options)
-- Plus 40+ additional standardized lists
+- Plus 40+ additional standardised lists
 
 See the [NHS DD Dataset Reference](nhs-data-dictionary-datasets.md) for the complete list.
 
@@ -88,7 +88,7 @@ See [SNOMED CT Integration](snomed-integration.md) for the full architecture and
 
 CheckTick uses **three automated cron jobs** to keep datasets up-to-date:
 
-1. **NHS Data Dictionary Scraping** - Scrapes NHS DD website for standardized codes
+1. **NHS Data Dictionary Scraping** - Scrapes NHS DD website for standardised codes
 2. **External API Sync** - Syncs organisational data from RCPCH API
 3. **SNOMED CT Update** *(optional)* - Checks TRUD for new releases and rebuilds snomed.db
 

@@ -30,5 +30,5 @@ To ensure data is not corrupted during processing or storage:
 As part of our **Bi-Annual Spot Checks**, the SIRO and CTO perform:
 
 1. **Schema Review:** Ensuring field lengths and types are still appropriate for the data being collected.
-2. **Review of "Other" Fields:** Analyzing free-text 'Other' inputs to see if new standardized categories should be added to improve future data quality.
+2. **Review of "Other" Fields:** Analyzing free-text 'Other' inputs to see if new standardised categories should be added to improve future data quality.
 3. **Accuracy Check:** Comparing a sample of raw database entries against the exported UI view to ensure zero transformation errors.

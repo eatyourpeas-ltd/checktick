@@ -751,7 +751,7 @@ CheckTick uses **five scheduled tasks**:
 1. **Data Governance** (GDPR Required) - Daily deletion warnings and automatic survey cleanup
 2. **Survey Progress Cleanup** (Recommended) - Remove expired incomplete survey sessions
 3. **External Dataset Sync** (Recommended) - Update hospital lists and organisational data
-4. **NHS Data Dictionary Sync** (Recommended) - Scrape standardized NHS codes and values
+4. **NHS Data Dictionary Sync** (Recommended) - Scrape standardised NHS codes and values
 5. **Global Question Group Templates Sync** (Optional) - Import reusable question templates
 
 ### Quick Setup

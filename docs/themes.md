@@ -410,7 +410,7 @@ We map these to daisyUI runtime variables (e.g., `--p`, `--b1`, etc.) and inject
 
 ## Rendering forms with daisyUI
 
-We ship a filter and partials to standardize Django form rendering.
+We ship a filter and partials to standardise Django form rendering.
 
 ### Template filter: `add_classes`
 

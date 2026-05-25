@@ -76,7 +76,7 @@ When you import a template:
 ### Important notes
 
 - **Complete groups**: Templates import as complete question groups. Validated instruments (like PHQ-9, GAD-7) should be used in their entirety for clinical validity.
-- **Editable after import**: You can modify questions after import, but be aware this may affect the validity of standardized instruments.
+- **Editable after import**: You can modify questions after import, but be aware this may affect the validity of standardised instruments.
 - **Attribution preserved**: If the template has attribution (authors, citations, licenses), this information is preserved with the imported question group.
 - **No republishing**: You cannot republish question groups that were imported from templates. This protects copyright and prevents circular attribution issues.
 
