@@ -281,6 +281,7 @@ Survey creators sometimes need a hand-picked subset of SNOMED concepts specific 
 A user codelist would be stored as a `DataSet` with `category="snomed"` and `source_type="user_codelist"`. Options would be snapshotted as `{sctid: preferred_term}` in Postgres at creation time (not live from `snomed.db`), since a frozen copy is appropriate for user-authored lists.
 
 Prerequisites before implementation:
+
 - An FTS5 typeahead UI for searching the full 831k-concept vocabulary (the open concept search endpoint already exists)
 - A policy decision on clinical safety guardrails (e.g. active-only concepts, hierarchy constraints)
 - Governance model for sharing codelists within or across organisations
@@ -306,4 +307,236 @@ The architecture is designed to extend. If `sct` gains support for additional te
 - [Self-hosting Scheduled Tasks](self-hosting-scheduled-tasks.md) — cron job setup for `update_snomed_db`
 - [`sct` project](https://github.com/pacharanero/sct) — the Rust binary that generates `snomed.db`
 - [NHS TRUD](https://isd.digital.nhs.uk/trud) — source of SNOMED CT releases
+
+---
+
+## Roadmap: Unified Dataset Creation Assistant
+
+This roadmap describes a user-friendly flow where users ask for a list in plain
+language, the system checks existing datasets first, and only creates a new
+SNOMED-driven list when needed. The UI should hide ECL by default.
+
+### Product goals
+
+- Single entry point for dataset creation to reduce confusion between NHS DD and SNOMED
+- Deterministic source routing: NHS DD first, SNOMED second, never mixed in one dataset
+- Fast path for users with known concept IDs
+- LLM used as a constrained planner, not as the final source of truth
+- Full provenance and audit trail for generated lists
+
+### Scope in two features
+
+1. Create lists from SNOMED CT concept IDs
+2. Create lists from natural language via LLM with ECL under the hood, integrated with duplicate checks against NHS DD first
+
+---
+
+## Phase plan
+
+### Phase 1: Source-aware assistant shell
+
+Steps:
+
+- Add one "Describe the list you need" entry point in dataset creation UI
+- Implement retrieval-first routing service:
+  - Search NHS DD datasets first
+  - If no strong match, search SNOMED curated/hosted datasets
+  - If no suitable match, offer "Create new draft"
+- Return source decision and confidence explanation in plain language
+
+Suggested snippet (routing result contract):
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+
+@dataclass
+class DatasetSuggestion:
+    source: Literal["nhs_dd", "snomed", "new_snomed_draft"]
+    reason: str
+    dataset_key: str | None
+    confidence: float
+```
+
+### Phase 2: SNOMED concept ID fast path
+
+Steps:
+
+- Add "Paste concept IDs" mode in the same assistant
+- Validate IDs against `snomed.db` and resolve preferred terms
+- Save as user-owned draft dataset with frozen options (`{sctid: term}`)
+- Record SNOMED release metadata at creation time
+
+Suggested snippet (ID validation service):
+
+```python
+def resolve_snomed_ids(ids: list[str]) -> dict[str, str]:
+    """Return validated {sctid: preferred_term}; raise on invalid IDs."""
+    # Query concepts table for active concepts only.
+    # Reject unknown/inactive IDs with actionable error details.
+    ...
+```
+
+### Phase 3: Natural language to SNOMED draft (ECL hidden)
+
+Steps:
+
+- Add LLM planning endpoint that outputs structured proposal JSON
+- Proposal includes:
+  - candidate ECL (internal)
+  - plain-language inclusion/exclusion rationale
+  - assumptions and ambiguity notes
+- Execute proposal deterministically against `snomed.db`
+- Show preview (count, sample concepts, source badge) before save
+- Save as draft only; require explicit user confirmation to publish/share
+
+Suggested snippet (LLM proposal schema):
+
+```python
+class SnomedDraftProposal(TypedDict):
+    user_intent: str
+    candidate_ecl: str
+    include_notes: list[str]
+    exclude_notes: list[str]
+    assumptions: list[str]
+```
+
+### Phase 4: Governance and drift management
+
+Steps:
+
+- Add review statuses: draft, review, published
+- Enforce reviewer confirmation before published status
+- Add "revalidate against current SNOMED release" operation
+- Add drift report for inactive concepts and term changes
+
+---
+
+## Guardrails and non-negotiables
+
+- Do not mix NHS DD and SNOMED options within one dataset
+- Retrieval-first before any LLM generation
+- Active concepts only unless explicitly overridden by policy
+- Hard caps for generated list size and query execution time
+- Never expose raw internal exception messages in API responses
+- Persist provenance for each generated draft:
+  - prompt
+  - planner output
+  - final query/ECL
+  - SNOMED release date
+  - creator/reviewer
+
+---
+
+## Suggested implementation components
+
+- `DatasetIntentRouter` service:
+  - `suggest_existing(query: str) -> list[DatasetSuggestion]`
+  - deterministic scoring with source priority (`nhs_dd` > `snomed`)
+- `SnomedDraftBuilder` service:
+  - `from_concept_ids(ids: list[str])`
+  - `from_natural_language(prompt: str)`
+- `DatasetDraft` model fields (or equivalent metadata fields):
+  - `origin_source`, `creation_mode`, `snomed_release_date`, `provenance_blob`
+
+---
+
+## Test coverage plan
+
+### Unit tests
+
+- Router priority:
+  - NHS DD exact/strong match chosen over SNOMED alternatives
+  - SNOMED fallback only when NHS DD no-match or low confidence
+- Source isolation:
+  - creating datasets never mixes categories in options payload
+- SNOMED ID path:
+  - invalid/inactive IDs rejected
+  - valid IDs resolve to stable `{sctid: term}` mapping
+- LLM proposal validation:
+  - malformed proposal rejected before query execution
+  - empty/too-broad proposal handled with actionable feedback
+- Security behavior:
+  - no raw exception leakage in user/API error messages
+
+### Integration tests
+
+- End-to-end natural language flow:
+  - query -> suggestion -> preview -> draft saved
+- Duplicate prevention:
+  - existing NHS DD list suggested instead of new SNOMED draft
+- Review lifecycle:
+  - draft cannot be published without reviewer step
+- Drift check:
+  - revalidation reports inactive/changed terms when release updates
+
+### Performance tests
+
+- Latency budget for assistant query path (router + preview)
+- Large generated set handling (cap, pagination, and timeout behavior)
+
+---
+
+## Documentation plan
+
+Update and/or add documentation when implementing this roadmap:
+
+- Update `docs/datasets-and-dropdowns.md`
+  - explain unified assistant and source badges
+  - include concept ID fast path guidance
+- Update `docs/dataset-loading-architecture.md`
+  - include assistant routing and draft creation flow
+  - document provenance fields and source-selection rules
+- Update `docs/snomed-integration.md` (this document)
+  - move implemented roadmap items into main architecture sections
+- Add `docs/llm-dataset-assistant.md` (new)
+  - prompt contract, guardrails, fallback behavior, and known limitations
+- Add API docs in `docs/api.md`
+  - suggestion endpoint
+  - preview endpoint
+  - draft creation endpoint
+  - validation/error response examples
+
+---
+
+## Success criteria
+
+- Users can request lists in plain language without SNOMED/ECL expertise
+- Existing NHS DD datasets are reused whenever appropriate
+- SNOMED custom lists are reproducible, auditable, and reviewable
+- No category mixing and no sensitive error leakage
+- Draft-to-publish flow is clinically governable and test-backed
+
+---
+
+## Decision Log (Open)
+
+Use this section to track unresolved product and safety decisions during
+implementation. Keep each item updated with owner/date when a decision is made.
+
+| Topic | Decision needed | Suggested default | Status |
+| --- | --- | --- | --- |
+| NHS DD vs SNOMED routing threshold | What confidence score should trigger "use existing NHS DD" vs "create SNOMED draft"? | Prefer NHS DD when confidence >= 0.75 and no explicit override in user intent | Open |
+| Duplicate detection strictness | Should near-duplicate custom lists be blocked or warned? | Warn by default, block only when exact option-set match | Open |
+| Generated list size cap | Maximum concept count for draft generation and preview? | Cap at 2,000 for immediate preview, require refined query beyond cap | Open |
+| Publish permissions | Who can publish SNOMED drafts to shared/global scope? | Org admin or designated clinical reviewer only | Open |
+| Review signoff policy | Is one reviewer enough, or dual signoff for high-impact lists? | One reviewer for org-private lists, two for org-shared/global lists | Open |
+| SNOMED release pinning | Should draft creation always pin to current release date? | Yes, mandatory release pin + revalidation prompt on release change | Open |
+| LLM provider and fallback | Which hosted model(s), and what fallback behavior on timeout? | Primary hosted model + deterministic non-LLM fallback to retrieval suggestions only | Open |
+| Prompt/data retention | Should user prompts used for list generation be retained? | Retain minimal provenance for audit, redact sensitive free text where possible | Open |
+| User-visible rationale depth | How much explanation is shown to non-technical users? | Plain-language summary with expandable "details" panel | Open |
+| Internationalization | Which languages are supported in assistant prompts and explanations? | Start with English only, add i18n once workflow stabilizes | Open |
+
+### Decision record template
+
+When a row is decided, add a short note below using this template:
+
+```text
+- [YYYY-MM-DD] Topic: <topic>
+  Decision: <what was decided>
+  Owner: <name/role>
+  Rationale: <1-3 lines>
+  Follow-up: <tickets/docs/tests>
+```
 
