@@ -9436,8 +9436,11 @@ def snomed_search(request: HttpRequest) -> JsonResponse:
     Response:
         {"results": [{"id": "SCTID", "text": "Preferred term"}, ...]}
     """
-    from .snomed_resolver import SnomedUnavailableError, search as snomed_search_fn
-    from .snomed_resolver import parse_option_pairs
+    from .snomed_resolver import (
+        SnomedUnavailableError,
+        parse_option_pairs,
+        search as snomed_search_fn,
+    )
 
     query = request.GET.get("q", "").strip()
     try:
