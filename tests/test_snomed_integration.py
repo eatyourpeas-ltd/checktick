@@ -13,9 +13,12 @@ All tests are offline — no real snomed.db required.
 
 from io import StringIO
 import sqlite3
+from types import SimpleNamespace
 
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import override_settings
+from django.test import Client, override_settings
+from django.urls import reverse
 import pytest
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -285,6 +288,142 @@ def test_search_returns_empty_for_no_match(snomed_db):
         results = search("xyzzy_no_such_term")
 
     assert results == []
+
+
+# ── SNOMED option shaping in API/views ───────────────────────────────────────
+
+
+@pytest.mark.django_db
+def test_dataset_serializer_maps_snomed_options_to_dict(monkeypatch):
+    from checktick_app.api.views import DataSetSerializer
+    from checktick_app.surveys.models import DataSet
+
+    dataset = DataSet.objects.create(
+        key="snomed_serializer_ok",
+        name="SNOMED serializer test",
+        category="snomed",
+        source_type="snomed_db",
+        options=[],
+        snomed_query_type="refset",
+        snomed_refset_id="999TEST0001",
+    )
+
+    monkeypatch.setattr(
+        "checktick_app.surveys.snomed_resolver.get_options",
+        lambda _dataset: ["11111111 | Metformin", "22222222 | Insulin glargine"],
+    )
+
+    data = DataSetSerializer(dataset).data
+
+    assert data["options"] == {
+        "11111111": "Metformin",
+        "22222222": "Insulin glargine",
+    }
+    assert "snomed_unavailable" not in data
+
+
+@pytest.mark.django_db
+def test_dataset_serializer_marks_snomed_unavailable_on_error(monkeypatch):
+    from checktick_app.api.views import DataSetSerializer
+    from checktick_app.surveys.models import DataSet
+
+    dataset = DataSet.objects.create(
+        key="snomed_serializer_unavailable",
+        name="SNOMED serializer unavailable",
+        category="snomed",
+        source_type="snomed_db",
+        options=[],
+        snomed_query_type="refset",
+        snomed_refset_id="999TEST0001",
+    )
+
+    def _raise(_dataset):
+        raise RuntimeError("db unavailable")
+
+    monkeypatch.setattr("checktick_app.surveys.snomed_resolver.get_options", _raise)
+
+    data = DataSetSerializer(dataset).data
+
+    assert data["options"] == {}
+    assert data["snomed_unavailable"] is True
+
+
+@pytest.mark.django_db
+def test_inject_dataset_options_maps_snomed_for_rendering(monkeypatch):
+    from checktick_app.surveys.models import DataSet
+    from checktick_app.surveys.views import _inject_dataset_options
+
+    dataset = DataSet.objects.create(
+        key="snomed_inject_ok",
+        name="SNOMED inject",
+        category="snomed",
+        source_type="snomed_db",
+        options=[],
+        snomed_query_type="refset",
+        snomed_refset_id="999TEST0001",
+    )
+    question = SimpleNamespace(dataset=dataset, options=[])
+
+    monkeypatch.setattr(
+        "checktick_app.surveys.snomed_resolver.get_options",
+        lambda _dataset: ["11111111 | Metformin"],
+    )
+
+    _inject_dataset_options([question])
+
+    assert question.options == [{"value": "11111111", "label": "Metformin"}]
+    assert getattr(question, "snomed_unavailable") is False
+
+
+@pytest.mark.django_db
+def test_inject_dataset_options_sets_unavailable_when_snomed_missing(monkeypatch):
+    from checktick_app.surveys.models import DataSet
+    from checktick_app.surveys.snomed_resolver import SnomedUnavailableError
+    from checktick_app.surveys.views import _inject_dataset_options
+
+    dataset = DataSet.objects.create(
+        key="snomed_inject_unavailable",
+        name="SNOMED inject unavailable",
+        category="snomed",
+        source_type="snomed_db",
+        options=[],
+        snomed_query_type="refset",
+        snomed_refset_id="999TEST0001",
+    )
+    question = SimpleNamespace(dataset=dataset, options=[{"value": "x", "label": "x"}])
+
+    def _raise(_dataset):
+        raise SnomedUnavailableError("missing")
+
+    monkeypatch.setattr("checktick_app.surveys.snomed_resolver.get_options", _raise)
+
+    _inject_dataset_options([question])
+
+    assert question.options == []
+    assert getattr(question, "snomed_unavailable") is True
+
+
+@pytest.mark.django_db
+def test_snomed_search_returns_generic_error_without_exception_leak(monkeypatch):
+    from checktick_app.surveys.snomed_resolver import SnomedUnavailableError
+
+    User = get_user_model()
+    user = User.objects.create_user(username="snomed-user", password="pass12345")
+    client = Client()
+    client.force_login(user)
+
+    def _raise(_query, limit=50):
+        raise SnomedUnavailableError("SNOMED_DB_PATH=/secret/path")
+
+    monkeypatch.setattr("checktick_app.surveys.snomed_resolver.search", _raise)
+
+    response = client.get(reverse("surveys:snomed_search"), {"q": "metformin"})
+    payload = response.json()
+
+    assert response.status_code == 503
+    assert payload["results"] == []
+    assert payload["error"] == "SNOMED search is temporarily unavailable."
+    assert "secret/path" not in payload["error"]
 
 
 # ── seed_snomed_datasets command ──────────────────────────────────────────────

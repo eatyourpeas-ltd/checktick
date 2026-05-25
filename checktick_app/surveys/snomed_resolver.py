@@ -28,7 +28,7 @@ import logging
 import os
 import sqlite3
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
 from django.conf import settings
 
@@ -74,6 +74,37 @@ def _get_connection() -> sqlite3.Connection:
 
 def _format_option(sctid: str, term: str) -> str:
     return f"{sctid} | {term}"
+
+
+def parse_option_pairs(raw_options: Iterable[object]) -> list[tuple[str, str]]:
+    """Parse SNOMED option entries into (SCTID, preferred term) pairs.
+
+    Primary input format is the resolver's historical string shape:
+    ``"SCTID | Preferred term"``. Non-standard entries degrade gracefully by
+    coercing to string and using the same value for ID and label.
+    """
+    pairs: list[tuple[str, str]] = []
+    for entry in raw_options:
+        if isinstance(entry, str) and " | " in entry:
+            sctid, term = entry.split(" | ", 1)
+            pairs.append((sctid.strip(), term.strip()))
+        else:
+            text = str(entry).strip()
+            pairs.append((text, text))
+    return pairs
+
+
+def options_as_dict(raw_options: Iterable[object]) -> dict[str, str]:
+    """Return SNOMED options as ``{sctid: preferred_term}`` mapping."""
+    return {sctid: term for sctid, term in parse_option_pairs(raw_options)}
+
+
+def options_as_value_label(raw_options: Iterable[object]) -> list[dict[str, str]]:
+    """Return SNOMED options as ``[{"value": sctid, "label": term}, ...]``."""
+    return [
+        {"value": sctid, "label": term}
+        for sctid, term in parse_option_pairs(raw_options)
+    ]
 
 
 def get_options(dataset: "DataSet") -> list[str]:

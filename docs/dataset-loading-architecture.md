@@ -151,13 +151,12 @@ when the category is `snomed`:
 
 ```python
 if obj.category == "snomed":
-    representation["options"] = resolve_snomed_options_as_dict(obj)
+    representation["options"] = options_as_dict(snomed_get_options(obj))
 ```
 
-`resolve_snomed_options_as_dict` returns `{"sctid": "preferred_term", …}` for
-consistency with the dict format used by other categories. If `snomed.db` is
-unavailable the serializer returns `{}` with an additional `snomed_unavailable:
-true` flag.
+`options_as_dict` returns `{"sctid": "preferred_term", …}` for consistency
+with the dict format used by other categories. If `snomed.db` is unavailable
+the serializer returns `{}` with an additional `snomed_unavailable: true` flag.
 
 ---
 

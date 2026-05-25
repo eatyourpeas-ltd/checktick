@@ -1512,7 +1512,10 @@ def _inject_dataset_options(questions: list) -> None:
     from .snomed_resolver import (
         SnomedUnavailableError,
         get_options as snomed_get_options,
+        options_as_value_label,
     )
+
+    snomed_cache: dict[int, list[dict[str, str]]] = {}
 
     for q in questions:
         try:
@@ -1521,16 +1524,12 @@ def _inject_dataset_options(questions: list) -> None:
                 continue
             if dataset.category == "snomed":
                 try:
-                    raw = snomed_get_options(dataset)
-                    resolved: list = []
-                    for entry in raw:
-                        if isinstance(entry, str) and " | " in entry:
-                            sctid, term = entry.split(" | ", 1)
-                            resolved.append(
-                                {"value": sctid.strip(), "label": term.strip()}
-                            )
-                        else:
-                            resolved.append({"value": str(entry), "label": str(entry)})
+                    dataset_id = int(getattr(dataset, "id", 0) or 0)
+                    resolved = snomed_cache.get(dataset_id)
+                    if resolved is None:
+                        raw = snomed_get_options(dataset)
+                        resolved = options_as_value_label(raw)
+                        snomed_cache[dataset_id] = resolved
                     q.options = resolved
                 except SnomedUnavailableError:
                     q.options = []
@@ -6482,6 +6481,7 @@ def survey_export_csv(
         from .snomed_resolver import (
             SnomedUnavailableError,
             get_options as snomed_get_options,
+            options_as_dict,
         )
 
         for q in questions:
@@ -6490,12 +6490,7 @@ def survey_export_csv(
                 continue
             try:
                 raw = snomed_get_options(ds)
-                lookup: dict[str, str] = {}
-                for entry in raw:
-                    if isinstance(entry, str) and " | " in entry:
-                        sctid, term = entry.split(" | ", 1)
-                        lookup[sctid.strip()] = term.strip()
-                snomed_term_lookup[q.id] = lookup
+                snomed_term_lookup[q.id] = options_as_dict(raw)
             except SnomedUnavailableError:
                 pass
     except ImportError:
@@ -8950,6 +8945,7 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
     from .snomed_resolver import (
         SnomedUnavailableError,
         get_options as snomed_get_options,
+        parse_option_pairs,
     )
 
     logger_detail = logging.getLogger(__name__)
@@ -8986,14 +8982,7 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
     if dataset.category == "snomed":
         try:
             raw_options = snomed_get_options(dataset)
-            # Parse "SCTID | Preferred term" strings into (sctid, term) tuples
-            snomed_options = []
-            for entry in raw_options:
-                if " | " in entry:
-                    sctid, term = entry.split(" | ", 1)
-                    snomed_options.append((sctid.strip(), term.strip()))
-                else:
-                    snomed_options.append((entry, entry))
+            snomed_options = parse_option_pairs(raw_options)
         except SnomedUnavailableError as exc:
             snomed_unavailable = True
             snomed_error = str(exc)
@@ -9448,6 +9437,7 @@ def snomed_search(request: HttpRequest) -> JsonResponse:
         {"results": [{"id": "SCTID", "text": "Preferred term"}, ...]}
     """
     from .snomed_resolver import SnomedUnavailableError, search as snomed_search_fn
+    from .snomed_resolver import parse_option_pairs
 
     query = request.GET.get("q", "").strip()
     try:
@@ -9460,16 +9450,14 @@ def snomed_search(request: HttpRequest) -> JsonResponse:
 
     try:
         raw = snomed_search_fn(query, limit=limit)
-    except SnomedUnavailableError as exc:
-        return JsonResponse({"error": str(exc), "results": []}, status=503)
+    except SnomedUnavailableError:
+        logger.warning("SNOMED search unavailable for query=%r", query, exc_info=True)
+        return JsonResponse(
+            {"error": _("SNOMED search is temporarily unavailable."), "results": []},
+            status=503,
+        )
 
-    results = []
-    for entry in raw:
-        if " | " in entry:
-            sctid, term = entry.split(" | ", 1)
-            results.append({"id": sctid.strip(), "text": term.strip()})
-        else:
-            results.append({"id": entry, "text": entry})
+    results = [{"id": sctid, "text": term} for sctid, term in parse_option_pairs(raw)]
 
     return JsonResponse({"results": results})
 
@@ -9489,6 +9477,7 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
     from .snomed_resolver import (
         SnomedUnavailableError,
         get_options as snomed_get_options,
+        options_as_dict,
     )
 
     user = request.user
@@ -9517,14 +9506,8 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
         messages.error(request, f"Cannot snapshot — {exc}")
         return redirect("surveys:dataset_detail", dataset_id=dataset_id)
 
-    # Convert list of "SCTID | Term" strings to {sctid: term} dict
-    options_dict: dict[str, str] = {}
-    for entry in raw_options:
-        if " | " in entry:
-            sctid, term = entry.split(" | ", 1)
-            options_dict[sctid.strip()] = term.strip()
-        else:
-            options_dict[entry] = entry
+    # Convert live SNOMED options to stable key/value mapping for the snapshot.
+    options_dict: dict[str, str] = options_as_dict(raw_options)
 
     # Determine organisation for the snapshot (prefer user's first org, else personal)
     org = user_orgs.first()

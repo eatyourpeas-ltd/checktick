@@ -179,15 +179,11 @@ class DataSetSerializer(serializers.ModelSerializer):
             try:
                 from checktick_app.surveys.snomed_resolver import (
                     get_options as snomed_get_options,
+                    options_as_dict,
                 )
 
                 raw = snomed_get_options(instance)
-                options: dict[str, str] = {}
-                for entry in raw:
-                    if isinstance(entry, str) and " | " in entry:
-                        sctid, term = entry.split(" | ", 1)
-                        options[sctid.strip()] = term.strip()
-                representation["options"] = options
+                representation["options"] = options_as_dict(raw)
             except Exception:
                 representation["options"] = {}
                 representation["snomed_unavailable"] = True
