@@ -1504,6 +1504,10 @@ def _inject_dataset_options(questions: list) -> None:
       SCTID (stable identifier); the preferred term is the display label.
 
     Requires questions to have been loaded with ``select_related("dataset")``.
+
+    When snomed.db is unavailable, ``q.snomed_unavailable`` is set to ``True``
+    so the template can render an informative placeholder instead of an empty
+    ``<select>``.
     """
     from .snomed_resolver import (
         SnomedUnavailableError,
@@ -1530,6 +1534,9 @@ def _inject_dataset_options(questions: list) -> None:
                     q.options = resolved
                 except SnomedUnavailableError:
                     q.options = []
+                    setattr(q, "snomed_unavailable", True)
+                    continue
+                setattr(q, "snomed_unavailable", False)
             elif isinstance(dataset.options, dict) and dataset.options:
                 q.options = [
                     {"value": k, "label": v} for k, v in dataset.options.items()
@@ -6465,8 +6472,34 @@ def survey_export_csv(
     prof_group, professional_fields, _ = _get_professional_group_and_fields(survey)
 
     # Get all questions ordered by group position (from survey.style) then by question order
-    all_questions = list(survey.questions.select_related("group").all())
+    all_questions = list(survey.questions.select_related("group", "dataset").all())
     questions = _order_questions_by_group(survey, all_questions)
+
+    # Pre-build per-question SCTID → preferred term lookup for SNOMED dropdown questions.
+    # This avoids repeated snomed.db queries inside the streaming generator.
+    snomed_term_lookup: dict[int, dict[str, str]] = {}
+    try:
+        from .snomed_resolver import (
+            SnomedUnavailableError,
+            get_options as snomed_get_options,
+        )
+
+        for q in questions:
+            ds = getattr(q, "dataset", None)
+            if ds is None or ds.category != "snomed":
+                continue
+            try:
+                raw = snomed_get_options(ds)
+                lookup: dict[str, str] = {}
+                for entry in raw:
+                    if isinstance(entry, str) and " | " in entry:
+                        sctid, term = entry.split(" | ", 1)
+                        lookup[sctid.strip()] = term.strip()
+                snomed_term_lookup[q.id] = lookup
+            except SnomedUnavailableError:
+                pass
+    except ImportError:
+        pass
 
     def generate():
         import csv
@@ -6546,6 +6579,10 @@ def survey_export_csv(
             # Add question answers
             for q in question_columns:
                 answer = answers_dict.get(str(q.id), "")
+                # Resolve SCTID to preferred term when a SNOMED lookup is available.
+                if q.type == "dropdown" and q.id in snomed_term_lookup and answer:
+                    if isinstance(answer, str) and answer.isdigit():
+                        answer = snomed_term_lookup[q.id].get(answer, answer)
                 formatted = _format_answer_for_export(answer, q.type)
                 row.append(formatted)
 
@@ -6601,6 +6638,24 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
 
     can_collect_patient_data, _ = check_patient_data_permission(request.user)
 
+    # SNOMED availability and metadata for the builder dataset picker.
+    snomed_available = True
+    snomed_datasets_meta: dict[str, dict] = {}
+    try:
+        from .snomed_resolver import _get_db_path
+
+        _get_db_path()  # raises SnomedUnavailableError if snomed.db is absent
+    except Exception:
+        snomed_available = False
+
+    if snomed_available:
+        from .models import DataSet as _DataSet
+
+        for ds in _DataSet.objects.filter(category="snomed", is_active=True):
+            snomed_datasets_meta[ds.key] = {
+                "member_count": ds.snomed_member_count or 0,
+            }
+
     ctx = {
         "survey": survey,
         "group": group,
@@ -6622,6 +6677,8 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
         "professional_ods_pairs": professional_ods_pairs,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
         "available_datasets": get_available_datasets(organization=survey.organization),
+        "snomed_available": snomed_available,
+        "snomed_datasets_meta": snomed_datasets_meta,
     }
     if any(brand_overrides.values()):
         ctx["brand"] = {

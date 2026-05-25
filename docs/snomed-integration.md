@@ -39,9 +39,12 @@ This document covers the design and implementation of SNOMED CT terminology inte
 | Typeahead API endpoint                                      | `views.snomed_search`, `urls.py`                                                       | ✅ Done |
 | SNOMED snapshot (live → Postgres)                           | `views.dataset_snomed_snapshot`, `urls.py`                                             | ✅ Done |
 | "Request SNOMED Refset" button + issue template             | `dataset_list.html`, `.github/ISSUE_TEMPLATE/snomed_refset_request.yml`                | ✅ Done |
-| Survey builder — dropdown/typeahead widget selection        | Use `snomed_member_count` thresholds (<500 dropdown, 500–2k searchable, >2k typeahead) | 🔲 Next |
-| Survey renderer — SCTID → preferred term resolution         | Resolve stored SCTIDs to display terms at render time                                  | 🔲 Next |
-| `datasets-and-dropdowns.md` update                          | Document SNOMED datasets for users                                                     | 🔲 Next |
+| Survey builder — dropdown/typeahead widget selection        | Use `snomed_member_count` thresholds (<500 dropdown, 500–2k searchable, >2k typeahead) | ✅ Done |
+| Survey renderer — SCTID → preferred term resolution         | Resolve stored SCTIDs to display terms at render time; graceful degradation on absent snomed.db | ✅ Done |
+| CSV export — SCTID → preferred term resolution              | Resolve SCTID answers to preferred terms in CSV export via pre-built lookup table      | ✅ Done |
+| Survey respondent — SNOMED unavailable message              | Show informative alert instead of empty `<select>` when snomed.db absent               | ✅ Done |
+| Builder inline SNOMED unavailable warning                   | Warning banner in dataset picker when snomed.db absent; member count hint on select    | ✅ Done |
+| `datasets-and-dropdowns.md` update                          | Document SNOMED datasets for users                                                     | ✅ Done |
 
 ### 🔲 Phase 3 — User SNOMED Codelists (future)
 
