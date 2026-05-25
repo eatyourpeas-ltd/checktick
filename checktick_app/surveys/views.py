@@ -1264,9 +1264,12 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
     # Render the same detail template in preview mode
     _prepare_question_rendering(survey)
     all_questions = list(
-        survey.questions.select_related("group").prefetch_related("images").all()
+        survey.questions.select_related("group", "dataset")
+        .prefetch_related("images")
+        .all()
     )
     qs = _order_questions_by_group(survey, all_questions)
+    _inject_dataset_options(qs)
 
     # Mark questions that have SHOW conditions (should be hidden by default)
     questions_with_show_conditions = set(
@@ -1484,6 +1487,57 @@ def _order_questions_by_group(
     ordered.extend(ungrouped_questions)
 
     return ordered
+
+
+def _inject_dataset_options(questions: list) -> None:
+    """Resolve dataset options into each question's ``options`` field for rendering.
+
+    When a dropdown question is linked to a :class:`DataSet` via the ``dataset``
+    ForeignKey, ``SurveyQuestion.options`` is stored as ``[]`` — the canonical
+    options come from the dataset.  This helper materialises those options onto
+    each question's ``options`` attribute so that the detail template can render
+    them with the standard ``as_list``/``option_value``/``option_label`` filters.
+
+    - Non-SNOMED datasets: ``DataSet.options`` is a ``{code: name}`` dict.
+    - SNOMED datasets: options are fetched live from ``snomed.db`` via
+      :func:`snomed_resolver.get_options`.  The stored response value is the
+      SCTID (stable identifier); the preferred term is the display label.
+
+    Requires questions to have been loaded with ``select_related("dataset")``.
+    """
+    from .snomed_resolver import (
+        SnomedUnavailableError,
+        get_options as snomed_get_options,
+    )
+
+    for q in questions:
+        try:
+            dataset = getattr(q, "dataset", None)
+            if dataset is None:
+                continue
+            if dataset.category == "snomed":
+                try:
+                    raw = snomed_get_options(dataset)
+                    resolved: list = []
+                    for entry in raw:
+                        if isinstance(entry, str) and " | " in entry:
+                            sctid, term = entry.split(" | ", 1)
+                            resolved.append(
+                                {"value": sctid.strip(), "label": term.strip()}
+                            )
+                        else:
+                            resolved.append({"value": str(entry), "label": str(entry)})
+                    q.options = resolved
+                except SnomedUnavailableError:
+                    q.options = []
+            elif isinstance(dataset.options, dict) and dataset.options:
+                q.options = [
+                    {"value": k, "label": v} for k, v in dataset.options.items()
+                ]
+            elif isinstance(dataset.options, list) and dataset.options:
+                q.options = dataset.options
+        except Exception:
+            pass
 
 
 def _prepare_question_rendering(
@@ -4247,7 +4301,8 @@ def _handle_participant_submission(
 
     # GET: render using existing detail template
     _prepare_question_rendering(survey)
-    qs = list(survey.questions.select_related("group").all())
+    qs = list(survey.questions.select_related("group", "dataset").all())
+    _inject_dataset_options(qs)
     for i, q in enumerate(qs, start=1):
         setattr(q, "idx", i)
         prev_gid = qs[i - 2].group_id if i - 2 >= 0 else None

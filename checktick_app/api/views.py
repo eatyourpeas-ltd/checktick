@@ -172,6 +172,27 @@ class DataSetSerializer(serializers.ModelSerializer):
 
         return False
 
+    def to_representation(self, instance):
+        """Resolve live SNOMED options for SNOMED datasets before serialising."""
+        representation = super().to_representation(instance)
+        if instance.category == "snomed":
+            try:
+                from checktick_app.surveys.snomed_resolver import (
+                    get_options as snomed_get_options,
+                )
+
+                raw = snomed_get_options(instance)
+                options: dict[str, str] = {}
+                for entry in raw:
+                    if isinstance(entry, str) and " | " in entry:
+                        sctid, term = entry.split(" | ", 1)
+                        options[sctid.strip()] = term.strip()
+                representation["options"] = options
+            except Exception:
+                representation["options"] = {}
+                representation["snomed_unavailable"] = True
+        return representation
+
     def validate(self, attrs):
         """Validate dataset creation/update."""
         # Prevent editing NHS DD datasets
