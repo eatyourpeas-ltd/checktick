@@ -8786,8 +8786,20 @@ def dataset_list(request: HttpRequest) -> HttpResponse:
         for tag in selected_tags:
             datasets = datasets.filter(tags__contains=[tag])
 
-    # Order datasets
-    datasets = datasets.order_by("-created_at")
+    # Apply name search filter
+    search_query = request.GET.get("q", "").strip()
+    if search_query:
+        datasets = datasets.filter(name__icontains=search_query)
+
+    # For SNOMED datasets: show only featured (curated) by default.
+    # "show_all" query param lets admins see the full registry.
+    show_all_snomed = request.GET.get("show_all_snomed") == "1"
+    if not show_all_snomed and (not category_filter or category_filter == "snomed"):
+        # Exclude non-featured SNOMED datasets unless explicitly requested
+        datasets = datasets.exclude(category="snomed", is_featured=False)
+
+    # Alphabetical order by name
+    datasets = datasets.order_by("name")
 
     # Pagination (20 per page)
     paginator = Paginator(datasets, 20)
@@ -8810,6 +8822,8 @@ def dataset_list(request: HttpRequest) -> HttpResponse:
             "available_tags": available_tags,
             "selected_category": category_filter,
             "selected_tags": selected_tags,
+            "search_query": search_query,
+            "show_all_snomed": show_all_snomed,
             "snomed_available": snomed_available,
             "snomed_unavailable_warning": snomed_unavailable_warning,
         },
@@ -8851,21 +8865,15 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
         "survey", "group"
     )
 
-    # Handle SNOMED CT datasets: fetch live options from snomed.db
+    # Handle SNOMED CT datasets: fetch live options from snomed.db.
+    # Only curated refsets are seeded, so option counts are always manageable.
     snomed_options: list[tuple[str, str]] | None = None
-    snomed_total_count: int | None = None
-    snomed_capped = False
     snomed_unavailable = False
     snomed_error: str | None = None
-    SNOMED_DISPLAY_LIMIT = 500
 
     if dataset.category == "snomed":
         try:
             raw_options = snomed_get_options(dataset)
-            snomed_total_count = len(raw_options)
-            if snomed_total_count > SNOMED_DISPLAY_LIMIT:
-                raw_options = raw_options[:SNOMED_DISPLAY_LIMIT]
-                snomed_capped = True
             # Parse "SCTID | Preferred term" strings into (sctid, term) tuples
             snomed_options = []
             for entry in raw_options:
@@ -8895,8 +8903,6 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
             "can_edit": user_can_edit,
             "questions_using": questions_using,
             "snomed_options": snomed_options,
-            "snomed_total_count": snomed_total_count,
-            "snomed_capped": snomed_capped,
             "snomed_unavailable": snomed_unavailable,
             "snomed_error": snomed_error,
         },

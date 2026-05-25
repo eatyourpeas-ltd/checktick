@@ -33,17 +33,35 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Each entry becomes one DataSet descriptor row.
 # snomed_refset_id: SCTID of the refset, or ancestor concept for descendants queries.
-# snomed_member_count: populated from snomed.db at seed time (both refset and
-#   descendants query types are counted).
+# snomed_member_count: populated from snomed.db at seed time.
 # is_featured: True = shown in default dataset browser.
 #
-# All refset SCTIDs below are verified against sct UK Monolith Edition by
-# querying the actual snomed.db (SELECT id, preferred_term FROM concepts WHERE id = ?).
+# DESIGN PRINCIPLE — curated refsets only
+# ----------------------------------------
+# A SNOMED CT reference set (refset) is a curated, expert-maintained subset of
+# concepts assembled for a specific clinical purpose. This is what CheckTick
+# supports: validated lists that power survey dropdowns without users having to
+# define their own clinical criteria (e.g. QOF drug lists, paediatric specialty
+# condition sets, ePrescribing routes).
 #
-# NOTE: QOF disease condition *register* refsets (the SNOMED codes that define which
-# patients count as being on a QOF register, e.g. QOF Epilepsy Register) are
-# distributed in the separate NHS England QOF Supplement TRUD product and are NOT
-# present in the UK Monolith Edition. Do not attempt to seed them from the Monolith.
+# What CheckTick does NOT support here:
+# - The full dm+d drug dictionary (VTM ~23k, VMP ~162k) — these are the source
+#   from which clinical drug lists are carved, not curated lists themselves.
+# - Full hierarchy traversals (descendants of body structure, descendants of
+#   clinical finding) — these are the entire SNOMED taxonomy, not refsets.
+#
+# If a user needs a bespoke list not in this registry, they can:
+#   1. Request a new refset via the GitHub issue template
+#   2. Use "Snapshot to Custom Dataset" on an existing dataset and filter it
+#   3. Create a plain custom dataset via the dataset builder
+#
+# All refset SCTIDs below are verified against the sct UK Monolith Edition by
+# direct concept lookup (SELECT id, preferred_term FROM concepts WHERE id = ?).
+#
+# NOTE: QOF disease condition *register* refsets (the SNOMED codes that define
+# which patients count as being on a QOF register) are distributed in the
+# separate NHS England QOF Supplement TRUD product and are NOT present in the
+# UK Monolith Edition. Do not attempt to seed them from the Monolith.
 # ---------------------------------------------------------------------------
 
 FEATURED_DATASETS = [
@@ -85,47 +103,33 @@ FEATURED_DATASETS = [
         "tags": ["drugs", "CHD", "QOF", "snomed"],
         "is_featured": True,
     },
-    # ── Drugs — dm+d hierarchy ────────────────────────────────────────────
-    # Only insulin is seeded here: SCTID 67866001 is the correct SNOMED concept
-    # for Insulin, with ~10 active substance-level children (soluble, isophane,
-    # degludec, human insulin, etc.) — a small, stable hierarchy.
-    #
-    # GLP-1 agonists and SGLT2 inhibitors do NOT have a clean hierarchy root in
-    # the UK Monolith (drug-class concepts at that granularity sit in dm+d VTM,
-    # not as a navigable parent concept). Use the VTM or VMP refsets and
-    # typeahead search for those drug classes instead.
-    #
-    # Body structure descendants (root 123037004) are excluded — the recursive
-    # CTE traversal of 100k+ concepts exceeds acceptable latency for both seed
-    # time and request time.
-    {
-        "key": "snomed_insulins",
-        "name": "Insulin Products (dm+d)",
-        "description": "All insulin substance types (descendants of 67866001 — Insulin). ~10 concepts.",
-        "snomed_refset_id": "67866001",
-        "snomed_query_type": "descendants",
-        "tags": ["drugs", "insulin", "diabetes", "dm+d", "snomed"],
-        "is_featured": True,
-    },
+    # ── Drugs — large reference dictionaries (is_featured=False) ─────────
+    # These are the full dm+d dictionaries — not curated clinical lists.
+    # They are registered as descriptors so survey responses can reference a
+    # specific SNOMED release date, but they are hidden from the default
+    # dataset browser (is_featured=False). Administrators can promote them
+    # if a specific use case warrants it (e.g. typeahead across all medicines).
     {
         "key": "snomed_dmd_vtm",
         "name": "dm+d VTM — All Drug Substances",
         "description": "All active Virtual Therapeutic Moieties from dm+d (~23,000 concepts). "
-        "Use for drug substance-level questions.",
+        "Full drug substance dictionary — not a curated clinical list. "
+        "Hidden by default; use a specific QOF or specialty refset instead.",
         "snomed_refset_id": "999000561000001109",
         "snomed_query_type": "refset",
         "tags": ["drugs", "dm+d", "VTM", "snomed"],
-        "is_featured": True,
+        "is_featured": False,
     },
     {
         "key": "snomed_dmd_vmp",
         "name": "dm+d VMP — All Medicinal Products",
         "description": "All active Virtual Medicinal Products from dm+d (~162,000 concepts). "
-        "Typeahead only — too large for a dropdown.",
+        "Full medicinal product dictionary — not a curated clinical list. "
+        "Hidden by default; use a specific QOF or specialty refset instead.",
         "snomed_refset_id": "999000541000001108",
         "snomed_query_type": "refset",
         "tags": ["drugs", "dm+d", "VMP", "snomed"],
-        "is_featured": True,
+        "is_featured": False,
     },
     # ── Conditions — Paediatric clinical condition refsets ────────────────
     # These refsets ARE present in the UK Monolith Edition (verified by SCTID lookup).
