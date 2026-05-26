@@ -14,6 +14,7 @@ refresh member counts and the release date stored in Postgres.
 Usage:
     python manage.py update_snomed_db
     python manage.py update_snomed_db --force   # skip check, always download
+    python manage.py update_snomed_db --force --prune   # clean stale artefacts first
     python manage.py update_snomed_db --edition uk_drug   # alternative edition
     python manage.py update_snomed_db --dry-run
 
@@ -25,6 +26,7 @@ Requirements:
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -40,6 +42,28 @@ SCT_EXIT_ERROR = 1
 
 def _get_setting(name: str, default: str = "") -> str:
     return getattr(settings, name, None) or os.environ.get(name, default)
+
+
+def _prune_snomed_artifacts(data_dir: Path, snomed_db_path: Path):
+    """Remove stale SNOMED build artefacts to reduce peak disk usage."""
+    removed = []
+
+    tmp_dir = data_dir / "tmp"
+    if tmp_dir.exists():
+        shutil.rmtree(tmp_dir)
+        removed.append(tmp_dir.name + "/")
+
+    for zip_path in sorted(data_dir.glob("*.zip")):
+        zip_path.unlink()
+        removed.append(zip_path.name)
+
+    for db_path in sorted(data_dir.glob("uk_sct2*.db")):
+        if db_path.resolve() == snomed_db_path.resolve():
+            continue
+        db_path.unlink()
+        removed.append(db_path.name)
+
+    return removed
 
 
 class Command(BaseCommand):
@@ -65,11 +89,20 @@ class Command(BaseCommand):
             action="store_true",
             help="Show what would happen without running sct commands or saving",
         )
+        parser.add_argument(
+            "--prune",
+            action="store_true",
+            help=(
+                "Delete stale tmp/zip/versioned db artefacts in SNOMED data dir "
+                "before checking/downloading"
+            ),
+        )
 
     def handle(self, *args, **options):
         force = options["force"]
         edition = options["edition"]
         dry_run = options["dry_run"]
+        prune = options["prune"]
 
         if dry_run:
             self.stdout.write(
@@ -96,7 +129,8 @@ class Command(BaseCommand):
             )
             sys.exit(1)
 
-        data_dir = str(Path(snomed_db_path).parent)
+        snomed_db = Path(snomed_db_path)
+        data_dir = snomed_db.parent
 
         # Verify sct binary is available (skipped in dry-run)
         if not dry_run:
@@ -117,6 +151,26 @@ class Command(BaseCommand):
                 sys.exit(1)
         else:
             self.stdout.write("🔧 sct binary: (not checked in dry-run)")
+
+        if prune:
+            if dry_run:
+                self.stdout.write(
+                    "   [DRY RUN] would prune stale tmp/, *.zip and uk_sct2*.db artefacts"
+                )
+            else:
+                self.stdout.write("🧹 Pruning stale SNOMED artefacts before update...")
+                try:
+                    removed = _prune_snomed_artifacts(data_dir, snomed_db)
+                except Exception as exc:
+                    self.stdout.write(
+                        self.style.ERROR(f"❌ Failed to prune SNOMED artefacts: {exc}")
+                    )
+                    sys.exit(1)
+
+                if removed:
+                    self.stdout.write(f"   Removed {len(removed)} artefact(s).")
+                else:
+                    self.stdout.write("   Nothing to prune.")
 
         # ── Step 1: check for update (unless --force) ─────────────────────
         needs_update = force
@@ -198,7 +252,7 @@ class Command(BaseCommand):
             # Redirect TMPDIR to the mounted volume so that sct's intermediate
             # files (ndjson extraction, SQLite build) do not fill the container's
             # ephemeral storage and trigger an eviction/OOM kill.
-            tmp_dir = str(Path(data_dir) / "tmp")
+            tmp_dir = str(data_dir / "tmp")
             Path(tmp_dir).mkdir(parents=True, exist_ok=True)
 
             download_result = subprocess.run(
@@ -209,9 +263,9 @@ class Command(BaseCommand):
                     "--edition",
                     edition,
                     "--output-dir",
-                    data_dir,
+                    str(data_dir),
                     "--data-dir",
-                    data_dir,
+                    str(data_dir),
                     "--pipeline",
                 ],
                 text=True,
@@ -235,13 +289,12 @@ class Command(BaseCommand):
 
             # sct writes a release-versioned filename (e.g. uk_sct2mo_42.1.0_….db).
             # Rename it to the canonical path that SNOMED_DB_PATH points to.
-            versioned_dbs = sorted(Path(data_dir).glob("uk_sct2mo_*.db"))
+            versioned_dbs = sorted(data_dir.glob("uk_sct2mo_*.db"))
             if versioned_dbs:
                 versioned_db = versioned_dbs[-1]
-                target = Path(snomed_db_path)
-                versioned_db.rename(target)
-                self.stdout.write(f"   Renamed {versioned_db.name} → {target.name}")
-            elif not Path(snomed_db_path).exists():
+                versioned_db.rename(snomed_db)
+                self.stdout.write(f"   Renamed {versioned_db.name} → {snomed_db.name}")
+            elif not snomed_db.exists():
                 self.stdout.write(
                     self.style.ERROR(
                         f"❌ No .db file found in {data_dir} after build — rename failed."

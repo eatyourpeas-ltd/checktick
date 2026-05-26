@@ -169,17 +169,16 @@ python manage.py seed_snomed_datasets --dry-run
 
 Checks TRUD for a newer SNOMED CT UK Monolith release. If one is found, downloads and rebuilds `snomed.db` via `sct trud download --pipeline`, then updates `snomed_release_date` on all SNOMED descriptor records.
 
+Use `--prune` when running updates on constrained volumes. It removes stale `tmp/`, downloaded zip files, and old versioned `uk_sct2*.db` artefacts before the update check/build starts.
+
 ```bash
 python manage.py update_snomed_db
 python manage.py update_snomed_db --force    # re-download even if current
 python manage.py update_snomed_db --dry-run  # check for new release only
+python manage.py update_snomed_db --force --prune  # free space before rebuild
 ```
 
-SNOMED CT UK is published **twice a year** (typically April and October). A weekly cron check is the recommended schedule — the command is a no-op when no new release is available.
-
-```cron
-0 6 * * 1  python manage.py update_snomed_db
-```
+SNOMED CT UK is published infrequently. For self-hosted deployments, prefer a **manual in-container update** during a planned maintenance window (for example monthly or only when you want to refresh terminology), rather than a scheduled cron job.
 
 See [Scheduled Tasks](self-hosting-scheduled-tasks.md) for Northflank setup.
 
@@ -231,9 +230,9 @@ docker compose exec web python manage.py seed_snomed_datasets
 | `sct ndjson`     | NDJSON intermediate    | ~1 GB+           |
 | `sct sqlite`     | Final `snomed.db`      | ~500 MB–1 GB     |
 
-Peak disk usage during a build is approximately **3.5 GB**. All intermediate and output files must be written to the mounted persistent volume (not container ephemeral storage). A **10 GB volume** is the recommended minimum.
+Peak disk usage during a build can exceed **6 GB** when temporary artefacts and the existing `snomed.db` overlap. All intermediate and output files must be written to the mounted persistent volume (not container ephemeral storage). A **10 GB volume** is the practical minimum; **20 GB** is recommended for safer headroom.
 
-The `snomed.db` volume must be shared between the web service (reads) and the `checktick-snomed-update` cron job (writes). The cron job should run on a higher compute spec (e.g. `nf-compute-200`) as the build process is CPU- and I/O-intensive. The web service just reads via lightweight SQLite queries and requires no additional resources beyond its standard spec.
+Run updates from inside the existing web/container shell, and use `--prune` before forced rebuilds to reduce burst usage.
 
 The `vault-data` volume is dedicated to HashiCorp Vault's Raft storage and must not be shared.
 
@@ -304,7 +303,7 @@ The architecture is designed to extend. If `sct` gains support for additional te
 
 - [Dataset Loading Architecture](dataset-loading-architecture.md) — full data flow for all dataset types
 - [Datasets and Dropdowns](datasets-and-dropdowns.md) — user-facing guide
-- [Self-hosting Scheduled Tasks](self-hosting-scheduled-tasks.md) — cron job setup for `update_snomed_db`
+- [Self-hosting Scheduled Tasks](self-hosting-scheduled-tasks.md) — manual SNOMED maintenance guidance
 - [`sct` project](https://github.com/pacharanero/sct) — the Rust binary that generates `snomed.db`
 - [NHS TRUD](https://isd.digital.nhs.uk/trud) — source of SNOMED CT releases
 

@@ -8,7 +8,7 @@ CheckTick requires scheduled tasks for data governance operations, housekeeping,
 
 ## Overview
 
-CheckTick uses eight scheduled tasks:
+CheckTick uses eight scheduled tasks, plus one optional manual SNOMED CT maintenance task:
 
 ### 1. Data Governance (Required for GDPR)
 
@@ -76,25 +76,25 @@ python manage.py sync_nhs_dd_datasets --force
 python manage.py sync_nhs_dd_datasets --dataset smoking_status_code
 ```
 
-### 5. SNOMED CT Update (Optional — requires TRUD API key)
+### 5. SNOMED CT Update (Optional, Manual — requires TRUD API key)
 
-The `update_snomed_db` management command runs weekly to:
+The `update_snomed_db` management command is intended to run infrequently from inside the container shell (for example monthly, or when you want to refresh terminology):
 
 1. **Check for a new release** — calls `sct trud check`, which hits the TRUD API and exits immediately (exit 0) if there is nothing new. The 1.8 GB download only starts if a new release is detected (exit 2).
 2. **Download and rebuild snomed.db** — runs `sct trud download --pipeline`, producing a fresh SQLite database on the `snomed-data` volume.
 3. **Refresh dataset descriptors** — automatically re-runs `seed_snomed_datasets --force` to update member counts and the release date in Postgres.
 
-**Optional**: If `TRUD_API_KEY` is not set the command exits cleanly, so it is safe to schedule unconditionally even in non-SNOMED deployments.
+**Optional**: If `TRUD_API_KEY` is not set the command exits cleanly.
 
-**Schedule**: Weekly is sufficient — SNOMED CT releases approximately monthly. The early-exit check costs almost nothing when there is no update, so running weekly adds negligible overhead.
+**Frequency**: Infrequent/manual is recommended for self-hosted deployments.
 
-> **TRUD maintenance windows**: TRUD is offline weekdays 18:00–08:00 UK time (and midnight–06:00). Schedule the job during UK business hours to avoid false failures (e.g. Wednesday 10:00 UTC).
+> **TRUD maintenance windows**: TRUD is offline weekdays 18:00–08:00 UK time (and midnight–06:00). Run manual updates during UK business hours to avoid false failures.
 
 **Initial Setup**: Seed the SNOMED CT dataset descriptors once after building snomed.db:
 
 ```bash
 # Build snomed.db from TRUD (takes several minutes — ~1.8 GB download)
-python manage.py update_snomed_db --force
+python manage.py update_snomed_db --force --prune
 
 # Or if snomed.db already exists on the volume:
 python manage.py seed_snomed_datasets
@@ -107,7 +107,7 @@ python manage.py seed_snomed_datasets
 python manage.py update_snomed_db --dry-run
 
 # Force a full download regardless of current state
-python manage.py update_snomed_db --force
+python manage.py update_snomed_db --force --prune
 
 # Use an alternative edition (default: uk_monolith)
 python manage.py update_snomed_db --edition uk_drug
@@ -257,20 +257,19 @@ Northflank provides native cron job support, making this the simplest option.
    - **Schedule**: `0 5 * * 0` (runs at 5 AM UTC every Sunday - weekly)
    - **Command**: `python manage.py sync_nhs_dd_datasets`
 
-#### 5. Create SNOMED CT Update Cron Job (Optional)
+#### 5. SNOMED CT Manual Maintenance (No Cron Job)
 
-> Skip this step if you are not using SNOMED CT (no `TRUD_API_KEY`).
+If you use SNOMED CT, run updates manually from the web service/container shell during a maintenance window:
 
-1. Click **"Add Service"** → **"Cron Job"** again
-2. Configure the job:
-   - **Name**: `checktick-snomed-update`
-   - **Docker Image**: Use the same image as your web service (must include the `sct` binary)
-   - **Schedule**: `0 10 * * 3` (runs at 10 AM UTC every Wednesday — inside TRUD business hours)
-   - **Command**: `python manage.py update_snomed_db`
-3. Mount the **`snomed-data`** volume to `/app/data` in this cron job (same as the web service)
-4. Add `TRUD_API_KEY` and `SNOMED_DB_PATH` to the job's environment variables
+```bash
+# Check for a new release (no download)
+python manage.py update_snomed_db --dry-run
 
-> **Note:** The job exits immediately (exit 0) if SNOMED CT is already up to date, so running it weekly adds negligible overhead.
+# Rebuild safely on persistent storage with cleanup first
+python manage.py update_snomed_db --force --prune
+```
+
+Recommended cadence is monthly (or on demand), since releases are infrequent.
 
 #### 6. Create Global Templates Sync Cron Job
 
@@ -307,7 +306,7 @@ All cron jobs need the same environment variables as your web service:
 - `DEFAULT_FROM_EMAIL` (for data governance)
 - `SITE_URL` (for email links in data governance)
 - `EXTERNAL_DATASET_API_URL`, `EXTERNAL_DATASET_API_KEY` (for dataset sync - optional, defaults to RCPCH API)
-- `TRUD_API_KEY`, `SNOMED_DB_PATH` (for SNOMED CT update job — optional)
+- `TRUD_API_KEY`, `SNOMED_DB_PATH` (optional — required only if you use SNOMED CT)
 
 #### 9. Deploy and Test
 
@@ -345,12 +344,11 @@ The `&&` ensures the ping only fires if the management command exits successfull
 **Example commands with heartbeat ping:**
 
 | Job | Command |
-|---|---|
+| --- | --- |
 | census-data-governance | `python manage.py process_data_governance && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
 | checktick-progress-cleanup | `python manage.py cleanup_survey_progress && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
 | checktick-data-sync | `python manage.py sync_external_datasets && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
 | checktick-nhsdd-sync | `python manage.py sync_nhs_dd_datasets && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
-| checktick-snomed-update | `python manage.py update_snomed_db && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
 | checktick-templates-sync | `python manage.py sync_global_question_group_templates && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
 
 > **App and Vault uptime:** Use an external uptime monitor (e.g. StatusCake, UptimeRobot) pointing at `https://your-domain/healthz`. This endpoint returns `503` if Vault is sealed, the database is unreachable, or SNOMED CT is misconfigured — giving you a single URL to monitor for all critical service health.
@@ -438,24 +436,6 @@ docker compose exec -T web python manage.py sync_global_question_group_templates
 exit $?
 ```
 
-Create `/usr/local/bin/checktick-snomed-update.sh` (optional — only if using SNOMED CT):
-
-```bash
-#!/bin/bash
-# CheckTick SNOMED CT Update Cron Job
-# Runs weekly on Wednesday at 10 AM UTC (inside TRUD business hours)
-# Exits immediately (exit 0) if SNOMED CT is already up to date.
-
-# Set working directory
-cd /path/to/your/checktick-app
-
-# Run the update command
-docker compose exec -T web python manage.py update_snomed_db >> /var/log/checktick/snomed-update.log 2>&1
-
-# Exit with the command's exit code
-exit $?
-```
-
 Make them executable:
 
 ```bash
@@ -463,7 +443,6 @@ chmod +x /usr/local/bin/checktick-data-governance.sh
 chmod +x /usr/local/bin/checktick-progress-cleanup.sh
 chmod +x /usr/local/bin/checktick-dataset-sync.sh
 chmod +x /usr/local/bin/checktick-templates-sync.sh
-chmod +x /usr/local/bin/checktick-snomed-update.sh  # if using SNOMED CT
 ```
 
 #### 2. Add to System Crontab
@@ -486,9 +465,6 @@ Add these lines:
 
 # CheckTick Global Templates Sync - Daily at 6 AM UTC
 0 6 * * * /usr/local/bin/checktick-templates-sync.sh
-
-# CheckTick SNOMED CT Update - Weekly Wednesday 10 AM UTC (optional)
-0 10 * * 3 /usr/local/bin/checktick-snomed-update.sh
 ```
 
 #### 3. Create Log Directory
@@ -525,13 +501,20 @@ cd /path/to/your/checktick-app
 docker compose exec web python manage.py sync_external_datasets
 ```
 
+If you use SNOMED CT, run updates manually from inside the running web container (for example monthly):
+
+```bash
+docker compose exec web python manage.py update_snomed_db --dry-run
+docker compose exec web python manage.py update_snomed_db --force --prune
+```
+
 ---
 
 ### Kubernetes
 
 If you're running CheckTick in Kubernetes, use a CronJob resource.
 
-#### Create a CronJob manifest:
+#### Create a CronJob manifest
 
 ```yaml
 apiVersion: batch/v1
