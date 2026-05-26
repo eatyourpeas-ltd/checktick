@@ -1,15 +1,33 @@
-<picture>
-	<source media="(prefers-color-scheme: dark)" srcset="checktick_app/static/icons/CheckTick_long-03-dark.svg">
-	<source media="(prefers-color-scheme: light)" srcset="checktick_app/static/icons/CheckTick_long-03.svg">
-	<img alt="CheckTick" src="checktick_app/static/icons/CheckTick_long-03.svg">
-</picture>
+<p align="center">
+ <picture>
+  <source media="(prefers-color-scheme: dark)" srcset="checktick_app/static/icons/CheckTick_long-03-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="checktick_app/static/icons/CheckTick_long-03.svg">
+  <img alt="CheckTick" src="checktick_app/static/icons/CheckTick_long-03.svg" width="380" style="max-width:100%;height:auto;">
+ </picture>
+</p>
 
-![Version](https://img.shields.io/badge/version-0.4.6-5fcfdd?style=for-the-badge)
-![GitHub License](https://img.shields.io/github/license/eatyourpeas/checktick?style=for-the-badge&color=5fcfdd)
-![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-5fcfdd?style=for-the-badge&logo=openapiinitiative&logoColor=white)
-![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/eatyourpeas/checktick?style=for-the-badge&color=5fcfdd)
-[![Docker Image](https://img.shields.io/badge/docker-ghcr.io-5fcfdd?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/eatyourpeas/checktick/pkgs/container/checktick)
-[![Uptime](https://app.statuscake.com/button/index.php?Track=7928755&Days=7&Design=1)](https://app.statuscake.com/UptimeStatus.php?tid=7928755)
+<p align="center">
+ <a href="https://github.com/eatyourpeas/checktick/releases">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.4.6-5fcfdd?style=flat-square">
+ </a>
+ <a href="https://github.com/eatyourpeas/checktick/blob/main/LICENSE">
+  <img alt="GitHub License" src="https://img.shields.io/github/license/eatyourpeas/checktick?style=flat-square&color=5fcfdd">
+ </a>
+ <a href="https://www.openapis.org/">
+  <img alt="OpenAPI" src="https://img.shields.io/badge/OpenAPI-3.0-5fcfdd?style=flat-square&logo=openapiinitiative&logoColor=white">
+ </a>
+ <a href="https://github.com/eatyourpeas/checktick/issues">
+  <img alt="GitHub Issues" src="https://img.shields.io/github/issues/eatyourpeas/checktick?style=flat-square&color=5fcfdd">
+ </a>
+ <a href="https://github.com/eatyourpeas/checktick/pkgs/container/checktick">
+  <img alt="Docker Image" src="https://img.shields.io/badge/docker-ghcr.io-5fcfdd?style=flat-square&logo=docker&logoColor=white">
+ </a>
+ <a href="https://app.statuscake.com/UptimeStatus.php?tid=7928755">
+  <img alt="Uptime" src="https://app.statuscake.com/button/index.php?Track=7928755&Days=7&Design=1" height="20">
+ </a>
+</p>
+
+---
 
 CheckTick is an open source secure survey platform for medical audit and research, created for the NHS. Features include:
 
@@ -17,12 +35,12 @@ CheckTick is an open source secure survey platform for medical audit and researc
 - **Security**: All data and AI hosted on secure servers in the UK. Every survey encrypted by default with AES-256-GCM, Role-based access control, audit logs, and single sign-on, GDPR, NHS DSPT, and Caldicott compliant. It has been penetration tested.
 - **Language Support**: Surveys can be published in a range of languages for multilingual audiences, using an LLM.
 - **Publication**: Fully controlled by the survey creator including access (open links vs login required for sensitive data)
-- **Datasets**: There is a growing library of standardised lists taken from the NHS Data Dictionary (eg blood groups, ethniticities) and trusted NHS sources (eg hospital lists) to populate dropdowns for which contributions are welcome.
+- **Datasets**: There is a growing library of standardised lists taken from the NHS Data Dictionary (eg blood groups, ethniticities) and trusted NHS sources (eg hospital lists) to populate dropdowns for which contributions are welcome. Also supports SNOMED refsets.
 - **Question Bank**: Survey questions can be shared with others to reuse or within teams (depending on account). Validated open questionaires (eg PHQ-9) can be imported into surveys without having to re-enter the questions.
 - **Customisable**: platform styling and survey styling are supported. Patient facing surveys are WCAG AA compliant. Tools are included to test accessibilty of custom styles prior to publishing. NHS styling for surveys is supported.
 - There is also an API with limited endpoints (largely due to security posture).
 
-Try it out [here](https://checktick.uk)
+**Try it out [here](https://checktick.uk)**
 >[!NOTE]
 >This is in a sandbox dev environment and is for demo purposes only. Do not store patient or sensitive information here.
 
@@ -32,7 +50,7 @@ Try it out [here](https://checktick.uk)
 - Developer/maintainer references: [docs/README.md](docs/README.md)
 - Agent workflow guidance: [AGENTS.md](AGENTS.md)
 
-## 🐳 Self-Hosting
+## Self-Hosting
 
 CheckTick can be self-hosted using Docker. Pre-built multi-architecture images are available on GitHub Container Registry.
 
@@ -50,9 +68,9 @@ cp .env.selfhost .env
 docker compose -f docker-compose.registry.yml up -d
 ```
 
-**📦 Docker Images:** [ghcr.io/eatyourpeas/checktick](https://github.com/eatyourpeas/checktick/pkgs/container/checktick)
+**Docker Images:** [ghcr.io/eatyourpeas/checktick](https://github.com/eatyourpeas/checktick/pkgs/container/checktick)
 
-**📚 Full Documentation:** See [Self-Hosting Guides](https://checktick.eatyourpeas.dev/docs/self-hosting-quickstart/)
+**Full Documentation:** See [Self-Hosting Guides](https://checktick.eatyourpeas.dev/docs/self-hosting-quickstart/)
 
 ## Versioning & Deployment
 
@@ -60,7 +78,7 @@ For release, container tags, and publish trigger rules, see [docs/versioning-and
 
 ## Getting Help & Contributing
 
-### 💬 Community & Support
+### Community & Support
 
 - **[Discussions](https://github.com/eatyourpeas/checktick/discussions)** - For questions, ideas, and community support
 - **[Issues](https://github.com/eatyourpeas/checktick/issues)** - For bug reports and specific feature requests
