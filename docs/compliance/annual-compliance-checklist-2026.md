@@ -495,7 +495,7 @@ priority: 2
 ### Week 3-4 (Dec 16-31)
 
 - [ ] **Annual Compliance Documentation Review** - Prepare evidence portfolio for next DSPT cycle
-  - Organize all logs and audit trails
+  - organise all logs and audit trails
   - Collect training certificates
   - Compile incident reports (if any)
   - Document all exercises and drills

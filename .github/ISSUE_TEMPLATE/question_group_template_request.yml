@@ -8,7 +8,7 @@ body:
       value: |
         **Request a new global Question Group Template**
 
-        CheckTick maintains a collection of validated, reusable Question Group Templates (such as PHQ-9, GAD-7, etc.) that are available to all users. These templates help users quickly add standardized questionnaires to their surveys.
+        CheckTick maintains a collection of validated, reusable Question Group Templates (such as PHQ-9, GAD-7, etc.) that are available to all users. These templates help users quickly add standardised questionnaires to their surveys.
 
         Before requesting a new template, please:
         1. Check the [existing templates](https://checktick.eatyourpeas.com/templates/) to see if it already exists

@@ -497,7 +497,7 @@ POST /api/surveys/{survey_id}/seed/
 
 ## Managing Datasets via the API
 
-The DataSet API allows you to create, manage, and share reusable dropdown option lists across your organisation. This is useful for standardized lists like NHS specialty codes, trust names, or custom organisational lists.
+The DataSet API allows you to create, manage, and share reusable dropdown option lists across your organisation. This is useful for standardised lists like NHS specialty codes, trust names, or custom organisational lists.
 
 ### Endpoints
 

@@ -102,12 +102,22 @@ urlpatterns = [
     # Dataset management routes (must be before slug routes)
     path("datasets/", views.dataset_list, name="dataset_list"),
     path("datasets/create/", views.dataset_create, name="dataset_create"),
+    path(
+        "datasets/snomed/search/",
+        views.snomed_search,
+        name="snomed_search",
+    ),
     path("datasets/<int:dataset_id>/", views.dataset_detail, name="dataset_detail"),
     path("datasets/<int:dataset_id>/edit/", views.dataset_edit, name="dataset_edit"),
     path(
         "datasets/<int:dataset_id>/delete/",
         views.dataset_delete,
         name="dataset_delete",
+    ),
+    path(
+        "datasets/<int:dataset_id>/snapshot/",
+        views.dataset_snomed_snapshot,
+        name="dataset_snomed_snapshot",
     ),
     # Published question group templates (must be before slug routes)
     path(

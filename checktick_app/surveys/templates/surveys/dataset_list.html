@@ -18,6 +18,15 @@
     </div>
   </div>
 
+  {% if snomed_unavailable_warning %}
+    <div class="not-prose alert alert-warning mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+      <div class="text-sm">
+        {% trans "SNOMED CT datasets are listed below but the <strong>SNOMED CT database is not available</strong> on this server. Contact your administrator to set up <code>snomed.db</code>." %}
+      </div>
+    </div>
+  {% endif %}
+
   <div class="not-prose flex flex-wrap gap-2 mb-4">
     {% if can_create %}
       <a class="btn btn-primary" href="{% url 'surveys:dataset_create' %}">{% trans "Create Dataset" %}</a>
@@ -31,15 +40,42 @@
       </svg>
       {% trans "Request NHS DD List" %}
     </a>
+    <a class="btn btn-secondary btn-outline"
+       href="https://github.com/eatyourpeas/checktick/issues/new?template=snomed_refset_request.yml&title=%5BSNOMED+Refset%5D%3A+"
+       target="_blank"
+       rel="noopener noreferrer">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+      </svg>
+      {% trans "Request SNOMED Refset" %}
+    </a>
   </div>
 
   <!-- Filters -->
   <div class="not-prose mb-6">
     <form method="get" id="filter-form">
-      <div class="flex flex-wrap gap-3 items-center mb-4">
+      <div class="flex flex-wrap gap-3 items-end mb-4">
+        <!-- Name search -->
         <div class="form-control">
           <label class="label">
-            <span class="label-text font-semibold">{% trans "Filter by category:" %}</span>
+            <span class="label-text font-semibold">{% trans "Search:" %}</span>
+          </label>
+          <div class="join">
+            <input type="text" name="q" value="{{ search_query }}"
+                   placeholder="{% trans "Dataset name…" %}"
+                   class="input input-bordered input-sm join-item w-48" />
+            <button type="submit" class="btn btn-sm join-item">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Category filter -->
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-semibold">{% trans "Category:" %}</span>
           </label>
           <select name="category" class="select select-bordered select-sm" data-auto-submit="true">
             <option value="">{% trans "All categories" %}</option>
@@ -48,8 +84,9 @@
             {% endfor %}
           </select>
         </div>
-        {% if selected_category or selected_tags %}
-          <a href="{% url 'surveys:dataset_list' %}" class="btn btn-sm btn-ghost mt-8">{% trans "Clear All" %}</a>
+
+        {% if search_query or selected_category or selected_tags or show_all_snomed %}
+          <a href="{% url 'surveys:dataset_list' %}" class="btn btn-sm btn-ghost">{% trans "Clear All" %}</a>
         {% endif %}
       </div>
 
@@ -91,8 +128,22 @@
 
   {% if page_obj %}
     <div class="not-prose">
-      <div class="text-sm text-gray-600 mb-3">
-        {% trans "Showing" %} {{ page_obj.start_index }}-{{ page_obj.end_index }} {% trans "of" %} {{ page_obj.paginator.count }} {% trans "datasets" %}
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-sm text-gray-600">
+          {% trans "Showing" %} {{ page_obj.start_index }}-{{ page_obj.end_index }} {% trans "of" %} {{ page_obj.paginator.count }} {% trans "datasets" %}
+        </div>
+        {% if not show_all_snomed %}
+          <a href="?{% if search_query %}q={{ search_query }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if selected_tags %}tags={{ selected_tags|join:"," }}&{% endif %}show_all_snomed=1"
+             class="text-xs text-purple-700 underline hover:text-purple-900">
+            {% trans "Show full SNOMED registry (including large reference dictionaries)" %}
+          </a>
+        {% else %}
+          <span class="text-xs text-purple-700">
+            {% trans "Showing full SNOMED registry" %} —
+            <a href="?{% if search_query %}q={{ search_query }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if selected_tags %}tags={{ selected_tags|join:"," }}&{% endif %}"
+               class="underline">{% trans "show curated only" %}</a>
+          </span>
+        {% endif %}
       </div>
       <div class="overflow-x-auto">
         <table class="table table-zebra w-full">
@@ -119,9 +170,15 @@
                 {% endif %}
               </td>
               <td>
-                <span class="badge badge-outline badge-sm">
-                  {{ dataset.get_category_display }}
-                </span>
+                {% if dataset.category == 'snomed' %}
+                  <span class="badge badge-sm" style="background-color:#7c3aed;color:#fff;">{% trans "SNOMED CT" %}</span>
+                {% elif dataset.category == 'nhs_dd' and not dataset.is_custom %}
+                  <span class="badge badge-info badge-sm">{% trans "NHS DD" %}</span>
+                {% else %}
+                  <span class="badge badge-outline badge-sm">
+                    {{ dataset.get_category_display }}
+                  </span>
+                {% endif %}
               </td>
               <td>
                 {% if dataset.tags %}
@@ -138,7 +195,19 @@
                 {% endif %}
               </td>
               <td class="text-sm text-gray-600">
-                {{ dataset.options|length }} {% trans "item" %}{{ dataset.options|length|pluralize }}
+                {% if dataset.category == 'snomed' %}
+                  {% if snomed_available %}
+                    {% if dataset.snomed_member_count %}
+                      <span class="badge badge-ghost badge-sm">{{ dataset.snomed_member_count }} {% trans "concept" %}{{ dataset.snomed_member_count|pluralize }}</span>
+                    {% else %}
+                      <span class="text-gray-400 text-xs">{% trans "Live" %}</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="badge badge-warning badge-sm">{% trans "Unavailable" %}</span>
+                  {% endif %}
+                {% else %}
+                  {{ dataset.options|length }} {% trans "item" %}{{ dataset.options|length|pluralize }}
+                {% endif %}
               </td>
               <td>
                 <a href="{% url 'surveys:dataset_detail' dataset_id=dataset.id %}" class="btn btn-xs btn-ghost">

@@ -4,7 +4,7 @@ category: getting-involved
 priority: 3
 ---
 
-The CheckTick documentation system automatically discovers and organizes all markdown files in the `docs/` folder.
+The CheckTick documentation system automatically discovers and organises all markdown files in the `docs/` folder.
 
 ## How It Works
 
@@ -256,7 +256,7 @@ Use consistent prefixes for related docs:
 - `self-hosting-quickstart.md` (priority: 2)
 - `self-hosting-configuration.md` (priority: 3)
 
-This helps organize related documentation together in the same category.
+This helps organise related documentation together in the same category.
 
 ## Linking Between Documentation Pages
 
@@ -301,7 +301,7 @@ Check [Authentication](../authentication-and-permissions.md) guide.  <!-- Won't 
 
 ## Navigation Structure
 
-The documentation sidebar is organized hierarchically:
+The documentation sidebar is organised hierarchically:
 
 ```
 Documentation

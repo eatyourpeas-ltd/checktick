@@ -12,7 +12,7 @@ The CheckTick webapp is tested using pytest with Django's test client. Tests ver
 
 ## Test Location
 
-Webapp tests are organized by app:
+Webapp tests are organised by app:
 
 - `/checktick_app/surveys/tests/` - Survey-related webapp tests
   - `test_builder_question_creation.py` - Question creation via builder (23 tests)

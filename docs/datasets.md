@@ -24,14 +24,16 @@ CheckTick maintains three types of global datasets that are available to all use
 Authoritative medical codes and classifications from the [NHS Data Dictionary](https://www.datadictionary.nhs.uk/).
 
 **Available datasets include:**
+
 - Main Specialty Code (75 options)
 - Treatment Function Code (73 options)
 - Ethnic Category (17 options)
 - Smoking Status Code (6 options)
 - Clinical Frailty Scale (9 options)
-- Plus 40+ additional standardized lists
+- Plus 40+ additional standardised lists
 
 **Characteristics:**
+
 - ✅ Regularly synced from NHS DD website
 - ✅ Read-only (maintains standardization)
 - ✅ Full transparency with source URLs
@@ -52,12 +54,34 @@ Organisational data automatically synced from the Royal College of Paediatrics a
 - Integrated Care Boards - 42 ICBs
 
 **Characteristics:**
+
 - ✅ Automatically updated daily
 - ✅ Reliable, maintained data
 - ✅ Offline-capable (cached in database)
 - ✅ Can be used as templates
 
-### 3. Community-Published Datasets
+### 3. SNOMED CT Refsets
+
+Expert-curated clinical terminology lists drawn from SNOMED CT — the NHS standard clinical terminology, distributed via NHS TRUD and processed locally using the [`sct`](https://github.com/pacharanero/sct) Rust binary.
+
+CheckTick only surfaces **validated refsets**: curated subsets assembled by clinical experts for a defined purpose. Raw source hierarchies (all body structures, all medicinal products) are deliberately excluded because they are not clinically meaningful as survey dropdowns.
+
+**Available refsets include:**
+
+- QOF drug lists (antiepileptics, diabetic drugs, asthma/COPD, CHD beta-blockers)
+- Paediatric specialty condition sets (neurology, respiratory, endocrine, cardiovascular, and more)
+
+See the full list and setup instructions in the [SNOMED CT Integration guide](/docs/snomed-integration/).
+
+**Characteristics:**
+
+- ✅ Expert-curated — validated subsets, not raw dictionaries
+- ✅ Live queries from a local `snomed.db` (NHS TRUD UK Monolith Edition)
+- ✅ SCTID stored on submission — stable across terminology updates
+- ✅ Alphabetically sorted in the dataset browser
+- ⚠️ Requires separate SNOMED CT setup for self-hosted instances
+
+### 4. Community-Published Datasets
 
 Curated lists shared by other organisations using CheckTick:
 
@@ -67,6 +91,7 @@ Curated lists shared by other organisations using CheckTick:
 - Regional resource lists
 
 **Characteristics:**
+
 - ✅ Created by the community
 - ✅ Tagged for easy discovery
 - ✅ Can be used as templates
@@ -74,7 +99,7 @@ Curated lists shared by other organisations using CheckTick:
 
 ### Requesting New Global Datasets
 
-If you need an NHS DD list or other standardized dataset that isn't available:
+If you need an NHS DD list or other standardised dataset that isn't available:
 
 1. Navigate to the **Datasets** page in CheckTick
 2. Click **"Request New Dataset"**
@@ -105,6 +130,7 @@ The dropdown will populate with all options from that dataset.
 ### Filtering and Search
 
 Use the dataset selector to:
+
 - **Filter by tags**: Click tag badges to filter by category (e.g., "medical", "administrative")
 - **Search by name**: Type keywords to find specific datasets
 - **View details**: See source, last updated, and number of options
@@ -118,6 +144,7 @@ You have two approaches for creating custom datasets:
 Best for completely unique lists specific to your organisation.
 
 **Steps:**
+
 1. Navigate to Django Admin → Datasets
 2. Click "Add Dataset"
 3. Fill in:
@@ -135,6 +162,7 @@ Your dataset immediately appears in the dropdown selector.
 Best when you want to modify an existing global dataset (NHS DD, RCPCH, or community-published).
 
 **Steps:**
+
 1. Find the global dataset you want to customize
 2. Click **"Create Custom Version"**
 3. Give it a new name (e.g., "Regional Hospitals")
@@ -146,7 +174,8 @@ Best when you want to modify an existing global dataset (NHS DD, RCPCH, or commu
 6. Save
 
 **Benefits:**
-- Start with quality, standardized data
+
+- Start with quality, standardised data
 - Your changes don't affect the original
 - Create multiple variants for different purposes
 
@@ -159,6 +188,7 @@ Share your curated lists with the entire CheckTick community.
 ### When to Publish
 
 Consider publishing when you've created a dataset that:
+
 - Would benefit other organisations
 - Is high-quality and well-maintained
 - Represents authoritative or curated data for a specific domain
@@ -172,6 +202,7 @@ Consider publishing when you've created a dataset that:
 4. Click **"Publish Globally"**
 
 **What happens:**
+
 - Your dataset becomes visible to all CheckTick users
 - Your organisation is credited as the source
 - Others can use it directly or create custom versions
@@ -188,7 +219,7 @@ Consider publishing when you've created a dataset that:
 
 ## Tags and Discovery
 
-Tags help organize and find datasets quickly.
+Tags help organise and find datasets quickly.
 
 ### Common Tag Categories
 
@@ -206,19 +237,19 @@ Tags help organize and find datasets quickly.
 
 ## Permissions
 
-| Action | Individual Users | Org VIEWER | Org CREATOR/ADMIN |
-|--------|-----------------|------------|-------------------|
-| View global datasets | ✅ | ✅ | ✅ |
-| View org datasets | ❌ | ✅ (own org) | ✅ (own org) |
-| Create datasets | ✅* | ❌ | ✅ |
-| Edit own datasets | ✅ | ❌ | ✅ (own org) |
-| Delete own datasets | ✅** | ❌ | ✅ (own org)** |
-| Create custom versions | ✅* | ❌ | ✅ |
-| Publish globally | ✅* | ❌ | ✅ (own org) |
+| Action                 | Individual Users | Org VIEWER   | Org CREATOR/ADMIN |
+| ---------------------- | ---------------- | ------------ | ----------------- |
+| View global datasets   | ✅               | ✅           | ✅                |
+| View org datasets      | ❌               | ✅ (own org) | ✅ (own org)      |
+| Create datasets        | ✅\*             | ❌           | ✅                |
+| Edit own datasets      | ✅               | ❌           | ✅ (own org)      |
+| Delete own datasets    | ✅\*\*           | ❌           | ✅ (own org)\*\*  |
+| Create custom versions | ✅\*             | ❌           | ✅                |
+| Publish globally       | ✅\*             | ❌           | ✅ (own org)      |
 
-*Individual users can create, customize, and publish datasets. In future releases, this will require a pro account.
+\*Individual users can create, customize, and publish datasets. In future releases, this will require a pro account.
 
-**Cannot delete if published with dependents from other organisations
+\*\*Cannot delete if published with dependents from other organisations
 
 **Role clarifications:**
 
@@ -228,6 +259,8 @@ Tags help organize and find datasets quickly.
 ## Related Documentation
 
 - **[NHS DD Dataset Reference](nhs-data-dictionary-datasets.md)** - Complete list with source URLs
+- **[SNOMED CT Integration](snomed-integration.md)** - Setup, refset catalogue, and design decisions
+- **[Dataset Loading Architecture](dataset-loading-architecture.md)** - Technical reference for how options are stored and served
 - **[Dataset API Reference](api-datasets.md)** - API endpoints for programmatic access
 - **[Self-hosting Setup](self-hosting-datasets.md)** - Initial setup and sync commands
 

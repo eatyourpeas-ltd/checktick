@@ -4038,7 +4038,7 @@ class DataSet(models.Model):
     Unified model for all dropdown datasets.
 
     Supports:
-    - NHS Data Dictionary standardized lists (read-only)
+    - NHS Data Dictionary standardised lists (read-only)
     - External API datasets (synced periodically)
     - User-created custom lists
     - Customized versions of NHS DD lists (based on parent)

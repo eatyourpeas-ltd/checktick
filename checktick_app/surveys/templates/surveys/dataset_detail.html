@@ -10,7 +10,9 @@
     <div>
       <h1 class="inline-flex items-center gap-2">
         {{ dataset.name }}
-        {% if dataset.category == 'nhs_dd' and not dataset.is_custom %}
+        {% if dataset.category == 'snomed' %}
+          <span class="badge" style="background-color:#7c3aed;color:#fff;">{% trans "SNOMED CT" %}</span>
+        {% elif dataset.category == 'nhs_dd' and not dataset.is_custom %}
           <span class="badge badge-info">{% trans "NHS DD" %}</span>
         {% endif %}
         {% if dataset.is_global %}
@@ -34,9 +36,19 @@
           </button>
         </form>
       {% endif %}
-      <a href="{% url 'surveys:dataset_create' %}?clone_from={{ dataset.id }}" class="btn btn-accent btn-sm">
-        {% trans "Create Custom Version" %}
-      </a>
+      {% if dataset.category == 'snomed' %}
+        <form method="post" action="{% url 'surveys:dataset_snomed_snapshot' dataset_id=dataset.id %}"
+              onsubmit="return confirm('{% trans "This will snapshot all live SNOMED options into a new Postgres dataset. Continue?" %}');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-accent btn-sm">
+            {% trans "Snapshot to Custom Dataset" %}
+          </button>
+        </form>
+      {% else %}
+        <a href="{% url 'surveys:dataset_create' %}?clone_from={{ dataset.id }}" class="btn btn-accent btn-sm">
+          {% trans "Create Custom Version" %}
+        </a>
+      {% endif %}
     </div>
   </div>
 
@@ -84,6 +96,52 @@
     </div>
   </div>
 
+  {% if dataset.category == 'snomed' %}
+    <div class="not-prose card bg-purple-50 border border-purple-200 mb-6">
+      <div class="card-body p-4">
+        <h3 class="card-title text-base text-purple-800">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          {% trans "SNOMED CT Provenance" %}
+        </h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm mt-2">
+          {% if dataset.snomed_refset_id %}
+            <div>
+              <span class="font-semibold text-purple-700">{% trans "Refset SCTID" %}</span><br>
+              <code class="text-xs">{{ dataset.snomed_refset_id }}</code>
+            </div>
+          {% endif %}
+          {% if dataset.snomed_query_type %}
+            <div>
+              <span class="font-semibold text-purple-700">{% trans "Query type" %}</span><br>
+              <span>{{ dataset.get_snomed_query_type_display }}</span>
+            </div>
+          {% endif %}
+          {% if dataset.snomed_release_date %}
+            <div>
+              <span class="font-semibold text-purple-700">{% trans "SNOMED release" %}</span><br>
+              <span>{{ dataset.snomed_release_date }}</span>
+            </div>
+          {% endif %}
+          {% if dataset.snomed_member_count %}
+            <div>
+              <span class="font-semibold text-purple-700">{% trans "Concept count" %}</span><br>
+              <span>{{ dataset.snomed_member_count }}</span>
+            </div>
+          {% endif %}
+        </div>
+        <div class="mt-3">
+          <a href="https://browser.ihtsdotools.org/?perspective=full&conceptId1={{ dataset.snomed_refset_id }}&edition=uk-edition"
+             target="_blank" rel="noopener noreferrer"
+             class="link link-primary text-sm">
+            {% trans "View in NHS SNOMED CT Browser" %} ↗
+          </a>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
   {% if dataset.parent %}
     <div class="alert alert-info">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -93,37 +151,82 @@
     </div>
   {% endif %}
 
-  <h2>{% trans "Options" %} ({{ dataset.options|length }})</h2>
+  {% if dataset.category == 'snomed' %}
+    <h2>{% trans "Options" %} {% if snomed_options %}({{ snomed_options|length }} {% trans "concepts" %}){% endif %}</h2>
 
-  {% if dataset.format_pattern %}
-    <p class="text-sm text-gray-600">
-      <strong>{% trans "Format:" %}</strong> <code>{{ dataset.format_pattern }}</code>
-    </p>
-  {% endif %}
-
-  <div class="not-prose">
-    {# All datasets now use dictionary format with keys and values #}
-    <div class="grid grid-cols-2 gap-4">
-      <div class="overflow-x-auto max-h-96 border rounded-lg">
-        <div class="bg-base-300 px-4 py-2 font-semibold text-sm border-b">{% trans "Keys" %}</div>
-        <ul class="menu bg-base-200 text-sm">
-          {% for key, value in dataset.options.items %}
-            <li><a class="cursor-default hover:bg-base-200">
-              <code class="text-xs font-semibold text-primary">{{ key }}</code>
-            </a></li>
-          {% endfor %}
-        </ul>
+    {% if snomed_unavailable %}
+      <div class="not-prose alert alert-warning mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        <div>
+          <p class="font-semibold">{% trans "SNOMED CT database unavailable" %}</p>
+          <p class="text-sm">{% trans "Options cannot be displayed. " %}{% if snomed_error %}{{ snomed_error }}{% endif %}</p>
+        </div>
       </div>
-      <div class="overflow-x-auto max-h-96 border rounded-lg">
-        <div class="bg-base-300 px-4 py-2 font-semibold text-sm border-b">{% trans "Values" %}</div>
-        <ul class="menu bg-base-200 text-sm">
-          {% for key, value in dataset.options.items %}
-            <li><a class="cursor-default hover:bg-base-200">{{ value }}</a></li>
-          {% endfor %}
-        </ul>
+    {% else %}
+      {% if dataset.snomed_member_count and dataset.snomed_member_count > 2000 %}
+        <div class="not-prose alert alert-info mb-4 text-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          {% trans "This dataset has over 2,000 concepts and requires a <strong>typeahead search</strong> widget — it cannot be used as a plain dropdown in the survey builder." %}
+        </div>
+      {% endif %}
+      <div class="not-prose">
+        <div class="overflow-x-auto max-h-96 border rounded-lg">
+          <table class="table table-sm table-zebra w-full">
+            <thead>
+              <tr>
+                <th>{% trans "SCTID" %}</th>
+                <th>{% trans "Preferred term" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for sctid, term in snomed_options %}
+                <tr>
+                  <td><code class="text-xs text-primary">{{ sctid }}</code></td>
+                  <td class="text-sm">{{ term }}</td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="2" class="text-gray-400 text-sm text-center">{% trans "No concepts found in this refset." %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endif %}
+  {% else %}
+    <h2>{% trans "Options" %} ({{ dataset.options|length }})</h2>
+
+    {% if dataset.format_pattern %}
+      <p class="text-sm text-gray-600">
+        <strong>{% trans "Format:" %}</strong> <code>{{ dataset.format_pattern }}</code>
+      </p>
+    {% endif %}
+
+    <div class="not-prose">
+      {# All datasets now use dictionary format with keys and values #}
+      <div class="grid grid-cols-2 gap-4">
+        <div class="overflow-x-auto max-h-96 border rounded-lg">
+          <div class="bg-base-300 px-4 py-2 font-semibold text-sm border-b">{% trans "Keys" %}</div>
+          <ul class="menu bg-base-200 text-sm">
+            {% for key, value in dataset.options.items %}
+              <li><a class="cursor-default hover:bg-base-200">
+                <code class="text-xs font-semibold text-primary">{{ key }}</code>
+              </a></li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div class="overflow-x-auto max-h-96 border rounded-lg">
+          <div class="bg-base-300 px-4 py-2 font-semibold text-sm border-b">{% trans "Values" %}</div>
+          <ul class="menu bg-base-200 text-sm">
+            {% for key, value in dataset.options.items %}
+              <li><a class="cursor-default hover:bg-base-200">{{ value }}</a></li>
+            {% endfor %}
+          </ul>
+        </div>
       </div>
     </div>
-  </div>
+  {% endif %}
 
   {% if questions_using %}
     <h2>{% trans "Used in Questions" %}</h2>

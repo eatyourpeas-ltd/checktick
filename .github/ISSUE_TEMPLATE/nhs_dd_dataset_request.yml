@@ -1,14 +1,14 @@
 name: 🏥 NHS Data Dictionary Dataset Request
-description: Request a new NHS Data Dictionary standardized list to be added to CheckTick
+description: Request a new NHS Data Dictionary standardised list to be added to CheckTick
 title: "[NHS DD Dataset]: "
 labels: ["dataset", "NHS", "enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        **Request a standardized NHS Data Dictionary list**
+        **Request a standardised NHS Data Dictionary list**
 
-        CheckTick maintains a curated collection of commonly-used NHS Data Dictionary standardized lists as global datasets. These are scraped from the official NHS Data Dictionary and made available to all users.
+        CheckTick maintains a curated collection of commonly-used NHS Data Dictionary standardised lists as global datasets. These are scraped from the official NHS Data Dictionary and made available to all users.
 
         Before requesting a new dataset, please:
         1. Check the [existing NHS DD datasets](https://github.com/eatyourpeas/checktick/blob/main/checktick_app/surveys/management/commands/sync_nhs_dd_datasets.py) to see if it's already available

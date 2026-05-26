@@ -36,9 +36,32 @@ logger = logging.getLogger(__name__)
 # snomed_member_count: populated from snomed.db at seed time.
 # is_featured: True = shown in default dataset browser.
 #
-# All refset SCTIDs below are verified against sct v0.3.11 UK Monolith Edition.
-# Note: the QOF Supplement (a separate TRUD product) provides additional disease
-# register refsets not included here; those SCTIDs are not present in the Monolith.
+# DESIGN PRINCIPLE — curated refsets only
+# ----------------------------------------
+# A SNOMED CT reference set (refset) is a curated, expert-maintained subset of
+# concepts assembled for a specific clinical purpose. This is what CheckTick
+# supports: validated lists that power survey dropdowns without users having to
+# define their own clinical criteria (e.g. QOF drug lists, paediatric specialty
+# condition sets, ePrescribing routes).
+#
+# What CheckTick does NOT support here:
+# - The full dm+d drug dictionary (VTM ~23k, VMP ~162k) — these are the source
+#   from which clinical drug lists are carved, not curated lists themselves.
+# - Full hierarchy traversals (descendants of body structure, descendants of
+#   clinical finding) — these are the entire SNOMED taxonomy, not refsets.
+#
+# If a user needs a bespoke list not in this registry, they can:
+#   1. Request a new refset via the GitHub issue template
+#   2. Use "Snapshot to Custom Dataset" on an existing dataset and filter it
+#   3. Create a plain custom dataset via the dataset builder
+#
+# All refset SCTIDs below are verified against the sct UK Monolith Edition by
+# direct concept lookup (SELECT id, preferred_term FROM concepts WHERE id = ?).
+#
+# NOTE: QOF disease condition *register* refsets (the SNOMED codes that define
+# which patients count as being on a QOF register) are distributed in the
+# separate NHS England QOF Supplement TRUD product and are NOT present in the
+# UK Monolith Edition. Do not attempt to seed them from the Monolith.
 # ---------------------------------------------------------------------------
 
 FEATURED_DATASETS = [
@@ -80,101 +103,142 @@ FEATURED_DATASETS = [
         "tags": ["drugs", "CHD", "QOF", "snomed"],
         "is_featured": True,
     },
-    # ── Drugs — dm+d hierarchy ────────────────────────────────────────────
-    {
-        "key": "snomed_glp1_agonists",
-        "name": "GLP-1 Receptor Agonists (dm+d)",
-        "description": "All GLP-1 receptor agonist drugs (descendants of 372938004).",
-        "snomed_refset_id": "372938004",
-        "snomed_query_type": "descendants",
-        "tags": ["drugs", "GLP-1", "diabetes", "dm+d", "snomed"],
-        "is_featured": True,
-    },
-    {
-        "key": "snomed_sglt2_inhibitors",
-        "name": "SGLT2 Inhibitors (dm+d)",
-        "description": "All SGLT2 inhibitor drugs (descendants of 703673008).",
-        "snomed_refset_id": "703673008",
-        "snomed_query_type": "descendants",
-        "tags": ["drugs", "SGLT2", "diabetes", "dm+d", "snomed"],
-        "is_featured": True,
-    },
-    {
-        "key": "snomed_insulins",
-        "name": "Insulin Products (dm+d)",
-        "description": "All insulin products (descendants of 67866001).",
-        "snomed_refset_id": "67866001",
-        "snomed_query_type": "descendants",
-        "tags": ["drugs", "insulin", "diabetes", "dm+d", "snomed"],
-        "is_featured": True,
-    },
+    # ── Drugs — large reference dictionaries (is_featured=False) ─────────
+    # These are the full dm+d dictionaries — not curated clinical lists.
+    # They are registered as descriptors so survey responses can reference a
+    # specific SNOMED release date, but they are hidden from the default
+    # dataset browser (is_featured=False). Administrators can promote them
+    # if a specific use case warrants it (e.g. typeahead across all medicines).
     {
         "key": "snomed_dmd_vtm",
         "name": "dm+d VTM — All Drug Substances",
         "description": "All active Virtual Therapeutic Moieties from dm+d (~23,000 concepts). "
-        "Use for drug substance-level questions.",
+        "Full drug substance dictionary — not a curated clinical list. "
+        "Hidden by default; use a specific QOF or specialty refset instead.",
         "snomed_refset_id": "999000561000001109",
         "snomed_query_type": "refset",
         "tags": ["drugs", "dm+d", "VTM", "snomed"],
-        "is_featured": True,
+        "is_featured": False,
     },
     {
         "key": "snomed_dmd_vmp",
         "name": "dm+d VMP — All Medicinal Products",
         "description": "All active Virtual Medicinal Products from dm+d (~162,000 concepts). "
-        "Typeahead only — too large for a dropdown.",
+        "Full medicinal product dictionary — not a curated clinical list. "
+        "Hidden by default; use a specific QOF or specialty refset instead.",
         "snomed_refset_id": "999000541000001108",
         "snomed_query_type": "refset",
         "tags": ["drugs", "dm+d", "VMP", "snomed"],
-        "is_featured": True,
+        "is_featured": False,
     },
-    # ── Conditions — QOF disease registers ───────────────────────────────
-    # These refset IDs are present in the UK Monolith Edition.
-    # Additional registers (diabetes, cancer, stroke, mental health) are only
-    # available in the separate QOF Supplement TRUD product, not the Monolith.
+    # ── Conditions — Paediatric clinical condition refsets ────────────────
+    # These refsets ARE present in the UK Monolith Edition (verified by SCTID lookup).
+    # Note: QOF disease *register* refsets (epilepsy, hypertension, CHD, AF, asthma,
+    # diabetes) are only in the separate NHS England QOF Supplement TRUD product and
+    # are NOT available in the Monolith — do not attempt to seed them here.
     {
-        "key": "snomed_qof_epilepsy_register",
-        "name": "QOF Epilepsy Register (SNOMED CT)",
-        "description": "SNOMED CT codes that define the QOF Epilepsy disease register.",
-        "snomed_refset_id": "999002451000000109",
+        "key": "snomed_paed_neurology",
+        "name": "Paediatric Neurology, Neurodevelopmental & Neurodisability Disorders",
+        "description": "SNOMED CT codes for paediatric neurology, neurodevelopmental and neurodisability conditions (NHS simple reference set).",
+        "snomed_refset_id": "2222191000000108",
         "snomed_query_type": "refset",
-        "tags": ["conditions", "epilepsy", "QOF", "snomed"],
-        "is_featured": True,
-    },
-    {
-        "key": "snomed_qof_hypertension_register",
-        "name": "QOF Hypertension Register (SNOMED CT)",
-        "description": "SNOMED CT codes that define the QOF Hypertension disease register.",
-        "snomed_refset_id": "999002461000000107",
-        "snomed_query_type": "refset",
-        "tags": ["conditions", "hypertension", "QOF", "snomed"],
-        "is_featured": True,
-    },
-    {
-        "key": "snomed_qof_chd_register",
-        "name": "QOF Coronary Heart Disease Register (SNOMED CT)",
-        "description": "SNOMED CT codes for the QOF Coronary Heart Disease register.",
-        "snomed_refset_id": "999002471000000100",
-        "snomed_query_type": "refset",
-        "tags": ["conditions", "CHD", "QOF", "snomed"],
+        "tags": [
+            "conditions",
+            "paediatric",
+            "neurology",
+            "neurodevelopmental",
+            "snomed",
+        ],
         "is_featured": True,
     },
     {
-        "key": "snomed_qof_af_register",
-        "name": "QOF Atrial Fibrillation Register (SNOMED CT)",
-        "description": "SNOMED CT codes for the QOF Atrial Fibrillation disease register.",
-        "snomed_refset_id": "999002481000000103",
+        "key": "snomed_paed_neurodisability_outpatient",
+        "name": "Paediatric Neurodisability Outpatient Diagnoses",
+        "description": "SNOMED CT codes for paediatric neurodisability diagnoses used in outpatient settings (NHS simple reference set).",
+        "snomed_refset_id": "999001751000000105",
         "snomed_query_type": "refset",
-        "tags": ["conditions", "atrial fibrillation", "QOF", "snomed"],
+        "tags": ["conditions", "paediatric", "neurodisability", "snomed"],
         "is_featured": True,
     },
     {
-        "key": "snomed_qof_asthma_register",
-        "name": "QOF Asthma / COPD Register (SNOMED CT)",
-        "description": "SNOMED CT codes for the QOF Asthma and COPD disease registers.",
-        "snomed_refset_id": "999002491000000101",
+        "key": "snomed_paed_allergy_immunology",
+        "name": "Paediatric Allergy & Immunology Findings",
+        "description": "SNOMED CT codes for paediatric allergy and immunology clinical findings (NHS simple reference set).",
+        "snomed_refset_id": "2170881000000102",
         "snomed_query_type": "refset",
-        "tags": ["conditions", "asthma", "COPD", "QOF", "snomed"],
+        "tags": ["conditions", "paediatric", "allergy", "immunology", "snomed"],
+        "is_featured": True,
+    },
+    {
+        "key": "snomed_paed_respiratory",
+        "name": "Paediatric Respiratory Disorders",
+        "description": "SNOMED CT codes for paediatric respiratory disorders including asthma (NHS simple reference set).",
+        "snomed_refset_id": "2181221000000101",
+        "snomed_query_type": "refset",
+        "tags": ["conditions", "paediatric", "respiratory", "asthma", "snomed"],
+        "is_featured": True,
+    },
+    {
+        "key": "snomed_paed_endocrine_metabolic",
+        "name": "Paediatric Endocrine & Metabolic Disorders",
+        "description": "SNOMED CT codes for paediatric endocrine and metabolic disorders including diabetes (NHS simple reference set).",
+        "snomed_refset_id": "2181151000000100",
+        "snomed_query_type": "refset",
+        "tags": ["conditions", "paediatric", "endocrine", "diabetes", "snomed"],
+        "is_featured": True,
+    },
+    {
+        "key": "snomed_paed_cardiovascular",
+        "name": "Paediatric Cardiovascular Disorders",
+        "description": "SNOMED CT codes for paediatric cardiovascular disorders (NHS simple reference set).",
+        "snomed_refset_id": "2181141000000103",
+        "snomed_query_type": "refset",
+        "tags": ["conditions", "paediatric", "cardiovascular", "snomed"],
+        "is_featured": True,
+    },
+    {
+        "key": "snomed_paed_genitourinary_renal",
+        "name": "Paediatric Genitourinary & Renal Disorders",
+        "description": "SNOMED CT codes for paediatric genitourinary and renal disorders (NHS simple reference set).",
+        "snomed_refset_id": "2181181000000106",
+        "snomed_query_type": "refset",
+        "tags": ["conditions", "paediatric", "renal", "genitourinary", "snomed"],
+        "is_featured": True,
+    },
+    {
+        "key": "snomed_paed_gi_nutrition",
+        "name": "Paediatric Gastroenterology & Nutrition Findings",
+        "description": "SNOMED CT codes for paediatric gastrointestinal and nutrition clinical findings (NHS simple reference set).",
+        "snomed_refset_id": "2181171000000109",
+        "snomed_query_type": "refset",
+        "tags": ["conditions", "paediatric", "gastroenterology", "nutrition", "snomed"],
+        "is_featured": True,
+    },
+    {
+        "key": "snomed_paed_infectious_disease",
+        "name": "Paediatric Infectious Disease Disorders",
+        "description": "SNOMED CT codes for paediatric infectious disease disorders (NHS simple reference set).",
+        "snomed_refset_id": "2222181000000106",
+        "snomed_query_type": "refset",
+        "tags": ["conditions", "paediatric", "infectious disease", "snomed"],
+        "is_featured": True,
+    },
+    {
+        "key": "snomed_paed_behaviour_mental_health",
+        "name": "Paediatric Behaviour, Emotions & Mental Health",
+        "description": "SNOMED CT codes for paediatric behaviour, emotions, mental health and substance use (NHS simple reference set).",
+        "snomed_refset_id": "2181121000000105",
+        "snomed_query_type": "refset",
+        "tags": ["conditions", "paediatric", "mental health", "behaviour", "snomed"],
+        "is_featured": True,
+    },
+    {
+        "key": "snomed_paed_perinatal_neonatal",
+        "name": "Paediatric Perinatal & Neonatal Disorders",
+        "description": "SNOMED CT codes for paediatric perinatal and neonatal disorders (NHS simple reference set).",
+        "snomed_refset_id": "2222221000000101",
+        "snomed_query_type": "refset",
+        "tags": ["conditions", "paediatric", "neonatal", "perinatal", "snomed"],
         "is_featured": True,
     },
     {
@@ -187,15 +251,9 @@ FEATURED_DATASETS = [
         "is_featured": True,
     },
     # ── Anatomy ───────────────────────────────────────────────────────────
-    {
-        "key": "snomed_body_sites",
-        "name": "Body Structures (SNOMED CT)",
-        "description": "Anatomical body structures (descendants of 123037004 — Body structure).",
-        "snomed_refset_id": "123037004",
-        "snomed_query_type": "descendants",
-        "tags": ["anatomy", "body site", "snomed"],
-        "is_featured": True,
-    },
+    # Body structure descendants (root 123037004) excluded — the hierarchy is
+    # 100k+ concepts; the recursive CTE traversal hangs at seed time and at
+    # request time. Use the SNOMED CT typeahead search for anatomy questions.
     {
         "key": "snomed_administration_routes",
         "name": "Drug Administration Routes (SNOMED CT)",
@@ -248,6 +306,32 @@ def _get_member_count(db_path: str, definition: dict) -> int | None:
             return get_refset_member_count(refset_id)
         except SnomedUnavailableError:
             return None
+
+    if query_type == "descendants" and refset_id:
+        # Count via a recursive CTE COUNT(*) — avoids loading all rows into memory
+        try:
+            import sqlite3
+
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            row = conn.execute(
+                """
+                WITH RECURSIVE descendants(id) AS (
+                    SELECT child_id FROM concept_isa WHERE parent_id = ?
+                    UNION ALL
+                    SELECT ci.child_id
+                    FROM concept_isa ci
+                    JOIN descendants d ON ci.parent_id = d.id
+                )
+                SELECT COUNT(*) FROM descendants d
+                JOIN concepts c ON c.id = d.id AND c.active = 1
+                """,
+                (refset_id,),
+            ).fetchone()
+            conn.close()
+            return row[0] if row else 0
+        except Exception:
+            return None
+
     return None
 
 

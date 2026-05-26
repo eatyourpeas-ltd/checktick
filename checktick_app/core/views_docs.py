@@ -234,7 +234,7 @@ DOC_PAGE_OVERRIDES = {
 
 def _discover_doc_pages():
     """
-    Auto-discover all markdown files in docs/ directory and organize by category.
+    Auto-discover all markdown files in docs/ directory and organise by category.
 
     All markdown files MUST have YAML frontmatter with 'title' and 'category' fields.
     Files without frontmatter or with invalid categories will be skipped.

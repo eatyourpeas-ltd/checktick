@@ -8,7 +8,7 @@ body:
       value: |
         **Request a new global dataset**
 
-        CheckTick maintains a collection of commonly-used datasets that are available to all users. These can be standardized lists, lookup tables, or curated options that are useful across multiple surveys.
+        CheckTick maintains a collection of commonly-used datasets that are available to all users. These can be standardised lists, lookup tables, or curated options that are useful across multiple surveys.
 
         Before requesting a new dataset, please:
         1. Check if a similar dataset already exists in the system

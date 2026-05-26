@@ -1,0 +1,107 @@
+name: 🧬 SNOMED CT Refset Request
+description: Request a new SNOMED CT reference set or concept hierarchy to be added to CheckTick
+title: "[SNOMED Refset]: "
+labels: ["dataset", "SNOMED", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Request a new SNOMED CT dataset**
+
+        CheckTick exposes curated SNOMED CT reference sets and concept hierarchies as global datasets, drawn from the UK Monolith edition. These are served live from a local `snomed.db` file and are available to all users as dropdown or typeahead questions.
+
+        Before requesting, please:
+        1. Check the existing SNOMED datasets in the CheckTick dataset browser (filter by "SNOMED CT") to see if it's already available
+        2. Search existing issues to avoid duplicates
+        3. Check the [NHS SNOMED CT Browser](https://browser.ihtsdotools.org/) to find the refset SCTID if known
+
+  - type: input
+    id: dataset-name
+    attributes:
+      label: Dataset Name
+      description: A clear name for the SNOMED CT dataset (e.g. "QOF Epilepsy — drug list")
+      placeholder: "e.g., UK Allergy Substances"
+    validations:
+      required: true
+
+  - type: input
+    id: refset-sctid
+    attributes:
+      label: Refset SCTID (if known)
+      description: The SNOMED CT SCTID for the reference set or root concept. Leave blank if unsure.
+      placeholder: "e.g., 999002271000000101"
+
+  - type: dropdown
+    id: query-type
+    attributes:
+      label: Query Type
+      description: How should CheckTick retrieve concepts from this dataset?
+      options:
+        - Named reference set (refset)
+        - All descendants of a root concept (hierarchy)
+        - I'm not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: expected-size
+    attributes:
+      label: Expected Size
+      description: Approximate number of concepts. This affects widget selection in the survey builder.
+      options:
+        - Small (< 100 concepts) — plain dropdown
+        - Medium (100–500 concepts) — searchable select
+        - Large (500–2,000 concepts) — searchable select
+        - Very large (> 2,000 concepts) — typeahead only
+        - I don't know
+    validations:
+      required: true
+
+  - type: dropdown
+    id: clinical-domain
+    attributes:
+      label: Clinical Domain
+      options:
+        - Drugs / Medications
+        - Conditions / Diagnoses
+        - Procedures
+        - Demographics (e.g. ethnicity, occupation)
+        - Administrative
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Describe how you plan to use this dataset in your surveys
+      placeholder: |
+        - What surveys or workflows need this?
+        - Why is a SNOMED standard list important for your use case?
+        - Who else might benefit?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I've checked the existing SNOMED CT datasets in CheckTick
+          required: true
+        - label: I've searched existing issues for duplicates
+          required: true
+        - label: This dataset would benefit multiple users, not just my specific use case
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **What happens next?**
+
+        1. Maintainers verify the refset SCTID against the UK Monolith edition
+        2. A `DataSet` descriptor row is added and promoted to `is_featured = True`
+        3. The dataset appears immediately in the CheckTick dataset browser with no deployment needed
+        4. You'll be notified when it's live

@@ -876,6 +876,46 @@
       });
     }
 
+    // SNOMED member count hint: show an informative message when a SNOMED
+    // dataset is selected, indicating what widget type will be used at render time.
+    const snomedMetaEl = form.querySelector("#snomed-datasets-meta");
+    const snomedMemberHint = form.querySelector("#snomed-member-count-hint");
+    const snomedMeta = snomedMetaEl
+      ? (() => {
+          try {
+            return JSON.parse(snomedMetaEl.textContent);
+          } catch {
+            return {};
+          }
+        })()
+      : {};
+    if (prefilledDataset && snomedMemberHint) {
+      prefilledDataset.addEventListener("change", function () {
+        const key = prefilledDataset.value;
+        const meta = snomedMeta[key];
+        if (!meta) {
+          snomedMemberHint.classList.add("hidden");
+          snomedMemberHint.textContent = "";
+          return;
+        }
+        const count = meta.member_count || 0;
+        let msg = "";
+        if (count > 2000) {
+          msg = `This SNOMED dataset has ${count.toLocaleString()} concepts — a typeahead search will be used in the survey.`;
+        } else if (count > 500) {
+          msg = `This SNOMED dataset has ${count.toLocaleString()} concepts — a searchable dropdown will be used in the survey.`;
+        } else if (count > 0) {
+          msg = `This SNOMED dataset has ${count.toLocaleString()} concepts — a standard dropdown will be used in the survey.`;
+        }
+        if (msg) {
+          snomedMemberHint.textContent = msg;
+          snomedMemberHint.classList.remove("hidden");
+        } else {
+          snomedMemberHint.classList.add("hidden");
+        }
+      });
+    }
+
     // Load dataset button handler
     if (loadDatasetBtn && prefilledDataset && optionsTextarea) {
       loadDatasetBtn.addEventListener("click", async function () {
