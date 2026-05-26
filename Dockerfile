@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir --upgrade pip>=26.0
 RUN pip install --no-cache-dir poetry==${POETRY_VERSION}
 
 # Install sct binary (SNOMED CT toolchain) — pre-built release, no Rust needed
-ARG SCT_VERSION=v0.3.11
+ARG SCT_VERSION=v3.11-ctfix1
 ARG SCT_REPO=eatyourpeas/sct
 RUN set -eux; \
     ARCH=$(uname -m); \
