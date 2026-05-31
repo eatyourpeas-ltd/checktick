@@ -2,11 +2,15 @@
 Tests for platform admin permissions - ensuring only superusers can access.
 """
 
+from datetime import date
+
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 import pytest
 
+from checktick_app.core.models import Payment
 from checktick_app.core.models import PricingOverride
+from checktick_app.core.models import UserProfile
 from checktick_app.surveys.models import Organization, OrganizationMembership
 
 User = get_user_model()
@@ -126,6 +130,19 @@ class TestPlatformAdminDashboardAccess:
         assert response.status_code == 200
         assert b"Platform Admin" in response.content
 
+    def test_dashboard_quick_actions_use_account_dropdown_and_platform_stats(
+        self, client, superuser
+    ):
+        """Quick actions should provide create-account dropdown and platform stats link."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_dashboard")
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert b"Create Account" in response.content
+        assert b"Pending Setups by Tier" in response.content
+        assert b"mode=platform" in response.content
+
 
 # ============================================================================
 # Organization List Access Tests
@@ -214,6 +231,48 @@ class TestOrganizationCreateAccess:
 
         # Verify organization was created
         assert Organization.objects.filter(name="New Test Organization").exists()
+
+    def test_superuser_can_add_tier_account_from_create_view(self, client, superuser):
+        """Create view should support tier account creation in tier mode."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_org_create")
+
+        response = client.post(
+            f"{url}?mode=tier&scope=team_medium",
+            {
+                "name": "Tier User",
+                "owner_email": "tieruser@example.com",
+            },
+        )
+
+        assert response.status_code == 302
+        assert "mode=tier&scope=team_medium" in response.url
+
+        account = User.objects.get(email="tieruser@example.com")
+        assert account.profile.account_tier == UserProfile.AccountTier.TEAM_MEDIUM
+        assert (
+            account.profile.subscription_status == UserProfile.SubscriptionStatus.ACTIVE
+        )
+        assert not Organization.objects.filter(name="Tier User").exists()
+
+    def test_tier_scope_persists_when_scope_missing_in_query(self, client, superuser):
+        """Selected tier scope should be retained when moving between pages."""
+        client.force_login(superuser)
+
+        dashboard_url = reverse("core:platform_admin_dashboard")
+        response = client.get(f"{dashboard_url}?mode=tier&scope=enterprise")
+        assert response.status_code == 200
+        assert response.context["scope"] == "enterprise"
+
+        list_url = reverse("core:platform_admin_org_list")
+        response = client.get(f"{list_url}?mode=tier")
+        assert response.status_code == 200
+        assert response.context["scope"] == "enterprise"
+
+        stats_url = reverse("core:platform_admin_stats")
+        response = client.get(f"{stats_url}?mode=tier")
+        assert response.status_code == 200
+        assert response.context["scope"] == "enterprise"
 
 
 # ============================================================================
@@ -654,3 +713,95 @@ class TestPlatformPricingAccess:
         url = reverse("core:platform_admin_pricing")
         response = client.put(url)
         assert response.status_code == 405
+
+    def test_pricing_page_redirects_from_tier_mode(self, client, superuser):
+        """Pricing is platform-level and should redirect away from tier mode query."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_pricing")
+        response = client.get(url, {"mode": "tier", "scope": "pro"})
+        assert response.status_code == 302
+        assert response.url == url
+
+
+# ============================================================================
+# Platform Billing Access Tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestPlatformBillingAccess:
+    """Test access control and behavior for platform billing view."""
+
+    def test_anonymous_user_redirected_to_login(self, client):
+        """Anonymous users are redirected to login."""
+        url = reverse("core:platform_admin_billing")
+        response = client.get(url)
+        assert response.status_code == 302
+        assert "login" in response.url.lower()
+
+    def test_regular_user_denied_access(self, client, regular_user):
+        """Regular users cannot access platform billing page."""
+        client.force_login(regular_user)
+        url = reverse("core:platform_admin_billing")
+        response = client.get(url)
+        assert response.status_code == 302
+
+    def test_superuser_can_access_billing(self, client, superuser):
+        """Superusers can access platform billing page."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_billing")
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b"Billing" in response.content
+
+    def test_billing_rejects_post(self, client, superuser):
+        """Billing view should reject POST requests."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_billing")
+        response = client.post(url)
+        assert response.status_code == 405
+
+    def test_tier_mode_filters_transactions(self, client, superuser, regular_user):
+        """Tier mode should filter billing timeline by selected tier."""
+        Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-TEST-PRO",
+            invoice_date=date(2026, 1, 10),
+            payment_provider="gocardless",
+            payment_id="PMT-PRO-1",
+            subscription_id="SUB-PRO-1",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-TEST-FREE",
+            invoice_date=date(2026, 1, 11),
+            payment_provider="gocardless",
+            payment_id="PMT-FREE-1",
+            subscription_id="SUB-FREE-1",
+            tier="free",
+            amount_ex_vat=0,
+            vat_amount=0,
+            amount_inc_vat=0,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_billing")
+        response = client.get(url, {"mode": "tier", "scope": "pro"})
+
+        assert response.status_code == 200
+        assert b"INV-TEST-PRO" in response.content
+        assert b"INV-TEST-FREE" not in response.content

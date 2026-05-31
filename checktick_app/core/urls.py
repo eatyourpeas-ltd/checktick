@@ -88,6 +88,11 @@ urlpatterns = [
         name="platform_admin_logs",
     ),
     path(
+        "platform-admin/billing/",
+        views_platform_admin.platform_admin_billing,
+        name="platform_admin_billing",
+    ),
+    path(
         "platform-admin/pricing/",
         views_platform_admin.pricing_overrides,
         name="platform_admin_pricing",

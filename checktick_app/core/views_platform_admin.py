@@ -7,17 +7,82 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import user_passes_test
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 
+from checktick_app.core.models import UserProfile
 from checktick_app.surveys.models import Organization, OrganizationMembership, Survey
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+PLATFORM_ADMIN_SCOPE_CHOICES = [
+    ("all", "All"),
+    ("free", "Free"),
+    ("pro", "Pro"),
+    ("team_small", "Team Small"),
+    ("team_medium", "Team Medium"),
+    ("team_large", "Team Large"),
+    ("organization", "Organisation"),
+    ("enterprise", "Enterprise"),
+]
+PLATFORM_ADMIN_SCOPE_VALUES = {value for value, _label in PLATFORM_ADMIN_SCOPE_CHOICES}
+TIER_SCOPE_CHOICES = [
+    ("free", "Free"),
+    ("pro", "Pro"),
+    ("team_small", "Team Small"),
+    ("team_medium", "Team Medium"),
+    ("team_large", "Team Large"),
+    ("organization", "Organisation"),
+    ("enterprise", "Enterprise"),
+]
+TIER_SCOPE_VALUES = {value for value, _label in TIER_SCOPE_CHOICES}
+
+
+def _get_platform_mode(request: HttpRequest) -> str:
+    mode = request.GET.get("mode", "").strip().lower()
+    if mode in {"platform", "tier"}:
+        request.session["platform_admin_mode"] = mode
+        return mode
+
+    stored_mode = request.session.get("platform_admin_mode", "platform")
+    if stored_mode not in {"platform", "tier"}:
+        return "platform"
+    return stored_mode
+
+
+def _get_platform_scope(request: HttpRequest) -> str:
+    scope = request.GET.get("scope", "all").strip().lower()
+    if scope not in PLATFORM_ADMIN_SCOPE_VALUES:
+        return "all"
+    return scope
+
+
+def _get_tier_scope(request: HttpRequest) -> str:
+    scope = request.GET.get("scope", "").strip().lower()
+    if scope in TIER_SCOPE_VALUES:
+        request.session["platform_admin_tier_scope"] = scope
+        return scope
+
+    stored_scope = request.session.get("platform_admin_tier_scope", "pro")
+    if stored_scope not in TIER_SCOPE_VALUES:
+        return "pro"
+    return stored_scope
+
+
+def _generate_unique_username_from_email(email: str) -> str:
+    base = email.split("@", 1)[0] or "user"
+    candidate = base
+    suffix = 1
+    while User.objects.filter(username=candidate).exists():
+        suffix += 1
+        candidate = f"{base}{suffix}"
+    return candidate
 
 
 def _render_organization_form(
@@ -27,7 +92,19 @@ def _render_organization_form(
     org: Organization | None = None,
     form_data=None,
 ) -> HttpResponse:
+    mode = _get_platform_mode(request)
+    scope = _get_tier_scope(request) if mode == "tier" else "all"
+    create_target = (
+        "account"
+        if not editing and mode == "tier" and scope != "organization"
+        else "organization"
+    )
+
     context = {
+        "mode": mode,
+        "scope": scope,
+        "create_target": create_target,
+        "selected_scope_label": dict(TIER_SCOPE_CHOICES).get(scope, scope),
         "billing_choices": Organization.BillingType.choices,
     }
     if editing:
@@ -80,8 +157,15 @@ def superuser_required(view_func):
 @ratelimit(key="user", rate="60/m", block=True)
 def platform_admin_dashboard(request: HttpRequest) -> HttpResponse:
     """Platform admin dashboard - overview of organizations and key metrics."""
+    mode = _get_platform_mode(request)
+    scope = _get_tier_scope(request) if mode == "tier" else "all"
+
+    org_base = Organization.objects.all()
+    if mode == "tier" and scope != "organization":
+        org_base = org_base.none()
+
     # Get organization stats
-    org_stats = Organization.objects.aggregate(
+    org_stats = org_base.aggregate(
         total=Count("id"),
         active=Count("id", filter=Q(is_active=True)),
         pending=Count(
@@ -91,14 +175,14 @@ def platform_admin_dashboard(request: HttpRequest) -> HttpResponse:
 
     # Get recent organizations
     recent_orgs = (
-        Organization.objects.select_related("owner", "created_by")
+        org_base.select_related("owner", "created_by")
         .annotate(member_count=Count("memberships"))
         .order_by("-created_at")[:5]
     )
 
     # Get organizations needing attention (past due, pending setup)
     attention_orgs = (
-        Organization.objects.filter(
+        org_base.filter(
             Q(subscription_status=Organization.SubscriptionStatus.PAST_DUE)
             | Q(
                 subscription_status=Organization.SubscriptionStatus.PENDING,
@@ -110,15 +194,58 @@ def platform_admin_dashboard(request: HttpRequest) -> HttpResponse:
     )
 
     # Platform-wide stats
-    total_users = User.objects.count()
-    total_surveys = Survey.objects.count()
+    users_qs = User.objects.all()
+    surveys_qs = Survey.objects.all()
+    if mode == "tier" and scope != "organization":
+        users_qs = users_qs.filter(profile__account_tier=scope)
+        surveys_qs = surveys_qs.filter(owner__profile__account_tier=scope)
+
+    total_users = users_qs.count()
+    total_surveys = surveys_qs.count()
+
+    # Pending setup summary across all tiers, used by quick actions and dashboard table.
+    pending_setup_rows = []
+    for tier_value, tier_label in TIER_SCOPE_CHOICES:
+        if tier_value == "organization":
+            pending_count = Organization.objects.filter(
+                subscription_status=Organization.SubscriptionStatus.PENDING,
+            ).count()
+            pending_link = (
+                f"{reverse('core:platform_admin_org_list')}"
+                "?mode=platform&status=pending"
+            )
+        else:
+            pending_count = User.objects.filter(
+                profile__account_tier=tier_value,
+                profile__subscription_status=UserProfile.SubscriptionStatus.INCOMPLETE,
+            ).count()
+            pending_link = (
+                f"{reverse('core:platform_admin_org_list')}"
+                f"?mode=tier&scope={tier_value}&status=incomplete"
+            )
+
+        pending_setup_rows.append(
+            {
+                "tier": tier_value,
+                "label": tier_label,
+                "count": pending_count,
+                "link": pending_link,
+            }
+        )
+
+    total_pending_setups = sum(row["count"] for row in pending_setup_rows)
 
     context = {
+        "mode": mode,
+        "scope": scope,
         "org_stats": org_stats,
         "recent_orgs": recent_orgs,
         "attention_orgs": attention_orgs,
         "total_users": total_users,
         "total_surveys": total_surveys,
+        "tier_scope_choices": TIER_SCOPE_CHOICES,
+        "pending_setup_rows": pending_setup_rows,
+        "total_pending_setups": total_pending_setups,
     }
 
     return render(request, "core/platform_admin/dashboard.html", context)
@@ -128,11 +255,51 @@ def platform_admin_dashboard(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET"])
 @ratelimit(key="user", rate="60/m", block=True)
 def organization_list(request: HttpRequest) -> HttpResponse:
-    """List all organizations with filtering and search."""
+    """List platform accounts, scoped by mode and tier."""
+    mode = _get_platform_mode(request)
+    scope = _get_tier_scope(request) if mode == "tier" else "all"
+
     # Get filter params
     status_filter = request.GET.get("status", "")
     billing_filter = request.GET.get("billing", "")
     search = request.GET.get("q", "").strip()
+
+    if mode == "tier" and scope != "organization":
+        users = User.objects.select_related("profile").annotate(
+            survey_count=Count("surveys", distinct=True),
+            payment_count=Count("payments", distinct=True),
+        )
+        users = users.filter(profile__account_tier=scope).order_by("-date_joined")
+
+        if status_filter:
+            if status_filter == "active":
+                users = users.filter(is_active=True)
+            elif status_filter == "inactive":
+                users = users.filter(is_active=False)
+            else:
+                users = users.filter(profile__subscription_status=status_filter)
+
+        if search:
+            users = users.filter(
+                Q(username__icontains=search)
+                | Q(email__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+            )
+
+        paginator = Paginator(users, 25)
+        page = request.GET.get("page", 1)
+        users_page = paginator.get_page(page)
+
+        context = {
+            "mode": mode,
+            "scope": scope,
+            "is_tier_user_view": True,
+            "users": users_page,
+            "status_filter": status_filter,
+            "search": search,
+        }
+        return render(request, "core/platform_admin/organization_list.html", context)
 
     # Base queryset
     orgs = (
@@ -170,6 +337,9 @@ def organization_list(request: HttpRequest) -> HttpResponse:
     orgs_page = paginator.get_page(page)
 
     context = {
+        "mode": mode,
+        "scope": scope,
+        "is_tier_user_view": False,
         "orgs": orgs_page,
         "status_filter": status_filter,
         "billing_filter": billing_filter,
@@ -185,11 +355,78 @@ def organization_list(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 @ratelimit(key="user", rate="30/h", block=True)
 def organization_create(request: HttpRequest) -> HttpResponse:
-    """Create a new organization."""
+    """Create a new organization or tier-scoped account."""
+    mode = _get_platform_mode(request)
+    scope = _get_tier_scope(request) if mode == "tier" else "all"
+    create_tier_account = mode == "tier" and scope != "organization"
+
     if request.method == "POST":
-        # Extract form data
         name = request.POST.get("name", "").strip()
         owner_email = request.POST.get("owner_email", "").strip().lower()
+
+        if create_tier_account:
+            errors = []
+            if not owner_email:
+                errors.append("Account email is required.")
+
+            if errors:
+                for error in errors:
+                    messages.error(request, error)
+                return _render_organization_form(request, form_data=request.POST)
+
+            account = User.objects.filter(email__iexact=owner_email).first()
+            created = False
+            if not account:
+                import secrets
+
+                username = _generate_unique_username_from_email(owner_email)
+                account = User.objects.create_user(
+                    username=username,
+                    email=owner_email,
+                    password=secrets.token_urlsafe(32),
+                )
+                account.is_active = True
+                if name:
+                    name_parts = name.split(maxsplit=1)
+                    account.first_name = name_parts[0]
+                    if len(name_parts) > 1:
+                        account.last_name = name_parts[1]
+                account.save()
+                created = True
+
+            profile = UserProfile.get_or_create_for_user(account)
+            profile.account_tier = scope
+            profile.subscription_status = (
+                UserProfile.SubscriptionStatus.NONE
+                if scope == UserProfile.AccountTier.FREE
+                else UserProfile.SubscriptionStatus.ACTIVE
+            )
+            profile.tier_changed_at = timezone.now()
+            profile.save(
+                update_fields=[
+                    "account_tier",
+                    "subscription_status",
+                    "tier_changed_at",
+                    "updated_at",
+                ]
+            )
+
+            if created:
+                messages.success(
+                    request,
+                    f"Account '{account.email}' created in {dict(TIER_SCOPE_CHOICES).get(scope, scope)} tier.",
+                )
+            else:
+                messages.success(
+                    request,
+                    f"Account '{account.email}' updated to {dict(TIER_SCOPE_CHOICES).get(scope, scope)} tier.",
+                )
+
+            return redirect(
+                f"{reverse('core:platform_admin_org_list')}?mode=tier&scope={scope}"
+            )
+
+        # Extract organization form data
         billing_type = request.POST.get(
             "billing_type", Organization.BillingType.PER_SEAT
         )
@@ -486,22 +723,64 @@ def organization_toggle_active(request: HttpRequest, org_id: int) -> HttpRespons
 @ratelimit(key="user", rate="60/m", block=True)
 def organization_stats(request: HttpRequest) -> HttpResponse:
     """Organization statistics and analytics page."""
+    mode = _get_platform_mode(request)
+    scope = _get_tier_scope(request) if mode == "tier" else "all"
+
+    if mode == "tier" and scope != "organization":
+        users_base = User.objects.select_related("profile").filter(
+            profile__account_tier=scope
+        )
+
+        status_stats = {
+            label: users_base.filter(profile__subscription_status=status).count()
+            for status, label in Organization.SubscriptionStatus.choices
+        }
+        status_stats["Active Users"] = users_base.filter(is_active=True).count()
+        status_stats["Inactive Users"] = users_base.filter(is_active=False).count()
+
+        top_by_surveys = users_base.annotate(survey_count=Count("surveys")).order_by(
+            "-survey_count", "username"
+        )[:10]
+        top_by_payments = users_base.annotate(payment_count=Count("payments")).order_by(
+            "-payment_count", "username"
+        )[:10]
+
+        context = {
+            "mode": mode,
+            "scope": scope,
+            "is_tier_user_stats": True,
+            "total_accounts": users_base.count(),
+            "active_accounts": users_base.filter(is_active=True).count(),
+            "paid_accounts": users_base.exclude(
+                profile__subscription_status="free"
+            ).count(),
+            "survey_total": Survey.objects.filter(owner__in=users_base).count(),
+            "status_stats": status_stats,
+            "top_by_surveys": top_by_surveys,
+            "top_by_payments": top_by_payments,
+        }
+        return render(request, "core/platform_admin/organization_stats.html", context)
+
+    org_base = Organization.objects.all()
+    if mode == "tier" and scope != "organization":
+        org_base = org_base.none()
+
     # Billing breakdown
     billing_stats = {}
     for billing_type, label in Organization.BillingType.choices:
-        count = Organization.objects.filter(billing_type=billing_type).count()
+        count = org_base.filter(billing_type=billing_type).count()
         billing_stats[label] = count
 
     # Status breakdown
     status_stats = {}
     for status, label in Organization.SubscriptionStatus.choices:
-        count = Organization.objects.filter(subscription_status=status).count()
+        count = org_base.filter(subscription_status=status).count()
         status_stats[label] = count
 
     # Monthly revenue estimate (active per-seat + flat rate)
     from django.db.models import F, Sum
 
-    per_seat_revenue = Organization.objects.filter(
+    per_seat_revenue = org_base.filter(
         billing_type=Organization.BillingType.PER_SEAT,
         is_active=True,
         subscription_status=Organization.SubscriptionStatus.ACTIVE,
@@ -513,7 +792,7 @@ def organization_stats(request: HttpRequest) -> HttpResponse:
         "0"
     )
 
-    flat_rate_revenue = Organization.objects.filter(
+    flat_rate_revenue = org_base.filter(
         billing_type=Organization.BillingType.FLAT_RATE,
         is_active=True,
         subscription_status=Organization.SubscriptionStatus.ACTIVE,
@@ -523,19 +802,22 @@ def organization_stats(request: HttpRequest) -> HttpResponse:
 
     # Top organizations by members
     top_by_members = (
-        Organization.objects.filter(is_active=True)
+        org_base.filter(is_active=True)
         .annotate(member_count=Count("memberships"))
         .order_by("-member_count")[:10]
     )
 
     # Top organizations by surveys
     top_by_surveys = (
-        Organization.objects.filter(is_active=True)
+        org_base.filter(is_active=True)
         .annotate(survey_count=Count("survey"))
         .order_by("-survey_count")[:10]
     )
 
     context = {
+        "mode": mode,
+        "scope": scope,
+        "is_tier_user_stats": False,
         "billing_stats": billing_stats,
         "status_stats": status_stats,
         "total_monthly_revenue": total_monthly_revenue,
@@ -567,6 +849,9 @@ def platform_logs(request: HttpRequest) -> HttpResponse:
     from checktick_app.core.services.hosting import get_hosting_logs_service
     from checktick_app.surveys.models import AuditLog
 
+    mode = _get_platform_mode(request)
+    scope = _get_tier_scope(request) if mode == "tier" else "all"
+
     # Get filter parameters
     log_source = request.GET.get("source", "application")  # application, infrastructure
     severity_filter = request.GET.get("severity", "")
@@ -577,6 +862,8 @@ def platform_logs(request: HttpRequest) -> HttpResponse:
     page_number = request.GET.get("page", 1)
 
     context = {
+        "mode": mode,
+        "scope": scope,
         "log_source": log_source,
         "severity_filter": severity_filter,
         "action_filter": action_filter,
@@ -591,6 +878,11 @@ def platform_logs(request: HttpRequest) -> HttpResponse:
         # Fetch infrastructure logs from hosting provider API
         hosting_service = get_hosting_logs_service()
         context["hosting_available"] = hosting_service.is_available
+        if mode == "tier":
+            messages.info(
+                request,
+                "Infrastructure logs are not tier-scoped in this view and remain platform-wide.",
+            )
 
         if hosting_service.is_available:
             # Parse date filters
@@ -630,6 +922,15 @@ def platform_logs(request: HttpRequest) -> HttpResponse:
         logs_qs = AuditLog.objects.select_related(
             "actor", "target_user", "organization", "survey"
         ).order_by("-created_at")
+        scope_filter = None
+
+        if mode == "tier":
+            scope_filter = (
+                Q(actor__profile__account_tier=scope)
+                | Q(target_user__profile__account_tier=scope)
+                | Q(organization__owner__profile__account_tier=scope)
+            )
+            logs_qs = logs_qs.filter(scope_filter)
 
         # Apply filters
         if severity_filter:
@@ -673,21 +974,22 @@ def platform_logs(request: HttpRequest) -> HttpResponse:
         context["total_logs"] = paginator.count
 
         # Summary stats for dashboard
+        stats_qs = AuditLog.objects.filter(
+            created_at__gte=timezone.now() - timezone.timedelta(hours=24)
+        )
+        if scope_filter is not None:
+            stats_qs = stats_qs.filter(scope_filter)
+
         context["log_stats"] = {
-            "total_24h": AuditLog.objects.filter(
-                created_at__gte=timezone.now() - timezone.timedelta(hours=24)
-            ).count(),
-            "critical_24h": AuditLog.objects.filter(
+            "total_24h": stats_qs.count(),
+            "critical_24h": stats_qs.filter(
                 severity=AuditLog.Severity.CRITICAL,
-                created_at__gte=timezone.now() - timezone.timedelta(hours=24),
             ).count(),
-            "warnings_24h": AuditLog.objects.filter(
+            "warnings_24h": stats_qs.filter(
                 severity=AuditLog.Severity.WARNING,
-                created_at__gte=timezone.now() - timezone.timedelta(hours=24),
             ).count(),
-            "auth_failures_24h": AuditLog.objects.filter(
+            "auth_failures_24h": stats_qs.filter(
                 action=AuditLog.Action.LOGIN_FAILED,
-                created_at__gte=timezone.now() - timezone.timedelta(hours=24),
             ).count(),
         }
 
@@ -710,6 +1012,13 @@ def pricing_overrides(request: HttpRequest) -> HttpResponse:
     from django.conf import settings
 
     from checktick_app.core.models import PricingOverride
+
+    if _get_platform_mode(request) == "tier":
+        messages.info(
+            request,
+            "Pricing overrides are a platform-level control. Switched to Platform mode.",
+        )
+        return redirect("core:platform_admin_pricing")
 
     if request.method == "POST":
         for tier, _label in PricingOverride.OVERRIDABLE_TIERS:
@@ -791,3 +1100,89 @@ def pricing_overrides(request: HttpRequest) -> HttpResponse:
 
     context = {"tier_rows": tier_rows}
     return render(request, "core/platform_admin/pricing_overrides.html", context)
+
+
+@superuser_required
+@require_http_methods(["GET"])
+@ratelimit(key="user", rate="60/m", block=True)
+def platform_admin_billing(request: HttpRequest) -> HttpResponse:
+    """Platform billing view with scope and transaction filters."""
+    from checktick_app.core.models import Payment
+
+    mode = _get_platform_mode(request)
+    scope = _get_tier_scope(request) if mode == "tier" else "all"
+    status_filter = request.GET.get("status", "").strip()
+    date_from = request.GET.get("from", "").strip()
+    date_to = request.GET.get("to", "").strip()
+    search_query = request.GET.get("q", "").strip()
+
+    payments_qs = Payment.objects.select_related("user").order_by(
+        "-invoice_date", "-created_at"
+    )
+
+    if mode == "tier":
+        payments_qs = payments_qs.filter(tier=scope)
+
+    valid_statuses = {value for value, _label in Payment.PaymentStatus.choices}
+    if status_filter in valid_statuses:
+        payments_qs = payments_qs.filter(status=status_filter)
+
+    if date_from:
+        try:
+            from_date = timezone.datetime.strptime(date_from, "%Y-%m-%d").date()
+            payments_qs = payments_qs.filter(invoice_date__gte=from_date)
+        except ValueError:
+            messages.warning(request, "Invalid 'from' date ignored.")
+
+    if date_to:
+        try:
+            to_date = timezone.datetime.strptime(date_to, "%Y-%m-%d").date()
+            payments_qs = payments_qs.filter(invoice_date__lte=to_date)
+        except ValueError:
+            messages.warning(request, "Invalid 'to' date ignored.")
+
+    if search_query:
+        payments_qs = payments_qs.filter(
+            Q(invoice_number__icontains=search_query)
+            | Q(customer_email__icontains=search_query)
+            | Q(customer_name__icontains=search_query)
+            | Q(payment_id__icontains=search_query)
+            | Q(subscription_id__icontains=search_query)
+            | Q(user__username__icontains=search_query)
+            | Q(user__email__icontains=search_query)
+        )
+
+    aggregates = payments_qs.aggregate(
+        total_ex_vat=Sum("amount_ex_vat"),
+        total_vat=Sum("vat_amount"),
+        total_inc_vat=Sum("amount_inc_vat"),
+        total_refunded=Sum(
+            "amount_inc_vat", filter=Q(status=Payment.PaymentStatus.REFUNDED)
+        ),
+        tx_count=Count("id"),
+    )
+
+    paginator = Paginator(payments_qs, 50)
+    page = request.GET.get("page", 1)
+    payments_page = paginator.get_page(page)
+
+    context = {
+        "mode": mode,
+        "scope": scope,
+        "scope_choices": TIER_SCOPE_CHOICES,
+        "status_filter": status_filter,
+        "status_choices": Payment.PaymentStatus.choices,
+        "date_from": date_from,
+        "date_to": date_to,
+        "search_query": search_query,
+        "payments": payments_page,
+        "totals": {
+            "ex_vat": (aggregates.get("total_ex_vat") or 0) / 100,
+            "vat": (aggregates.get("total_vat") or 0) / 100,
+            "inc_vat": (aggregates.get("total_inc_vat") or 0) / 100,
+            "refunded": (aggregates.get("total_refunded") or 0) / 100,
+            "tx_count": aggregates.get("tx_count") or 0,
+        },
+    }
+
+    return render(request, "core/platform_admin/billing.html", context)

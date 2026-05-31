@@ -8,8 +8,11 @@
 
 <!-- Stats Cards -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  {% if mode != 'tier' or scope == 'organization' %}
   <div class="stat bg-base-100 rounded-box shadow">
-    <div class="stat-title">{% trans "Total Organisations" %}</div>
+    <div class="stat-title">
+      {% trans "Total Organisations" %}
+    </div>
     <div class="stat-value text-primary">{{ org_stats.total }}</div>
     <div class="stat-desc">{{ org_stats.active }} {% trans "active" %}</div>
   </div>
@@ -19,20 +22,65 @@
     <div class="stat-value">{{ org_stats.pending }}</div>
     <div class="stat-desc">{% trans "Awaiting owner activation" %}</div>
   </div>
+  {% endif %}
 
   <div class="stat bg-base-100 rounded-box shadow">
-    <div class="stat-title">{% trans "Total Users" %}</div>
+    <div class="stat-title">
+      {% if mode == 'tier' %}
+        {% blocktrans with scope_value=scope %}Users ({{ scope_value }}){% endblocktrans %}
+      {% else %}
+        {% trans "Total Users" %}
+      {% endif %}
+    </div>
     <div class="stat-value text-secondary">{{ total_users }}</div>
-    <div class="stat-desc">{% trans "Platform-wide" %}</div>
+    <div class="stat-desc">
+      {% if mode == 'tier' %}
+        {% trans "Filtered by selected tier" %}
+      {% else %}
+        {% trans "Platform-wide" %}
+      {% endif %}
+    </div>
   </div>
 
   <div class="stat bg-base-100 rounded-box shadow">
-    <div class="stat-title">{% trans "Total Surveys" %}</div>
+    <div class="stat-title">
+      {% if mode == 'tier' %}
+        {% blocktrans with scope_value=scope %}Surveys ({{ scope_value }}){% endblocktrans %}
+      {% else %}
+        {% trans "Total Surveys" %}
+      {% endif %}
+    </div>
     <div class="stat-value text-accent">{{ total_surveys }}</div>
-    <div class="stat-desc">{% trans "All organisations" %}</div>
+    <div class="stat-desc">
+      {% if mode == 'tier' %}
+        {% trans "Owned by users in selected tier" %}
+      {% else %}
+        {% trans "All organisations" %}
+      {% endif %}
+    </div>
   </div>
 </div>
 
+{% if mode == 'tier' and scope != 'organization' %}
+<div class="card bg-base-100 shadow mb-6">
+  <div class="card-body">
+    <h2 class="card-title">{% trans "Tier Overview" %}</h2>
+    <p class="text-base-content/70">
+      {% blocktrans with scope_value=scope %}
+        Organisation onboarding tables are hidden for tier {{ scope_value }} because they only apply to organisation accounts.
+      {% endblocktrans %}
+    </p>
+    <div class="card-actions justify-start mt-3">
+      <a href="{% url 'core:platform_admin_billing' %}?mode=tier&scope={{ scope }}" class="btn btn-primary btn-sm">
+        {% trans "View Tier Billing" %}
+      </a>
+      <a href="{% url 'core:platform_admin_org_list' %}?mode=tier&scope={{ scope }}" class="btn btn-outline btn-sm">
+        {% trans "View Accounts" %}
+      </a>
+    </div>
+  </div>
+</div>
+{% else %}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
   <!-- Recent Organisations -->
   <div class="card bg-base-100 shadow">
@@ -137,24 +185,77 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 <!-- Quick Actions -->
 <div class="card bg-base-100 shadow mt-6">
   <div class="card-body">
     <h2 class="card-title">{% trans "Quick Actions" %}</h2>
     <div class="flex flex-wrap gap-2">
-      <a href="{% url 'core:platform_admin_org_create' %}" class="btn btn-primary">
-        + {% trans "Create Organisation" %}
-      </a>
-      <a href="{% url 'core:platform_admin_org_list' %}?status=pending" class="btn btn-outline">
-        {% trans "View Pending Setups" %}
-      </a>
-      <a href="{% url 'core:platform_admin_stats' %}" class="btn btn-outline">
-        {% trans "View Statistics" %}
+      <details class="dropdown">
+        <summary class="btn btn-primary m-0">+ {% trans "Create Account" %}</summary>
+        <ul class="menu dropdown-content bg-base-100 rounded-box z-1 w-64 p-2 shadow">
+          {% for tier_value, tier_label in tier_scope_choices %}
+            <li>
+              <a href="{% url 'core:platform_admin_org_create' %}?mode=tier&scope={{ tier_value }}">
+                {% blocktrans with tier_name=tier_label %}Create {{ tier_name }} account{% endblocktrans %}
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      </details>
+      <a href="{% url 'core:platform_admin_stats' %}?mode=platform" class="btn btn-outline">
+        {% trans "View Platform Statistics" %}
       </a>
       <a href="{% url 'admin:surveys_organization_changelist' %}" class="btn btn-outline">
         {% trans "Django Admin → Organisations" %}
       </a>
+    </div>
+  </div>
+</div>
+
+<!-- Pending Setups By Tier -->
+<div id="pending-setups" class="card bg-base-100 shadow mt-6">
+  <div class="card-body">
+    <div class="flex items-center justify-between">
+      <h2 class="card-title">
+        {% trans "Pending Setups by Tier" %}
+        <span class="tooltip tooltip-right"
+              data-tip="Organisation pending uses org subscription status = pending. Non-organisation tiers use user profile subscription status = incomplete.">
+          <span class="badge badge-ghost badge-sm ml-1 cursor-help">?</span>
+        </span>
+      </h2>
+      <span class="badge badge-warning badge-lg">
+        {% blocktrans with count=total_pending_setups %}{{ count }} total pending{% endblocktrans %}
+      </span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>{% trans "Tier" %}</th>
+            <th>{% trans "Pending" %}</th>
+            <th>{% trans "Action" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in pending_setup_rows %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td>
+              {% if row.count > 0 %}
+                <span class="badge badge-warning">{{ row.count }}</span>
+              {% else %}
+                <span class="badge badge-ghost">0</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{{ row.link }}" class="btn btn-xs btn-ghost">{% trans "View" %}</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
 </div>

@@ -25,38 +25,72 @@
 
       <!-- Navigation -->
       <nav class="mt-4">
+        {% with current_mode=mode|default:'platform' current_scope=scope|default:'pro' %}
+           <div role="tablist" class="tabs tabs-boxed bg-base-300 inline-flex mb-3">
+           <a href="{% url 'core:platform_admin_dashboard' %}?mode=platform"
+             class="tab {% if current_mode == 'platform' %}tab-active{% endif %}">{% trans "Platform" %}</a>
+           <a href="{% url 'core:platform_admin_dashboard' %}?mode=tier&scope={{ current_scope }}"
+             class="tab {% if current_mode == 'tier' %}tab-active{% endif %}">{% trans "Tier" %}</a>
+        </div>
+
+        {% if current_mode == 'tier' %}
+          <div role="alert" class="alert alert-info mb-3">
+            <span>{% trans "Tier mode filters billing and operational views to a selected subscription tier." %}</span>
+          </div>
+          <form method="get" action="" class="flex items-center gap-2 mb-3" id="tier-scope-form">
+            <input type="hidden" name="mode" value="tier">
+            <label for="platform-scope" class="text-sm font-medium text-base-content/80">{% trans "Tier" %}</label>
+            <select id="platform-scope" name="scope" class="select select-sm select-bordered">
+              <option value="free" {% if current_scope == 'free' %}selected{% endif %}>{% trans "Free" %}</option>
+              <option value="pro" {% if current_scope == 'pro' %}selected{% endif %}>{% trans "Pro" %}</option>
+              <option value="team_small" {% if current_scope == 'team_small' %}selected{% endif %}>{% trans "Team Small" %}</option>
+              <option value="team_medium" {% if current_scope == 'team_medium' %}selected{% endif %}>{% trans "Team Medium" %}</option>
+              <option value="team_large" {% if current_scope == 'team_large' %}selected{% endif %}>{% trans "Team Large" %}</option>
+              <option value="organization" {% if current_scope == 'organization' %}selected{% endif %}>{% trans "Organisation" %}</option>
+              <option value="enterprise" {% if current_scope == 'enterprise' %}selected{% endif %}>{% trans "Enterprise" %}</option>
+            </select>
+          </form>
+        {% else %}
+          <div role="alert" class="alert alert-warning mb-3">
+            <span>{% trans "Platform mode shows cross-tier totals and global operational state." %}</span>
+          </div>
+        {% endif %}
+
         <ul class="flex gap-2 flex-wrap">
           <li>
-            <a href="{% url 'core:platform_admin_dashboard' %}"
+            <a href="{% url 'core:platform_admin_dashboard' %}?mode={{ current_mode }}{% if current_mode == 'tier' %}&scope={{ current_scope }}{% endif %}"
                class="btn btn-sm {% if request.resolver_match.url_name == 'platform_admin_dashboard' %}btn-primary{% else %}btn-ghost{% endif %}">
-              {% trans "Dashboard" %}
+              {% trans "Overview" %}
             </a>
           </li>
           <li>
-            <a href="{% url 'core:platform_admin_org_list' %}"
+            <a href="{% url 'core:platform_admin_org_list' %}?mode={{ current_mode }}{% if current_mode == 'tier' %}&scope={{ current_scope }}{% endif %}"
                class="btn btn-sm {% if 'org' in request.resolver_match.url_name %}btn-primary{% else %}btn-ghost{% endif %}">
-              {% trans "Organisations" %}
+              {% trans "Accounts" %}
             </a>
           </li>
           <li>
-            <a href="{% url 'core:platform_admin_stats' %}"
+            <a href="{% url 'core:platform_admin_stats' %}?mode={{ current_mode }}{% if current_mode == 'tier' %}&scope={{ current_scope }}{% endif %}"
                class="btn btn-sm {% if request.resolver_match.url_name == 'platform_admin_stats' %}btn-primary{% else %}btn-ghost{% endif %}">
               {% trans "Statistics" %}
             </a>
           </li>
           <li>
-            <a href="{% url 'core:platform_admin_logs' %}"
+            <a href="{% url 'core:platform_admin_logs' %}?mode={{ current_mode }}{% if current_mode == 'tier' %}&scope={{ current_scope }}{% endif %}"
                class="btn btn-sm {% if request.resolver_match.url_name == 'platform_admin_logs' %}btn-primary{% else %}btn-ghost{% endif %}">
               {% trans "Logs" %}
             </a>
           </li>
+          {% if current_mode == 'platform' %}
           <li>
             <a href="{% url 'core:platform_admin_pricing' %}"
                class="btn btn-sm {% if request.resolver_match.url_name == 'platform_admin_pricing' %}btn-primary{% else %}btn-ghost{% endif %}">
               {% trans "Pricing" %}
             </a>
           </li>
+          {% endif %}
         </ul>
+        {% endwith %}
       </nav>
     </div>
   </div>
@@ -74,4 +108,17 @@
     {% block platform_content %}{% endblock %}
   </div>
 </div>
+
+<script nonce="{{ request.csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function () {
+  var scopeSelect = document.getElementById('platform-scope');
+  var scopeForm = document.getElementById('tier-scope-form');
+  if (!scopeSelect || !scopeForm) {
+    return;
+  }
+  scopeSelect.addEventListener('change', function () {
+    scopeForm.submit();
+  });
+});
+</script>
 {% endblock %}

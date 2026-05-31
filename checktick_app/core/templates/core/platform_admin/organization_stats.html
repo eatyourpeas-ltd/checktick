@@ -5,6 +5,116 @@
 {% block platform_title %}{% trans "Statistics" %}{% endblock %}
 
 {% block platform_content %}
+{% if is_tier_user_stats %}
+<h2 class="text-xl font-semibold mb-6">
+  {% blocktrans with scope_value=scope %}Tier Statistics ({{ scope_value }}){% endblocktrans %}
+</h2>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Accounts" %}</div>
+    <div class="stat-value text-primary">{{ total_accounts }}</div>
+    <div class="stat-desc">{% trans "In selected tier" %}</div>
+  </div>
+
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Active" %}</div>
+    <div class="stat-value text-secondary">{{ active_accounts }}</div>
+    <div class="stat-desc">{% trans "Can access platform" %}</div>
+  </div>
+
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Paid" %}</div>
+    <div class="stat-value text-accent">{{ paid_accounts }}</div>
+    <div class="stat-desc">{% trans "Excluding free status" %}</div>
+  </div>
+
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Surveys" %}</div>
+    <div class="stat-value">{{ survey_total }}</div>
+    <div class="stat-desc">{% trans "Owned by tier accounts" %}</div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h3 class="card-title">{% trans "Accounts by Status" %}</h3>
+      <div class="space-y-3 mt-4">
+        {% for label, count in status_stats.items %}
+        <div class="flex items-center justify-between">
+          <span>{{ label }}</span>
+          <div class="flex items-center gap-2">
+            <progress class="progress progress-primary w-32" value="{{ count }}" max="{% widthratio count 1 1 %}"></progress>
+            <span class="font-mono text-sm w-10 text-right">{{ count }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h3 class="card-title">{% trans "Top Accounts by Payments" %}</h3>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>{% trans "Account" %}</th>
+              <th class="text-right">{% trans "Payments" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in top_by_payments %}
+            <tr>
+              <td class="text-base-content/60">{{ forloop.counter }}</td>
+              <td>{{ user.username }}</td>
+              <td class="text-right font-mono">{{ user.payment_count }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="3" class="text-center text-base-content/60">{% trans "No data" %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card bg-base-100 shadow">
+  <div class="card-body">
+    <h3 class="card-title">{% trans "Top Accounts by Surveys" %}</h3>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>{% trans "Account" %}</th>
+            <th class="text-right">{% trans "Surveys" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in top_by_surveys %}
+          <tr>
+            <td class="text-base-content/60">{{ forloop.counter }}</td>
+            <td>{{ user.username }}</td>
+            <td class="text-right font-mono">{{ user.survey_count }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="3" class="text-center text-base-content/60">{% trans "No data" %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
 <h2 class="text-xl font-semibold mb-6">{% trans "Platform Statistics" %}</h2>
 
 <!-- Revenue Overview -->
@@ -137,4 +247,5 @@
     </div>
   </div>
 </div>
+{% endif %}
 {% endblock %}
