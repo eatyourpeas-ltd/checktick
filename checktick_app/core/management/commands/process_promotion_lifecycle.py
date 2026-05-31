@@ -52,9 +52,13 @@ class Command(BaseCommand):
         ending_cutoff = now + timedelta(days=ending_soon_days)
         recent_expiry_cutoff = now - timedelta(days=recent_expiry_days)
 
-        self.stdout.write(self.style.SUCCESS(f"Processing promotion lifecycle at {now}"))
+        self.stdout.write(
+            self.style.SUCCESS(f"Processing promotion lifecycle at {now}")
+        )
         if dry_run:
-            self.stdout.write(self.style.WARNING("DRY RUN MODE - no API or email changes"))
+            self.stdout.write(
+                self.style.WARNING("DRY RUN MODE - no API or email changes")
+            )
 
         stats = {
             "subscriptions_checked": 0,
@@ -108,7 +112,9 @@ class Command(BaseCommand):
         for key, value in stats.items():
             self.stdout.write(f"{key}: {value}")
 
-    def _log_once_exists(self, action: str, promotion_id: int, target_type: str, target_id: str) -> bool:
+    def _log_once_exists(
+        self, action: str, promotion_id: int, target_type: str, target_id: str
+    ) -> bool:
         return AuditLog.objects.filter(
             action=action,
             metadata__promotion_id=str(promotion_id),
@@ -138,11 +144,26 @@ class Command(BaseCommand):
             },
         )
 
-    def _process_user_profile(self, payment_client, profile, now, ending_cutoff, recent_expiry_cutoff, dry_run, verbose, stats):
+    def _process_user_profile(
+        self,
+        payment_client,
+        profile,
+        now,
+        ending_cutoff,
+        recent_expiry_cutoff,
+        dry_run,
+        verbose,
+        stats,
+    ):
         user = profile.user
         resolution = resolve_effective_pricing_for_user(user, at_time=now)
-        current_amount = self._fetch_current_amount(payment_client, profile.payment_subscription_id)
-        if current_amount is not None and current_amount != resolution.effective_amount_pence:
+        current_amount = self._fetch_current_amount(
+            payment_client, profile.payment_subscription_id
+        )
+        if (
+            current_amount is not None
+            and current_amount != resolution.effective_amount_pence
+        ):
             self._reconcile_subscription(
                 payment_client,
                 subscription_id=profile.payment_subscription_id,
@@ -160,18 +181,37 @@ class Command(BaseCommand):
             target_type="user",
             target_id=str(user.id),
             current_resolution=resolution,
-            next_resolution=resolve_effective_pricing_for_user(user, at_time=ending_cutoff + timedelta(minutes=1)),
-            ended_promotion=self._find_recently_ended_promotion_for_user(user, now, recent_expiry_cutoff),
+            next_resolution=resolve_effective_pricing_for_user(
+                user, at_time=ending_cutoff + timedelta(minutes=1)
+            ),
+            ended_promotion=self._find_recently_ended_promotion_for_user(
+                user, now, recent_expiry_cutoff
+            ),
             now=now,
             ending_cutoff=ending_cutoff,
             dry_run=dry_run,
             stats=stats,
         )
 
-    def _process_team(self, payment_client, team, now, ending_cutoff, recent_expiry_cutoff, dry_run, verbose, stats):
+    def _process_team(
+        self,
+        payment_client,
+        team,
+        now,
+        ending_cutoff,
+        recent_expiry_cutoff,
+        dry_run,
+        verbose,
+        stats,
+    ):
         resolution = resolve_effective_pricing_for_team(team, at_time=now)
-        current_amount = self._fetch_current_amount(payment_client, team.subscription_id)
-        if current_amount is not None and current_amount != resolution.effective_amount_pence:
+        current_amount = self._fetch_current_amount(
+            payment_client, team.subscription_id
+        )
+        if (
+            current_amount is not None
+            and current_amount != resolution.effective_amount_pence
+        ):
             self._reconcile_subscription(
                 payment_client,
                 subscription_id=team.subscription_id,
@@ -189,18 +229,37 @@ class Command(BaseCommand):
             target_type="team",
             target_id=str(team.id),
             current_resolution=resolution,
-            next_resolution=resolve_effective_pricing_for_team(team, at_time=ending_cutoff + timedelta(minutes=1)),
-            ended_promotion=self._find_recently_ended_promotion_for_team(team, now, recent_expiry_cutoff),
+            next_resolution=resolve_effective_pricing_for_team(
+                team, at_time=ending_cutoff + timedelta(minutes=1)
+            ),
+            ended_promotion=self._find_recently_ended_promotion_for_team(
+                team, now, recent_expiry_cutoff
+            ),
             now=now,
             ending_cutoff=ending_cutoff,
             dry_run=dry_run,
             stats=stats,
         )
 
-    def _process_organization(self, payment_client, org, now, ending_cutoff, recent_expiry_cutoff, dry_run, verbose, stats):
+    def _process_organization(
+        self,
+        payment_client,
+        org,
+        now,
+        ending_cutoff,
+        recent_expiry_cutoff,
+        dry_run,
+        verbose,
+        stats,
+    ):
         resolution = resolve_effective_pricing_for_organization(org, at_time=now)
-        current_amount = self._fetch_current_amount(payment_client, org.payment_subscription_id)
-        if current_amount is not None and current_amount != resolution.effective_amount_pence:
+        current_amount = self._fetch_current_amount(
+            payment_client, org.payment_subscription_id
+        )
+        if (
+            current_amount is not None
+            and current_amount != resolution.effective_amount_pence
+        ):
             self._reconcile_subscription(
                 payment_client,
                 subscription_id=org.payment_subscription_id,
@@ -212,7 +271,9 @@ class Command(BaseCommand):
             )
             stats["subscriptions_updated"] += 1
 
-        contact_email = org.billing_contact_email or (org.owner.email if org.owner else "")
+        contact_email = org.billing_contact_email or (
+            org.owner.email if org.owner else ""
+        )
         if not contact_email:
             return
         contact_name = org.name
@@ -222,8 +283,12 @@ class Command(BaseCommand):
             target_type="organization",
             target_id=str(org.id),
             current_resolution=resolution,
-            next_resolution=resolve_effective_pricing_for_organization(org, at_time=ending_cutoff + timedelta(minutes=1)),
-            ended_promotion=self._find_recently_ended_promotion_for_organization(org, now, recent_expiry_cutoff),
+            next_resolution=resolve_effective_pricing_for_organization(
+                org, at_time=ending_cutoff + timedelta(minutes=1)
+            ),
+            ended_promotion=self._find_recently_ended_promotion_for_organization(
+                org, now, recent_expiry_cutoff
+            ),
             now=now,
             ending_cutoff=ending_cutoff,
             dry_run=dry_run,
@@ -242,12 +307,26 @@ class Command(BaseCommand):
         except (TypeError, ValueError):
             return None
 
-    def _reconcile_subscription(self, payment_client, *, subscription_id: str, effective_amount: int, applied_promotion, target_label: str, dry_run: bool, verbose: bool):
+    def _reconcile_subscription(
+        self,
+        payment_client,
+        *,
+        subscription_id: str,
+        effective_amount: int,
+        applied_promotion,
+        target_label: str,
+        dry_run: bool,
+        verbose: bool,
+    ):
         metadata = {
-            "applied_promotion_id": str(applied_promotion.id) if applied_promotion else "",
+            "applied_promotion_id": (
+                str(applied_promotion.id) if applied_promotion else ""
+            ),
         }
         if verbose or dry_run:
-            self.stdout.write(f"Reconcile {target_label}: {subscription_id} -> {effective_amount}")
+            self.stdout.write(
+                f"Reconcile {target_label}: {subscription_id} -> {effective_amount}"
+            )
         if not dry_run:
             payment_client.update_subscription(
                 subscription_id,
@@ -262,17 +341,47 @@ class Command(BaseCommand):
                 subscription_id,
             )
 
-    def _send_lifecycle_notifications(self, *, to_email: str, recipient_name: str, target_type: str, target_id: str, current_resolution, next_resolution, ended_promotion, now, ending_cutoff, dry_run: bool, stats: dict):
+    def _send_lifecycle_notifications(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        target_type: str,
+        target_id: str,
+        current_resolution,
+        next_resolution,
+        ended_promotion,
+        now,
+        ending_cutoff,
+        dry_run: bool,
+        stats: dict,
+    ):
         promotion = current_resolution.applied_promotion
-        if promotion and promotion.starts_at and promotion.starts_at <= now and not self._log_once_exists(AuditLog.Action.PROMOTION_ACTIVATED, promotion.id, target_type, target_id):
+        if (
+            promotion
+            and promotion.starts_at
+            and promotion.starts_at <= now
+            and not self._log_once_exists(
+                AuditLog.Action.PROMOTION_ACTIVATED,
+                promotion.id,
+                target_type,
+                target_id,
+            )
+        ):
             if not dry_run:
                 send_promotion_activated_email(
                     to_email=to_email,
                     recipient_name=recipient_name,
                     promotion_name=promotion.name,
                     effective_amount=f"£{current_resolution.effective_amount_pence / 100:.2f}",
-                    effective_tier=current_resolution.effective_tier.replace("_", " ").title(),
-                    ends_at_text=promotion.ends_at.strftime("%d %B %Y") if promotion.ends_at else "",
+                    effective_tier=current_resolution.effective_tier.replace(
+                        "_", " "
+                    ).title(),
+                    ends_at_text=(
+                        promotion.ends_at.strftime("%d %B %Y")
+                        if promotion.ends_at
+                        else ""
+                    ),
                 )
             if not dry_run:
                 self._create_lifecycle_log(
@@ -284,7 +393,17 @@ class Command(BaseCommand):
                 )
             stats["activation_emails"] += 1
 
-        if promotion and promotion.ends_at and now <= promotion.ends_at <= ending_cutoff and not self._log_once_exists(AuditLog.Action.PROMOTION_ENDING_SOON, promotion.id, target_type, target_id):
+        if (
+            promotion
+            and promotion.ends_at
+            and now <= promotion.ends_at <= ending_cutoff
+            and not self._log_once_exists(
+                AuditLog.Action.PROMOTION_ENDING_SOON,
+                promotion.id,
+                target_type,
+                target_id,
+            )
+        ):
             if not dry_run:
                 send_promotion_ending_soon_email(
                     to_email=to_email,
@@ -292,7 +411,9 @@ class Command(BaseCommand):
                     promotion_name=promotion.name,
                     current_amount=f"£{current_resolution.effective_amount_pence / 100:.2f}",
                     next_amount=f"£{next_resolution.effective_amount_pence / 100:.2f}",
-                    effective_tier=current_resolution.effective_tier.replace("_", " ").title(),
+                    effective_tier=current_resolution.effective_tier.replace(
+                        "_", " "
+                    ).title(),
                     ends_at_text=promotion.ends_at.strftime("%d %B %Y"),
                 )
             if not dry_run:
@@ -305,13 +426,20 @@ class Command(BaseCommand):
                 )
             stats["ending_soon_emails"] += 1
 
-        if ended_promotion and not self._log_once_exists(AuditLog.Action.PROMOTION_EXPIRED, ended_promotion.id, target_type, target_id):
+        if ended_promotion and not self._log_once_exists(
+            AuditLog.Action.PROMOTION_EXPIRED,
+            ended_promotion.id,
+            target_type,
+            target_id,
+        ):
             if not dry_run:
                 send_promotion_expired_email(
                     to_email=to_email,
                     recipient_name=recipient_name,
                     promotion_name=ended_promotion.name,
-                    effective_tier=current_resolution.effective_tier.replace("_", " ").title(),
+                    effective_tier=current_resolution.effective_tier.replace(
+                        "_", " "
+                    ).title(),
                     new_amount=f"£{current_resolution.effective_amount_pence / 100:.2f}",
                 )
             if not dry_run:
@@ -328,7 +456,10 @@ class Command(BaseCommand):
         return (
             Promotion.objects.filter(
                 Q(scope_type=Promotion.ScopeType.PLATFORM)
-                | Q(scope_type=Promotion.ScopeType.TIER, target_tier=user.profile.account_tier)
+                | Q(
+                    scope_type=Promotion.ScopeType.TIER,
+                    target_tier=user.profile.account_tier,
+                )
                 | Q(scope_type=Promotion.ScopeType.ACCOUNT, target_user=user),
                 ends_at__lt=now,
                 ends_at__gte=cutoff,
@@ -341,7 +472,10 @@ class Command(BaseCommand):
         return (
             Promotion.objects.filter(
                 Q(scope_type=Promotion.ScopeType.PLATFORM)
-                | Q(scope_type=Promotion.ScopeType.TIER, target_tier=team.owner.profile.account_tier)
+                | Q(
+                    scope_type=Promotion.ScopeType.TIER,
+                    target_tier=team.owner.profile.account_tier,
+                )
                 | Q(scope_type=Promotion.ScopeType.ACCOUNT, target_team=team),
                 ends_at__lt=now,
                 ends_at__gte=cutoff,
@@ -354,7 +488,10 @@ class Command(BaseCommand):
         return (
             Promotion.objects.filter(
                 Q(scope_type=Promotion.ScopeType.PLATFORM)
-                | Q(scope_type=Promotion.ScopeType.TIER, target_tier=UserProfile.AccountTier.ORGANIZATION)
+                | Q(
+                    scope_type=Promotion.ScopeType.TIER,
+                    target_tier=UserProfile.AccountTier.ORGANIZATION,
+                )
                 | Q(scope_type=Promotion.ScopeType.ACCOUNT, target_organization=org),
                 ends_at__lt=now,
                 ends_at__gte=cutoff,

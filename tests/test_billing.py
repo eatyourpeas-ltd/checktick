@@ -28,7 +28,9 @@ import pytest
 
 from checktick_app.core.admin import PaymentAdmin
 from checktick_app.core.models import Payment, Promotion, UserProfile
-from checktick_app.core.services.promotion_resolver import resolve_effective_pricing_for_user
+from checktick_app.core.services.promotion_resolver import (
+    resolve_effective_pricing_for_user,
+)
 from checktick_app.core.tier_limits import get_tier_limits
 from checktick_app.surveys.models import AuditLog, Organization, Survey
 
@@ -495,6 +497,185 @@ class TestPaymentRecordCreation:
         assert payment.user == pro_user_gocardless
 
 
+class TestRefundWebhookLifecycle:
+    """Test refund lifecycle updates driven by payment provider webhooks."""
+
+    @pytest.fixture
+    def refund_payment(self, db):
+        user = User.objects.create_user(
+            username="refund-user@example.com",
+            email="refund-user@example.com",
+            password="TestPass123!",
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.payment_provider = "gocardless"
+        user.profile.save()
+
+        return Payment.objects.create(
+            user=user,
+            invoice_number="INV-REFUND-WEBHOOK",
+            invoice_date=date(2026, 2, 1),
+            payment_provider="gocardless",
+            payment_id="PM-REFUND-WEBHOOK",
+            subscription_id="SB-REFUND-WEBHOOK",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=user.email,
+            customer_name=user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+    @pytest.mark.django_db
+    @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
+    def test_refund_created_marks_payment_refunded(self, mock_validate, refund_payment):
+        """Refund created events should move the local payment into refunded state."""
+        mock_validate.return_value = True
+
+        payload = {
+            "events": [
+                {
+                    "id": "EV-REF-CREATED",
+                    "resource_type": "refunds",
+                    "action": "created",
+                    "links": {"refund": "RF-CREATED-1"},
+                    "resource_metadata": {
+                        "payment_record_id": str(refund_payment.id),
+                        "reason": "Promotion correction",
+                    },
+                }
+            ]
+        }
+
+        client = Client()
+        response = client.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        refund_payment.refresh_from_db()
+        assert refund_payment.status == Payment.PaymentStatus.REFUNDED
+        assert AuditLog.objects.filter(
+            metadata__provider_refund_id="RF-CREATED-1",
+            metadata__refund_event_action="created",
+            metadata__payment_id=str(refund_payment.id),
+        ).exists()
+
+    @pytest.mark.django_db
+    @patch("checktick_app.core.views_billing.send_refund_processed_email")
+    @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
+    def test_refund_paid_sends_customer_notification_once(
+        self, mock_validate, mock_refund_email, refund_payment
+    ):
+        """Refund paid events should notify the customer once even if webhooks retry."""
+        mock_validate.return_value = True
+        refund_payment.status = Payment.PaymentStatus.REFUNDED
+        refund_payment.save(update_fields=["status", "updated_at"])
+
+        AuditLog.objects.create(
+            actor=None,
+            scope=AuditLog.Scope.ACCOUNT,
+            action=AuditLog.Action.PROMOTION_RECONCILED,
+            severity=AuditLog.Severity.INFO,
+            message="Refund requested via admin.",
+            metadata={
+                "payment_id": str(refund_payment.id),
+                "provider_refund_id": "RF-PAID-1",
+            },
+        )
+
+        payload = {
+            "events": [
+                {
+                    "id": "EV-REF-PAID",
+                    "resource_type": "refunds",
+                    "action": "paid",
+                    "links": {"refund": "RF-PAID-1"},
+                }
+            ]
+        }
+
+        client = Client()
+        first_response = client.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        second_response = client.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        assert first_response.status_code == 200
+        assert second_response.status_code == 200
+        mock_refund_email.assert_called_once_with(
+            user=refund_payment.user,
+            payment=refund_payment,
+            refund_reason="",
+        )
+        assert (
+            AuditLog.objects.filter(
+                metadata__provider_refund_id="RF-PAID-1",
+                metadata__refund_event_action="paid",
+            ).count()
+            == 1
+        )
+
+    @pytest.mark.django_db
+    @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
+    def test_refund_failed_restores_confirmed_status(
+        self, mock_validate, refund_payment
+    ):
+        """Refund failure events should restore the local payment to confirmed."""
+        mock_validate.return_value = True
+        refund_payment.status = Payment.PaymentStatus.REFUNDED
+        refund_payment.save(update_fields=["status", "updated_at"])
+
+        AuditLog.objects.create(
+            actor=None,
+            scope=AuditLog.Scope.ACCOUNT,
+            action=AuditLog.Action.PROMOTION_RECONCILED,
+            severity=AuditLog.Severity.INFO,
+            message="Refund requested via admin.",
+            metadata={
+                "payment_id": str(refund_payment.id),
+                "provider_refund_id": "RF-FAILED-1",
+            },
+        )
+
+        payload = {
+            "events": [
+                {
+                    "id": "EV-REF-FAILED",
+                    "resource_type": "refunds",
+                    "action": "failed",
+                    "links": {"refund": "RF-FAILED-1"},
+                }
+            ]
+        }
+
+        client = Client()
+        response = client.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        refund_payment.refresh_from_db()
+        assert refund_payment.status == Payment.PaymentStatus.CONFIRMED
+        assert AuditLog.objects.filter(
+            metadata__provider_refund_id="RF-FAILED-1",
+            metadata__refund_event_action="failed",
+        ).exists()
+
+
 class TestVATCSVExport:
     """Test CSV export for VAT returns contains only financial data."""
 
@@ -760,10 +941,18 @@ class TestPromotionLifecycleCommand:
         return user
 
     @pytest.mark.django_db
-    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_expired_email")
-    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_ending_soon_email")
-    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_activated_email")
-    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.PaymentClient")
+    @patch(
+        "checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_expired_email"
+    )
+    @patch(
+        "checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_ending_soon_email"
+    )
+    @patch(
+        "checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_activated_email"
+    )
+    @patch(
+        "checktick_app.core.management.commands.process_promotion_lifecycle.PaymentClient"
+    )
     def test_promotion_lifecycle_dry_run_has_no_side_effects(
         self,
         mock_payment_client_cls,
@@ -796,10 +985,18 @@ class TestPromotionLifecycleCommand:
         ).exists()
 
     @pytest.mark.django_db
-    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_expired_email")
-    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_ending_soon_email")
-    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_activated_email")
-    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.PaymentClient")
+    @patch(
+        "checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_expired_email"
+    )
+    @patch(
+        "checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_ending_soon_email"
+    )
+    @patch(
+        "checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_activated_email"
+    )
+    @patch(
+        "checktick_app.core.management.commands.process_promotion_lifecycle.PaymentClient"
+    )
     def test_promotion_lifecycle_reconciles_and_logs(
         self,
         mock_payment_client_cls,
@@ -829,7 +1026,9 @@ class TestPromotionLifecycleCommand:
         mock_payment_client.update_subscription.assert_called_once()
         update_call = mock_payment_client.update_subscription.call_args
         assert update_call.args[0] == "sub_live_123"
-        assert update_call.kwargs["amount"] == expected_resolution.effective_amount_pence
+        assert (
+            update_call.kwargs["amount"] == expected_resolution.effective_amount_pence
+        )
         assert update_call.kwargs["metadata"]["applied_promotion_id"] == str(promo.id)
         mock_activated_email.assert_called_once()
         mock_ending_email.assert_called_once()

@@ -1134,6 +1134,75 @@ def send_payment_failed_email(
     )
 
 
+def send_refund_processed_email(
+    *,
+    user,
+    payment,
+    refund_reason: str = "",
+) -> bool:
+    """Send confirmation that a refund has completed successfully.
+
+    Args:
+        user: Django User instance receiving the refund
+        payment: Local Payment record tied to the refund
+        refund_reason: Optional admin-supplied explanation
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    logger.info(
+        "Sending refund processed email to %s for invoice %s",
+        user.email,
+        payment.invoice_number,
+    )
+
+    branding = get_platform_branding()
+    site_url = getattr(settings, "SITE_URL", "http://localhost:8000")
+    refund_amount = payment.get_amount_inc_vat_display()
+
+    markdown_lines = [
+        "# Your Refund Has Been Processed",
+        "",
+        f"Hi {user.first_name or user.username},",
+        "",
+        "We have completed a refund against your CheckTick subscription payment.",
+        "",
+        f"- **Invoice:** {payment.invoice_number}",
+        f"- **Amount:** {refund_amount}",
+        f"- **Original payment date:** {payment.invoice_date.strftime('%d %B %Y')}",
+    ]
+
+    if refund_reason:
+        markdown_lines.append(f"- **Reason:** {refund_reason}")
+
+    markdown_lines.extend(
+        [
+            "",
+            "The exact time it takes for the refunded money to appear depends on the payment provider and the customer bank or payment method involved.",
+            "",
+            f"You can review your billing history in CheckTick here: {site_url}/billing/history/",
+            "",
+            "If anything looks incorrect, please reply to this email or contact support.",
+            "",
+            "Best regards,",
+            f"The {branding['title']} Team",
+        ]
+    )
+
+    return send_branded_email(
+        to_email=user.email,
+        subject=f"Refund Processed - {branding['title']}",
+        markdown_content="\n".join(markdown_lines),
+        branding=branding,
+        context={
+            "user": user,
+            "payment": payment,
+            "refund_reason": refund_reason,
+            "refund_amount": refund_amount,
+        },
+    )
+
+
 def send_promotion_activated_email(
     *,
     to_email: str,

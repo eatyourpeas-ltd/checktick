@@ -13,8 +13,6 @@ Implemented in code:
 Still future work:
 
 1. Refund lifecycle completion and policy hardening:
-   - webhook/event handling for provider-side refund states
-   - customer notification after refund execution
    - explicit policy for partial refunds, credits, and reconciliation edge cases
 2. Adjustment reporting for refunds and credits tied to promotions.
 
@@ -24,6 +22,9 @@ Recently completed since the original draft:
 2. Platform admin refund actions from the billing timeline for confirmed GoCardless payments.
 3. Tier account-list refund access, including choosing from multiple refundable payments per account.
 4. Audit logging and safe return navigation for admin-initiated refunds.
+5. Provider webhook handling for refund lifecycle states (`created`, `paid`, `failed`, `funds_returned`, `refund_settled`) with idempotent processing.
+6. Customer refund processed notifications after provider confirmation.
+7. Billing documentation updates clarifying hosted-provider reference behavior and self-hosted provider-agnostic adaptation points.
 
 ## Scope
 

@@ -1535,7 +1535,10 @@ def platform_admin_billing_refund(
         return redirect(return_url)
 
     if payment.payment_provider != "gocardless":
-        messages.error(request, "Refunds are only implemented for GoCardless payments.")
+        messages.error(
+            request,
+            "Refunds are only implemented for the currently configured hosted payment provider.",
+        )
         return redirect(return_url)
 
     if not payment.payment_id:

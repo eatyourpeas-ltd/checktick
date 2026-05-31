@@ -12,6 +12,8 @@ This guide explains how billing works in CheckTick, including subscriptions, pay
 
 CheckTick uses a secure payment provider to handle all billing. We offer flexible subscription plans to suit individual users, small teams, and large organisations.
 
+> **Provider note:** The hosted reference deployment ships with one payment-provider integration and related webhook handling. The billing domain model aims to stay as provider-agnostic as practical, but checkout steps, refund capabilities, event names, settlement timing, and customer notification flows may need adjustment if you use a different provider.
+
 > **Note for Self-Hosters:** If you're running CheckTick with `SELF_HOSTED=true` in your environment configuration, billing features are automatically hidden and all users get Enterprise-level features without payment requirements.
 
 ## Pricing
@@ -103,13 +105,17 @@ For VAT-exempt customers (e.g., charities, educational institutions), please con
 
 ## Payment Methods
 
-CheckTick accepts the following payment methods:
+Available payment methods depend on the payment provider configured for your deployment.
 
-- Direct Debit (UK bank accounts)
-- Credit cards (Visa, Mastercard, American Express)
-- Debit cards
+For the hosted reference deployment, recurring billing currently uses the configured bank debit / direct debit provider flow.
 
-All payments are processed securely by our payment provider. CheckTick never stores your complete payment information.
+For self-hosted or custom hosted deployments:
+
+- available payment methods depend on the provider you integrate
+- customer-facing checkout wording may need to be adapted to match that provider
+- refund handling and webhook/state mapping may need provider-specific changes
+
+CheckTick does not store complete payment credentials directly in application data.
 
 ## Starting a Subscription
 
@@ -119,9 +125,9 @@ All payments are processed securely by our payment provider. CheckTick never sto
 2. Select your desired plan
 3. Complete the registration form
 4. Click "Create account"
-5. You'll be redirected to our secure checkout
-6. Enter your payment details
-7. Complete the payment
+5. You'll be redirected to the configured secure checkout or mandate setup flow
+6. Complete the payment authorisation steps requested by that provider
+7. Return to CheckTick when the provider confirms setup
 8. Your account is activated immediately
 
 ### Upgrading from Free to Paid
@@ -145,7 +151,7 @@ To view your current subscription status:
 You'll see:
 - Current plan tier
 - Next billing date
-- Payment method (last 4 digits)
+- Payment provider and current subscription reference where available
 - Subscription status (Active/Past Due/Cancelled)
 
 ### Updating Payment Method
@@ -153,8 +159,8 @@ You'll see:
 1. Log in to CheckTick
 2. Go to **Profile** > **Subscription**
 3. Click **Update Payment Method**
-4. You'll be redirected to the secure payment portal
-5. Update your payment details
+4. You'll be redirected to the provider-managed billing or mandate flow if supported
+5. Complete the update steps provided there
 6. Changes take effect immediately
 
 ### Viewing Payment History
@@ -164,9 +170,28 @@ You'll see:
 
 You can:
 - View all past invoices
-- Download invoice PDFs
-- See payment dates and amounts
+- Review payment dates, amounts, and statuses
 - Check payment status
+
+The exact level of customer self-service available here depends on the configured billing provider and what metadata CheckTick stores locally.
+
+## Refunds and Billing Adjustments
+
+For the hosted reference deployment, platform admins can initiate supported refunds from the Platform Admin billing timeline and from the tier account list.
+
+Current behaviour:
+
+- refunds are available only for supported provider-backed payments
+- the hosted implementation currently performs full-payment refunds only
+- refund lifecycle updates are reconciled from provider webhook events
+- customers receive a confirmation email when the provider reports the refund as paid
+
+For self-hosted or alternative provider integrations, the refund workflow may need changes in:
+
+- provider API calls
+- webhook event names and status mapping
+- settlement timing assumptions
+- customer notification copy and compliance handling
 
 ## Platform Admin Pricing Overrides
 
@@ -190,6 +215,7 @@ For hosted deployments, superusers can override default public prices from the P
 - Overrides affect new subscriptions and displayed prices
 - Existing subscriptions are not retroactively repriced
 - Organisation and Enterprise pricing are managed separately as bespoke plans
+- Refunds and credits resulting from pricing or promotion changes are handled separately from price overrides
 
 ## Upgrading Your Plan
 
