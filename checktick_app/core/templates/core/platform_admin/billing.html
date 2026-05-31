@@ -93,6 +93,11 @@
   <div class="card bg-base-100 shadow">
     <div class="card-body">
       <h3 class="card-title">{% trans "Payment Timeline" %}</h3>
+      <p class="text-sm text-base-content/70">
+        {% blocktrans with policy_version=refund_policy_version %}
+        Refund policy {{ policy_version }}: full-payment refunds only. Partial refunds and automated credits are tracked as policy exceptions.
+        {% endblocktrans %}
+      </p>
       <div class="overflow-x-auto">
         <table class="table table-sm">
           <thead>
@@ -142,6 +147,12 @@
                       <input type="hidden" name="from" value="{{ date_from }}">
                       <input type="hidden" name="to" value="{{ date_to }}">
                       <input type="hidden" name="q" value="{{ search_query }}">
+                      <select name="refund_reason_code" class="select select-bordered select-xs w-40" required>
+                        <option value="">{% trans "Reason code" %}</option>
+                        {% for value, label in refund_reason_code_choices %}
+                          <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                      </select>
                       <input type="text" name="refund_reason" class="input input-bordered input-xs w-40" placeholder="{% trans 'Reason' %}">
                       <button type="submit" class="btn btn-xs btn-error btn-outline">{% trans "Refund" %}</button>
                     </form>
@@ -176,6 +187,82 @@
         {% endif %}
       </div>
       {% endif %}
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h3 class="card-title">{% trans "Promotion Adjustment Report" %}</h3>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="stat bg-base-200 rounded-box">
+          <div class="stat-title">{% trans "Adjustment Rows" %}</div>
+          <div class="stat-value text-primary">{{ adjustment_summary.rows }}</div>
+        </div>
+        <div class="stat bg-base-200 rounded-box">
+          <div class="stat-title">{% trans "Refund Rows" %}</div>
+          <div class="stat-value text-secondary">{{ adjustment_summary.refund_rows }}</div>
+        </div>
+        <div class="stat bg-base-200 rounded-box">
+          <div class="stat-title">{% trans "Credits (Manual)" %}</div>
+          <div class="stat-value">{{ adjustment_summary.credit_rows }}</div>
+        </div>
+        <div class="stat bg-base-200 rounded-box">
+          <div class="stat-title">{% trans "Completed Refunds" %}</div>
+          <div class="stat-value text-accent">£{{ adjustment_summary.completed_refund_total|floatformat:2 }}</div>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto mt-4">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>{% trans "Logged" %}</th>
+              <th>{% trans "Invoice" %}</th>
+              <th>{% trans "Customer" %}</th>
+              <th>{% trans "Type" %}</th>
+              <th>{% trans "Status" %}</th>
+              <th>{% trans "Amount" %}</th>
+              <th>{% trans "Promotion-linked" %}</th>
+              <th>{% trans "Provider Refund" %}</th>
+              <th>{% trans "Reason" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in adjustment_rows %}
+              <tr>
+                <td>{{ row.created_at|date:"d M Y H:i" }}</td>
+                <td class="font-mono text-xs">{{ row.invoice_number }}</td>
+                <td class="text-xs">{{ row.customer_email|default:"-" }}</td>
+                <td><span class="badge badge-ghost badge-sm">{{ row.adjustment_type }}</span></td>
+                <td><span class="badge badge-outline badge-sm">{{ row.status }}</span></td>
+                <td>£{{ row.amount_pounds|floatformat:2 }}</td>
+                <td>
+                  {% if row.promotion_linked %}
+                    <span class="badge badge-success badge-sm">{% trans "Yes" %}</span>
+                  {% else %}
+                    <span class="badge badge-ghost badge-sm">{% trans "No" %}</span>
+                  {% endif %}
+                </td>
+                <td class="font-mono text-xs">{{ row.provider_refund_id|default:"-" }}</td>
+                <td class="text-xs">
+                  {% if row.reason_code %}
+                    <div>{{ row.reason_code }}</div>
+                  {% endif %}
+                  {% if row.reason %}
+                    <div class="text-base-content/70">{{ row.reason }}</div>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="9" class="text-center text-base-content/60 py-6">
+                  {% trans "No promotion-linked adjustments matched the current billing filters." %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>

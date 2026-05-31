@@ -183,8 +183,18 @@ Current behaviour:
 
 - refunds are available only for supported provider-backed payments
 - the hosted implementation currently performs full-payment refunds only
+- partial refunds are policy-restricted (not automated in the hosted admin flow)
+- reason codes are required for operator-initiated refunds for auditability
 - refund lifecycle updates are reconciled from provider webhook events
 - customers receive a confirmation email when the provider reports the refund as paid
+
+Hosted policy baseline (platform admin):
+
+- supported adjustment action is currently **full refund only**
+- reason code should be selected (for example: promotion correction, billing error, duplicate charge, support goodwill, other)
+- if **Other** is selected, a free-text explanation should be provided
+- manual credits can be tracked and reported as adjustment records, but provider automation for credits is integration-dependent
+- adjustment records are visible in the Platform Admin billing adjustment report for reconciliation
 
 For self-hosted or alternative provider integrations, the refund workflow may need changes in:
 

@@ -12,9 +12,8 @@ Implemented in code:
 
 Still future work:
 
-1. Refund lifecycle completion and policy hardening:
-   - explicit policy for partial refunds, credits, and reconciliation edge cases
-2. Adjustment reporting for refunds and credits tied to promotions.
+1. No additional open items are currently tracked for the promotions + refund lifecycle delivery slice.
+2. Future enhancements should be tracked as separate roadmap items (for example, provider-native credit automation where supported).
 
 Recently completed since the original draft:
 
@@ -25,6 +24,8 @@ Recently completed since the original draft:
 5. Provider webhook handling for refund lifecycle states (`created`, `paid`, `failed`, `funds_returned`, `refund_settled`) with idempotent processing.
 6. Customer refund processed notifications after provider confirmation.
 7. Billing documentation updates clarifying hosted-provider reference behavior and self-hosted provider-agnostic adaptation points.
+8. Explicit hosted refund policy guardrails (reason codes, no partial refund automation, and adjustment audit metadata).
+9. Platform billing adjustment reporting for promotion-linked refunds and credits.
 
 ## Scope
 

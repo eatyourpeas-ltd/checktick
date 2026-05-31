@@ -1063,7 +1063,11 @@ class TestPlatformBillingAccess:
                 "core:platform_admin_billing_refund",
                 kwargs={"payment_id": payment.id},
             ),
-            {"refund_reason": "Promotion correction", "mode": "platform"},
+            {
+                "refund_reason_code": "promotion_correction",
+                "refund_reason": "Promotion correction",
+                "mode": "platform",
+            },
         )
 
         assert response.status_code == 302
@@ -1077,6 +1081,10 @@ class TestPlatformBillingAccess:
                 "invoice_number": "INV-REFUND-1",
                 "payment_record_id": str(payment.id),
                 "reason": "Promotion correction",
+                "reason_code": "promotion_correction",
+                "adjustment_type": "refund",
+                "adjustment_status": "requested",
+                "policy_version": "2026-05-31",
             },
         )
 
@@ -1113,7 +1121,11 @@ class TestPlatformBillingAccess:
                 "core:platform_admin_billing_refund",
                 kwargs={"payment_id": payment.id},
             ),
-            {"refund_reason": "Promotion correction", "mode": "platform"},
+            {
+                "refund_reason_code": "promotion_correction",
+                "refund_reason": "Promotion correction",
+                "mode": "platform",
+            },
         )
 
         assert response.status_code == 302
@@ -1155,11 +1167,103 @@ class TestPlatformBillingAccess:
                 "core:platform_admin_billing_refund",
                 kwargs={"payment_id": payment.id},
             ),
-            {"return_to": return_to},
+            {
+                "refund_reason_code": "promotion_correction",
+                "refund_reason": "Promotion correction",
+                "return_to": return_to,
+            },
         )
 
         assert response.status_code == 302
         assert response.url == return_to
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_refund_requires_valid_reason_code(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """Refund policy requires an explicit supported reason code."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-POLICY",
+            invoice_date=date(2026, 1, 15),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-POLICY",
+            subscription_id="SUB-REF-POLICY",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason": "Promotion correction",
+                "refund_reason_code": "not_a_real_code",
+                "mode": "platform",
+            },
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.CONFIRMED
+        mock_payment_client_cls.return_value.refund_payment.assert_not_called()
+
+    def test_billing_shows_adjustment_reporting_for_promotion_refunds(
+        self, client, superuser, regular_user
+    ):
+        """Billing page includes promotion-linked adjustment reporting rows."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-ADJ-1",
+            invoice_date=date(2026, 1, 16),
+            payment_provider="gocardless",
+            payment_id="PMT-ADJ-1",
+            subscription_id="SUB-ADJ-1",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.REFUNDED,
+        )
+
+        AuditLog.objects.create(
+            actor=superuser,
+            scope=AuditLog.Scope.ACCOUNT,
+            action=AuditLog.Action.PROMOTION_RECONCILED,
+            severity=AuditLog.Severity.INFO,
+            message="Promotion correction refund requested.",
+            metadata={
+                "payment_id": str(payment.id),
+                "provider_refund_id": "RF-ADJ-1",
+                "refund_reason_code": "promotion_correction",
+                "refund_reason": "Promotion correction",
+                "adjustment_type": "refund",
+                "adjustment_status": "completed",
+                "amount_pence": 600,
+            },
+        )
+
+        client.force_login(superuser)
+        response = client.get(reverse("core:platform_admin_billing"))
+
+        assert response.status_code == 200
+        assert b"Promotion Adjustment Report" in response.content
+        assert b"INV-ADJ-1" in response.content
+        assert b"promotion_correction" in response.content
 
 
 # ============================================================================

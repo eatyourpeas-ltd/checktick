@@ -42,6 +42,15 @@ PLATFORM_ADMIN_SCOPE_CHOICES = [
     ("enterprise", "Enterprise"),
 ]
 PLATFORM_ADMIN_SCOPE_VALUES = {value for value, _label in PLATFORM_ADMIN_SCOPE_CHOICES}
+REFUND_REASON_CODE_CHOICES = [
+    ("promotion_correction", "Promotion Correction"),
+    ("billing_error", "Billing Error"),
+    ("duplicate_charge", "Duplicate Charge"),
+    ("support_goodwill", "Support Goodwill"),
+    ("other", "Other"),
+]
+REFUND_REASON_CODE_VALUES = {value for value, _label in REFUND_REASON_CODE_CHOICES}
+REFUND_POLICY_VERSION = "2026-05-31"
 TIER_SCOPE_CHOICES = [
     ("free", "Free"),
     ("pro", "Pro"),
@@ -183,6 +192,146 @@ def _billing_return_url(request: HttpRequest) -> str:
     if not query_parts:
         return base_url
     return f"{base_url}?{'&'.join(query_parts)}"
+
+
+def _coerce_amount_pence(raw_amount: str) -> int | None:
+    """Parse a pence amount from input, returning None for blank values."""
+    cleaned = (raw_amount or "").strip()
+    if not cleaned:
+        return None
+    try:
+        parsed = int(cleaned)
+    except ValueError:
+        return None
+    if parsed < 0:
+        return None
+    return parsed
+
+
+def _build_adjustment_report(payments_queryset) -> tuple[list[dict], dict]:
+    """Build promotion-linked refund/credit adjustment rows for billing reporting."""
+    scoped_payments = list(
+        payments_queryset.only(
+            "id",
+            "user",
+            "invoice_number",
+            "amount_inc_vat",
+            "status",
+            "customer_email",
+        )
+    )
+    if not scoped_payments:
+        return [], {
+            "rows": 0,
+            "refund_rows": 0,
+            "credit_rows": 0,
+            "completed_refund_total": 0,
+            "pending_refund_total": 0,
+            "reversed_refund_total": 0,
+        }
+
+    payment_by_id = {str(payment.id): payment for payment in scoped_payments}
+    audit_rows = (
+        AuditLog.objects.filter(
+            scope=AuditLog.Scope.ACCOUNT,
+            action=AuditLog.Action.PROMOTION_RECONCILED,
+            metadata__payment_id__in=list(payment_by_id.keys()),
+        )
+        .select_related("target_user")
+        .order_by("-created_at")[:500]
+    )
+
+    def _status_for(metadata: dict, payment_status: str) -> str:
+        event_action = (metadata.get("refund_event_action") or "").strip().lower()
+        explicit_status = (metadata.get("adjustment_status") or "").strip().lower()
+        if explicit_status:
+            return explicit_status
+        if event_action in {"paid", "refund_settled"}:
+            return "completed"
+        if event_action in {"failed", "funds_returned"}:
+            return "reversed"
+        if event_action == "created":
+            return "pending"
+        if payment_status == Payment.PaymentStatus.REFUNDED:
+            return "completed"
+        return "requested"
+
+    rows = []
+    summary = {
+        "rows": 0,
+        "refund_rows": 0,
+        "credit_rows": 0,
+        "completed_refund_total": 0,
+        "pending_refund_total": 0,
+        "reversed_refund_total": 0,
+    }
+
+    for entry in audit_rows:
+        metadata = entry.metadata or {}
+        payment = payment_by_id.get(str(metadata.get("payment_id", "")))
+        if payment is None:
+            continue
+
+        inferred_type = (metadata.get("adjustment_type") or "").strip().lower()
+        event_action = (metadata.get("refund_event_action") or "").strip().lower()
+        provider_refund_id = (metadata.get("provider_refund_id") or "").strip()
+        if inferred_type not in {"refund", "credit"}:
+            inferred_type = (
+                "refund"
+                if provider_refund_id
+                or event_action
+                or "refund" in entry.message.lower()
+                else "credit"
+            )
+
+        amount_pence = _coerce_amount_pence(str(metadata.get("amount_pence", "")))
+        if amount_pence is None:
+            amount_pence = payment.amount_inc_vat
+
+        status = _status_for(metadata, payment.status)
+        reason_code = (metadata.get("refund_reason_code") or "").strip().lower()
+        reason_text = (metadata.get("refund_reason") or "").strip()
+        promotion_linked = reason_code.startswith("promotion") or (
+            "promotion" in reason_text.lower() or "promotion" in entry.message.lower()
+        )
+
+        rows.append(
+            {
+                "created_at": entry.created_at,
+                "invoice_number": payment.invoice_number,
+                "customer_email": payment.customer_email,
+                "adjustment_type": inferred_type,
+                "status": status,
+                "amount_pounds": amount_pence / 100,
+                "reason_code": reason_code,
+                "reason": reason_text,
+                "provider_refund_id": provider_refund_id,
+                "promotion_linked": promotion_linked,
+                "message": entry.message,
+            }
+        )
+
+        summary["rows"] += 1
+        if inferred_type == "credit":
+            summary["credit_rows"] += 1
+            continue
+
+        summary["refund_rows"] += 1
+        if status == "completed":
+            summary["completed_refund_total"] += amount_pence
+        elif status == "reversed":
+            summary["reversed_refund_total"] += amount_pence
+        else:
+            summary["pending_refund_total"] += amount_pence
+
+    for key in [
+        "completed_refund_total",
+        "pending_refund_total",
+        "reversed_refund_total",
+    ]:
+        summary[key] = summary[key] / 100
+
+    return rows, summary
 
 
 def _promotion_form_context(
@@ -1489,6 +1638,7 @@ def platform_admin_billing(request: HttpRequest) -> HttpResponse:
         ),
         tx_count=Count("id"),
     )
+    adjustment_rows, adjustment_summary = _build_adjustment_report(payments_qs)
 
     paginator = Paginator(payments_qs, 50)
     page = request.GET.get("page", 1)
@@ -1511,6 +1661,10 @@ def platform_admin_billing(request: HttpRequest) -> HttpResponse:
             "refunded": (aggregates.get("total_refunded") or 0) / 100,
             "tx_count": aggregates.get("tx_count") or 0,
         },
+        "adjustment_rows": adjustment_rows,
+        "adjustment_summary": adjustment_summary,
+        "refund_reason_code_choices": REFUND_REASON_CODE_CHOICES,
+        "refund_policy_version": REFUND_POLICY_VERSION,
     }
 
     return render(request, "core/platform_admin/billing.html", context)
@@ -1534,6 +1688,11 @@ def platform_admin_billing_refund(
         messages.error(request, "Only confirmed payments can be refunded.")
         return redirect(return_url)
 
+    refund_reason_code = request.POST.get("refund_reason_code", "").strip().lower()
+    if refund_reason_code not in REFUND_REASON_CODE_VALUES:
+        messages.error(request, "Select a valid refund reason code.")
+        return redirect(return_url)
+
     if payment.payment_provider != "gocardless":
         messages.error(
             request,
@@ -1548,6 +1707,26 @@ def platform_admin_billing_refund(
         return redirect(return_url)
 
     refund_reason = request.POST.get("refund_reason", "").strip()
+    if refund_reason_code == "other" and not refund_reason:
+        messages.error(
+            request,
+            "Please provide a short explanation when using reason code 'Other'.",
+        )
+        return redirect(return_url)
+
+    requested_amount_pence = _coerce_amount_pence(
+        request.POST.get("refund_amount_pence", "")
+    )
+    if (
+        requested_amount_pence is not None
+        and requested_amount_pence != payment.amount_inc_vat
+    ):
+        messages.error(
+            request,
+            "Partial refunds are not currently supported. Submit the full payment amount.",
+        )
+        return redirect(return_url)
+
     payment_client = PaymentClient()
     try:
         refund = payment_client.refund_payment(
@@ -1558,6 +1737,10 @@ def platform_admin_billing_refund(
                 "invoice_number": payment.invoice_number,
                 "payment_record_id": str(payment.id),
                 "reason": refund_reason,
+                "reason_code": refund_reason_code,
+                "adjustment_type": "refund",
+                "adjustment_status": "requested",
+                "policy_version": REFUND_POLICY_VERSION,
             },
         )
     except PaymentAPIError as exc:
@@ -1578,7 +1761,14 @@ def platform_admin_billing_refund(
             "invoice_number": payment.invoice_number,
             "provider_payment_id": payment.payment_id,
             "provider_refund_id": refund.get("id", ""),
+            "refund_reason_code": refund_reason_code,
             "refund_reason": refund_reason,
+            "amount_pence": payment.amount_inc_vat,
+            "adjustment_type": "refund",
+            "adjustment_status": "requested",
+            "supports_partial_refunds": False,
+            "supports_credit_adjustments": False,
+            "refund_policy_version": REFUND_POLICY_VERSION,
         },
     )
     messages.success(request, f"Payment {payment.invoice_number} refunded.")

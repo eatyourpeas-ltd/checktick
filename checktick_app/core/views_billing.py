@@ -707,10 +707,20 @@ def _log_refund_event(
     if _refund_event_already_logged(provider_refund_id, action):
         return
 
+    adjustment_status = {
+        "created": "pending",
+        "paid": "completed",
+        "refund_settled": "completed",
+        "failed": "reversed",
+        "funds_returned": "reversed",
+    }.get(action, "requested")
+
     metadata = {
         "provider_refund_id": provider_refund_id,
         "refund_event_action": action,
         "refund_reason": refund_reason,
+        "adjustment_type": "refund",
+        "adjustment_status": adjustment_status,
     }
     if payment:
         metadata.update(
