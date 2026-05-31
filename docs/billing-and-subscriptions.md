@@ -358,7 +358,7 @@ In accordance with UK Consumer Contracts Regulations:
 
 To request a refund within the 14-day cancellation period:
 
-1. Email us at [support@checktick.com](mailto:support@checktick.com)
+1. Email us at [support@checktick.uk](mailto:support@checktick.uk)
 2. Include your account email and order number
 3. Refunds are processed within 14 days of the cancellation request
 4. Refunds go back to the original payment method
@@ -417,9 +417,11 @@ Team admins can:
 For security, billing operations are rate-limited:
 
 - **Subscription cancellation**: 5 attempts per hour
-- **Payment updates**: 10 attempts per minute
-- **Webhook callbacks**: 10 per minute per IP
-- **Checkout sessions**: 100 per minute per IP
+- **Checkout start**: 10 attempts per hour per user
+- **Webhook callbacks**: 100 per minute per IP
+- **Platform-admin refund action**: 20 attempts per hour per superuser
+
+Webhook callbacks are accepted only when the provider signature is valid and a webhook secret is configured.
 
 ## Invoices & Receipts
 

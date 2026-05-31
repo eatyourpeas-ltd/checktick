@@ -6,6 +6,8 @@ priority: 3
 
 Complete configuration guide for customizing your CheckTick deployment.
 
+By default, self-hosted deployments run with billing features disabled (`SELF_HOSTED=true`). If you choose to integrate an external payment provider, configure webhook signing and provider credentials explicitly for your environment.
+
 ## Environment Variables Reference
 
 All configuration is done through environment variables in the `.env` file.
@@ -61,6 +63,17 @@ EMAIL_TIMEOUT=10
 ```
 
 ### Optional Settings
+
+#### Billing Integration (Optional)
+
+Self-hosted operators who enable external billing integrations should configure provider-specific secrets and callbacks, including a webhook signing secret.
+
+```bash
+# Required when billing webhooks are enabled
+PAYMENT_WEBHOOK_SECRET=your-webhook-signing-secret
+```
+
+Keep this value separate from Django `SECRET_KEY` and rotate it if exposure is suspected.
 
 #### Branding
 
