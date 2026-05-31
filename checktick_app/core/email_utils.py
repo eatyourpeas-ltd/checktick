@@ -292,8 +292,8 @@ def send_branded_email(
             f"Failed to render email template: {e}",
             exc_info=True,
             extra={
-                "recipient": to_email,
-                "subject": subject,
+                "template_subject": subject,
+                "recipient_count": 1,
                 "template": "emails/base_email.html",
             },
         )
@@ -324,15 +324,21 @@ def send_branded_email(
         )
         email.attach_alternative(html_message, "text/html")
         email.send()
-        logger.info(f"Email sent successfully to {to_email}: {subject}")
+        logger.info(
+            "Email sent successfully",
+            extra={
+                "template_subject": subject,
+                "recipient_count": 1,
+            },
+        )
         return True
     except Exception as e:
         logger.error(
-            f"Failed to send email to {to_email}: {subject}",
+            "Failed to send email",
             exc_info=True,
             extra={
-                "recipient": to_email,
-                "subject": subject,
+                "template_subject": subject,
+                "recipient_count": 1,
                 "error_type": type(e).__name__,
                 "from_email": from_email or settings.DEFAULT_FROM_EMAIL,
                 "email_backend": settings.EMAIL_BACKEND,
