@@ -1,16 +1,26 @@
 {% extends 'core/platform_admin/base.html' %}
 {% load i18n %}
 
-{% block platform_title %}{% trans "Create Promotion" %}{% endblock %}
+{% block platform_title %}{% if editing %}{% trans "Edit Promotion" %}{% else %}{% trans "Create Promotion" %}{% endif %}{% endblock %}
 
 {% block platform_content %}
 <div class="flex items-center gap-4 mb-6">
   <a href="{% url 'core:platform_admin_promotions' %}?mode={{ mode }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}" class="btn btn-ghost btn-sm">← {% trans "Back" %}</a>
-  <h2 class="text-xl font-semibold">{% trans "Create Promotion" %}</h2>
+  <h2 class="text-xl font-semibold">{% if editing %}{% trans "Edit Promotion" %}{% else %}{% trans "Create Promotion" %}{% endif %}</h2>
 </div>
 
 <div class="card bg-base-100 shadow max-w-4xl">
   <div class="card-body">
+    {% if duplicate_source %}
+    <div class="alert alert-info text-sm">
+      {% blocktrans with name=duplicate_source.name %}Creating a new promotion based on {{ name }}. Billing-impacting terms can then be adjusted safely before activation.{% endblocktrans %}
+    </div>
+    {% endif %}
+    {% if editing and promotion.starts_at and promotion.starts_at <= now %}
+    <div class="alert alert-warning text-sm">
+      {% trans "This promotion has already started. Billing-impacting fields are locked by server-side policy; change metadata only, or revoke and create a replacement promotion." %}
+    </div>
+    {% endif %}
     <form method="post" class="space-y-4">
       {% csrf_token %}
       <input type="hidden" name="mode" value="{{ mode }}">
@@ -130,7 +140,7 @@
 
       <div class="card-actions justify-end mt-6">
         <a href="{% url 'core:platform_admin_promotions' %}?mode={{ mode }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}" class="btn btn-ghost">{% trans "Cancel" %}</a>
-        <button type="submit" class="btn btn-primary">{% trans "Create Promotion" %}</button>
+        <button type="submit" class="btn btn-primary">{% if editing %}{% trans "Save Changes" %}{% else %}{% trans "Create Promotion" %}{% endif %}</button>
       </div>
     </form>
   </div>

@@ -19,6 +19,7 @@ from django_ratelimit.decorators import ratelimit
 
 from checktick_app.core.models import Promotion, UserProfile
 from checktick_app.surveys.models import (
+    AuditLog,
     Organization,
     OrganizationMembership,
     Survey,
@@ -139,6 +140,87 @@ def _parse_decimal_field(value: str, label: str, errors: list[str]) -> Decimal |
         return None
 
 
+def _promotion_return_url(mode: str, scope: str) -> str:
+    if mode == "tier" and scope in TIER_SCOPE_VALUES:
+        return f"{reverse('core:platform_admin_promotions')}?mode=tier&scope={scope}"
+    return reverse("core:platform_admin_promotions")
+
+
+def _promotion_form_context(
+    *,
+    mode: str,
+    scope: str,
+    form_data,
+    editing: bool = False,
+    promotion: Promotion | None = None,
+    duplicate_source: Promotion | None = None,
+) -> dict:
+    return {
+        "mode": mode,
+        "scope": scope,
+        "form_data": form_data,
+        "scope_choices": Promotion.ScopeType.choices,
+        "effect_choices": Promotion.EffectType.choices,
+        "tier_choices": UserProfile.AccountTier.choices,
+        "editing": editing,
+        "promotion": promotion,
+        "duplicate_source": duplicate_source,
+    }
+
+
+def _promotion_form_data_from_instance(promotion: Promotion) -> dict:
+    return {
+        "name": promotion.name,
+        "code": promotion.code,
+        "description": promotion.description,
+        "scope_type": promotion.scope_type,
+        "target_tier": promotion.target_tier,
+        "target_user_email": promotion.target_user.email if promotion.target_user else "",
+        "target_team_id": str(promotion.target_team_id or ""),
+        "target_organization_id": str(promotion.target_organization_id or ""),
+        "effect_type": promotion.effect_type,
+        "effect_value": str(promotion.effect_value),
+        "effect_tier": promotion.effect_tier,
+        "priority": str(promotion.priority),
+        "is_active": promotion.is_active,
+        "starts_at": (
+            timezone.localtime(promotion.starts_at).strftime("%Y-%m-%dT%H:%M")
+            if promotion.starts_at
+            else ""
+        ),
+        "ends_at": (
+            timezone.localtime(promotion.ends_at).strftime("%Y-%m-%dT%H:%M")
+            if promotion.ends_at
+            else ""
+        ),
+        "reason": promotion.reason,
+        "internal_notes": promotion.internal_notes,
+    }
+
+
+def _log_promotion_event(
+    *,
+    request: HttpRequest,
+    action: str,
+    promotion: Promotion,
+    message: str,
+    metadata: dict | None = None,
+) -> None:
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.ACCOUNT,
+        action=action,
+        severity=AuditLog.Severity.INFO,
+        message=message,
+        metadata={
+            "promotion_id": str(promotion.id),
+            "promotion_name": promotion.name,
+            "promotion_scope": promotion.scope_type,
+            **(metadata or {}),
+        },
+    )
+
+
 def _parse_max_seats(value: str, errors: list[str]) -> int | None:
     if not value:
         return None
@@ -244,6 +326,34 @@ def platform_admin_dashboard(request: HttpRequest) -> HttpResponse:
 
     total_pending_setups = sum(row["count"] for row in pending_setup_rows)
 
+    promotion_qs = Promotion.objects.all()
+    if mode == "tier":
+        promotion_qs = promotion_qs.filter(
+            Q(scope_type=Promotion.ScopeType.PLATFORM)
+            | Q(scope_type=Promotion.ScopeType.TIER, target_tier=scope)
+            | Q(scope_type=Promotion.ScopeType.ACCOUNT, target_user__profile__account_tier=scope)
+            | Q(scope_type=Promotion.ScopeType.ACCOUNT, target_team__owner__profile__account_tier=scope)
+            | Q(scope_type=Promotion.ScopeType.ACCOUNT, target_organization__owner__profile__account_tier=scope)
+        ).distinct()
+
+    now = timezone.now()
+    soon_cutoff = now + timezone.timedelta(days=7)
+    promotion_summary = {
+        "active": promotion_qs.filter(is_active=True)
+        .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=now))
+        .filter(Q(ends_at__isnull=True) | Q(ends_at__gte=now))
+        .count(),
+        "scheduled": promotion_qs.filter(is_active=True, starts_at__gt=now).count(),
+        "expiring_soon": promotion_qs.filter(
+            is_active=True,
+            ends_at__gte=now,
+            ends_at__lte=soon_cutoff,
+        ).count(),
+        "account_specific": promotion_qs.filter(
+            scope_type=Promotion.ScopeType.ACCOUNT
+        ).count(),
+    }
+
     context = {
         "mode": mode,
         "scope": scope,
@@ -255,6 +365,7 @@ def platform_admin_dashboard(request: HttpRequest) -> HttpResponse:
         "tier_scope_choices": TIER_SCOPE_CHOICES,
         "pending_setup_rows": pending_setup_rows,
         "total_pending_setups": total_pending_setups,
+        "promotion_summary": promotion_summary,
     }
 
     return render(request, "core/platform_admin/dashboard.html", context)
@@ -1536,6 +1647,7 @@ def platform_admin_promotion_create(request: HttpRequest) -> HttpResponse:
                     "Organisation targets are only valid in Organisation or Enterprise tier mode."
                 )
 
+        promotion = None
         if not errors:
             promotion = Promotion(
                 name=name,
@@ -1570,34 +1682,217 @@ def platform_admin_promotion_create(request: HttpRequest) -> HttpResponse:
             return render(
                 request,
                 "core/platform_admin/promotion_form.html",
-                {
-                    "mode": mode,
-                    "scope": scope,
-                    "form_data": request.POST,
-                    "scope_choices": Promotion.ScopeType.choices,
-                    "effect_choices": Promotion.EffectType.choices,
-                    "tier_choices": UserProfile.AccountTier.choices,
-                },
+                _promotion_form_context(mode=mode, scope=scope, form_data=request.POST),
             )
 
-        messages.success(request, f"Promotion '{name}' created.")
-        if mode == "tier":
-            return redirect(
-                f"{reverse('core:platform_admin_promotions')}?mode=tier&scope={scope}"
+        if promotion is not None:
+            _log_promotion_event(
+                request=request,
+                action=AuditLog.Action.CREATE,
+                promotion=promotion,
+                message=f"Promotion '{name}' created via platform admin.",
             )
-        return redirect("core:platform_admin_promotions")
+        messages.success(request, f"Promotion '{name}' created.")
+        return redirect(_promotion_return_url(mode, scope))
 
     return render(
         request,
         "core/platform_admin/promotion_form.html",
-        {
-            "mode": mode,
-            "scope": scope,
-            "form_data": request.GET,
-            "scope_choices": Promotion.ScopeType.choices,
-            "effect_choices": Promotion.EffectType.choices,
-            "tier_choices": UserProfile.AccountTier.choices,
-        },
+        _promotion_form_context(mode=mode, scope=scope, form_data=request.GET),
+    )
+
+
+@superuser_required
+@require_http_methods(["GET", "POST"])
+@ratelimit(key="user", rate="30/h", block=True)
+def platform_admin_promotion_edit(
+    request: HttpRequest, promotion_id: int
+) -> HttpResponse:
+    """Edit an existing promotion rule."""
+    promotion = get_object_or_404(Promotion, id=promotion_id)
+    mode = _get_platform_mode(request)
+    scope = _get_tier_scope(request) if mode == "tier" else "all"
+
+    if request.method == "POST":
+        errors = []
+        form_data = request.POST
+
+        promotion.name = request.POST.get("name", "").strip()
+        promotion.code = request.POST.get("code", "").strip()
+        promotion.description = request.POST.get("description", "").strip()
+        promotion.scope_type = request.POST.get("scope_type", "").strip()
+        promotion.target_tier = request.POST.get("target_tier", "").strip()
+        promotion.effect_type = request.POST.get("effect_type", "").strip()
+        promotion.effect_tier = request.POST.get("effect_tier", "").strip()
+        promotion.reason = request.POST.get("reason", "").strip()
+        promotion.internal_notes = request.POST.get("internal_notes", "").strip()
+        promotion.is_active = request.POST.get("is_active") == "on"
+        promotion.updated_by = request.user
+
+        effect_value_raw = request.POST.get("effect_value", "0").strip()
+        priority_raw = request.POST.get("priority", "100").strip()
+        target_user_email = request.POST.get("target_user_email", "").strip().lower()
+        target_team_id = request.POST.get("target_team_id", "").strip()
+        target_org_id = request.POST.get("target_organization_id", "").strip()
+        starts_at_raw = request.POST.get("starts_at", "").strip()
+        ends_at_raw = request.POST.get("ends_at", "").strip()
+
+        if not promotion.name:
+            errors.append("Name is required.")
+
+        try:
+            promotion.effect_value = Decimal(effect_value_raw)
+        except InvalidOperation:
+            errors.append("Effect value must be a valid number.")
+            promotion.effect_value = Decimal("0")
+
+        try:
+            promotion.priority = int(priority_raw)
+        except ValueError:
+            errors.append("Priority must be a whole number.")
+            promotion.priority = 100
+
+        promotion.starts_at = None
+        if starts_at_raw:
+            try:
+                promotion.starts_at = timezone.make_aware(
+                    timezone.datetime.fromisoformat(starts_at_raw)
+                )
+            except ValueError:
+                errors.append("Start datetime must be valid.")
+
+        promotion.ends_at = None
+        if ends_at_raw:
+            try:
+                promotion.ends_at = timezone.make_aware(
+                    timezone.datetime.fromisoformat(ends_at_raw)
+                )
+            except ValueError:
+                errors.append("End datetime must be valid.")
+
+        promotion.target_user = None
+        promotion.target_team = None
+        promotion.target_organization = None
+
+        if target_user_email:
+            promotion.target_user = User.objects.filter(
+                email__iexact=target_user_email
+            ).first()
+            if not promotion.target_user:
+                errors.append("Target user email was not found.")
+
+        if target_team_id:
+            try:
+                promotion.target_team = Team.objects.get(id=int(target_team_id))
+            except (ValueError, Team.DoesNotExist):
+                errors.append("Target team ID is invalid.")
+
+        if target_org_id:
+            try:
+                promotion.target_organization = Organization.objects.get(
+                    id=int(target_org_id)
+                )
+            except (ValueError, Organization.DoesNotExist):
+                errors.append("Target organisation ID is invalid.")
+
+        if mode == "tier":
+            if (
+                promotion.scope_type == Promotion.ScopeType.TIER
+                and promotion.target_tier
+                and promotion.target_tier != scope
+            ):
+                errors.append(
+                    "In tier mode, tier-scope promotions must target the selected tier."
+                )
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return render(
+                request,
+                "core/platform_admin/promotion_form.html",
+                _promotion_form_context(
+                    mode=mode,
+                    scope=scope,
+                    form_data=form_data,
+                    editing=True,
+                    promotion=promotion,
+                ),
+            )
+
+        try:
+            promotion.full_clean()
+            promotion.save()
+        except Exception as exc:
+            messages.error(request, str(exc))
+            return render(
+                request,
+                "core/platform_admin/promotion_form.html",
+                _promotion_form_context(
+                    mode=mode,
+                    scope=scope,
+                    form_data=form_data,
+                    editing=True,
+                    promotion=promotion,
+                ),
+            )
+
+        _log_promotion_event(
+            request=request,
+            action=AuditLog.Action.UPDATE,
+            promotion=promotion,
+            message=f"Promotion '{promotion.name}' updated via platform admin.",
+        )
+        messages.success(request, f"Promotion '{promotion.name}' updated.")
+        return redirect(_promotion_return_url(mode, scope))
+
+    return render(
+        request,
+        "core/platform_admin/promotion_form.html",
+        _promotion_form_context(
+            mode=mode,
+            scope=scope,
+            form_data=_promotion_form_data_from_instance(promotion),
+            editing=True,
+            promotion=promotion,
+        ),
+    )
+
+
+@superuser_required
+@require_http_methods(["GET"])
+@ratelimit(key="user", rate="30/h", block=True)
+def platform_admin_promotion_duplicate(
+    request: HttpRequest, promotion_id: int
+) -> HttpResponse:
+    """Open create form prefilled from an existing promotion."""
+    source_promotion = get_object_or_404(Promotion, id=promotion_id)
+    mode = _get_platform_mode(request)
+    scope = _get_tier_scope(request) if mode == "tier" else "all"
+    form_data = _promotion_form_data_from_instance(source_promotion)
+    form_data["name"] = f"{source_promotion.name} Copy"
+    form_data["code"] = ""
+    form_data["starts_at"] = ""
+    form_data["ends_at"] = ""
+    form_data["is_active"] = False
+
+    _log_promotion_event(
+        request=request,
+        action=AuditLog.Action.UPDATE,
+        promotion=source_promotion,
+        message=f"Promotion '{source_promotion.name}' opened for duplication.",
+        metadata={"duplicate_preview": True},
+    )
+
+    return render(
+        request,
+        "core/platform_admin/promotion_form.html",
+        _promotion_form_context(
+            mode=mode,
+            scope=scope,
+            form_data=form_data,
+            duplicate_source=source_promotion,
+        ),
     )
 
 
@@ -1614,11 +1909,43 @@ def platform_admin_promotion_toggle(
     promotion.save(update_fields=["is_active", "updated_by", "updated_at"])
 
     status_text = "activated" if promotion.is_active else "deactivated"
+    _log_promotion_event(
+        request=request,
+        action=AuditLog.Action.UPDATE,
+        promotion=promotion,
+        message=f"Promotion '{promotion.name}' {status_text}.",
+        metadata={"is_active": promotion.is_active},
+    )
     messages.success(request, f"Promotion '{promotion.name}' {status_text}.")
     mode = request.POST.get("mode", "").strip().lower()
     scope = request.POST.get("scope", "").strip().lower()
-    if mode == "tier" and scope in TIER_SCOPE_VALUES:
-        return redirect(
-            f"{reverse('core:platform_admin_promotions')}?mode=tier&scope={scope}"
-        )
-    return redirect("core:platform_admin_promotions")
+    return redirect(_promotion_return_url(mode, scope))
+
+
+@superuser_required
+@require_http_methods(["POST"])
+@ratelimit(key="user", rate="30/h", block=True)
+def platform_admin_promotion_revoke(
+    request: HttpRequest, promotion_id: int
+) -> HttpResponse:
+    """Revoke a promotion by deactivating it immediately and ending its window now."""
+    promotion = get_object_or_404(Promotion, id=promotion_id)
+    now = timezone.now()
+    promotion.is_active = False
+    if promotion.ends_at is None or promotion.ends_at > now:
+        promotion.ends_at = now
+    promotion.updated_by = request.user
+    promotion.save(update_fields=["is_active", "ends_at", "updated_by", "updated_at"])
+
+    _log_promotion_event(
+        request=request,
+        action=AuditLog.Action.REMOVE,
+        promotion=promotion,
+        message=f"Promotion '{promotion.name}' revoked.",
+        metadata={"revoked_at": now.isoformat()},
+    )
+    messages.success(request, f"Promotion '{promotion.name}' revoked.")
+
+    mode = request.POST.get("mode", "").strip().lower()
+    scope = request.POST.get("scope", "").strip().lower()
+    return redirect(_promotion_return_url(mode, scope))

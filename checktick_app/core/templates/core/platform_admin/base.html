@@ -91,7 +91,7 @@
           {% endif %}
           <li>
             <a href="{% url 'core:platform_admin_promotions' %}?mode={{ current_mode }}{% if current_mode == 'tier' %}&scope={{ current_scope }}{% endif %}"
-               class="btn btn-sm {% if request.resolver_match.url_name == 'platform_admin_promotions' or request.resolver_match.url_name == 'platform_admin_promotion_create' %}btn-primary{% else %}btn-ghost{% endif %}">
+               class="btn btn-sm {% if request.resolver_match.url_name == 'platform_admin_promotions' or request.resolver_match.url_name == 'platform_admin_promotion_create' or request.resolver_match.url_name == 'platform_admin_promotion_edit' or request.resolver_match.url_name == 'platform_admin_promotion_duplicate' %}btn-primary{% else %}btn-ghost{% endif %}">
               {% trans "Promotions" %}
             </a>
           </li>

@@ -20,15 +20,17 @@ from unittest.mock import MagicMock, patch
 from django.conf import settings
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import Client, RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 import pytest
 
 from checktick_app.core.admin import PaymentAdmin
-from checktick_app.core.models import Payment, UserProfile
+from checktick_app.core.models import Payment, Promotion, UserProfile
+from checktick_app.core.services.promotion_resolver import resolve_effective_pricing_for_user
 from checktick_app.core.tier_limits import get_tier_limits
-from checktick_app.surveys.models import Organization, Survey
+from checktick_app.surveys.models import AuditLog, Organization, Survey
 
 User = get_user_model()
 
@@ -738,6 +740,112 @@ class TestSubscriptionExpiryCommand:
         assert (
             past_due_expired_user.profile.account_tier == UserProfile.AccountTier.FREE
         )
+
+
+class TestPromotionLifecycleCommand:
+    """Test the process_promotion_lifecycle management command."""
+
+    @pytest.fixture
+    def promoted_user(self, db):
+        user = User.objects.create_user(
+            username="promo-user@example.com",
+            email="promo-user@example.com",
+            password="TestPass123!",
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.payment_subscription_id = "sub_live_123"
+        user.profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
+        user.profile.payment_provider = "gocardless"
+        user.profile.save()
+        return user
+
+    @pytest.mark.django_db
+    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_expired_email")
+    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_ending_soon_email")
+    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_activated_email")
+    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.PaymentClient")
+    def test_promotion_lifecycle_dry_run_has_no_side_effects(
+        self,
+        mock_payment_client_cls,
+        mock_activated_email,
+        mock_ending_email,
+        mock_expired_email,
+        promoted_user,
+    ):
+        Promotion.objects.create(
+            name="Dry Run Promo",
+            scope_type=Promotion.ScopeType.ACCOUNT,
+            target_user=promoted_user,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value="10.00",
+            is_active=True,
+            starts_at=timezone.now() - timedelta(days=1),
+            ends_at=timezone.now() + timedelta(days=3),
+        )
+        mock_payment_client = mock_payment_client_cls.return_value
+        mock_payment_client.get_subscription.return_value = {"amount": "2500"}
+
+        call_command("process_promotion_lifecycle", "--dry-run")
+
+        mock_payment_client.update_subscription.assert_not_called()
+        mock_activated_email.assert_not_called()
+        mock_ending_email.assert_not_called()
+        mock_expired_email.assert_not_called()
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.PROMOTION_RECONCILED
+        ).exists()
+
+    @pytest.mark.django_db
+    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_expired_email")
+    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_ending_soon_email")
+    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.send_promotion_activated_email")
+    @patch("checktick_app.core.management.commands.process_promotion_lifecycle.PaymentClient")
+    def test_promotion_lifecycle_reconciles_and_logs(
+        self,
+        mock_payment_client_cls,
+        mock_activated_email,
+        mock_ending_email,
+        mock_expired_email,
+        promoted_user,
+    ):
+        promo = Promotion.objects.create(
+            name="Live Promo",
+            scope_type=Promotion.ScopeType.ACCOUNT,
+            target_user=promoted_user,
+            effect_type=Promotion.EffectType.FIXED_DISCOUNT,
+            effect_value="5.00",
+            is_active=True,
+            starts_at=timezone.now() - timedelta(days=1),
+            ends_at=timezone.now() + timedelta(days=2),
+        )
+        mock_payment_client = mock_payment_client_cls.return_value
+        mock_payment_client.get_subscription.return_value = {"amount": "2000"}
+        mock_payment_client.update_subscription.return_value = {"id": "sub_live_123"}
+
+        expected_resolution = resolve_effective_pricing_for_user(promoted_user)
+
+        call_command("process_promotion_lifecycle")
+
+        mock_payment_client.update_subscription.assert_called_once()
+        update_call = mock_payment_client.update_subscription.call_args
+        assert update_call.args[0] == "sub_live_123"
+        assert update_call.kwargs["amount"] == expected_resolution.effective_amount_pence
+        assert update_call.kwargs["metadata"]["applied_promotion_id"] == str(promo.id)
+        mock_activated_email.assert_called_once()
+        mock_ending_email.assert_called_once()
+        mock_expired_email.assert_not_called()
+        assert AuditLog.objects.filter(
+            action=AuditLog.Action.PROMOTION_RECONCILED,
+            metadata__target_id="sub_live_123",
+        ).exists()
+        assert AuditLog.objects.filter(
+            action=AuditLog.Action.PROMOTION_ACTIVATED,
+            metadata__promotion_id=str(promo.id),
+        ).exists()
+        assert AuditLog.objects.filter(
+            action=AuditLog.Action.PROMOTION_ENDING_SOON,
+            metadata__promotion_id=str(promo.id),
+        ).exists()
 
 
 class TestVATConfiguration:

@@ -106,16 +106,28 @@
               {% endif %}
             </td>
             <td>
-              <form method="post" action="{% url 'core:platform_admin_promotion_toggle' promotion_id=promotion.id %}">
-                {% csrf_token %}
-                <input type="hidden" name="mode" value="{{ mode }}">
-                {% if mode == 'tier' %}
-                <input type="hidden" name="scope" value="{{ scope }}">
-                {% endif %}
-                <button type="submit" class="btn btn-xs btn-ghost">
-                  {% if promotion.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}
-                </button>
-              </form>
+              <div class="flex flex-wrap gap-2">
+                <a href="{% url 'core:platform_admin_promotion_edit' promotion_id=promotion.id %}?mode={{ mode }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}" class="btn btn-xs btn-ghost">{% trans "Edit" %}</a>
+                <a href="{% url 'core:platform_admin_promotion_duplicate' promotion_id=promotion.id %}?mode={{ mode }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}" class="btn btn-xs btn-ghost">{% trans "Duplicate" %}</a>
+                <form method="post" action="{% url 'core:platform_admin_promotion_toggle' promotion_id=promotion.id %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="mode" value="{{ mode }}">
+                  {% if mode == 'tier' %}
+                  <input type="hidden" name="scope" value="{{ scope }}">
+                  {% endif %}
+                  <button type="submit" class="btn btn-xs btn-ghost">
+                    {% if promotion.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}
+                  </button>
+                </form>
+                <form method="post" action="{% url 'core:platform_admin_promotion_revoke' promotion_id=promotion.id %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="mode" value="{{ mode }}">
+                  {% if mode == 'tier' %}
+                  <input type="hidden" name="scope" value="{{ scope }}">
+                  {% endif %}
+                  <button type="submit" class="btn btn-xs btn-error btn-outline">{% trans "Revoke" %}</button>
+                </form>
+              </div>
             </td>
           </tr>
           {% empty %}

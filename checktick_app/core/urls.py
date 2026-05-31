@@ -108,9 +108,24 @@ urlpatterns = [
         name="platform_admin_promotion_create",
     ),
     path(
+        "platform-admin/promotions/<int:promotion_id>/edit/",
+        views_platform_admin.platform_admin_promotion_edit,
+        name="platform_admin_promotion_edit",
+    ),
+    path(
+        "platform-admin/promotions/<int:promotion_id>/duplicate/",
+        views_platform_admin.platform_admin_promotion_duplicate,
+        name="platform_admin_promotion_duplicate",
+    ),
+    path(
         "platform-admin/promotions/<int:promotion_id>/toggle/",
         views_platform_admin.platform_admin_promotion_toggle,
         name="platform_admin_promotion_toggle",
+    ),
+    path(
+        "platform-admin/promotions/<int:promotion_id>/revoke/",
+        views_platform_admin.platform_admin_promotion_revoke,
+        name="platform_admin_promotion_revoke",
     ),
     # Billing
     path(

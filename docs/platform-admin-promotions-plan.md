@@ -1,5 +1,20 @@
 # Platform Admin Promotions: Current State Review and Implementation Plan
 
+## Status Update (31 May 2026)
+
+Implemented in code:
+
+1. Promotion model, precedence resolver, billing integration, and public pricing/signup surfacing.
+2. Platform admin promotions list/create/toggle flows.
+3. Post-start promotion immutability for billing-impacting terms.
+4. Platform admin edit, duplicate, and revoke flows for promotions.
+5. Promotion lifecycle audit logging via the existing `AuditLog` model for create, update, toggle, and revoke actions.
+
+Still future work:
+
+1. Refund/credit adjustment workflow from the billing timeline. This remains blocked until provider-side refund support is added to the payment client and policy decisions are finalised.
+2. Adjustment reporting for refunds and credits tied to promotions.
+
 ## Scope
 
 This document reviews the current billing and platform admin implementation and proposes a plan to add a promotions feature that can be granted by platform admins at:

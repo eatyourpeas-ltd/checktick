@@ -59,6 +59,30 @@
       {% endif %}
     </div>
   </div>
+
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Active Promotions" %}</div>
+    <div class="stat-value text-warning">{{ promotion_summary.active }}</div>
+    <div class="stat-desc">{{ promotion_summary.expiring_soon }} {% trans "expiring within 7 days" %}</div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Scheduled Promotions" %}</div>
+    <div class="stat-value text-info">{{ promotion_summary.scheduled }}</div>
+    <div class="stat-desc">{% trans "Not yet active" %}</div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Account Promotions" %}</div>
+    <div class="stat-value text-secondary">{{ promotion_summary.account_specific }}</div>
+    <div class="stat-desc">{% trans "User, team, and organisation scoped" %}</div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{% trans "Promotion Ops" %}</div>
+    <div class="stat-value text-accent">{{ promotion_summary.expiring_soon }}</div>
+    <div class="stat-desc">{% trans "Need review soon" %}</div>
+  </div>
 </div>
 
 {% if mode == 'tier' and scope != 'organization' %}

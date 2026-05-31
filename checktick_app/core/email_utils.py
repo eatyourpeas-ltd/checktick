@@ -1134,6 +1134,129 @@ def send_payment_failed_email(
     )
 
 
+def send_promotion_activated_email(
+    *,
+    to_email: str,
+    recipient_name: str,
+    promotion_name: str,
+    effective_amount: str,
+    effective_tier: str,
+    ends_at_text: str = "",
+) -> bool:
+    """Send notification that a promotion is now affecting billing."""
+    branding = get_platform_branding()
+    site_url = getattr(settings, "SITE_URL", "http://localhost:8000")
+    subject = f"Promotion Activated - {branding['title']}"
+    markdown_lines = [
+        f"# Promotion Activated: {promotion_name}",
+        "",
+        f"Hi {recipient_name},",
+        "",
+        "A promotion is now active on your CheckTick account.",
+        "",
+        f"- **Promotion:** {promotion_name}",
+        f"- **Effective tier:** {effective_tier}",
+        f"- **Effective monthly amount:** {effective_amount}",
+    ]
+    if ends_at_text:
+        markdown_lines.append(f"- **Ends:** {ends_at_text}")
+    markdown_lines.extend(
+        [
+            "",
+            f"[View pricing]({site_url}/pricing/)",
+            "",
+            f"The {branding['title']} Team",
+        ]
+    )
+    return send_branded_email(
+        to_email=to_email,
+        subject=subject,
+        markdown_content="\n".join(markdown_lines),
+        branding=branding,
+        context={"promotion_name": promotion_name, "effective_tier": effective_tier},
+    )
+
+
+def send_promotion_ending_soon_email(
+    *,
+    to_email: str,
+    recipient_name: str,
+    promotion_name: str,
+    current_amount: str,
+    next_amount: str,
+    effective_tier: str,
+    ends_at_text: str,
+) -> bool:
+    """Send warning that a promotion is ending soon."""
+    branding = get_platform_branding()
+    site_url = getattr(settings, "SITE_URL", "http://localhost:8000")
+    subject = f"Promotion Ending Soon - {branding['title']}"
+    markdown_content = "\n".join(
+        [
+            f"# Promotion Ending Soon: {promotion_name}",
+            "",
+            f"Hi {recipient_name},",
+            "",
+            "A promotion currently affecting your account is due to end soon.",
+            "",
+            f"- **Promotion:** {promotion_name}",
+            f"- **Current effective tier:** {effective_tier}",
+            f"- **Current monthly amount:** {current_amount}",
+            f"- **Expected monthly amount after expiry:** {next_amount}",
+            f"- **Ends:** {ends_at_text}",
+            "",
+            f"[View pricing]({site_url}/pricing/)",
+            "",
+            f"The {branding['title']} Team",
+        ]
+    )
+    return send_branded_email(
+        to_email=to_email,
+        subject=subject,
+        markdown_content=markdown_content,
+        branding=branding,
+        context={"promotion_name": promotion_name, "effective_tier": effective_tier},
+    )
+
+
+def send_promotion_expired_email(
+    *,
+    to_email: str,
+    recipient_name: str,
+    promotion_name: str,
+    effective_tier: str,
+    new_amount: str,
+) -> bool:
+    """Send notification that a promotion has expired or been reconciled away."""
+    branding = get_platform_branding()
+    site_url = getattr(settings, "SITE_URL", "http://localhost:8000")
+    subject = f"Promotion Ended - {branding['title']}"
+    markdown_content = "\n".join(
+        [
+            f"# Promotion Ended: {promotion_name}",
+            "",
+            f"Hi {recipient_name},",
+            "",
+            "A promotion affecting your CheckTick billing has ended, and your subscription pricing has been reconciled.",
+            "",
+            f"- **Promotion:** {promotion_name}",
+            f"- **Current effective tier:** {effective_tier}",
+            f"- **Current monthly amount:** {new_amount}",
+            "",
+            f"[View pricing]({site_url}/pricing/)",
+            "",
+            f"The {branding['title']} Team",
+        ]
+    )
+    return send_branded_email(
+        to_email=to_email,
+        subject=subject,
+        markdown_content=markdown_content,
+        branding=branding,
+        context={"promotion_name": promotion_name, "effective_tier": effective_tier},
+    )
+
+
 # =============================================================================
 # Key Recovery Email Functions
 # =============================================================================

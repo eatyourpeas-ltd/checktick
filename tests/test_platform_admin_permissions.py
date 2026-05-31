@@ -11,7 +11,7 @@ from django.utils import timezone
 import pytest
 
 from checktick_app.core.models import Payment, PricingOverride, Promotion, UserProfile
-from checktick_app.surveys.models import Organization, OrganizationMembership, Team
+from checktick_app.surveys.models import AuditLog, Organization, OrganizationMembership, Team
 
 User = get_user_model()
 
@@ -142,6 +142,38 @@ class TestPlatformAdminDashboardAccess:
         assert b"Create Account" in response.content
         assert b"Pending Setups by Tier" in response.content
         assert b"mode=platform" in response.content
+
+    def test_dashboard_includes_promotion_summary(self, client, superuser):
+        """Dashboard should show active and scheduled promotion counts."""
+        Promotion.objects.create(
+            name="Active Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=Decimal("10.00"),
+            is_active=True,
+            starts_at=timezone.now() - timedelta(days=1),
+            ends_at=timezone.now() + timedelta(days=3),
+        )
+        Promotion.objects.create(
+            name="Scheduled Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=Decimal("5.00"),
+            is_active=True,
+            starts_at=timezone.now() + timedelta(days=2),
+            ends_at=timezone.now() + timedelta(days=10),
+        )
+
+        client.force_login(superuser)
+        response = client.get(reverse("core:platform_admin_dashboard"))
+
+        assert response.status_code == 200
+        assert b"Active Promotions" in response.content
+        assert b"Scheduled Promotions" in response.content
+        summary = response.context["promotion_summary"]
+        assert summary["active"] == 1
+        assert summary["scheduled"] == 1
+        assert summary["expiring_soon"] == 1
 
 
 # ============================================================================
@@ -985,6 +1017,143 @@ class TestPlatformPromotionsAccess:
 
         promotion.refresh_from_db()
         assert promotion.is_active is False
+        assert AuditLog.objects.filter(
+            action=AuditLog.Action.UPDATE,
+            metadata__promotion_id=str(promotion.id),
+        ).exists()
+
+    def test_superuser_can_edit_scheduled_promotion(self, client, superuser):
+        """Scheduled promotions can be edited before they start."""
+        promotion = Promotion.objects.create(
+            name="Editable Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            starts_at=timezone.now() + timedelta(days=2),
+            is_active=True,
+        )
+        client.force_login(superuser)
+
+        response = client.post(
+            reverse(
+                "core:platform_admin_promotion_edit",
+                kwargs={"promotion_id": promotion.id},
+            ),
+            {
+                "name": "Editable Promo Updated",
+                "code": "",
+                "description": "Updated",
+                "scope_type": Promotion.ScopeType.PLATFORM,
+                "target_tier": "",
+                "effect_type": Promotion.EffectType.PERCENT_DISCOUNT,
+                "effect_value": "15.00",
+                "effect_tier": "",
+                "priority": "100",
+                "starts_at": (timezone.now() + timedelta(days=3)).strftime("%Y-%m-%dT%H:%M"),
+                "ends_at": "",
+                "reason": "Refined offer",
+                "internal_notes": "Ops note",
+                "is_active": "on",
+            },
+        )
+
+        assert response.status_code == 302
+        promotion.refresh_from_db()
+        assert promotion.name == "Editable Promo Updated"
+        assert str(promotion.effect_value) == "15.00"
+        assert AuditLog.objects.filter(
+            action=AuditLog.Action.UPDATE,
+            metadata__promotion_id=str(promotion.id),
+        ).exists()
+
+    def test_started_promotion_edit_rejects_billing_term_change(self, client, superuser):
+        """Started promotions should reject billing-impacting edits in admin UI."""
+        promotion = Promotion.objects.create(
+            name="Started Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            starts_at=timezone.now() - timedelta(days=1),
+            is_active=True,
+        )
+        client.force_login(superuser)
+
+        response = client.post(
+            reverse(
+                "core:platform_admin_promotion_edit",
+                kwargs={"promotion_id": promotion.id},
+            ),
+            {
+                "name": "Started Promo",
+                "code": "",
+                "description": "",
+                "scope_type": Promotion.ScopeType.PLATFORM,
+                "target_tier": "",
+                "effect_type": Promotion.EffectType.PERCENT_DISCOUNT,
+                "effect_value": "25.00",
+                "effect_tier": "",
+                "priority": "100",
+                "starts_at": (timezone.now() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M"),
+                "ends_at": "",
+                "reason": "",
+                "internal_notes": "",
+                "is_active": "on",
+            },
+        )
+
+        assert response.status_code == 200
+        assert b"cannot be edited in place" in response.content
+        promotion.refresh_from_db()
+        assert str(promotion.effect_value) == "10.00"
+
+    def test_duplicate_promotion_prefills_create_form(self, client, superuser):
+        """Duplicate action should open create form prefilled from the source promotion."""
+        promotion = Promotion.objects.create(
+            name="Source Promo",
+            code="SRC",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            is_active=True,
+        )
+        client.force_login(superuser)
+        response = client.get(
+            reverse(
+                "core:platform_admin_promotion_duplicate",
+                kwargs={"promotion_id": promotion.id},
+            )
+        )
+
+        assert response.status_code == 200
+        assert b"Source Promo Copy" in response.content
+        assert b"Creating a new promotion based on" in response.content
+
+    def test_revoke_promotion_ends_it_immediately(self, client, superuser):
+        """Revoking a promotion should deactivate it and end its window now."""
+        promotion = Promotion.objects.create(
+            name="Revokable Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            starts_at=timezone.now() - timedelta(days=2),
+            is_active=True,
+        )
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_promotion_revoke",
+                kwargs={"promotion_id": promotion.id},
+            )
+        )
+
+        assert response.status_code == 302
+        promotion.refresh_from_db()
+        assert promotion.is_active is False
+        assert promotion.ends_at is not None
+        assert AuditLog.objects.filter(
+            action=AuditLog.Action.REMOVE,
+            metadata__promotion_id=str(promotion.id),
+        ).exists()
 
     def test_tier_mode_filters_promotions_by_selected_scope(self, client, superuser):
         """Tier mode should only surface promotions relevant to selected tier scope."""
