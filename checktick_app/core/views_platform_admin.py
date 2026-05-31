@@ -324,14 +324,13 @@ def _build_adjustment_report(payments_queryset) -> tuple[list[dict], dict]:
         else:
             summary["pending_refund_total"] += amount_pence
 
-    for key in [
-        "completed_refund_total",
-        "pending_refund_total",
-        "reversed_refund_total",
-    ]:
-        summary[key] = summary[key] / 100
-
-    return rows, summary
+    summary_out = {
+        **summary,
+        "completed_refund_total": summary["completed_refund_total"] / 100,
+        "pending_refund_total": summary["pending_refund_total"] / 100,
+        "reversed_refund_total": summary["reversed_refund_total"] / 100,
+    }
+    return rows, summary_out
 
 
 def _promotion_form_context(
