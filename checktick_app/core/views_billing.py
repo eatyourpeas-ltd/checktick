@@ -594,12 +594,6 @@ def verify_gocardless_webhook_signature(request: HttpRequest) -> bool:
     webhook_secret = settings.PAYMENT_WEBHOOK_SECRET
     if not webhook_secret:
         logger.error("PAYMENT_WEBHOOK_SECRET not configured")
-        # In development, you might want to allow webhooks without signature
-        if settings.DEBUG:
-            logger.warning(
-                "DEBUG mode: Allowing webhook without signature verification"
-            )
-            return True
         return False
 
     # GoCardless signature is a simple HMAC-SHA256 of the request body

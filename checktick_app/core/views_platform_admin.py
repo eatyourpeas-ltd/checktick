@@ -210,6 +210,8 @@ def _coerce_amount_pence(raw_amount: str) -> int | None:
 
 def _build_adjustment_report(payments_queryset) -> tuple[list[dict], dict]:
     """Build promotion-linked refund/credit adjustment rows for billing reporting."""
+    max_payments = 500
+    max_audit_rows = 500
     scoped_payments = list(
         payments_queryset.only(
             "id",
@@ -218,7 +220,7 @@ def _build_adjustment_report(payments_queryset) -> tuple[list[dict], dict]:
             "amount_inc_vat",
             "status",
             "customer_email",
-        )
+        )[:max_payments]
     )
     if not scoped_payments:
         return [], {
@@ -238,7 +240,7 @@ def _build_adjustment_report(payments_queryset) -> tuple[list[dict], dict]:
             metadata__payment_id__in=list(payment_by_id.keys()),
         )
         .select_related("target_user")
-        .order_by("-created_at")[:500]
+        .order_by("-created_at")[:max_audit_rows]
     )
 
     def _status_for(metadata: dict, payment_status: str) -> str:
@@ -1676,8 +1678,9 @@ def platform_admin_billing_refund(
     request: HttpRequest, payment_id: int
 ) -> HttpResponse:
     """Refund a confirmed payment from the billing timeline."""
-    payment = get_object_or_404(Payment.objects.select_related("user"), id=payment_id)
     return_url = _billing_return_url(request)
+
+    payment = get_object_or_404(Payment.objects.select_related("user"), id=payment_id)
 
     if payment.status == Payment.PaymentStatus.REFUNDED:
         messages.warning(request, "Payment has already been refunded.")
@@ -1727,50 +1730,64 @@ def platform_admin_billing_refund(
         return redirect(return_url)
 
     payment_client = PaymentClient()
+    refunded_invoice_number = payment.invoice_number
     try:
-        refund = payment_client.refund_payment(
-            payment.payment_id,
-            amount=payment.amount_inc_vat,
-            total_amount_confirmation=payment.amount_inc_vat,
-            metadata={
-                "invoice_number": payment.invoice_number,
-                "payment_record_id": str(payment.id),
-                "reason": refund_reason,
-                "reason_code": refund_reason_code,
-                "adjustment_type": "refund",
-                "adjustment_status": "requested",
-                "policy_version": REFUND_POLICY_VERSION,
-            },
-        )
+        with transaction.atomic():
+            locked_payment = Payment.objects.select_for_update().get(id=payment_id)
+
+            if locked_payment.status == Payment.PaymentStatus.REFUNDED:
+                messages.warning(request, "Payment has already been refunded.")
+                return redirect(return_url)
+
+            if locked_payment.status != Payment.PaymentStatus.CONFIRMED:
+                messages.error(request, "Only confirmed payments can be refunded.")
+                return redirect(return_url)
+
+            refund = payment_client.refund_payment(
+                locked_payment.payment_id,
+                amount=locked_payment.amount_inc_vat,
+                total_amount_confirmation=locked_payment.amount_inc_vat,
+                metadata={
+                    "invoice_number": locked_payment.invoice_number,
+                    "payment_record_id": str(locked_payment.id),
+                    "reason": refund_reason,
+                    "reason_code": refund_reason_code,
+                    "adjustment_type": "refund",
+                    "adjustment_status": "requested",
+                    "policy_version": REFUND_POLICY_VERSION,
+                },
+            )
+
+            locked_payment.status = Payment.PaymentStatus.REFUNDED
+            locked_payment.save(update_fields=["status", "updated_at"])
+
+            AuditLog.objects.create(
+                actor=request.user,
+                scope=AuditLog.Scope.ACCOUNT,
+                action=AuditLog.Action.PROMOTION_RECONCILED,
+                severity=AuditLog.Severity.INFO,
+                message=f"Payment {locked_payment.invoice_number} refunded via platform admin.",
+                metadata={
+                    "payment_id": str(locked_payment.id),
+                    "invoice_number": locked_payment.invoice_number,
+                    "provider_payment_id": locked_payment.payment_id,
+                    "provider_refund_id": refund.get("id", ""),
+                    "refund_reason_code": refund_reason_code,
+                    "refund_reason": refund_reason,
+                    "amount_pence": locked_payment.amount_inc_vat,
+                    "adjustment_type": "refund",
+                    "adjustment_status": "requested",
+                    "supports_partial_refunds": False,
+                    "supports_credit_adjustments": False,
+                    "refund_policy_version": REFUND_POLICY_VERSION,
+                },
+            )
+            refunded_invoice_number = locked_payment.invoice_number
     except PaymentAPIError as exc:
         messages.error(request, f"Refund failed: {exc}")
         return redirect(return_url)
 
-    payment.status = Payment.PaymentStatus.REFUNDED
-    payment.save(update_fields=["status", "updated_at"])
-
-    AuditLog.objects.create(
-        actor=request.user,
-        scope=AuditLog.Scope.ACCOUNT,
-        action=AuditLog.Action.PROMOTION_RECONCILED,
-        severity=AuditLog.Severity.INFO,
-        message=f"Payment {payment.invoice_number} refunded via platform admin.",
-        metadata={
-            "payment_id": str(payment.id),
-            "invoice_number": payment.invoice_number,
-            "provider_payment_id": payment.payment_id,
-            "provider_refund_id": refund.get("id", ""),
-            "refund_reason_code": refund_reason_code,
-            "refund_reason": refund_reason,
-            "amount_pence": payment.amount_inc_vat,
-            "adjustment_type": "refund",
-            "adjustment_status": "requested",
-            "supports_partial_refunds": False,
-            "supports_credit_adjustments": False,
-            "refund_policy_version": REFUND_POLICY_VERSION,
-        },
-    )
-    messages.success(request, f"Payment {payment.invoice_number} refunded.")
+    messages.success(request, f"Payment {refunded_invoice_number} refunded.")
     return redirect(return_url)
 
 

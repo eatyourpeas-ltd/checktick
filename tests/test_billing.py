@@ -21,7 +21,7 @@ from django.conf import settings
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import Client, RequestFactory
+from django.test import Client, RequestFactory, override_settings
 from django.urls import reverse
 from django.utils import timezone
 import pytest
@@ -674,6 +674,61 @@ class TestRefundWebhookLifecycle:
             metadata__provider_refund_id="RF-FAILED-1",
             metadata__refund_event_action="failed",
         ).exists()
+
+
+class TestWebhookSignatureSecurity:
+    """Test webhook signature verification failure modes."""
+
+    @pytest.mark.django_db
+    @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
+    def test_payment_webhook_rejects_invalid_signature(self, mock_verify):
+        """Webhook endpoint should reject requests when signature verification fails."""
+        mock_verify.return_value = False
+
+        client = Client()
+        response = client.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps({"events": []}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 403
+
+    @pytest.mark.django_db
+    @override_settings(PAYMENT_WEBHOOK_SECRET="", DEBUG=False)
+    def test_verify_signature_fails_without_configured_secret(self):
+        """Signature verification must fail when webhook secret is missing."""
+        from checktick_app.core.views_billing import (
+            verify_gocardless_webhook_signature,
+        )
+
+        factory = RequestFactory()
+        request = factory.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps({"events": []}),
+            content_type="application/json",
+            HTTP_WEBHOOK_SIGNATURE="dummy-signature",
+        )
+
+        assert verify_gocardless_webhook_signature(request) is False
+
+    @pytest.mark.django_db
+    @override_settings(PAYMENT_WEBHOOK_SECRET="", DEBUG=True)
+    def test_verify_signature_still_fails_in_debug_without_secret(self):
+        """Debug mode should not bypass webhook secret requirements."""
+        from checktick_app.core.views_billing import (
+            verify_gocardless_webhook_signature,
+        )
+
+        factory = RequestFactory()
+        request = factory.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps({"events": []}),
+            content_type="application/json",
+            HTTP_WEBHOOK_SIGNATURE="dummy-signature",
+        )
+
+        assert verify_gocardless_webhook_signature(request) is False
 
 
 class TestVATCSVExport:

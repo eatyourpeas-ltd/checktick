@@ -972,6 +972,77 @@ class TestPlatformBillingAccess:
         response = client.get(url)
         assert response.status_code == 302
 
+    def test_non_superuser_cannot_post_refund(self, client, regular_user):
+        """Regular users cannot call the refund endpoint directly."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-NON-SUPER-REFUND",
+            invoice_date=date(2026, 1, 20),
+            payment_provider="gocardless",
+            payment_id="PMT-NON-SUPER-REFUND",
+            subscription_id="SUB-NON-SUPER-REFUND",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        client.force_login(regular_user)
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason_code": "promotion_correction",
+                "refund_reason": "Unauthorized",
+            },
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.CONFIRMED
+
+    def test_anonymous_user_cannot_post_refund(self, client, regular_user):
+        """Anonymous users are redirected when posting to refund endpoint."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-ANON-REFUND",
+            invoice_date=date(2026, 1, 19),
+            payment_provider="gocardless",
+            payment_id="PMT-ANON-REFUND",
+            subscription_id="SUB-ANON-REFUND",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason_code": "promotion_correction",
+                "refund_reason": "Unauthorized",
+            },
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.CONFIRMED
+
     def test_superuser_can_access_billing(self, client, superuser):
         """Superusers can access platform billing page."""
         client.force_login(superuser)
@@ -1178,6 +1249,51 @@ class TestPlatformBillingAccess:
         assert response.url == return_to
 
     @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_second_refund_request_is_idempotently_ignored(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """Second refund request for the same payment should not call provider again."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-IDEMPOTENT",
+            invoice_date=date(2026, 1, 23),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-IDEMPOTENT",
+            subscription_id="SUB-REF-IDEMPOTENT",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        mock_payment_client = mock_payment_client_cls.return_value
+        mock_payment_client.refund_payment.return_value = {"id": "RF-IDEMPOTENT"}
+
+        client.force_login(superuser)
+        refund_url = reverse(
+            "core:platform_admin_billing_refund",
+            kwargs={"payment_id": payment.id},
+        )
+        payload = {
+            "refund_reason_code": "promotion_correction",
+            "refund_reason": "Promotion correction",
+            "mode": "platform",
+        }
+
+        first_response = client.post(refund_url, payload)
+        second_response = client.post(refund_url, payload)
+
+        assert first_response.status_code == 302
+        assert second_response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.REFUNDED
+        assert mock_payment_client.refund_payment.call_count == 1
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
     def test_refund_requires_valid_reason_code(
         self, mock_payment_client_cls, client, superuser, regular_user
     ):
@@ -1209,6 +1325,89 @@ class TestPlatformBillingAccess:
             {
                 "refund_reason": "Promotion correction",
                 "refund_reason_code": "not_a_real_code",
+                "mode": "platform",
+            },
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.CONFIRMED
+        mock_payment_client_cls.return_value.refund_payment.assert_not_called()
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_refund_other_reason_requires_free_text(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """Policy requires explanation when reason code is Other."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-OTHER",
+            invoice_date=date(2026, 1, 21),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-OTHER",
+            subscription_id="SUB-REF-OTHER",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason_code": "other",
+                "refund_reason": "",
+                "mode": "platform",
+            },
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.CONFIRMED
+        mock_payment_client_cls.return_value.refund_payment.assert_not_called()
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_refund_rejects_partial_amounts(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """Policy currently allows only full-amount refunds."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-PARTIAL",
+            invoice_date=date(2026, 1, 22),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-PARTIAL",
+            subscription_id="SUB-REF-PARTIAL",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason_code": "billing_error",
+                "refund_reason": "Partial attempt",
+                "refund_amount_pence": "500",
                 "mode": "platform",
             },
         )
@@ -1264,6 +1463,54 @@ class TestPlatformBillingAccess:
         assert b"Promotion Adjustment Report" in response.content
         assert b"INV-ADJ-1" in response.content
         assert b"promotion_correction" in response.content
+
+    def test_adjustment_report_limits_rows_for_performance(
+        self, client, superuser, regular_user
+    ):
+        """Adjustment report should cap rows to a bounded number."""
+        payments = []
+        for idx in range(510):
+            payment = Payment.objects.create(
+                user=regular_user,
+                invoice_number=f"INV-ADJ-LIMIT-{idx}",
+                invoice_date=date(2026, 1, 1),
+                payment_provider="gocardless",
+                payment_id=f"PMT-ADJ-LIMIT-{idx}",
+                subscription_id=f"SUB-ADJ-LIMIT-{idx}",
+                tier="pro",
+                amount_ex_vat=500,
+                vat_amount=100,
+                amount_inc_vat=600,
+                vat_rate=0.20,
+                currency="GBP",
+                customer_email=regular_user.email,
+                customer_name=regular_user.username,
+                status=Payment.PaymentStatus.REFUNDED,
+            )
+            payments.append(payment)
+
+        for payment in payments:
+            AuditLog.objects.create(
+                actor=superuser,
+                scope=AuditLog.Scope.ACCOUNT,
+                action=AuditLog.Action.PROMOTION_RECONCILED,
+                severity=AuditLog.Severity.INFO,
+                message="Promotion correction refund requested.",
+                metadata={
+                    "payment_id": str(payment.id),
+                    "provider_refund_id": f"RF-{payment.id}",
+                    "refund_reason_code": "promotion_correction",
+                    "adjustment_type": "refund",
+                    "adjustment_status": "completed",
+                    "amount_pence": 600,
+                },
+            )
+
+        client.force_login(superuser)
+        response = client.get(reverse("core:platform_admin_billing"))
+
+        assert response.status_code == 200
+        assert len(response.context["adjustment_rows"]) <= 500
 
 
 # ============================================================================
