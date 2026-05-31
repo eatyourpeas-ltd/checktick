@@ -75,10 +75,12 @@ Filter templates by:
 View your published templates in the template library filtered by your organisation or username (coming soon).
 
 To update a template:
+
 - Make changes to your original question group
 - Publish again with the same slug (existing template is updated)
 
 To delete a template:
+
 - Access the template detail page
 - Click **Delete Template**
 - Confirm deletion
@@ -130,12 +132,14 @@ See the [Global Templates Appendix](/docs/question-group-templates-index/) for t
 Community members can contribute validated instruments:
 
 **Via GitHub Issue:**
+
 1. Create an issue: "New Global Template: [Name]"
 2. Provide complete markdown with YAML frontmatter
 3. Include validation evidence and copyright status
 4. Tag with `template-request`
 
 **Via Pull Request:**
+
 1. Add template file to `docs/question-group-templates/`
 2. Include complete YAML frontmatter with attribution
 3. Test with `sync_global_question_group_templates --dry-run`
@@ -163,6 +167,7 @@ See [Outline Documentation](/docs/import/) for complete syntax.
 ### Template Metadata
 
 Global templates include YAML frontmatter with:
+
 - Title, slug, description
 - Complete attribution (authors, DOI, PMID, etc.)
 - Tags for categorization

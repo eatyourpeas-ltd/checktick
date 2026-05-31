@@ -13,6 +13,7 @@ The CheckTick API is tested using pytest with Django's test client. Tests verify
 ## Test Location
 
 API tests are located in:
+
 - `/tests/test_api_*.py` - General API tests
 - `/checktick_app/api/tests/` - App-specific API tests
 
@@ -121,6 +122,7 @@ response = client.post("/api/endpoint/", **headers)
 ```
 
 **Note:** Authentication and permission tests are covered in:
+
 - `tests/test_api_permissions.py`
 - `tests/test_api_access_controls.py`
 - `tests/test_jwt_auth.py`
@@ -173,6 +175,7 @@ def test_seed_text_question(self, client, setup_basic_survey):
 #### Valid Question Types
 
 The API validates question types against these allowed values:
+
 - `text` - Text input
 - `mc_single` - Multiple choice (single selection)
 - `mc_multi` - Multiple choice (multiple selections)
@@ -308,6 +311,7 @@ def test_seed_with_multiple_question_groups(self, client, setup_basic_survey):
 ## Testing Response Formats
 
 Always verify:
+
 1. HTTP status code
 2. Response structure
 3. Data types
@@ -523,6 +527,7 @@ def test_seed_multiple_questions(self, client, setup_basic_survey):
 ## Reference Tests
 
 For comprehensive examples, see:
+
 - `tests/test_api_questions_and_groups.py` - 35 tests covering questions/groups API
 - `tests/test_api_permissions.py` - Permission and access control patterns
 - `tests/test_user_api.py` - User management API patterns

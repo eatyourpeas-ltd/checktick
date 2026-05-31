@@ -36,6 +36,7 @@ Organisation and Enterprise pricing remain bespoke.
 ### Individual Plans
 
 **Individual (Free)**
+
 - £0/month
 - Up to 3 active surveys
 - Unlimited responses
@@ -43,6 +44,7 @@ Organisation and Enterprise pricing remain bespoke.
 - Basic features
 
 **Individual Pro**
+
 - £6/month (inc VAT) - 1 seat
 - Unlimited surveys
 - Unlimited responses
@@ -54,6 +56,7 @@ Organisation and Enterprise pricing remain bespoke.
 Teams provide shared billing and collaboration for groups of 5-50 users.
 
 **Team Small**
+
 - £30/month (inc VAT) - 5 seats
 - 5 team members
 - Unlimited active surveys
@@ -61,12 +64,14 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 - Team encryption management
 
 **Team Medium**
+
 - £90/month (inc VAT) - 15 seats
 - 15 team members
 - Unlimited active surveys
 - All Team Small features
 
 **Team Large**
+
 - £300/month (inc VAT) - 50 seats
 - 50 team members
 - Unlimited active surveys
@@ -75,6 +80,7 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 ### Organisation & Enterprise
 
 **Organisation**
+
 - Bespoke pricing (£6/seat/month inc VAT)
 - Custom number of seats
 - Multiple teams within organisation
@@ -83,6 +89,7 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 - Priority support
 
 **Enterprise**
+
 - Custom pricing (contact sales)
 - Includes hosting and support costs
 - Self-hosted option
@@ -94,6 +101,7 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 ## VAT Information
 
 All prices include UK VAT at 20%. VAT invoices are automatically sent on subscription confirmation containing:
+
 - Unique invoice number
 - Invoice date
 - Amount excluding VAT
@@ -149,6 +157,7 @@ To view your current subscription status:
 2. Go to **Profile** > **Subscription**
 
 You'll see:
+
 - Current plan tier
 - Next billing date
 - Payment provider and current subscription reference where available
@@ -169,6 +178,7 @@ You'll see:
 2. Go to **Profile** > **Payment History**
 
 You can:
+
 - View all past invoices
 - Review payment dates, amounts, and statuses
 - Check payment status
@@ -237,11 +247,13 @@ You can upgrade to a higher tier at any time:
 4. Complete the checkout
 
 **Prorated Billing:**
+
 - You'll be charged the difference between your current plan and the new plan
 - The proration is calculated based on remaining days in your billing cycle
 - Your next billing date remains the same
 
 **What Happens:**
+
 - New features are available immediately
 - All existing surveys are preserved
 - No data loss or downtime
@@ -257,6 +269,7 @@ To downgrade to a lower tier:
 4. Confirm the change
 
 **Important:**
+
 - Downgrades take effect at the end of your current billing period
 - You retain access to current features until the period ends
 - If you have more surveys than the new limit allows, excess surveys will be automatically closed
@@ -264,6 +277,7 @@ To downgrade to a lower tier:
 
 **Survey Auto-Closure:**
 If downgrading would exceed survey limits:
+
 - Your oldest surveys are automatically closed (not deleted)
 - You'll receive an email notification listing which surveys were closed
 - Closed surveys and their responses remain accessible
@@ -283,16 +297,19 @@ If downgrading would exceed survey limits:
 ### What Happens When You Cancel
 
 **Immediate Effects:**
+
 - Your subscription is marked for cancellation
 - You receive a confirmation email
 - Billing stops at the end of the current period
 
 **Until Period End:**
+
 - You retain full access to paid features
 - You can continue using your account normally
 - No refunds for partial months
 
 **After Period End:**
+
 - Your account downgrades to Individual (Free)
 - If you have more than 3 surveys, excess surveys are automatically closed
 - All data is preserved
@@ -386,12 +403,14 @@ Organisations are billed per user per month:
 ### Managing Team Members
 
 Team admins can:
+
 - Add members (up to team limit)
 - Remove members (immediate access revocation)
 - Change member roles
 - Transfer team ownership
 
 **Billing impact:**
+
 - Adding members: No immediate charge, reflected in next renewal
 - Removing members: Access ends immediately, credit applied to next billing
 - Over limit: Must upgrade team size or remove members
@@ -434,6 +453,7 @@ Webhook callbacks are accepted only when the provider signature is valid and a w
 ### Invoice Details
 
 Each invoice includes:
+
 - Invoice number
 - Billing date
 - Payment amount
@@ -452,24 +472,28 @@ Each invoice includes:
 ### Common Issues
 
 **"Payment failed" error:**
+
 - Check payment details are correct
 - Ensure sufficient funds available
 - Try a different payment method
 - Contact your bank to authorize the payment
 
 **"Subscription not updating" issue:**
+
 - Wait 5 minutes for webhook processing
 - Refresh the page
 - Clear browser cache
 - Contact support if persists
 
 **"Cannot cancel subscription" error:**
+
 - You may have hit the rate limit (5 per hour)
 - Wait an hour and try again
 - Organisation members cannot self-cancel
 - Contact support for assistance
 
 **"Survey limit exceeded" after downgrade:**
+
 - This is expected behavior
 - Oldest surveys are auto-closed
 - Check your email for the list of closed surveys
@@ -480,11 +504,13 @@ Each invoice includes:
 If you encounter billing issues:
 
 **For FREE and PRO users:**
+
 - Check the [FAQ section](/docs/getting-started/#frequently-asked-questions)
 - Visit [Community Discussions](https://github.com/eatyourpeas/checktick/discussions)
 - Email support: [support@checktick.uk](mailto:support@checktick.uk)
 
 **For ORganisaTION and ENTERPRISE users:**
+
 - Priority support email: [enterprise@checktick.uk](mailto:enterprise@checktick.uk)
 - Phone support (if applicable to your plan)
 - Dedicated account manager (Enterprise only)
@@ -522,6 +548,7 @@ For self-hosting setup instructions, see the [Self-Hosting Guide](/docs/self-hos
 ### Terms of Service
 
 By subscribing to CheckTick, you agree to:
+
 - Our [Terms of Service](/docs/terms-of-service/)
 - Our [Privacy Notice](/docs/privacy-notice/)
 - Our [Refund Policy](/docs/refund-policy/)

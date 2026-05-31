@@ -23,6 +23,7 @@ class Condition(models.Model):
 ```
 
 **Action Types:**
+
 - `SHOW` - Display the next question
 - `JUMP_TO` - Skip ahead to target_question
 - `SKIP` - Hide the next question
@@ -54,6 +55,7 @@ class CollectionItem(models.Model):
 ```
 
 **Rules:**
+
 - Either `question` or `nested_collection` must be set (not both)
 - Collections can be nested one level deep
 - Order determines the display sequence
@@ -210,6 +212,7 @@ if (p) colors.primary = `hsl(${p})`;
 ```
 
 **Color Usage:**
+
 - `colors.primary` - Conditional questions, badges
 - `colors.accent` - Regular questions
 - `colors.border` - Connecting lines
@@ -229,6 +232,7 @@ if (p) colors.primary = `hsl(${p})`;
 ```
 
 **Syntax Rules:**
+
 - `->` prefix for condition lines
 - Format: `-> [value] : [action]`
 - Actions:
@@ -318,6 +322,7 @@ for item in collection_definition.collectionitem_set.all():
 ### Key Test Scenarios
 
 **Branching:**
+
 - Condition creation via API
 - Multiple conditions on one question
 - Invalid target questions
@@ -325,6 +330,7 @@ for item in collection_definition.collectionitem_set.all():
 - Conditions across groups
 
 **Repeats:**
+
 - Unlimited repeats
 - Limited repeats (reaching max)
 - Nested collections
@@ -359,6 +365,7 @@ def test_condition_evaluation():
 ### Database Queries
 
 The branching data API performs:
+
 - 1 query for questions
 - 1 query for conditions (with select_related)
 - 1 query for collection items (for repeats)

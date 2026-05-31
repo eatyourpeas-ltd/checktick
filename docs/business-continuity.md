@@ -153,6 +153,7 @@ Same as Individual, with faster recovery:
 **For self-hosted deployments:**
 
 1. Check container/pod status:
+
    ```bash
    docker ps -a | grep vault
    # or
@@ -160,6 +161,7 @@ Same as Individual, with faster recovery:
    ```
 
 2. Review logs:
+
    ```bash
    docker logs vault-container
    # or
@@ -167,6 +169,7 @@ Same as Individual, with faster recovery:
    ```
 
 3. Restart and unseal:
+
    ```bash
    docker start vault-container
    # Then unseal with keys

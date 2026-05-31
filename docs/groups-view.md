@@ -21,6 +21,7 @@ A question group is a named collection of questions that:
 ### 1. Question Group Management
 
 The Groups View page lets you:
+
 - **Reorder groups** - Drag and drop to arrange groups in your survey
 - **Create repeats (collections)** - Turn groups into repeatable sections
 - **Nest repeats** - Create one level of nesting (e.g., "People" containing "Visits")
@@ -29,6 +30,7 @@ The Groups View page lets you:
 ### 2. Publishing Templates
 
 Share your question groups with others:
+
 - **Organisation templates** - Share validated questionnaires within your team
 - **Global templates** - Contribute to the community library of validated instruments
 - **Attribution support** - Include proper citations for published instruments (PHQ-9, GAD-7, etc.)
@@ -39,6 +41,7 @@ See [Publishing Question Groups](/docs/publish-question-groups/) for detailed pu
 ### 3. Template Library
 
 Browse and import pre-built question groups:
+
 - **Search and filter** - Find templates by name, tags, or language
 - **View details** - Preview questions and attribution before importing
 - **One-click import** - Add complete questionnaires to your surveys

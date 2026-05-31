@@ -96,6 +96,7 @@ Platform-level branding can be configured via environment variables. These are i
 > **Note:** On each container startup, the `sync_branding` management command syncs non-empty environment variables to the database. This ensures deployment-level configuration takes priority over any manual database changes.
 
 > **⚠️ Warning: Empty env vars override defaults!** If you set an environment variable to an empty string (e.g., `BRAND_FONT_HEADING=`), this **will override** the Python default. Either:
+>
 > - Don't include the variable at all (let Python defaults apply)
 > - Set it to a valid value
 > - Use the docker-compose.yml fallback syntax: `${BRAND_FONT_HEADING:-}` (note the `-` which means "use empty if not set, but don't set it")
@@ -133,6 +134,7 @@ Available weights: 300 (Light), 400 (Regular), 500 (Medium), 700 (Bold), 900 (Bl
 The body font (IBM Plex Sans) is loaded from Google Fonts by default via `BRAND_FONT_CSS_URL`.
 
 To use different fonts:
+
 1. Set `BRAND_FONT_HEADING` to a different font stack
 2. Set `BRAND_FONT_BODY` to a different font stack
 3. Set `BRAND_FONT_CSS_URL` to load external fonts (or empty for system fonts only)
@@ -222,10 +224,12 @@ Organisation owners can customize their organisation's appearance, overriding pl
 ### What You Can Configure
 
 **Basic Settings:**
+
 - Light theme preset (choose from 20 options)
 - Dark theme preset (choose from 12 options)
 
 **Advanced Settings** (optional):
+
 - Custom CSS for light theme
 - Custom CSS for dark theme
 

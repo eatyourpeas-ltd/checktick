@@ -12,12 +12,14 @@ This guide covers edge cases and special situations in data governance, includin
 ### 1.1 What is a Legal Hold?
 
 A **legal hold** (also called "litigation hold") prevents automatic deletion of survey data when:
+
 - Legal proceedings are active or anticipated
 - Regulatory investigations are underway
 - Formal complaints have been filed
 - Audit requirements demand data preservation
 
 **Key characteristics:**
+
 - Overrides normal retention periods
 - Prevents automatic deletion
 - Requires documented justification
@@ -26,6 +28,7 @@ A **legal hold** (also called "litigation hold") prevents automatic deletion of 
 ### 1.2 When to Apply a Legal Hold
 
 **Apply a legal hold when:**
+
 - You receive a legal notice requiring data preservation
 - Litigation is reasonably anticipated
 - Regulatory authority requests data retention
@@ -35,6 +38,7 @@ A **legal hold** (also called "litigation hold") prevents automatic deletion of 
 - Internal disciplinary proceedings underway
 
 **Do NOT apply for:**
+
 - General "we might need this" concerns
 - Convenience (to avoid deletion)
 - Bypassing the 24-month retention limit
@@ -440,6 +444,7 @@ A **data custodian** is a user who:
 - Custodian can download if creator unavailable
 
 **Inappropriate Uses:**
+
 - As a workaround for editors to see data (violates access control)
 - To bypass retention limits (custodians can't extend)
 - For non-essential "nice to have" access

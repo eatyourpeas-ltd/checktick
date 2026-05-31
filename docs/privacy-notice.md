@@ -158,7 +158,7 @@ You have rights under UK GDPR including:
 * Portability
 * Objection
 
-Requests: support@checktick.uk
+Requests: <support@checktick.uk>
 
 ---
 
@@ -177,6 +177,7 @@ Users collecting children’s data must:
 Data is primarily stored in the UK.
 
 Where transfers occur, safeguards include:
+
 * Standard Contractual Clauses
 * UK GDPR-compliant DPAs
 
@@ -203,7 +204,7 @@ The survey creator is the data controller.
 
 Contact the survey creator first.
 
-If unresolved, contact: dpo@checktick.uk
+If unresolved, contact: <dpo@checktick.uk>
 
 ### 11.3 Anonymous vs Pseudonymous
 
@@ -226,7 +227,7 @@ We may:
 You may complain to:
 
 **Information Commissioner's Office (ICO)**
-https://ico.org.uk
+<https://ico.org.uk>
 
 ---
 
@@ -238,8 +239,8 @@ We will notify users of material changes.
 
 ## 13. Contact
 
-* support@checktick.uk
-* dpo@checktick.uk
+* <support@checktick.uk>
+* <dpo@checktick.uk>
 
 ---
 

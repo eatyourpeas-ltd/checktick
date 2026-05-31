@@ -87,11 +87,13 @@ Teams provide collaboration features for groups of 5-20 users. Teams can be stan
 ### Team Small (5 users)
 
 ***Limits:***
+
 - **50 active surveys**
 - **5 team members maximum**
 - Unlimited responses per survey
 
 ***Features:***
+
 - Everything in PRO, plus:
 - Team collaboration with role-based access
 - Team admin can manage members and surveys
@@ -103,11 +105,13 @@ Teams provide collaboration features for groups of 5-20 users. Teams can be stan
 ### Team Medium (10 users)
 
 ***Limits:***
+
 - **50 active surveys**
 - **10 team members maximum**
 - Unlimited responses per survey
 
 ***Features:***
+
 - Everything in Team Small
 - Larger team capacity
 
@@ -116,11 +120,13 @@ Teams provide collaboration features for groups of 5-20 users. Teams can be stan
 ### Team Large (20 users)
 
 ***Limits:***
+
 - **50 active surveys**
 - **20 team members maximum**
 - Unlimited responses per survey
 
 ***Features:***
+
 - Everything in Team Medium
 - Larger team capacity
 

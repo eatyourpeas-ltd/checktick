@@ -39,6 +39,7 @@ Platform Master Key (split-knowledge)
 ```
 
 **Key Principle**:
+
 - Higher-level keys can decrypt lower-level keys, but not vice versa
 - Custodian shares use same distribution as Vault unseal keys (aligned security model)
 - Need any 3 of 4 shares for platform recovery (same threshold as Vault unsealing)
@@ -115,6 +116,7 @@ If a team member loses access to their account (SSO issues, left organisation te
 6. Access is granted immediately
 
 **This creates an audit log entry:**
+
 ```json
 {
   "timestamp": "2025-11-30T10:00:00Z",
@@ -300,7 +302,7 @@ Recommended Action:
 
 **If user initiates:**
 
-1. User contacts support@checktick.uk
+1. User contacts <support@checktick.uk>
 2. Support creates recovery ticket
 3. User receives confirmation email with ticket ID
 
@@ -413,16 +415,16 @@ After time delay completes:
    - XOR combination happens in memory only
    - Full platform key exists briefly, then cleared
 
-3. **User's KEK retrieved from Vault**
+4. **User's KEK retrieved from Vault**
    - Platform key decrypts the escrowed key
    - Key is made available to user's session
 
-4. **User regains access**
+5. **User regains access**
    - Survey unlocks with recovered key
    - User prompted to set new password + recovery phrase
    - New key escrow created automatically
 
-5. **Notification sent**
+6. **Notification sent**
    - User receives confirmation email
    - Organisation admin notified (if applicable)
    - Audit entry created
@@ -434,12 +436,14 @@ The custodian component is the offline portion of the platform master key, split
 #### Storage Requirements
 
 **Custodian shares are distributed across 4 locations:**
+
 - ✅ Admin 1's password manager (Share 1)
 - ✅ Admin 2's password manager (Share 2)
 - ✅ Physical safe - fireproof, waterproof (Share 3)
 - ✅ Encrypted cloud backup (Share 4 - spare)
 
 **Security model:**
+
 - Need any 3 of 4 shares to reconstruct custodian component
 - Same distribution as Vault unseal keys (aligned security)
 - No single point of failure
@@ -493,6 +497,7 @@ python manage.py execute_platform_recovery ABC-123-XYZ \
 ```
 
 **Security features:**
+
 - Shares only in memory during execution
 - Never persisted to disk or logs
 - Automatic memory clearing after use
@@ -552,6 +557,7 @@ vault write -f auth/approle/role/checktick-app/secret-id
 **What It Is**: The 4 Shamir shares that reconstruct the custodian component (part of platform master key).
 
 **Why Rotate**:
+
 - After any suspected compromise
 - When designated custodians change
 - Annual security review requirement
@@ -559,6 +565,7 @@ vault write -f auth/approle/role/checktick-app/secret-id
 **How To Rotate**: See [Rotation Schedule](#rotation-schedule) above for full 7-step process.
 
 **Frequency**:
+
 - **Mandatory**: After compromise or custodian changes
 - **Recommended**: Annually as part of security audit
 
@@ -580,6 +587,7 @@ vault operator rotate
 ```
 
 **Requirements**:
+
 - Vault must be unsealed
 - No impact on application - Vault handles everything internally
 - Does NOT require re-encrypting application data
@@ -598,6 +606,7 @@ vault operator rotate
 **What They Are**: The 4 Shamir-split keys needed to unseal Vault after restart (3 of 4 required).
 
 **When To Rotate**:
+
 - Custodian leaves organization without proper handover
 - Multiple unseal keys suspected compromised
 - Changing threshold requirements (e.g., 3-of-4 to 4-of-6)
@@ -625,11 +634,13 @@ vault operator rekey
 **What They Are**: Per-organization encryption keys that encrypt team keys.
 
 **Why Not Rotate**:
+
 - Encrypted with platform master key (which uses custodian shares)
 - Rotation requires re-encrypting all team keys
 - Only rotate if specific compromise suspected
 
 **Exception**: Rotate only when:
+
 - Organization key specifically compromised
 - Compliance requires it (rare)
 - Organization security incident
@@ -641,11 +652,13 @@ vault operator rekey
 **What They Are**: Team-shared encryption keys for team surveys.
 
 **Why Not Rotate**:
+
 - SSO-based access control (revoke access by removing from team)
 - Rotation requires re-encrypting all team surveys
 - Operationally disruptive for active teams
 
 **Exception**: Rotate only when:
+
 - Team member with key access leaves under suspicious circumstances
 - Team-specific security incident
 - Compliance audit requires it
@@ -659,11 +672,13 @@ vault operator rekey
 **What They Are**: Per-survey encryption keys that encrypt patient data.
 
 **Why Not Rotate**:
+
 - Each survey already has unique key (isolation by design)
 - Password/recovery phrase protect access
 - Rotation requires re-encrypting all survey responses
 
 **Exception**: Rotate only when:
+
 - Specific survey's KEK known to be compromised
 - User reports unauthorized access to specific survey
 
@@ -904,15 +919,15 @@ For HIPAA compliance:
 
 **For urgent recovery issues:**
 
-- Email: support@checktick.uk
+- Email: <support@checktick.uk>
 - Include: Organisation name, user email, survey ID, ticket number
 
 **For security concerns:**
 
-- Email: security@checktick.uk
+- Email: <security@checktick.uk>
 - Report any suspected unauthorized access immediately
 
 **For compliance questions:**
 
-- Email: compliance@checktick.uk
+- Email: <compliance@checktick.uk>
 - Include: Specific regulation and evidence needed

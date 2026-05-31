@@ -88,6 +88,7 @@ Last updated: 2025-11-17
 For complete transparency, the full system prompt for the AI Survey Generator is published in the [AI Survey Generator documentation](/docs/ai-survey-generator/#transparency--system-prompt).
 
 The prompt specifies:
+
 - Core responsibilities (clarifying questions, generating markdown, refining based on feedback)
 - Exact markdown format and syntax rules
 - Allowed question types (text, multiple choice, dropdown, likert scales, etc.)
@@ -135,6 +136,7 @@ Users can update existing translations using "Translate Again":
 For full transparency, here is the complete system prompt used for survey translation. **This prompt is loaded directly from this documentation file** to ensure consistency between what users see and what the LLM receives.
 
 The prompt includes:
+
 - Medical translation best practices
 - Instructions to output plain text (no markdown or language codes)
 - Strict JSON output requirements with validation rules
@@ -142,6 +144,7 @@ The prompt includes:
 - Context about the clinical healthcare platform
 
 **Template variables** (substituted at runtime):
+
 - `{target_language_name}`: Full language name (e.g., "Arabic")
 - `{target_language_code}`: ISO language code (e.g., "ar")
 
@@ -225,6 +228,7 @@ Context: This is for a clinical healthcare platform. Accuracy is CRITICAL for pa
 ### Why manual review is essential
 
 **Medical accuracy:** LLMs can make mistakes with:
+
 - Specialized medical terminology
 - Cultural nuances in healthcare contexts
 - Regional variations in medical language
@@ -239,6 +243,7 @@ Context: This is for a clinical healthcare platform. Accuracy is CRITICAL for pa
 5. Publish only after human verification
 
 The confidence levels help prioritize reviews:
+
 - **High confidence**: Quick review may suffice
 - **Medium confidence**: Thorough professional review needed
 - **Low confidence**: Consider professional medical translator
@@ -406,7 +411,7 @@ If you discover a security issue:
 1. **Do not exploit it** - Report immediately instead
 2. **Contact us via:**
    - GitHub Security Advisories (preferred)
-   - Email: security@your-domain.com
+   - Email: <security@your-domain.com>
 3. **Provide details:**
    - Description of the issue
    - Steps to reproduce
