@@ -40,6 +40,9 @@
             <span class="label-text font-semibold text-lg">{% trans 'Choose Your Plan' %}</span>
             <a href="{% url 'core:pricing' %}" target="_blank" class="link underline hover:text-primary text-sm flex items-center gap-1">{% trans 'Compare plans' %}</a>
           </div>
+          {% if active_public_promotions %}
+          <p class="text-xs text-warning mt-2">{% trans 'Limited-time offers are available on selected plans.' %}</p>
+          {% endif %}
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
             {# Individual Free #}
@@ -49,6 +52,9 @@
                 <div class="flex items-center gap-2">
                   <span class="label-text font-semibold">{% trans 'FREE' %}</span>
                   <span class="badge badge-sm">{% trans '£0/month' %}</span>
+                  {% if promotions_by_tier.free %}
+                  <span class="badge badge-sm badge-warning">{{ promotions_by_tier.free.short_text }}</span>
+                  {% endif %}
                 </div>
                 <p class="text-sm">
                   {% trans 'Up to 3 surveys, basic features' %}
@@ -62,7 +68,10 @@
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
                   <span class="label-text font-semibold">{% trans 'PRO' %}</span>
-                  <span class="badge badge-sm badge-primary">{% trans '£5/month' %}</span>
+                  <span class="badge badge-sm badge-primary">{{ tier_display.pro }}/{% trans 'month' %}</span>
+                  {% if promotions_by_tier.pro %}
+                  <span class="badge badge-sm badge-warning">{{ promotions_by_tier.pro.short_text }}</span>
+                  {% endif %}
                 </div>
                 <p class="text-sm text-base-content/70">
                   {% trans 'Unlimited surveys, collaboration' %}
@@ -76,22 +85,29 @@
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2 mb-2">
                   <span class="label-text font-semibold">{% trans 'TEAM' %}</span>
-                  <span class="badge badge-sm badge-primary">{% trans 'From £25/month' %}</span>
+                  <span class="badge badge-sm badge-primary">{% trans 'From' %} {{ tier_display.team_small }}/{% trans 'month' %}</span>
                 </div>
                 <select id="team-size-select" class="select select-bordered select-sm w-full" onclick="event.stopPropagation();">
                   <option value="team_small">
-                    {% trans 'Small' %}- 5{% trans 'members' %}(£25/{% trans 'mo' %})
+                    {% trans 'Small' %} - {{ subscription_tiers.team_small.max_members }} {% trans 'members' %} ({{ tier_display.team_small }}/{% trans 'mo' %}){% if promotions_by_tier.team_small %} - {{ promotions_by_tier.team_small.short_text }}{% endif %}
                   </option>
                   <option value="team_medium">
-                    {% trans 'Medium' %}- 10{% trans 'members' %}(£50/{% trans 'mo' %})
+                    {% trans 'Medium' %} - {{ subscription_tiers.team_medium.max_members }} {% trans 'members' %} ({{ tier_display.team_medium }}/{% trans 'mo' %}){% if promotions_by_tier.team_medium %} - {{ promotions_by_tier.team_medium.short_text }}{% endif %}
                   </option>
                   <option value="team_large">
-                    {% trans 'Large' %}- 20{% trans 'members' %}(£100/{% trans 'mo' %})
+                    {% trans 'Large' %} - {{ subscription_tiers.team_large.max_members }} {% trans 'members' %} ({{ tier_display.team_large }}/{% trans 'mo' %}){% if promotions_by_tier.team_large %} - {{ promotions_by_tier.team_large.short_text }}{% endif %}
                   </option>
                 </select>
                 <p class="text-sm text-base-content/70 mt-1">
                   {% trans 'Up to 50 surveys, full collaboration' %}
                 </p>
+                {% if promotions_by_tier.team_small or promotions_by_tier.team_medium or promotions_by_tier.team_large %}
+                <p class="text-xs text-warning mt-1">
+                  {% if promotions_by_tier.team_small %}{% trans 'Small' %}: {{ promotions_by_tier.team_small.short_text }}{% endif %}
+                  {% if promotions_by_tier.team_medium %} · {% trans 'Medium' %}: {{ promotions_by_tier.team_medium.short_text }}{% endif %}
+                  {% if promotions_by_tier.team_large %} · {% trans 'Large' %}: {{ promotions_by_tier.team_large.short_text }}{% endif %}
+                </p>
+                {% endif %}
               </div>
             </label>
 

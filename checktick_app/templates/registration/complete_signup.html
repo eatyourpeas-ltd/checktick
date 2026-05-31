@@ -24,6 +24,12 @@
         You've successfully signed in with {{ email }}. Let's complete your account setup.
         {% endblocktrans %}
       </p>
+      {% if homepage_promotion %}
+      <div class="mb-4 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm flex items-center justify-between gap-2">
+        <span>{% trans "Limited-time offer:" %} {{ homepage_promotion.short_text }}</span>
+        <a href="{% url 'core:pricing' %}" class="link link-hover font-semibold">{% trans "View pricing" %}</a>
+      </div>
+      {% endif %}
 
       <form method="post" class="space-y-6">
         {% csrf_token %}

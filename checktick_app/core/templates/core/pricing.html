@@ -14,6 +14,16 @@
     <p class="text-lg text-base-content max-w-2xl mx-auto">
       {% trans "CheckTick is a secure, privacy-focused survey platform designed for healthcare research, clinical audits, and quality improvement projects." %}
     </p>
+    {% if active_public_promotions %}
+    <div class="mt-4 inline-flex items-center gap-2 rounded-full border border-warning/40 bg-warning/10 px-4 py-2 text-sm">
+      <span class="font-semibold">{% trans "Active offers:" %}</span>
+      <span>
+        {% for promo in active_public_promotions %}
+          {{ promo.short_text }}{% if promo.ends_at %} · {% trans "ends" %} {{ promo.ends_at|date:'d M' }}{% endif %}{% if not forloop.last %} · {% endif %}
+        {% endfor %}
+      </span>
+    </div>
+    {% endif %}
   </div>
 
   <!-- Pricing Cards -->
@@ -26,6 +36,9 @@
         <div class="mb-4">
           <span class="text-3xl font-bold">{% trans "Free" %}</span>
           <p class="text-sm text-base-content">{% trans "Up to 3 surveys" %}</p>
+          {% if promotions_by_tier.free %}
+          <p class="text-xs text-warning mt-1">{{ promotions_by_tier.free.short_text }}</p>
+          {% endif %}
         </div>
 
         <div class="divider"></div>
@@ -123,6 +136,9 @@
           <span class="text-base-content">/{% trans "month" %}</span>
           <p class="text-sm text-base-content">{% trans "Unlimited surveys" %}</p>
           <p class="text-xs text-base-content">{% trans "inc. VAT" %}</p>
+          {% if promotions_by_tier.pro %}
+          <p class="text-xs text-warning mt-1">{{ promotions_by_tier.pro.short_text }}{% if promotions_by_tier.pro.ends_at %} · {% trans "ends" %} {{ promotions_by_tier.pro.ends_at|date:'d M' }}{% endif %}</p>
+          {% endif %}
         </div>
 
         <div class="divider"></div>
@@ -220,12 +236,15 @@
           <select id="team-size-selector" class="select select-bordered w-full">
             <option value="team_small" data-price="{{ tier_pounds.team_small }}" data-members="{{ subscription_tiers.team_small.max_members }}" data-price-id="{{ price_ids.team_small }}">
               {% trans "Small" %} - {{ subscription_tiers.team_small.max_members }} {% trans "members" %} - {{ tier_display.team_small }}/{% trans "month" %}
+              {% if promotions_by_tier.team_small %} - {{ promotions_by_tier.team_small.short_text }}{% endif %}
             </option>
             <option value="team_medium" data-price="{{ tier_pounds.team_medium }}" data-members="{{ subscription_tiers.team_medium.max_members }}" data-price-id="{{ price_ids.team_medium }}">
               {% trans "Medium" %} - {{ subscription_tiers.team_medium.max_members }} {% trans "members" %} - {{ tier_display.team_medium }}/{% trans "month" %}
+              {% if promotions_by_tier.team_medium %} - {{ promotions_by_tier.team_medium.short_text }}{% endif %}
             </option>
             <option value="team_large" data-price="{{ tier_pounds.team_large }}" data-members="{{ subscription_tiers.team_large.max_members }}" data-price-id="{{ price_ids.team_large }}">
               {% trans "Large" %} - {{ subscription_tiers.team_large.max_members }} {% trans "members" %} - {{ tier_display.team_large }}/{% trans "month" %}
+              {% if promotions_by_tier.team_large %} - {{ promotions_by_tier.team_large.short_text }}{% endif %}
             </option>
           </select>
         </div>
@@ -235,6 +254,13 @@
           <span class="text-base-content">/{% trans "month" %}</span>
           <p class="text-sm text-base-content" id="team-members-display">{% trans "Up to" %} 5 {% trans "team members" %}</p>
           <p class="text-xs text-base-content">{% trans "inc. VAT" %}</p>
+          {% if promotions_by_tier.team_small or promotions_by_tier.team_medium or promotions_by_tier.team_large %}
+          <p class="text-xs text-warning mt-1">
+            {% if promotions_by_tier.team_small %}{% trans "Small" %}: {{ promotions_by_tier.team_small.short_text }}{% endif %}
+            {% if promotions_by_tier.team_medium %} · {% trans "Medium" %}: {{ promotions_by_tier.team_medium.short_text }}{% endif %}
+            {% if promotions_by_tier.team_large %} · {% trans "Large" %}: {{ promotions_by_tier.team_large.short_text }}{% endif %}
+          </p>
+          {% endif %}
         </div>
 
         <div class="divider"></div>
