@@ -2,10 +2,12 @@
 Tests for platform admin permissions - ensuring only superusers can access.
 """
 
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 import pytest
 
 from checktick_app.core.models import Payment, PricingOverride, Promotion, UserProfile
@@ -170,6 +172,64 @@ class TestOrganizationListAccess:
         url = reverse("core:platform_admin_org_list")
         response = client.get(url)
         assert response.status_code == 200
+
+    def test_tier_account_list_shows_active_promotion_and_actions(
+        self, client, superuser
+    ):
+        """Tier account view should include promotion state, expiry, and quick actions."""
+        account = User.objects.create_user(
+            username="promoted-pro-account",
+            email="promoted-pro-account@test.com",
+            password=TEST_PASSWORD,
+        )
+        account.profile.account_tier = UserProfile.AccountTier.PRO
+        account.profile.save()
+
+        Promotion.objects.create(
+            name="Tier Account Promo",
+            scope_type=Promotion.ScopeType.ACCOUNT,
+            target_user=account,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=Decimal("10.00"),
+            is_active=True,
+            ends_at=timezone.now() + timedelta(days=7),
+        )
+
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_org_list")
+        response = client.get(url, {"mode": "tier", "scope": "pro"})
+
+        assert response.status_code == 200
+        assert b"Tier Account Promo" in response.content
+        assert b"Apply Promotion" in response.content
+        assert b"Billing History" in response.content
+
+        users = list(response.context["users"].object_list)
+        matched = [u for u in users if u.email == account.email]
+        assert matched
+        assert matched[0].has_active_promotion is True
+        assert matched[0].active_promotion_ends_at is not None
+
+    def test_tier_account_list_includes_apply_and_billing_links(
+        self, client, superuser
+    ):
+        """Tier account rows should include apply-promotion and billing-history links."""
+        account = User.objects.create_user(
+            username="plain-pro-account",
+            email="plain-pro-account@test.com",
+            password=TEST_PASSWORD,
+        )
+        account.profile.account_tier = UserProfile.AccountTier.PRO
+        account.profile.save()
+
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_org_list")
+        response = client.get(url, {"mode": "tier", "scope": "pro"})
+
+        assert response.status_code == 200
+        assert f"target_user_email={account.email}".encode() in response.content
+        assert b"platform-admin/billing" in response.content
+        assert b"q=plain-pro-account" in response.content
 
 
 # ============================================================================

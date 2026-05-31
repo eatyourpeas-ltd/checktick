@@ -89,10 +89,13 @@
             <th>{% trans "Email" %}</th>
             <th>{% trans "Tier" %}</th>
             <th>{% trans "Subscription" %}</th>
+            <th>{% trans "Promotion" %}</th>
+            <th>{% trans "Promotion Ends" %}</th>
             <th>{% trans "Surveys" %}</th>
             <th>{% trans "Payments" %}</th>
             <th>{% trans "Status" %}</th>
             <th>{% trans "Joined" %}</th>
+            <th>{% trans "Actions" %}</th>
           </tr>
         </thead>
         <tbody>
@@ -102,6 +105,21 @@
             <td>{{ account.email }}</td>
             <td><span class="badge badge-ghost badge-sm">{{ account.profile.get_account_tier_display }}</span></td>
             <td><span class="badge badge-sm">{{ account.profile.get_subscription_status_display }}</span></td>
+            <td>
+              {% if account.has_active_promotion %}
+                <span class="badge badge-success badge-sm">{% trans "Active" %}</span>
+                <div class="text-xs text-base-content/70">{{ account.active_promotion.name }}</div>
+              {% else %}
+                <span class="badge badge-ghost badge-sm">{% trans "None" %}</span>
+              {% endif %}
+            </td>
+            <td class="text-sm text-base-content/70">
+              {% if account.active_promotion_ends_at %}
+                {{ account.active_promotion_ends_at|date:"d M Y H:i" }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
             <td>{{ account.survey_count }}</td>
             <td>{{ account.payment_count }}</td>
             <td>
@@ -112,10 +130,18 @@
               {% endif %}
             </td>
             <td class="text-sm text-base-content/70">{{ account.date_joined|date:"d M Y" }}</td>
+            <td>
+              <div class="flex gap-1 flex-wrap">
+                <a href="{% url 'core:platform_admin_promotion_create' %}?mode=tier&scope={{ scope }}&scope_type=account&target_user_email={{ account.email }}"
+                   class="btn btn-xs btn-primary">{% trans "Apply Promotion" %}</a>
+                <a href="{% url 'core:platform_admin_billing' %}?mode=tier&scope={{ scope }}&q={{ account.email }}"
+                   class="btn btn-xs btn-ghost">{% trans "Billing History" %}</a>
+              </div>
+            </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="8" class="text-center py-8 text-base-content/60">{% trans "No accounts match your filters" %}</td>
+            <td colspan="11" class="text-center py-8 text-base-content/60">{% trans "No accounts match your filters" %}</td>
           </tr>
           {% endfor %}
         </tbody>

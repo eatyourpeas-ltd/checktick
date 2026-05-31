@@ -296,6 +296,69 @@ def organization_list(request: HttpRequest) -> HttpResponse:
         page = request.GET.get("page", 1)
         users_page = paginator.get_page(page)
 
+        users_on_page = list(users_page.object_list)
+        if users_on_page:
+            now = timezone.now()
+            account_promotions = (
+                Promotion.objects.filter(
+                    scope_type=Promotion.ScopeType.ACCOUNT,
+                    target_user__in=users_on_page,
+                    is_active=True,
+                )
+                .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=now))
+                .filter(Q(ends_at__isnull=True) | Q(ends_at__gte=now))
+            )
+
+            tier_promotions = (
+                Promotion.objects.filter(
+                    scope_type=Promotion.ScopeType.TIER,
+                    target_tier=scope,
+                    is_active=True,
+                )
+                .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=now))
+                .filter(Q(ends_at__isnull=True) | Q(ends_at__gte=now))
+            )
+
+            platform_promotions = (
+                Promotion.objects.filter(
+                    scope_type=Promotion.ScopeType.PLATFORM,
+                    is_active=True,
+                )
+                .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=now))
+                .filter(Q(ends_at__isnull=True) | Q(ends_at__gte=now))
+            )
+
+            def _priority_tuple(promotion: Promotion, specificity: int) -> tuple:
+                return (
+                    -specificity,
+                    promotion.priority,
+                    -promotion.created_at.timestamp(),
+                )
+
+            account_map = {}
+            for promotion in sorted(
+                account_promotions,
+                key=lambda p: _priority_tuple(p, 3),
+            ):
+                if promotion.target_user_id not in account_map:
+                    account_map[promotion.target_user_id] = promotion
+            best_tier = (
+                sorted(tier_promotions, key=lambda p: _priority_tuple(p, 2))[0]
+                if tier_promotions
+                else None
+            )
+            best_platform = (
+                sorted(platform_promotions, key=lambda p: _priority_tuple(p, 1))[0]
+                if platform_promotions
+                else None
+            )
+
+            for account in users_on_page:
+                applied = account_map.get(account.id) or best_tier or best_platform
+                account.active_promotion = applied
+                account.active_promotion_ends_at = applied.ends_at if applied else None
+                account.has_active_promotion = applied is not None
+
         context = {
             "mode": mode,
             "scope": scope,
@@ -1452,6 +1515,7 @@ def platform_admin_promotion_create(request: HttpRequest) -> HttpResponse:
         {
             "mode": mode,
             "scope": scope,
+            "form_data": request.GET,
             "scope_choices": Promotion.ScopeType.choices,
             "effect_choices": Promotion.EffectType.choices,
             "tier_choices": UserProfile.AccountTier.choices,
