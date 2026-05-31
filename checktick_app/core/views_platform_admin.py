@@ -15,8 +15,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 
-from checktick_app.core.models import UserProfile
-from checktick_app.surveys.models import Organization, OrganizationMembership, Survey
+from checktick_app.core.models import Promotion, UserProfile
+from checktick_app.surveys.models import Organization, OrganizationMembership, Survey, Team
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -1186,3 +1186,209 @@ def platform_admin_billing(request: HttpRequest) -> HttpResponse:
     }
 
     return render(request, "core/platform_admin/billing.html", context)
+
+
+@superuser_required
+@require_http_methods(["GET"])
+@ratelimit(key="user", rate="60/m", block=True)
+def platform_admin_promotions(request: HttpRequest) -> HttpResponse:
+    """List promotion rules with basic filters for platform admins."""
+    mode = _get_platform_mode(request)
+    scope = _get_tier_scope(request) if mode == "tier" else "all"
+
+    scope_filter = request.GET.get("scope_type", "").strip().lower()
+    status_filter = request.GET.get("status", "active").strip().lower()
+    search = request.GET.get("q", "").strip()
+    now = timezone.now()
+
+    promotions = Promotion.objects.select_related(
+        "target_user",
+        "target_team",
+        "target_organization",
+        "created_by",
+    ).order_by("scope_type", "priority", "-created_at")
+
+    if scope_filter in {choice for choice, _label in Promotion.ScopeType.choices}:
+        promotions = promotions.filter(scope_type=scope_filter)
+
+    if status_filter == "active":
+        promotions = promotions.filter(is_active=True).filter(
+            Q(starts_at__isnull=True) | Q(starts_at__lte=now)
+        ).filter(Q(ends_at__isnull=True) | Q(ends_at__gte=now))
+    elif status_filter == "scheduled":
+        promotions = promotions.filter(is_active=True, starts_at__gt=now)
+    elif status_filter == "expired":
+        promotions = promotions.filter(Q(is_active=False) | Q(ends_at__lt=now))
+
+    if search:
+        promotions = promotions.filter(
+            Q(name__icontains=search)
+            | Q(code__icontains=search)
+            | Q(description__icontains=search)
+        )
+
+    context = {
+        "mode": mode,
+        "scope": scope,
+        "promotions": promotions,
+        "scope_filter": scope_filter,
+        "status_filter": status_filter,
+        "search": search,
+        "scope_choices": Promotion.ScopeType.choices,
+    }
+    return render(request, "core/platform_admin/promotions_list.html", context)
+
+
+@superuser_required
+@require_http_methods(["GET", "POST"])
+@ratelimit(key="user", rate="30/h", block=True)
+def platform_admin_promotion_create(request: HttpRequest) -> HttpResponse:
+    """Create a promotion rule (UI scaffold)."""
+    mode = _get_platform_mode(request)
+    scope = _get_tier_scope(request) if mode == "tier" else "all"
+
+    if request.method == "POST":
+        errors = []
+        name = request.POST.get("name", "").strip()
+        code = request.POST.get("code", "").strip()
+        description = request.POST.get("description", "").strip()
+        scope_type = request.POST.get("scope_type", "").strip()
+        target_tier = request.POST.get("target_tier", "").strip()
+        target_user_email = request.POST.get("target_user_email", "").strip().lower()
+        target_team_id = request.POST.get("target_team_id", "").strip()
+        target_org_id = request.POST.get("target_organization_id", "").strip()
+        effect_type = request.POST.get("effect_type", "").strip()
+        effect_value = request.POST.get("effect_value", "0").strip()
+        effect_tier = request.POST.get("effect_tier", "").strip()
+        priority = request.POST.get("priority", "100").strip()
+        is_active = request.POST.get("is_active") == "on"
+        starts_at_raw = request.POST.get("starts_at", "").strip()
+        ends_at_raw = request.POST.get("ends_at", "").strip()
+        reason = request.POST.get("reason", "").strip()
+        internal_notes = request.POST.get("internal_notes", "").strip()
+
+        if not name:
+            errors.append("Name is required.")
+
+        try:
+            effect_value_decimal = Decimal(effect_value)
+        except InvalidOperation:
+            errors.append("Effect value must be a valid number.")
+            effect_value_decimal = Decimal("0")
+
+        try:
+            priority_int = int(priority)
+        except ValueError:
+            errors.append("Priority must be a whole number.")
+            priority_int = 100
+
+        starts_at = None
+        if starts_at_raw:
+            try:
+                starts_at = timezone.datetime.fromisoformat(starts_at_raw)
+                starts_at = timezone.make_aware(starts_at)
+            except ValueError:
+                errors.append("Start datetime must be valid.")
+
+        ends_at = None
+        if ends_at_raw:
+            try:
+                ends_at = timezone.datetime.fromisoformat(ends_at_raw)
+                ends_at = timezone.make_aware(ends_at)
+            except ValueError:
+                errors.append("End datetime must be valid.")
+
+        target_user = None
+        target_team = None
+        target_organization = None
+
+        if target_user_email:
+            target_user = User.objects.filter(email__iexact=target_user_email).first()
+            if not target_user:
+                errors.append("Target user email was not found.")
+
+        if target_team_id:
+            try:
+                target_team = Team.objects.get(id=int(target_team_id))
+            except (ValueError, Team.DoesNotExist):
+                errors.append("Target team ID is invalid.")
+
+        if target_org_id:
+            try:
+                target_organization = Organization.objects.get(id=int(target_org_id))
+            except (ValueError, Organization.DoesNotExist):
+                errors.append("Target organisation ID is invalid.")
+
+        if not errors:
+            promotion = Promotion(
+                name=name,
+                code=code,
+                description=description,
+                scope_type=scope_type,
+                target_tier=target_tier,
+                target_user=target_user,
+                target_team=target_team,
+                target_organization=target_organization,
+                effect_type=effect_type,
+                effect_value=effect_value_decimal,
+                effect_tier=effect_tier,
+                priority=priority_int,
+                is_active=is_active,
+                starts_at=starts_at,
+                ends_at=ends_at,
+                reason=reason,
+                internal_notes=internal_notes,
+                created_by=request.user,
+                updated_by=request.user,
+            )
+            try:
+                promotion.full_clean()
+                promotion.save()
+            except Exception as exc:
+                errors.append(str(exc))
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return render(
+                request,
+                "core/platform_admin/promotion_form.html",
+                {
+                    "mode": mode,
+                    "scope": scope,
+                    "form_data": request.POST,
+                    "scope_choices": Promotion.ScopeType.choices,
+                    "effect_choices": Promotion.EffectType.choices,
+                    "tier_choices": UserProfile.AccountTier.choices,
+                },
+            )
+
+        messages.success(request, f"Promotion '{name}' created.")
+        return redirect("core:platform_admin_promotions")
+
+    return render(
+        request,
+        "core/platform_admin/promotion_form.html",
+        {
+            "mode": mode,
+            "scope": scope,
+            "scope_choices": Promotion.ScopeType.choices,
+            "effect_choices": Promotion.EffectType.choices,
+            "tier_choices": UserProfile.AccountTier.choices,
+        },
+    )
+
+
+@superuser_required
+@require_http_methods(["POST"])
+@ratelimit(key="user", rate="30/h", block=True)
+def platform_admin_promotion_toggle(request: HttpRequest, promotion_id: int) -> HttpResponse:
+    """Toggle active status for a promotion rule."""
+    promotion = get_object_or_404(Promotion, id=promotion_id)
+    promotion.is_active = not promotion.is_active
+    promotion.updated_by = request.user
+    promotion.save(update_fields=["is_active", "updated_by", "updated_at"])
+
+    status_text = "activated" if promotion.is_active else "deactivated"
+    messages.success(request, f"Promotion '{promotion.name}' {status_text}.")
+    return redirect("core:platform_admin_promotions")

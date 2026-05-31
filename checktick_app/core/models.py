@@ -862,3 +862,184 @@ class PricingOverride(models.Model):
                 tiers[override.tier]["amount"] = override.amount
                 tiers[override.tier]["amount_ex_vat"] = override.amount_ex_vat
         return tiers
+
+
+class Promotion(models.Model):
+    """Promotion rules with platform, tier, or account scope.
+
+    Scope precedence is intended to be resolved as:
+    account > tier > platform
+    """
+
+    class ScopeType(models.TextChoices):
+        PLATFORM = "platform", "Platform"
+        TIER = "tier", "Tier"
+        ACCOUNT = "account", "Account"
+
+    class EffectType(models.TextChoices):
+        PERCENT_DISCOUNT = "percent_discount", "Percent Discount"
+        FIXED_DISCOUNT = "fixed_discount", "Fixed Discount"
+        SET_PRICE = "set_price", "Set Price"
+        TIER_OVERRIDE = "tier_override", "Tier Override"
+
+    name = models.CharField(max_length=255)
+    code = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Optional internal code for support/finance reference",
+    )
+    description = models.TextField(blank=True, default="")
+
+    scope_type = models.CharField(max_length=20, choices=ScopeType.choices)
+
+    # Target fields by scope
+    target_tier = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        choices=UserProfile.AccountTier.choices,
+    )
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="promotions",
+    )
+    target_team = models.ForeignKey(
+        "surveys.Team",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="promotions",
+    )
+    target_organization = models.ForeignKey(
+        "surveys.Organization",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="promotions",
+    )
+
+    effect_type = models.CharField(max_length=30, choices=EffectType.choices)
+    effect_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Percent or currency value depending on effect type",
+    )
+    effect_tier = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        choices=UserProfile.AccountTier.choices,
+        help_text="Required for tier override effects",
+    )
+
+    priority = models.IntegerField(
+        default=100,
+        help_text="Lower values are applied first within a scope",
+    )
+    is_active = models.BooleanField(default=True)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
+
+    reason = models.TextField(blank=True, default="")
+    internal_notes = models.TextField(blank=True, default="")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_promotions",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_promotions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["scope_type", "priority", "-created_at"]
+        indexes = [
+            models.Index(fields=["scope_type", "is_active"]),
+            models.Index(fields=["target_tier", "is_active"]),
+            models.Index(fields=["starts_at", "ends_at"]),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.name} ({self.get_scope_type_display()})"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        has_account_target = any(
+            [self.target_user_id, self.target_team_id, self.target_organization_id]
+        )
+
+        if self.scope_type == self.ScopeType.PLATFORM:
+            if self.target_tier or has_account_target:
+                raise ValidationError(
+                    "Platform-scope promotions cannot set target tier or account targets."
+                )
+
+        elif self.scope_type == self.ScopeType.TIER:
+            if not self.target_tier:
+                raise ValidationError("Tier-scope promotions must set a target tier.")
+            if has_account_target:
+                raise ValidationError(
+                    "Tier-scope promotions cannot set user/team/organisation targets."
+                )
+
+        elif self.scope_type == self.ScopeType.ACCOUNT:
+            target_count = sum(
+                bool(v)
+                for v in [
+                    self.target_user_id,
+                    self.target_team_id,
+                    self.target_organization_id,
+                ]
+            )
+            if target_count != 1:
+                raise ValidationError(
+                    "Account-scope promotions must target exactly one of user, team, or organisation."
+                )
+            if self.target_tier:
+                raise ValidationError(
+                    "Account-scope promotions should not set target tier."
+                )
+
+        if self.starts_at and self.ends_at and self.starts_at >= self.ends_at:
+            raise ValidationError("Promotion start time must be before end time.")
+
+        if (
+            self.effect_type == self.EffectType.TIER_OVERRIDE
+            and not self.effect_tier
+        ):
+            raise ValidationError("Tier override effects must set an effect tier.")
+
+        if (
+            self.effect_type != self.EffectType.TIER_OVERRIDE
+            and self.effect_tier
+        ):
+            raise ValidationError(
+                "Effect tier is only valid when effect type is Tier Override."
+            )
+
+    def is_currently_active(self, at_time=None) -> bool:
+        """Return True if the promotion is active for the supplied time."""
+        at = at_time or timezone.now()
+        if not self.is_active:
+            return False
+        if self.starts_at and at < self.starts_at:
+            return False
+        if self.ends_at and at > self.ends_at:
+            return False
+        return True

@@ -88,6 +88,12 @@
               {% trans "Pricing" %}
             </a>
           </li>
+          <li>
+            <a href="{% url 'core:platform_admin_promotions' %}"
+               class="btn btn-sm {% if request.resolver_match.url_name == 'platform_admin_promotions' or request.resolver_match.url_name == 'platform_admin_promotion_create' %}btn-primary{% else %}btn-ghost{% endif %}">
+              {% trans "Promotions" %}
+            </a>
+          </li>
           {% endif %}
         </ul>
         {% endwith %}

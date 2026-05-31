@@ -97,6 +97,21 @@ urlpatterns = [
         views_platform_admin.pricing_overrides,
         name="platform_admin_pricing",
     ),
+    path(
+        "platform-admin/promotions/",
+        views_platform_admin.platform_admin_promotions,
+        name="platform_admin_promotions",
+    ),
+    path(
+        "platform-admin/promotions/create/",
+        views_platform_admin.platform_admin_promotion_create,
+        name="platform_admin_promotion_create",
+    ),
+    path(
+        "platform-admin/promotions/<int:promotion_id>/toggle/",
+        views_platform_admin.platform_admin_promotion_toggle,
+        name="platform_admin_promotion_toggle",
+    ),
     # Billing
     path(
         "subscription/", views_billing.subscription_portal, name="subscription_portal"

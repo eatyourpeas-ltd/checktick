@@ -1,0 +1,134 @@
+{% extends 'core/platform_admin/base.html' %}
+{% load i18n %}
+
+{% block platform_title %}{% trans "Create Promotion" %}{% endblock %}
+
+{% block platform_content %}
+<div class="flex items-center gap-4 mb-6">
+  <a href="{% url 'core:platform_admin_promotions' %}" class="btn btn-ghost btn-sm">← {% trans "Back" %}</a>
+  <h2 class="text-xl font-semibold">{% trans "Create Promotion" %}</h2>
+</div>
+
+<div class="card bg-base-100 shadow max-w-4xl">
+  <div class="card-body">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Name" %} *</span></label>
+          <input type="text" name="name" class="input input-bordered" required value="{{ form_data.name }}">
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Code" %}</span></label>
+          <input type="text" name="code" class="input input-bordered" value="{{ form_data.code }}">
+        </div>
+      </div>
+
+      <div class="form-control">
+        <label class="label"><span class="label-text">{% trans "Description" %}</span></label>
+        <textarea name="description" class="textarea textarea-bordered" rows="2">{{ form_data.description }}</textarea>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Scope" %} *</span></label>
+          <select name="scope_type" class="select select-bordered" required>
+            {% for value, label in scope_choices %}
+            <option value="{{ value }}" {% if form_data.scope_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Target Tier" %}</span></label>
+          <select name="target_tier" class="select select-bordered">
+            <option value="">{% trans "None" %}</option>
+            {% for value, label in tier_choices %}
+            <option value="{{ value }}" {% if form_data.target_tier == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Priority" %}</span></label>
+          <input type="number" name="priority" class="input input-bordered" value="{{ form_data.priority|default:'100' }}">
+        </div>
+      </div>
+
+      <div class="alert alert-info text-sm">
+        {% trans "For account scope, set exactly one target below (user email, team ID, or organisation ID)." %}
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Target User Email" %}</span></label>
+          <input type="email" name="target_user_email" class="input input-bordered" value="{{ form_data.target_user_email }}">
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Target Team ID" %}</span></label>
+          <input type="number" name="target_team_id" class="input input-bordered" value="{{ form_data.target_team_id }}">
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Target Organisation ID" %}</span></label>
+          <input type="number" name="target_organization_id" class="input input-bordered" value="{{ form_data.target_organization_id }}">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Effect" %} *</span></label>
+          <select name="effect_type" class="select select-bordered" required>
+            {% for value, label in effect_choices %}
+            <option value="{{ value }}" {% if form_data.effect_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Effect Value" %} *</span></label>
+          <input type="number" step="0.01" name="effect_value" class="input input-bordered" value="{{ form_data.effect_value|default:'0.00' }}" required>
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Effect Tier" %}</span></label>
+          <select name="effect_tier" class="select select-bordered">
+            <option value="">{% trans "None" %}</option>
+            {% for value, label in tier_choices %}
+            <option value="{{ value }}" {% if form_data.effect_tier == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Starts At" %}</span></label>
+          <input type="datetime-local" name="starts_at" class="input input-bordered" value="{{ form_data.starts_at }}">
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">{% trans "Ends At" %}</span></label>
+          <input type="datetime-local" name="ends_at" class="input input-bordered" value="{{ form_data.ends_at }}">
+        </div>
+      </div>
+
+      <div class="form-control">
+        <label class="label"><span class="label-text">{% trans "Reason" %}</span></label>
+        <textarea name="reason" class="textarea textarea-bordered" rows="2">{{ form_data.reason }}</textarea>
+      </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text">{% trans "Internal Notes" %}</span></label>
+        <textarea name="internal_notes" class="textarea textarea-bordered" rows="2">{{ form_data.internal_notes }}</textarea>
+      </div>
+
+      <div class="form-control">
+        <label class="cursor-pointer label justify-start gap-4">
+          <input type="checkbox" name="is_active" class="checkbox checkbox-primary" {% if form_data.is_active or not form_data %}checked{% endif %}>
+          <span class="label-text">{% trans "Active" %}</span>
+        </label>
+      </div>
+
+      <div class="card-actions justify-end mt-6">
+        <a href="{% url 'core:platform_admin_promotions' %}" class="btn btn-ghost">{% trans "Cancel" %}</a>
+        <button type="submit" class="btn btn-primary">{% trans "Create Promotion" %}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

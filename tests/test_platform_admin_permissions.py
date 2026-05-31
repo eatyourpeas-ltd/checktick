@@ -9,6 +9,7 @@ from django.urls import reverse
 import pytest
 
 from checktick_app.core.models import Payment
+from checktick_app.core.models import Promotion
 from checktick_app.core.models import PricingOverride
 from checktick_app.core.models import UserProfile
 from checktick_app.surveys.models import Organization, OrganizationMembership
@@ -805,3 +806,74 @@ class TestPlatformBillingAccess:
         assert response.status_code == 200
         assert b"INV-TEST-PRO" in response.content
         assert b"INV-TEST-FREE" not in response.content
+
+
+# ============================================================================
+# Platform Promotions Access Tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestPlatformPromotionsAccess:
+    """Test access control and basic behavior for platform promotions views."""
+
+    def test_anonymous_user_redirected_to_login(self, client):
+        """Anonymous users are redirected to login."""
+        url = reverse("core:platform_admin_promotions")
+        response = client.get(url)
+        assert response.status_code == 302
+        assert "login" in response.url.lower()
+
+    def test_regular_user_denied_access(self, client, regular_user):
+        """Regular users cannot access promotions page."""
+        client.force_login(regular_user)
+        url = reverse("core:platform_admin_promotions")
+        response = client.get(url)
+        assert response.status_code == 302
+
+    def test_superuser_can_access_promotions(self, client, superuser):
+        """Superusers can access promotions listing."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotions")
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b"Promotions" in response.content
+
+    def test_superuser_can_create_platform_promotion(self, client, superuser):
+        """Superusers can create a platform-scope promotion."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.post(
+            url,
+            {
+                "name": "Summer Promo",
+                "code": "SUMMER2026",
+                "scope_type": "platform",
+                "effect_type": "percent_discount",
+                "effect_value": "10.00",
+                "priority": "50",
+                "is_active": "on",
+            },
+        )
+        assert response.status_code == 302
+        assert Promotion.objects.filter(name="Summer Promo").exists()
+
+    def test_superuser_can_toggle_promotion(self, client, superuser):
+        """Superusers can activate/deactivate a promotion."""
+        promotion = Promotion.objects.create(
+            name="Toggle Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=5,
+            is_active=True,
+        )
+        client.force_login(superuser)
+        url = reverse(
+            "core:platform_admin_promotion_toggle",
+            kwargs={"promotion_id": promotion.id},
+        )
+        response = client.post(url)
+        assert response.status_code == 302
+
+        promotion.refresh_from_db()
+        assert promotion.is_active is False
