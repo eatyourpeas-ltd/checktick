@@ -1,6 +1,6 @@
 ---
 title: Branching Logic - Technical Guide
-category: api
+category: development
 priority: 15
 ---
 

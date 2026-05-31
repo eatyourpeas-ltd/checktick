@@ -1,6 +1,6 @@
 ---
 title: Account Tiers Implementation
-category: api
+category: development
 priority: 100
 ---
 

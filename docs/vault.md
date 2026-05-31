@@ -1,6 +1,6 @@
 ---
 title: Vault Integration
-category: api
+category: development
 priority: 5
 ---
 

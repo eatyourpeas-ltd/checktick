@@ -1,6 +1,6 @@
 ---
 title: Themes (Legacy)
-category: configuration
+category: development
 priority: 2
 ---
 

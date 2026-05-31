@@ -1,6 +1,6 @@
 ---
 title: Versioning and Deployment
-category: api
+category: development
 priority: 12
 ---
 

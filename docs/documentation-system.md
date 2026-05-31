@@ -43,7 +43,8 @@ Your documentation content starts here...
 - `configuration` - Configuration guides
 - `security` - Security documentation
 - `data-governance` - Data governance guides
-- `api` - API & development docs
+- `api` - API documentation
+- `development` - Development and technical implementation docs
 - `testing` - Testing guides
 - `internationalisation` - i18n documentation
 - `accessibility-and-inclusion` - Accessibility and inclusion documentation
@@ -318,9 +319,12 @@ Documentation
 ├── 🔒 Security
 │   ├── Authentication And Permissions
 │   └── Patient Data Encryption
-├── 🔧 API & Development
+├── 🔧 API
 │   ├── Adding External Datasets
 │   └── Api
+├── 🛠️ Development
+│   ├── Billing, Refunds, and Promotions Technical Overview
+│   └── Platform Admin Functionality Technical Implementation
 ├── 🧪 Testing
 │   ├── Testing Api
 │   └── Testing Webapp

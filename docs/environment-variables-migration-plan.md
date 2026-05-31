@@ -1,6 +1,6 @@
 ---
 title: Environment Variables Migration Plan
-category: api
+category: development
 priority: 101
 ---
 
