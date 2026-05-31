@@ -13,7 +13,9 @@ The email system provides:
 - **Welcome emails** on user signup
 - **Password change notifications** for security
 - **Survey creation/deletion confirmations** (optional)
-- **Team and survey invitations** (future)
+- **Team and survey invitations**
+- **Subscription, payment, refund, and promotion lifecycle emails**
+- **Recovery workflow notifications** for users and platform admins
 - **Error and critical alerts** (future, for logging integration)
 - **Markdown-based templates** with platform and survey-level branding
 - **Granular user preferences** controllable via profile page
@@ -193,8 +195,8 @@ Users have granular control over which emails they receive. Preferences are mana
 | **Survey published notifications** | Alert when your survey is published | ❌ Disabled |
 | **Team invitations** | Invites to join organisations | ✅ Enabled |
 | **Survey invitations** | Invites to collaborate on surveys | ✅ Enabled |
-| **Error notifications** | System errors affecting you (future) | ✅ Enabled |
-| **Critical alerts** | Critical system issues (future) | ✅ Enabled |
+| **Error notifications** | Reserved for future logging/monitoring integrations | ✅ Enabled |
+| **Critical alerts** | Reserved for future logging/monitoring integrations | ✅ Enabled |
 
 ### Managing Preferences
 
@@ -225,6 +227,18 @@ Each email has two components:
 | `password_changed.md` | Security notification | `user.username`, `user.email`, `brand_title` |
 | `survey_created.md` | Survey creation confirmation | `user.username`, `survey.title`, `survey.slug`, `survey.state` |
 | `survey_deleted.md` | Survey deletion confirmation | `user.username`, `survey_name`, `survey_slug` |
+| `authenticated_invite_existing_user.md` | Existing-user survey invite | `recipient_name`, `inviter_name`, `survey_name`, `dashboard_url` |
+| `authenticated_invite_new_user.md` | New-user survey invite | `recipient_name`, `inviter_name`, `survey_name`, `register_url` |
+| `team_invitation.md` | Team/org invitation | `recipient_name`, `inviter_name`, `team_name`, `invitation_link` |
+| `subscription_created.md` | Subscription started | `user_name`, `plan_name`, `next_payment_date`, `amount`, `currency` |
+| `subscription_cancelled.md` | Subscription cancelled | `user_name`, `plan_name`, `cancelled_at`, `final_access_date` |
+| `subscription_expired.md` | Subscription expired | `user_name`, `expired_at`, `reactivation_url` |
+| `payment_failed.md` | Payment failure alert | `user_name`, `amount`, `currency`, `attempt_date`, `action_url` |
+| `refund_processed.md` | Refund completed | `user_name`, `amount`, `currency`, `refund_reference`, `processed_at` |
+| `promotion_activated.md` | Promotion started | `user_name`, `promotion_name`, `effective_from`, `effective_to` |
+| `promotion_ending_soon.md` | Promotion reminder | `user_name`, `promotion_name`, `effective_to` |
+| `promotion_expired.md` | Promotion ended | `user_name`, `promotion_name`, `expired_at` |
+| `recovery_*.md` | Recovery workflow stages | stage-specific case metadata |
 
 ### Customizing Templates
 

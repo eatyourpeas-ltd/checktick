@@ -89,6 +89,7 @@ CheckTick works with any PostgreSQL-compatible managed database service:
 Create a PostgreSQL database through your cloud provider:
 
 **Minimum Requirements:**
+
 - PostgreSQL 12 or higher (16 recommended)
 - 2 vCPU, 4GB RAM minimum
 - 20GB storage (SSD recommended)
@@ -130,10 +131,12 @@ az postgres server create \
 Allow connections from your CheckTick server:
 
 **AWS RDS:**
+
 - Add inbound rule in security group for PostgreSQL (port 5432)
 - Allow your server's IP address
 
 **Azure:**
+
 ```bash
 az postgres server firewall-rule create \
   --resource-group checktick-rg \
@@ -148,16 +151,19 @@ az postgres server firewall-rule create \
 Your connection string format depends on the provider:
 
 **AWS RDS:**
+
 ```
 postgresql://checktick:password@checktick-db.abc123.us-east-1.rds.amazonaws.com:5432/checktick
 ```
 
 **Azure Database:**
+
 ```
 postgresql://checktick@checktick-db:password@checktick-db.postgres.database.azure.com:5432/checktick?sslmode=require
 ```
 
 **Google Cloud SQL:**
+
 ```
 postgresql://checktick:password@/checktick?host=/cloudsql/project-id:region:instance-name
 ```
@@ -221,9 +227,11 @@ postgresql://username:password@/database_name?host=/cloudsql/project:region:inst
 Set appropriate connection limits in your database:
 
 **For included PostgreSQL:**
+
 - Default: 100 connections (sufficient for most deployments)
 
 **For external database:**
+
 - Small: 100 connections
 - Medium: 200 connections
 - Large: 500+ connections
@@ -237,6 +245,7 @@ DATABASE_URL=postgresql://user:pass@host:5432/db?sslmode=require
 ```
 
 SSL modes:
+
 - `disable` - No SSL (only for local development)
 - `require` - SSL required, don't verify certificate
 - `verify-ca` - SSL required, verify certificate

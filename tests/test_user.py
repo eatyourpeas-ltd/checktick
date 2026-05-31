@@ -2,10 +2,41 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 import pytest
 
-from checktick_app.core.models import UserOIDC
+from checktick_app.core.models import Promotion, UserOIDC
 from checktick_app.surveys.models import Organization, OrganizationMembership, Survey
 
 TEST_PASSWORD = "ComplexTestPassword123!"
+
+
+@pytest.mark.django_db
+def test_complete_signup_page_shows_active_promotion_signpost(client):
+    """Complete signup should surface active promotions with a pricing link."""
+    email = "promo-oidc-user@example.com"
+    password = TEST_PASSWORD
+
+    User = get_user_model()
+    user = User.objects.create_user(username=email, email=email, password=password)
+    UserOIDC.objects.create(user=user, signup_completed=False)
+    Promotion.objects.create(
+        name="Welcome Offer",
+        scope_type=Promotion.ScopeType.PLATFORM,
+        effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+        effect_value=12,
+        is_active=True,
+    )
+
+    client.login(username=email, password=password)
+    session = client.session
+    session["needs_signup_completion"] = True
+    session.save()
+
+    response = client.get(reverse("core:complete_signup"))
+    assert response.status_code == 200
+
+    html = response.content.decode("utf-8")
+    assert "Limited-time offer" in html
+    assert "12% off" in html
+    assert reverse("core:pricing") in html
 
 
 @pytest.mark.django_db

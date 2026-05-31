@@ -175,6 +175,7 @@ The exported CSV file contains:
 ### Encrypted Fields
 
 Some fields may be encrypted in the CSV:
+
 - Email addresses
 - Phone numbers
 - Other personally identifiable information (PII)

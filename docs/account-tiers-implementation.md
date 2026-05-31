@@ -1,6 +1,6 @@
 ---
 title: Account Tiers Implementation
-category: api
+category: development
 priority: 100
 ---
 
@@ -63,6 +63,7 @@ class Team(models.Model):
 ```
 
 **Key Properties:**
+
 - `max_members` - Returns 5/10/20 based on size, or custom_max_members
 - `current_member_count()` - Count of team memberships
 - `can_add_members()` - Check if under capacity
@@ -82,6 +83,7 @@ class TeamMembership(models.Model):
 ```
 
 **Roles:**
+
 - **Admin**: Manage team members, settings, and all surveys
 - **Creator**: Create and edit surveys within team
 - **Viewer**: Read-only access to team surveys
@@ -180,12 +182,14 @@ class Survey(models.Model):
 **Key Principle**: Self-hosted instances get **Enterprise tier features** without payment requirements.
 
 ### Configuration
+
 ```bash
 # .env file
 SELF_HOSTED=true
 ```
 
 When `SELF_HOSTED=true`:
+
 - All users automatically get Enterprise tier capabilities
 - **Billing UI is completely hidden** - no payment pages, upgrade prompts, or subscription management
 - No payment integration required
@@ -196,7 +200,9 @@ When `SELF_HOSTED=true`:
 - Pricing page still visible but marked as reference for hosted version
 
 ### Branding Management for Self-Hosted
+
 Self-hosted administrators can configure branding via:
+
 1. **UI Dashboard** (recommended): Navigate to `/admin/branding/` (requires superuser)
 2. **Management Command**: `python manage.py configure_branding`
 3. **Direct Database**: Edit `SiteBranding` model (not recommended)
@@ -206,6 +212,7 @@ Self-hosted administrators can configure branding via:
 ## Hosted SaaS Deployments
 
 ### Configuration
+
 ```bash
 # .env file
 SELF_HOSTED=false
@@ -214,7 +221,9 @@ PAYMENT_API_KEY=your_api_key_here
 ```
 
 ### Tier Enforcement
+
 When `SELF_HOSTED=false`:
+
 - Survey limits enforced for FREE tier (3 surveys max)
 - Collaboration features gated by tier
 - Branding features restricted to Enterprise tier

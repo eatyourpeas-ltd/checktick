@@ -1,0 +1,269 @@
+{% extends 'core/platform_admin/base.html' %}
+{% load i18n %}
+
+{% block platform_title %}{% trans "Billing" %}{% endblock %}
+
+{% block platform_content %}
+<div class="space-y-6">
+  <div class="flex items-center justify-between gap-4 flex-wrap">
+    <div>
+      <h2 class="text-2xl font-bold">{% trans "Billing" %}</h2>
+      {% if mode == 'tier' %}
+        <p class="text-sm text-base-content/70">
+          {% blocktrans with scope_value=scope %}Showing payment data for tier: {{ scope_value }}{% endblocktrans %}
+        </p>
+      {% else %}
+        <p class="text-sm text-base-content/70">{% trans "Showing cross-tier platform payment data." %}</p>
+      {% endif %}
+    </div>
+    <div class="badge badge-ghost badge-lg">{% trans "Scaffold" %}</div>
+  </div>
+
+  <form method="get" class="card bg-base-100 shadow">
+    <div class="card-body">
+      <input type="hidden" name="mode" value="{{ mode }}">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        {% if mode == 'tier' %}
+        <div>
+          <label class="label" for="scope"><span class="label-text">{% trans "Scope" %}</span></label>
+          <select id="scope" name="scope" class="select select-bordered w-full">
+            {% for value, label in scope_choices %}
+              <option value="{{ value }}" {% if scope == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+
+        <div>
+          <label class="label" for="status"><span class="label-text">{% trans "Status" %}</span></label>
+          <select id="status" name="status" class="select select-bordered w-full">
+            <option value="">{% trans "All" %}</option>
+            {% for value, label in status_choices %}
+              <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="label" for="from"><span class="label-text">{% trans "From" %}</span></label>
+          <input id="from" name="from" type="date" class="input input-bordered w-full" value="{{ date_from }}">
+        </div>
+
+        <div>
+          <label class="label" for="to"><span class="label-text">{% trans "To" %}</span></label>
+          <input id="to" name="to" type="date" class="input input-bordered w-full" value="{{ date_to }}">
+        </div>
+
+        <div>
+          <label class="label" for="q"><span class="label-text">{% trans "Search" %}</span></label>
+          <input id="q" name="q" type="text" class="input input-bordered w-full" value="{{ search_query }}" placeholder="{% trans 'Invoice, email, payment ID' %}">
+        </div>
+      </div>
+
+      <div class="card-actions justify-end mt-4">
+        <button type="submit" class="btn btn-primary">{% trans "Apply Filters" %}</button>
+        <a href="{% url 'core:platform_admin_billing' %}?mode={{ mode }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}" class="btn btn-ghost">{% trans "Clear" %}</a>
+      </div>
+    </div>
+  </form>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div class="stat bg-base-100 rounded-box shadow">
+      <div class="stat-title">{% trans "Transactions" %}</div>
+      <div class="stat-value text-primary">{{ totals.tx_count }}</div>
+    </div>
+    <div class="stat bg-base-100 rounded-box shadow">
+      <div class="stat-title">{% trans "Ex VAT" %}</div>
+      <div class="stat-value text-secondary">£{{ totals.ex_vat|floatformat:2 }}</div>
+    </div>
+    <div class="stat bg-base-100 rounded-box shadow">
+      <div class="stat-title">{% trans "VAT" %}</div>
+      <div class="stat-value">£{{ totals.vat|floatformat:2 }}</div>
+    </div>
+    <div class="stat bg-base-100 rounded-box shadow">
+      <div class="stat-title">{% trans "Inc VAT" %}</div>
+      <div class="stat-value text-accent">£{{ totals.inc_vat|floatformat:2 }}</div>
+    </div>
+    <div class="stat bg-base-100 rounded-box shadow">
+      <div class="stat-title">{% trans "Refunded" %}</div>
+      <div class="stat-value">£{{ totals.refunded|floatformat:2 }}</div>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h3 class="card-title">{% trans "Payment Timeline" %}</h3>
+      <p class="text-sm text-base-content/70">
+        {% blocktrans with policy_version=refund_policy_version %}
+        Refund policy {{ policy_version }}: full-payment refunds only. Partial refunds and automated credits are tracked as policy exceptions.
+        {% endblocktrans %}
+      </p>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>{% trans "Date" %}</th>
+              <th>{% trans "Invoice" %}</th>
+              <th>{% trans "Customer" %}</th>
+              <th>{% trans "Tier" %}</th>
+              <th>{% trans "Amount" %}</th>
+              <th>{% trans "Status" %}</th>
+              <th>{% trans "Provider Ref" %}</th>
+              <th>{% trans "Actions" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for payment in payments %}
+              <tr>
+                <td>{{ payment.invoice_date|date:"d M Y" }}</td>
+                <td class="font-mono text-xs">{{ payment.invoice_number }}</td>
+                <td>
+                  <div class="font-medium">{{ payment.customer_name|default:"-" }}</div>
+                  <div class="text-xs text-base-content/70">{{ payment.customer_email }}</div>
+                </td>
+                <td><span class="badge badge-ghost badge-sm">{{ payment.tier }}</span></td>
+                <td>£{{ payment.amount_inc_vat|floatformat:-2 }}</td>
+                <td>
+                  {% if payment.status == 'confirmed' %}
+                    <span class="badge badge-success badge-sm">{{ payment.get_status_display }}</span>
+                  {% elif payment.status == 'failed' %}
+                    <span class="badge badge-error badge-sm">{{ payment.get_status_display }}</span>
+                  {% elif payment.status == 'refunded' %}
+                    <span class="badge badge-warning badge-sm">{{ payment.get_status_display }}</span>
+                  {% else %}
+                    <span class="badge badge-ghost badge-sm">{{ payment.get_status_display }}</span>
+                  {% endif %}
+                </td>
+                <td class="font-mono text-xs">{{ payment.payment_id|default:payment.subscription_id|default:"-" }}</td>
+                <td>
+                  {% if payment.status == 'confirmed' and payment.payment_provider == 'gocardless' and payment.payment_id %}
+                    <form method="post" action="{% url 'core:platform_admin_billing_refund' payment_id=payment.id %}" class="flex flex-col gap-2">
+                      {% csrf_token %}
+                      <input type="hidden" name="mode" value="{{ mode }}">
+                      {% if mode == 'tier' %}
+                        <input type="hidden" name="scope" value="{{ scope }}">
+                      {% endif %}
+                      <input type="hidden" name="status" value="{{ status_filter }}">
+                      <input type="hidden" name="from" value="{{ date_from }}">
+                      <input type="hidden" name="to" value="{{ date_to }}">
+                      <input type="hidden" name="q" value="{{ search_query }}">
+                      <select name="refund_reason_code" class="select select-bordered select-xs w-40" required>
+                        <option value="">{% trans "Reason code" %}</option>
+                        {% for value, label in refund_reason_code_choices %}
+                          <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                      </select>
+                      <input type="text" name="refund_reason" class="input input-bordered input-xs w-40" placeholder="{% trans 'Reason' %}">
+                      <button type="submit" class="btn btn-xs btn-error btn-outline">{% trans "Refund" %}</button>
+                    </form>
+                  {% else %}
+                    <span class="text-xs text-base-content/50">{% trans "No action" %}</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="8" class="text-center text-base-content/60 py-8">{% trans "No payments found for current filters." %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if payments.has_other_pages %}
+      <div class="join mt-4">
+        {% if payments.has_previous %}
+          <a href="?mode={{ mode }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}&status={{ status_filter }}&from={{ date_from }}&to={{ date_to }}&q={{ search_query }}&page={{ payments.previous_page_number }}" class="join-item btn btn-sm">{% trans "Prev" %}</a>
+        {% else %}
+          <button class="join-item btn btn-sm btn-disabled">{% trans "Prev" %}</button>
+        {% endif %}
+
+        <button class="join-item btn btn-sm btn-ghost">{{ payments.number }} / {{ payments.paginator.num_pages }}</button>
+
+        {% if payments.has_next %}
+          <a href="?mode={{ mode }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}&status={{ status_filter }}&from={{ date_from }}&to={{ date_to }}&q={{ search_query }}&page={{ payments.next_page_number }}" class="join-item btn btn-sm">{% trans "Next" %}</a>
+        {% else %}
+          <button class="join-item btn btn-sm btn-disabled">{% trans "Next" %}</button>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h3 class="card-title">{% trans "Promotion Adjustment Report" %}</h3>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="stat bg-base-200 rounded-box">
+          <div class="stat-title">{% trans "Adjustment Rows" %}</div>
+          <div class="stat-value text-primary">{{ adjustment_summary.rows }}</div>
+        </div>
+        <div class="stat bg-base-200 rounded-box">
+          <div class="stat-title">{% trans "Refund Rows" %}</div>
+          <div class="stat-value text-secondary">{{ adjustment_summary.refund_rows }}</div>
+        </div>
+        <div class="stat bg-base-200 rounded-box">
+          <div class="stat-title">{% trans "Credits (Manual)" %}</div>
+          <div class="stat-value">{{ adjustment_summary.credit_rows }}</div>
+        </div>
+        <div class="stat bg-base-200 rounded-box">
+          <div class="stat-title">{% trans "Completed Refunds" %}</div>
+          <div class="stat-value text-accent">£{{ adjustment_summary.completed_refund_total|floatformat:2 }}</div>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto mt-4">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>{% trans "Logged" %}</th>
+              <th>{% trans "Invoice" %}</th>
+              <th>{% trans "Customer" %}</th>
+              <th>{% trans "Type" %}</th>
+              <th>{% trans "Status" %}</th>
+              <th>{% trans "Amount" %}</th>
+              <th>{% trans "Promotion-linked" %}</th>
+              <th>{% trans "Provider Refund" %}</th>
+              <th>{% trans "Reason" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in adjustment_rows %}
+              <tr>
+                <td>{{ row.created_at|date:"d M Y H:i" }}</td>
+                <td class="font-mono text-xs">{{ row.invoice_number }}</td>
+                <td class="text-xs">{{ row.customer_email|default:"-" }}</td>
+                <td><span class="badge badge-ghost badge-sm">{{ row.adjustment_type }}</span></td>
+                <td><span class="badge badge-outline badge-sm">{{ row.status }}</span></td>
+                <td>£{{ row.amount_pounds|floatformat:2 }}</td>
+                <td>
+                  {% if row.promotion_linked %}
+                    <span class="badge badge-success badge-sm">{% trans "Yes" %}</span>
+                  {% else %}
+                    <span class="badge badge-ghost badge-sm">{% trans "No" %}</span>
+                  {% endif %}
+                </td>
+                <td class="font-mono text-xs">{{ row.provider_refund_id|default:"-" }}</td>
+                <td class="text-xs">
+                  {% if row.reason_code %}
+                    <div>{{ row.reason_code }}</div>
+                  {% endif %}
+                  {% if row.reason %}
+                    <div class="text-base-content/70">{{ row.reason }}</div>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="9" class="text-center text-base-content/60 py-6">
+                  {% trans "No promotion-linked adjustments matched the current billing filters." %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

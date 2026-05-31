@@ -27,6 +27,7 @@ This guide focuses on **platform-level configuration** for deployment administra
 5. Changes apply instantly without container restarts
 
 **Alternative methods:**
+
 - CLI: `python manage.py configure_branding --show` (see command options below)
 - Django Admin: `/admin/core/sitebranding/` (still available)
 - Environment variables: Optional fallbacks only (not recommended for active configuration)

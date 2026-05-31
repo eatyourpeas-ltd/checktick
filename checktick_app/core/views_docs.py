@@ -73,9 +73,14 @@ DOC_CATEGORIES = {
         "icon": "🗂️",
     },
     "api": {
-        "title": "API & Development",
+        "title": "API",
         "order": 7,
         "icon": "🔧",
+    },
+    "development": {
+        "title": "Development",
+        "order": 7.5,
+        "icon": "🛠️",
     },
     "testing": {
         "title": "Testing",
@@ -188,7 +193,7 @@ DOC_PAGE_OVERRIDES = {
     },
     "themes": {
         "file": "themes.md",
-        "category": "api",
+        "category": "development",
     },  # Developer guide for theme implementation
     "branching-and-repeats": {
         "file": "branching-and-repeats.md",
@@ -197,7 +202,7 @@ DOC_PAGE_OVERRIDES = {
     },
     "branching-technical": {
         "file": "branching-technical.md",
-        "category": "api",
+        "category": "development",
         "title": "Branching Logic - Technical Guide",
     },
     "documentation-system": {

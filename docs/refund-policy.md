@@ -6,13 +6,15 @@ priority: 3
 
 # Refund Policy
 
-**Last Updated: 4 December 2025**
+**Last Updated: 31 May 2026**
 
 This Refund Policy explains our policies regarding refunds, cancellations, and billing for CheckTick paid subscriptions.
 
 ## 1. Overview
 
 CheckTick subscriptions are processed through our secure payment provider. All payments are handled securely, and refunds are subject to this policy.
+
+For self-hosted deployments with `SELF_HOSTED=true`, billing is disabled by default and this refund policy applies only if you enable and operate your own external billing integration.
 
 ### 1.1 Key Points
 
@@ -58,7 +60,7 @@ CheckTick offers paid subscriptions for:
 You can cancel your subscription at any time through:
 
 * Your **Account Settings** in CheckTick
-* The **customer portal** (link provided in your subscription emails)
+* The **provider-managed billing/mandate flow** (where available)
 * Contacting our support team
 
 ### 3.2 Effect of Cancellation
@@ -84,9 +86,21 @@ When downgrading from a paid tier to FREE:
 
 ### 4.1 General Refund Policy
 
-We want you to be happy with CheckTick. If you're not satisfied, we may grant refunds at our discretion beyond the statutory 14-day period. Contact us at [support@checktick.com](mailto:support@checktick.com) to discuss your situation.
+We want you to be happy with CheckTick. If you're not satisfied, we may grant refunds at our discretion beyond the statutory 14-day period. Contact us at [support@checktick.uk](mailto:support@checktick.uk) to discuss your situation.
 
 Refunds are processed through our payment provider. This does not affect your statutory rights as a consumer in relation to products which are not as described, faulty, or not fit for purpose.
+
+### 4.1A Operational Refund Policy (Hosted Reference Deployment)
+
+For platform-admin initiated refunds in the hosted reference deployment:
+
+* Refund automation currently supports **full-payment refunds only**
+* **Partial refunds are policy-restricted** in the current hosted admin flow
+* Operators must provide a **reason code** for each refund request
+* If the reason code is **Other**, a free-text explanation is required
+* Refund status is reconciled from provider webhook events and recorded in audit metadata
+
+Alternative hosted providers or custom self-hosted integrations may support different workflows; adapt policy enforcement and webhook mappings to match your provider and legal obligations.
 
 ### 4.2 Consumer Right to Cancel (14-Day Cooling Off Period)
 
@@ -94,7 +108,7 @@ If you are a consumer, you have the right to cancel your subscription within **1
 
 **How to exercise your right to cancel:**
 
-* Contact us at [support@checktick.com](mailto:support@checktick.com) before the 14-day period expires
+* Contact us at [support@checktick.uk](mailto:support@checktick.uk) before the 14-day period expires
 * To meet the cancellation deadline, you must send your cancellation request before the 14-day period expires
 
 **Effect of cancellation:**
@@ -166,7 +180,7 @@ Orders where payments are made via wire transfer are not protected under the Con
 To request a refund:
 
 1. **Contact Support**
-   * Email: [support@checktick.com](support@checktick.com)
+   * Email: [support@checktick.uk](mailto:support@checktick.uk)
    * Include your account email and subscription details
    * Explain the reason for your refund request
 
@@ -230,7 +244,7 @@ If a payment fails:
 To resolve payment issues:
 
 * Update your payment method in your account settings
-* Contact us if you need assistance at [support@checktick.com](mailto:support@checktick.com)
+* Contact us if you need assistance at [support@checktick.uk](mailto:support@checktick.uk)
 
 ## 8. Taxes and Fees
 
@@ -291,7 +305,7 @@ Changes do not apply retroactively to refund requests made before the change.
 
 For refund requests or questions about this policy:
 
-* **Email:** [support@checktick.com](support@checktick.com)
+* **Email:** [support@checktick.uk](mailto:support@checktick.uk)
 * **GitHub Issues:** [https://github.com/eatyourpeas/checktick/issues](https://github.com/eatyourpeas/checktick/issues)
 * **Documentation:** [https://checktick.com/docs/](https://checktick.com/docs/)
 
@@ -312,6 +326,6 @@ We reserve the right to deny refund requests that appear to be:
 
 ---
 
-**Last Updated: 4 December 2025**
+**Last Updated: 31 May 2026**
 
 We strive to be fair and transparent with our refund policy. If you have any questions or concerns, please don't hesitate to contact us. We're here to help!

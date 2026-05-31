@@ -1,6 +1,6 @@
 ---
 title: Publishing Surveys (Technical)
-category: api
+category: development
 priority: 15
 ---
 

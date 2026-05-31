@@ -37,53 +37,64 @@ Our accessibility focus prioritises **survey respondents** - the patients, profe
 ### Question Types
 
 #### Text Input
+
 - `aria-labelledby` connects input to question text
 - `aria-required="true"` and `required` attribute for mandatory fields
 - Screen-reader-only "(required)" text alongside visual asterisks
 
 #### Single Choice (Radio Buttons)
+
 - Wrapped in `role="radiogroup"` with `aria-labelledby`
 - Each option properly labelled
 - Required attribute for mandatory questions
 
 #### Multiple Choice (Checkboxes)
+
 - Wrapped in `role="group"` with `aria-labelledby`
 - Each checkbox has associated label
 
 #### Dropdown/Select
+
 - `aria-labelledby` connects to question text
 - `aria-required` for mandatory fields
 
 #### Yes/No Questions
+
 - Same accessibility as dropdowns
 - Clear labelling of options
 
 #### Likert Scales
+
 - **Range Slider**: `aria-valuemin`, `aria-valuemax`, `aria-valuenow` attributes
 - **Radio Options**: `role="radiogroup"` with label references
 - Left/right anchor labels included in `aria-labelledby`
 
 #### Orderable (Ranking) Questions
+
 - `role="listbox"` on container
 - `role="option"` on each item
 - Screen-reader instructions: "Use arrow keys or drag to reorder items"
 - **Keyboard alternative**: Arrow keys for reordering (no mouse required)
 
 #### Image Choice Questions
+
 - `role="radiogroup"` on image grid
 - Each image has `alt` text from label or default
 - `focus-within` ring for keyboard navigation visibility
 
 ### Patient Demographics & Professional Details
+
 - Wrapped in `<fieldset>` with `<legend>`
 - `aria-label` on all inputs (especially those using placeholder-only design)
 - Validation errors announced via aria-live
 
 ### Progress & Status
+
 - Progress bar has `aria-label`, `aria-valuenow`, `aria-valuemin`, `aria-valuemax`
 - Save status uses `aria-live="polite"` to announce changes
 
 ### Decorative Elements
+
 - SVG icons use `aria-hidden="true"` to prevent screen reader clutter
 
 ## Colour Contrast
@@ -96,6 +107,7 @@ CheckTick uses [DaisyUI](https://daisyui.com/) themes which are designed to meet
 ### Custom Themes
 
 Organisations can create custom themes. When doing so, verify contrast using:
+
 - [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/)
 - Browser developer tools accessibility audits
 - [axe DevTools](https://www.deque.com/axe/devtools/)
@@ -117,10 +129,12 @@ All survey functionality is available via keyboard:
 ## Screen Reader Support
 
 Tested with:
+
 - VoiceOver (macOS/iOS)
 - NVDA (Windows)
 
 Screen readers will announce:
+
 - Question text and type
 - Required status
 - Group context (when in a question group)

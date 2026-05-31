@@ -92,12 +92,14 @@ After downloading:
 Store downloaded data:
 
 **Approved Locations:**
+
 - ✓ Encrypted work device hard drive
 - ✓ Organisation-managed network drive (if encrypted)
 - ✓ Organisation-approved secure cloud (e.g., Azure with encryption)
 - ✓ Secure server with access controls
 
 **Prohibited Locations:**
+
 - ✗ USB drives or external hard drives
 - ✗ Personal cloud storage (Dropbox, Google Drive, iCloud, OneDrive personal)
 - ✗ Personal email attachments
@@ -124,6 +126,7 @@ organise files securely:
 ```
 
 **Best Practices:**
+
 - Use descriptive folder names (but avoid PII in folder names)
 - Keep different surveys separate
 - Archive old data separately
@@ -134,12 +137,14 @@ organise files securely:
 Set strict permissions:
 
 **On Windows:**
+
 1. Right-click file/folder → Properties → Security
 2. Remove "Everyone" and "Users" groups
 3. Keep only your user account
 4. Set to "Full Control" for you only
 
 **On macOS:**
+
 1. Right-click file/folder → Get Info → Sharing & Permissions
 2. Remove "everyone" and "staff"
 3. Keep only your user account
@@ -332,11 +337,13 @@ If you suspect a breach:
 ### Reporting Requirements
 
 **Within 1 hour:**
+
 - Notify your organisation owner
 - Notify Data Protection Officer (if your organisation has one)
 - Notify IT security team
 
 **Within 24 hours:**
+
 - Provide written incident report:
   - What happened
   - When it happened
@@ -345,6 +352,7 @@ If you suspect a breach:
   - What you've done to contain it
 
 **Within 72 hours (if required by law):**
+
 - Your organisation must report to regulatory authority (ICO in UK, etc.)
 - You must cooperate fully with investigation
 
@@ -402,6 +410,7 @@ Data breaches can result in:
 ### Security Questions
 
 **For questions about:**
+
 - Security best practices → Contact IT security team
 - Data protection law → Contact Data Protection Officer
 - Organisational policy → Contact organisation owner
@@ -410,12 +419,14 @@ Data breaches can result in:
 ### Reporting Issues
 
 **Report immediately if:**
+
 - You suspect a breach
 - You receive suspicious emails about CheckTick
 - You notice unauthorized access to data
 - You're unsure if something is a security issue
 
 **Contact:**
+
 - Organisation owner: [Set in organisation settings]
 - Data Protection Officer: [Set in organisation settings]
 - IT Security: [Your organisation's IT security contact]
@@ -423,6 +434,7 @@ Data breaches can result in:
 ### Emergency Contacts
 
 **Outside Business Hours:**
+
 - Critical breach: Call organisation emergency number
 - Device lost/stolen: Call IT security hotline
 - Ransomware: Disconnect device, call IT security

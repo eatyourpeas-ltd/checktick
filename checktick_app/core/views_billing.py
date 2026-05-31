@@ -18,10 +18,12 @@ from django_ratelimit.decorators import ratelimit
 from checktick_app.core.billing import PaymentAPIError, payment_client
 from checktick_app.core.email_utils import (
     send_payment_failed_email,
+    send_refund_processed_email,
     send_subscription_cancelled_email,
     send_subscription_created_email,
 )
-from checktick_app.core.models import UserProfile
+from checktick_app.core.models import Payment, UserProfile
+from checktick_app.surveys.models import AuditLog
 
 logger = logging.getLogger(__name__)
 
@@ -533,6 +535,20 @@ def payment_webhook(request: HttpRequest) -> HttpResponse:
                 else:
                     logger.info(f"Ignoring payment action: {action}")
 
+            elif resource_type == "refunds":
+                if action == "created":
+                    handle_gocardless_refund_created(event)
+                elif action == "paid":
+                    handle_gocardless_refund_paid(event)
+                elif action == "failed":
+                    handle_gocardless_refund_failed(event)
+                elif action == "funds_returned":
+                    handle_gocardless_refund_funds_returned(event)
+                elif action == "refund_settled":
+                    handle_gocardless_refund_settled(event)
+                else:
+                    logger.info(f"Ignoring refund action: {action}")
+
             elif resource_type == "mandates":
                 if action == "active":
                     handle_gocardless_mandate_active(event)
@@ -578,12 +594,6 @@ def verify_gocardless_webhook_signature(request: HttpRequest) -> bool:
     webhook_secret = settings.PAYMENT_WEBHOOK_SECRET
     if not webhook_secret:
         logger.error("PAYMENT_WEBHOOK_SECRET not configured")
-        # In development, you might want to allow webhooks without signature
-        if settings.DEBUG:
-            logger.warning(
-                "DEBUG mode: Allowing webhook without signature verification"
-            )
-            return True
         return False
 
     # GoCardless signature is a simple HMAC-SHA256 of the request body
@@ -606,6 +616,124 @@ def verify_gocardless_webhook_signature(request: HttpRequest) -> bool:
 # =============================================================================
 # GoCardless Event Handlers
 # =============================================================================
+
+
+def _refund_event_metadata(event: dict) -> dict:
+    """Merge refund metadata from the triggering request and refund resource."""
+    metadata = {}
+    if isinstance(event.get("metadata"), dict):
+        metadata.update(event["metadata"])
+    if isinstance(event.get("resource_metadata"), dict):
+        metadata.update(event["resource_metadata"])
+    return metadata
+
+
+def _resolve_payment_for_refund_event(event: dict) -> Payment | None:
+    """Resolve a local Payment record for a refund webhook event."""
+    links = event.get("links", {})
+    metadata = _refund_event_metadata(event)
+
+    payment_record_id = metadata.get("payment_record_id")
+    if payment_record_id:
+        try:
+            return Payment.objects.select_related("user").get(id=int(payment_record_id))
+        except (Payment.DoesNotExist, ValueError, TypeError):
+            logger.warning(
+                "Refund event referenced unknown local payment record: %s",
+                payment_record_id,
+            )
+
+    provider_payment_id = links.get("payment")
+    if provider_payment_id:
+        payment = (
+            Payment.objects.select_related("user")
+            .filter(payment_id=provider_payment_id)
+            .order_by("-created_at")
+            .first()
+        )
+        if payment:
+            return payment
+
+    provider_refund_id = links.get("refund")
+    if provider_refund_id:
+        audit_entry = (
+            AuditLog.objects.filter(metadata__provider_refund_id=provider_refund_id)
+            .order_by("-created_at")
+            .first()
+        )
+        if audit_entry:
+            logged_payment_id = audit_entry.metadata.get("payment_id")
+            try:
+                return Payment.objects.select_related("user").get(
+                    id=int(logged_payment_id)
+                )
+            except (Payment.DoesNotExist, ValueError, TypeError):
+                logger.warning(
+                    "Refund event matched audit log but local payment was missing: %s",
+                    logged_payment_id,
+                )
+
+    return None
+
+
+def _refund_event_already_logged(provider_refund_id: str, action: str) -> bool:
+    """Return True if this refund webhook action has already been audited."""
+    if not provider_refund_id:
+        return False
+    return AuditLog.objects.filter(
+        scope=AuditLog.Scope.ACCOUNT,
+        action=AuditLog.Action.PROMOTION_RECONCILED,
+        metadata__provider_refund_id=provider_refund_id,
+        metadata__refund_event_action=action,
+    ).exists()
+
+
+def _log_refund_event(
+    *,
+    payment: Payment | None,
+    provider_refund_id: str,
+    action: str,
+    message: str,
+    severity: str,
+    refund_reason: str = "",
+) -> None:
+    """Persist a refund lifecycle event into the audit trail once."""
+    if _refund_event_already_logged(provider_refund_id, action):
+        return
+
+    adjustment_status = {
+        "created": "pending",
+        "paid": "completed",
+        "refund_settled": "completed",
+        "failed": "reversed",
+        "funds_returned": "reversed",
+    }.get(action, "requested")
+
+    metadata = {
+        "provider_refund_id": provider_refund_id,
+        "refund_event_action": action,
+        "refund_reason": refund_reason,
+        "adjustment_type": "refund",
+        "adjustment_status": adjustment_status,
+    }
+    if payment:
+        metadata.update(
+            {
+                "payment_id": str(payment.id),
+                "invoice_number": payment.invoice_number,
+                "provider_payment_id": payment.payment_id,
+            }
+        )
+
+    AuditLog.objects.create(
+        actor=None,
+        scope=AuditLog.Scope.ACCOUNT,
+        action=AuditLog.Action.PROMOTION_RECONCILED,
+        severity=severity,
+        target_user=payment.user if payment else None,
+        message=message,
+        metadata=metadata,
+    )
 
 
 def handle_gocardless_subscription_created(event: dict) -> None:
@@ -862,6 +990,153 @@ def handle_gocardless_payment_cancelled(event: dict) -> None:
         f"GoCardless payment cancelled: {payment_id} (subscription: {subscription_id})"
     )
     # Usually informational - no action needed
+
+
+def handle_gocardless_refund_created(event: dict) -> None:
+    """Handle refund creation webhook events."""
+    links = event.get("links", {})
+    provider_refund_id = links.get("refund", "")
+    payment = _resolve_payment_for_refund_event(event)
+    refund_reason = _refund_event_metadata(event).get("reason", "")
+
+    logger.info("GoCardless refund created: %s", provider_refund_id)
+
+    if not payment:
+        logger.warning("Refund created event could not be matched to a local payment")
+        return
+
+    if payment.status != Payment.PaymentStatus.REFUNDED:
+        payment.status = Payment.PaymentStatus.REFUNDED
+        payment.save(update_fields=["status", "updated_at"])
+
+    _log_refund_event(
+        payment=payment,
+        provider_refund_id=provider_refund_id,
+        action="created",
+        message=f"Refund created for payment {payment.invoice_number}.",
+        severity=AuditLog.Severity.INFO,
+        refund_reason=refund_reason,
+    )
+
+
+def handle_gocardless_refund_paid(event: dict) -> None:
+    """Handle refund paid webhook events and notify the customer once."""
+    links = event.get("links", {})
+    provider_refund_id = links.get("refund", "")
+    payment = _resolve_payment_for_refund_event(event)
+    refund_reason = _refund_event_metadata(event).get("reason", "")
+
+    logger.info("GoCardless refund paid: %s", provider_refund_id)
+
+    if not payment:
+        logger.warning("Refund paid event could not be matched to a local payment")
+        return
+
+    if payment.status != Payment.PaymentStatus.REFUNDED:
+        payment.status = Payment.PaymentStatus.REFUNDED
+        payment.save(update_fields=["status", "updated_at"])
+
+    if not _refund_event_already_logged(provider_refund_id, "paid"):
+        try:
+            send_refund_processed_email(
+                user=payment.user,
+                payment=payment,
+                refund_reason=refund_reason,
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to send refund processed email for refund %s: %s",
+                provider_refund_id,
+                exc,
+            )
+
+    _log_refund_event(
+        payment=payment,
+        provider_refund_id=provider_refund_id,
+        action="paid",
+        message=f"Refund paid for payment {payment.invoice_number}.",
+        severity=AuditLog.Severity.INFO,
+        refund_reason=refund_reason,
+    )
+
+
+def handle_gocardless_refund_failed(event: dict) -> None:
+    """Handle refund failure events by restoring the payment to confirmed."""
+    links = event.get("links", {})
+    provider_refund_id = links.get("refund", "")
+    payment = _resolve_payment_for_refund_event(event)
+    refund_reason = _refund_event_metadata(event).get("reason", "")
+
+    logger.warning("GoCardless refund failed: %s", provider_refund_id)
+
+    if not payment:
+        logger.warning("Refund failed event could not be matched to a local payment")
+        return
+
+    if payment.status != Payment.PaymentStatus.CONFIRMED:
+        payment.status = Payment.PaymentStatus.CONFIRMED
+        payment.save(update_fields=["status", "updated_at"])
+
+    _log_refund_event(
+        payment=payment,
+        provider_refund_id=provider_refund_id,
+        action="failed",
+        message=f"Refund failed for payment {payment.invoice_number}; payment restored to confirmed.",
+        severity=AuditLog.Severity.WARNING,
+        refund_reason=refund_reason,
+    )
+
+
+def handle_gocardless_refund_funds_returned(event: dict) -> None:
+    """Handle returned refund funds by restoring the payment to confirmed."""
+    links = event.get("links", {})
+    provider_refund_id = links.get("refund", "")
+    payment = _resolve_payment_for_refund_event(event)
+    refund_reason = _refund_event_metadata(event).get("reason", "")
+
+    logger.warning("GoCardless refund funds returned: %s", provider_refund_id)
+
+    if not payment:
+        logger.warning(
+            "Refund funds_returned event could not be matched to a local payment"
+        )
+        return
+
+    if payment.status != Payment.PaymentStatus.CONFIRMED:
+        payment.status = Payment.PaymentStatus.CONFIRMED
+        payment.save(update_fields=["status", "updated_at"])
+
+    _log_refund_event(
+        payment=payment,
+        provider_refund_id=provider_refund_id,
+        action="funds_returned",
+        message=f"Refund funds returned for payment {payment.invoice_number}; payment restored to confirmed.",
+        severity=AuditLog.Severity.WARNING,
+        refund_reason=refund_reason,
+    )
+
+
+def handle_gocardless_refund_settled(event: dict) -> None:
+    """Handle refund settlement events for reconciliation visibility."""
+    links = event.get("links", {})
+    provider_refund_id = links.get("refund", "")
+    payment = _resolve_payment_for_refund_event(event)
+    refund_reason = _refund_event_metadata(event).get("reason", "")
+
+    logger.info("GoCardless refund settled: %s", provider_refund_id)
+
+    _log_refund_event(
+        payment=payment,
+        provider_refund_id=provider_refund_id,
+        action="refund_settled",
+        message=(
+            f"Refund settled for payment {payment.invoice_number}."
+            if payment
+            else "Refund settled for an unmapped payment."
+        ),
+        severity=AuditLog.Severity.INFO,
+        refund_reason=refund_reason,
+    )
 
 
 def handle_gocardless_mandate_active(event: dict) -> None:

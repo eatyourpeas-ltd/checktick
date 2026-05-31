@@ -6,16 +6,32 @@
 
 {% block platform_content %}
 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-  <h2 class="text-xl font-semibold">{% trans "Organisations" %}</h2>
-  <a href="{% url 'core:platform_admin_org_create' %}" class="btn btn-primary">
-    + {% trans "Create Organisation" %}
-  </a>
+  <h2 class="text-xl font-semibold">
+    {% if is_tier_user_view %}
+      {% blocktrans with scope_value=scope %}Accounts ({{ scope_value }}){% endblocktrans %}
+    {% else %}
+      {% trans "Organisations" %}
+    {% endif %}
+  </h2>
+  {% if not is_tier_user_view %}
+    <a href="{% url 'core:platform_admin_org_create' %}" class="btn btn-primary">
+      + {% trans "Create Organisation" %}
+    </a>
+  {% else %}
+    <a href="{% url 'core:platform_admin_org_create' %}?mode=tier&scope={{ scope }}" class="btn btn-primary">
+      + {% trans "Add Account" %}
+    </a>
+  {% endif %}
 </div>
 
 <!-- Filters -->
 <div class="card bg-base-100 shadow mb-6">
   <div class="card-body py-4">
     <form method="get" class="flex flex-wrap gap-4 items-end">
+      <input type="hidden" name="mode" value="{{ mode|default:'platform' }}">
+      {% if mode == 'tier' %}
+        <input type="hidden" name="scope" value="{{ scope }}">
+      {% endif %}
       <div class="form-control">
         <label class="label py-1">
           <span class="label-text text-sm">{% trans "Search" %}</span>
@@ -33,12 +49,15 @@
           <option value="">{% trans "All" %}</option>
           <option value="active" {% if status_filter == 'active' %}selected{% endif %}>{% trans "Active" %}</option>
           <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>{% trans "Inactive" %}</option>
-          {% for value, label in status_choices %}
-          <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
+          {% if not is_tier_user_view %}
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          {% endif %}
         </select>
       </div>
 
+      {% if not is_tier_user_view %}
       <div class="form-control">
         <label class="label py-1">
           <span class="label-text text-sm">{% trans "Billing Type" %}</span>
@@ -50,9 +69,10 @@
           {% endfor %}
         </select>
       </div>
+      {% endif %}
 
       <button type="submit" class="btn btn-sm btn-primary">{% trans "Filter" %}</button>
-      <a href="{% url 'core:platform_admin_org_list' %}" class="btn btn-sm btn-ghost">{% trans "Clear" %}</a>
+      <a href="{% url 'core:platform_admin_org_list' %}?mode={{ mode|default:'platform' }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}" class="btn btn-sm btn-ghost">{% trans "Clear" %}</a>
     </form>
   </div>
 </div>
@@ -60,6 +80,117 @@
 <!-- Organisations Table -->
 <div class="card bg-base-100 shadow">
   <div class="card-body">
+    {% if is_tier_user_view %}
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>{% trans "Username" %}</th>
+            <th>{% trans "Email" %}</th>
+            <th>{% trans "Tier" %}</th>
+            <th>{% trans "Subscription" %}</th>
+            <th>{% trans "Promotion" %}</th>
+            <th>{% trans "Promotion Ends" %}</th>
+            <th>{% trans "Surveys" %}</th>
+            <th>{% trans "Payments" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Joined" %}</th>
+            <th>{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for account in users %}
+          <tr class="hover">
+            <td class="font-medium">{{ account.username }}</td>
+            <td>{{ account.email }}</td>
+            <td><span class="badge badge-ghost badge-sm">{{ account.profile.get_account_tier_display }}</span></td>
+            <td><span class="badge badge-sm">{{ account.profile.get_subscription_status_display }}</span></td>
+            <td>
+              {% if account.has_active_promotion %}
+                <span class="badge badge-success badge-sm">{% trans "Active" %}</span>
+                <div class="text-xs text-base-content/70">{{ account.active_promotion.name }}</div>
+              {% else %}
+                <span class="badge badge-ghost badge-sm">{% trans "None" %}</span>
+              {% endif %}
+            </td>
+            <td class="text-sm text-base-content/70">
+              {% if account.active_promotion_ends_at %}
+                {{ account.active_promotion_ends_at|date:"d M Y H:i" }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td>{{ account.survey_count }}</td>
+            <td>{{ account.payment_count }}</td>
+            <td>
+              {% if account.is_active %}
+                <span class="badge badge-success badge-sm">{% trans "Active" %}</span>
+              {% else %}
+                <span class="badge badge-ghost badge-sm">{% trans "Inactive" %}</span>
+              {% endif %}
+            </td>
+            <td class="text-sm text-base-content/70">{{ account.date_joined|date:"d M Y" }}</td>
+            <td>
+              <div class="flex gap-1 flex-wrap">
+                <a href="{% url 'core:platform_admin_promotion_create' %}?mode=tier&scope={{ scope }}&scope_type=account&target_user_email={{ account.email }}"
+                   class="btn btn-xs btn-primary">{% trans "Apply Promotion" %}</a>
+                <a href="{% url 'core:platform_admin_billing' %}?mode=tier&scope={{ scope }}&q={{ account.email }}"
+                   class="btn btn-xs btn-ghost">{% trans "Billing History" %}</a>
+                {% if account.refundable_payments %}
+                <details class="dropdown dropdown-end">
+                  <summary class="btn btn-xs btn-error btn-outline m-0">{% trans "Refund Payment" %}</summary>
+                  <ul class="menu dropdown-content z-[1] p-2 shadow bg-base-100 rounded-box w-72 gap-2">
+                    {% for payment in account.refundable_payments %}
+                    <li class="border border-base-300 rounded-box p-2">
+                      <div class="flex items-start justify-between gap-3 p-0">
+                        <div>
+                          <div class="font-mono text-xs">{{ payment.invoice_number }}</div>
+                          <div class="text-xs text-base-content/70">{{ payment.invoice_date|date:"d M Y" }} · £{{ payment.amount_inc_vat_pounds }}</div>
+                        </div>
+                        <form method="post" action="{% url 'core:platform_admin_billing_refund' payment_id=payment.id %}">
+                          {% csrf_token %}
+                          <input type="hidden" name="return_to" value="{{ current_list_url }}">
+                          <button type="submit" class="btn btn-xs btn-error btn-outline whitespace-nowrap">{% trans "Refund" %}</button>
+                        </form>
+                      </div>
+                    </li>
+                    {% endfor %}
+                  </ul>
+                </details>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="11" class="text-center py-8 text-base-content/60">{% trans "No accounts match your filters" %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if users.has_other_pages %}
+    <div class="flex justify-center mt-6">
+      <div class="join">
+        {% if users.has_previous %}
+          <a href="?mode={{ mode|default:'platform' }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}&page={{ users.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+             class="join-item btn btn-sm">«</a>
+        {% endif %}
+
+        <span class="join-item btn btn-sm btn-disabled">
+          {% trans "Page" %} {{ users.number }} {% trans "of" %} {{ users.paginator.num_pages }}
+        </span>
+
+        {% if users.has_next %}
+          <a href="?mode={{ mode|default:'platform' }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}&page={{ users.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+             class="join-item btn btn-sm">»</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% else %}
     <div class="overflow-x-auto">
       <table class="table table-sm">
         <thead>
@@ -158,7 +289,7 @@
     <div class="flex justify-center mt-6">
       <div class="join">
         {% if orgs.has_previous %}
-          <a href="?page={{ orgs.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if billing_filter %}&billing={{ billing_filter }}{% endif %}"
+          <a href="?mode={{ mode|default:'platform' }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}&page={{ orgs.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if billing_filter %}&billing={{ billing_filter }}{% endif %}"
              class="join-item btn btn-sm">«</a>
         {% endif %}
 
@@ -167,11 +298,12 @@
         </span>
 
         {% if orgs.has_next %}
-          <a href="?page={{ orgs.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if billing_filter %}&billing={{ billing_filter }}{% endif %}"
+          <a href="?mode={{ mode|default:'platform' }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}&page={{ orgs.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if billing_filter %}&billing={{ billing_filter }}{% endif %}"
              class="join-item btn btn-sm">»</a>
         {% endif %}
       </div>
     </div>
+    {% endif %}
     {% endif %}
   </div>
 </div>

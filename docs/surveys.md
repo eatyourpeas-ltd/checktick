@@ -167,6 +167,7 @@ For complete technical details, see [Survey Progress Tracking](/docs/survey-prog
 CheckTick supports creating and publishing surveys in multiple languages. This is essential for reaching diverse populations and ensuring healthcare surveys are accessible to all respondents.
 
 Key features:
+
 - AI-assisted translation using LLMs for quick first drafts
 - Manual editing for fine-tuning translations
 - Independent publishing for each language version

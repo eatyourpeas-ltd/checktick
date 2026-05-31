@@ -1,3 +1,4 @@
+from decimal import Decimal
 import logging
 import os
 
@@ -7,9 +8,10 @@ from django.contrib.auth import login, views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
-from django.utils import translation
+from django.utils import timezone, translation
 from django.utils.translation import gettext as _
 
 from checktick_app.surveys.models import (
@@ -75,8 +77,128 @@ except ImportError:
 LANGUAGE_SESSION_KEY = "_language"
 
 
+PUBLIC_PROMOTION_TIERS = [
+    "free",
+    "pro",
+    "team_small",
+    "team_medium",
+    "team_large",
+]
+
+
+def _format_promotion_value(value: Decimal) -> str:
+    value = value.quantize(Decimal("0.01"))
+    if value == value.to_integral_value():
+        return str(int(value))
+    return f"{value:.2f}"
+
+
+def _promotion_short_text(promotion) -> str:
+    effect_type = promotion.effect_type
+    value_text = _format_promotion_value(promotion.effect_value)
+
+    if effect_type == "percent_discount":
+        return f"{value_text}% off"
+    if effect_type == "fixed_discount":
+        return f"£{value_text} off"
+    if effect_type == "set_price":
+        return f"Now £{value_text}/month"
+    if effect_type == "tier_override" and promotion.effect_tier:
+        return f"Upgrade to {promotion.get_effect_tier_display()}"
+    return "Limited-time offer"
+
+
+def _select_best_promotion(promotions, specificity: int):
+    if not promotions:
+        return None
+    return sorted(
+        promotions,
+        key=lambda p: (
+            -specificity,
+            p.priority,
+            -p.created_at.timestamp(),
+        ),
+    )[0]
+
+
+def _get_public_pricing_context() -> dict:
+    from checktick_app.core.models import PricingOverride, Promotion
+
+    effective_tiers = PricingOverride.get_effective_tiers()
+
+    def _to_pounds(pence: int) -> str:
+        pounds = pence / 100
+        return f"£{int(pounds)}" if pounds == int(pounds) else f"£{pounds:.2f}"
+
+    tier_display = {
+        key: _to_pounds(cfg["amount"])
+        for key, cfg in effective_tiers.items()
+        if cfg.get("amount", 0) > 0
+    }
+    tier_pounds = {key: cfg["amount"] // 100 for key, cfg in effective_tiers.items()}
+
+    now = timezone.now()
+    promotions_qs = (
+        Promotion.objects.filter(is_active=True)
+        .filter(scope_type__in=[Promotion.ScopeType.PLATFORM, Promotion.ScopeType.TIER])
+        .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=now))
+        .filter(Q(ends_at__isnull=True) | Q(ends_at__gte=now))
+    )
+
+    platform_promotion = _select_best_promotion(
+        [p for p in promotions_qs if p.scope_type == Promotion.ScopeType.PLATFORM],
+        specificity=1,
+    )
+
+    tier_promotion_lookup = {}
+    for tier in PUBLIC_PROMOTION_TIERS:
+        tier_promotions = [
+            p
+            for p in promotions_qs
+            if p.scope_type == Promotion.ScopeType.TIER and p.target_tier == tier
+        ]
+        tier_promotion_lookup[tier] = _select_best_promotion(
+            tier_promotions,
+            specificity=2,
+        )
+
+    promotions_by_tier = {}
+    promotion_summaries = []
+    seen_promotions = set()
+    for tier in PUBLIC_PROMOTION_TIERS:
+        promotion = tier_promotion_lookup.get(tier) or platform_promotion
+        if promotion is None:
+            promotions_by_tier[tier] = None
+            continue
+
+        info = {
+            "id": promotion.id,
+            "name": promotion.name,
+            "short_text": _promotion_short_text(promotion),
+            "ends_at": promotion.ends_at,
+            "scope_type": promotion.scope_type,
+        }
+        promotions_by_tier[tier] = info
+
+        if promotion.id not in seen_promotions:
+            seen_promotions.add(promotion.id)
+            promotion_summaries.append(info)
+
+    homepage_promotion = promotion_summaries[0] if promotion_summaries else None
+
+    return {
+        "subscription_tiers": effective_tiers,
+        "tier_display": tier_display,
+        "tier_pounds": tier_pounds,
+        "promotions_by_tier": promotions_by_tier,
+        "active_public_promotions": promotion_summaries,
+        "homepage_promotion": homepage_promotion,
+    }
+
+
 def home(request):
-    return render(request, "core/home.html")
+    context = _get_public_pricing_context()
+    return render(request, "core/home.html", context)
 
 
 def hosting(request):
@@ -103,31 +225,12 @@ def pricing(request):
     auto_open_checkout = request.session.pop("auto_open_checkout", False)
     pending_tier = request.session.get("pending_tier", "")
 
-    from checktick_app.core.models import PricingOverride
-
-    effective_tiers = PricingOverride.get_effective_tiers()
-
-    # Pre-compute pound display values for the template (amounts stored as pence)
-    def _to_pounds(pence: int) -> str:
-        pounds = pence / 100
-        return f"£{int(pounds)}" if pounds == int(pounds) else f"£{pounds:.2f}"
-
-    tier_display = {
-        key: _to_pounds(cfg["amount"])
-        for key, cfg in effective_tiers.items()
-        if cfg.get("amount", 0) > 0
-    }
-    # Whole-pound values used by the team selector JS (data-price attribute)
-    tier_pounds = {key: cfg["amount"] // 100 for key, cfg in effective_tiers.items()}
-
     context = {
-        "subscription_tiers": effective_tiers,
-        "tier_display": tier_display,
-        "tier_pounds": tier_pounds,
         "self_hosted": False,  # Always False here since we redirect above
         "auto_open_checkout": auto_open_checkout,
         "pending_tier": pending_tier,
     }
+    context.update(_get_public_pricing_context())
     return render(request, "core/pricing.html", context)
 
 
@@ -604,7 +707,12 @@ def signup(request):
                 return redirect("surveys:list")
     else:
         form = SignupForm()
-    return render(request, "registration/signup.html", {"form": form, "next": next_url})
+    context = {
+        "form": form,
+        "next": next_url,
+    }
+    context.update(_get_public_pricing_context())
+    return render(request, "registration/signup.html", context)
 
 
 @login_required
@@ -692,13 +800,11 @@ def complete_signup(request):
         )
         return redirect("surveys:list")
 
-    return render(
-        request,
-        "registration/complete_signup.html",
-        {
-            "user": request.user,
-        },
-    )
+    context = {
+        "user": request.user,
+    }
+    context.update(_get_public_pricing_context())
+    return render(request, "registration/complete_signup.html", context)
 
 
 class BrandedPasswordResetView(auth_views.PasswordResetView):

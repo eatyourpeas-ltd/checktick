@@ -12,6 +12,8 @@ This guide explains how billing works in CheckTick, including subscriptions, pay
 
 CheckTick uses a secure payment provider to handle all billing. We offer flexible subscription plans to suit individual users, small teams, and large organisations.
 
+> **Provider note:** The hosted reference deployment ships with one payment-provider integration and related webhook handling. The billing domain model aims to stay as provider-agnostic as practical, but checkout steps, refund capabilities, event names, settlement timing, and customer notification flows may need adjustment if you use a different provider.
+
 > **Note for Self-Hosters:** If you're running CheckTick with `SELF_HOSTED=true` in your environment configuration, billing features are automatically hidden and all users get Enterprise-level features without payment requirements.
 
 ## Pricing
@@ -34,6 +36,7 @@ Organisation and Enterprise pricing remain bespoke.
 ### Individual Plans
 
 **Individual (Free)**
+
 - £0/month
 - Up to 3 active surveys
 - Unlimited responses
@@ -41,6 +44,7 @@ Organisation and Enterprise pricing remain bespoke.
 - Basic features
 
 **Individual Pro**
+
 - £6/month (inc VAT) - 1 seat
 - Unlimited surveys
 - Unlimited responses
@@ -52,6 +56,7 @@ Organisation and Enterprise pricing remain bespoke.
 Teams provide shared billing and collaboration for groups of 5-50 users.
 
 **Team Small**
+
 - £30/month (inc VAT) - 5 seats
 - 5 team members
 - Unlimited active surveys
@@ -59,12 +64,14 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 - Team encryption management
 
 **Team Medium**
+
 - £90/month (inc VAT) - 15 seats
 - 15 team members
 - Unlimited active surveys
 - All Team Small features
 
 **Team Large**
+
 - £300/month (inc VAT) - 50 seats
 - 50 team members
 - Unlimited active surveys
@@ -73,6 +80,7 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 ### Organisation & Enterprise
 
 **Organisation**
+
 - Bespoke pricing (£6/seat/month inc VAT)
 - Custom number of seats
 - Multiple teams within organisation
@@ -81,6 +89,7 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 - Priority support
 
 **Enterprise**
+
 - Custom pricing (contact sales)
 - Includes hosting and support costs
 - Self-hosted option
@@ -92,6 +101,7 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 ## VAT Information
 
 All prices include UK VAT at 20%. VAT invoices are automatically sent on subscription confirmation containing:
+
 - Unique invoice number
 - Invoice date
 - Amount excluding VAT
@@ -103,13 +113,17 @@ For VAT-exempt customers (e.g., charities, educational institutions), please con
 
 ## Payment Methods
 
-CheckTick accepts the following payment methods:
+Available payment methods depend on the payment provider configured for your deployment.
 
-- Direct Debit (UK bank accounts)
-- Credit cards (Visa, Mastercard, American Express)
-- Debit cards
+For the hosted reference deployment, recurring billing currently uses the configured bank debit / direct debit provider flow.
 
-All payments are processed securely by our payment provider. CheckTick never stores your complete payment information.
+For self-hosted or custom hosted deployments:
+
+- available payment methods depend on the provider you integrate
+- customer-facing checkout wording may need to be adapted to match that provider
+- refund handling and webhook/state mapping may need provider-specific changes
+
+CheckTick does not store complete payment credentials directly in application data.
 
 ## Starting a Subscription
 
@@ -119,9 +133,9 @@ All payments are processed securely by our payment provider. CheckTick never sto
 2. Select your desired plan
 3. Complete the registration form
 4. Click "Create account"
-5. You'll be redirected to our secure checkout
-6. Enter your payment details
-7. Complete the payment
+5. You'll be redirected to the configured secure checkout or mandate setup flow
+6. Complete the payment authorisation steps requested by that provider
+7. Return to CheckTick when the provider confirms setup
 8. Your account is activated immediately
 
 ### Upgrading from Free to Paid
@@ -143,9 +157,10 @@ To view your current subscription status:
 2. Go to **Profile** > **Subscription**
 
 You'll see:
+
 - Current plan tier
 - Next billing date
-- Payment method (last 4 digits)
+- Payment provider and current subscription reference where available
 - Subscription status (Active/Past Due/Cancelled)
 
 ### Updating Payment Method
@@ -153,8 +168,8 @@ You'll see:
 1. Log in to CheckTick
 2. Go to **Profile** > **Subscription**
 3. Click **Update Payment Method**
-4. You'll be redirected to the secure payment portal
-5. Update your payment details
+4. You'll be redirected to the provider-managed billing or mandate flow if supported
+5. Complete the update steps provided there
 6. Changes take effect immediately
 
 ### Viewing Payment History
@@ -163,10 +178,40 @@ You'll see:
 2. Go to **Profile** > **Payment History**
 
 You can:
+
 - View all past invoices
-- Download invoice PDFs
-- See payment dates and amounts
+- Review payment dates, amounts, and statuses
 - Check payment status
+
+The exact level of customer self-service available here depends on the configured billing provider and what metadata CheckTick stores locally.
+
+## Refunds and Billing Adjustments
+
+For the hosted reference deployment, platform admins can initiate supported refunds from the Platform Admin billing timeline and from the tier account list.
+
+Current behaviour:
+
+- refunds are available only for supported provider-backed payments
+- the hosted implementation currently performs full-payment refunds only
+- partial refunds are policy-restricted (not automated in the hosted admin flow)
+- reason codes are required for operator-initiated refunds for auditability
+- refund lifecycle updates are reconciled from provider webhook events
+- customers receive a confirmation email when the provider reports the refund as paid
+
+Hosted policy baseline (platform admin):
+
+- supported adjustment action is currently **full refund only**
+- reason code should be selected (for example: promotion correction, billing error, duplicate charge, support goodwill, other)
+- if **Other** is selected, a free-text explanation should be provided
+- manual credits can be tracked and reported as adjustment records, but provider automation for credits is integration-dependent
+- adjustment records are visible in the Platform Admin billing adjustment report for reconciliation
+
+For self-hosted or alternative provider integrations, the refund workflow may need changes in:
+
+- provider API calls
+- webhook event names and status mapping
+- settlement timing assumptions
+- customer notification copy and compliance handling
 
 ## Platform Admin Pricing Overrides
 
@@ -190,6 +235,7 @@ For hosted deployments, superusers can override default public prices from the P
 - Overrides affect new subscriptions and displayed prices
 - Existing subscriptions are not retroactively repriced
 - Organisation and Enterprise pricing are managed separately as bespoke plans
+- Refunds and credits resulting from pricing or promotion changes are handled separately from price overrides
 
 ## Upgrading Your Plan
 
@@ -201,11 +247,13 @@ You can upgrade to a higher tier at any time:
 4. Complete the checkout
 
 **Prorated Billing:**
+
 - You'll be charged the difference between your current plan and the new plan
 - The proration is calculated based on remaining days in your billing cycle
 - Your next billing date remains the same
 
 **What Happens:**
+
 - New features are available immediately
 - All existing surveys are preserved
 - No data loss or downtime
@@ -221,6 +269,7 @@ To downgrade to a lower tier:
 4. Confirm the change
 
 **Important:**
+
 - Downgrades take effect at the end of your current billing period
 - You retain access to current features until the period ends
 - If you have more surveys than the new limit allows, excess surveys will be automatically closed
@@ -228,6 +277,7 @@ To downgrade to a lower tier:
 
 **Survey Auto-Closure:**
 If downgrading would exceed survey limits:
+
 - Your oldest surveys are automatically closed (not deleted)
 - You'll receive an email notification listing which surveys were closed
 - Closed surveys and their responses remain accessible
@@ -247,16 +297,19 @@ If downgrading would exceed survey limits:
 ### What Happens When You Cancel
 
 **Immediate Effects:**
+
 - Your subscription is marked for cancellation
 - You receive a confirmation email
 - Billing stops at the end of the current period
 
 **Until Period End:**
+
 - You retain full access to paid features
 - You can continue using your account normally
 - No refunds for partial months
 
 **After Period End:**
+
 - Your account downgrades to Individual (Free)
 - If you have more than 3 surveys, excess surveys are automatically closed
 - All data is preserved
@@ -322,7 +375,7 @@ In accordance with UK Consumer Contracts Regulations:
 
 To request a refund within the 14-day cancellation period:
 
-1. Email us at [support@checktick.com](mailto:support@checktick.com)
+1. Email us at [support@checktick.uk](mailto:support@checktick.uk)
 2. Include your account email and order number
 3. Refunds are processed within 14 days of the cancellation request
 4. Refunds go back to the original payment method
@@ -350,12 +403,14 @@ Organisations are billed per user per month:
 ### Managing Team Members
 
 Team admins can:
+
 - Add members (up to team limit)
 - Remove members (immediate access revocation)
 - Change member roles
 - Transfer team ownership
 
 **Billing impact:**
+
 - Adding members: No immediate charge, reflected in next renewal
 - Removing members: Access ends immediately, credit applied to next billing
 - Over limit: Must upgrade team size or remove members
@@ -381,9 +436,11 @@ Team admins can:
 For security, billing operations are rate-limited:
 
 - **Subscription cancellation**: 5 attempts per hour
-- **Payment updates**: 10 attempts per minute
-- **Webhook callbacks**: 10 per minute per IP
-- **Checkout sessions**: 100 per minute per IP
+- **Checkout start**: 10 attempts per hour per user
+- **Webhook callbacks**: 100 per minute per IP
+- **Platform-admin refund action**: 20 attempts per hour per superuser
+
+Webhook callbacks are accepted only when the provider signature is valid and a webhook secret is configured.
 
 ## Invoices & Receipts
 
@@ -396,6 +453,7 @@ For security, billing operations are rate-limited:
 ### Invoice Details
 
 Each invoice includes:
+
 - Invoice number
 - Billing date
 - Payment amount
@@ -414,24 +472,28 @@ Each invoice includes:
 ### Common Issues
 
 **"Payment failed" error:**
+
 - Check payment details are correct
 - Ensure sufficient funds available
 - Try a different payment method
 - Contact your bank to authorize the payment
 
 **"Subscription not updating" issue:**
+
 - Wait 5 minutes for webhook processing
 - Refresh the page
 - Clear browser cache
 - Contact support if persists
 
 **"Cannot cancel subscription" error:**
+
 - You may have hit the rate limit (5 per hour)
 - Wait an hour and try again
 - Organisation members cannot self-cancel
 - Contact support for assistance
 
 **"Survey limit exceeded" after downgrade:**
+
 - This is expected behavior
 - Oldest surveys are auto-closed
 - Check your email for the list of closed surveys
@@ -442,11 +504,13 @@ Each invoice includes:
 If you encounter billing issues:
 
 **For FREE and PRO users:**
+
 - Check the [FAQ section](/docs/getting-started/#frequently-asked-questions)
 - Visit [Community Discussions](https://github.com/eatyourpeas/checktick/discussions)
 - Email support: [support@checktick.uk](mailto:support@checktick.uk)
 
 **For ORganisaTION and ENTERPRISE users:**
+
 - Priority support email: [enterprise@checktick.uk](mailto:enterprise@checktick.uk)
 - Phone support (if applicable to your plan)
 - Dedicated account manager (Enterprise only)
@@ -484,6 +548,7 @@ For self-hosting setup instructions, see the [Self-Hosting Guide](/docs/self-hos
 ### Terms of Service
 
 By subscribing to CheckTick, you agree to:
+
 - Our [Terms of Service](/docs/terms-of-service/)
 - Our [Privacy Notice](/docs/privacy-notice/)
 - Our [Refund Policy](/docs/refund-policy/)

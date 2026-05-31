@@ -45,13 +45,13 @@
 <!-- Log Source Tabs -->
 <div role="tablist" class="tabs tabs-boxed mb-4 bg-base-200 p-1">
   <a role="tab"
-     href="?source=application{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
+  href="?mode={{ mode|default:'platform' }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}&source=application{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
      class="tab {% if log_source == 'application' %}tab-active{% endif %}">
     {% include "components/icons/document.html" with classes="w-4 h-4 inline mr-1" %}
     {% trans "Application Logs" %}
   </a>
   <a role="tab"
-     href="?source=infrastructure{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}"
+      href="?mode={{ mode|default:'platform' }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}&source=infrastructure{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}"
      class="tab {% if log_source == 'infrastructure' %}tab-active{% endif %} {% if not hosting_configured %}opacity-50{% endif %}">
     {% include "components/icons/cloud-upload.html" with classes="w-4 h-4 inline mr-1" %}
     {% trans "Infrastructure Logs" %}
@@ -65,6 +65,10 @@
 <div class="card bg-base-100 shadow mb-6">
   <div class="card-body py-4">
     <form method="get" class="flex flex-wrap gap-4 items-end">
+      <input type="hidden" name="mode" value="{{ mode|default:'platform' }}">
+      {% if mode == 'tier' %}
+        <input type="hidden" name="scope" value="{{ scope }}">
+      {% endif %}
       <input type="hidden" name="source" value="{{ log_source }}">
 
       <!-- Date Range -->
@@ -128,7 +132,7 @@
       <button type="submit" class="btn btn-sm btn-primary">
         {% trans "Filter" %}
       </button>
-      <a href="?source={{ log_source }}" class="btn btn-sm btn-ghost">
+      <a href="?mode={{ mode|default:'platform' }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}&source={{ log_source }}" class="btn btn-sm btn-ghost">
         {% trans "Clear" %}
       </a>
     </form>
@@ -260,7 +264,7 @@
         <div class="flex justify-center p-4 border-t border-base-200">
           <div class="join">
             {% if logs.has_previous %}
-              <a href="?source={{ log_source }}&page={{ logs.previous_page_number }}{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
+                <a href="?mode={{ mode|default:'platform' }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}&source={{ log_source }}&page={{ logs.previous_page_number }}{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
                  class="join-item btn btn-sm">«</a>
             {% endif %}
 
@@ -269,7 +273,7 @@
             </span>
 
             {% if logs.has_next %}
-              <a href="?source={{ log_source }}&page={{ logs.next_page_number }}{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
+                <a href="?mode={{ mode|default:'platform' }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}&source={{ log_source }}&page={{ logs.next_page_number }}{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
                  class="join-item btn btn-sm">»</a>
             {% endif %}
           </div>

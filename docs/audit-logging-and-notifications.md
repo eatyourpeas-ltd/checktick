@@ -101,6 +101,19 @@ All key management and recovery events must create immutable audit entries.
 | `custodian_component_accessed` | CRITICAL | admin_id, reason, request_id |
 | `vault_key_rotated` | WARNING | key_type, rotated_by |
 
+#### Billing and Promotion Adjustment Events
+
+Promotion-linked refund and adjustment lifecycle actions are logged using the account scope and structured metadata (for example, payment ID, provider refund ID, reason code, adjustment status, and policy version).
+
+| Event | Severity | Required Fields |
+|-------|----------|-----------------|
+| `promotion_reconciled` (admin refund request) | INFO | payment_id, provider_payment_id, provider_refund_id, refund_reason_code, amount_pence, adjustment_type, adjustment_status |
+| `promotion_reconciled` (refund created webhook) | INFO | payment_id, provider_refund_id, refund_event_action=created, adjustment_status=pending |
+| `promotion_reconciled` (refund paid / settled webhook) | INFO | payment_id, provider_refund_id, refund_event_action, adjustment_status=completed |
+| `promotion_reconciled` (refund failed / funds returned webhook) | WARNING | payment_id, provider_refund_id, refund_event_action, adjustment_status=reversed |
+
+These records are surfaced in the Platform Admin billing adjustment report for reconciliation workflows.
+
 ### Audit Entry Format
 
 All audit entries must follow this structure:

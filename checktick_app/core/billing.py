@@ -19,6 +19,11 @@ from django.contrib.auth import get_user_model
 import requests
 
 from checktick_app.core.models import PricingOverride
+from checktick_app.core.services.promotion_resolver import (
+    resolve_effective_pricing_for_team,
+    resolve_effective_pricing_for_user,
+)
+from checktick_app.surveys.models import Team
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -488,6 +493,45 @@ class PaymentClient:
         response = self._make_request("GET", f"/payments/{payment_id}")
         return response.get("payments", {})
 
+    def refund_payment(
+        self,
+        payment_id: str,
+        amount: int,
+        total_amount_confirmation: int | None = None,
+        metadata: Optional[dict] = None,
+    ) -> dict:
+        """Create a refund for an existing payment.
+
+        Args:
+            payment_id: GoCardless payment ID
+            amount: Refund amount in minor units
+            total_amount_confirmation: Expected total payment amount in minor units
+            metadata: Optional refund metadata
+
+        Returns:
+            Refund payload from the provider
+
+        Reference: https://developer.gocardless.com/api-reference/#refunds-create-a-refund
+        """
+        data = {
+            "refunds": {
+                "amount": str(amount),
+                "links": {"payment": payment_id},
+            }
+        }
+        if total_amount_confirmation is not None:
+            data["refunds"]["total_amount_confirmation"] = str(
+                total_amount_confirmation
+            )
+        if metadata is not None:
+            data["refunds"]["metadata"] = metadata
+
+        logger.info(
+            f"Creating refund ({self.environment}): payment={payment_id}, amount={amount}"
+        )
+        response = self._make_request("POST", "/refunds", data=data)
+        return response.get("refunds", {})
+
 
 # Global client instance
 payment_client = PaymentClient()
@@ -592,9 +636,21 @@ def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
     if not tier_config:
         raise ValueError(f"Unknown subscription tier: {tier}")
 
+    if tier.startswith("team_"):
+        existing_team = Team.objects.filter(owner=user).first()
+        if existing_team is not None:
+            resolution = resolve_effective_pricing_for_team(
+                existing_team,
+                base_tier=tier,
+            )
+        else:
+            resolution = resolve_effective_pricing_for_user(user, base_tier=tier)
+    else:
+        resolution = resolve_effective_pricing_for_user(user, base_tier=tier)
+
     subscription = payment_client.create_subscription(
         mandate_id=mandate_id,
-        amount=tier_config["amount"],
+        amount=resolution.effective_amount_pence,
         currency=tier_config.get("currency", "GBP"),
         interval_unit=tier_config.get("interval_unit", "monthly"),
         interval=tier_config.get("interval", 1),
@@ -603,6 +659,12 @@ def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
             "user_id": str(user.id),
             "username": user.username,
             "tier": tier,
+            "effective_tier": resolution.effective_tier,
+            "applied_promotion_id": (
+                str(resolution.applied_promotion.id)
+                if resolution.applied_promotion
+                else ""
+            ),
         },
     )
 

@@ -13,6 +13,12 @@
       </svg>
       <span>{% trans 'This application is in development currently and should NOT be used for live surveys at the moment.' %}</span>
     </div>
+    {% if homepage_promotion %}
+    <div class="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-2 text-sm flex items-center justify-between gap-3">
+      <span>{% trans 'Limited-time offer:' %} {{ homepage_promotion.short_text }}</span>
+      <a href="{% url 'core:pricing' %}" class="link link-hover font-semibold">{% trans 'View pricing' %}</a>
+    </div>
+    {% endif %}
   </div>
 
   <section class="hero min-h-[60vh] bg-base-100 rounded-box shadow mt-6 md:mt-8 mb-16">

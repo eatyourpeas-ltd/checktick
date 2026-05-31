@@ -109,6 +109,7 @@ The User Management Hub displays pending invitations alongside existing members.
 - **Cancel**: Remove the pending invitation
 
 Pending invitations are shown with a warning indicator and include:
+
 - The invited email address
 - The role they will be assigned
 - How long ago the invitation was sent
@@ -117,6 +118,7 @@ Pending invitations are shown with a warning indicator and include:
 ### Capacity and Invitations
 
 For teams with size limits:
+
 - Pending invitations count toward the team capacity
 - You cannot invite more users than your remaining capacity
 - Example: A Small team (5 max) with 3 members and 1 pending invitation can only invite 1 more user

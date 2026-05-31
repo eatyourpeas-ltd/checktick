@@ -1,6 +1,6 @@
 ---
 title: SNOMED CT Integration
-category: api
+category: development
 priority: 5
 ---
 
@@ -538,4 +538,3 @@ When a row is decided, add a short note below using this template:
   Rationale: <1-3 lines>
   Follow-up: <tickets/docs/tests>
 ```
-

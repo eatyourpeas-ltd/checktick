@@ -1,6 +1,6 @@
 ---
 title: Encryption Technical Reference
-category: api
+category: development
 priority: 6
 ---
 

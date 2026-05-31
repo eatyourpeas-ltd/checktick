@@ -41,6 +41,7 @@ This guide is for **developers** implementing or modifying data governance featu
 ### 1.2 Data Flow
 
 **Data Export:**
+
 ```text
 User clicks "Download Data"
   → DownloadDisclaimerModal (React component)
@@ -53,6 +54,7 @@ User clicks "Download Data"
 ```
 
 **Retention Extension:**
+
 ```text
 User receives warning email
   → Clicks "Extend Retention"
@@ -65,6 +67,7 @@ User receives warning email
 ```
 
 **Automatic Deletion:**
+
 ```text
 Celery periodic task (daily)
   → RetentionService.check_expired_surveys()
@@ -1135,6 +1138,7 @@ class Command(BaseCommand):
 ```
 
 **Usage:**
+
 ```bash
 python manage.py check_retention
 ```

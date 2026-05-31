@@ -244,6 +244,8 @@ CSV formula injection (values beginning with `=`, `@`, `+`, `-`) is blocked at e
 - `DEBUG=False` enforced in production
 - Secret keys generated securely
 - Database credentials via environment variables
+- Billing webhooks require a configured `PAYMENT_WEBHOOK_SECRET`
+- Webhook callbacks are rejected when signature validation fails
 
 #### HTTP Security Headers
 

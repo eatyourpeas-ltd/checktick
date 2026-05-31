@@ -13,6 +13,7 @@ This guide helps you choose the right channel for getting help or contributing t
 **Use [GitHub Discussions](https://github.com/eatyourpeas/checktick/discussions)**
 
 Discussions are perfect for:
+
 - Questions about using CheckTick
 - Getting help with setup or configuration
 - Seeking advice on healthcare survey design
@@ -25,6 +26,7 @@ Discussions are perfect for:
 **Use [GitHub Issues](https://github.com/eatyourpeas/checktick/issues)**
 
 Issues are for:
+
 - Bug reports with clear reproduction steps
 - Specific feature requests with detailed requirements
 - Documentation problems or improvements
@@ -43,6 +45,7 @@ For sensitive security issues that could be exploited.
 GitHub Discussions is our community forum for:
 
 #### Questions and Support
+
 - "How do I create multi-language surveys?"
 - "What's the best way to handle patient consent?"
 - "Why isn't my Docker setup working?"
@@ -50,6 +53,7 @@ GitHub Discussions is our community forum for:
 - "What question types work best for clinical audits?"
 
 #### Sharing and Community
+
 - Showcasing your CheckTick implementation
 - Sharing healthcare use cases and success stories
 - Discussing best practices for survey design
@@ -57,6 +61,7 @@ GitHub Discussions is our community forum for:
 - Announcing community events or resources
 
 #### Ideas and Brainstorming
+
 - "It would be cool if CheckTick could..."
 - Early-stage feature ideas that need refinement
 - Discussing potential integrations
@@ -64,6 +69,7 @@ GitHub Discussions is our community forum for:
 - Getting community input before formal feature requests
 
 #### Announcements
+
 - Release updates and changelogs
 - New documentation or tutorials
 - Community highlights
@@ -74,13 +80,16 @@ GitHub Discussions is our community forum for:
 GitHub Issues are for specific, actionable items:
 
 #### Bug Reports
+
 Use the bug report template when:
+
 - Something is broken or not working as expected
 - You can provide clear steps to reproduce the problem
 - There's an error message or unexpected behavior
 - A feature that used to work is now broken
 
 Include:
+
 - Clear description of the problem
 - Steps to reproduce
 - Expected vs actual behavior
@@ -88,13 +97,16 @@ Include:
 - Screenshots if helpful
 
 #### Feature Requests
+
 Use the feature request template when:
+
 - You have a specific, well-defined feature in mind
 - You can describe the healthcare use case clearly
 - You've thought through the user story
 - The feature would benefit the broader community
 
 Include:
+
 - Clear problem statement
 - Proposed solution
 - Healthcare/clinical context
@@ -102,7 +114,9 @@ Include:
 - Consider implementation complexity
 
 #### Documentation Issues
+
 Use the documentation template when:
+
 - You found incorrect information
 - Instructions are unclear or outdated
 - Code examples don't work
@@ -114,6 +128,7 @@ Use the documentation template when:
 #### Discussion Examples ✅
 
 **Good Discussion Topics:**
+
 - "Best practices for creating patient satisfaction surveys"
 - "How to handle multilingual surveys in a diverse patient population"
 - "Sharing my experience deploying CheckTick for a clinical audit"
@@ -123,6 +138,7 @@ Use the documentation template when:
 #### Issue Examples ✅
 
 **Good Issue Topics:**
+
 - "Survey export fails with large datasets (>1000 responses)"
 - "Feature Request: Add support for conditional question logic"
 - "Documentation: API authentication examples are outdated"
@@ -144,7 +160,7 @@ Maintainers can help with this conversion process.
 
 1. **Search first**: Check existing discussions, issues, and documentation
 2. **Check the docs**: Browse `/docs` folder and the live documentation
-3. **Try the demo**: Test functionality at https://checktick.eatyourpeas.dev
+3. **Try the demo**: Test functionality at <https://checktick.eatyourpeas.dev>
 4. **Gather information**: Have your environment details ready
 
 ### When Posting
@@ -177,10 +193,10 @@ When asking questions or reporting issues:
 
 ## Need More Help?
 
-- **Documentation**: https://checktick.eatyourpeas.dev/docs/
-- **Demo Environment**: https://checktick.eatyourpeas.dev
-- **Discussions**: https://github.com/eatyourpeas/checktick/discussions
-- **Issues**: https://github.com/eatyourpeas/checktick/issues
-- **Security**: https://github.com/eatyourpeas/checktick/security/advisories/new
+- **Documentation**: <https://checktick.eatyourpeas.dev/docs/>
+- **Demo Environment**: <https://checktick.eatyourpeas.dev>
+- **Discussions**: <https://github.com/eatyourpeas/checktick/discussions>
+- **Issues**: <https://github.com/eatyourpeas/checktick/issues>
+- **Security**: <https://github.com/eatyourpeas/checktick/security/advisories/new>
 
 Remember: When in doubt, start with Discussions! The community and maintainers are here to help.

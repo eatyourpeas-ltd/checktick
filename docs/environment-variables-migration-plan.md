@@ -1,6 +1,6 @@
 ---
 title: Environment Variables Migration Plan
-category: api
+category: development
 priority: 101
 ---
 
@@ -184,6 +184,7 @@ These settings are customization-focused and benefit from UI-based management. T
 | `BRAND_THEME_CSS_DARK` | ❌ Remove from ENV | Django Admin → SiteBranding (theme_dark_css field) |
 
 **Management Command**:
+
 ```bash
 # CLI configuration for initial setup or automation
 python manage.py configure_branding \
@@ -194,10 +195,12 @@ python manage.py configure_branding \
 ```
 
 **UI Access**:
+
 - **Self-hosted**: Superusers access via `/admin/core/sitebranding/` or custom view at `/branding/`
 - **Hosted SaaS**: Enterprise tier users access custom branding view at `/branding/`
 
 **Benefits of UI Management**:
+
 1. ✅ No container restarts required for theme changes
 2. ✅ File upload support for logos (better UX than mounting volumes)
 3. ✅ Live preview of changes
@@ -223,6 +226,7 @@ site_title = branding.site_title if branding and branding.site_title else settin
 ```
 
 This allows:
+
 - Quick setup via ENV var for basic deployments
 - UI customization for advanced users who want live changes
 - Fallback to ENV var if database not available
@@ -265,6 +269,7 @@ class SiteBranding(models.Model):
 **File**: `checktick_app/core/management/commands/configure_branding.py`
 
 Already designed in `docs/account-tiers-implementation.md`. Supports:
+
 - `--theme-light`, `--theme-dark`
 - `--logo`, `--logo-dark`
 - `--default-theme`
@@ -273,11 +278,13 @@ Already designed in `docs/account-tiers-implementation.md`. Supports:
 ### Phase 3: Create/Enhance Branding UI ✅
 
 **Option A**: Django Admin (simpler, faster to implement)
+
 - Register `SiteBranding` model in admin
 - Use existing admin interface
 - Good for self-hosted superusers
 
 **Option B**: Custom View (better UX, more control)
+
 - Create custom view at `/branding/`
 - File upload with preview
 - Theme selector with live preview
@@ -307,12 +314,14 @@ def branding(request):
 ### Phase 5: Update Documentation
 
 Update all self-hosting documentation to:
+
 1. Remove branding environment variables from examples
 2. Add instructions for using `python manage.py configure_branding`
 3. Add instructions for accessing Django admin branding configuration
 4. Update quickstart guide to focus on essential ENV vars only
 
 **Files to Update**:
+
 - ✅ `docs/self-hosting-quickstart.md`
 - ✅ `docs/self-hosting-configuration.md`
 - ✅ `docs/self-hosting-themes.md`
@@ -495,6 +504,7 @@ Scheduled tasks (cron jobs) should **remain as documented** - these are operatio
 ## Summary
 
 ### Environment Variables: 37 variables
+
 - **Security**: 6 (SECRET_KEY, DEBUG, ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS, SECURE_SSL_REDIRECT, SITE_URL)
 - **Database**: 4 (DATABASE_URL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
 - **Email**: 9 (DEFAULT_FROM_EMAIL, SERVER_EMAIL, EMAIL_HOST, EMAIL_PORT, EMAIL_USE_TLS, EMAIL_USE_SSL, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_TIMEOUT)
@@ -505,6 +515,7 @@ Scheduled tasks (cron jobs) should **remain as documented** - these are operatio
 - **Data Governance**: 4 (CHECKTICK_DEFAULT_RETENTION_MONTHS, CHECKTICK_MAX_RETENTION_MONTHS, CHECKTICK_DOWNLOAD_LINK_EXPIRY_DAYS, CHECKTICK_WARN_BEFORE_DELETION_DAYS) - Optional
 
 ### Migrated to UI: 15 variables
+
 - All `BRAND_*` variables (15 total)
 - Managed via Django admin or `python manage.py configure_branding`
 

@@ -48,6 +48,7 @@ If you need to update an existing translation (for example, after changing the s
    - Maintain any responses already collected
 
 **Important:** "Translate Again" overwrites the translated text but preserves:
+
 - Survey settings and permissions
 - Question structure and IDs
 - Conditional logic
@@ -55,6 +56,7 @@ If you need to update an existing translation (for example, after changing the s
 - Publication status
 
 **Use cases for Translate Again:**
+
 - Source survey was updated after initial translation
 - You want to try a different translation approach
 - Medical terminology needs updating

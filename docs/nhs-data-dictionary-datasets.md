@@ -192,16 +192,19 @@ If `snomed.db` is not present (for example on a self-hosted instance that has no
 CheckTick ships the following featured refsets out of the box:
 
 **QOF drug lists (NHS England)**
+
 - Antiepileptic drug list
 - Diabetes drug list
 - Atrial fibrillation drug list
 - COPD/Asthma drug list
 
 **NHS clinical**
+
 - UK Ethnic Categories
 - UK Allergy Substances
 
 **Paediatric specialty condition sets**
+
 - Epilepsy syndromes, endocrine disorders, cardiac conditions, respiratory conditions, neuromuscular disorders, epilepsy genes, renal conditions, GI conditions, rare chromosomal conditions
 
 ### Requesting a New SNOMED Refset

@@ -3318,6 +3318,11 @@ class AuditLog(models.Model):
         USER_DEACTIVATED = "user_deactivated", "User Account Deactivated"
         # Data governance actions
         DATA_EXPORTED = "data_exported", "Data Exported"
+        # Promotion lifecycle actions
+        PROMOTION_ACTIVATED = "promotion_activated", "Promotion Activated"
+        PROMOTION_ENDING_SOON = "promotion_ending_soon", "Promotion Ending Soon"
+        PROMOTION_EXPIRED = "promotion_expired", "Promotion Expired"
+        PROMOTION_RECONCILED = "promotion_reconciled", "Promotion Reconciled"
 
     class Severity(models.TextChoices):
         INFO = "info", "Information"

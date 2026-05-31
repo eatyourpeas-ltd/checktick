@@ -2,12 +2,23 @@
 Tests for platform admin permissions - ensuring only superusers can access.
 """
 
+from datetime import date, timedelta
+from decimal import Decimal
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 import pytest
 
-from checktick_app.core.models import PricingOverride
-from checktick_app.surveys.models import Organization, OrganizationMembership
+from checktick_app.core.billing import PaymentAPIError
+from checktick_app.core.models import Payment, PricingOverride, Promotion, UserProfile
+from checktick_app.surveys.models import (
+    AuditLog,
+    Organization,
+    OrganizationMembership,
+    Team,
+)
 
 User = get_user_model()
 
@@ -126,6 +137,51 @@ class TestPlatformAdminDashboardAccess:
         assert response.status_code == 200
         assert b"Platform Admin" in response.content
 
+    def test_dashboard_quick_actions_use_account_dropdown_and_platform_stats(
+        self, client, superuser
+    ):
+        """Quick actions should provide create-account dropdown and platform stats link."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_dashboard")
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert b"Create Account" in response.content
+        assert b"Pending Setups by Tier" in response.content
+        assert b"mode=platform" in response.content
+
+    def test_dashboard_includes_promotion_summary(self, client, superuser):
+        """Dashboard should show active and scheduled promotion counts."""
+        Promotion.objects.create(
+            name="Active Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=Decimal("10.00"),
+            is_active=True,
+            starts_at=timezone.now() - timedelta(days=1),
+            ends_at=timezone.now() + timedelta(days=3),
+        )
+        Promotion.objects.create(
+            name="Scheduled Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=Decimal("5.00"),
+            is_active=True,
+            starts_at=timezone.now() + timedelta(days=2),
+            ends_at=timezone.now() + timedelta(days=10),
+        )
+
+        client.force_login(superuser)
+        response = client.get(reverse("core:platform_admin_dashboard"))
+
+        assert response.status_code == 200
+        assert b"Active Promotions" in response.content
+        assert b"Scheduled Promotions" in response.content
+        summary = response.context["promotion_summary"]
+        assert summary["active"] == 1
+        assert summary["scheduled"] == 1
+        assert summary["expiring_soon"] == 1
+
 
 # ============================================================================
 # Organization List Access Tests
@@ -155,6 +211,142 @@ class TestOrganizationListAccess:
         url = reverse("core:platform_admin_org_list")
         response = client.get(url)
         assert response.status_code == 200
+
+    def test_tier_account_list_shows_active_promotion_and_actions(
+        self, client, superuser
+    ):
+        """Tier account view should include promotion state, expiry, and quick actions."""
+        account = User.objects.create_user(
+            username="promoted-pro-account",
+            email="promoted-pro-account@test.com",
+            password=TEST_PASSWORD,
+        )
+        account.profile.account_tier = UserProfile.AccountTier.PRO
+        account.profile.save()
+
+        Promotion.objects.create(
+            name="Tier Account Promo",
+            scope_type=Promotion.ScopeType.ACCOUNT,
+            target_user=account,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=Decimal("10.00"),
+            is_active=True,
+            ends_at=timezone.now() + timedelta(days=7),
+        )
+
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_org_list")
+        response = client.get(url, {"mode": "tier", "scope": "pro"})
+
+        assert response.status_code == 200
+        assert b"Tier Account Promo" in response.content
+        assert b"Apply Promotion" in response.content
+        assert b"Billing History" in response.content
+
+        users = list(response.context["users"].object_list)
+        matched = [u for u in users if u.email == account.email]
+        assert matched
+        assert matched[0].has_active_promotion is True
+        assert matched[0].active_promotion_ends_at is not None
+
+    def test_tier_account_list_includes_apply_and_billing_links(
+        self, client, superuser
+    ):
+        """Tier account rows should include apply-promotion and billing-history links."""
+        account = User.objects.create_user(
+            username="plain-pro-account",
+            email="plain-pro-account@test.com",
+            password=TEST_PASSWORD,
+        )
+        account.profile.account_tier = UserProfile.AccountTier.PRO
+        account.profile.save()
+
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_org_list")
+        response = client.get(url, {"mode": "tier", "scope": "pro"})
+
+        assert response.status_code == 200
+        assert f"target_user_email={account.email}".encode() in response.content
+        assert b"platform-admin/billing" in response.content
+        assert b"q=plain-pro-account" in response.content
+
+    def test_tier_account_list_includes_refund_picker_for_account_payments(
+        self, client, superuser
+    ):
+        """Tier account rows should expose a refund picker for all refundable payments."""
+        account = User.objects.create_user(
+            username="refund-pro-account",
+            email="refund-pro-account@test.com",
+            password=TEST_PASSWORD,
+        )
+        account.profile.account_tier = UserProfile.AccountTier.PRO
+        account.profile.save()
+
+        older_payment = Payment.objects.create(
+            user=account,
+            invoice_number="INV-REFUND-OLDER",
+            invoice_date=date(2026, 1, 10),
+            payment_provider="gocardless",
+            payment_id="PMT-OLDER",
+            subscription_id="SUB-OLDER",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=account.email,
+            customer_name=account.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        latest_payment = Payment.objects.create(
+            user=account,
+            invoice_number="INV-REFUND-LATEST",
+            invoice_date=date(2026, 1, 11),
+            payment_provider="gocardless",
+            payment_id="PMT-LATEST",
+            subscription_id="SUB-LATEST",
+            tier="pro",
+            amount_ex_vat=700,
+            vat_amount=140,
+            amount_inc_vat=840,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=account.email,
+            customer_name=account.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_org_list")
+        response = client.get(url, {"mode": "tier", "scope": "pro"})
+
+        assert response.status_code == 200
+        assert b"Refund Payment" in response.content
+        assert b"INV-REFUND-OLDER" in response.content
+        assert b"INV-REFUND-LATEST" in response.content
+        assert (
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": latest_payment.id},
+            ).encode()
+            in response.content
+        )
+        assert (
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": older_payment.id},
+            ).encode()
+            in response.content
+        )
+
+        users = list(response.context["users"].object_list)
+        matched = [u for u in users if u.email == account.email]
+        assert matched
+        assert [payment.id for payment in matched[0].refundable_payments] == [
+            latest_payment.id,
+            older_payment.id,
+        ]
 
 
 # ============================================================================
@@ -214,6 +406,99 @@ class TestOrganizationCreateAccess:
 
         # Verify organization was created
         assert Organization.objects.filter(name="New Test Organization").exists()
+
+    def test_superuser_can_add_tier_account_from_create_view(self, client, superuser):
+        """Create view should support tier account creation in tier mode."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_org_create")
+
+        response = client.post(
+            f"{url}?mode=tier&scope=team_medium",
+            {
+                "name": "Tier User",
+                "owner_email": "tieruser@example.com",
+            },
+        )
+
+        assert response.status_code == 302
+        assert "mode=tier&scope=team_medium" in response.url
+
+        account = User.objects.get(email="tieruser@example.com")
+        assert account.profile.account_tier == UserProfile.AccountTier.TEAM_MEDIUM
+        assert (
+            account.profile.subscription_status == UserProfile.SubscriptionStatus.ACTIVE
+        )
+        assert not Organization.objects.filter(name="Tier User").exists()
+
+    def test_superuser_can_add_tier_account_with_promotion(self, client, superuser):
+        """Tier account create should optionally apply a promotion in one submit."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_org_create")
+
+        response = client.post(
+            f"{url}?mode=tier&scope=pro",
+            {
+                "name": "Promo Account",
+                "owner_email": "promo-account@example.com",
+                "apply_promotion": "on",
+                "promotion_name": "Welcome 15%",
+                "promotion_effect_type": Promotion.EffectType.PERCENT_DISCOUNT,
+                "promotion_effect_value": "15.00",
+                "promotion_ends_at": "2030-01-01T12:00",
+                "promotion_reason": "Onboarding incentive",
+            },
+        )
+
+        assert response.status_code == 302
+        account = User.objects.get(email="promo-account@example.com")
+        promotion = Promotion.objects.get(target_user=account, name="Welcome 15%")
+        assert promotion.scope_type == Promotion.ScopeType.ACCOUNT
+        assert promotion.effect_type == Promotion.EffectType.PERCENT_DISCOUNT
+        assert str(promotion.effect_value) == "15.00"
+
+    def test_invalid_promotion_input_blocks_tier_account_create(
+        self, client, superuser
+    ):
+        """Invalid one-step promotion fields should keep user on form and avoid account create."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_org_create")
+
+        response = client.post(
+            f"{url}?mode=tier&scope=pro",
+            {
+                "name": "Broken Promo Account",
+                "owner_email": "broken-promo-account@example.com",
+                "apply_promotion": "on",
+                "promotion_name": "Broken Promo",
+                "promotion_effect_type": Promotion.EffectType.PERCENT_DISCOUNT,
+                "promotion_effect_value": "not-a-number",
+            },
+        )
+
+        assert response.status_code == 200
+        assert not User.objects.filter(
+            email="broken-promo-account@example.com"
+        ).exists()
+        assert not Promotion.objects.filter(name="Broken Promo").exists()
+
+    def test_tier_scope_persists_when_scope_missing_in_query(self, client, superuser):
+        """Selected tier scope should be retained when moving between pages."""
+        client.force_login(superuser)
+
+        dashboard_url = reverse("core:platform_admin_dashboard")
+        response = client.get(f"{dashboard_url}?mode=tier&scope=enterprise")
+        assert response.status_code == 200
+        assert response.context["scope"] == "enterprise"
+
+        list_url = reverse("core:platform_admin_org_list")
+        response = client.get(f"{list_url}?mode=tier")
+        assert response.status_code == 200
+        assert response.context["scope"] == "enterprise"
+
+        stats_url = reverse("core:platform_admin_stats")
+        response = client.get(f"{stats_url}?mode=tier")
+        assert response.status_code == 200
+        assert response.context["scope"] == "enterprise"
 
 
 # ============================================================================
@@ -654,3 +939,872 @@ class TestPlatformPricingAccess:
         url = reverse("core:platform_admin_pricing")
         response = client.put(url)
         assert response.status_code == 405
+
+    def test_pricing_page_redirects_from_tier_mode(self, client, superuser):
+        """Pricing is platform-level and should redirect away from tier mode query."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_pricing")
+        response = client.get(url, {"mode": "tier", "scope": "pro"})
+        assert response.status_code == 302
+        assert response.url == url
+
+
+# ============================================================================
+# Platform Billing Access Tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestPlatformBillingAccess:
+    """Test access control and behavior for platform billing view."""
+
+    def test_anonymous_user_redirected_to_login(self, client):
+        """Anonymous users are redirected to login."""
+        url = reverse("core:platform_admin_billing")
+        response = client.get(url)
+        assert response.status_code == 302
+        assert "login" in response.url.lower()
+
+    def test_regular_user_denied_access(self, client, regular_user):
+        """Regular users cannot access platform billing page."""
+        client.force_login(regular_user)
+        url = reverse("core:platform_admin_billing")
+        response = client.get(url)
+        assert response.status_code == 302
+
+    def test_non_superuser_cannot_post_refund(self, client, regular_user):
+        """Regular users cannot call the refund endpoint directly."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-NON-SUPER-REFUND",
+            invoice_date=date(2026, 1, 20),
+            payment_provider="gocardless",
+            payment_id="PMT-NON-SUPER-REFUND",
+            subscription_id="SUB-NON-SUPER-REFUND",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        client.force_login(regular_user)
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason_code": "promotion_correction",
+                "refund_reason": "Unauthorized",
+            },
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.CONFIRMED
+
+    def test_anonymous_user_cannot_post_refund(self, client, regular_user):
+        """Anonymous users are redirected when posting to refund endpoint."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-ANON-REFUND",
+            invoice_date=date(2026, 1, 19),
+            payment_provider="gocardless",
+            payment_id="PMT-ANON-REFUND",
+            subscription_id="SUB-ANON-REFUND",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason_code": "promotion_correction",
+                "refund_reason": "Unauthorized",
+            },
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.CONFIRMED
+
+    def test_superuser_can_access_billing(self, client, superuser):
+        """Superusers can access platform billing page."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_billing")
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b"Billing" in response.content
+
+    def test_billing_rejects_post(self, client, superuser):
+        """Billing view should reject POST requests."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_billing")
+        response = client.post(url)
+        assert response.status_code == 405
+
+    def test_tier_mode_filters_transactions(self, client, superuser, regular_user):
+        """Tier mode should filter billing timeline by selected tier."""
+        Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-TEST-PRO",
+            invoice_date=date(2026, 1, 10),
+            payment_provider="gocardless",
+            payment_id="PMT-PRO-1",
+            subscription_id="SUB-PRO-1",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-TEST-FREE",
+            invoice_date=date(2026, 1, 11),
+            payment_provider="gocardless",
+            payment_id="PMT-FREE-1",
+            subscription_id="SUB-FREE-1",
+            tier="free",
+            amount_ex_vat=0,
+            vat_amount=0,
+            amount_inc_vat=0,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_billing")
+        response = client.get(url, {"mode": "tier", "scope": "pro"})
+
+        assert response.status_code == 200
+        assert b"INV-TEST-PRO" in response.content
+        assert b"INV-TEST-FREE" not in response.content
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_superuser_can_refund_confirmed_payment(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """Platform admin should be able to refund confirmed GoCardless payments."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-1",
+            invoice_date=date(2026, 1, 12),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-1",
+            subscription_id="SUB-REF-1",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        mock_payment_client = mock_payment_client_cls.return_value
+        mock_payment_client.refund_payment.return_value = {"id": "RF-123"}
+
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason_code": "promotion_correction",
+                "refund_reason": "Promotion correction",
+                "mode": "platform",
+            },
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.REFUNDED
+        mock_payment_client.refund_payment.assert_called_once_with(
+            "PMT-REF-1",
+            amount=600,
+            total_amount_confirmation=600,
+            metadata={
+                "invoice_number": "INV-REFUND-1",
+                "payment_record_id": str(payment.id),
+                "reason": "Promotion correction",
+                "reason_code": "promotion_correction",
+                "adjustment_type": "refund",
+                "adjustment_status": "requested",
+                "policy_version": "2026-05-31",
+            },
+        )
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_refund_failure_does_not_mark_payment_refunded(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """If provider refund fails, local payment state must remain confirmed."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-FAIL",
+            invoice_date=date(2026, 1, 13),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-FAIL",
+            subscription_id="SUB-REF-FAIL",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        mock_payment_client = mock_payment_client_cls.return_value
+        mock_payment_client.refund_payment.side_effect = PaymentAPIError(
+            "provider refused"
+        )
+
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason_code": "promotion_correction",
+                "refund_reason": "Promotion correction",
+                "mode": "platform",
+            },
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.CONFIRMED
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_refund_from_tier_account_list_returns_to_account_list(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """Refund posts from the tier account list should return to the same tier list URL."""
+        regular_user.profile.account_tier = UserProfile.AccountTier.PRO
+        regular_user.profile.save(update_fields=["account_tier", "updated_at"])
+
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-RETURN",
+            invoice_date=date(2026, 1, 14),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-RETURN",
+            subscription_id="SUB-REF-RETURN",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        mock_payment_client = mock_payment_client_cls.return_value
+        mock_payment_client.refund_payment.return_value = {"id": "RF-RETURN"}
+
+        client.force_login(superuser)
+        return_to = f"{reverse('core:platform_admin_org_list')}?mode=tier&scope=pro"
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason_code": "promotion_correction",
+                "refund_reason": "Promotion correction",
+                "return_to": return_to,
+            },
+        )
+
+        assert response.status_code == 302
+        assert response.url == return_to
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_second_refund_request_is_idempotently_ignored(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """Second refund request for the same payment should not call provider again."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-IDEMPOTENT",
+            invoice_date=date(2026, 1, 23),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-IDEMPOTENT",
+            subscription_id="SUB-REF-IDEMPOTENT",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        mock_payment_client = mock_payment_client_cls.return_value
+        mock_payment_client.refund_payment.return_value = {"id": "RF-IDEMPOTENT"}
+
+        client.force_login(superuser)
+        refund_url = reverse(
+            "core:platform_admin_billing_refund",
+            kwargs={"payment_id": payment.id},
+        )
+        payload = {
+            "refund_reason_code": "promotion_correction",
+            "refund_reason": "Promotion correction",
+            "mode": "platform",
+        }
+
+        first_response = client.post(refund_url, payload)
+        second_response = client.post(refund_url, payload)
+
+        assert first_response.status_code == 302
+        assert second_response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.REFUNDED
+        assert mock_payment_client.refund_payment.call_count == 1
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_refund_requires_valid_reason_code(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """Refund policy requires an explicit supported reason code."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-POLICY",
+            invoice_date=date(2026, 1, 15),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-POLICY",
+            subscription_id="SUB-REF-POLICY",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason": "Promotion correction",
+                "refund_reason_code": "not_a_real_code",
+                "mode": "platform",
+            },
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.CONFIRMED
+        mock_payment_client_cls.return_value.refund_payment.assert_not_called()
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_refund_other_reason_requires_free_text(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """Policy requires explanation when reason code is Other."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-OTHER",
+            invoice_date=date(2026, 1, 21),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-OTHER",
+            subscription_id="SUB-REF-OTHER",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason_code": "other",
+                "refund_reason": "",
+                "mode": "platform",
+            },
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.CONFIRMED
+        mock_payment_client_cls.return_value.refund_payment.assert_not_called()
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_refund_rejects_partial_amounts(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """Policy currently allows only full-amount refunds."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-PARTIAL",
+            invoice_date=date(2026, 1, 22),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-PARTIAL",
+            subscription_id="SUB-REF-PARTIAL",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {
+                "refund_reason_code": "billing_error",
+                "refund_reason": "Partial attempt",
+                "refund_amount_pence": "500",
+                "mode": "platform",
+            },
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.CONFIRMED
+        mock_payment_client_cls.return_value.refund_payment.assert_not_called()
+
+    def test_billing_shows_adjustment_reporting_for_promotion_refunds(
+        self, client, superuser, regular_user
+    ):
+        """Billing page includes promotion-linked adjustment reporting rows."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-ADJ-1",
+            invoice_date=date(2026, 1, 16),
+            payment_provider="gocardless",
+            payment_id="PMT-ADJ-1",
+            subscription_id="SUB-ADJ-1",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.REFUNDED,
+        )
+
+        AuditLog.objects.create(
+            actor=superuser,
+            scope=AuditLog.Scope.ACCOUNT,
+            action=AuditLog.Action.PROMOTION_RECONCILED,
+            severity=AuditLog.Severity.INFO,
+            message="Promotion correction refund requested.",
+            metadata={
+                "payment_id": str(payment.id),
+                "provider_refund_id": "RF-ADJ-1",
+                "refund_reason_code": "promotion_correction",
+                "refund_reason": "Promotion correction",
+                "adjustment_type": "refund",
+                "adjustment_status": "completed",
+                "amount_pence": 600,
+            },
+        )
+
+        client.force_login(superuser)
+        response = client.get(reverse("core:platform_admin_billing"))
+
+        assert response.status_code == 200
+        assert b"Promotion Adjustment Report" in response.content
+        assert b"INV-ADJ-1" in response.content
+        assert b"promotion_correction" in response.content
+
+    def test_adjustment_report_limits_rows_for_performance(
+        self, client, superuser, regular_user
+    ):
+        """Adjustment report should cap rows to a bounded number."""
+        payments = []
+        for idx in range(510):
+            payment = Payment.objects.create(
+                user=regular_user,
+                invoice_number=f"INV-ADJ-LIMIT-{idx}",
+                invoice_date=date(2026, 1, 1),
+                payment_provider="gocardless",
+                payment_id=f"PMT-ADJ-LIMIT-{idx}",
+                subscription_id=f"SUB-ADJ-LIMIT-{idx}",
+                tier="pro",
+                amount_ex_vat=500,
+                vat_amount=100,
+                amount_inc_vat=600,
+                vat_rate=0.20,
+                currency="GBP",
+                customer_email=regular_user.email,
+                customer_name=regular_user.username,
+                status=Payment.PaymentStatus.REFUNDED,
+            )
+            payments.append(payment)
+
+        for payment in payments:
+            AuditLog.objects.create(
+                actor=superuser,
+                scope=AuditLog.Scope.ACCOUNT,
+                action=AuditLog.Action.PROMOTION_RECONCILED,
+                severity=AuditLog.Severity.INFO,
+                message="Promotion correction refund requested.",
+                metadata={
+                    "payment_id": str(payment.id),
+                    "provider_refund_id": f"RF-{payment.id}",
+                    "refund_reason_code": "promotion_correction",
+                    "adjustment_type": "refund",
+                    "adjustment_status": "completed",
+                    "amount_pence": 600,
+                },
+            )
+
+        client.force_login(superuser)
+        response = client.get(reverse("core:platform_admin_billing"))
+
+        assert response.status_code == 200
+        assert len(response.context["adjustment_rows"]) <= 500
+
+
+# ============================================================================
+# Platform Promotions Access Tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestPlatformPromotionsAccess:
+    """Test access control and basic behavior for platform promotions views."""
+
+    def test_anonymous_user_redirected_to_login(self, client):
+        """Anonymous users are redirected to login."""
+        url = reverse("core:platform_admin_promotions")
+        response = client.get(url)
+        assert response.status_code == 302
+        assert "login" in response.url.lower()
+
+    def test_regular_user_denied_access(self, client, regular_user):
+        """Regular users cannot access promotions page."""
+        client.force_login(regular_user)
+        url = reverse("core:platform_admin_promotions")
+        response = client.get(url)
+        assert response.status_code == 302
+
+    def test_superuser_can_access_promotions(self, client, superuser):
+        """Superusers can access promotions listing."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotions")
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b"Promotions" in response.content
+
+    def test_superuser_can_create_platform_promotion(self, client, superuser):
+        """Superusers can create a platform-scope promotion."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.post(
+            url,
+            {
+                "name": "Summer Promo",
+                "code": "SUMMER2026",
+                "scope_type": "platform",
+                "effect_type": "percent_discount",
+                "effect_value": "10.00",
+                "priority": "50",
+                "is_active": "on",
+            },
+        )
+        assert response.status_code == 302
+        assert Promotion.objects.filter(name="Summer Promo").exists()
+
+    def test_superuser_can_toggle_promotion(self, client, superuser):
+        """Superusers can activate/deactivate a promotion."""
+        promotion = Promotion.objects.create(
+            name="Toggle Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=5,
+            is_active=True,
+        )
+        client.force_login(superuser)
+        url = reverse(
+            "core:platform_admin_promotion_toggle",
+            kwargs={"promotion_id": promotion.id},
+        )
+        response = client.post(url)
+        assert response.status_code == 302
+
+        promotion.refresh_from_db()
+        assert promotion.is_active is False
+        assert AuditLog.objects.filter(
+            action=AuditLog.Action.UPDATE,
+            metadata__promotion_id=str(promotion.id),
+        ).exists()
+
+    def test_superuser_can_edit_scheduled_promotion(self, client, superuser):
+        """Scheduled promotions can be edited before they start."""
+        promotion = Promotion.objects.create(
+            name="Editable Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            starts_at=timezone.now() + timedelta(days=2),
+            is_active=True,
+        )
+        client.force_login(superuser)
+
+        response = client.post(
+            reverse(
+                "core:platform_admin_promotion_edit",
+                kwargs={"promotion_id": promotion.id},
+            ),
+            {
+                "name": "Editable Promo Updated",
+                "code": "",
+                "description": "Updated",
+                "scope_type": Promotion.ScopeType.PLATFORM,
+                "target_tier": "",
+                "effect_type": Promotion.EffectType.PERCENT_DISCOUNT,
+                "effect_value": "15.00",
+                "effect_tier": "",
+                "priority": "100",
+                "starts_at": (timezone.now() + timedelta(days=3)).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": "",
+                "reason": "Refined offer",
+                "internal_notes": "Ops note",
+                "is_active": "on",
+            },
+        )
+
+        assert response.status_code == 302
+        promotion.refresh_from_db()
+        assert promotion.name == "Editable Promo Updated"
+        assert str(promotion.effect_value) == "15.00"
+        assert AuditLog.objects.filter(
+            action=AuditLog.Action.UPDATE,
+            metadata__promotion_id=str(promotion.id),
+        ).exists()
+
+    def test_started_promotion_edit_rejects_billing_term_change(
+        self, client, superuser
+    ):
+        """Started promotions should reject billing-impacting edits in admin UI."""
+        promotion = Promotion.objects.create(
+            name="Started Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            starts_at=timezone.now() - timedelta(days=1),
+            is_active=True,
+        )
+        client.force_login(superuser)
+
+        response = client.post(
+            reverse(
+                "core:platform_admin_promotion_edit",
+                kwargs={"promotion_id": promotion.id},
+            ),
+            {
+                "name": "Started Promo",
+                "code": "",
+                "description": "",
+                "scope_type": Promotion.ScopeType.PLATFORM,
+                "target_tier": "",
+                "effect_type": Promotion.EffectType.PERCENT_DISCOUNT,
+                "effect_value": "25.00",
+                "effect_tier": "",
+                "priority": "100",
+                "starts_at": (timezone.now() - timedelta(days=1)).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": "",
+                "reason": "",
+                "internal_notes": "",
+                "is_active": "on",
+            },
+        )
+
+        assert response.status_code == 200
+        assert b"cannot be edited in place" in response.content
+        promotion.refresh_from_db()
+        assert str(promotion.effect_value) == "10.00"
+
+    def test_duplicate_promotion_prefills_create_form(self, client, superuser):
+        """Duplicate action should open create form prefilled from the source promotion."""
+        promotion = Promotion.objects.create(
+            name="Source Promo",
+            code="SRC",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            is_active=True,
+        )
+        client.force_login(superuser)
+        response = client.get(
+            reverse(
+                "core:platform_admin_promotion_duplicate",
+                kwargs={"promotion_id": promotion.id},
+            )
+        )
+
+        assert response.status_code == 200
+        assert b"Source Promo Copy" in response.content
+        assert b"Creating a new promotion based on" in response.content
+
+    def test_revoke_promotion_ends_it_immediately(self, client, superuser):
+        """Revoking a promotion should deactivate it and end its window now."""
+        promotion = Promotion.objects.create(
+            name="Revokable Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            starts_at=timezone.now() - timedelta(days=2),
+            is_active=True,
+        )
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_promotion_revoke",
+                kwargs={"promotion_id": promotion.id},
+            )
+        )
+
+        assert response.status_code == 302
+        promotion.refresh_from_db()
+        assert promotion.is_active is False
+        assert promotion.ends_at is not None
+        assert AuditLog.objects.filter(
+            action=AuditLog.Action.REMOVE,
+            metadata__promotion_id=str(promotion.id),
+        ).exists()
+
+    def test_tier_mode_filters_promotions_by_selected_scope(self, client, superuser):
+        """Tier mode should only surface promotions relevant to selected tier scope."""
+        pro_user = User.objects.create_user(
+            username="promo-pro-user",
+            email="promo-pro-user@test.com",
+            password=TEST_PASSWORD,
+        )
+        pro_user.profile.account_tier = UserProfile.AccountTier.PRO
+        pro_user.profile.save()
+        team_owner = User.objects.create_user(
+            username="promo-team-owner",
+            email="promo-team-owner@test.com",
+            password=TEST_PASSWORD,
+        )
+        team_owner.profile.account_tier = UserProfile.AccountTier.TEAM_SMALL
+        team_owner.profile.save()
+        team = Team.objects.create(
+            name="Promo Team", owner=team_owner, size=Team.Size.SMALL
+        )
+
+        Promotion.objects.create(
+            name="Global Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=5,
+            is_active=True,
+        )
+        Promotion.objects.create(
+            name="Team Small Tier Promo",
+            scope_type=Promotion.ScopeType.TIER,
+            target_tier=UserProfile.AccountTier.TEAM_SMALL,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            is_active=True,
+        )
+        Promotion.objects.create(
+            name="Pro User Promo",
+            scope_type=Promotion.ScopeType.ACCOUNT,
+            target_user=pro_user,
+            effect_type=Promotion.EffectType.FIXED_DISCOUNT,
+            effect_value=2,
+            is_active=True,
+        )
+        Promotion.objects.create(
+            name="Team Account Promo",
+            scope_type=Promotion.ScopeType.ACCOUNT,
+            target_team=team,
+            effect_type=Promotion.EffectType.FIXED_DISCOUNT,
+            effect_value=3,
+            is_active=True,
+        )
+
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotions")
+        response = client.get(url, {"mode": "tier", "scope": "team_small"})
+
+        assert response.status_code == 200
+        assert b"Global Promo" in response.content
+        assert b"Team Small Tier Promo" in response.content
+        assert b"Team Account Promo" in response.content
+        assert b"Pro User Promo" not in response.content
+
+    def test_tier_mode_create_defaults_target_tier(self, client, superuser):
+        """Tier mode creation should default tier-scope promotion target tier to selected scope."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.post(
+            f"{url}?mode=tier&scope=team_medium",
+            {
+                "name": "Tier Mode Promo",
+                "scope_type": "tier",
+                "target_tier": "",
+                "effect_type": "percent_discount",
+                "effect_value": "10.00",
+                "priority": "50",
+                "is_active": "on",
+            },
+        )
+
+        assert response.status_code == 302
+        promotion = Promotion.objects.get(name="Tier Mode Promo")
+        assert promotion.target_tier == UserProfile.AccountTier.TEAM_MEDIUM

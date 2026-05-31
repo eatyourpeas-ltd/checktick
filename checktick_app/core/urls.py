@@ -88,9 +88,49 @@ urlpatterns = [
         name="platform_admin_logs",
     ),
     path(
+        "platform-admin/billing/",
+        views_platform_admin.platform_admin_billing,
+        name="platform_admin_billing",
+    ),
+    path(
+        "platform-admin/billing/<int:payment_id>/refund/",
+        views_platform_admin.platform_admin_billing_refund,
+        name="platform_admin_billing_refund",
+    ),
+    path(
         "platform-admin/pricing/",
         views_platform_admin.pricing_overrides,
         name="platform_admin_pricing",
+    ),
+    path(
+        "platform-admin/promotions/",
+        views_platform_admin.platform_admin_promotions,
+        name="platform_admin_promotions",
+    ),
+    path(
+        "platform-admin/promotions/create/",
+        views_platform_admin.platform_admin_promotion_create,
+        name="platform_admin_promotion_create",
+    ),
+    path(
+        "platform-admin/promotions/<int:promotion_id>/edit/",
+        views_platform_admin.platform_admin_promotion_edit,
+        name="platform_admin_promotion_edit",
+    ),
+    path(
+        "platform-admin/promotions/<int:promotion_id>/duplicate/",
+        views_platform_admin.platform_admin_promotion_duplicate,
+        name="platform_admin_promotion_duplicate",
+    ),
+    path(
+        "platform-admin/promotions/<int:promotion_id>/toggle/",
+        views_platform_admin.platform_admin_promotion_toggle,
+        name="platform_admin_promotion_toggle",
+    ),
+    path(
+        "platform-admin/promotions/<int:promotion_id>/revoke/",
+        views_platform_admin.platform_admin_promotion_revoke,
+        name="platform_admin_promotion_revoke",
     ),
     # Billing
     path(
