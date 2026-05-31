@@ -29,6 +29,9 @@ from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 
 from checktick_app.core.billing import PaymentAPIError, payment_client
+from checktick_app.core.services.promotion_resolver import (
+    resolve_effective_pricing_for_organization,
+)
 from checktick_app.surveys.models import Organization
 
 logger = logging.getLogger(__name__)
@@ -132,8 +135,17 @@ def organisation_checkout(request: HttpRequest, token: str) -> HttpResponse:
         seats = organisation.max_seats
         price_per_seat = None
 
-    vat_amount = monthly_cost_ex_vat * vat_rate
-    monthly_cost_inc_vat = monthly_cost_ex_vat + vat_amount
+    monthly_cost_inc_vat = monthly_cost_ex_vat * (1 + vat_rate)
+    resolution = resolve_effective_pricing_for_organization(
+        organisation,
+        base_amount_pence=int(monthly_cost_inc_vat * 100),
+        base_amount_ex_vat_pence=int(monthly_cost_ex_vat * 100),
+    )
+    monthly_cost_ex_vat = Decimal(resolution.effective_amount_ex_vat_pence) / Decimal(
+        "100"
+    )
+    monthly_cost_inc_vat = Decimal(resolution.effective_amount_pence) / Decimal("100")
+    vat_amount = monthly_cost_inc_vat - monthly_cost_ex_vat
 
     # Get company details for footer
     company_name = getattr(settings, "COMPANY_NAME", "")
@@ -148,6 +160,7 @@ def organisation_checkout(request: HttpRequest, token: str) -> HttpResponse:
         "vat_rate_percent": int(vat_rate * 100),
         "vat_amount": vat_amount,
         "monthly_cost_inc_vat": monthly_cost_inc_vat,
+        "applied_promotion": resolution.applied_promotion,
         "company_name": company_name,
         "vat_number": vat_number,
         "token": token,
@@ -303,7 +316,12 @@ def organisation_checkout_complete(request: HttpRequest, token: str) -> HttpResp
             monthly_cost_ex_vat = Decimal("0")
 
         monthly_cost_inc_vat = monthly_cost_ex_vat * (1 + vat_rate)
-        amount_pence = int(monthly_cost_inc_vat * 100)
+        resolution = resolve_effective_pricing_for_organization(
+            organisation,
+            base_amount_pence=int(monthly_cost_inc_vat * 100),
+            base_amount_ex_vat_pence=int(monthly_cost_ex_vat * 100),
+        )
+        amount_pence = resolution.effective_amount_pence
 
         # Create subscription
         subscription = payment_client.create_subscription(
@@ -317,6 +335,12 @@ def organisation_checkout_complete(request: HttpRequest, token: str) -> HttpResp
                 "organisation_id": str(organisation.id),
                 "organisation_name": organisation.name,
                 "billing_type": organisation.billing_type,
+                "effective_tier": resolution.effective_tier,
+                "applied_promotion_id": (
+                    str(resolution.applied_promotion.id)
+                    if resolution.applied_promotion
+                    else ""
+                ),
             },
         )
 

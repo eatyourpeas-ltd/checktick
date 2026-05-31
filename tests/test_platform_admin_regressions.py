@@ -4,7 +4,7 @@ from django.urls import reverse
 import pytest
 
 from checktick_app.core.billing import create_subscription_for_user
-from checktick_app.core.models import PricingOverride
+from checktick_app.core.models import PricingOverride, Promotion
 from checktick_app.surveys.models import Organization
 
 User = get_user_model()
@@ -82,6 +82,44 @@ def test_checkout_uses_active_pricing_override(monkeypatch):
 
     assert subscription_id == "SUB_123"
     assert captured["amount"] == overridden_amount
+
+
+@pytest.mark.django_db
+def test_checkout_uses_account_promotion_amount(monkeypatch):
+    user = User.objects.create_user(
+        username="billing_promo_regression",
+        email="billing-promo-regression@test.com",
+        password=TEST_PASSWORD,
+    )
+    base_amount = settings.SUBSCRIPTION_TIERS["pro"]["amount"]
+    Promotion.objects.create(
+        name="Account fixed discount",
+        scope_type=Promotion.ScopeType.ACCOUNT,
+        target_user=user,
+        effect_type=Promotion.EffectType.FIXED_DISCOUNT,
+        effect_value="1.00",
+        is_active=True,
+    )
+
+    captured = {}
+
+    def fake_create_subscription(**kwargs):
+        captured.update(kwargs)
+        return {"id": "SUB_PROMO_123"}
+
+    monkeypatch.setattr(
+        "checktick_app.core.billing.payment_client.create_subscription",
+        fake_create_subscription,
+    )
+
+    subscription_id = create_subscription_for_user(
+        user=user,
+        tier="pro",
+        mandate_id="MD123",
+    )
+
+    assert subscription_id == "SUB_PROMO_123"
+    assert captured["amount"] == base_amount - 100
 
 
 @pytest.mark.django_db

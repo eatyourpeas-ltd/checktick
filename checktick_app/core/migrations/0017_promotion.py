@@ -15,7 +15,15 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="Promotion",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
                 ("name", models.CharField(max_length=255)),
                 (
                     "code",
@@ -31,7 +39,11 @@ class Migration(migrations.Migration):
                 (
                     "scope_type",
                     models.CharField(
-                        choices=[("platform", "Platform"), ("tier", "Tier"), ("account", "Account")],
+                        choices=[
+                            ("platform", "Platform"),
+                            ("tier", "Tier"),
+                            ("account", "Account"),
+                        ],
                         max_length=20,
                     ),
                 ),
@@ -162,14 +174,22 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="promotion",
-            index=models.Index(fields=["scope_type", "is_active"], name="core_promot_scope_t_adfecc_idx"),
+            index=models.Index(
+                fields=["scope_type", "is_active"],
+                name="core_promot_scope_t_adfecc_idx",
+            ),
         ),
         migrations.AddIndex(
             model_name="promotion",
-            index=models.Index(fields=["target_tier", "is_active"], name="core_promot_target__c6fdd4_idx"),
+            index=models.Index(
+                fields=["target_tier", "is_active"],
+                name="core_promot_target__c6fdd4_idx",
+            ),
         ),
         migrations.AddIndex(
             model_name="promotion",
-            index=models.Index(fields=["starts_at", "ends_at"], name="core_promot_starts__e93836_idx"),
+            index=models.Index(
+                fields=["starts_at", "ends_at"], name="core_promot_starts__e93836_idx"
+            ),
         ),
     ]

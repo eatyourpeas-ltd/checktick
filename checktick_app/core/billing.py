@@ -19,6 +19,9 @@ from django.contrib.auth import get_user_model
 import requests
 
 from checktick_app.core.models import PricingOverride
+from checktick_app.core.services.promotion_resolver import (
+    resolve_effective_pricing_for_user,
+)
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -592,9 +595,11 @@ def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
     if not tier_config:
         raise ValueError(f"Unknown subscription tier: {tier}")
 
+    resolution = resolve_effective_pricing_for_user(user, base_tier=tier)
+
     subscription = payment_client.create_subscription(
         mandate_id=mandate_id,
-        amount=tier_config["amount"],
+        amount=resolution.effective_amount_pence,
         currency=tier_config.get("currency", "GBP"),
         interval_unit=tier_config.get("interval_unit", "monthly"),
         interval=tier_config.get("interval", 1),
@@ -603,6 +608,12 @@ def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
             "user_id": str(user.id),
             "username": user.username,
             "tier": tier,
+            "effective_tier": resolution.effective_tier,
+            "applied_promotion_id": (
+                str(resolution.applied_promotion.id)
+                if resolution.applied_promotion
+                else ""
+            ),
         },
     )
 

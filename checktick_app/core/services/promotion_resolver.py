@@ -80,7 +80,10 @@ def _apply_effect(
     if not promotion:
         return amount_pence, amount_ex_vat_pence, tier
 
-    if promotion.effect_type == Promotion.EffectType.TIER_OVERRIDE and promotion.effect_tier:
+    if (
+        promotion.effect_type == Promotion.EffectType.TIER_OVERRIDE
+        and promotion.effect_tier
+    ):
         tier_amount, tier_amount_ex_vat = _get_tier_pricing(promotion.effect_tier)
         return tier_amount, tier_amount_ex_vat, promotion.effect_tier
 
@@ -90,22 +93,36 @@ def _apply_effect(
 
     if promotion.effect_type == Promotion.EffectType.FIXED_DISCOUNT:
         discount = max(0, _to_pence(promotion.effect_value))
-        return max(0, amount_pence - discount), max(0, amount_ex_vat_pence - discount), tier
+        return (
+            max(0, amount_pence - discount),
+            max(0, amount_ex_vat_pence - discount),
+            tier,
+        )
 
     if promotion.effect_type == Promotion.EffectType.PERCENT_DISCOUNT:
-        ratio = max(Decimal("0"), min(Decimal("100"), promotion.effect_value)) / Decimal("100")
+        ratio = max(
+            Decimal("0"), min(Decimal("100"), promotion.effect_value)
+        ) / Decimal("100")
         discount_inc = int(Decimal(amount_pence) * ratio)
         discount_ex = int(Decimal(amount_ex_vat_pence) * ratio)
-        return max(0, amount_pence - discount_inc), max(0, amount_ex_vat_pence - discount_ex), tier
+        return (
+            max(0, amount_pence - discount_inc),
+            max(0, amount_ex_vat_pence - discount_ex),
+            tier,
+        )
 
     return amount_pence, amount_ex_vat_pence, tier
 
 
-def resolve_effective_pricing_for_user(user, at_time=None) -> PromotionResolution:
+def resolve_effective_pricing_for_user(
+    user,
+    at_time=None,
+    base_tier: str | None = None,
+) -> PromotionResolution:
     """Resolve effective promotion and price for a user account."""
     at = at_time or timezone.now()
     profile = UserProfile.get_or_create_for_user(user)
-    tier = profile.account_tier
+    tier = base_tier or profile.account_tier
     base_amount, base_amount_ex_vat = _get_tier_pricing(tier)
 
     promotions = Promotion.objects.filter(
@@ -165,11 +182,20 @@ def resolve_effective_pricing_for_team(team, at_time=None) -> PromotionResolutio
     )
 
 
-def resolve_effective_pricing_for_organization(org, at_time=None) -> PromotionResolution:
+def resolve_effective_pricing_for_organization(
+    org,
+    at_time=None,
+    base_amount_pence: int | None = None,
+    base_amount_ex_vat_pence: int | None = None,
+) -> PromotionResolution:
     """Resolve effective promotion and price for an organisation account."""
     at = at_time or timezone.now()
     tier = UserProfile.AccountTier.ORGANIZATION
-    base_amount, base_amount_ex_vat = _get_tier_pricing(tier)
+    if base_amount_pence is None or base_amount_ex_vat_pence is None:
+        base_amount, base_amount_ex_vat = _get_tier_pricing(tier)
+    else:
+        base_amount = base_amount_pence
+        base_amount_ex_vat = base_amount_ex_vat_pence
 
     promotions = Promotion.objects.filter(
         Q(scope_type=Promotion.ScopeType.PLATFORM)

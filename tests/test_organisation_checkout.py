@@ -20,6 +20,7 @@ from django.urls import reverse
 from django.utils import timezone
 import pytest
 
+from checktick_app.core.models import Promotion
 from checktick_app.surveys.models import Organization
 
 User = get_user_model()
@@ -117,6 +118,12 @@ def flat_rate_organisation(db):
 def client():
     """Create a test client."""
     return Client()
+
+
+@pytest.fixture(autouse=True)
+def disable_ratelimit(settings):
+    """Avoid cross-test throttling in this high-request module."""
+    settings.RATELIMIT_ENABLE = False
 
 
 # ============================================================================
@@ -615,6 +622,42 @@ class TestCheckoutWorkflow:
         # £100 flat rate + 20% VAT = £120 = 12000 pence
         call_kwargs = mock_payment_client.create_subscription.call_args.kwargs
         assert call_kwargs["amount"] == 12000  # 12000 pence
+
+    @pytest.mark.django_db
+    @patch("checktick_app.surveys.views_organisation_billing.payment_client")
+    def test_complete_checkout_applies_account_promotion_amount(
+        self, mock_payment_client, client, organisation_pending_setup
+    ):
+        """Account-scope org promotions should adjust checkout subscription amount."""
+        Promotion.objects.create(
+            name="Org 10% discount",
+            scope_type=Promotion.ScopeType.ACCOUNT,
+            target_organization=organisation_pending_setup,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=Decimal("10.00"),
+            is_active=True,
+        )
+        mock_payment_client.complete_redirect_flow.return_value = {
+            "id": "RF0001234",
+            "links": {"customer": "CU001", "mandate": "MD001"},
+        }
+        mock_payment_client.create_subscription.return_value = {"id": "SU001"}
+
+        session = client.session
+        session["org_checkout_session_token"] = "test_session"
+        session["org_checkout_org_id"] = organisation_pending_setup.id
+        session.save()
+
+        url = reverse(
+            "surveys:organisation_checkout_complete",
+            kwargs={"token": organisation_pending_setup.setup_token},
+        )
+        client.get(url, {"redirect_flow_id": "RF0001234"})
+
+        call_kwargs = mock_payment_client.create_subscription.call_args.kwargs
+        # Base: 10 seats * 5.00 = 50.00 ex VAT => 60.00 inc VAT (6000 pence)
+        # Promotion: 10% discount => 5400 pence
+        assert call_kwargs["amount"] == 5400
 
 
 # ============================================================================

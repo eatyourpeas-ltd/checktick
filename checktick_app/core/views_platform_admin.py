@@ -16,7 +16,12 @@ from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 
 from checktick_app.core.models import Promotion, UserProfile
-from checktick_app.surveys.models import Organization, OrganizationMembership, Survey, Team
+from checktick_app.surveys.models import (
+    Organization,
+    OrganizationMembership,
+    Survey,
+    Team,
+)
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -1212,9 +1217,11 @@ def platform_admin_promotions(request: HttpRequest) -> HttpResponse:
         promotions = promotions.filter(scope_type=scope_filter)
 
     if status_filter == "active":
-        promotions = promotions.filter(is_active=True).filter(
-            Q(starts_at__isnull=True) | Q(starts_at__lte=now)
-        ).filter(Q(ends_at__isnull=True) | Q(ends_at__gte=now))
+        promotions = (
+            promotions.filter(is_active=True)
+            .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=now))
+            .filter(Q(ends_at__isnull=True) | Q(ends_at__gte=now))
+        )
     elif status_filter == "scheduled":
         promotions = promotions.filter(is_active=True, starts_at__gt=now)
     elif status_filter == "expired":
@@ -1382,7 +1389,9 @@ def platform_admin_promotion_create(request: HttpRequest) -> HttpResponse:
 @superuser_required
 @require_http_methods(["POST"])
 @ratelimit(key="user", rate="30/h", block=True)
-def platform_admin_promotion_toggle(request: HttpRequest, promotion_id: int) -> HttpResponse:
+def platform_admin_promotion_toggle(
+    request: HttpRequest, promotion_id: int
+) -> HttpResponse:
     """Toggle active status for a promotion rule."""
     promotion = get_object_or_404(Promotion, id=promotion_id)
     promotion.is_active = not promotion.is_active

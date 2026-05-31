@@ -1019,16 +1019,10 @@ class Promotion(models.Model):
         if self.starts_at and self.ends_at and self.starts_at >= self.ends_at:
             raise ValidationError("Promotion start time must be before end time.")
 
-        if (
-            self.effect_type == self.EffectType.TIER_OVERRIDE
-            and not self.effect_tier
-        ):
+        if self.effect_type == self.EffectType.TIER_OVERRIDE and not self.effect_tier:
             raise ValidationError("Tier override effects must set an effect tier.")
 
-        if (
-            self.effect_type != self.EffectType.TIER_OVERRIDE
-            and self.effect_tier
-        ):
+        if self.effect_type != self.EffectType.TIER_OVERRIDE and self.effect_tier:
             raise ValidationError(
                 "Effect tier is only valid when effect type is Tier Override."
             )

@@ -8,10 +8,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 import pytest
 
-from checktick_app.core.models import Payment
-from checktick_app.core.models import Promotion
-from checktick_app.core.models import PricingOverride
-from checktick_app.core.models import UserProfile
+from checktick_app.core.models import Payment, PricingOverride, Promotion, UserProfile
 from checktick_app.surveys.models import Organization, OrganizationMembership
 
 User = get_user_model()
