@@ -6,7 +6,9 @@ import logging
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import user_passes_test
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -111,6 +113,8 @@ def _render_organization_form(
         "create_target": create_target,
         "selected_scope_label": dict(TIER_SCOPE_CHOICES).get(scope, scope),
         "billing_choices": Organization.BillingType.choices,
+        "promotion_effect_choices": Promotion.EffectType.choices,
+        "tier_choices": UserProfile.AccountTier.choices,
     }
     if editing:
         context.update(
@@ -437,47 +441,115 @@ def organization_create(request: HttpRequest) -> HttpResponse:
             if not owner_email:
                 errors.append("Account email is required.")
 
+            apply_promotion = request.POST.get("apply_promotion") == "on"
+            promotion_name = request.POST.get("promotion_name", "").strip()
+            promotion_effect_type = request.POST.get(
+                "promotion_effect_type", ""
+            ).strip()
+            promotion_effect_value_raw = request.POST.get(
+                "promotion_effect_value", "0"
+            ).strip()
+            promotion_effect_tier = request.POST.get(
+                "promotion_effect_tier", ""
+            ).strip()
+            promotion_ends_at_raw = request.POST.get("promotion_ends_at", "").strip()
+            promotion_reason = request.POST.get("promotion_reason", "").strip()
+
+            promotion_effect_value = Decimal("0")
+            promotion_ends_at = None
+
+            if apply_promotion:
+                valid_effect_types = {
+                    choice for choice, _label in Promotion.EffectType.choices
+                }
+                if not promotion_name:
+                    errors.append(
+                        "Promotion name is required when applying a promotion."
+                    )
+                if promotion_effect_type not in valid_effect_types:
+                    errors.append("A valid promotion effect type is required.")
+                try:
+                    promotion_effect_value = Decimal(promotion_effect_value_raw)
+                except InvalidOperation:
+                    errors.append("Promotion effect value must be a valid number.")
+
+                if promotion_ends_at_raw:
+                    try:
+                        promotion_ends_at = timezone.datetime.fromisoformat(
+                            promotion_ends_at_raw
+                        )
+                        promotion_ends_at = timezone.make_aware(promotion_ends_at)
+                    except ValueError:
+                        errors.append("Promotion end datetime must be valid.")
+
             if errors:
                 for error in errors:
                     messages.error(request, error)
                 return _render_organization_form(request, form_data=request.POST)
 
-            account = User.objects.filter(email__iexact=owner_email).first()
-            created = False
-            if not account:
-                import secrets
+            with transaction.atomic():
+                account = User.objects.filter(email__iexact=owner_email).first()
+                created = False
+                if not account:
+                    import secrets
 
-                username = _generate_unique_username_from_email(owner_email)
-                account = User.objects.create_user(
-                    username=username,
-                    email=owner_email,
-                    password=secrets.token_urlsafe(32),
+                    username = _generate_unique_username_from_email(owner_email)
+                    account = User.objects.create_user(
+                        username=username,
+                        email=owner_email,
+                        password=secrets.token_urlsafe(32),
+                    )
+                    account.is_active = True
+                    if name:
+                        name_parts = name.split(maxsplit=1)
+                        account.first_name = name_parts[0]
+                        if len(name_parts) > 1:
+                            account.last_name = name_parts[1]
+                    account.save()
+                    created = True
+
+                profile = UserProfile.get_or_create_for_user(account)
+                profile.account_tier = scope
+                profile.subscription_status = (
+                    UserProfile.SubscriptionStatus.NONE
+                    if scope == UserProfile.AccountTier.FREE
+                    else UserProfile.SubscriptionStatus.ACTIVE
                 )
-                account.is_active = True
-                if name:
-                    name_parts = name.split(maxsplit=1)
-                    account.first_name = name_parts[0]
-                    if len(name_parts) > 1:
-                        account.last_name = name_parts[1]
-                account.save()
-                created = True
+                profile.tier_changed_at = timezone.now()
+                profile.save(
+                    update_fields=[
+                        "account_tier",
+                        "subscription_status",
+                        "tier_changed_at",
+                        "updated_at",
+                    ]
+                )
 
-            profile = UserProfile.get_or_create_for_user(account)
-            profile.account_tier = scope
-            profile.subscription_status = (
-                UserProfile.SubscriptionStatus.NONE
-                if scope == UserProfile.AccountTier.FREE
-                else UserProfile.SubscriptionStatus.ACTIVE
-            )
-            profile.tier_changed_at = timezone.now()
-            profile.save(
-                update_fields=[
-                    "account_tier",
-                    "subscription_status",
-                    "tier_changed_at",
-                    "updated_at",
-                ]
-            )
+                if apply_promotion:
+                    promotion = Promotion(
+                        name=promotion_name,
+                        scope_type=Promotion.ScopeType.ACCOUNT,
+                        target_user=account,
+                        effect_type=promotion_effect_type,
+                        effect_value=promotion_effect_value,
+                        effect_tier=promotion_effect_tier,
+                        is_active=True,
+                        starts_at=timezone.now(),
+                        ends_at=promotion_ends_at,
+                        reason=promotion_reason,
+                        created_by=request.user,
+                        updated_by=request.user,
+                    )
+                    try:
+                        promotion.full_clean()
+                    except ValidationError as exc:
+                        for message in exc.messages:
+                            messages.error(request, message)
+                        return _render_organization_form(
+                            request,
+                            form_data=request.POST,
+                        )
+                    promotion.save()
 
             if created:
                 messages.success(
@@ -488,6 +560,12 @@ def organization_create(request: HttpRequest) -> HttpResponse:
                 messages.success(
                     request,
                     f"Account '{account.email}' updated to {dict(TIER_SCOPE_CHOICES).get(scope, scope)} tier.",
+                )
+
+            if apply_promotion:
+                messages.success(
+                    request,
+                    f"Promotion '{promotion_name}' applied to account '{account.email}'.",
                 )
 
             return redirect(

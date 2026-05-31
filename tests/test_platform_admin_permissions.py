@@ -313,6 +313,57 @@ class TestOrganizationCreateAccess:
         )
         assert not Organization.objects.filter(name="Tier User").exists()
 
+    def test_superuser_can_add_tier_account_with_promotion(self, client, superuser):
+        """Tier account create should optionally apply a promotion in one submit."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_org_create")
+
+        response = client.post(
+            f"{url}?mode=tier&scope=pro",
+            {
+                "name": "Promo Account",
+                "owner_email": "promo-account@example.com",
+                "apply_promotion": "on",
+                "promotion_name": "Welcome 15%",
+                "promotion_effect_type": Promotion.EffectType.PERCENT_DISCOUNT,
+                "promotion_effect_value": "15.00",
+                "promotion_ends_at": "2030-01-01T12:00",
+                "promotion_reason": "Onboarding incentive",
+            },
+        )
+
+        assert response.status_code == 302
+        account = User.objects.get(email="promo-account@example.com")
+        promotion = Promotion.objects.get(target_user=account, name="Welcome 15%")
+        assert promotion.scope_type == Promotion.ScopeType.ACCOUNT
+        assert promotion.effect_type == Promotion.EffectType.PERCENT_DISCOUNT
+        assert str(promotion.effect_value) == "15.00"
+
+    def test_invalid_promotion_input_blocks_tier_account_create(
+        self, client, superuser
+    ):
+        """Invalid one-step promotion fields should keep user on form and avoid account create."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_org_create")
+
+        response = client.post(
+            f"{url}?mode=tier&scope=pro",
+            {
+                "name": "Broken Promo Account",
+                "owner_email": "broken-promo-account@example.com",
+                "apply_promotion": "on",
+                "promotion_name": "Broken Promo",
+                "promotion_effect_type": Promotion.EffectType.PERCENT_DISCOUNT,
+                "promotion_effect_value": "not-a-number",
+            },
+        )
+
+        assert response.status_code == 200
+        assert not User.objects.filter(
+            email="broken-promo-account@example.com"
+        ).exists()
+        assert not Promotion.objects.filter(name="Broken Promo").exists()
+
     def test_tier_scope_persists_when_scope_missing_in_query(self, client, superuser):
         """Selected tier scope should be retained when moving between pages."""
         client.force_login(superuser)
