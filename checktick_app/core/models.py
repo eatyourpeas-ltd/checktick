@@ -980,6 +980,59 @@ class Promotion(models.Model):
     def clean(self):
         from django.core.exceptions import ValidationError
 
+        now = timezone.now()
+
+        if self.pk:
+            existing = (
+                Promotion.objects.filter(pk=self.pk)
+                .values(
+                    "scope_type",
+                    "target_tier",
+                    "target_user_id",
+                    "target_team_id",
+                    "target_organization_id",
+                    "effect_type",
+                    "effect_value",
+                    "effect_tier",
+                    "priority",
+                    "starts_at",
+                    "ends_at",
+                )
+                .first()
+            )
+
+            if existing:
+                starts_at = existing["starts_at"]
+                has_started = starts_at is None or starts_at <= now
+
+                # Once a promotion has reached its effective window, lock billing-impacting
+                # terms and require deactivation + replacement instead of in-place edits.
+                if has_started:
+                    locked_field_names = [
+                        "scope_type",
+                        "target_tier",
+                        "target_user_id",
+                        "target_team_id",
+                        "target_organization_id",
+                        "effect_type",
+                        "effect_value",
+                        "effect_tier",
+                        "priority",
+                        "starts_at",
+                        "ends_at",
+                    ]
+                    changed = [
+                        field
+                        for field in locked_field_names
+                        if existing[field] != getattr(self, field)
+                    ]
+                    if changed:
+                        raise ValidationError(
+                            "This promotion has already started and billing-impacting fields "
+                            "cannot be edited in place. Deactivate it and create a new "
+                            "promotion instead."
+                        )
+
         has_account_target = any(
             [self.target_user_id, self.target_team_id, self.target_organization_id]
         )

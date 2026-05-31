@@ -6,7 +6,7 @@ priority: 2
 
 # Privacy Notice
 
-**Last Updated: 6 April 2026**
+**Last Updated: 31 May 2026**
 
 This Privacy Notice explains how Eatyourpeas Ltd ("we", "us", or "our"), trading as CheckTick, collects, uses, stores, and protects your personal information when you use our survey platform and services.
 
@@ -57,9 +57,21 @@ For survey data you collect, **you are the data controller** and Eatyourpeas Ltd
 
 Handled by payment provider (**GoCardless**). We do not store bank details.
 
-### 2.5 Cookies
+### 2.5 Promotions and Billing Metadata
+
+When account promotions are used, we may process limited billing metadata to apply and support those pricing terms, including:
+
+* Promotion identifier and scope (platform, tier, or account)
+* Effective pricing/tier outcome used for subscription setup or updates
+* Administrative reason/internal support notes
+* Audit metadata (who created/updated/deactivated a promotion and when)
+
+For billing integrity and auditability, promotions that have started are treated as financially immutable. If terms need to change, the existing promotion is ended/deactivated and a new promotion is created.
+
+### 2.6 Cookies
 
 Used only for:
+
 * Authentication
 * Session management
 * Security
@@ -231,4 +243,4 @@ We will notify users of material changes.
 
 ---
 
-**Last Updated: 6 April 2026**
+**Last Updated: 31 May 2026**
