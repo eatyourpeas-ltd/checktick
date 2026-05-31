@@ -493,6 +493,45 @@ class PaymentClient:
         response = self._make_request("GET", f"/payments/{payment_id}")
         return response.get("payments", {})
 
+    def refund_payment(
+        self,
+        payment_id: str,
+        amount: int,
+        total_amount_confirmation: int | None = None,
+        metadata: Optional[dict] = None,
+    ) -> dict:
+        """Create a refund for an existing payment.
+
+        Args:
+            payment_id: GoCardless payment ID
+            amount: Refund amount in minor units
+            total_amount_confirmation: Expected total payment amount in minor units
+            metadata: Optional refund metadata
+
+        Returns:
+            Refund payload from the provider
+
+        Reference: https://developer.gocardless.com/api-reference/#refunds-create-a-refund
+        """
+        data = {
+            "refunds": {
+                "amount": str(amount),
+                "links": {"payment": payment_id},
+            }
+        }
+        if total_amount_confirmation is not None:
+            data["refunds"]["total_amount_confirmation"] = str(
+                total_amount_confirmation
+            )
+        if metadata is not None:
+            data["refunds"]["metadata"] = metadata
+
+        logger.info(
+            f"Creating refund ({self.environment}): payment={payment_id}, amount={amount}"
+        )
+        response = self._make_request("POST", "/refunds", data=data)
+        return response.get("refunds", {})
+
 
 # Global client instance
 payment_client = PaymentClient()

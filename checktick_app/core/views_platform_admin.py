@@ -14,10 +14,12 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 
-from checktick_app.core.models import Promotion, UserProfile
+from checktick_app.core.billing import PaymentAPIError, PaymentClient
+from checktick_app.core.models import Payment, Promotion, UserProfile
 from checktick_app.surveys.models import (
     AuditLog,
     Organization,
@@ -146,6 +148,43 @@ def _promotion_return_url(mode: str, scope: str) -> str:
     return reverse("core:platform_admin_promotions")
 
 
+def _billing_return_url(request: HttpRequest) -> str:
+    params = request.POST.copy() if request.method == "POST" else request.GET.copy()
+    explicit_return_to = params.get("return_to", "").strip()
+    if explicit_return_to and url_has_allowed_host_and_scheme(
+        explicit_return_to,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return explicit_return_to
+
+    mode = params.get("mode", "").strip().lower()
+    scope = params.get("scope", "").strip().lower()
+    status_filter = params.get("status", "").strip()
+    date_from = params.get("from", "").strip()
+    date_to = params.get("to", "").strip()
+    search_query = params.get("q", "").strip()
+
+    query_parts = []
+    if mode == "tier":
+        query_parts.append(f"mode=tier&scope={scope}")
+    elif mode:
+        query_parts.append(f"mode={mode}")
+    if status_filter:
+        query_parts.append(f"status={status_filter}")
+    if date_from:
+        query_parts.append(f"from={date_from}")
+    if date_to:
+        query_parts.append(f"to={date_to}")
+    if search_query:
+        query_parts.append(f"q={search_query}")
+
+    base_url = reverse("core:platform_admin_billing")
+    if not query_parts:
+        return base_url
+    return f"{base_url}?{'&'.join(query_parts)}"
+
+
 def _promotion_form_context(
     *,
     mode: str,
@@ -175,7 +214,9 @@ def _promotion_form_data_from_instance(promotion: Promotion) -> dict:
         "description": promotion.description,
         "scope_type": promotion.scope_type,
         "target_tier": promotion.target_tier,
-        "target_user_email": promotion.target_user.email if promotion.target_user else "",
+        "target_user_email": (
+            promotion.target_user.email if promotion.target_user else ""
+        ),
         "target_team_id": str(promotion.target_team_id or ""),
         "target_organization_id": str(promotion.target_organization_id or ""),
         "effect_type": promotion.effect_type,
@@ -331,9 +372,18 @@ def platform_admin_dashboard(request: HttpRequest) -> HttpResponse:
         promotion_qs = promotion_qs.filter(
             Q(scope_type=Promotion.ScopeType.PLATFORM)
             | Q(scope_type=Promotion.ScopeType.TIER, target_tier=scope)
-            | Q(scope_type=Promotion.ScopeType.ACCOUNT, target_user__profile__account_tier=scope)
-            | Q(scope_type=Promotion.ScopeType.ACCOUNT, target_team__owner__profile__account_tier=scope)
-            | Q(scope_type=Promotion.ScopeType.ACCOUNT, target_organization__owner__profile__account_tier=scope)
+            | Q(
+                scope_type=Promotion.ScopeType.ACCOUNT,
+                target_user__profile__account_tier=scope,
+            )
+            | Q(
+                scope_type=Promotion.ScopeType.ACCOUNT,
+                target_team__owner__profile__account_tier=scope,
+            )
+            | Q(
+                scope_type=Promotion.ScopeType.ACCOUNT,
+                target_organization__owner__profile__account_tier=scope,
+            )
         ).distinct()
 
     now = timezone.now()
@@ -412,6 +462,9 @@ def organization_list(request: HttpRequest) -> HttpResponse:
         users_page = paginator.get_page(page)
 
         users_on_page = list(users_page.object_list)
+        for account in users_on_page:
+            account.refundable_payments = []
+
         if users_on_page:
             now = timezone.now()
             account_promotions = (
@@ -443,6 +496,22 @@ def organization_list(request: HttpRequest) -> HttpResponse:
                 .filter(Q(ends_at__isnull=True) | Q(ends_at__gte=now))
             )
 
+            refundable_payments = (
+                Payment.objects.filter(
+                    user__in=users_on_page,
+                    status=Payment.PaymentStatus.CONFIRMED,
+                    payment_provider="gocardless",
+                    payment_id__isnull=False,
+                )
+                .exclude(payment_id="")
+                .order_by("user_id", "-invoice_date", "-created_at")
+            )
+
+            refundable_payment_map = {}
+            for payment in refundable_payments:
+                payment.amount_inc_vat_pounds = f"{payment.amount_inc_vat / 100:.2f}"
+                refundable_payment_map.setdefault(payment.user_id, []).append(payment)
+
             def _priority_tuple(promotion: Promotion, specificity: int) -> tuple:
                 return (
                     -specificity,
@@ -473,11 +542,13 @@ def organization_list(request: HttpRequest) -> HttpResponse:
                 account.active_promotion = applied
                 account.active_promotion_ends_at = applied.ends_at if applied else None
                 account.has_active_promotion = applied is not None
+                account.refundable_payments = refundable_payment_map.get(account.id, [])
 
         context = {
             "mode": mode,
             "scope": scope,
             "is_tier_user_view": True,
+            "current_list_url": request.get_full_path(),
             "users": users_page,
             "status_filter": status_filter,
             "search": search,
@@ -1443,6 +1514,72 @@ def platform_admin_billing(request: HttpRequest) -> HttpResponse:
     }
 
     return render(request, "core/platform_admin/billing.html", context)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+@ratelimit(key="user", rate="20/h", block=True)
+def platform_admin_billing_refund(
+    request: HttpRequest, payment_id: int
+) -> HttpResponse:
+    """Refund a confirmed payment from the billing timeline."""
+    payment = get_object_or_404(Payment.objects.select_related("user"), id=payment_id)
+    return_url = _billing_return_url(request)
+
+    if payment.status == Payment.PaymentStatus.REFUNDED:
+        messages.warning(request, "Payment has already been refunded.")
+        return redirect(return_url)
+
+    if payment.status != Payment.PaymentStatus.CONFIRMED:
+        messages.error(request, "Only confirmed payments can be refunded.")
+        return redirect(return_url)
+
+    if payment.payment_provider != "gocardless":
+        messages.error(request, "Refunds are only implemented for GoCardless payments.")
+        return redirect(return_url)
+
+    if not payment.payment_id:
+        messages.error(
+            request, "Payment is missing the provider payment ID required for refund."
+        )
+        return redirect(return_url)
+
+    refund_reason = request.POST.get("refund_reason", "").strip()
+    payment_client = PaymentClient()
+    try:
+        refund = payment_client.refund_payment(
+            payment.payment_id,
+            amount=payment.amount_inc_vat,
+            total_amount_confirmation=payment.amount_inc_vat,
+            metadata={
+                "invoice_number": payment.invoice_number,
+                "payment_record_id": str(payment.id),
+                "reason": refund_reason,
+            },
+        )
+    except PaymentAPIError as exc:
+        messages.error(request, f"Refund failed: {exc}")
+        return redirect(return_url)
+
+    payment.status = Payment.PaymentStatus.REFUNDED
+    payment.save(update_fields=["status", "updated_at"])
+
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.ACCOUNT,
+        action=AuditLog.Action.PROMOTION_RECONCILED,
+        severity=AuditLog.Severity.INFO,
+        message=f"Payment {payment.invoice_number} refunded via platform admin.",
+        metadata={
+            "payment_id": str(payment.id),
+            "invoice_number": payment.invoice_number,
+            "provider_payment_id": payment.payment_id,
+            "provider_refund_id": refund.get("id", ""),
+            "refund_reason": refund_reason,
+        },
+    )
+    messages.success(request, f"Payment {payment.invoice_number} refunded.")
+    return redirect(return_url)
 
 
 @superuser_required

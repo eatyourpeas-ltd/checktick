@@ -12,8 +12,18 @@ Implemented in code:
 
 Still future work:
 
-1. Refund/credit adjustment workflow from the billing timeline. This remains blocked until provider-side refund support is added to the payment client and policy decisions are finalised.
+1. Refund lifecycle completion and policy hardening:
+   - webhook/event handling for provider-side refund states
+   - customer notification after refund execution
+   - explicit policy for partial refunds, credits, and reconciliation edge cases
 2. Adjustment reporting for refunds and credits tied to promotions.
+
+Recently completed since the original draft:
+
+1. Provider-side refund creation support in `PaymentClient` for GoCardless refunds.
+2. Platform admin refund actions from the billing timeline for confirmed GoCardless payments.
+3. Tier account-list refund access, including choosing from multiple refundable payments per account.
+4. Audit logging and safe return navigation for admin-initiated refunds.
 
 ## Scope
 

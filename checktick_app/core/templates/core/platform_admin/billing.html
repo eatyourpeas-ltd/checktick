@@ -104,6 +104,7 @@
               <th>{% trans "Amount" %}</th>
               <th>{% trans "Status" %}</th>
               <th>{% trans "Provider Ref" %}</th>
+              <th>{% trans "Actions" %}</th>
             </tr>
           </thead>
           <tbody>
@@ -129,10 +130,29 @@
                   {% endif %}
                 </td>
                 <td class="font-mono text-xs">{{ payment.payment_id|default:payment.subscription_id|default:"-" }}</td>
+                <td>
+                  {% if payment.status == 'confirmed' and payment.payment_provider == 'gocardless' and payment.payment_id %}
+                    <form method="post" action="{% url 'core:platform_admin_billing_refund' payment_id=payment.id %}" class="flex flex-col gap-2">
+                      {% csrf_token %}
+                      <input type="hidden" name="mode" value="{{ mode }}">
+                      {% if mode == 'tier' %}
+                        <input type="hidden" name="scope" value="{{ scope }}">
+                      {% endif %}
+                      <input type="hidden" name="status" value="{{ status_filter }}">
+                      <input type="hidden" name="from" value="{{ date_from }}">
+                      <input type="hidden" name="to" value="{{ date_to }}">
+                      <input type="hidden" name="q" value="{{ search_query }}">
+                      <input type="text" name="refund_reason" class="input input-bordered input-xs w-40" placeholder="{% trans 'Reason' %}">
+                      <button type="submit" class="btn btn-xs btn-error btn-outline">{% trans "Refund" %}</button>
+                    </form>
+                  {% else %}
+                    <span class="text-xs text-base-content/50">{% trans "No action" %}</span>
+                  {% endif %}
+                </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="7" class="text-center text-base-content/60 py-8">{% trans "No payments found for current filters." %}</td>
+                <td colspan="8" class="text-center text-base-content/60 py-8">{% trans "No payments found for current filters." %}</td>
               </tr>
             {% endfor %}
           </tbody>

@@ -4,14 +4,21 @@ Tests for platform admin permissions - ensuring only superusers can access.
 
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
 import pytest
 
+from checktick_app.core.billing import PaymentAPIError
 from checktick_app.core.models import Payment, PricingOverride, Promotion, UserProfile
-from checktick_app.surveys.models import AuditLog, Organization, OrganizationMembership, Team
+from checktick_app.surveys.models import (
+    AuditLog,
+    Organization,
+    OrganizationMembership,
+    Team,
+)
 
 User = get_user_model()
 
@@ -262,6 +269,84 @@ class TestOrganizationListAccess:
         assert f"target_user_email={account.email}".encode() in response.content
         assert b"platform-admin/billing" in response.content
         assert b"q=plain-pro-account" in response.content
+
+    def test_tier_account_list_includes_refund_picker_for_account_payments(
+        self, client, superuser
+    ):
+        """Tier account rows should expose a refund picker for all refundable payments."""
+        account = User.objects.create_user(
+            username="refund-pro-account",
+            email="refund-pro-account@test.com",
+            password=TEST_PASSWORD,
+        )
+        account.profile.account_tier = UserProfile.AccountTier.PRO
+        account.profile.save()
+
+        older_payment = Payment.objects.create(
+            user=account,
+            invoice_number="INV-REFUND-OLDER",
+            invoice_date=date(2026, 1, 10),
+            payment_provider="gocardless",
+            payment_id="PMT-OLDER",
+            subscription_id="SUB-OLDER",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=account.email,
+            customer_name=account.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        latest_payment = Payment.objects.create(
+            user=account,
+            invoice_number="INV-REFUND-LATEST",
+            invoice_date=date(2026, 1, 11),
+            payment_provider="gocardless",
+            payment_id="PMT-LATEST",
+            subscription_id="SUB-LATEST",
+            tier="pro",
+            amount_ex_vat=700,
+            vat_amount=140,
+            amount_inc_vat=840,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=account.email,
+            customer_name=account.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_org_list")
+        response = client.get(url, {"mode": "tier", "scope": "pro"})
+
+        assert response.status_code == 200
+        assert b"Refund Payment" in response.content
+        assert b"INV-REFUND-OLDER" in response.content
+        assert b"INV-REFUND-LATEST" in response.content
+        assert (
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": latest_payment.id},
+            ).encode()
+            in response.content
+        )
+        assert (
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": older_payment.id},
+            ).encode()
+            in response.content
+        )
+
+        users = list(response.context["users"].object_list)
+        matched = [u for u in users if u.email == account.email]
+        assert matched
+        assert [payment.id for payment in matched[0].refundable_payments] == [
+            latest_payment.id,
+            older_payment.id,
+        ]
 
 
 # ============================================================================
@@ -947,6 +1032,135 @@ class TestPlatformBillingAccess:
         assert b"INV-TEST-PRO" in response.content
         assert b"INV-TEST-FREE" not in response.content
 
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_superuser_can_refund_confirmed_payment(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """Platform admin should be able to refund confirmed GoCardless payments."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-1",
+            invoice_date=date(2026, 1, 12),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-1",
+            subscription_id="SUB-REF-1",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        mock_payment_client = mock_payment_client_cls.return_value
+        mock_payment_client.refund_payment.return_value = {"id": "RF-123"}
+
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {"refund_reason": "Promotion correction", "mode": "platform"},
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.REFUNDED
+        mock_payment_client.refund_payment.assert_called_once_with(
+            "PMT-REF-1",
+            amount=600,
+            total_amount_confirmation=600,
+            metadata={
+                "invoice_number": "INV-REFUND-1",
+                "payment_record_id": str(payment.id),
+                "reason": "Promotion correction",
+            },
+        )
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_refund_failure_does_not_mark_payment_refunded(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """If provider refund fails, local payment state must remain confirmed."""
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-FAIL",
+            invoice_date=date(2026, 1, 13),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-FAIL",
+            subscription_id="SUB-REF-FAIL",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        mock_payment_client = mock_payment_client_cls.return_value
+        mock_payment_client.refund_payment.side_effect = PaymentAPIError(
+            "provider refused"
+        )
+
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {"refund_reason": "Promotion correction", "mode": "platform"},
+        )
+
+        assert response.status_code == 302
+        payment.refresh_from_db()
+        assert payment.status == Payment.PaymentStatus.CONFIRMED
+
+    @patch("checktick_app.core.views_platform_admin.PaymentClient")
+    def test_refund_from_tier_account_list_returns_to_account_list(
+        self, mock_payment_client_cls, client, superuser, regular_user
+    ):
+        """Refund posts from the tier account list should return to the same tier list URL."""
+        regular_user.profile.account_tier = UserProfile.AccountTier.PRO
+        regular_user.profile.save(update_fields=["account_tier", "updated_at"])
+
+        payment = Payment.objects.create(
+            user=regular_user,
+            invoice_number="INV-REFUND-RETURN",
+            invoice_date=date(2026, 1, 14),
+            payment_provider="gocardless",
+            payment_id="PMT-REF-RETURN",
+            subscription_id="SUB-REF-RETURN",
+            tier="pro",
+            amount_ex_vat=500,
+            vat_amount=100,
+            amount_inc_vat=600,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=regular_user.email,
+            customer_name=regular_user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        mock_payment_client = mock_payment_client_cls.return_value
+        mock_payment_client.refund_payment.return_value = {"id": "RF-RETURN"}
+
+        client.force_login(superuser)
+        return_to = f"{reverse('core:platform_admin_org_list')}?mode=tier&scope=pro"
+        response = client.post(
+            reverse(
+                "core:platform_admin_billing_refund",
+                kwargs={"payment_id": payment.id},
+            ),
+            {"return_to": return_to},
+        )
+
+        assert response.status_code == 302
+        assert response.url == return_to
+
 
 # ============================================================================
 # Platform Promotions Access Tests
@@ -1049,7 +1263,9 @@ class TestPlatformPromotionsAccess:
                 "effect_value": "15.00",
                 "effect_tier": "",
                 "priority": "100",
-                "starts_at": (timezone.now() + timedelta(days=3)).strftime("%Y-%m-%dT%H:%M"),
+                "starts_at": (timezone.now() + timedelta(days=3)).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
                 "ends_at": "",
                 "reason": "Refined offer",
                 "internal_notes": "Ops note",
@@ -1066,7 +1282,9 @@ class TestPlatformPromotionsAccess:
             metadata__promotion_id=str(promotion.id),
         ).exists()
 
-    def test_started_promotion_edit_rejects_billing_term_change(self, client, superuser):
+    def test_started_promotion_edit_rejects_billing_term_change(
+        self, client, superuser
+    ):
         """Started promotions should reject billing-impacting edits in admin UI."""
         promotion = Promotion.objects.create(
             name="Started Promo",
@@ -1093,7 +1311,9 @@ class TestPlatformPromotionsAccess:
                 "effect_value": "25.00",
                 "effect_tier": "",
                 "priority": "100",
-                "starts_at": (timezone.now() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M"),
+                "starts_at": (timezone.now() - timedelta(days=1)).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
                 "ends_at": "",
                 "reason": "",
                 "internal_notes": "",

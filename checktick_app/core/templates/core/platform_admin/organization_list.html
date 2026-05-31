@@ -136,6 +136,28 @@
                    class="btn btn-xs btn-primary">{% trans "Apply Promotion" %}</a>
                 <a href="{% url 'core:platform_admin_billing' %}?mode=tier&scope={{ scope }}&q={{ account.email }}"
                    class="btn btn-xs btn-ghost">{% trans "Billing History" %}</a>
+                {% if account.refundable_payments %}
+                <details class="dropdown dropdown-end">
+                  <summary class="btn btn-xs btn-error btn-outline m-0">{% trans "Refund Payment" %}</summary>
+                  <ul class="menu dropdown-content z-[1] p-2 shadow bg-base-100 rounded-box w-72 gap-2">
+                    {% for payment in account.refundable_payments %}
+                    <li class="border border-base-300 rounded-box p-2">
+                      <div class="flex items-start justify-between gap-3 p-0">
+                        <div>
+                          <div class="font-mono text-xs">{{ payment.invoice_number }}</div>
+                          <div class="text-xs text-base-content/70">{{ payment.invoice_date|date:"d M Y" }} · £{{ payment.amount_inc_vat_pounds }}</div>
+                        </div>
+                        <form method="post" action="{% url 'core:platform_admin_billing_refund' payment_id=payment.id %}">
+                          {% csrf_token %}
+                          <input type="hidden" name="return_to" value="{{ current_list_url }}">
+                          <button type="submit" class="btn btn-xs btn-error btn-outline whitespace-nowrap">{% trans "Refund" %}</button>
+                        </form>
+                      </div>
+                    </li>
+                    {% endfor %}
+                  </ul>
+                </details>
+                {% endif %}
               </div>
             </td>
           </tr>

@@ -93,6 +93,11 @@ urlpatterns = [
         name="platform_admin_billing",
     ),
     path(
+        "platform-admin/billing/<int:payment_id>/refund/",
+        views_platform_admin.platform_admin_billing_refund,
+        name="platform_admin_billing_refund",
+    ),
+    path(
         "platform-admin/pricing/",
         views_platform_admin.pricing_overrides,
         name="platform_admin_pricing",
