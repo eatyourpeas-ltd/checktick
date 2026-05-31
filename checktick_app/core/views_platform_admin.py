@@ -1,6 +1,6 @@
 """Platform admin views for superuser management of organizations."""
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import logging
 
 from django.contrib import messages
@@ -18,6 +18,53 @@ from checktick_app.surveys.models import Organization, OrganizationMembership, S
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+def _render_organization_form(
+    request: HttpRequest,
+    *,
+    editing: bool = False,
+    org: Organization | None = None,
+    form_data=None,
+) -> HttpResponse:
+    context = {
+        "billing_choices": Organization.BillingType.choices,
+    }
+    if editing:
+        context.update(
+            {
+                "org": org,
+                "status_choices": Organization.SubscriptionStatus.choices,
+                "editing": True,
+            }
+        )
+    if form_data is not None:
+        context["form_data"] = form_data
+    return render(request, "core/platform_admin/organization_form.html", context)
+
+
+def _parse_decimal_field(value: str, label: str, errors: list[str]) -> Decimal | None:
+    if not value:
+        return None
+    try:
+        return Decimal(value)
+    except InvalidOperation:
+        errors.append(f"{label} must be a valid number.")
+        return None
+
+
+def _parse_max_seats(value: str, errors: list[str]) -> int | None:
+    if not value:
+        return None
+    try:
+        parsed = int(value)
+    except ValueError:
+        errors.append("Maximum seats must be a whole number.")
+        return None
+    if parsed < 1:
+        errors.append("Maximum seats must be at least 1.")
+        return None
+    return parsed
 
 
 def superuser_required(view_func):
@@ -154,27 +201,38 @@ def organization_create(request: HttpRequest) -> HttpResponse:
 
         # Validation
         errors = []
+        valid_billing_types = {
+            choice for choice, _label in Organization.BillingType.choices
+        }
+
         if not name:
             errors.append("Organization name is required.")
         if not owner_email:
             errors.append("Owner email is required.")
+        if billing_type not in valid_billing_types:
+            errors.append("Invalid billing type selected.")
 
         if billing_type == Organization.BillingType.PER_SEAT and not price_per_seat:
             errors.append("Price per seat is required for per-seat billing.")
         if billing_type == Organization.BillingType.FLAT_RATE and not flat_rate_price:
             errors.append("Flat rate price is required for flat-rate billing.")
 
+        parsed_price_per_seat = _parse_decimal_field(
+            price_per_seat,
+            "Price per seat",
+            errors,
+        )
+        parsed_flat_rate_price = _parse_decimal_field(
+            flat_rate_price,
+            "Flat rate price",
+            errors,
+        )
+        parsed_max_seats = _parse_max_seats(max_seats, errors)
+
         if errors:
             for error in errors:
                 messages.error(request, error)
-            return render(
-                request,
-                "core/platform_admin/organization_form.html",
-                {
-                    "billing_choices": Organization.BillingType.choices,
-                    "form_data": request.POST,
-                },
-            )
+            return _render_organization_form(request, form_data=request.POST)
 
         # Find or create owner
         owner = User.objects.filter(email__iexact=owner_email).first()
@@ -196,9 +254,9 @@ def organization_create(request: HttpRequest) -> HttpResponse:
             name=name,
             owner=owner,
             billing_type=billing_type,
-            price_per_seat=Decimal(price_per_seat) if price_per_seat else None,
-            flat_rate_price=Decimal(flat_rate_price) if flat_rate_price else None,
-            max_seats=int(max_seats) if max_seats else None,
+            price_per_seat=parsed_price_per_seat,
+            flat_rate_price=parsed_flat_rate_price,
+            max_seats=parsed_max_seats,
             billing_contact_email=billing_contact_email or owner_email,
             billing_notes=billing_notes,
             created_by=request.user,
@@ -226,13 +284,7 @@ def organization_create(request: HttpRequest) -> HttpResponse:
         return redirect("core:platform_admin_org_detail", org_id=org.id)
 
     # GET - show form
-    return render(
-        request,
-        "core/platform_admin/organization_form.html",
-        {
-            "billing_choices": Organization.BillingType.choices,
-        },
-    )
+    return _render_organization_form(request)
 
 
 @superuser_required
@@ -287,27 +339,64 @@ def organization_edit(request: HttpRequest, org_id: int) -> HttpResponse:
     org = get_object_or_404(Organization, id=org_id)
 
     if request.method == "POST":
-        # Update fields
-        org.name = request.POST.get("name", org.name).strip()
-        org.billing_type = request.POST.get("billing_type", org.billing_type)
-
+        name = request.POST.get("name", org.name).strip()
+        billing_type = request.POST.get("billing_type", org.billing_type)
         price_per_seat = request.POST.get("price_per_seat", "").strip()
-        org.price_per_seat = Decimal(price_per_seat) if price_per_seat else None
-
         flat_rate_price = request.POST.get("flat_rate_price", "").strip()
-        org.flat_rate_price = Decimal(flat_rate_price) if flat_rate_price else None
-
         max_seats = request.POST.get("max_seats", "").strip()
-        org.max_seats = int(max_seats) if max_seats else None
-
-        org.billing_contact_email = request.POST.get(
-            "billing_contact_email", ""
-        ).strip()
-        org.billing_notes = request.POST.get("billing_notes", "").strip()
-        org.subscription_status = request.POST.get(
+        billing_contact_email = request.POST.get("billing_contact_email", "").strip()
+        billing_notes = request.POST.get("billing_notes", "").strip()
+        subscription_status = request.POST.get(
             "subscription_status", org.subscription_status
         )
-        org.is_active = request.POST.get("is_active") == "on"
+        is_active = request.POST.get("is_active") == "on"
+
+        errors = []
+        valid_billing_types = {
+            choice for choice, _label in Organization.BillingType.choices
+        }
+        valid_subscription_statuses = {
+            choice for choice, _label in Organization.SubscriptionStatus.choices
+        }
+
+        if not name:
+            errors.append("Organization name is required.")
+        if billing_type not in valid_billing_types:
+            errors.append("Invalid billing type selected.")
+        if subscription_status not in valid_subscription_statuses:
+            errors.append("Invalid subscription status selected.")
+        if billing_type == Organization.BillingType.PER_SEAT and not price_per_seat:
+            errors.append("Price per seat is required for per-seat billing.")
+        if billing_type == Organization.BillingType.FLAT_RATE and not flat_rate_price:
+            errors.append("Flat rate price is required for flat-rate billing.")
+
+        parsed_price_per_seat = _parse_decimal_field(
+            price_per_seat,
+            "Price per seat",
+            errors,
+        )
+        parsed_flat_rate_price = _parse_decimal_field(
+            flat_rate_price,
+            "Flat rate price",
+            errors,
+        )
+        parsed_max_seats = _parse_max_seats(max_seats, errors)
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return _render_organization_form(request, editing=True, org=org)
+
+        # Update fields
+        org.name = name
+        org.billing_type = billing_type
+        org.price_per_seat = parsed_price_per_seat
+        org.flat_rate_price = parsed_flat_rate_price
+        org.max_seats = parsed_max_seats
+        org.billing_contact_email = billing_contact_email
+        org.billing_notes = billing_notes
+        org.subscription_status = subscription_status
+        org.is_active = is_active
 
         org.save()
 
@@ -315,16 +404,7 @@ def organization_edit(request: HttpRequest, org_id: int) -> HttpResponse:
         messages.success(request, f"Organization '{org.name}' updated successfully.")
         return redirect("core:platform_admin_org_detail", org_id=org.id)
 
-    return render(
-        request,
-        "core/platform_admin/organization_form.html",
-        {
-            "org": org,
-            "billing_choices": Organization.BillingType.choices,
-            "status_choices": Organization.SubscriptionStatus.choices,
-            "editing": True,
-        },
-    )
+    return _render_organization_form(request, editing=True, org=org)
 
 
 @superuser_required

@@ -18,6 +18,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 import requests
 
+from checktick_app.core.models import PricingOverride
+
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
@@ -586,7 +588,7 @@ def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
         PaymentAPIError: If subscription creation fails
         ValueError: If tier is not configured
     """
-    tier_config = settings.SUBSCRIPTION_TIERS.get(tier)
+    tier_config = PricingOverride.get_effective_tiers().get(tier)
     if not tier_config:
         raise ValueError(f"Unknown subscription tier: {tier}")
 
