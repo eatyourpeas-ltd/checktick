@@ -1213,6 +1213,30 @@ def platform_admin_promotions(request: HttpRequest) -> HttpResponse:
         "created_by",
     ).order_by("scope_type", "priority", "-created_at")
 
+    if mode == "tier":
+        tier_scope_filter = (
+            Q(scope_type=Promotion.ScopeType.PLATFORM)
+            | Q(scope_type=Promotion.ScopeType.TIER, target_tier=scope)
+            | Q(
+                scope_type=Promotion.ScopeType.ACCOUNT,
+                target_user__profile__account_tier=scope,
+            )
+            | Q(
+                scope_type=Promotion.ScopeType.ACCOUNT,
+                target_team__owner__profile__account_tier=scope,
+            )
+            | Q(
+                scope_type=Promotion.ScopeType.ACCOUNT,
+                target_organization__owner__profile__account_tier=scope,
+            )
+        )
+        if scope == UserProfile.AccountTier.ORGANIZATION:
+            tier_scope_filter |= Q(
+                scope_type=Promotion.ScopeType.ACCOUNT,
+                target_organization__isnull=False,
+            )
+        promotions = promotions.filter(tier_scope_filter).distinct()
+
     if scope_filter in {choice for choice, _label in Promotion.ScopeType.choices}:
         promotions = promotions.filter(scope_type=scope_filter)
 
@@ -1277,6 +1301,13 @@ def platform_admin_promotion_create(request: HttpRequest) -> HttpResponse:
         if not name:
             errors.append("Name is required.")
 
+        if (
+            mode == "tier"
+            and scope_type == Promotion.ScopeType.TIER
+            and not target_tier
+        ):
+            target_tier = scope
+
         try:
             effect_value_decimal = Decimal(effect_value)
         except InvalidOperation:
@@ -1326,6 +1357,44 @@ def platform_admin_promotion_create(request: HttpRequest) -> HttpResponse:
             except (ValueError, Organization.DoesNotExist):
                 errors.append("Target organisation ID is invalid.")
 
+        if mode == "tier":
+            if (
+                scope_type == Promotion.ScopeType.TIER
+                and target_tier
+                and target_tier != scope
+            ):
+                errors.append(
+                    "In tier mode, tier-scope promotions must target the selected tier."
+                )
+            if (
+                scope_type == Promotion.ScopeType.ACCOUNT
+                and target_user is not None
+                and target_user.profile.account_tier != scope
+            ):
+                errors.append(
+                    "Target user must belong to the selected tier in tier mode."
+                )
+            if (
+                scope_type == Promotion.ScopeType.ACCOUNT
+                and target_team is not None
+                and target_team.owner.profile.account_tier != scope
+            ):
+                errors.append(
+                    "Target team owner must belong to the selected tier in tier mode."
+                )
+            if (
+                scope_type == Promotion.ScopeType.ACCOUNT
+                and target_organization is not None
+                and scope
+                not in {
+                    UserProfile.AccountTier.ORGANIZATION,
+                    UserProfile.AccountTier.ENTERPRISE,
+                }
+            ):
+                errors.append(
+                    "Organisation targets are only valid in Organisation or Enterprise tier mode."
+                )
+
         if not errors:
             promotion = Promotion(
                 name=name,
@@ -1371,6 +1440,10 @@ def platform_admin_promotion_create(request: HttpRequest) -> HttpResponse:
             )
 
         messages.success(request, f"Promotion '{name}' created.")
+        if mode == "tier":
+            return redirect(
+                f"{reverse('core:platform_admin_promotions')}?mode=tier&scope={scope}"
+            )
         return redirect("core:platform_admin_promotions")
 
     return render(
@@ -1400,4 +1473,10 @@ def platform_admin_promotion_toggle(
 
     status_text = "activated" if promotion.is_active else "deactivated"
     messages.success(request, f"Promotion '{promotion.name}' {status_text}.")
+    mode = request.POST.get("mode", "").strip().lower()
+    scope = request.POST.get("scope", "").strip().lower()
+    if mode == "tier" and scope in TIER_SCOPE_VALUES:
+        return redirect(
+            f"{reverse('core:platform_admin_promotions')}?mode=tier&scope={scope}"
+        )
     return redirect("core:platform_admin_promotions")

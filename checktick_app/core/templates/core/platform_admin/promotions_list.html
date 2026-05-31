@@ -9,12 +9,16 @@
     <h2 class="text-2xl font-bold">{% trans "Promotions" %}</h2>
     <p class="text-base-content/70">{% trans "Manage platform, tier, and account-level promotion rules." %}</p>
   </div>
-  <a href="{% url 'core:platform_admin_promotion_create' %}" class="btn btn-primary">+ {% trans "Create Promotion" %}</a>
+  <a href="{% url 'core:platform_admin_promotion_create' %}?mode={{ mode }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}" class="btn btn-primary">+ {% trans "Create Promotion" %}</a>
 </div>
 
 <div class="card bg-base-100 shadow mb-6">
   <div class="card-body py-4">
     <form method="get" class="flex flex-wrap gap-4 items-end">
+      <input type="hidden" name="mode" value="{{ mode }}">
+      {% if mode == 'tier' %}
+      <input type="hidden" name="scope" value="{{ scope }}">
+      {% endif %}
       <div class="form-control">
         <label class="label py-1"><span class="label-text text-sm">{% trans "Search" %}</span></label>
         <input type="text" name="q" value="{{ search }}" class="input input-sm input-bordered w-56" placeholder="{% trans 'Name, code, description' %}">
@@ -38,7 +42,7 @@
         </select>
       </div>
       <button type="submit" class="btn btn-sm btn-primary">{% trans "Filter" %}</button>
-      <a href="{% url 'core:platform_admin_promotions' %}" class="btn btn-sm btn-ghost">{% trans "Clear" %}</a>
+      <a href="{% url 'core:platform_admin_promotions' %}?mode={{ mode }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}" class="btn btn-sm btn-ghost">{% trans "Clear" %}</a>
     </form>
   </div>
 </div>
@@ -104,6 +108,10 @@
             <td>
               <form method="post" action="{% url 'core:platform_admin_promotion_toggle' promotion_id=promotion.id %}">
                 {% csrf_token %}
+                <input type="hidden" name="mode" value="{{ mode }}">
+                {% if mode == 'tier' %}
+                <input type="hidden" name="scope" value="{{ scope }}">
+                {% endif %}
                 <button type="submit" class="btn btn-xs btn-ghost">
                   {% if promotion.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}
                 </button>

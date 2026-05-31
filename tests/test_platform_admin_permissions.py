@@ -9,7 +9,7 @@ from django.urls import reverse
 import pytest
 
 from checktick_app.core.models import Payment, PricingOverride, Promotion, UserProfile
-from checktick_app.surveys.models import Organization, OrganizationMembership
+from checktick_app.surveys.models import Organization, OrganizationMembership, Team
 
 User = get_user_model()
 
@@ -874,3 +874,86 @@ class TestPlatformPromotionsAccess:
 
         promotion.refresh_from_db()
         assert promotion.is_active is False
+
+    def test_tier_mode_filters_promotions_by_selected_scope(self, client, superuser):
+        """Tier mode should only surface promotions relevant to selected tier scope."""
+        pro_user = User.objects.create_user(
+            username="promo-pro-user",
+            email="promo-pro-user@test.com",
+            password=TEST_PASSWORD,
+        )
+        pro_user.profile.account_tier = UserProfile.AccountTier.PRO
+        pro_user.profile.save()
+        team_owner = User.objects.create_user(
+            username="promo-team-owner",
+            email="promo-team-owner@test.com",
+            password=TEST_PASSWORD,
+        )
+        team_owner.profile.account_tier = UserProfile.AccountTier.TEAM_SMALL
+        team_owner.profile.save()
+        team = Team.objects.create(
+            name="Promo Team", owner=team_owner, size=Team.Size.SMALL
+        )
+
+        Promotion.objects.create(
+            name="Global Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=5,
+            is_active=True,
+        )
+        Promotion.objects.create(
+            name="Team Small Tier Promo",
+            scope_type=Promotion.ScopeType.TIER,
+            target_tier=UserProfile.AccountTier.TEAM_SMALL,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            is_active=True,
+        )
+        Promotion.objects.create(
+            name="Pro User Promo",
+            scope_type=Promotion.ScopeType.ACCOUNT,
+            target_user=pro_user,
+            effect_type=Promotion.EffectType.FIXED_DISCOUNT,
+            effect_value=2,
+            is_active=True,
+        )
+        Promotion.objects.create(
+            name="Team Account Promo",
+            scope_type=Promotion.ScopeType.ACCOUNT,
+            target_team=team,
+            effect_type=Promotion.EffectType.FIXED_DISCOUNT,
+            effect_value=3,
+            is_active=True,
+        )
+
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotions")
+        response = client.get(url, {"mode": "tier", "scope": "team_small"})
+
+        assert response.status_code == 200
+        assert b"Global Promo" in response.content
+        assert b"Team Small Tier Promo" in response.content
+        assert b"Team Account Promo" in response.content
+        assert b"Pro User Promo" not in response.content
+
+    def test_tier_mode_create_defaults_target_tier(self, client, superuser):
+        """Tier mode creation should default tier-scope promotion target tier to selected scope."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.post(
+            f"{url}?mode=tier&scope=team_medium",
+            {
+                "name": "Tier Mode Promo",
+                "scope_type": "tier",
+                "target_tier": "",
+                "effect_type": "percent_discount",
+                "effect_value": "10.00",
+                "priority": "50",
+                "is_active": "on",
+            },
+        )
+
+        assert response.status_code == 302
+        promotion = Promotion.objects.get(name="Tier Mode Promo")
+        assert promotion.target_tier == UserProfile.AccountTier.TEAM_MEDIUM

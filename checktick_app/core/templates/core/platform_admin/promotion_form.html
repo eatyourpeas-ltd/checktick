@@ -5,7 +5,7 @@
 
 {% block platform_content %}
 <div class="flex items-center gap-4 mb-6">
-  <a href="{% url 'core:platform_admin_promotions' %}" class="btn btn-ghost btn-sm">← {% trans "Back" %}</a>
+  <a href="{% url 'core:platform_admin_promotions' %}?mode={{ mode }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}" class="btn btn-ghost btn-sm">← {% trans "Back" %}</a>
   <h2 class="text-xl font-semibold">{% trans "Create Promotion" %}</h2>
 </div>
 
@@ -13,6 +13,10 @@
   <div class="card-body">
     <form method="post" class="space-y-4">
       {% csrf_token %}
+      <input type="hidden" name="mode" value="{{ mode }}">
+      {% if mode == 'tier' %}
+      <input type="hidden" name="scope" value="{{ scope }}">
+      {% endif %}
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="form-control">
@@ -125,7 +129,7 @@
       </div>
 
       <div class="card-actions justify-end mt-6">
-        <a href="{% url 'core:platform_admin_promotions' %}" class="btn btn-ghost">{% trans "Cancel" %}</a>
+        <a href="{% url 'core:platform_admin_promotions' %}?mode={{ mode }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}" class="btn btn-ghost">{% trans "Cancel" %}</a>
         <button type="submit" class="btn btn-primary">{% trans "Create Promotion" %}</button>
       </div>
     </form>

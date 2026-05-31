@@ -20,8 +20,10 @@ import requests
 
 from checktick_app.core.models import PricingOverride
 from checktick_app.core.services.promotion_resolver import (
+    resolve_effective_pricing_for_team,
     resolve_effective_pricing_for_user,
 )
+from checktick_app.surveys.models import Team
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -595,7 +597,17 @@ def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
     if not tier_config:
         raise ValueError(f"Unknown subscription tier: {tier}")
 
-    resolution = resolve_effective_pricing_for_user(user, base_tier=tier)
+    if tier.startswith("team_"):
+        existing_team = Team.objects.filter(owner=user).first()
+        if existing_team is not None:
+            resolution = resolve_effective_pricing_for_team(
+                existing_team,
+                base_tier=tier,
+            )
+        else:
+            resolution = resolve_effective_pricing_for_user(user, base_tier=tier)
+    else:
+        resolution = resolve_effective_pricing_for_user(user, base_tier=tier)
 
     subscription = payment_client.create_subscription(
         mandate_id=mandate_id,

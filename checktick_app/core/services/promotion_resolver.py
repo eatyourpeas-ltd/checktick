@@ -150,11 +150,15 @@ def resolve_effective_pricing_for_user(
     )
 
 
-def resolve_effective_pricing_for_team(team, at_time=None) -> PromotionResolution:
+def resolve_effective_pricing_for_team(
+    team,
+    at_time=None,
+    base_tier: str | None = None,
+) -> PromotionResolution:
     """Resolve effective promotion and price for a team account."""
     at = at_time or timezone.now()
     owner_profile = UserProfile.get_or_create_for_user(team.owner)
-    tier = owner_profile.account_tier
+    tier = base_tier or owner_profile.account_tier
     base_amount, base_amount_ex_vat = _get_tier_pricing(tier)
 
     promotions = Promotion.objects.filter(
