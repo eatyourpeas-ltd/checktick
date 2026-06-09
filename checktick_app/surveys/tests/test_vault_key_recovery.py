@@ -7,11 +7,17 @@ These tests verify the ethical data recovery flow using mocked Vault responses.
 import os
 from unittest.mock import Mock, patch
 
+import pytest
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
-import pytest
 
+from checktick_app.settings import TESTING
+from checktick_app.surveys.tests.test_platform_key_versioning import (
+    TEST_ADMIN_PASSWORD,
+    TEST_PASSWORD,
+    TEST_USERNAME,
+)
 from checktick_app.surveys.vault_client import VaultClient, VaultKeyNotFoundError
 
 User = get_user_model()
@@ -146,9 +152,9 @@ class TestVaultClientKeyDerivation(TestCase):
 
         reconstructed = client.get_platform_master_key(self.custodian_component)
 
-        assert (
-            reconstructed == self.platform_key
-        ), "Key should be reconstructed correctly"
+        assert reconstructed == self.platform_key, (
+            "Key should be reconstructed correctly"
+        )
 
 
 class TestVaultEscrowAndRecovery(TestCase):
@@ -179,9 +185,9 @@ class TestVaultEscrowAndRecovery(TestCase):
 
         # Create database objects
         self.user = User.objects.create_user(
-            username="testuser",
+            username=TEST_USERNAME,
             email="test.user@example.com",
-            password="testpass123",
+            password=TEST_PASSWORD,
         )
         self.admin_user = User.objects.create_superuser(
             username="admin",
@@ -359,9 +365,9 @@ class TestEmailVerification(TestCase):
 
         # Create database objects
         self.user = User.objects.create_user(
-            username="testuser",
+            username=TEST_USERNAME,
             email="real.user@example.com",
-            password="testpass123",
+            password=TEST_PASSWORD,
         )
         self.survey = Survey.objects.create(
             owner=self.user,
@@ -755,12 +761,12 @@ class TestFullRecoveryWorkflow(TestCase):
         self.user = User.objects.create_user(
             username="testuser",
             email="dr.smith@hospital.nhs.uk",
-            password="testpass123",
+            password=TEST_PASSWORD,
         )
         self.admin_user = User.objects.create_superuser(
             username="admin",
             email="admin@example.com",
-            password="adminpass123",
+            password=TEST_ADMIN_PASSWORD,
         )
         self.survey = Survey.objects.create(
             owner=self.user,
@@ -887,9 +893,9 @@ class TestFullRecoveryWorkflow(TestCase):
             hierarchy_key=recovered_org_key,
         )
 
-        assert (
-            recovered_kek == survey_kek
-        ), "Org owner should be able to recover survey KEK"
+        assert recovered_kek == survey_kek, (
+            "Org owner should be able to recover survey KEK"
+        )
 
     @patch("checktick_app.surveys.vault_client.settings")
     def test_multiple_surveys_same_user(self, mock_settings):
@@ -911,8 +917,8 @@ class TestFullRecoveryWorkflow(TestCase):
         for i in range(3):
             survey = Survey.objects.create(
                 owner=self.user,
-                name=f"Test Survey {i+1}",
-                slug=f"test-survey-{i+1}",
+                name=f"Test Survey {i + 1}",
+                slug=f"test-survey-{i + 1}",
             )
             survey_keks[survey.id] = os.urandom(32)
 

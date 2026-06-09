@@ -14,7 +14,7 @@ category: dspt-9-it-protection
 * **Guest Accounts:** DISABLED on all business devices. No guest, temporary, or anonymous access permitted.
 * **Single User Per Device:** Each physical device is assigned to one individual. Only one standard user account exists per device for day-to-day operations.
 * **Standard User Accounts:** All {{ platform_name }} business activities (coding, email, web browsing, document editing) must be performed on a standard (non-administrator) user account.
-* **Administrator Accounts:** 
+* **Administrator Accounts:**
   - Maintained separately from standard user accounts
   - Only used for system-wide updates, software installation, or security configuration changes
   - Administrator credentials stored in encrypted password manager (Bitwarden/1Password)
@@ -44,8 +44,8 @@ category: dspt-9-it-protection
 * **Monthly Cloud Review:** Active cloud service accounts reviewed monthly as documented in Access Control Policy
 * **Leaver Process:** Immediate account removal within 1 hour of staff departure (documented in Access Control Policy section 4.1)
 
-**Last Policy Review:** 08/02/2026  
-**Next Review:** 08/02/2027  
+**Last Policy Review:** 08/02/2026
+**Next Review:** 08/02/2027
 **Cyber Essentials Requirement:** Control 1.2 - User Account Management
 
 ## 2. Software Restrictions

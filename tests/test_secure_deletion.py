@@ -11,9 +11,9 @@ These tests verify that:
 
 import os
 
+import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-import pytest
 
 from checktick_app.surveys.models import (
     DataExport,
@@ -22,6 +22,7 @@ from checktick_app.surveys.models import (
     SurveyResponse,
 )
 from checktick_app.surveys.services.export_service import ExportService
+from tests.test_export_encryption import PASSWORD, USERNAME
 
 User = get_user_model()
 
@@ -30,9 +31,9 @@ User = get_user_model()
 def user(db):
     """Create a test user."""
     return User.objects.create_user(
-        username="testuser",
+        username=USERNAME,
         email="test@example.com",
-        password="testpass123",
+        password=PASSWORD,
     )
 
 
@@ -62,7 +63,7 @@ def encrypted_survey_with_data(db, user):
 
     # Set up encryption
     kek = os.urandom(32)
-    password = "TestPassword123"
+    password = PASSWORD
     recovery_words = ["abandon"] * 11 + ["about"]
     survey.set_dual_encryption(kek, password, recovery_words)
 
@@ -373,7 +374,7 @@ class TestRetentionServiceIntegration:
 
         # Set up encryption
         kek = os.urandom(32)
-        password = "TestPassword123"
+        password = PASSWORD
         recovery_words = ["abandon"] * 11 + ["about"]
         survey.set_dual_encryption(kek, password, recovery_words)
 

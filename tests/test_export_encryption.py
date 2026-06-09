@@ -9,10 +9,11 @@ These tests verify that:
 """
 
 import os
+from telnetlib import TELNET_PORT
 
+import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-import pytest
 
 from checktick_app.surveys.models import QuestionGroup, Survey, SurveyResponse
 from checktick_app.surveys.services import ExportService
@@ -20,14 +21,17 @@ from checktick_app.surveys.utils import decrypt_sensitive
 
 User = get_user_model()
 
+USERNAME = "testuser"
+PASSWORD = "testpass123"
+
 
 @pytest.fixture
 def user(db):
     """Create a test user."""
     return User.objects.create_user(
-        username="testuser",
+        username=USERNAME,
         email="test@example.com",
-        password="testpass123",
+        password=PASSWORD,
     )
 
 
@@ -77,7 +81,7 @@ def encrypted_survey_with_responses(db, user):
 
     # Set up encryption (dual-path)
     kek = os.urandom(32)
-    password = "TestPassword123"
+    password = PASSWORD
     recovery_words = ["abandon"] * 11 + ["about"]
     survey.set_dual_encryption(kek, password, recovery_words)
 
@@ -220,7 +224,7 @@ class TestExportServiceEncryption:
         """Export file should be encrypted when password is provided."""
         survey = plain_survey_with_responses
 
-        export_password = "ExportPassword123"
+        export_password = PASSWORD
 
         # Create export with file encryption
         export = ExportService.create_export(
@@ -237,7 +241,7 @@ class TestExportServiceEncryption:
     def test_export_csv_encryption_roundtrip(self):
         """Test that CSV encryption and decryption work correctly."""
         csv_data = "Response ID,Question1,Question2\n1,Answer1,Answer2\n"
-        password = "TestPassword123"
+        password = PASSWORD
 
         # Encrypt CSV
         encrypted_blob, key_id = ExportService._encrypt_csv(csv_data, password)
@@ -275,7 +279,7 @@ class TestExportServiceEncryption:
         export = ExportService.create_export(
             survey=survey,
             user=user,
-            password="ExportPass123",
+            password=PASSWORD,
             survey_key=kek,
         )
 
@@ -356,7 +360,7 @@ class TestExportIntegrationWithEncryption:
         export = ExportService.create_export(
             survey=survey,
             user=user,
-            password="DownloadPass123",  # Optional download protection
+            password=PASSWORD,  # Optional download protection
             survey_key=unlocked_kek,
         )
 

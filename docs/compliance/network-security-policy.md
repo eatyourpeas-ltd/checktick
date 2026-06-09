@@ -54,7 +54,7 @@ All administrative staff working with {{ platform_name }} systems must ensure th
 
 All devices used to access {{ platform_name }} administrative systems must have their native operating system firewalls activated:
 
-* **macOS Devices:** 
+* **macOS Devices:**
   - Application Firewall must be enabled
   - **Stealth Mode** must be activated to prevent device discovery on public networks
   - Block all incoming connections except those explicitly required for approved business applications
