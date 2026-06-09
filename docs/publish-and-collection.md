@@ -17,6 +17,17 @@ From your survey dashboard, click **Publish Settings** to configure:
 - **Who can access it**: Choose a visibility mode (see below)
 - **Security features**: Enable CAPTCHA for anonymous surveys
 
+## Question Order, Preview, and Live Publication
+
+Question-group order is now consistent across authoring and participant views.
+
+- The **Survey Map** on the `/groups/` page is the source of truth for display sequence.
+- Group order comes from `survey.style.group_order` (set when users reorder groups), with a safe fallback for missing/stale IDs:
+  1. groups explicitly listed in `group_order`
+  2. any remaining groups sorted by name (A→Z)
+- **Preview** (`/surveys/{slug}/preview/`) and **live survey routes** (`/take/`, `/take/unlisted/...`, `/take/token/...`) use the same runtime ordering and branching configuration.
+- Publishing does **not** reshuffle questions/groups; publication uses the current authored structure.
+
 ## Choosing a Visibility Mode
 
 CheckTick provides four ways to share your survey, from most secure to most open:
@@ -333,6 +344,12 @@ CheckTick includes enterprise-grade security:
 - Tokens can only be used once
 - Generate a new token for the participant
 - Check if the token has expired
+
+**"Groups appear in different order in preview vs live"**
+
+- Preview and live now share the same ordering pipeline.
+- Recheck the order in **Groups** (Survey Map reflects runtime order).
+- If order still looks wrong after major edits (clone/import/translation), save group order again from `/groups/` to refresh `group_order` state.
 
 **"CAPTCHA failed"**
 

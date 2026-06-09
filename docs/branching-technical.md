@@ -8,26 +8,27 @@ Technical documentation for developers implementing or extending branching logic
 
 ## Database Models
 
-### Condition Model
+### SurveyQuestionCondition Model
 
-The `Condition` model stores branching logic rules:
+The `SurveyQuestionCondition` model stores branching rules:
 
 ```python
-class Condition(models.Model):
-    question = models.ForeignKey(Question)  # The question this condition applies to
-    source_question = models.ForeignKey(Question)  # The question being checked
-    expected_value = models.CharField()  # The answer that triggers this condition
-    action = models.CharField(choices=ACTION_CHOICES)  # What to do when matched
-    target_question = models.ForeignKey(Question, null=True)  # Where to jump/skip to
-    order = models.IntegerField()  # Evaluation order for multiple conditions
+class SurveyQuestionCondition(models.Model):
+    question = models.ForeignKey(SurveyQuestion, related_name="conditions")
+    operator = models.CharField(choices=["eq", "neq", "contains", "gt", ...])
+    value = models.CharField(blank=True)
+    target_question = models.ForeignKey(SurveyQuestion, null=True, blank=True)
+    action = models.CharField(choices=["show", "jump_to", "skip", "end_survey"])
+    order = models.PositiveIntegerField(default=0)
+    description = models.CharField(blank=True)
 ```
 
 **Action Types:**
 
-- `SHOW` - Display the next question
-- `JUMP_TO` - Skip ahead to target_question
-- `SKIP` - Hide the next question
-- `END_SURVEY` - Complete the survey
+- `show` - Display target question when condition matches (hidden by default)
+- `jump_to` - Skip forward to target question
+- `skip` - Hide target question when condition matches
+- `end_survey` - End survey flow
 
 ### CollectionDefinition Model
 
@@ -35,43 +36,46 @@ Collections (groups) can be marked as repeating:
 
 ```python
 class CollectionDefinition(models.Model):
-    survey = models.ForeignKey(Survey)
-    name = models.CharField()
-    order = models.IntegerField()
-    max_count = models.IntegerField(null=True, blank=True)  # Null = unlimited
-    parent = models.ForeignKey('self', null=True)  # For nested collections
+    survey = models.ForeignKey(Survey, related_name="collections")
+    key = models.SlugField()  # unique per survey
+    name = models.CharField(max_length=255)
+    cardinality = models.CharField(choices=["one", "many"], default="many")
+    min_count = models.PositiveIntegerField(default=0)
+    max_count = models.PositiveIntegerField(null=True, blank=True)  # Null = unlimited
+    parent = models.ForeignKey("self", null=True, blank=True, related_name="children")
 ```
 
 ### CollectionItem Model
 
-Links questions or collections to their parent collection:
+Links question groups or child collections to a parent collection:
 
 ```python
 class CollectionItem(models.Model):
-    collection = models.ForeignKey(CollectionDefinition)
-    question = models.ForeignKey(Question, null=True)
-    nested_collection = models.ForeignKey(CollectionDefinition, null=True)
-    order = models.IntegerField()
+    collection = models.ForeignKey(CollectionDefinition, related_name="items")
+    item_type = models.CharField(choices=["group", "collection"])
+    group = models.ForeignKey(QuestionGroup, null=True, blank=True)
+    child_collection = models.ForeignKey(CollectionDefinition, null=True, blank=True)
+    order = models.PositiveIntegerField(default=0)
 ```
 
 **Rules:**
 
-- Either `question` or `nested_collection` must be set (not both)
+- Exactly one of `group` or `child_collection` must be set
 - Collections can be nested one level deep
-- Order determines the display sequence
+- `order` determines item order *within the collection definition*
 
 ## Relationships
 
-### Question → Conditions
+### SurveyQuestion → Conditions
 
-A question can have multiple conditions checked against it:
+A survey question can have multiple branching conditions:
 
 ```python
-# Conditions that check this question's answer
-source_conditions = question.source_conditions.all()
+# Outgoing conditions triggered by this question's answer
+outgoing_conditions = question.conditions.all()
 
-# Conditions that control whether this question appears
-target_conditions = question.condition_set.all()
+# Incoming conditions that point to this question
+incoming_conditions = question.incoming_conditions.all()
 ```
 
 ### Collections Hierarchy
@@ -79,12 +83,34 @@ target_conditions = question.condition_set.all()
 ```
 Survey
  └── CollectionDefinition (max_count=3)
-      ├── CollectionItem → Question 1
-      ├── CollectionItem → Question 2
-      └── CollectionItem → Nested CollectionDefinition
-           ├── CollectionItem → Question 3
-           └── CollectionItem → Question 4
+      ├── CollectionItem → Group A
+      ├── CollectionItem → Group B
+      └── CollectionItem → Child CollectionDefinition
+           ├── CollectionItem → Group C
+           └── CollectionItem → Group D
 ```
+
+## Runtime Ordering Contract
+
+To keep authoring and runtime consistent, ordering is derived through a shared pipeline in `checktick_app/surveys/views.py`:
+
+- `_resolved_group_order_ids(survey)`
+  - Uses `survey.style["group_order"]` first
+  - Filters stale/non-existent IDs
+  - Appends remaining groups sorted by name (case-insensitive), then id
+- `_order_questions_by_group(survey, questions)`
+  - Applies resolved group order
+  - Orders questions within each group by `(question.order, id)`
+- `_annotate_question_render_sequence(survey, questions)`
+  - Annotates `idx`, `group_start`, `group_end`, `has_show_condition`
+
+This same ordering is used by:
+
+- Survey Map API (`branching_data_api`)
+- Preview (`/surveys/{slug}/preview/`)
+- Live participant routes (`/take/`, `/take/unlisted/...`, `/take/token/...`)
+
+Result: **Survey Map = Preview = Live** for question-group sequence.
 
 ## API Endpoints
 
@@ -92,7 +118,7 @@ Survey
 
 **Endpoint:** `GET /surveys/{slug}/builder/api/branching-data/`
 
-Returns complete branching structure for visualization:
+Returns ordered branching structure for visualization:
 
 ```json
 {
@@ -100,6 +126,7 @@ Returns complete branching structure for visualization:
     {
       "id": "123",
       "text": "Question text",
+      "full_text": "Full question text",
       "order": 0,
       "group_name": "Demographics",
       "group_id": "456"
@@ -108,18 +135,19 @@ Returns complete branching structure for visualization:
   "conditions": {
     "123": [
       {
-        "source_question_text": "Previous question",
-        "expected_value": "Yes",
-        "action": "SHOW",
+        "operator": "eq",
+        "value": "Yes",
+        "action": "show",
         "target_question": "789",
-        "summary": "When 'Previous question' = 'Yes': Show next question"
+        "description": "",
+        "summary": "equals Yes"
       }
     ]
   },
   "group_repeats": {
     "456": {
       "is_repeated": true,
-      "count": 5  // or null for unlimited
+      "count": 5
     }
   }
 }
@@ -129,18 +157,20 @@ Returns complete branching structure for visualization:
 
 ### Condition Management
 
-**Create:** `POST /surveys/{slug}/builder/question/{qid}/conditions/`
-**Update:** `PUT /surveys/{slug}/builder/question/{qid}/conditions/{cid}/`
-**Delete:** `DELETE /surveys/{slug}/builder/question/{qid}/conditions/{cid}/`
+**Create:** `POST /surveys/{slug}/builder/questions/{qid}/conditions/create`
+**Update:** `POST /surveys/{slug}/builder/questions/{qid}/conditions/{cid}/update`
+**Delete:** `POST /surveys/{slug}/builder/questions/{qid}/conditions/{cid}/delete`
 
 Request body for create/update:
 
 ```json
 {
-  "source_question": 123,
-  "expected_value": "Yes",
-  "action": "JUMP_TO",
-  "target_question": 456
+  "operator": "eq",
+  "value": "Yes",
+  "action": "jump_to",
+  "target_question": 456,
+  "order": 0,
+  "description": ""
 }
 ```
 
@@ -223,23 +253,20 @@ if (p) colors.primary = `hsl(${p})`;
 ### Condition Syntax
 
 ```markdown
-## Source Question
+## Source Question {source-question}
 (mc_single)
 - Option A
 - Option B
--> Option A : {target-question-name}
--> Option B : SKIP
+? when equals "Option A" -> {target-question}
+? when equals "Option B" -> {another-target}
 ```
 
 **Syntax Rules:**
 
-- `->` prefix for condition lines
-- Format: `-> [value] : [action]`
-- Actions:
-  - `{question-name}` - Jump to question
-  - `SKIP` - Skip next question
-  - `END` - End survey
-  - Default (no action) - Show next
+- `? when` prefix for condition lines
+- Format: `? when <operator> <value> -> {target-id}`
+- Common operators: `equals`, `not_equals`, `contains`, `greater_than`, `less_than`
+- Targets can be question IDs (or group IDs during import, resolved to the first question in that group)
 
 ### Repeat Syntax
 
@@ -267,98 +294,47 @@ REPEAT-5
 
 ### Condition Evaluation
 
-When rendering a survey, conditions are evaluated in order:
+Client-side branching uses `checktick_app/static/js/branching.js` with config produced by `_build_branching_config(...)`.
 
-```python
-def should_show_question(question, user_responses):
-    conditions = question.condition_set.all().order_by('order')
+Supported actions and behavior:
 
-    for condition in conditions:
-        source_value = user_responses.get(condition.source_question.id)
+- `show`: target question is hidden by default, shown when an incoming SHOW condition matches
+- `jump_to`: hides questions between current and target in configured question order
+- `skip`: hides the target question when condition matches
+- `end_survey`: hides subsequent questions after trigger
 
-        if source_value == condition.expected_value:
-            if condition.action == 'SHOW':
-                return True
-            elif condition.action == 'JUMP_TO':
-                return condition.target_question
-            elif condition.action == 'SKIP':
-                return False
-            elif condition.action == 'END_SURVEY':
-                return 'END'
-
-    return True  # Default: show question
-```
+Condition evaluation follows question order from `branching_config.questions`, generated from the same runtime ordering pipeline used by Survey Map, preview, and live routes.
 
 ### Collection Instances
 
-When a user adds a repeat instance:
+Collection definitions remain backend entities for repeat metadata and response structuring.
 
-```python
-# Create new response instance
-instance = ResponseInstance.objects.create(
-    response=response,
-    collection=collection_definition,
-    instance_number=collection_definition.get_next_instance_number(response)
-)
-
-# Copy questions for this instance
-for item in collection_definition.collectionitem_set.all():
-    if item.question:
-        QuestionResponse.objects.create(
-            response=response,
-            question=item.question,
-            collection_instance=instance
-        )
-```
+Important: participant page rendering order is currently driven by the shared question-order pipeline (`group_order` + per-group question order), not by traversing `CollectionItem` trees.
 
 ## Testing
 
 ### Test Files
 
-- `test_bulk_upload_branching.py` - Markdown import with conditions
-- `test_conditions.py` - Condition model and evaluation
-- `test_collections.py` - Repeating groups
+- `test_bulk_upload_branching.py` - Markdown import with branching and repeats
+- `test_groups_reorder.py` - Group ordering persistence
+- `test_groups_repeats.py` - Repeat creation/edit/removal
+- `test_collections_models.py` - Collection model constraints
+- `test_runtime_ordering_consistency.py` - Survey Map/Preview/Live ordering consistency
 
 ### Key Test Scenarios
 
-**Branching:**
+**Branching + ordering consistency:**
 
-- Condition creation via API
-- Multiple conditions on one question
-- Invalid target questions
-- Circular dependencies
-- Conditions across groups
+- Survey Map ordering matches Preview ordering
+- Survey Map ordering matches live `/take/*` ordering
+- Partial/stale `group_order` IDs produce the same fallback order as `/groups/`
+- Branching config question order follows runtime ordered question list
 
-**Repeats:**
+Relevant coverage includes:
 
-- Unlimited repeats
-- Limited repeats (reaching max)
-- Nested collections
-- Collection ordering
-- Response instance creation
-
-### Example Test
-
-```python
-def test_condition_evaluation():
-    # Create survey with branching
-    q1 = Question.objects.create(text="Trigger question", type="mc_single")
-    q2 = Question.objects.create(text="Target question", type="text")
-
-    Condition.objects.create(
-        question=q2,
-        source_question=q1,
-        expected_value="Yes",
-        action="SHOW"
-    )
-
-    # Test evaluation
-    response = {"q1": "Yes"}
-    assert should_show_question(q2, response) == True
-
-    response = {"q1": "No"}
-    assert should_show_question(q2, response) == False
-```
+- `checktick_app/surveys/tests/test_runtime_ordering_consistency.py`
+- `checktick_app/surveys/tests/test_groups_reorder.py`
+- `checktick_app/surveys/tests/test_xss_survey_take.py`
 
 ## Performance Considerations
 
@@ -373,12 +349,12 @@ The branching data API performs:
 **Optimization:**
 
 ```python
-# Prefetch related data
-questions = Question.objects.filter(
+# Prefetch related data for branching visualisation
+questions = SurveyQuestion.objects.filter(
     survey=survey
 ).select_related('group').prefetch_related(
-    Prefetch('condition_set',
-             queryset=Condition.objects.select_related('source_question'))
+    'conditions',
+    'conditions__target_question'
 )
 ```
 
