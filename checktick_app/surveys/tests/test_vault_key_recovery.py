@@ -12,6 +12,11 @@ from django.test import TestCase
 from django.utils import timezone
 import pytest
 
+from checktick_app.surveys.tests.test_platform_key_versioning import (
+    TEST_ADMIN_PASSWORD,
+    TEST_PASSWORD,
+    TEST_USERNAME,
+)
 from checktick_app.surveys.vault_client import VaultClient, VaultKeyNotFoundError
 
 User = get_user_model()
@@ -179,9 +184,9 @@ class TestVaultEscrowAndRecovery(TestCase):
 
         # Create database objects
         self.user = User.objects.create_user(
-            username="testuser",
+            username=TEST_USERNAME,
             email="test.user@example.com",
-            password="testpass123",
+            password=TEST_PASSWORD,
         )
         self.admin_user = User.objects.create_superuser(
             username="admin",
@@ -359,9 +364,9 @@ class TestEmailVerification(TestCase):
 
         # Create database objects
         self.user = User.objects.create_user(
-            username="testuser",
+            username=TEST_USERNAME,
             email="real.user@example.com",
-            password="testpass123",
+            password=TEST_PASSWORD,
         )
         self.survey = Survey.objects.create(
             owner=self.user,
@@ -755,12 +760,12 @@ class TestFullRecoveryWorkflow(TestCase):
         self.user = User.objects.create_user(
             username="testuser",
             email="dr.smith@hospital.nhs.uk",
-            password="testpass123",
+            password=TEST_PASSWORD,
         )
         self.admin_user = User.objects.create_superuser(
             username="admin",
             email="admin@example.com",
-            password="adminpass123",
+            password=TEST_ADMIN_PASSWORD,
         )
         self.survey = Survey.objects.create(
             owner=self.user,
@@ -911,8 +916,8 @@ class TestFullRecoveryWorkflow(TestCase):
         for i in range(3):
             survey = Survey.objects.create(
                 owner=self.user,
-                name=f"Test Survey {i+1}",
-                slug=f"test-survey-{i+1}",
+                name=f"Test Survey {i + 1}",
+                slug=f"test-survey-{i + 1}",
             )
             survey_keks[survey.id] = os.urandom(32)
 

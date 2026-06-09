@@ -21,6 +21,8 @@ from django.test import Client, override_settings
 from django.urls import reverse
 import pytest
 
+from tests.test_export_encryption import PASSWORD, USERNAME
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -408,7 +410,7 @@ def test_snomed_search_returns_generic_error_without_exception_leak(monkeypatch)
     from checktick_app.surveys.snomed_resolver import SnomedUnavailableError
 
     User = get_user_model()
-    user = User.objects.create_user(username="snomed-user", password="pass12345")
+    user = User.objects.create_user(username=USERNAME, password=PASSWORD)
     client = Client()
     client.force_login(user)
 

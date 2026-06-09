@@ -13,14 +13,21 @@ from checktick_app.surveys.vault_client import VaultClient
 
 User = get_user_model()
 
+TEST_PASSWORD = "testpass123"
+TEST_USERNAME = "testuser"
+TEST_EMAIL = "test@example.com"
+TEST_ADMIN_USERNAME = "admin"
+TEST_ADMIN_PASSWORD = "adminpass123"
+TEST_ADMIN_EMAIL = "admin@example.com"
+
 
 @pytest.fixture
 def user(db):
     """Create a test user."""
     return User.objects.create_user(
-        username="testuser",
-        email="test@example.com",
-        password="testpass123",
+        username=TEST_USERNAME,
+        email=TEST_EMAIL,
+        password=TEST_PASSWORD,
     )
 
 
@@ -28,9 +35,9 @@ def user(db):
 def admin_user(db):
     """Create an admin user."""
     return User.objects.create_superuser(
-        username="admin",
-        email="admin@example.com",
-        password="adminpass123",
+        username=TEST_ADMIN_USERNAME,
+        email=TEST_ADMIN_EMAIL,
+        password=TEST_ADMIN_PASSWORD,
     )
 
 

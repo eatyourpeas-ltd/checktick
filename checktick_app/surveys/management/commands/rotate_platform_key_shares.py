@@ -18,7 +18,7 @@ For generating a completely new platform key, use create_platform_key_version (O
 Usage:
     python manage.py rotate_platform_key_shares --version v1 \\
         --existing-custodian-component platform_custodian_component_v1.bin
-    
+
 Security Notes:
     - Requires existing custodian component to reconstruct platform key
     - Generates NEW vault + custodian components (same platform key)

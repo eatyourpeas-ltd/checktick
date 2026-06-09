@@ -31,7 +31,7 @@ All devices used for {{ platform_name }} business must meet the following "Stand
 * **Firewall:** macOS Stealth Mode Firewall must be turned ON.
 * **Sudo/Admin:** Day-to-day work must be done on a Standard User account; Administrator credentials must be stored in a password manager.
 * **Biometric Authentication (Touch ID):** PAM module (pam_tid.so) configured to authorize sudo operations via Touch ID, providing high-strength authentication while maintaining operational efficiency.
-* **Login & Screen Lock (Cyber Essentials):** 
+* **Login & Screen Lock (Cyber Essentials):**
   - Automatic Login must be DISABLED
   - Password or Touch ID required immediately after sleep or screen saver
   - Screen saver activation: Maximum 10 minutes of inactivity (recommended: 5 minutes)
