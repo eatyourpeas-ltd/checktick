@@ -11,15 +11,15 @@ Covers:
 All tests are offline — no real snomed.db required.
 """
 
-import sqlite3
 from io import StringIO
+import sqlite3
 from types import SimpleNamespace
 
-import pytest
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import Client, override_settings
 from django.urls import reverse
+import pytest
 
 from tests.test_export_encryption import PASSWORD, USERNAME
 

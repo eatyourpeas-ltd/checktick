@@ -7,12 +7,11 @@ These tests verify the ethical data recovery flow using mocked Vault responses.
 import os
 from unittest.mock import Mock, patch
 
-import pytest
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
+import pytest
 
-from checktick_app.settings import TESTING
 from checktick_app.surveys.tests.test_platform_key_versioning import (
     TEST_ADMIN_PASSWORD,
     TEST_PASSWORD,
@@ -152,9 +151,9 @@ class TestVaultClientKeyDerivation(TestCase):
 
         reconstructed = client.get_platform_master_key(self.custodian_component)
 
-        assert reconstructed == self.platform_key, (
-            "Key should be reconstructed correctly"
-        )
+        assert (
+            reconstructed == self.platform_key
+        ), "Key should be reconstructed correctly"
 
 
 class TestVaultEscrowAndRecovery(TestCase):
@@ -893,9 +892,9 @@ class TestFullRecoveryWorkflow(TestCase):
             hierarchy_key=recovered_org_key,
         )
 
-        assert recovered_kek == survey_kek, (
-            "Org owner should be able to recover survey KEK"
-        )
+        assert (
+            recovered_kek == survey_kek
+        ), "Org owner should be able to recover survey KEK"
 
     @patch("checktick_app.surveys.vault_client.settings")
     def test_multiple_surveys_same_user(self, mock_settings):

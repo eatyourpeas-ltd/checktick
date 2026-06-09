@@ -1,12 +1,12 @@
 """Tests for platform key versioning and rotation."""
 
-import secrets
 from datetime import timedelta
+import secrets
 from unittest.mock import Mock, patch
 
-import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+import pytest
 
 from checktick_app.surveys.models import PlatformKeyVersion, Survey, UserSurveyKEKEscrow
 from checktick_app.surveys.vault_client import VaultClient

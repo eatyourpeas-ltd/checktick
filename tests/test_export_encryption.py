@@ -9,11 +9,10 @@ These tests verify that:
 """
 
 import os
-from telnetlib import TELNET_PORT
 
-import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+import pytest
 
 from checktick_app.surveys.models import QuestionGroup, Survey, SurveyResponse
 from checktick_app.surveys.services import ExportService

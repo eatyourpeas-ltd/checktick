@@ -11,9 +11,9 @@ These tests verify that:
 
 import os
 
-import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+import pytest
 
 from checktick_app.surveys.models import (
     DataExport,

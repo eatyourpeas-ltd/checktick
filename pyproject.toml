@@ -10,7 +10,7 @@ packages = [
 
  [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
-django = "~5.2.14"
+django = "~5.2.15"
 django-environ = "^0.11.2"
 psycopg2-binary = "^2.9.9"
 jinja2 = "^3.1.4"
