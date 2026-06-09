@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 
-import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+import pytest
 
 from checktick_app.surveys.models import (
     Organization,
