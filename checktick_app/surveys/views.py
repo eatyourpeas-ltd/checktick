@@ -1157,22 +1157,7 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         survey.questions.select_related("group").prefetch_related("images").all()
     )
     qs = _order_questions_by_group(survey, all_questions)
-
-    # Mark questions that have SHOW conditions (should be hidden by default)
-    questions_with_show_conditions = set(
-        SurveyQuestionCondition.objects.filter(
-            target_question__survey=survey, action=SurveyQuestionCondition.Action.SHOW
-        ).values_list("target_question_id", flat=True)
-    )
-
-    for i, q in enumerate(qs, start=1):
-        setattr(q, "idx", i)
-        prev_gid = qs[i - 2].group_id if i - 2 >= 0 else None
-        next_gid = qs[i].group_id if i < len(qs) else None
-        curr_gid = q.group_id
-        setattr(q, "group_start", bool(curr_gid and curr_gid != prev_gid))
-        setattr(q, "group_end", bool(curr_gid and curr_gid != next_gid))
-        setattr(q, "has_show_condition", q.id in questions_with_show_conditions)
+    _annotate_question_render_sequence(survey, qs)
     has_patient_template = any(
         getattr(q, "type", None) == SurveyQuestion.Types.TEMPLATE_PATIENT for q in qs
     )
@@ -1270,22 +1255,7 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
     )
     qs = _order_questions_by_group(survey, all_questions)
     _inject_dataset_options(qs)
-
-    # Mark questions that have SHOW conditions (should be hidden by default)
-    questions_with_show_conditions = set(
-        SurveyQuestionCondition.objects.filter(
-            target_question__survey=survey, action=SurveyQuestionCondition.Action.SHOW
-        ).values_list("target_question_id", flat=True)
-    )
-
-    for i, q in enumerate(qs, start=1):
-        setattr(q, "idx", i)
-        prev_gid = qs[i - 2].group_id if i - 2 >= 0 else None
-        next_gid = qs[i].group_id if i < len(qs) else None
-        curr_gid = q.group_id
-        setattr(q, "group_start", bool(curr_gid and curr_gid != prev_gid))
-        setattr(q, "group_end", bool(curr_gid and curr_gid != next_gid))
-        setattr(q, "has_show_condition", q.id in questions_with_show_conditions)
+    _annotate_question_render_sequence(survey, qs)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
     prof_group, professional_fields, professional_ods = (
         _get_professional_group_and_fields(survey)
@@ -1443,16 +1413,61 @@ def _build_branching_config(questions: list[SurveyQuestion]) -> dict[str, Any]:
     return config
 
 
+def _resolved_group_order_ids(survey: Survey) -> list[int]:
+    """Return group IDs in the same display order as the /groups page.
+
+    Order rule:
+    1) Explicit IDs from ``survey.style['group_order']`` (valid IDs only)
+    2) Remaining groups sorted by name (case-insensitive), then id
+    """
+    groups = list(survey.question_groups.only("id", "name").all())
+    groups_map = {g.id: g for g in groups}
+
+    style = survey.style or {}
+    raw_order = style.get("group_order", [])
+    explicit_ids: list[int] = []
+    if isinstance(raw_order, list):
+        for gid in raw_order:
+            if str(gid).isdigit():
+                gid_int = int(gid)
+                if gid_int in groups_map and gid_int not in explicit_ids:
+                    explicit_ids.append(gid_int)
+
+    remaining = sorted(
+        (g for g in groups if g.id not in explicit_ids),
+        key=lambda g: ((g.name or "").lower(), g.id),
+    )
+    return explicit_ids + [g.id for g in remaining]
+
+
+def _annotate_question_render_sequence(
+    survey: Survey, questions: list[SurveyQuestion]
+) -> list[SurveyQuestion]:
+    """Attach rendering helper attrs consumed by ``surveys/detail.html``."""
+    questions_with_show_conditions = set(
+        SurveyQuestionCondition.objects.filter(
+            target_question__survey=survey,
+            action=SurveyQuestionCondition.Action.SHOW,
+        ).values_list("target_question_id", flat=True)
+    )
+
+    for i, q in enumerate(questions, start=1):
+        setattr(q, "idx", i)
+        prev_gid = questions[i - 2].group_id if i - 2 >= 0 else None
+        next_gid = questions[i].group_id if i < len(questions) else None
+        curr_gid = q.group_id
+        setattr(q, "group_start", bool(curr_gid and curr_gid != prev_gid))
+        setattr(q, "group_end", bool(curr_gid and curr_gid != next_gid))
+        setattr(q, "has_show_condition", q.id in questions_with_show_conditions)
+
+    return questions
+
+
 def _order_questions_by_group(
     survey: Survey, questions: list[SurveyQuestion]
 ) -> list[SurveyQuestion]:
-    """Order questions by group position (from survey.style['group_order']), then by question.order within each group.
-
-    This ensures that when groups are reordered via drag-and-drop, questions appear in the correct sequence
-    without breaking question-to-question branching logic.
-    """
-    style = survey.style or {}
-    group_order = style.get("group_order", [])
+    """Order questions by group position, then by question.order within each group."""
+    group_order = _resolved_group_order_ids(survey)
 
     # Separate questions by group
     grouped_questions: dict[int | None, list[SurveyQuestion]] = {}
@@ -1468,18 +1483,27 @@ def _order_questions_by_group(
     for group_id in grouped_questions:
         grouped_questions[group_id].sort(key=lambda q: (q.order, q.id))
 
-    # Build final ordered list
-    ordered = []
+    ordered: list[SurveyQuestion] = []
 
-    # Add groups in their specified order
+    # Add groups in resolved order
     for gid in group_order:
-        gid = int(gid) if str(gid).isdigit() else None
-        if gid and gid in grouped_questions:
+        if gid in grouped_questions:
             ordered.extend(grouped_questions[gid])
             del grouped_questions[gid]
 
-    # Add any remaining groups not in group_order (sorted by group_id)
-    for gid in sorted(grouped_questions.keys()):
+    # Any remaining (e.g. orphaned group refs) sorted by group name then id
+    remaining_group_ids = sorted(
+        grouped_questions.keys(),
+        key=lambda gid: (
+            (
+                (grouped_questions[gid][0].group.name or "").lower()
+                if grouped_questions[gid] and grouped_questions[gid][0].group
+                else ""
+            ),
+            gid,
+        ),
+    )
+    for gid in remaining_group_ids:
         ordered.extend(grouped_questions[gid])
 
     # Add ungrouped questions at the end, sorted by order
@@ -4307,15 +4331,10 @@ def _handle_participant_submission(
 
     # GET: render using existing detail template
     _prepare_question_rendering(survey)
-    qs = list(survey.questions.select_related("group", "dataset").all())
+    all_questions = list(survey.questions.select_related("group", "dataset").all())
+    qs = _order_questions_by_group(survey, all_questions)
     _inject_dataset_options(qs)
-    for i, q in enumerate(qs, start=1):
-        setattr(q, "idx", i)
-        prev_gid = qs[i - 2].group_id if i - 2 >= 0 else None
-        next_gid = qs[i].group_id if i < len(qs) else None
-        curr_gid = q.group_id
-        setattr(q, "group_start", bool(curr_gid and curr_gid != prev_gid))
-        setattr(q, "group_end", bool(curr_gid and curr_gid != next_gid))
+    _annotate_question_render_sequence(survey, qs)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
     prof_group, professional_fields, professional_ods = (
         _get_professional_group_and_fields(survey)
@@ -4331,9 +4350,13 @@ def _handle_participant_submission(
         style["theme_css_light"] = _sanitize_css(style.get("theme_css_light") or "")
         style["theme_css_dark"] = _sanitize_css(style.get("theme_css_dark") or "")
         survey.style = style
+    # Build branching configuration for client-side logic
+    branching_config = _build_branching_config(qs)
+
     ctx = {
         "survey": survey,
         "questions": qs,
+        "branching_config": json.dumps(branching_config),
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
         "demographic_defs": DEMOGRAPHIC_FIELD_DEFS,
@@ -4568,15 +4591,12 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             "surveyquestion", filter=models.Q(surveyquestion__survey=survey)
         )
     )
-    # Apply explicit saved order if present in survey.style
-    order_ids = []
-    style = survey.style or {}
-    if isinstance(style.get("group_order"), list):
-        order_ids = [int(gid) for gid in style["group_order"] if str(gid).isdigit()]
+    # Apply saved order with same fallback semantics used in runtime rendering
+    order_ids = _resolved_group_order_ids(survey)
     groups_map = {g.id: g for g in groups_qs}
     ordered = [groups_map[g_id] for g_id in order_ids if g_id in groups_map]
     remaining = [g for g in groups_qs if g.id not in order_ids]
-    groups = ordered + sorted(remaining, key=lambda g: g.name.lower())
+    groups = ordered + sorted(remaining, key=lambda g: ((g.name or "").lower(), g.id))
     # Apply style overrides so navigation reflects survey branding while managing groups
     style = survey.style or {}
     brand_overrides = {
