@@ -1,7 +1,7 @@
 import logging
 import os
-import subprocess
 from pathlib import Path
+import subprocess
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
