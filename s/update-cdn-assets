@@ -1,4 +1,3 @@
-i=1
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -14,13 +13,12 @@ STATIC_DIR="$ROOT_DIR/checktick_app/static/js"
 DOCS_FILE="$ROOT_DIR/docs/cdn-libraries.md"
 LOG_FILE="$ROOT_DIR/docs/compliance/infrastructure-technical-change-log.md"
 
-# A map of package -> target file (customize as needed)
-declare -A PACKAGES
+# Package list in "npm-package|target-file|source-path-in-package" format (bash 3 compatible)
 PACKAGES=(
-  [htmx.org]="htmx.min.js"
-  [sortablejs]="sortable.min.js"
-  [axe-core]="axe-core.min.js"
-  [redoc]="redoc.standalone.min.js"
+  "htmx.org|htmx.min.js|dist/htmx.min.js"
+  "sortablejs|sortable.min.js|Sortable.min.js"
+  "axe-core|axe-core.min.js|axe.min.js"
+  "redoc|redoc.standalone.min.js|bundles/redoc.standalone.js"
 )
 
 DRY_RUN=0
@@ -57,8 +55,15 @@ print_header() {
 }
 
 get_current_version() {
-  local pkg=$1
-  grep -E "\|[ ]*$pkg[ ]*\|" "$DOCS_FILE" || true
+  local file=$1
+  awk -F'|' -v file="$file" '
+    $0 ~ /checktick_app\/static\/js\// && $0 ~ file {
+      ver=$3
+      gsub(/^[ \t`]+|[ \t`]+$/, "", ver)
+      print ver
+      exit
+    }
+  ' "$DOCS_FILE" || true
 }
 
 get_latest_version() {
@@ -69,12 +74,19 @@ get_latest_version() {
 list_deps() {
   printf "%-3s  %-20s  %-14s  %s\n" "#" "Package" "Current" "Latest"
   local i=1
-  for pkg in "${!PACKAGES[@]}"; do
-    local row
-    row=$(get_current_version "$pkg" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/, "", $0); print $0}')
-    local current="(not found)"
-    if [[ -n "$row" ]]; then
-      current=$(echo "$row" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/, "", $0); print $3}')
+  for entry in "${PACKAGES[@]}"; do
+    local pkg
+    pkg=${entry%%|*}
+
+    local rest
+    rest=${entry#*|}
+    local file
+    file=${rest%%|*}
+
+    local current
+    current=$(get_current_version "$file")
+    if [[ -z "$current" ]]; then
+      current="(not found)"
     fi
     local latest
     latest=$(get_latest_version "$pkg")
@@ -167,20 +179,21 @@ append_change_log() {
   local sri=$4
   local date_str
   date_str=$(date '+%d/%m/%Y')
-  local entry="| $date_str | Dr Simon Chapman | Updated self-hosted $pkg ($old_ver -> $new_ver) and regenerated SHA-384 SRI | Routine JavaScript dependency maintenance (no CVE remediation referenced) | Dr Serena Haywood (SIRO) | ✅ Active |"
+  local entry="| $date_str | Dr Simon Chapman | Updated self-hosted $pkg ($old_ver -> $new_ver) and regenerated SHA-384 SRI ($sri) | Routine JavaScript dependency maintenance (no CVE remediation referenced) | Dr Serena Haywood (SIRO) | ✅ Active |"
   if [[ $DRY_RUN -eq 1 ]]; then
     echo "Would append to $LOG_FILE:"
     echo "$entry"
     return
   fi
   # Append at end of file (maintainers can move into the table section if needed)
-  echo "\n$entry" >> "$LOG_FILE"
+  printf "\n%s\n" "$entry" >> "$LOG_FILE"
   echo "Appended infrastructure change log entry to $LOG_FILE"
 }
 
 update_dep() {
   local pkg=$1
   local file=$2
+  local source_rel=${3-}
   echo "Updating $pkg -> $file"
   # Get latest version
   local latest
@@ -191,11 +204,10 @@ update_dep() {
   fi
 
   # Attempt to parse current version from docs (best-effort)
-  local current_row
-  current_row=$(get_current_version "$pkg" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/, "", $0); print $0}') || true
-  local current_ver="(unknown)"
-  if [[ -n "$current_row" ]]; then
-    current_ver=$(echo "$current_row" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/, "", $0); print $3}')
+  local current_ver
+  current_ver=$(get_current_version "$file")
+  if [[ -z "$current_ver" ]]; then
+    current_ver="(unknown)"
   fi
 
   tmpdir=$(mktemp -d)
@@ -211,8 +223,21 @@ update_dep() {
   echo "Extracting $tgz..."
   tar -xzf "$tgz" -C "$tmpdir"
 
-  # Heuristic: check common locations for minified files
-  candidates=(
+  # Candidate locations for the source asset inside the package
+  local source_base=""
+  if [[ -n "$source_rel" ]]; then
+    source_base=${source_rel##*/}
+  fi
+
+  candidates=()
+
+  # Explicit source mapping takes priority (supports rename like axe.min.js -> axe-core.min.js)
+  if [[ -n "$source_rel" ]]; then
+    candidates+=("$tmpdir/package/$source_rel")
+  fi
+
+  # Heuristic fallbacks
+  candidates+=(
     "$tmpdir/package/dist/$file"
     "$tmpdir/package/bundles/${file/standalone.min./standalone.}"
     "$tmpdir/package/$file"
@@ -220,6 +245,18 @@ update_dep() {
     "$tmpdir/package/lib/$file"
     "$tmpdir/package/umd/$file"
   )
+
+  # If mapped source filename differs from target, also try common folders with source basename
+  if [[ -n "$source_base" && "$source_base" != "$file" ]]; then
+    candidates+=(
+      "$tmpdir/package/$source_base"
+      "$tmpdir/package/dist/$source_base"
+      "$tmpdir/package/build/$source_base"
+      "$tmpdir/package/lib/$source_base"
+      "$tmpdir/package/umd/$source_base"
+      "$tmpdir/package/bundles/$source_base"
+    )
+  fi
 
   src=""
   for c in "${candidates[@]}"; do
@@ -231,7 +268,7 @@ update_dep() {
 
   if [[ -z "$src" ]]; then
     echo "Could not find $file inside package. Listing files for inspection:"
-    find "$tmpdir/package" -maxdepth 4 -type f -name "*.min.js" -print
+    find "$tmpdir/package" -maxdepth 4 -type f \( -name "*.min.js" -o -name "*.js" \) -print
     exit 1
   fi
 
@@ -271,11 +308,13 @@ list_deps
 sel=$(select_dep)
 
 # Map selection to package
-
-for pkg in "${!PACKAGES[@]}"; do
+i=1
+for entry in "${PACKAGES[@]}"; do
   if [[ "$i" -eq "$sel" ]]; then
-    selected_pkg="$pkg"
-    selected_file="${PACKAGES[$pkg]}"
+    selected_pkg=${entry%%|*}
+    rest=${entry#*|}
+    selected_file=${rest%%|*}
+    selected_source=${rest#*|}
     break
   fi
   i=$((i+1))
@@ -286,6 +325,6 @@ if [[ -z "${selected_pkg-}" ]]; then
   exit 1
 fi
 
-update_dep "$selected_pkg" "$selected_file"
+update_dep "$selected_pkg" "$selected_file" "${selected_source-}"
 
 echo "Done."
