@@ -19,7 +19,7 @@ CheckTick self-hosts critical JavaScript libraries with Subresource Integrity (S
 | ------------ | ------- | ------------------------------------------------- | --------------------------------------- |
 | HTMX         | 2.0.10  | `checktick_app/static/js/htmx.min.js`             | Dynamic HTML updates without JavaScript |
 | SortableJS   | 1.15.7  | `checktick_app/static/js/sortable.min.js`         | Drag-and-drop reordering                |
-| axe-core     | 4.11.4  | `checktick_app/static/js/axe-core.min.js`         | WCAG accessibility testing              |
+| axe-core     | 4.12.0  | `checktick_app/static/js/axe-core.min.js`         | WCAG accessibility testing              |
 | NHS Frontend | 8.1.0   | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling               |
 | ReDoc        | 2.5.2   | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation       |
 
@@ -39,7 +39,7 @@ sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V
 sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc
 ```
 
-### axe-core 4.11.4
+### axe-core 4.12.0
 
 ```text
 sha384-JPn8kKVo7BLn9/zcbvarZHaq40amEwymg7J3Uhc7Lb4ds5KZ1kKLagxlEZX5iqWj
@@ -92,11 +92,11 @@ curl -o checktick_app/static/js/sortable.min.js https://cdn.jsdelivr.net/npm/sor
 #   cp /tmp/package/Sortable.min.js checktick_app/static/js/sortable.min.js && rm sortablejs-1.15.7.tgz
 
 # axe-core
-curl -o checktick_app/static/js/axe-core.min.js https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.11.4/axe.min.js
+curl -o checktick_app/static/js/axe-core.min.js https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.12.0/axe.min.js
 
 # Alternative: npm pack (recommended)
-# npm pack axe-core@4.11.4 && tar -xzf axe-core-4.11.4.tgz -C /tmp && \
-#   cp /tmp/package/axe.min.js checktick_app/static/js/axe-core.min.js && rm axe-core-4.11.4.tgz
+# npm pack axe-core@4.12.0 && tar -xzf axe-core-4.12.0.tgz -C /tmp && \
+#   cp /tmp/package/axe.min.js checktick_app/static/js/axe-core.min.js && rm axe-core-4.12.0.tgz
 
 # NHS Frontend
 curl -o checktick_app/static/css/nhsuk-frontend.min.css https://cdn.jsdelivr.net/npm/nhsuk-frontend@8.1.0/dist/nhsuk.min.css
@@ -178,7 +178,7 @@ When upgrading a library version, **all three of the following must be updated**
 
 ### 1. Workflow pin — `.github/workflows/update-cdn-libraries.yml`
 
-Update the `env` variable for the library (e.g. `AXE_CORE_VERSION: "4.11.4"`). This is what the weekly check compares against npm to decide whether to raise an issue.
+Update the `env` variable for the library (e.g. `AXE_CORE_VERSION: "4.12.0"`). This is what the weekly check compares against npm to decide whether to raise an issue.
 
 ### 2. Static file + SRI hash — templates
 
