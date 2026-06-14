@@ -23,8 +23,8 @@
   {% endif %}
   {% if survey.style.nhs_styling %}
     {# NHS Frontend Styling - https://github.com/nhsuk/nhsuk-frontend #}
-    <link href="{% static 'css/nhsuk-frontend.min.css' %}"
-          integrity="sha384-qWZYzCDfWOMmbbg+HoBYKha59es/145h5uc93F1rxBFwJVruD2lcomcIwUlCwPDF"
+    <link href="{% static cdn_assets.nhs_frontend.static_file %}"
+          integrity="{{ cdn_assets.nhs_frontend.sri }}"
           crossorigin="anonymous"
           rel="stylesheet" />
     <style>
@@ -648,9 +648,9 @@
   <!-- DEBUG: Question {{ forloop.counter }}: type={{ q.type }}, text={{ q.text|truncatechars:50 }} -->
 {% endfor %}
 
-<script src="{% static 'js/sortable.min.js' %}"
+<script src="{% static cdn_assets.sortablejs.static_file %}"
   nonce="{{ request.csp_nonce }}"
-  integrity="sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc"
+  integrity="{{ cdn_assets.sortablejs.sri }}"
   crossorigin="anonymous"></script>
 <script src="{% static 'js/orderable.js' %}" nonce="{{ request.csp_nonce }}"></script>
 {# Load professional fields script if we have group-level OR question-level professional details #}

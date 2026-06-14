@@ -1,38 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Interactive helper to list self-hosted CDN assets and update a selected one
-# Features added:
-# - --dry-run to preview changes (no file writes)
-# - --yes to skip interactive confirmation
-# - Computes SHA-384 SRI and can update template `integrity` attributes
-# - Appends an entry to docs/compliance/infrastructure-technical-change-log.md when an update occurs
-
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-STATIC_DIR="$ROOT_DIR/checktick_app/static/js"
-DOCS_FILE="$ROOT_DIR/docs/cdn-libraries.md"
+MANIFEST_FILE="$ROOT_DIR/checktick_app/cdn_assets.json"
 LOG_FILE="$ROOT_DIR/docs/compliance/infrastructure-technical-change-log.md"
-
-# Package list in "npm-package|target-file|source-path-in-package" format (bash 3 compatible)
-PACKAGES=(
-  "htmx.org|htmx.min.js|dist/htmx.min.js"
-  "sortablejs|sortable.min.js|Sortable.min.js"
-  "axe-core|axe-core.min.js|axe.min.js"
-  "redoc|redoc.standalone.min.js|bundles/redoc.standalone.js"
-)
+SYNC_DOCS_SCRIPT="$ROOT_DIR/s/sync-cdn-docs"
 
 DRY_RUN=0
 ASSUME_YES=0
+SELECTED_KEY=""
+PIN_VERSION=""
+SYNC_ONLY=0
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--dry-run] [--yes]
+Usage: $(basename "$0") [--dry-run] [--yes] [--key <asset_key>] [--version <x.y.z>] [--sync-docs]
 
-Interactive helper to update self-hosted JS assets from npm.
+Update self-hosted CDN assets using the single source of truth manifest:
+  checktick_app/cdn_assets.json
 
 Options:
-  --dry-run   Don't write any files; show what would change
-  --yes       Non-interactive: accept prompts and apply changes
+  --dry-run        Preview actions without writing files
+  --yes            Non-interactive mode (required with --key)
+  --key <key>      Asset key from manifest (e.g. htmx, sortablejs, axe_core)
+  --version <ver>  Override target version (defaults to latest npm version)
+  --sync-docs      Only sync docs/cdn-libraries.md from manifest and exit
 EOF
   exit 1
 }
@@ -41,135 +33,118 @@ while [[ ${1-} != "" ]]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
     --yes) ASSUME_YES=1 ;;
+    --key)
+      shift
+      SELECTED_KEY=${1-}
+      [[ -n "$SELECTED_KEY" ]] || usage
+      ;;
+    --version)
+      shift
+      PIN_VERSION=${1-}
+      [[ -n "$PIN_VERSION" ]] || usage
+      ;;
+    --sync-docs) SYNC_ONLY=1 ;;
     -h|--help) usage ;;
-    *) echo "Unknown arg: $1"; usage ;;
+    *)
+      echo "Unknown arg: $1"
+      usage
+      ;;
   esac
   shift
 done
 
-print_header() {
-  echo "Update CDN assets (npm pack source-of-truth)"
-  echo "Repository root: $ROOT_DIR"
-  echo "Static dir: $STATIC_DIR"
-  echo
+manifest_rows() {
+  python3 - <<PY
+import json
+from pathlib import Path
+p = Path(r'''$MANIFEST_FILE''')
+data = json.loads(p.read_text(encoding='utf-8'))
+for i, a in enumerate(data.get('assets', []), start=1):
+    print('|'.join([
+        str(i),
+        a.get('key',''),
+        a.get('name',''),
+        a.get('npm_package',''),
+        a.get('version',''),
+        a.get('static_file',''),
+        a.get('source_path',''),
+    ]))
+PY
 }
 
-get_current_version() {
-  local file=$1
-  awk -F'|' -v file="$file" '
-    $0 ~ /checktick_app\/static\/js\// && $0 ~ file {
-      ver=$3
-      gsub(/^[ \t`]+|[ \t`]+$/, "", ver)
-      print ver
-      exit
-    }
-  ' "$DOCS_FILE" || true
+asset_exists() {
+  local key=$1
+  python3 - <<PY
+import json,sys
+from pathlib import Path
+p = Path(r'''$MANIFEST_FILE''')
+data = json.loads(p.read_text(encoding='utf-8'))
+keys = {a.get('key') for a in data.get('assets', [])}
+sys.exit(0 if '$key' in keys else 1)
+PY
 }
 
-get_latest_version() {
-  local pkg=$1
-  npm view "$pkg" version 2>/dev/null || echo "(unknown)"
+asset_field() {
+  local key=$1
+  local field=$2
+  python3 - <<PY
+import json
+from pathlib import Path
+p = Path(r'''$MANIFEST_FILE''')
+data = json.loads(p.read_text(encoding='utf-8'))
+for a in data.get('assets', []):
+    if a.get('key') == '$key':
+        print(a.get('$field',''))
+        break
+PY
 }
 
-list_deps() {
-  printf "%-3s  %-20s  %-14s  %s\n" "#" "Package" "Current" "Latest"
-  local i=1
-  for entry in "${PACKAGES[@]}"; do
-    local pkg
-    pkg=${entry%%|*}
-
-    local rest
-    rest=${entry#*|}
-    local file
-    file=${rest%%|*}
-
-    local current
-    current=$(get_current_version "$file")
-    if [[ -z "$current" ]]; then
-      current="(not found)"
-    fi
-    local latest
-    latest=$(get_latest_version "$pkg")
-    printf "%-3s  %-20s  %-14s  %s\n" "$i" "$pkg" "$current" "$latest"
-    i=$((i+1))
-  done
+key_for_index() {
+  local idx=$1
+  python3 - <<PY
+import json
+from pathlib import Path
+p = Path(r'''$MANIFEST_FILE''')
+data = json.loads(p.read_text(encoding='utf-8'))
+assets = data.get('assets', [])
+idx = int('$idx')
+if 1 <= idx <= len(assets):
+    print(assets[idx-1].get('key',''))
+PY
 }
 
-select_dep() {
-  echo
-  if [[ $ASSUME_YES -eq 1 ]]; then
-    read -rp "Enter the number of the dependency to update: " sel
-  else
-    read -rp "Enter the number of the dependency to update (or Enter to cancel): " sel
-    if [[ -z "$sel" ]]; then
-      echo "Cancelled"
-      exit 0
-    fi
-  fi
-  if ! [[ "$sel" =~ ^[0-9]+$ ]]; then
-    echo "Invalid selection"
-    exit 1
-  fi
-  echo "$sel"
+update_manifest_entry() {
+  local key=$1
+  local version=$2
+  local sri=$3
+
+  python3 - <<PY
+import json
+from pathlib import Path
+p = Path(r'''$MANIFEST_FILE''')
+data = json.loads(p.read_text(encoding='utf-8'))
+for a in data.get('assets', []):
+    if a.get('key') == '$key':
+        a['version'] = '$version'
+        a['sri'] = '$sri'
+        break
+p.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+PY
 }
 
 compute_sri() {
   local file=$1
-  # compute SHA-384 and prefix
   local b64
   b64=$(openssl dgst -sha384 -binary "$file" | openssl base64 -A)
   echo "sha384-$b64"
 }
 
-update_templates_integrity() {
-  local file_name=$1
-  local new_sri=$2
-  # Templates to consider (can be extended)
-  local templates=(
-    "$ROOT_DIR/checktick_app/templates/base.html"
-    "$ROOT_DIR/checktick_app/surveys/templates/surveys/detail.html"
-    "$ROOT_DIR/checktick_app/surveys/templates/surveys/builder.html"
-    "$ROOT_DIR/checktick_app/surveys/templates/surveys/groups.html"
-    "$ROOT_DIR/checktick_app/surveys/templates/surveys/group_builder.html"
-    "$ROOT_DIR/checktick_app/api/templates/api/redoc.html"
-  )
-
-  for tpl in "${templates[@]}"; do
-    if [[ ! -f "$tpl" ]]; then
-      continue
-    fi
-    if ! grep -q "js/$file_name" "$tpl"; then
-      continue
-    fi
-
-    echo "Patching template: $tpl (script: $file_name)"
-    if [[ $DRY_RUN -eq 1 ]]; then
-      echo "Would set integrity=$new_sri in $tpl for script containing js/$file_name"
-      continue
-    fi
-
-    # Python inplace edit: find <script ... js/<file_name> ...> and add/replace integrity attr
-    python3 - <<PY
-import re
-p='''$tpl'''
-fname='''$file_name'''
-new='''$new_sri'''
-text=open(p,'r',encoding='utf-8').read()
-pattern=re.compile(r'(<script[^>]*?js/{}[^>]*?)(integrity="[^"]*"\s*)?([^>]*>)'.format(re.escape(fname)),re.IGNORECASE|re.DOTALL)
-def repl(m):
-    pre=m.group(1)
-    integrity=m.group(2) or ''
-    post=m.group(3) or ''
-    # ensure a single space before integrity
-    return pre + ' integrity="%s" ' % new + post
-newtext, count = pattern.subn(repl, text)
-if count>0:
-    open(p,'w',encoding='utf-8').write(newtext)
-    print('Updated %s' % p)
-else:
-    print('No matching <script> for %s in %s' % (fname,p))
-PY
-  done
+sync_docs() {
+  if [[ $DRY_RUN -eq 1 ]]; then
+    echo "Would run: python3 s/sync-cdn-docs"
+    return
+  fi
+  python3 "$SYNC_DOCS_SCRIPT"
 }
 
 append_change_log() {
@@ -180,151 +155,181 @@ append_change_log() {
   local date_str
   date_str=$(date '+%d/%m/%Y')
   local entry="| $date_str | Dr Simon Chapman | Updated self-hosted $pkg ($old_ver -> $new_ver) and regenerated SHA-384 SRI ($sri) | Routine JavaScript dependency maintenance (no CVE remediation referenced) | Dr Serena Haywood (SIRO) | ✅ Active |"
+
   if [[ $DRY_RUN -eq 1 ]]; then
     echo "Would append to $LOG_FILE:"
     echo "$entry"
     return
   fi
-  # Append at end of file (maintainers can move into the table section if needed)
+
   printf "\n%s\n" "$entry" >> "$LOG_FILE"
   echo "Appended infrastructure change log entry to $LOG_FILE"
 }
 
-update_dep() {
+get_latest_version() {
   local pkg=$1
-  local file=$2
-  local source_rel=${3-}
-  echo "Updating $pkg -> $file"
-  # Get latest version
-  local latest
-  latest=$(npm view "$pkg" version 2>/dev/null || true)
-  if [[ -z "$latest" ]]; then
-    echo "Failed to get latest version for $pkg"
-    exit 1
-  fi
+  npm view "$pkg" version 2>/dev/null || echo "(unknown)"
+}
 
-  # Attempt to parse current version from docs (best-effort)
-  local current_ver
-  current_ver=$(get_current_version "$file")
-  if [[ -z "$current_ver" ]]; then
-    current_ver="(unknown)"
-  fi
+list_deps() {
+  printf "%-3s  %-16s  %-20s  %-14s  %s\n" "#" "Key" "Package" "Current" "Latest"
+  while IFS='|' read -r idx key _name pkg current _file _src; do
+    latest=$(get_latest_version "$pkg")
+    printf "%-3s  %-16s  %-20s  %-14s  %s\n" "$idx" "$key" "$pkg" "$current" "$latest"
+  done < <(manifest_rows)
+}
 
-  tmpdir=$(mktemp -d)
-  trap 'rm -rf "$tmpdir"' EXIT
+find_source_in_package() {
+  local tmpdir=$1
+  local source_path=$2
 
-  echo "Packing $pkg@$latest..."
-  (cd "$tmpdir" && npm pack "$pkg@$latest")
-  tgz=$(ls "$tmpdir"/*.tgz | head -n1)
-  if [[ ! -f "$tgz" ]]; then
-    echo "Failed to download package tarball"
-    exit 1
-  fi
-  echo "Extracting $tgz..."
-  tar -xzf "$tgz" -C "$tmpdir"
-
-  # Candidate locations for the source asset inside the package
-  local source_base=""
-  if [[ -n "$source_rel" ]]; then
-    source_base=${source_rel##*/}
-  fi
-
-  candidates=()
-
-  # Explicit source mapping takes priority (supports rename like axe.min.js -> axe-core.min.js)
-  if [[ -n "$source_rel" ]]; then
-    candidates+=("$tmpdir/package/$source_rel")
-  fi
-
-  # Heuristic fallbacks
-  candidates+=(
-    "$tmpdir/package/dist/$file"
-    "$tmpdir/package/bundles/${file/standalone.min./standalone.}"
-    "$tmpdir/package/$file"
-    "$tmpdir/package/build/$file"
-    "$tmpdir/package/lib/$file"
-    "$tmpdir/package/umd/$file"
-  )
-
-  # If mapped source filename differs from target, also try common folders with source basename
-  if [[ -n "$source_base" && "$source_base" != "$file" ]]; then
-    candidates+=(
-      "$tmpdir/package/$source_base"
-      "$tmpdir/package/dist/$source_base"
-      "$tmpdir/package/build/$source_base"
-      "$tmpdir/package/lib/$source_base"
-      "$tmpdir/package/umd/$source_base"
-      "$tmpdir/package/bundles/$source_base"
-    )
-  fi
-
-  src=""
-  for c in "${candidates[@]}"; do
-    if [[ -f "$c" ]]; then
-      src="$c"
-      break
-    fi
-  done
-
-  if [[ -z "$src" ]]; then
-    echo "Could not find $file inside package. Listing files for inspection:"
-    find "$tmpdir/package" -maxdepth 4 -type f \( -name "*.min.js" -o -name "*.js" \) -print
-    exit 1
-  fi
-
-  echo "Found asset: $src"
-  echo "Computing SRI (SHA-384) and writing to $STATIC_DIR/$file"
-
-  mkdir -p "$STATIC_DIR"
-  if [[ $DRY_RUN -eq 1 ]]; then
-    # Compute SRI but don't write
-    proposed_sri=$(compute_sri "$src")
-    echo "Proposed SRI: $proposed_sri"
-    echo "Would copy $src -> $STATIC_DIR/$file"
-    echo "Would update templates and append compliance log"
+  if [[ -f "$tmpdir/package/$source_path" ]]; then
+    echo "$tmpdir/package/$source_path"
     return
   fi
 
-  tmpout="$STATIC_DIR/.${file}.tmp"
-  cp "$src" "$tmpout"
-  chmod 0644 "$tmpout"
-  mv -f "$tmpout" "$STATIC_DIR/$file"
+  local base
+  base=$(basename "$source_path")
+  local found
+  found=$(find "$tmpdir/package" -type f -name "$base" | head -n1 || true)
+  if [[ -n "$found" ]]; then
+    echo "$found"
+    return
+  fi
 
-  new_sri=$(compute_sri "$STATIC_DIR/$file")
-  echo "Wrote $STATIC_DIR/$file (SRI: $new_sri)"
-
-  # Update templates
-  update_templates_integrity "$file" "$new_sri"
-
-  # Append infrastructure change log entry
-  append_change_log "$pkg" "$current_ver" "$latest" "$new_sri"
-
-  echo "Updated $STATIC_DIR/$file to $pkg@$latest"
-  echo "Updated templates and appended compliance log entry."
+  echo ""
 }
 
-print_header
-list_deps
-sel=$(select_dep)
-
-# Map selection to package
-i=1
-for entry in "${PACKAGES[@]}"; do
-  if [[ "$i" -eq "$sel" ]]; then
-    selected_pkg=${entry%%|*}
-    rest=${entry#*|}
-    selected_file=${rest%%|*}
-    selected_source=${rest#*|}
-    break
+select_key() {
+  if [[ -n "$SELECTED_KEY" ]]; then
+    if ! asset_exists "$SELECTED_KEY"; then
+      echo "Unknown --key: $SELECTED_KEY"
+      exit 1
+    fi
+    echo "$SELECTED_KEY"
+    return
   fi
-  i=$((i+1))
-done
 
-if [[ -z "${selected_pkg-}" ]]; then
-  echo "Selection out of range"
+  if [[ $ASSUME_YES -eq 1 ]]; then
+    echo "--yes without --key is not supported. Provide --key <asset_key>."
+    exit 1
+  fi
+
+  echo
+  read -rp "Enter the number of the dependency to update (or Enter to cancel): " sel
+  if [[ -z "$sel" ]]; then
+    echo "Cancelled"
+    exit 0
+  fi
+  if ! [[ "$sel" =~ ^[0-9]+$ ]]; then
+    echo "Invalid selection"
+    exit 1
+  fi
+
+  key=$(key_for_index "$sel")
+  if [[ -z "$key" ]]; then
+    echo "Selection out of range"
+    exit 1
+  fi
+  echo "$key"
+}
+
+update_dep() {
+  local key=$1
+
+  local name pkg current_ver static_file source_path
+  name=$(asset_field "$key" "name")
+  pkg=$(asset_field "$key" "npm_package")
+  current_ver=$(asset_field "$key" "version")
+  static_file=$(asset_field "$key" "static_file")
+  source_path=$(asset_field "$key" "source_path")
+
+  if [[ -z "$pkg" || -z "$static_file" || -z "$source_path" ]]; then
+    echo "Asset metadata is incomplete for key: $key"
+    exit 1
+  fi
+
+  local target_ver
+  if [[ -n "$PIN_VERSION" ]]; then
+    target_ver="$PIN_VERSION"
+  else
+    target_ver=$(npm view "$pkg" version 2>/dev/null || true)
+  fi
+
+  if [[ -z "$target_ver" ]]; then
+    echo "Failed to resolve target version for $pkg"
+    exit 1
+  fi
+
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+
+  echo "Updating $name ($key): $pkg@$target_ver"
+  echo "Packing npm artifact..."
+  (cd "$tmpdir" && npm pack "$pkg@$target_ver" --silent)
+
+  local tgz
+  tgz=$(ls "$tmpdir"/*.tgz | head -n1)
+  tar -xzf "$tgz" -C "$tmpdir"
+
+  local src
+  src=$(find_source_in_package "$tmpdir" "$source_path")
+  if [[ -z "$src" ]]; then
+    echo "Could not find source asset '$source_path' in package $pkg@$target_ver"
+    find "$tmpdir/package" -maxdepth 4 -type f \( -name '*.js' -o -name '*.css' \) -print
+    exit 1
+  fi
+
+  local target_path
+  target_path="$ROOT_DIR/checktick_app/static/$static_file"
+
+  if [[ $DRY_RUN -eq 1 ]]; then
+    local proposed_sri
+    proposed_sri=$(compute_sri "$src")
+    echo "Would copy: $src -> $target_path"
+    echo "Would set manifest version: $current_ver -> $target_ver"
+    echo "Would set manifest sri: $proposed_sri"
+    sync_docs
+    append_change_log "$pkg" "$current_ver" "$target_ver" "$proposed_sri"
+    return
+  fi
+
+  mkdir -p "$(dirname "$target_path")"
+  cp "$src" "$target_path.tmp"
+  chmod 0644 "$target_path.tmp"
+  mv -f "$target_path.tmp" "$target_path"
+
+  local new_sri
+  new_sri=$(compute_sri "$target_path")
+
+  update_manifest_entry "$key" "$target_ver" "$new_sri"
+  echo "Updated manifest: $MANIFEST_FILE"
+
+  sync_docs
+  append_change_log "$pkg" "$current_ver" "$target_ver" "$new_sri"
+
+  echo "Updated $target_path"
+  echo "SRI: $new_sri"
+}
+
+if [[ ! -f "$MANIFEST_FILE" ]]; then
+  echo "Missing manifest file: $MANIFEST_FILE"
   exit 1
 fi
 
-update_dep "$selected_pkg" "$selected_file" "${selected_source-}"
+if [[ $SYNC_ONLY -eq 1 ]]; then
+  sync_docs
+  exit 0
+fi
+
+echo "Update CDN assets (manifest source-of-truth)"
+echo "Repository root: $ROOT_DIR"
+echo "Manifest: $MANIFEST_FILE"
+echo
+
+list_deps
+key=$(select_key)
+update_dep "$key"
 
 echo "Done."

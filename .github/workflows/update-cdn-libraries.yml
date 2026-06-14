@@ -12,13 +12,6 @@ permissions:
   pull-requests: write
   issues: write
 
-env:
-  # Library versions - update these when upgrading
-  HTMX_VERSION: "2.0.10"
-  SORTABLEJS_VERSION: "1.15.7"
-  REDOC_VERSION: "2.5.3"
-  AXE_CORE_VERSION: "4.12.1"
-
 jobs:
   check-libraries:
     runs-on: ubuntu-latest
@@ -40,6 +33,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Load CDN manifest metadata
+        id: cdn-metadata
+        run: |
+          manifest="checktick_app/cdn_assets.json"
+          echo "htmx_version=$(jq -r '.assets[] | select(.key=="htmx") | .version' "$manifest")" >> $GITHUB_OUTPUT
+          echo "sortablejs_version=$(jq -r '.assets[] | select(.key=="sortablejs") | .version' "$manifest")" >> $GITHUB_OUTPUT
+          echo "axecore_version=$(jq -r '.assets[] | select(.key=="axe_core") | .version' "$manifest")" >> $GITHUB_OUTPUT
+          echo "redoc_version=$(jq -r '.assets[] | select(.key=="redoc") | .version' "$manifest")" >> $GITHUB_OUTPUT
+
       - name: Check HTMX
         id: check-htmx
         run: |
@@ -47,7 +49,7 @@ jobs:
           tmpdir=$(mktemp -d)
           trap 'rm -rf "$tmpdir"' EXIT
           pushd "$tmpdir"
-          npm pack htmx.org@${{ env.HTMX_VERSION }} --silent
+          npm pack htmx.org@${{ steps.cdn-metadata.outputs.htmx_version }} --silent
           tarball=$(ls *.tgz | head -n1)
           tar -xzf "$tarball"
           # Prefer dist/htmx.min.js, fall back to any *.min.js
@@ -79,11 +81,9 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "HTMX has been updated or is missing"
             mv -f "$src" checktick_app/static/js/htmx.min.js
-            # tmpdir will be removed by trap
-            # Update integrity hash in base.html
-            sed -i "s|integrity=\"sha384-[A-Za-z0-9+/=]*\"\([[:space:]]*crossorigin=\"anonymous\">.*htmx\)|integrity=\"sha384-${NEW_HASH}\"\1|g" checktick_app/templates/base.html || true
-            # More robust: Update the line after htmx.min.js
-            sed -i "/htmx\.min\.js/,/integrity=/{s|integrity=\"sha384-[A-Za-z0-9+/=]*\"|integrity=\"sha384-${NEW_HASH}\"|}" checktick_app/templates/base.html || true
+            tmp_json=$(mktemp)
+            jq --arg key "htmx" --arg sri "sha384-${NEW_HASH}" '.assets |= map(if .key == $key then .sri = $sri else . end)' checktick_app/cdn_assets.json > "$tmp_json"
+            mv "$tmp_json" checktick_app/cdn_assets.json
           else
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "HTMX is up to date"
@@ -96,7 +96,7 @@ jobs:
           tmpdir=$(mktemp -d)
           trap 'rm -rf "$tmpdir"' EXIT
           pushd "$tmpdir"
-          npm pack sortablejs@${{ env.SORTABLEJS_VERSION }} --silent
+          npm pack sortablejs@${{ steps.cdn-metadata.outputs.sortablejs_version }} --silent
           tarball=$(ls *.tgz | head -n1)
           tar -xzf "$tarball"
           # Try common names then fallback
@@ -128,16 +128,9 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "SortableJS has been updated or is missing"
             mv -f "$src" checktick_app/static/js/sortable.min.js
-            # tmpdir will be removed by trap
-            # Update integrity hash in all SortableJS template files
-            for file in checktick_app/surveys/templates/surveys/detail.html \
-                        checktick_app/surveys/templates/surveys/builder.html \
-                        checktick_app/surveys/templates/surveys/groups.html \
-                        checktick_app/surveys/templates/surveys/group_builder.html; do
-              if [ -f "$file" ]; then
-                sed -i "/sortable\.min\.js/,/integrity=/{s|integrity=\"sha384-[A-Za-z0-9+/=]*\"|integrity=\"sha384-${NEW_HASH}\"|}" "$file" || true
-              fi
-            done
+            tmp_json=$(mktemp)
+            jq --arg key "sortablejs" --arg sri "sha384-${NEW_HASH}" '.assets |= map(if .key == $key then .sri = $sri else . end)' checktick_app/cdn_assets.json > "$tmp_json"
+            mv "$tmp_json" checktick_app/cdn_assets.json
           else
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "SortableJS is up to date"
@@ -150,7 +143,7 @@ jobs:
           tmpdir=$(mktemp -d)
           trap 'rm -rf "$tmpdir"' EXIT
           pushd "$tmpdir"
-          npm pack axe-core@${{ env.AXE_CORE_VERSION }} --silent
+          npm pack axe-core@${{ steps.cdn-metadata.outputs.axecore_version }} --silent
           tarball=$(ls *.tgz | head -n1)
           tar -xzf "$tarball"
           # Try common names then fallback
@@ -182,7 +175,9 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "axe-core has been updated or is missing"
             mv -f "$src" checktick_app/static/js/axe-core.min.js
-            # tmpdir will be removed by trap
+            tmp_json=$(mktemp)
+            jq --arg key "axe_core" --arg sri "sha384-${NEW_HASH}" '.assets |= map(if .key == $key then .sri = $sri else . end)' checktick_app/cdn_assets.json > "$tmp_json"
+            mv "$tmp_json" checktick_app/cdn_assets.json
           else
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "axe-core is up to date"
@@ -194,7 +189,7 @@ jobs:
           tmpdir=$(mktemp -d)
           trap 'rm -rf "$tmpdir"' EXIT
           pushd "$tmpdir"
-          npm pack redoc@${{ env.REDOC_VERSION }} --silent
+          npm pack redoc@${{ steps.cdn-metadata.outputs.redoc_version }} --silent
           tarball=$(ls *.tgz | head -n1)
           tar -xzf "$tarball"
           file=$(find package/bundles -type f -name 'redoc.standalone.js' -print -quit || true)
@@ -219,8 +214,9 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "ReDoc has been updated or is missing"
             mv -f "$src" checktick_app/static/js/redoc.standalone.min.js
-            # Update integrity hash in redoc.html
-            sed -i "/redoc\.standalone\.min\.js/,/integrity=/{s|integrity=\"sha384-[A-Za-z0-9+/=]*\"|integrity=\"sha384-${NEW_HASH}\"|g}" checktick_app/api/templates/api/redoc.html || true
+            tmp_json=$(mktemp)
+            jq --arg key "redoc" --arg sri "sha384-${NEW_HASH}" '.assets |= map(if .key == $key then .sri = $sri else . end)' checktick_app/cdn_assets.json > "$tmp_json"
+            mv "$tmp_json" checktick_app/cdn_assets.json
           else
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "ReDoc is up to date"
@@ -233,55 +229,63 @@ jobs:
 
           # Check HTMX latest version from npm
           HTMX_LATEST=$(curl -s "https://registry.npmjs.org/htmx.org" | jq -r '.["dist-tags"].latest')
-          echo "HTMX: Current pinned = ${{ env.HTMX_VERSION }}, Latest = ${HTMX_LATEST}"
+          echo "HTMX: Current pinned = ${{ steps.cdn-metadata.outputs.htmx_version }}, Latest = ${HTMX_LATEST}"
           echo "htmx_latest=${HTMX_LATEST}" >> $GITHUB_OUTPUT
 
-          if [ "${{ env.HTMX_VERSION }}" != "${HTMX_LATEST}" ]; then
-            echo "- ⚠️ **HTMX**: Newer version available (${HTMX_LATEST} vs ${{ env.HTMX_VERSION }})" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.cdn-metadata.outputs.htmx_version }}" != "${HTMX_LATEST}" ]; then
+            echo "- ⚠️ **HTMX**: Newer version available (${HTMX_LATEST} vs ${{ steps.cdn-metadata.outputs.htmx_version }})" >> $GITHUB_STEP_SUMMARY
             echo "htmx_update_available=true" >> $GITHUB_OUTPUT
           else
-            echo "- ✅ **HTMX**: Up to date (${{ env.HTMX_VERSION }})" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ **HTMX**: Up to date (${{ steps.cdn-metadata.outputs.htmx_version }})" >> $GITHUB_STEP_SUMMARY
             echo "htmx_update_available=false" >> $GITHUB_OUTPUT
           fi
 
           # Check SortableJS latest version from npm
           SORTABLEJS_LATEST=$(curl -s "https://registry.npmjs.org/sortablejs" | jq -r '.["dist-tags"].latest')
-          echo "SortableJS: Current pinned = ${{ env.SORTABLEJS_VERSION }}, Latest = ${SORTABLEJS_LATEST}"
+          echo "SortableJS: Current pinned = ${{ steps.cdn-metadata.outputs.sortablejs_version }}, Latest = ${SORTABLEJS_LATEST}"
           echo "sortablejs_latest=${SORTABLEJS_LATEST}" >> $GITHUB_OUTPUT
 
-          if [ "${{ env.SORTABLEJS_VERSION }}" != "${SORTABLEJS_LATEST}" ]; then
-            echo "- ⚠️ **SortableJS**: Newer version available (${SORTABLEJS_LATEST} vs ${{ env.SORTABLEJS_VERSION }})" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.cdn-metadata.outputs.sortablejs_version }}" != "${SORTABLEJS_LATEST}" ]; then
+            echo "- ⚠️ **SortableJS**: Newer version available (${SORTABLEJS_LATEST} vs ${{ steps.cdn-metadata.outputs.sortablejs_version }})" >> $GITHUB_STEP_SUMMARY
             echo "sortablejs_update_available=true" >> $GITHUB_OUTPUT
           else
-            echo "- ✅ **SortableJS**: Up to date (${{ env.SORTABLEJS_VERSION }})" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ **SortableJS**: Up to date (${{ steps.cdn-metadata.outputs.sortablejs_version }})" >> $GITHUB_STEP_SUMMARY
             echo "sortablejs_update_available=false" >> $GITHUB_OUTPUT
           fi
 
           # Check axe-core latest version from npm
           AXECORE_LATEST=$(curl -s "https://registry.npmjs.org/axe-core" | jq -r '.["dist-tags"].latest')
-          echo "axe-core: Current pinned = ${{ env.AXE_CORE_VERSION }}, Latest = ${AXECORE_LATEST}"
+          echo "axe-core: Current pinned = ${{ steps.cdn-metadata.outputs.axecore_version }}, Latest = ${AXECORE_LATEST}"
           echo "axecore_latest=${AXECORE_LATEST}" >> $GITHUB_OUTPUT
 
-          if [ "${{ env.AXE_CORE_VERSION }}" != "${AXECORE_LATEST}" ]; then
-            echo "- ⚠️ **axe-core**: Newer version available (${AXECORE_LATEST} vs ${{ env.AXE_CORE_VERSION }})" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.cdn-metadata.outputs.axecore_version }}" != "${AXECORE_LATEST}" ]; then
+            echo "- ⚠️ **axe-core**: Newer version available (${AXECORE_LATEST} vs ${{ steps.cdn-metadata.outputs.axecore_version }})" >> $GITHUB_STEP_SUMMARY
             echo "axecore_update_available=true" >> $GITHUB_OUTPUT
           else
-            echo "- ✅ **axe-core**: Up to date (${{ env.AXE_CORE_VERSION }})" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ **axe-core**: Up to date (${{ steps.cdn-metadata.outputs.axecore_version }})" >> $GITHUB_STEP_SUMMARY
             echo "axecore_update_available=false" >> $GITHUB_OUTPUT
           fi
 
           # Check ReDoc latest version from npm
           REDOC_LATEST=$(curl -s "https://registry.npmjs.org/redoc" | jq -r '.["dist-tags"].latest')
-          echo "ReDoc: Current pinned = ${{ env.REDOC_VERSION }}, Latest = ${REDOC_LATEST}"
+          echo "ReDoc: Current pinned = ${{ steps.cdn-metadata.outputs.redoc_version }}, Latest = ${REDOC_LATEST}"
           echo "redoc_latest=${REDOC_LATEST}" >> $GITHUB_OUTPUT
 
-          if [ "${{ env.REDOC_VERSION }}" != "${REDOC_LATEST}" ]; then
-            echo "- ⚠️ **ReDoc**: Newer version available (${REDOC_LATEST} vs ${{ env.REDOC_VERSION }})" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.cdn-metadata.outputs.redoc_version }}" != "${REDOC_LATEST}" ]; then
+            echo "- ⚠️ **ReDoc**: Newer version available (${REDOC_LATEST} vs ${{ steps.cdn-metadata.outputs.redoc_version }})" >> $GITHUB_STEP_SUMMARY
             echo "redoc_update_available=true" >> $GITHUB_OUTPUT
           else
-            echo "- ✅ **ReDoc**: Up to date (${{ env.REDOC_VERSION }})" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ **ReDoc**: Up to date (${{ steps.cdn-metadata.outputs.redoc_version }})" >> $GITHUB_STEP_SUMMARY
             echo "redoc_update_available=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Sync CDN docs
+        if: steps.check-htmx.outputs.changed == 'true' ||
+          steps.check-sortablejs.outputs.changed == 'true' ||
+          steps.check-axecore.outputs.changed == 'true' ||
+          steps.check-redoc.outputs.changed == 'true'
+        run: |
+          python3 s/sync-cdn-docs
 
       - name: Create Pull Request for hash changes
         id: create-pr
@@ -297,10 +301,10 @@ jobs:
             Update CDN libraries with new SRI hashes
 
             Libraries updated:
-            - HTMX ${{ env.HTMX_VERSION }}: ${{ steps.check-htmx.outputs.changed == 'true' && 'Updated' || 'No change' }}
-            - SortableJS ${{ env.SORTABLEJS_VERSION }}: ${{ steps.check-sortablejs.outputs.changed == 'true' && 'Updated' || 'No change' }}
-            - axe-core ${{ env.AXE_CORE_VERSION }}: ${{ steps.check-axecore.outputs.changed == 'true' && 'Updated' || 'No change' }}
-            - ReDoc ${{ env.REDOC_VERSION }}: ${{ steps.check-redoc.outputs.changed == 'true' && 'Updated' || 'No change' }}
+            - HTMX ${{ steps.cdn-metadata.outputs.htmx_version }}: ${{ steps.check-htmx.outputs.changed == 'true' && 'Updated' || 'No change' }}
+            - SortableJS ${{ steps.cdn-metadata.outputs.sortablejs_version }}: ${{ steps.check-sortablejs.outputs.changed == 'true' && 'Updated' || 'No change' }}
+            - axe-core ${{ steps.cdn-metadata.outputs.axecore_version }}: ${{ steps.check-axecore.outputs.changed == 'true' && 'Updated' || 'No change' }}
+            - ReDoc ${{ steps.cdn-metadata.outputs.redoc_version }}: ${{ steps.check-redoc.outputs.changed == 'true' && 'Updated' || 'No change' }}
           branch: update-cdn-libraries
           delete-branch: true
           title: "Update CDN libraries with new SRI hashes"
@@ -313,19 +317,18 @@ jobs:
 
             | Library | Version | Status | New Hash |
             |---------|---------|--------|----------|
-            | HTMX | ${{ env.HTMX_VERSION }} | ${{ steps.check-htmx.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-htmx.outputs.new_hash }}` |
-            | SortableJS | ${{ env.SORTABLEJS_VERSION }} | ${{ steps.check-sortablejs.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-sortablejs.outputs.new_hash }}` |
-            | axe-core | ${{ env.AXE_CORE_VERSION }} | ${{ steps.check-axecore.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-axecore.outputs.new_hash }}` |
-            | ReDoc | ${{ env.REDOC_VERSION }} | ${{ steps.check-redoc.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-redoc.outputs.new_hash }}` |
+            | HTMX | ${{ steps.cdn-metadata.outputs.htmx_version }} | ${{ steps.check-htmx.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-htmx.outputs.new_hash }}` |
+            | SortableJS | ${{ steps.cdn-metadata.outputs.sortablejs_version }} | ${{ steps.check-sortablejs.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-sortablejs.outputs.new_hash }}` |
+            | axe-core | ${{ steps.cdn-metadata.outputs.axecore_version }} | ${{ steps.check-axecore.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-axecore.outputs.new_hash }}` |
+            | ReDoc | ${{ steps.cdn-metadata.outputs.redoc_version }} | ${{ steps.check-redoc.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-redoc.outputs.new_hash }}` |
 
             ### Files Updated
             - `checktick_app/static/js/htmx.min.js`
             - `checktick_app/static/js/sortable.min.js`
             - `checktick_app/static/js/axe-core.min.js`
             - `checktick_app/static/js/redoc.standalone.min.js`
-            - `checktick_app/templates/base.html` (HTMX integrity hash)
-            - `checktick_app/surveys/templates/surveys/*.html` (SortableJS integrity hashes)
-            - `checktick_app/api/templates/api/redoc.html` (ReDoc integrity hash)
+            - `checktick_app/cdn_assets.json`
+            - `docs/cdn-libraries.md`
 
             ### Testing Checklist
             Before merging, please verify:
@@ -337,11 +340,12 @@ jobs:
             - [ ] Build survey page functions correctly
 
             ### Integrity Hashes (Auto-Updated)
-            The SRI integrity hashes in templates have been automatically updated:
+            The SRI hashes in `checktick_app/cdn_assets.json` (and generated docs) have been automatically updated:
 
-            **HTMX** (base.html): `sha384-${{ steps.check-htmx.outputs.new_hash }}`
-            **SortableJS** (detail.html, builder.html, groups.html, group_builder.html): `sha384-${{ steps.check-sortablejs.outputs.new_hash }}`
-            **ReDoc** (redoc.html): `sha384-${{ steps.check-redoc.outputs.new_hash }}`
+            **HTMX**: `sha384-${{ steps.check-htmx.outputs.new_hash }}`
+            **SortableJS**: `sha384-${{ steps.check-sortablejs.outputs.new_hash }}`
+            **axe-core**: `sha384-${{ steps.check-axecore.outputs.new_hash }}`
+            **ReDoc**: `sha384-${{ steps.check-redoc.outputs.new_hash }}`
 
       - name: Create per-dependency version issues
         if: steps.check-versions.outputs.htmx_update_available == 'true' ||
@@ -404,7 +408,7 @@ jobs:
                 `- **Current version:** ${d.current}\n` +
                 `- **Latest version:** ${d.latest}\n\n` +
                 `**Changelog:** ${d.changelog}\n\n` +
-                `Please review the upgrade and update the pinned version in .github/workflows/update-cdn-libraries.yml and run the workflow to refresh the files.`;
+                `Please review the upgrade and update the version in checktick_app/cdn_assets.json, then run the workflow to refresh files and hashes.`;
 
               await github.rest.issues.create({
                 owner: context.repo.owner,
@@ -417,15 +421,15 @@ jobs:
             }
         env:
           HTMX_UPDATE_AVAILABLE: ${{ steps.check-versions.outputs.htmx_update_available }}
-          HTMX_CURRENT: ${{ env.HTMX_VERSION }}
+          HTMX_CURRENT: ${{ steps.cdn-metadata.outputs.htmx_version }}
           HTMX_LATEST: ${{ steps.check-versions.outputs.htmx_latest }}
           SORTABLEJS_UPDATE_AVAILABLE: ${{ steps.check-versions.outputs.sortablejs_update_available }}
-          SORTABLEJS_CURRENT: ${{ env.SORTABLEJS_VERSION }}
+          SORTABLEJS_CURRENT: ${{ steps.cdn-metadata.outputs.sortablejs_version }}
           SORTABLEJS_LATEST: ${{ steps.check-versions.outputs.sortablejs_latest }}
           AXE_UPDATE_AVAILABLE: ${{ steps.check-versions.outputs.axecore_update_available }}
-          AXE_CURRENT: ${{ env.AXE_CORE_VERSION }}
+          AXE_CURRENT: ${{ steps.cdn-metadata.outputs.axecore_version }}
           AXE_LATEST: ${{ steps.check-versions.outputs.axecore_latest }}
           REDOC_UPDATE_AVAILABLE: ${{ steps.check-versions.outputs.redoc_update_available }}
-          REDOC_CURRENT: ${{ env.REDOC_VERSION }}
+          REDOC_CURRENT: ${{ steps.cdn-metadata.outputs.redoc_version }}
           REDOC_LATEST: ${{ steps.check-versions.outputs.redoc_latest }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

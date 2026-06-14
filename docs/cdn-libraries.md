@@ -4,284 +4,148 @@ category: security
 priority: 10
 ---
 
-CheckTick self-hosts critical JavaScript libraries with Subresource Integrity (SRI) verification for enhanced security. This document describes the libraries, their purposes, and how to update them.
+CheckTick self-hosts critical frontend libraries and enforces Subresource Integrity (SRI).
 
-## Why Self-Host?
+## Why self-host?
 
-1. **Security**: SRI hashes verify file integrity, preventing CDN compromise attacks
-2. **Privacy**: No third-party CDN tracking or analytics
-3. **Reliability**: No dependency on external CDN availability
-4. **Performance**: Can be served from same origin, reducing DNS lookups
+1. **Security**: SRI hashes verify file integrity and mitigate CDN compromise risk.
+2. **Privacy**: no third-party CDN tracking.
+3. **Reliability**: no runtime dependency on external CDN availability.
+4. **Performance**: same-origin serving can reduce connection overhead.
+
+## Single source of truth
+
+CDN asset metadata is maintained in:
+
+- `checktick_app/cdn_assets.json`
+
+This includes each asset's:
+
+- package name
+- pinned version
+- static target file path
+- source path inside the npm package
+- SRI hash
+
+Templates read SRI values from this manifest via template context (`cdn_assets.*.sri`), so hashes are no longer duplicated in template files.
 
 ## Libraries
 
-| Library      | Version | File                                              | Purpose                                 |
-| ------------ | ------- | ------------------------------------------------- | --------------------------------------- |
-| HTMX         | 2.0.10  | `checktick_app/static/js/htmx.min.js`             | Dynamic HTML updates without JavaScript |
-| SortableJS   | 1.15.7  | `checktick_app/static/js/sortable.min.js`         | Drag-and-drop reordering                |
-| axe-core     | 4.12.1  | `checktick_app/static/js/axe-core.min.js`         | WCAG accessibility testing              |
-| NHS Frontend | 8.1.0   | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling               |
-| ReDoc        | 2.5.3   | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation       |
+<!-- CDN_LIBRARIES_TABLE:START -->
+| Library | Version | File | Purpose |
+| ------- | ------- | ---- | ------- |
+| HTMX | 2.0.10 | `checktick_app/static/js/htmx.min.js` | Dynamic HTML updates without JavaScript |
+| SortableJS | 1.15.7 | `checktick_app/static/js/sortable.min.js` | Drag-and-drop reordering |
+| axe-core | 4.12.1 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
+| ReDoc | 2.5.3 | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation |
+| NHS Frontend | 8.1.0 | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling |
+<!-- CDN_LIBRARIES_TABLE:END -->
 
-## SRI Hashes
+## SRI hashes
 
-Current SRI hashes (SHA-384):
+Current SHA-384 SRI values:
 
+<!-- CDN_SRI_HASHES:START -->
 ### HTMX 2.0.10
 
 ```text
-sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V
+sha384-q2oWHKMnJry5BOtYUZkXcyieUmqzXIjdmKDYicmMspegPENZr4UrGc656JYEgJoo
 ```
 
 ### SortableJS 1.15.7
 
 ```text
-sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc
+sha384-pAVIuzMQbJcj7JX9XYTtp8sSNh3OvFXn0g9ldX+lANHPoXFdYVKw/2G1gS/eU62A
 ```
 
 ### axe-core 4.12.1
 
 ```text
-sha384-JQegRXq6EhTiWoGPFDmqbJNsDow5BoSsGhnaeDzGp+qyOFCuMZZ24qY2fz3FxZF5
-```
-
-### NHS Frontend 8.1.0
-
-```text
-sha384-qWZYzCDfWOMmbbg+HoBYKha59es/145h5uc93F1rxBFwJVruD2lcomcIwUlCwPDF
+sha384-BdMxweAM6a5IkRxVOGXhKT5nagnyiRc1i78hWgYKq7oOcHRcKBNtbeufhvCSqldt
 ```
 
 ### ReDoc 2.5.3
 
 ```text
-sha384-xiEssMQFSpSfLbzRZCGfxxIM5QDb2DTrU6vyoZdp2sV1L6pmOMy6MpTtUoLbpC96
+sha384-wGl2vRYcqJBa50CzY6euuShOQuBMr6jGCJwEZd2GpPR6Ht+9GDtNpAPpA5QAr7GJ
 ```
 
-## Automatic Updates
+### NHS Frontend 8.1.0
 
-GitHub Actions workflows automatically check for updates:
-
-- **Weekly Check**: Runs every Monday at 9:30am UTC
-- **Hash Verification**: Compares local files against CDN sources
-- **Version Check**: Alerts when newer versions are available
-- **PR Creation**: Creates PRs when files need updating
-
-### Workflows
-
-| Workflow      | File                                         | Schedule          |
-| ------------- | -------------------------------------------- | ----------------- |
-| CDN Libraries | `.github/workflows/update-cdn-libraries.yml` | Monday 9:30am UTC |
-
-## Manual Update Process
-
-### 1. Download Latest Version
-
-```bash
-# HTMX
-curl -o checktick_app/static/js/htmx.min.js https://unpkg.com/htmx.org@2.0.10/dist/htmx.min.js
-
-# Alternative: npm pack (recommended for reproducibility)
-# npm pack htmx.org@2.0.10 && tar -xzf htmx.org-2.0.10.tgz -C /tmp && \
-#   cp /tmp/package/dist/htmx.min.js checktick_app/static/js/htmx.min.js && rm htmx.org-2.0.10.tgz
-
-# SortableJS
-curl -o checktick_app/static/js/sortable.min.js https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js
-
-# Alternative: npm pack (recommended for reproducibility)
-# npm pack sortablejs@1.15.7 && tar -xzf sortablejs-1.15.7.tgz -C /tmp && \
-#   cp /tmp/package/Sortable.min.js checktick_app/static/js/sortable.min.js && rm sortablejs-1.15.7.tgz
-
-# axe-core
-curl -o checktick_app/static/js/axe-core.min.js https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.12.1/axe.min.js
-
-# Alternative: npm pack (recommended)
-# npm pack axe-core@4.12.1 && tar -xzf axe-core-4.12.1.tgz -C /tmp && \
-#   cp /tmp/package/axe.min.js checktick_app/static/js/axe-core.min.js && rm axe-core-4.12.1.tgz
-
-# NHS Frontend
-curl -o checktick_app/static/css/nhsuk-frontend.min.css https://cdn.jsdelivr.net/npm/nhsuk-frontend@8.1.0/dist/nhsuk.min.css
-
-# Alternative: npm pack (recommended)
-# npm pack nhsuk-frontend@8.1.0 && tar -xzf nhsuk-frontend-8.1.0.tgz -C /tmp && \
-#   cp /tmp/package/dist/nhsuk.min.css checktick_app/static/css/nhsuk-frontend.min.css && rm nhsuk-frontend-8.1.0.tgz
-
-# ReDoc (npm pack recommended - no unpkg/cdnjs alternative needed)
-npm pack redoc@2.5.3 && tar -xzf redoc-2.5.3.tgz -C /tmp && \
-  cp /tmp/package/bundles/redoc.standalone.js checktick_app/static/js/redoc.standalone.min.js && \
-  rm redoc-2.5.3.tgz
+```text
+sha384-IDDaUjZThM1cVGH55y4Yzz7YTgr55yuHEQYOnf3Hx0jpArWS5CgFIKTnSl6CHKbx
 ```
+<!-- CDN_SRI_HASHES:END -->
 
-### 2. Generate SRI Hash
+> The two sections above are generated from `checktick_app/cdn_assets.json` by `s/sync-cdn-docs`.
 
-```bash
-openssl dgst -sha384 -binary FILE.js | openssl base64 -A
-# For CSS files:
-openssl dgst -sha384 -binary FILE.css | openssl base64 -A
-```
+## Automation
 
-### 3. Update Templates
+### Workflow
 
-Update the `integrity` attribute in the relevant templates:
+| Workflow | File | Schedule |
+| --- | --- | --- |
+| CDN libraries check | `.github/workflows/update-cdn-libraries.yml` | Monday 9:30am UTC |
 
-**HTMX** - `checktick_app/templates/base.html`:
+### Updater scripts
 
-```html
-<script
-  src="{% static 'js/htmx.min.js' %}"
-  integrity="sha384-NEW_HASH_HERE"
-  crossorigin="anonymous"
-></script>
-```
+- `s/update-cdn-assets` — update one asset from npm, refresh manifest SRI/version, sync docs, append compliance log.
+- `s/sync-cdn-docs` — regenerate docs sections from the manifest only.
 
-**SortableJS** - Multiple templates:
+## Manual update process
 
-- `checktick_app/surveys/templates/surveys/detail.html`
-- `checktick_app/surveys/templates/surveys/builder.html`
-- `checktick_app/surveys/templates/surveys/groups.html`
-- `checktick_app/surveys/templates/surveys/group_builder.html`
-
-```html
-<script
-  src="{% static 'js/sortable.min.js' %}"
-  integrity="sha384-NEW_HASH_HERE"
-  crossorigin="anonymous"
-></script>
-```
-
-**NHS Frontend** - Survey templates with NHS styling enabled:
-
-- `checktick_app/surveys/templates/surveys/detail.html`
-- `checktick_app/surveys/templates/surveys/builder.html`
-- `checktick_app/surveys/templates/surveys/groups.html`
-- `checktick_app/surveys/templates/surveys/dashboard.html`
-
-```html
-<link
-  href="{% static 'css/nhsuk-frontend.min.css' %}"
-  integrity="sha384-NEW_HASH_HERE"
-  crossorigin="anonymous"
-  rel="stylesheet"
-/>
-```
-
-### 4. Test
-
-Before deploying:
-
-- [ ] Survey form submissions work (HTMX)
-- [ ] Question reordering works (SortableJS)
-- [ ] No console errors or CSP violations
-
-## Upgrading Versions
-
-When upgrading a library version, **all three of the following must be updated**. Missing any one of them will cause the automated check to keep raising a new issue.
-
-### 1. Workflow pin — `.github/workflows/update-cdn-libraries.yml`
-
-Update the `env` variable for the library (e.g. `AXE_CORE_VERSION: "4.12.1"`). This is what the weekly check compares against npm to decide whether to raise an issue.
-
-### 2. Static file + SRI hash — templates
-
-Replace the `.min.js` / `.min.css` file in `checktick_app/static/` and update the `integrity="sha384-…"` attribute in all templates that reference it. Use `s/update-cdn-assets` or the manual `npm pack` steps above.
-
-### 3. Compliance log — `docs/compliance/vulnerability-patch-log.md`
-
-Add a row recording the old → new version, the new SRI hash, and the files changed. Security/maintenance patches go here; routine non-security bumps go in `docs/compliance/infrastructure-technical-change-log.md` instead.
-
----
-
-After completing all three steps:
-
-- Review the library changelog for breaking changes
-- Run `s/test --no-a11y` to verify nothing is broken
-- Commit and open a PR
-
-## Security Considerations
-
-- **SRI verification** ensures files haven't been tampered with
-- **Same-origin serving** eliminates CDN trust requirements
-- **Version pinning** prevents unexpected updates
-- **Weekly monitoring** alerts to new versions and security fixes
-
-## Troubleshooting
-
-### SRI Hash Mismatch
-
-If a library fails to load with "SRI mismatch":
-
-1. Re-download the file from the CDN
-2. Regenerate the SRI hash
-3. Update the template with new hash
-4. Clear browser cache and test
-
-### CDN Unavailable
-
-Since files are self-hosted, CDN outages don't
-| NHS Frontend | jsdelivr.net | unpkg.com |affect the application. If you need to re-download:
-
-1. Check CDN status (unpkg, jsDelivr)
-2. Try alternative CDN source
-3. Use npm to download: `npm pack htmx.org@2.0.10`
-
-## CDN Sources
-
-| Library    | Primary CDN          | Alternative  |
-| ---------- | -------------------- | ------------ |
-| HTMX       | unpkg.com            | jsdelivr.net |
-| SortableJS | jsdelivr.net         | unpkg.com    |
-| axe-core   | cdnjs.cloudflare.com | unpkg.com    |
-| ReDoc      | npm registry (redoc) | cdn.redoc.ly |
-
-## CI Source-of-Truth (npm)
-
-Our GitHub Actions workflow now uses `npm pack` as the canonical source-of-truth when updating self-hosted JavaScript libraries. Instead of directly curling files from third-party CDNs, the workflow:
-
-- Uses `npm pack <package>@<version>` to retrieve the package tarball from the registry
-- Extracts the packaged assets into a temporary directory
-- Locates the appropriate `*.min.js` file (for example, `axe-core.min.js`)
-- Computes the SHA-384 SRI from the exact bytes in the packed artifact
-- Atomically moves the file into `checktick_app/static/js/` and cleans up the temp files
-
-This approach ensures that the file we ship is identical to the npm registry artifact, avoids leaving temporary files in the repository root, and produces reproducible SRI hashes.
-
-## Using the updater script
-
-We provide a small helper script at the repository root to make manual updates safe and reproducible: `s/update-cdn-assets` (no file extension).
-
-- Requirements: `node` and `npm` available on PATH, `openssl` and `tar` on PATH, `python3` for template patching.
-- Location: `s/update-cdn-assets`
-
-Usage examples:
-
-Dry run (preview changes, no file writes):
-
-```bash
-s/update-cdn-assets --dry-run
-```
-
-Interactive update (pick a package, confirm):
+Preferred path:
 
 ```bash
 s/update-cdn-assets
 ```
 
-Non-interactive update (accept prompts automatically):
+Useful modes:
 
 ```bash
-s/update-cdn-assets --yes
+# preview only
+s/update-cdn-assets --dry-run
+
+# non-interactive update of a specific asset
+s/update-cdn-assets --yes --key axe_core
+
+# sync docs from manifest without changing assets
+python3 s/sync-cdn-docs
 ```
 
-What the script does when updating:
+## Upgrading versions
 
-- Lists configured packages and shows the current version (from this document) and the latest on npm
-- Downloads the package via `npm pack` into a temp dir and extracts it
-- Locates the expected minified asset and copies it atomically into `checktick_app/static/js/`
-- Computes the SHA-384 SRI and updates matching templates' `integrity` attributes (best-effort)
-- Appends a single-line entry to `docs/compliance/infrastructure-technical-change-log.md` for routine (non-security) changes
+When upgrading a CDN library:
 
-Notes & pitfalls:
+1. **Update from one place**: use `s/update-cdn-assets` (or edit `checktick_app/cdn_assets.json` directly if needed).
+2. **Sync generated docs**: `python3 s/sync-cdn-docs` (automatically run by `s/update-cdn-assets`).
+3. **Record compliance entry**:
+   - security/CVE-driven: `docs/compliance/vulnerability-patch-log.md`
+   - routine non-security maintenance: `docs/compliance/infrastructure-technical-change-log.md`
 
-- Package layout varies: if the script cannot find the minified file it will print the list of `*.min.js` files found in the package so you can inspect and copy manually.
-- The script updates a small set of templates by default. Extend the `templates` list in the script if you have other locations where the script tag appears.
-- The script updates `docs/compliance/infrastructure-technical-change-log.md` automatically when not in `--dry-run` mode for routine maintenance updates. Record CVE/security remediations in `docs/compliance/vulnerability-patch-log.md`.
-- The script does not yet update `docs/cdn-libraries.md` automatically — we recommend manually bumping the version and SRI in this document or running the script and then editing the docs to match.
+Then run validation (`s/test --no-a11y`) before PR.
+
+## Troubleshooting
+
+### SRI mismatch
+
+If a library fails to load due to SRI mismatch:
+
+1. Re-download via `npm pack` (or rerun `s/update-cdn-assets`).
+2. Recompute/update hash in `checktick_app/cdn_assets.json`.
+3. Sync docs with `python3 s/sync-cdn-docs`.
+4. Clear browser cache and re-test.
+
+### CDN unavailable
+
+Because assets are self-hosted, runtime app availability is unaffected by CDN outages.
+
+## CDN sources
+
+| Library | Primary source | Alternative |
+| --- | --- | --- |
+| HTMX | unpkg.com | jsdelivr.net |
+| SortableJS | jsdelivr.net | unpkg.com |
+| axe-core | cdnjs.cloudflare.com | unpkg.com |
+| ReDoc | npm registry (redoc) | cdn.redoc.ly |
+| NHS Frontend | jsdelivr.net | unpkg.com |
