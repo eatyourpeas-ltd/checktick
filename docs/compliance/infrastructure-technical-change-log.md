@@ -123,3 +123,6 @@ Use this section for routine dependency/library updates where no specific CVE or
 | Date | Requestor | Change Description | Business Justification | Approved By | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | 09/05/2026 | Dr Simon Chapman | Added split logging policy: non-security dependency updates tracked here; CVE/security remediations tracked in vulnerability patch log | Improve audit clarity by separating maintenance updates from security incidents | Dr Serena Haywood (SIRO) | ✅ Active |
+| 14/06/2026 | Dr Simon Chapman | Updated self-hosted axe-core (4.12.0 -> 4.12.1) and regenerated SHA-384 SRI (sha384-JQegRXq6EhTiWoGPFDmqbJNsDow5BoSsGhnaeDzGp+qyOFCuMZZ24qY2fz3FxZF5) | Routine JavaScript dependency maintenance (no CVE remediation referenced) | Dr Serena Haywood (SIRO) | ✅ Active |
+
+| 14/06/2026 | Dr Simon Chapman | Updated self-hosted redoc (2.5.2 -> 2.5.3) and regenerated SHA-384 SRI (sha384-xiEssMQFSpSfLbzRZCGfxxIM5QDb2DTrU6vyoZdp2sV1L6pmOMy6MpTtUoLbpC96) | Routine JavaScript dependency maintenance (no CVE remediation referenced) | Dr Serena Haywood (SIRO) | ✅ Active |

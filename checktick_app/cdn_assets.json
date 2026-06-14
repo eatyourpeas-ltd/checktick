@@ -1,0 +1,54 @@
+{
+  "assets": [
+    {
+      "key": "htmx",
+      "name": "HTMX",
+      "npm_package": "htmx.org",
+      "version": "2.0.10",
+      "static_file": "js/htmx.min.js",
+      "source_path": "dist/htmx.min.js",
+      "sri": "sha384-q2oWHKMnJry5BOtYUZkXcyieUmqzXIjdmKDYicmMspegPENZr4UrGc656JYEgJoo",
+      "purpose": "Dynamic HTML updates without JavaScript"
+    },
+    {
+      "key": "sortablejs",
+      "name": "SortableJS",
+      "npm_package": "sortablejs",
+      "version": "1.15.7",
+      "static_file": "js/sortable.min.js",
+      "source_path": "Sortable.min.js",
+      "sri": "sha384-pAVIuzMQbJcj7JX9XYTtp8sSNh3OvFXn0g9ldX+lANHPoXFdYVKw/2G1gS/eU62A",
+      "purpose": "Drag-and-drop reordering"
+    },
+    {
+      "key": "axe_core",
+      "name": "axe-core",
+      "npm_package": "axe-core",
+      "version": "4.12.1",
+      "static_file": "js/axe-core.min.js",
+      "source_path": "axe.min.js",
+      "sri": "sha384-BdMxweAM6a5IkRxVOGXhKT5nagnyiRc1i78hWgYKq7oOcHRcKBNtbeufhvCSqldt",
+      "purpose": "WCAG accessibility testing"
+    },
+    {
+      "key": "redoc",
+      "name": "ReDoc",
+      "npm_package": "redoc",
+      "version": "2.5.3",
+      "static_file": "js/redoc.standalone.min.js",
+      "source_path": "bundles/redoc.standalone.js",
+      "sri": "sha384-wGl2vRYcqJBa50CzY6euuShOQuBMr6jGCJwEZd2GpPR6Ht+9GDtNpAPpA5QAr7GJ",
+      "purpose": "OpenAPI interactive documentation"
+    },
+    {
+      "key": "nhs_frontend",
+      "name": "NHS Frontend",
+      "npm_package": "nhsuk-frontend",
+      "version": "8.1.0",
+      "static_file": "css/nhsuk-frontend.min.css",
+      "source_path": "dist/nhsuk.min.css",
+      "sri": "sha384-IDDaUjZThM1cVGH55y4Yzz7YTgr55yuHEQYOnf3Hx0jpArWS5CgFIKTnSl6CHKbx",
+      "purpose": "NHS design system styling"
+    }
+  ]
+}

@@ -1,11 +1,12 @@
 import logging
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 
+from checktick_app.cdn_assets import get_cdn_assets
 from checktick_app.surveys.models import (
     Organization,
     OrganizationMembership,
@@ -389,4 +390,5 @@ def branding(request):
         "settings": {
             "HCAPTCHA_SITEKEY": getattr(settings, "HCAPTCHA_SITEKEY", ""),
         },
+        "cdn_assets": get_cdn_assets(),
     }

@@ -66,9 +66,9 @@
   </div>
 </div>
 
-<script src="{% static 'js/sortable.min.js' %}"
+<script src="{% static cdn_assets.sortablejs.static_file %}"
   nonce="{{ request.csp_nonce }}"
-  integrity="sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc"
+  integrity="{{ cdn_assets.sortablejs.sri }}"
   crossorigin="anonymous"></script>
 <script src="{% static 'js/builder.js' %}" nonce="{{ request.csp_nonce }}"></script>
 {% endblock %}

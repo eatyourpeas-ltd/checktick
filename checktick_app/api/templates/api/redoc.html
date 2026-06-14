@@ -14,8 +14,8 @@
     </div>
   </div>
 </div>
-<script src="{% static 'js/redoc.standalone.min.js' %}"
-        integrity="sha384-70P5pmIdaQdVbxvjhrcTDv1uKcKqalZ3OHi7S2J+uzDl0PW8dO6L+pHOpm9EEjGJ"
+<script src="{% static cdn_assets.redoc.static_file %}"
+        integrity="{{ cdn_assets.redoc.sri }}"
         crossorigin="anonymous"></script>
 <redoc spec-url="/api/schema"></redoc>
 {% endblock %}

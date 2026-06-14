@@ -293,9 +293,9 @@
         </div>
       </div>
     </footer>
-    <script src="{% static 'js/htmx.min.js' %}"
+    <script src="{% static cdn_assets.htmx.static_file %}"
             nonce="{{ request.csp_nonce }}"
-          integrity="sha384-q2oWHKMnJry5BOtYUZkXcyieUmqzXIjdmKDYicmMspegPENZr4UrGc656JYEgJoo"
+            integrity="{{ cdn_assets.htmx.sri }}"
             crossorigin="anonymous"></script>
     <script nonce="{{ request.csp_nonce }}">
       // Configure HTMX *after* it loads so these properties are written

@@ -38,15 +38,25 @@ It signposts common workflows and links to the full docs instead of duplicating 
 - See `docs/versioning-and-deployment.md` for full trigger and tagging rules.
 - Typically bumped by CTO; agents should follow semver conventions if contributing version changes.
 
-## Dependencies
+## CDN / Self-Hosted JS Dependencies
 
-- For self-hosted JavaScript dependency and SRI updates, use `docs/cdn-libraries.md` as the source of truth.
-- Follow the `npm pack` + SHA-384 SRI workflow in `docs/cdn-libraries.md` (or use `s/update-cdn-assets` where appropriate) when bumping JS packages.
-- **When bumping a CDN library version, three places must all be updated — missing any one will cause the automated check to keep raising a new issue:**
-  1. The version pin in `.github/workflows/update-cdn-libraries.yml`
-  2. The static file in `checktick_app/static/` and the `integrity="sha384-…"` attribute in all templates that reference it
-  3. A row in `docs/compliance/vulnerability-patch-log.md` (security/maintenance) or `docs/compliance/infrastructure-technical-change-log.md` (routine non-security)
-- See `docs/cdn-libraries.md` → **Upgrading Versions** for the full step-by-step checklist.
+- **Single source of truth:** `checktick_app/cdn_assets.json` holds the version, SRI hash, npm package name, static file path, and source path for every self-hosted CDN asset.
+- Templates read SRI and file path from this manifest via the `cdn_assets` template context variable (injected by `checktick_app/context_processors.py` → `checktick_app/cdn_assets.py`). **Do not hardcode SRI hashes or static file paths in templates.**
+- To update a CDN dependency, run `s/update-cdn-assets`. This downloads the asset from npm, copies it into `checktick_app/static/`, updates the manifest version and SRI, regenerates `docs/cdn-libraries.md`, and appends a compliance log entry.
+- Useful flags:
+  - `s/update-cdn-assets --dry-run` — preview only.
+  - `s/update-cdn-assets --yes --key axe_core` — non-interactive update of a specific asset.
+  - `s/update-cdn-assets --sync-docs` — regenerate docs from the manifest without downloading anything.
+- `s/sync-cdn-docs` (also called automatically by the updater) regenerates the auto-generated table and SRI sections inside `docs/cdn-libraries.md` from the manifest.
+- The GitHub Actions workflow (`.github/workflows/update-cdn-libraries.yml`) reads pinned versions from the manifest (not from `env:` variables) and writes updated SRI hashes back to the manifest via `jq`.
+- **When bumping a CDN library version, only two things are needed:**
+  1. Run `s/update-cdn-assets` (handles manifest, static file, docs, and compliance log).
+  2. If the update is security-driven, also add a row to `docs/compliance/vulnerability-patch-log.md`.
+- See `docs/cdn-libraries.md` for the full architecture and troubleshooting guide.
+
+## Other Dependencies
+
+- Python dependencies are managed via Poetry (`pyproject.toml` / `poetry.lock`).
 
 ## Notes
 
