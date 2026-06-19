@@ -39,7 +39,7 @@ To satisfy NCSC guidelines, every logged event must contain:
 
 ## 5. Review Procedure
 
-* **Automated:** Sentry/Slack alerts for 'Level: Error' or 'Level: Critical' events.
+* **Automated:** Email alerts for 'Level: Error' or 'Level: Critical' events.
 * **Quarterly:** CTO and DPO review logs via the Platform Admin dashboard (`/platform-admin/logs/`) to:
   * Analyse 'Authentication Success/Fail' ratios for unusual patterns
   * Review critical and warning events
@@ -53,6 +53,22 @@ The Platform Admin dashboard provides superuser-only access to:
 
 * **Application Logs:** All `AuditLog` entries from the database including authentication events, 2FA actions, account changes, and survey access.
 * **Infrastructure Logs:** Container/application logs from the hosting provider (if configured via `HOSTING_API_TOKEN`, `HOSTING_PROJECT_ID`, `HOSTING_SERVICE_ID`).
+
+**⚠️ Patient Data Never in Logs:**
+Under no circumstances does patient identifiable information appear in log files. The logging system is designed with explicit PII exclusion:
+- Patient names, dates of birth, addresses, or NHS numbers ❌ NEVER in logs
+- Encrypted survey responses (`enc_demographics`, `enc_answers`) ❌ NEVER logged
+- Sensitive health data from survey answers
+
+**Patient Data NEVER in logs**
+
+Only non-identifiable data is logged:
+- Anonymous user identifiers (`user.username`, not full names)
+- Numeric database IDs (surveys, teams, organizations, responses)
+- Event types and ISO 8601 timestamps
+- IP addresses and user agents (for security monitoring)
+- Non-sensitive metadata (`subscription_status`, `payment_provider`)
+- Error messages without patient context
 
 ### Log Categories Tracked
 
