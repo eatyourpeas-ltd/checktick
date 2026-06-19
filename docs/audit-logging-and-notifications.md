@@ -20,6 +20,7 @@ CheckTick uses a unified `AuditLog` model for all security-relevant events. The 
 - **Severity levels**: INFO, WARNING, CRITICAL (auto-detected based on action)
 - **Context capture**: IP address, user agent, actor, target user
 - **Structured metadata**: JSON field for additional context
+- **Email notifications**: Email notifications are sent for critical security events to DevOps via SMTP. The list of recipients is configured in the `ADMINS` variable in `settings.py` and accepts the CTO email address by default.
 
 #### Logging Security Events
 
