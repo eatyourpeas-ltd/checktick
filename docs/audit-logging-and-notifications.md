@@ -22,6 +22,25 @@ CheckTick uses a unified `AuditLog` model for all security-relevant events. The 
 - **Structured metadata**: JSON field for additional context
 - **Email notifications**: Email notifications are sent for critical security events to DevOps via SMTP. The list of recipients is configured in the `ADMINS` variable in `settings.py` and accepts the CTO email address by default.
 
+**🔒 Patient Data Never in Logs Guarantee**
+
+Under no circumstances does patient identifiable information appear in log files. The logging system is explicitly designed to exclude:
+
+- Patient names, dates of birth, addresses, or NHS numbers
+- Encrypted survey responses (`enc_demographics`, `enc_answers`)
+- Sensitive health data from survey answers
+- Any form of patient-identifiable information from survey data
+
+**Only non-identifiable data is logged:**
+- Anonymous user identifiers (`user.username`, not full names)
+- Numeric database IDs (surveys, teams, organizations, responses)
+- Event types and ISO 8601 timestamps
+- IP addresses and user agents (for security monitoring)
+- Non-sensitive metadata (`subscription_status`, `payment_provider`)
+- Error messages and stack traces that **never** include patient context
+
+This design ensures compliance with GDPR Article 5(1)(c) (data minimisation) and meets DCB1596 requirements for secure logging. Even in error scenarios, the logging infrastructure is engineered to contain NO patient data—only system metadata and error descriptions.
+
 #### Logging Security Events
 
 Use the convenience method for security events:
@@ -170,11 +189,11 @@ All audit entries must follow this structure:
 
 Audit logs MUST be:
 
-- ✅ Write-once (no modifications after creation)
-- ✅ Cryptographically signed (detect tampering)
-- ✅ Replicated (survive single-point failures)
-- ✅ Accessible for compliance audits
-- ✅ Searchable by date, user, event type
+- Write-once (no modifications after creation)
+- Cryptographically signed (detect tampering)
+- Replicated (survive single-point failures)
+- Accessible for compliance audits
+- Searchable by date, user, event type
 
 Implementation options:
 

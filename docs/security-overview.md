@@ -24,16 +24,16 @@ CheckTick is committed to **UK Data Sovereignty**; we intentionally prioritize U
 
 | OWASP Category | Status | Key Controls |
 |----------------|--------|--------------|
-| A01: Broken Access Control | ✅ Mitigated | Role-based access, survey-level permissions, team/org hierarchy |
-| A02: Cryptographic Failures | ✅ Mitigated | AES-256-GCM encryption, secure key derivation, Vault integration |
-| A03: Injection | ✅ Mitigated | Parameterized queries, Django ORM, input validation |
-| A04: Insecure Design | ✅ Mitigated | Privacy-by-design, threat modelling, security reviews |
-| A05: Security Misconfiguration | ✅ Mitigated | Secure defaults, CSP headers, environment separation |
-| A06: Vulnerable Components | ✅ Mitigated | pip-audit scanning, automated updates, SRI verification |
-| A07: Auth Failures | ✅ Mitigated | 2FA, password policies, session management, lockout |
-| A08: Software/Data Integrity | ✅ Mitigated | SRI hashes, signed commits, CI/CD security |
-| A09: Logging Failures | ✅ Mitigated | Comprehensive audit logging, SIEM-ready format |
-| A10: SSRF | ✅ Mitigated | Restricted network access, URL validation |
+| A01: Broken Access Control | Mitigated | Role-based access, survey-level permissions, team/org hierarchy |
+| A02: Cryptographic Failures | Mitigated | AES-256-GCM encryption, secure key derivation, Vault integration |
+| A03: Injection | Mitigated | Parameterized queries, Django ORM, input validation |
+| A04: Insecure Design | Mitigated | Privacy-by-design, threat modelling, security reviews |
+| A05: Security Misconfiguration | Mitigated | Secure defaults, CSP headers, environment separation |
+| A06: Vulnerable Components | Mitigated | pip-audit scanning, automated updates, SRI verification |
+| A07: Auth Failures | Mitigated | 2FA, password policies, session management, lockout |
+| A08: Software/Data Integrity | Mitigated | SRI hashes, signed commits, CI/CD security |
+| A09: Logging Failures | Mitigated | Comprehensive audit logging, SIEM-ready format |
+| A10: SSRF | Mitigated | Restricted network access, URL validation |
 
 ---
 
@@ -423,6 +423,20 @@ All external JavaScript includes SRI hashes:
 #### Unified Audit Logging
 
 All security-relevant events are logged to the `AuditLog` model:
+
+**⚠️ Patient Data Never in Logs:**
+Under no circumstances does patient identifiable information appear in log files. The logging system is designed with explicit PII exclusion:
+- Patient names, dates of birth, addresses, or NHS numbers ❌ NEVER in logs
+- Encrypted survey responses (`enc_demographics`, `enc_answers`) ❌ NEVER logged
+- Sensitive health data from survey answers ❌ NEVER in logs
+
+Only non-identifiable data is logged:
+- ✅ Anonymous user identifiers (`user.username`, not full names)
+- ✅ Numeric database IDs (surveys, teams, organizations, responses)
+- ✅ Event types and ISO 8601 timestamps
+- ✅ IP addresses and user agents (for security monitoring)
+- ✅ Non-sensitive metadata (`subscription_status`, `payment_provider`)
+- ✅ Error messages without patient context
 
 **Authentication Events**:
 
