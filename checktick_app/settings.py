@@ -1,9 +1,9 @@
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
-from csp.constants import NONCE as CSP_NONCE
 import environ
+from csp.constants import NONCE as CSP_NONCE
 
 # Detect if running tests
 TESTING = "pytest" in sys.modules or "test" in sys.argv
@@ -580,6 +580,11 @@ else:
     )
 
 # Email configuration
+ADMINS = [
+    # Add your admin email(s) here as tuples of (name, email)
+    # Example: ADMINS = [("DevOps Team", "devops@eatyourpeas.dev")]
+    [("DevOps Team", CTO_EMAIL)]
+]
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@example.com")
 SERVER_EMAIL = env("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
 
@@ -678,6 +683,13 @@ LOGGING = {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
         },
+        # Email admin on critical errors and exceptions
+        "mail_admins": {
+            "level": "ERROR",
+            "class": "django.utils.log.AdminEmailHandler",
+            "include_html": True,
+            "formatter": "verbose",
+        },
     },
     "root": {
         "handlers": ["console"],
@@ -689,9 +701,20 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "django.db": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        # Email notifications for Django request errors
+        "django.request": {
+            "handlers": ["console", "mail_admins"],
+            "level": "ERROR",
+            "propagate": False,
+        },
         "checktick_app": {
             "handlers": ["console"],
-            "level": "INFO",
+            "level": "ERROR",
             "propagate": False,
         },
         # Email-specific logging
