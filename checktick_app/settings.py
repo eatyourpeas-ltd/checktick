@@ -583,7 +583,7 @@ else:
 ADMINS = [
     # Add your admin email(s) here as tuples of (name, email)
     # Example: ADMINS = [("DevOps Team", "devops@eatyourpeas.dev")]
-    [("DevOps Team", CTO_EMAIL)]
+    ("DevOps Team", CTO_EMAIL),
 ]
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@example.com")
 SERVER_EMAIL = env("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
