@@ -5,7 +5,7 @@
 set -e
 
 echo "🔒 CheckTick Security Audit"
-echo "==========================="
+echo "=========================="
 echo ""
 
 # Colors for output

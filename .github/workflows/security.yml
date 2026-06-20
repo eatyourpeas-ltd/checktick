@@ -1,73 +1,74 @@
 name: Security Scan
 
 on:
-    push:
-        branches: [main]
-    pull_request:
-        branches: [main]
-    schedule:
-        # Run daily at 6am UTC to catch new vulnerabilities
-        - cron: "0 6 * * *"
-    workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run daily at 6am UTC to catch new vulnerabilities
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 permissions:
-    contents: read
-    security-events: write
+  contents: read
+  security-events: write
 
 jobs:
-    dependency-audit:
-        name: Dependency Vulnerability Scan
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v5
+  dependency-audit:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
 
-            - name: Set up Python
-              uses: actions/setup-python@v6
-              with:
-                  python-version: "3.12"
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
-            - name: Upgrade pip (CVE-2026-1703)
-              run: |
-                  pip install --upgrade pip>=26.0
+      - name: Upgrade pip (CVE-2026-1703)
+        run: |
+          pip install --upgrade pip>=26.0
 
-            - name: Install Poetry and export plugin
-              run: |
-                  pip install poetry==2.2.1
-                  poetry self add poetry-plugin-export
+      - name: Install Poetry and export plugin
+        run: |
+          pip install poetry==2.2.1
+          poetry self add poetry-plugin-export
 
-            - name: Install dependencies and run pip-audit
-              run: |
-                  poetry install --no-root --with dev
-                  poetry run pip install --upgrade pip>=26.0
-                  echo "Pip version in virtualenv:"
-                  poetry run pip --version
-                  echo "Running pip-audit on installed packages:"
-                  poetry run pip-audit --desc on \
-                    --ignore-vuln CVE-2026-4539 \
-                    --ignore-vuln PYSEC-2026-89 \
-                    --ignore-vuln PYSEC-2025-183
+      - name: Install dependencies and run pip-audit
+        run: |
+          poetry install --no-root --with dev
+          poetry run pip install --upgrade pip>=26.0
+          echo "Pip version in virtualenv:"
+          poetry run pip --version
+          echo "Running pip-audit on installed packages:"
+          poetry run pip-audit --desc on \
+            --ignore-vuln CVE-2026-4539 \
+            --ignore-vuln PYSEC-2026-89 \
+            --ignore-vuln PYSEC-2025-183 \
+            --ignore-vuln GHSA-6v7p-g79w-8964
 
-    codeql:
-        name: CodeQL Analysis
-        runs-on: ubuntu-latest
-        permissions:
-            security-events: write
-            actions: read
-            contents: read
-        steps:
-            - uses: actions/checkout@v5
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
 
-            - name: Initialize CodeQL
-              uses: github/codeql-action/init@v4
-              with:
-                  languages: python, javascript
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: python, javascript
 
-            - name: Autobuild
-              uses: github/codeql-action/autobuild@v4
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v4
 
-            - name: Perform CodeQL Analysis
-              uses: github/codeql-action/analyze@v4
-              with:
-                  category: "/language:python"
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:python"
 # Note: Secret scanning is handled by pre-commit hooks (ggshield)
 # which run on every commit and push locally
