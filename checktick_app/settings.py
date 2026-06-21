@@ -671,7 +671,7 @@ DEFAULT_STREAM_NAME = "prod"
 # Set environment variables in production:
 # LOGS_BASE_URL=http://your-openobserve-server:5080
 # LOGS_KEY=your-api-key-token
-# LOGS_ORGANIZATION=checktick
+# LOGS_ORGANISATION=checktick
 # LOGS_STREAM_NAME=prod_logs
 LOGS_BASE_URL = os.environ.get("LOGS_BASE_URL")
 LOGS_KEY = os.environ.get("LOGS_KEY")

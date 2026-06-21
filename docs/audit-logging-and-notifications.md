@@ -10,6 +10,10 @@ This document specifies the logging, notification, and SIEM requirements for Che
 
 For a complete overview of security controls aligned with OWASP Top 10, see [Security Overview](/docs/security-overview/).
 
+## Infrastructure Logging
+
+For information about self-hosted logging configuration via OpenObserve, see [Infrastructure Logging](/docs/infrastructure-logging/).
+
 ## Audit Logging Requirements
 
 ### Implementation

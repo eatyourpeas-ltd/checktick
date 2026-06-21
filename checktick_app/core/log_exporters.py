@@ -32,12 +32,12 @@ class OpenObserveExporter(logging.Handler):
     - LOGS_KEY or LOGS_ACCESS_KEY: OpenObserve API key/token (required for activation)
 
     Optional environment variables:
-    - LOGS_ORGANIZATION: OpenObserve organization name (default: "checktick")
+    - LOGS_ORGANISATION: OpenObserve organization name (default: "checktick")
     - LOGS_STREAM_NAME: OpenObserve stream name (default: "prod")
     """
 
     DEFAULT_BASE_URL = "http://localhost:5080"
-    DEFAULT_ORGANIZATION = "checktick"
+    DEFAULT_ORGANISATION = "checktick"
     DEFAULT_STREAM_NAME = "prod"
 
     def __init__(
@@ -68,10 +68,7 @@ class OpenObserveExporter(logging.Handler):
             self.base_url = base_url or settings.LOGS_BASE_URL
             self.key = key or settings.LOGS_KEY or settings.LOGS_ACCESS_KEY
             self.organization = (
-                organization
-                or settings.LOGS_ORGANIZATION
-                or settings.LOGS_ORANIZATION  # typo compatibility
-                or self.DEFAULT_ORGANIZATION
+                organization or settings.LOGS_ORGANISATION or self.DEFAULT_ORGANISATION
             )
             self.stream_name = stream_name or (
                 settings.LOGS_STREAM_NAME or self.DEFAULT_STREAM_NAME
