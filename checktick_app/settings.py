@@ -1,9 +1,9 @@
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
-from csp.constants import NONCE as CSP_NONCE
 import environ
+from csp.constants import NONCE as CSP_NONCE
 
 # Detect if running tests
 TESTING = "pytest" in sys.modules or "test" in sys.argv
@@ -665,6 +665,19 @@ CHECKTICK_WARN_BEFORE_DELETION_DAYS = [
 ]
 
 # Logging Configuration
+# OpenObserve Log Exporter Configuration
+DEFAULT_ORGANISATION = "checktick"
+DEFAULT_STREAM_NAME = "prod"
+# Set environment variables in production:
+# LOGS_BASE_URL=http://your-openobserve-server:5080
+# LOGS_KEY=your-api-key-token
+# LOGS_ORGANIZATION=checktick
+# LOGS_STREAM_NAME=prod_logs
+LOGS_BASE_URL = os.environ.get("LOGS_BASE_URL")
+LOGS_KEY = os.environ.get("LOGS_KEY")
+LOGS_ORGANISATION = os.environ.get("LOGS_ORGANISATION", DEFAULT_ORGANISATION)
+LOGS_STREAM_NAME = os.environ.get("LOGS_STREAM_NAME", DEFAULT_STREAM_NAME)
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -683,6 +696,15 @@ LOGGING = {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
         },
+        # OpenObserve Log Exporter - only when configured
+        "openobserve": {
+            "()": "checktick_app.core.log_exporters.OpenObserveExporter",
+            "level": "ERROR",
+            "base_url": LOGS_BASE_URL,
+            "key": LOGS_KEY,
+            "organization": LOGS_ORGANIZATION,
+            "stream_name": LOGS_STREAM_NAME,
+        },
         # Email admin on critical errors and exceptions
         "mail_admins": {
             "level": "ERROR",
@@ -692,7 +714,7 @@ LOGGING = {
         },
     },
     "root": {
-        "handlers": ["console"],
+        "handlers": ["console", "openobserve"],
         "level": "INFO",
     },
     "loggers": {
