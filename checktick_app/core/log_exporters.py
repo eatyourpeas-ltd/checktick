@@ -11,8 +11,8 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-import requests
 from django.conf import settings
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class OpenObserveExporter(logging.Handler):
             self._error_backoff = 30  # seconds
         else:
             # Silent handler - no overhead when disabled
-            logger.debug(f"OpenObserve exporter disabled: missing credentials")
+            logger.debug("OpenObserve exporter disabled: missing credentials")
 
     def make_request(self, record: logging.LogRecord) -> None:
         """Send log record to OpenObserve via HTTP POST. Returns immediately if disabled."""
