@@ -702,7 +702,7 @@ LOGGING = {
             "level": "ERROR",
             "base_url": LOGS_BASE_URL,
             "key": LOGS_KEY,
-            "organization": LOGS_ORGANIZATION,
+            "organization": LOGS_ORGANISATION,
             "stream_name": LOGS_STREAM_NAME,
         },
         # Email admin on critical errors and exceptions
