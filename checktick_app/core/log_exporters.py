@@ -7,8 +7,10 @@ with timestamps, severity levels, logger names, and message content.
 
 from __future__ import annotations
 
+import base64
 import logging
 import time
+import traceback
 from typing import Any, Dict, Optional
 
 from django.conf import settings
@@ -57,10 +59,8 @@ class OpenObserveExporter(logging.Handler):
         super().__init__(logging.ERROR)  # Set level to ERROR by default
 
         # Auto-determine enabled status based on credentials
-        self.enabled = (
-            bool(bool(key is not None and base_url is not None))
-            and settings.LOGS_KEY is not None
-            and settings.LOGS_BASE_URL is not None
+        self.enabled = (key is not None and base_url is not None) or (
+            settings.LOGS_KEY is not None and settings.LOGS_BASE_URL is not None
         )
 
         # Only set credentials if enabled
@@ -81,33 +81,45 @@ class OpenObserveExporter(logging.Handler):
             # Silent handler - no overhead when disabled
             logger.debug("OpenObserve exporter disabled: missing credentials")
 
-    def make_request(self, record: logging.LogRecord) -> None:
-        """Send log record to OpenObserve via HTTP POST. Returns immediately if disabled."""
-        if not self.enabled:
-            return
-        if self._should_skip_record(record):
-            return
+    def emit(self, record: logging.LogRecord) -> None:
+        """Entry point for the logging handler."""
+        self.make_request(record)
 
-        now = time.time()
-        # Rate limiting: skip if too recent
-        if now - self.last_send < self.send_interval:
-            return
+    def _should_skip_record(self, record: logging.LogRecord) -> bool:
+        """Check if the record should be skipped based on level."""
+        return record.levelno < self.level
 
-        try:
-            payload = self._create_payload(record)
-            url = self._get_endpoint()
-            headers = self._get_headers()
+        def make_request(self, record: logging.LogRecord) -> None:
+            """Send log record to OpenObserve via HTTP POST. Returns immediately if disabled."""
+            if not self.enabled:
+                return
+            if self._should_skip_record(record):
+                return
 
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
-            response.raise_for_status()
-            self._last_error_time = 0
-            self.last_send = now
+            now = time.time()
+            # Rate limiting: skip if too recent
+            if now - self.last_send < self.send_interval:
+                return
 
-        except Exception as e:
-            self._last_error_time = time.time()
-            self.last_send = time.time()
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"OpenObserve error: {e}")
+            # Backoff: skip if we are in a backoff period after an error
+            if now - self._last_error_time < self._error_backoff:
+                return
+
+            try:
+                payload = self._create_payload(record)
+                url = self._get_endpoint()
+                headers = self._get_headers()
+
+                response = requests.post(url, json=payload, headers=headers, timeout=10)
+                response.raise_for_status()
+                self._last_error_time = 0
+                self.last_send = now
+
+            except Exception as e:
+                self._last_error_time = time.time()
+                self.last_send = time.time()
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f"OpenObserve error: {e}")
 
     def _create_payload(self, record: logging.LogRecord) -> Dict[str, Any]:
         """Create structured JSON payload for OpenObserve."""
@@ -128,8 +140,6 @@ class OpenObserveExporter(logging.Handler):
         }
 
         if record.exc_info:
-            import traceback
-
             log_fields["exception"] = traceback.format_exception(*record.exc_info)
 
         extra_fields = {}
@@ -153,7 +163,9 @@ class OpenObserveExporter(logging.Handler):
 
     def _get_headers(self) -> Dict[str, str]:
         """Get HTTP headers for the request."""
-        auth_header = f"Basic {self.key}"
+        # Encode username:password to base64 for Basic Auth
+        encoded_key = base64.b64encode(self.key.encode()).decode()
+        auth_header = f"Basic {encoded_key}"
         return {
             "User-Agent": "CheckTick-Logger/1.0",
             "Content-Type": "application/json",
