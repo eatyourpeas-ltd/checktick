@@ -13,8 +13,8 @@ import time
 import traceback
 from typing import Any, Dict, Optional
 
-from django.conf import settings
 import requests
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class OpenObserveExporter(logging.Handler):
             self.stream_name = stream_name or (
                 settings.LOGS_STREAM_NAME or self.DEFAULT_STREAM_NAME
             )
-            self.last_send = time.time()
+            self.last_send = 0.0
             self.send_interval = 0.5  # seconds between sends
             self._last_error_time = 0.0
             self._error_backoff = 30  # seconds
@@ -89,37 +89,37 @@ class OpenObserveExporter(logging.Handler):
         """Check if the record should be skipped based on level."""
         return record.levelno < self.level
 
-        def make_request(self, record: logging.LogRecord) -> None:
-            """Send log record to OpenObserve via HTTP POST. Returns immediately if disabled."""
-            if not self.enabled:
-                return
-            if self._should_skip_record(record):
-                return
+    def make_request(self, record: logging.LogRecord) -> None:
+        """Send log record to OpenObserve via HTTP POST. Returns immediately if disabled."""
+        if not self.enabled:
+            return
+        if self._should_skip_record(record):
+            return
 
-            now = time.time()
-            # Rate limiting: skip if too recent
-            if now - self.last_send < self.send_interval:
-                return
+        now = time.time()
+        # Rate limiting: skip if too recent
+        if now - self.last_send < self.send_interval:
+            return
 
-            # Backoff: skip if we are in a backoff period after an error
-            if now - self._last_error_time < self._error_backoff:
-                return
+        # Backoff: skip if we are in a backoff period after an error
+        if now - self._last_error_time < self._error_backoff:
+            return
 
-            try:
-                payload = self._create_payload(record)
-                url = self._get_endpoint()
-                headers = self._get_headers()
+        try:
+            payload = self._create_payload(record)
+            url = self._get_endpoint()
+            headers = self._get_headers()
 
-                response = requests.post(url, json=payload, headers=headers, timeout=10)
-                response.raise_for_status()
-                self._last_error_time = 0
-                self.last_send = now
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
+            response.raise_for_status()
+            self._last_error_time = 0
+            self.last_send = now
 
-            except Exception as e:
-                self._last_error_time = time.time()
-                self.last_send = time.time()
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(f"OpenObserve error: {e}")
+        except Exception as e:
+            self._last_error_time = time.time()
+            self.last_send = time.time()
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"OpenObserve error: {e}")
 
     def _create_payload(self, record: logging.LogRecord) -> Dict[str, Any]:
         """Create structured JSON payload for OpenObserve."""
