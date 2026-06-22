@@ -13,8 +13,8 @@ import time
 import traceback
 from typing import Any, Dict, Optional
 
-import requests
 from django.conf import settings
+import requests
 
 logger = logging.getLogger(__name__)
 
