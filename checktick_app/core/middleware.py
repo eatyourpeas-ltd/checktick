@@ -1,5 +1,7 @@
 """Custom middleware for CheckTick application."""
 
+from typing import Optional
+
 from django.conf import settings as django_settings
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -122,3 +124,64 @@ class UserLanguageMiddleware:
 
         response = self.get_response(request)
         return response
+
+
+class LoggingContextMiddleware:
+    """
+    Middleware that populates request context for logging purposes.
+    Captures the acting user, their IP address, and a request ID.
+    This is critical for NCSC traceability requirements.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Import here to avoid circular imports
+        from checktick_app.core.logging_context import (
+            ctx_remote_addr,
+            ctx_request_id,
+            ctx_user_id,
+        )
+
+        # 1. Capture User Identity
+        user_id = None
+        if request.user and request.user.is_authenticated:
+            user_id = request.user.id
+
+        # 2. Capture Source IP
+        remote_addr = self._get_client_ip(request)
+
+        # 3. Capture/Generate Request ID
+        request_id = request.headers.get("X-Request-ID") or request.META.get(
+            "HTTP_X_REQUEST_ID"
+        )
+        if not request_id:
+            import uuid
+
+            request_id = str(uuid.uuid4())
+
+        # Set context variables
+        token_user = ctx_user_id.set(user_id)
+        token_addr = ctx_remote_addr.set(remote_addr)
+        token_req = ctx_request_id.set(request_id)
+
+        try:
+            response = self.get_response(request)
+            # Add request ID to response header
+            try:
+                response["X-Request-ID"] = request_id
+            except Exception:
+                pass
+            return response
+        finally:
+            ctx_user_id.reset(token_user)
+            ctx_remote_addr.reset(token_addr)
+            ctx_request_id.reset(token_req)
+
+    def _get_client_ip(self, request) -> Optional[str]:
+        """Extract client IP, handling X-Forwarded-For headers."""
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            return x_forwarded_for.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR")

@@ -290,6 +290,7 @@ MIDDLEWARE = [
     "django_otp.middleware.OTPMiddleware",
     "checktick_app.core.middleware.Require2FAMiddleware",
     "checktick_app.core.middleware.UserLanguageMiddleware",
+    "checktick_app.core.middleware.LoggingContextMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
@@ -665,12 +666,30 @@ CHECKTICK_WARN_BEFORE_DELETION_DAYS = [
 ]
 
 # Logging Configuration
+# OpenObserve Log Exporter Configuration
+DEFAULT_ORGANISATION = "checktick"
+DEFAULT_STREAM_NAME = "prod"
+# Set environment variables in production:
+# LOGS_BASE_URL=http://your-openobserve-server:5080
+# LOGS_KEY=your-api-key-token
+# LOGS_ORGANISATION=checktick
+# LOGS_STREAM_NAME=prod_logs
+LOGS_BASE_URL = os.environ.get("LOGS_BASE_URL")
+LOGS_KEY = os.environ.get("LOGS_KEY")
+LOGS_ORGANISATION = os.environ.get("LOGS_ORGANISATION", DEFAULT_ORGANISATION)
+LOGS_STREAM_NAME = os.environ.get("LOGS_STREAM_NAME", DEFAULT_STREAM_NAME)
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "filters": {
+        "context_filter": {
+            "()": "checktick_app.core.logging_context.LoggingContextFilter",
+        },
+    },
     "formatters": {
         "verbose": {
-            "format": "[{levelname}] {asctime} {name} {message}",
+            "format": "[{levelname}] {asctime} [RID:{request_id}] [UID:{user_id}] [IP:{remote_addr}] {name} {message}",
             "style": "{",
         },
         "simple": {
@@ -682,17 +701,27 @@ LOGGING = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
+            "filters": ["context_filter"],
         },
-        # Email admin on critical errors and exceptions
+        "openobserve": {
+            "()": "checktick_app.core.log_exporters.OpenObserveExporter",
+            "level": "ERROR",
+            "base_url": LOGS_BASE_URL,
+            "key": LOGS_KEY,
+            "organization": LOGS_ORGANISATION,
+            "stream_name": LOGS_STREAM_NAME,
+            "filters": ["context_filter"],  # filter to redact
+        },
         "mail_admins": {
             "level": "ERROR",
             "class": "django.utils.log.AdminEmailHandler",
             "include_html": True,
             "formatter": "verbose",
+            "filters": ["context_filter"],  # filter to redact
         },
     },
     "root": {
-        "handlers": ["console"],
+        "handlers": ["console", "openobserve"],
         "level": "INFO",
     },
     "loggers": {
