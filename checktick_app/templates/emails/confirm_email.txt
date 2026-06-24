@@ -1,0 +1,14 @@
+Hello {{ user.first_name|default:user.username }},
+
+Thank you for signing up for {{ brand_title }}!
+
+To complete your registration and activate your account, please confirm your email address by clicking the link below:
+
+{{ confirmation_url }}
+
+This link will expire at {{ expires_at }}.
+
+If you did not create an account with us, please ignore this email.
+
+Best regards,
+The {{ brand_title }} Team

@@ -49,22 +49,31 @@ class SafeAccountDeletionTests(TestCase):
             email="individual@example.com",
             password=TEST_PASSWORD,
         )
+        # Confirm email so user can create/delete surveys
+        self.individual_user.profile.email_confirmed = True
+        self.individual_user.profile.save()
 
         self.org_user = User.objects.create_user(
             username="org_user", email="org_user@example.com", password=TEST_PASSWORD
         )
+        self.org_user.profile.email_confirmed = True
+        self.org_user.profile.save()
 
         self.collaborator_user = User.objects.create_user(
             username="collaborator",
             email="collaborator@example.com",
             password=TEST_PASSWORD,
         )
+        self.collaborator_user.profile.email_confirmed = True
+        self.collaborator_user.profile.save()
 
         self.survey_owner = User.objects.create_user(
             username="survey_owner",
             email="survey_owner@example.com",
             password=TEST_PASSWORD,
         )
+        self.survey_owner.profile.email_confirmed = True
+        self.survey_owner.profile.save()
 
     def test_individual_user_can_safely_delete_account(self):
         """Test that individual users with no dependencies can delete their account."""

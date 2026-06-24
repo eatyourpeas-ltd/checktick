@@ -25,6 +25,7 @@ from checktick_app.surveys.models import (
     TeamMembership,
 )
 
+from .email_confirmation import EmailConfirmationManager
 from .forms import (
     BrandingConfigForm,
     SignupForm,
@@ -645,6 +646,34 @@ def signup(request):
             # Since we just created the user, log them in using the default ModelBackend.
             login(request, user, backend="django.contrib.auth.backends.ModelBackend")
 
+            # Mark user as having unconfirmed email initially
+            user.profile.email_confirmed = False
+            user.profile.save(update_fields=["email_confirmed"])
+
+            # Send email confirmation
+            try:
+                from .email_confirmation import EmailConfirmationManager
+
+                EmailConfirmationManager.send_confirmation_email(user, request)
+
+                # If user came from a survey invitation, store the URL for after confirmation
+                if next_url:
+                    request.session["post_confirmation_redirect"] = next_url
+
+                messages.info(
+                    request,
+                    "Please check your email to confirm your account before accessing features.",
+                )
+            except Exception as e:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to send confirmation email to {user.email}: {e}")
+                messages.warning(
+                    request,
+                    "We had trouble sending a confirmation email. Please contact support if you don't receive it.",
+                )
+
             # Send welcome email
             try:
                 from .email_utils import send_welcome_email
@@ -658,53 +687,17 @@ def signup(request):
                 logger.error(f"Failed to send welcome email to {user.username}: {e}")
 
             # Handle tier-based signup flow
-            # FREE: Go straight to surveys (or next_url if provided)
-            # PRO/TEAM: Redirect to pricing to complete payment immediately
-            # Organisation/Enterprise: Contact sales (shouldn't reach here from form)
-            if selected_tier == "free":
-                # FREE tier - redirect to next_url if provided, otherwise surveys
-                if next_url:
-                    messages.success(
-                        request,
-                        _("Welcome to CheckTick! You can now complete the survey."),
-                    )
-                    return redirect(next_url)
-                messages.success(
-                    request,
-                    _("Welcome to CheckTick! Start by creating your first survey."),
-                )
-                return redirect("surveys:list")
-            elif selected_tier in ("pro", "team_small", "team_medium", "team_large"):
-                # Self-service paid tiers - redirect to pricing for immediate payment
-                # Store next_url for after payment completion
-                if next_url:
-                    request.session["pending_next_url"] = next_url
+            # For all tiers, redirect to home since email is not confirmed yet
+            # User will be redirected appropriately after confirming email
+            if selected_tier in ("pro", "team_small", "team_medium", "team_large"):
+                # Store tier choice for after email confirmation
                 request.session["pending_tier"] = selected_tier
-                request.session["auto_open_checkout"] = True  # Signal JS to auto-open
-                tier_display = selected_tier.upper().replace("_", " ")
-                messages.info(
+                messages.warning(
                     request,
-                    _(
-                        "Welcome to CheckTick! Complete your %(tier)s subscription "
-                        "payment to activate all features."
-                    )
-                    % {"tier": tier_display},
+                    "Please confirm your email address before accessing premium features.",
                 )
-                return redirect("core:pricing")
-            else:
-                # Organisation, Enterprise, or unknown - fallback to surveys
-                # These tiers require contacting sales and shouldn't be selectable in form
-                if next_url:
-                    messages.success(
-                        request,
-                        _("Welcome to CheckTick! You can now complete the survey."),
-                    )
-                    return redirect(next_url)
-                messages.success(
-                    request,
-                    _("Welcome to CheckTick! Start by creating your first survey."),
-                )
-                return redirect("surveys:list")
+
+            return redirect("core:home")
     else:
         form = SignupForm()
     context = {
@@ -715,7 +708,48 @@ def signup(request):
     return render(request, "registration/signup.html", context)
 
 
-@login_required
+def confirm_email(request, token):
+    """Handle email confirmation via token."""
+
+    user = EmailConfirmationManager.verify_token(token)
+
+    if user:
+        messages.success(request, "Your email has been successfully confirmed!")
+        # Log the user in if not already logged in
+        if not request.user.is_authenticated:
+            login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+
+        # Check if user has a stored redirect URL from signup
+        post_confirmation_redirect = request.session.pop(
+            "post_confirmation_redirect", None
+        )
+        pending_tier = request.session.pop("pending_tier", None)
+
+        if post_confirmation_redirect:
+            # User came from survey invitation - redirect back to survey
+            messages.success(request, "Welcome! You can now complete the survey.")
+            return redirect(post_confirmation_redirect)
+        elif pending_tier:
+            # User had selected a paid tier - redirect to pricing
+            request.session["pending_tier"] = pending_tier
+            request.session["auto_open_checkout"] = True
+            messages.success(
+                request,
+                f"Email confirmed! Proceeding with {pending_tier.upper().replace('_', ' ')} subscription setup.",
+            )
+            return redirect("core:pricing")
+        else:
+            # Regular confirmation - go to home
+            messages.success(
+                request, "Email confirmed! You can now access all features."
+            )
+            return redirect("core:home")
+    else:
+        messages.error(request, "Invalid or expired confirmation link.")
+
+    return redirect("core:home")
+
+
 def complete_signup(request):
     """
     Complete signup for users who authenticated via OIDC from login page.
@@ -874,8 +908,10 @@ def can_user_safely_delete_own_account(user):
         if has_collaborators:
             return False
 
-    # Check if they are a collaborator on others' surveys
-    is_collaborator = SurveyMembership.objects.filter(user=user).exists()
+    # Check if they are a collaborator on others' surveys (not their own)
+    is_collaborator = (
+        SurveyMembership.objects.filter(user=user).exclude(survey__owner=user).exists()
+    )
     if is_collaborator:
         return False
 

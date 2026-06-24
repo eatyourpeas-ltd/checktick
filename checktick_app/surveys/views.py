@@ -36,6 +36,8 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 
+from checktick_app.core.decorators import email_confirmed_required
+
 from .color import hex_to_oklch
 from .external_datasets import get_available_datasets
 from .llm_client import ConversationalSurveyLLM
@@ -844,6 +846,7 @@ class SurveyCreateForm(forms.ModelForm):
 
 
 @login_required
+@email_confirmed_required
 @require_http_methods(["GET", "POST"])
 def survey_create(request: HttpRequest) -> HttpResponse:
     """

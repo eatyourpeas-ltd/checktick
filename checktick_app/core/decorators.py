@@ -244,3 +244,40 @@ def check_tier_permission(request: HttpRequest, permission_check) -> tuple[bool,
         return False, "Authentication required"
 
     return permission_check(request.user)
+
+
+# Email confirmation decorator
+
+
+def email_confirmed_required(view_func):
+    """
+    Decorator that checks if the user has confirmed their email.
+    Redirects to home with a message if email is not confirmed.
+    """
+
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        # Check if user is authenticated first
+        if not request.user.is_authenticated:
+            return login_required(view_func)(request, *args, **kwargs)
+
+        # Check if user has confirmed their email
+        # For regular users (non-OIDC), check email confirmation
+        user_has_oidc = (
+            hasattr(request.user, "oidc") and request.user.oidc.email_verified
+        )
+        user_has_confirmed_email = request.user.profile.email_confirmed
+
+        # Allow if user has OIDC with verified email OR has confirmed email via signup
+        if user_has_oidc or user_has_confirmed_email:
+            return view_func(request, *args, **kwargs)
+        else:
+            # Redirect to home with message
+            messages.warning(
+                request,
+                "Please confirm your email address before accessing this feature. "
+                "Check your inbox for the confirmation email.",
+            )
+            return redirect("core:home")
+
+    return _wrapped_view

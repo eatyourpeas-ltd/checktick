@@ -7,7 +7,7 @@ from django.utils import timezone as _tz
 from django.views.generic import RedirectView
 
 from checktick_app.core.models import UserAPIKey
-from checktick_app.core.views import BrandedPasswordResetView
+from checktick_app.core.views import BrandedPasswordResetView, confirm_email
 from checktick_app.core.views_2fa import TwoFactorLoginView
 
 
@@ -74,6 +74,11 @@ urlpatterns = [
             template_name="registration/password_reset_complete.html"
         ),
         name="password_reset_complete",
+    ),
+    path(
+        "accounts/confirm-email/<str:token>/",
+        confirm_email,
+        name="confirm_email",
     ),
     path("", include("checktick_app.core.urls")),
     path("surveys/", include("checktick_app.surveys.urls")),

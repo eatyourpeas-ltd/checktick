@@ -23,6 +23,7 @@ def free_user(db):
         username="freeuser", password=TEST_PASSWORD, email="free@test.com"
     )
     user.profile.account_tier = UserProfile.AccountTier.FREE
+    user.profile.email_confirmed = True  # Required for creating surveys
     user.profile.save()
     return user
 
@@ -34,6 +35,7 @@ def pro_user(db):
         username="prouser", password=TEST_PASSWORD, email="pro@test.com"
     )
     user.profile.account_tier = UserProfile.AccountTier.PRO
+    user.profile.email_confirmed = True  # Required for creating surveys
     user.profile.save()
     return user
 
@@ -45,6 +47,7 @@ def org_user(db):
         username="orguser", password=TEST_PASSWORD, email="org@test.com"
     )
     user.profile.account_tier = UserProfile.AccountTier.ORGANIZATION
+    user.profile.email_confirmed = True  # Required for creating surveys
     user.profile.save()
     return user
 
@@ -72,13 +75,15 @@ class TestSurveyCreationEnforcement:
             response = client.post(
                 reverse("surveys:create"),
                 {
-                    "name": f"Survey {i+1}",
-                    "slug": f"survey-{i+1}",
+                    "name": f"Survey {i + 1}",
+                    "slug": f"survey-{i + 1}",
                     "encryption_option": "none",  # No encryption
                 },
             )
             assert response.status_code == 302  # Redirect on success
-            assert Survey.objects.filter(owner=free_user, name=f"Survey {i+1}").exists()
+            assert Survey.objects.filter(
+                owner=free_user, name=f"Survey {i + 1}"
+            ).exists()
 
     def test_free_tier_blocked_at_4th_survey(self, client, free_user):
         """FREE tier users are blocked from creating 4th survey."""
@@ -87,8 +92,8 @@ class TestSurveyCreationEnforcement:
         # Create 3 surveys
         for i in range(3):
             Survey.objects.create(
-                name=f"Survey {i+1}",
-                slug=f"survey-{i+1}",
+                name=f"Survey {i + 1}",
+                slug=f"survey-{i + 1}",
                 owner=free_user,
             )
 
@@ -118,8 +123,8 @@ class TestSurveyCreationEnforcement:
         # Create 3 surveys
         for i in range(3):
             Survey.objects.create(
-                name=f"Survey {i+1}",
-                slug=f"survey-{i+1}",
+                name=f"Survey {i + 1}",
+                slug=f"survey-{i + 1}",
                 owner=free_user,
             )
 
@@ -139,13 +144,15 @@ class TestSurveyCreationEnforcement:
             response = client.post(
                 reverse("surveys:create"),
                 {
-                    "name": f"Survey {i+1}",
-                    "slug": f"survey-{i+1}",
+                    "name": f"Survey {i + 1}",
+                    "slug": f"survey-{i + 1}",
                     "encryption_option": "none",
                 },
             )
             assert response.status_code == 302
-            assert Survey.objects.filter(owner=pro_user, name=f"Survey {i+1}").exists()
+            assert Survey.objects.filter(
+                owner=pro_user, name=f"Survey {i + 1}"
+            ).exists()
 
         assert Survey.objects.filter(owner=pro_user).count() == 5
 
@@ -158,13 +165,15 @@ class TestSurveyCreationEnforcement:
             response = client.post(
                 reverse("surveys:create"),
                 {
-                    "name": f"Survey {i+1}",
-                    "slug": f"survey-{i+1}",
+                    "name": f"Survey {i + 1}",
+                    "slug": f"survey-{i + 1}",
                     "encryption_option": "none",
                 },
             )
             assert response.status_code == 302
-            assert Survey.objects.filter(owner=org_user, name=f"Survey {i+1}").exists()
+            assert Survey.objects.filter(
+                owner=org_user, name=f"Survey {i + 1}"
+            ).exists()
 
         assert Survey.objects.filter(owner=org_user).count() == 5
 
@@ -405,8 +414,8 @@ class TestContextProcessor:
         # Create 3 surveys
         for i in range(3):
             Survey.objects.create(
-                name=f"Survey {i+1}",
-                slug=f"survey-{i+1}",
+                name=f"Survey {i + 1}",
+                slug=f"survey-{i + 1}",
                 owner=free_user,
             )
 
