@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import csv
 import io
 import json
 import logging
 import re
 import secrets
-from copy import deepcopy
 from typing import Any, Iterable, Union
 
 from django import forms
@@ -64,7 +64,6 @@ from .models import (
     SurveyResponse,
     Team,
     TeamMembership,
-    UserSurveyKEKEscrow,
 )
 from .permissions import (
     can_change_survey_style,
@@ -524,7 +523,7 @@ def survey_list(request: HttpRequest) -> HttpResponse:
     - Organisation: Surveys in organisations the user is a member of
     - Shared: Surveys explicitly shared with the user via SurveyMembership
     """
-    from .models import LANGUAGE_FLAGS, LANGUAGE_NAMES, SurveyMembership, TeamMembership
+    from .models import LANGUAGE_FLAGS, LANGUAGE_NAMES, SurveyMembership
 
     user = request.user
 
@@ -1542,10 +1541,8 @@ def _inject_dataset_options(questions: list) -> None:
     """
     from .snomed_resolver import (
         SnomedUnavailableError,
-        options_as_value_label,
-    )
-    from .snomed_resolver import (
         get_options as snomed_get_options,
+        options_as_value_label,
     )
 
     snomed_cache: dict[int, list[dict[str, str]]] = {}
@@ -5243,7 +5240,7 @@ def user_management_hub(request: HttpRequest) -> HttpResponse:
         send_team_invitation_email,
     )
 
-    from .models import OrgInvitation, Team, TeamInvitation, TeamMembership
+    from .models import OrgInvitation, TeamInvitation
 
     # Single organisation model: pick the organisation where user is ADMIN (or None)
     org = (
@@ -5707,7 +5704,7 @@ def resend_invitation(request: HttpRequest) -> HttpResponse:
         send_team_invitation_email,
     )
 
-    from .models import OrgInvitation, TeamInvitation, TeamMembership
+    from .models import OrgInvitation, TeamInvitation
 
     invitation_type = request.POST.get("type")  # "team" or "org"
     invitation_id = request.POST.get("invitation_id")
@@ -5777,7 +5774,7 @@ def resend_invitation(request: HttpRequest) -> HttpResponse:
 @ratelimit(key="user", rate="30/h", block=True)
 def cancel_invitation(request: HttpRequest) -> HttpResponse:
     """Cancel a pending team or org invitation."""
-    from .models import OrgInvitation, TeamInvitation, TeamMembership
+    from .models import OrgInvitation, TeamInvitation
 
     invitation_type = request.POST.get("type")  # "team" or "org"
     invitation_id = request.POST.get("invitation_id")
@@ -6510,10 +6507,8 @@ def survey_export_csv(
     try:
         from .snomed_resolver import (
             SnomedUnavailableError,
-            options_as_dict,
-        )
-        from .snomed_resolver import (
             get_options as snomed_get_options,
+            options_as_dict,
         )
 
         for q in questions:
@@ -7645,9 +7640,7 @@ def _validate_and_process_image(uploaded_file) -> tuple[bool, str]:
             img_format = (
                 "PNG"
                 if ext == ".png"
-                else "JPEG"
-                if ext in (".jpg", ".jpeg")
-                else "WEBP"
+                else "JPEG" if ext in (".jpg", ".jpeg") else "WEBP"
             )
             img.save(buffer, format=img_format, quality=85)
             buffer.seek(0)
@@ -8978,10 +8971,8 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
 
     from .snomed_resolver import (
         SnomedUnavailableError,
-        parse_option_pairs,
-    )
-    from .snomed_resolver import (
         get_options as snomed_get_options,
+        parse_option_pairs,
     )
 
     logger_detail = logging.getLogger(__name__)
@@ -9475,8 +9466,6 @@ def snomed_search(request: HttpRequest) -> JsonResponse:
     from .snomed_resolver import (
         SnomedUnavailableError,
         parse_option_pairs,
-    )
-    from .snomed_resolver import (
         search as snomed_search_fn,
     )
 
@@ -9517,10 +9506,8 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
 
     from .snomed_resolver import (
         SnomedUnavailableError,
-        options_as_dict,
-    )
-    from .snomed_resolver import (
         get_options as snomed_get_options,
+        options_as_dict,
     )
 
     user = request.user

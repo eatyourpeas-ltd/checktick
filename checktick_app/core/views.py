@@ -1,11 +1,10 @@
+from decimal import Decimal
 import logging
 import os
-from decimal import Decimal
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login
-from django.contrib.auth import views as auth_views
+from django.contrib.auth import login, views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
@@ -748,7 +747,6 @@ def signup(request):
 
 def confirm_email(request, token):
     """Handle email confirmation via token."""
-    from .email_confirmation import EmailConfirmationManager
 
     user = EmailConfirmationManager.verify_token(token)
 

@@ -1,6 +1,5 @@
-import uuid
-from calendar import c
 from datetime import timedelta
+import uuid
 
 from django.conf import settings
 from django.contrib.auth import get_user_model

@@ -20,8 +20,8 @@ Usage:
     python manage.py prune_unconfirmed_users --grace-days=14
 """
 
-import logging
 from datetime import timedelta
+import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model

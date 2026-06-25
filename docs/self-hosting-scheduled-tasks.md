@@ -8,7 +8,7 @@ CheckTick requires scheduled tasks for data governance operations, housekeeping,
 
 ## Overview
 
-CheckTick uses eight scheduled tasks, plus one optional manual SNOMED CT maintenance task:
+CheckTick uses eight scheduled tasks, plus one optional manual SNOMED CT maintenance task, plus one ad-hoc security task run by the CTO:
 
 ### 1. Data Governance (Required for GDPR)
 
@@ -211,6 +211,53 @@ The `process_dsr_deadlines` management command runs daily to:
 
 - the response is frozen
 - emails are sent to the controller to inform them
+
+### 10. Prune Unconfirmed Users (Ad-hoc — Run by CTO)
+
+> **Not scheduled.** This command is run manually by the CTO on an ad-hoc basis. Do not add it to a cron job.
+
+The `prune_unconfirmed_users` management command removes fake or phishing accounts that sign up with non-existent email addresses and never confirm their email:
+
+1. **Deactivate existing users** — Users created before the email confirmation feature who never confirm are deactivated after a grace period (default: 30 days). Their data is preserved.
+2. **Delete new signups with no data** — Users created after the feature who never confirm and have no surveys, memberships, or audit history are deleted after the grace period. This removes fake/phishing accounts that cannot access protected features.
+3. **Safety fallback** — If a new signup somehow has data (surveys, memberships, etc.), they are deactivated instead of deleted to prevent accidental data loss.
+4. **Audit logging** — Every deactivation and deletion is logged in `AuditLog` with full metadata.
+
+**Why ad-hoc?** The command is intentionally not automated because:
+
+- It affects user accounts directly (deletion is irreversible)
+- The CTO may want to review `--dry-run` output before execution
+- Grace period and cutoff dates may need adjustment based on operational context
+- It should be run after reviewing signup patterns and support tickets
+
+**Usage:**
+
+```bash
+# Preview what would happen (always run this first)
+python manage.py prune_unconfirmed_users --dry-run --verbose
+
+# Run with default 30-day grace period
+python manage.py prune_unconfirmed_users --verbose
+
+# Tighten grace period for faster cleanup
+python manage.py prune_unconfirmed_users --grace-days=14 --verbose
+```
+
+**What happens:**
+
+- Existing users (pre-feature) → deactivated, data preserved
+- New signups with no data → deleted (fake/phishing accounts)
+- New signups with data → deactivated (safety fallback)
+- Confirmed users, staff, and superusers → never touched
+
+**Configuration:**
+
+Set `EMAIL_CONFIRMATION_CUTOFF` in settings to the date the email confirmation feature was deployed. Users joined before this date are treated as "existing" and deactivated rather than deleted.
+
+```python
+# settings.py
+EMAIL_CONFIRMATION_CUTOFF = timezone.make_aware(timezone.datetime(2025, 6, 25))
+```
 
 ---
 
@@ -735,6 +782,55 @@ Cleanup completed successfully
 - Token-based progress older than 30 days
 - Only incomplete surveys (completed submissions are already deleted on submission)
 
+### Prune Unconfirmed Users Command
+
+> **Ad-hoc only — run by the CTO. Not scheduled.**
+
+```bash
+# Preview what would happen (always run this first)
+python manage.py prune_unconfirmed_users --dry-run --verbose
+
+# Run with default 30-day grace period
+python manage.py prune_unconfirmed_users --verbose
+
+# Custom grace period
+python manage.py prune_unconfirmed_users --grace-days=14 --verbose
+```
+
+**Example Output:**
+
+```text
+Starting unconfirmed user pruning at 2026-06-25 10:00:00+00:00
+  Grace period: 30 days
+  Feature cutoff: 2025-06-25
+
+  User: fakeuser123 (fake@example.com)
+    Joined: 2026-04-01
+    Existing user: False
+    Has data: False
+    Action: DELETE
+    Deleted: fakeuser123
+
+  User: olduser (old@example.com)
+    Joined: 2024-01-15
+    Existing user: True
+    Has data: False
+    Action: DEACTIVATE
+    Deactivated: olduser
+
+Pruning completed at 2026-06-25 10:00:02+00:00
+  - Deactivated: 1
+  - Deleted:     1
+  - Skipped:     0
+```
+
+**What happens:**
+
+- Existing users (joined before `EMAIL_CONFIRMATION_CUTOFF`) → deactivated, data preserved
+- New signups with no surveys/memberships/audit history → deleted
+- New signups with data → deactivated (safety fallback)
+- Confirmed users, staff, and superusers → never touched
+
 ---
 
 ## Testing
@@ -761,6 +857,16 @@ docker compose exec web python manage.py cleanup_survey_progress --dry-run --ver
 docker compose exec web python manage.py cleanup_survey_progress --verbose
 ```
 
+**Prune Unconfirmed Users:**
+
+```bash
+# Test with dry-run (safe, no changes)
+docker compose exec web python manage.py prune_unconfirmed_users --dry-run --verbose
+
+# Test for real (only if you have test data)
+docker compose exec web python manage.py prune_unconfirmed_users --verbose
+```
+
 ### Test in Production
 
 1. **First, use dry-run mode:**
@@ -771,6 +877,9 @@ docker compose exec web python manage.py cleanup_survey_progress --verbose
 
    # Progress cleanup
    python manage.py cleanup_survey_progress --dry-run --verbose
+
+   # Prune unconfirmed users (ad-hoc — review carefully)
+   python manage.py prune_unconfirmed_users --dry-run --verbose
    ```
 
 2. **Review the output** - it will show what surveys/progress records would be affected
@@ -983,6 +1092,17 @@ A: Progress records expire after 30 days of inactivity. This is intentional:
 - After 30 days, the session is likely abandoned
 - Users can still start a new submission if needed
 - Only the progress draft is deleted, not any completed submissions
+
+**Q: Why isn't the prune unconfirmed users command scheduled?**
+
+A: This command is intentionally **ad-hoc only**, run by the CTO:
+
+- It performs irreversible deletions of user accounts
+- The CTO should review `--dry-run` output before execution
+- Grace periods and cutoff dates may need adjustment based on context
+- It should be run after reviewing signup patterns and support tickets
+
+Never add this to a cron job or automated schedule.
 
 **Q: Do both cron jobs need to run?**
 

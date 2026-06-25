@@ -319,8 +319,8 @@ class Organization(models.Model):
         Returns:
             The generated setup token
         """
-        import secrets
         from datetime import timedelta
+        import secrets
 
         self.setup_token = secrets.token_urlsafe(32)
         self.setup_expires_at = timezone.now() + timedelta(days=expires_days)
@@ -5196,9 +5196,7 @@ class PlatformKeyVersion(models.Model):
         status = (
             "active"
             if self.is_active()
-            else "retired"
-            if self.retired_at
-            else "pending"
+            else "retired" if self.retired_at else "pending"
         )
         return f"Platform Key {self.version} ({status})"
 
