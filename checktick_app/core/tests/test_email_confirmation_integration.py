@@ -22,6 +22,9 @@ class TestEmailConfirmationIntegration(TestCase):
             from checktick_app.core.models import UserProfile
 
             UserProfile.objects.create(user=self.user)
+        # Explicitly set to False for tests that verify the default/signup behavior
+        self.user.profile.email_confirmed = False
+        self.user.profile.save()
 
     def test_user_profile_has_email_confirmed_field(self):
         """Test that UserProfile has the email_confirmed field."""

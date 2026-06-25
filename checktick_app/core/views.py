@@ -1,10 +1,11 @@
-from decimal import Decimal
 import logging
 import os
+from decimal import Decimal
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login, views as auth_views
+from django.contrib.auth import login
+from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
@@ -345,9 +346,6 @@ def profile(request):
                     "Confirmation email has been sent. Please check your inbox.",
                 )
             except Exception as e:
-                import logging
-
-                logger = logging.getLogger(__name__)
                 logger.error(
                     f"Failed to resend confirmation email to {request.user.email}: {e}"
                 )
@@ -702,9 +700,6 @@ def signup(request):
                     "Please check your email to confirm your account before accessing features.",
                 )
             except Exception as e:
-                import logging
-
-                logger = logging.getLogger(__name__)
                 logger.error(f"Failed to send confirmation email to {user.email}: {e}")
                 messages.warning(
                     request,
@@ -718,9 +713,6 @@ def signup(request):
                 send_welcome_email(user)
             except Exception as e:
                 # Don't block signup if email fails
-                import logging
-
-                logger = logging.getLogger(__name__)
                 logger.error(f"Failed to send welcome email to {user.username}: {e}")
 
             # Handle tier-based signup flow
@@ -805,9 +797,6 @@ def resend_confirmation_email(request):
             request, "Confirmation email has been resent. Please check your inbox."
         )
     except Exception as e:
-        import logging
-
-        logger = logging.getLogger(__name__)
         logger.error(
             f"Failed to resend confirmation email to {request.user.email}: {e}"
         )

@@ -21,6 +21,9 @@ class TestEmailConfirmationModel(TestCase):
         self.user = User.objects.create_user(
             username="testuser", email="test@example.com", password=PASSWORD
         )
+        # Explicitly set to False for tests that verify the default/signup behavior
+        self.user.profile.email_confirmed = False
+        self.user.profile.save()
 
     def test_email_confirmation_field_exists(self):
         """Test that the email_confirmed field exists on UserProfile."""
@@ -43,6 +46,9 @@ class TestEmailConfirmationManager(TestCase):
         self.user = User.objects.create_user(
             username="testuser", email="test@example.com", password=PASSWORD
         )
+        # Explicitly set to False for tests that verify the default/signup behavior
+        self.user.profile.email_confirmed = False
+        self.user.profile.save()
 
     def test_generate_token(self):
         """Test token generation."""

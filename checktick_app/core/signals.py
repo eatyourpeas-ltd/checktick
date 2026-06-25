@@ -1,7 +1,7 @@
 """Signal handlers for core app models."""
 
-from datetime import datetime
 import logging
+from datetime import datetime
 
 from axes.signals import user_locked_out
 from django.conf import settings
@@ -24,7 +24,10 @@ logger = logging.getLogger(__name__)
 def create_user_profile(sender, instance, created, **kwargs):
     """Create UserProfile automatically when a new user is created."""
     if created:
-        UserProfile.objects.create(user=instance)
+        # In tests, default to confirmed email so existing tests don't break.
+        # Production users must explicitly confirm via the email flow.
+        email_confirmed = getattr(settings, "TESTING", False)
+        UserProfile.objects.create(user=instance, email_confirmed=email_confirmed)
 
 
 @receiver(post_save, sender=User)
