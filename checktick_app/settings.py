@@ -570,9 +570,7 @@ if os.environ.get("PYTEST_CURRENT_TEST"):
     EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 elif DEBUG:
     # In development (DEBUG=True), print emails to console
-    EMAIL_BACKEND = env(
-        "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
-    )
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 else:
     # In production (DEBUG=False), use Microsoft Graph API email backend
     EMAIL_BACKEND = env(
