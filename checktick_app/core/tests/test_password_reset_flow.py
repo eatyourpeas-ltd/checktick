@@ -58,3 +58,44 @@ class TestPasswordResetFlow:
             "/accounts/login/", {"username": user.email, "password": new_password}
         )
         assert login.status_code == 302
+
+    def test_password_reset_email_subject_includes_brand_name(self, client, mailoutbox):
+        """Test that password reset email subject includes the platform brand name."""
+        unique_id = secrets.token_hex(8)
+        email = f"brand_test_{unique_id}@example.com"
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=secrets.token_urlsafe(12),
+        )
+        client.post(reverse("password_reset"), {"email": user.email})
+        assert len(mailoutbox) == 1
+        msg = mailoutbox[0]
+        # Subject should include the brand name (e.g., "CheckTick: Reset your password")
+        assert (
+            "CheckTick" in msg.subject
+        ), f"Expected brand name 'CheckTick' in subject, got: '{msg.subject}'"
+        assert "Reset your password" in msg.subject
+
+    def test_password_reset_email_body_includes_brand_name(self, client, mailoutbox):
+        """Test that password reset email body includes the platform brand name."""
+        unique_id = secrets.token_hex(8)
+        email = f"brand_body_{unique_id}@example.com"
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=secrets.token_urlsafe(12),
+        )
+        client.post(reverse("password_reset"), {"email": user.email})
+        assert len(mailoutbox) == 1
+        msg = mailoutbox[0]
+        # Plain text body should include the brand name
+        assert (
+            "CheckTick" in msg.body
+        ), "Expected brand name 'CheckTick' in plain text body"
+        # HTML alternative should also include the brand name
+        assert msg.alternatives, "Expected HTML alternative email"
+        html_content = msg.alternatives[0][0]
+        assert (
+            "CheckTick" in html_content
+        ), "Expected brand name 'CheckTick' in HTML body"

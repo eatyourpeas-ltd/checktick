@@ -238,6 +238,49 @@ class TestSignupWithEmailConfirmation(TestCase):
         # Confirmation token should be created
         self.assertTrue(EmailConfirmationToken.objects.filter(user=user).exists())
 
+    def test_signup_confirmation_email_includes_brand_name(self):
+        """Test that signup confirmation email subject includes the platform brand name."""
+        from django.core import mail
+
+        response = self.client.post(
+            reverse("core:signup"),
+            {
+                "email": "brandtest@example.com",
+                "password1": "complexpassword123!",
+                "password2": "complexpassword123!",
+            },
+        )
+
+        # Should redirect to home after signup
+        self.assertEqual(response.status_code, 302)
+
+        # Check that confirmation email was sent
+        self.assertEqual(len(mail.outbox), 2)  # Confirmation + welcome email
+
+        # Find the confirmation email
+        confirmation_email = None
+        for email in mail.outbox:
+            if "confirm" in email.subject.lower():
+                confirmation_email = email
+                break
+
+        self.assertIsNotNone(confirmation_email, "Confirmation email should be sent")
+
+        # Subject should include the brand name
+        self.assertIn(
+            "CheckTick",
+            confirmation_email.subject,
+            f"Expected brand name 'CheckTick' in subject, got: '{confirmation_email.subject}'",
+        )
+        self.assertIn("confirm", confirmation_email.subject.lower())
+
+        # Body should also include the brand name
+        self.assertIn(
+            "CheckTick",
+            confirmation_email.body,
+            "Expected brand name 'CheckTick' in email body",
+        )
+
 
 class TestProtectedFeaturesAccess(TestCase):
     """Test access to features that require email confirmation."""

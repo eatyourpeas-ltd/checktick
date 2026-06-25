@@ -911,8 +911,8 @@ class BrandedPasswordResetView(auth_views.PasswordResetView):
     email_template_name = "registration/password_reset_email.txt"
     html_email_template_name = "registration/password_reset_email.html"
 
-    def get_email_options(self):
-        opts = super().get_email_options()
+    def form_valid(self, form):
+        """Override to inject brand context into email templates."""
         # Use get_platform_branding() so brand includes colors/fonts needed by base_email.html.
         try:
             from checktick_app.core.email_utils import get_platform_branding
@@ -920,14 +920,14 @@ class BrandedPasswordResetView(auth_views.PasswordResetView):
             brand = get_platform_branding()
         except Exception:
             brand = {"title": getattr(settings, "BRAND_TITLE", "CheckTick")}
-        extra = opts.get("extra_email_context") or {}
-        merged = {
-            **extra,
+
+        # Inject brand context into extra_email_context
+        self.extra_email_context = {
+            **(self.extra_email_context or {}),
             "brand": brand,
             "site_url": getattr(settings, "SITE_URL", ""),
         }
-        opts["extra_email_context"] = merged
-        return opts
+        return super().form_valid(form)
 
 
 ## Removed DirectPasswordResetConfirmView to use Django's standard confirm flow.
