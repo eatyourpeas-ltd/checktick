@@ -1,7 +1,7 @@
 """Signal handlers for core app models."""
 
-import logging
 from datetime import datetime
+import logging
 
 from axes.signals import user_locked_out
 from django.conf import settings
