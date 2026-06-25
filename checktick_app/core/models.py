@@ -251,6 +251,9 @@ class UserProfile(models.Model):
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
 
+    # Email confirmation
+    email_confirmed = models.BooleanField(default=False)
+
     # Account tier and limits
     account_tier = models.CharField(
         max_length=20,

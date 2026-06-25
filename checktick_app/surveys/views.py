@@ -36,6 +36,8 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 
+from checktick_app.core.decorators import email_confirmed_required
+
 from .color import hex_to_oklch
 from .external_datasets import get_available_datasets
 from .llm_client import ConversationalSurveyLLM
@@ -60,6 +62,8 @@ from .models import (
     SurveyQuestion,
     SurveyQuestionCondition,
     SurveyResponse,
+    Team,
+    TeamMembership,
 )
 from .permissions import (
     can_change_survey_style,
@@ -509,6 +513,7 @@ def _verify_captcha(request: HttpRequest) -> bool:
 
 
 @login_required
+@email_confirmed_required
 def survey_list(request: HttpRequest) -> HttpResponse:
     """Display surveys the user has access to, grouped by access type.
 
@@ -518,7 +523,7 @@ def survey_list(request: HttpRequest) -> HttpResponse:
     - Organisation: Surveys in organisations the user is a member of
     - Shared: Surveys explicitly shared with the user via SurveyMembership
     """
-    from .models import LANGUAGE_FLAGS, LANGUAGE_NAMES, SurveyMembership, TeamMembership
+    from .models import LANGUAGE_FLAGS, LANGUAGE_NAMES, SurveyMembership
 
     user = request.user
 
@@ -844,6 +849,7 @@ class SurveyCreateForm(forms.ModelForm):
 
 
 @login_required
+@email_confirmed_required
 @require_http_methods(["GET", "POST"])
 def survey_create(request: HttpRequest) -> HttpResponse:
     """
@@ -2159,6 +2165,7 @@ def _serialize_question_for_builder(
 
 
 @login_required
+@email_confirmed_required
 @ratelimit(key="user", rate="100/h", block=True)
 def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
@@ -5233,7 +5240,7 @@ def user_management_hub(request: HttpRequest) -> HttpResponse:
         send_team_invitation_email,
     )
 
-    from .models import OrgInvitation, Team, TeamInvitation, TeamMembership
+    from .models import OrgInvitation, TeamInvitation
 
     # Single organisation model: pick the organisation where user is ADMIN (or None)
     org = (
@@ -5697,7 +5704,7 @@ def resend_invitation(request: HttpRequest) -> HttpResponse:
         send_team_invitation_email,
     )
 
-    from .models import OrgInvitation, TeamInvitation, TeamMembership
+    from .models import OrgInvitation, TeamInvitation
 
     invitation_type = request.POST.get("type")  # "team" or "org"
     invitation_id = request.POST.get("invitation_id")
@@ -5767,7 +5774,7 @@ def resend_invitation(request: HttpRequest) -> HttpResponse:
 @ratelimit(key="user", rate="30/h", block=True)
 def cancel_invitation(request: HttpRequest) -> HttpResponse:
     """Cancel a pending team or org invitation."""
-    from .models import OrgInvitation, TeamInvitation, TeamMembership
+    from .models import OrgInvitation, TeamInvitation
 
     invitation_type = request.POST.get("type")  # "team" or "org"
     invitation_id = request.POST.get("invitation_id")

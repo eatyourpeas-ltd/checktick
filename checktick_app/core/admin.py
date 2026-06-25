@@ -110,12 +110,14 @@ class UserProfileAdmin(admin.ModelAdmin):
         "account_tier",
         "subscription_status",
         "payment_provider",
+        "email_confirmed",
         "tier_changed_at",
     )
     list_filter = (
         "account_tier",
         "subscription_status",
         "payment_provider",
+        "email_confirmed",
         "custom_branding_enabled",
     )
     search_fields = (

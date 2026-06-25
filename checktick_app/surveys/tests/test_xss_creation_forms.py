@@ -98,7 +98,8 @@ def owner(django_user_model):
         password="securepass123",
     )
     UserProfile.objects.filter(user=user).update(
-        account_tier=UserProfile.AccountTier.PRO
+        account_tier=UserProfile.AccountTier.PRO,
+        email_confirmed=True,  # Required for creating surveys
     )
     user._state.fields_cache.pop("profile", None)
     return user
@@ -598,10 +599,9 @@ def test_builder_question_create_strips_html_from_text(auth_client, survey):
     )
     q = survey.questions.order_by("-id").first()
     assert q is not None, "No question was created"
-    assert "<script>" not in q.text, (
-        "HTML tags must be stripped from question text at write-time; "
-        f"got: {q.text!r}"
-    )
+    assert (
+        "<script>" not in q.text
+    ), f"HTML tags must be stripped from question text at write-time; got: {q.text!r}"
     assert "</script>" not in q.text
 
 
@@ -623,9 +623,9 @@ def test_builder_question_create_option_labels_stripped(auth_client, survey):
         str(opt.get("label", opt) if isinstance(opt, dict) else opt)
         for opt in (q.options or [])
     )
-    assert "<script>" not in all_labels, (
-        "HTML tags must be stripped from option labels; " f"got options: {q.options!r}"
-    )
+    assert (
+        "<script>" not in all_labels
+    ), f"HTML tags must be stripped from option labels; got options: {q.options!r}"
 
 
 @pytest.mark.django_db
@@ -721,9 +721,9 @@ def test_builder_group_create_strips_html_from_name(auth_client, survey):
     )
     g = survey.question_groups.order_by("-id").first()
     assert g is not None, "No group was created"
-    assert "<script>" not in g.name, (
-        "HTML tags must be stripped from builder group name; " f"got: {g.name!r}"
-    )
+    assert (
+        "<script>" not in g.name
+    ), f"HTML tags must be stripped from builder group name; got: {g.name!r}"
 
 
 # ===========================================================================
@@ -1042,7 +1042,8 @@ def pro_user(django_user_model):
         password=TEST_PASSWORD,
     )
     user.profile.account_tier = "pro"
-    user.profile.save(update_fields=["account_tier"])
+    user.profile.email_confirmed = True  # Required for API key functionality
+    user.profile.save(update_fields=["account_tier", "email_confirmed"])
     return user
 
 

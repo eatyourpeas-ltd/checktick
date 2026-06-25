@@ -25,6 +25,8 @@ from checktick_app.core.email_utils import (
 from checktick_app.core.models import Payment, UserProfile
 from checktick_app.surveys.models import AuditLog
 
+from .decorators import email_confirmed_required
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,6 +51,7 @@ def billing_enabled_required(view_func):
 
 
 @login_required
+@email_confirmed_required
 @require_http_methods(["GET"])
 def subscription_portal(request: HttpRequest) -> HttpResponse:
     """Subscription management portal.
@@ -107,6 +110,7 @@ def subscription_portal(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@email_confirmed_required
 @billing_enabled_required
 @require_http_methods(["POST"])
 @ratelimit(key="user", rate="5/h", block=True)
@@ -316,6 +320,7 @@ def update_team_name(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@email_confirmed_required
 @billing_enabled_required
 @require_http_methods(["POST"])
 @ratelimit(key="user", rate="10/h", block=True)

@@ -26,6 +26,8 @@ import qrcode
 
 from checktick_app.surveys.models import AuditLog
 
+from .decorators import email_confirmed_required
+
 logger = logging.getLogger(__name__)
 
 
@@ -98,6 +100,7 @@ def is_password_user(user) -> bool:
 
 
 @login_required
+@email_confirmed_required
 def two_factor_setup(request):
     """Set up 2FA for the current user."""
     user = request.user
@@ -195,6 +198,7 @@ def two_factor_setup(request):
 
 
 @login_required
+@email_confirmed_required
 def two_factor_manage(request):
     """Manage 2FA settings."""
     user = request.user
@@ -223,6 +227,7 @@ def two_factor_manage(request):
 
 
 @login_required
+@email_confirmed_required
 def two_factor_disable(request):
     """Disable 2FA for the current user."""
     user = request.user
