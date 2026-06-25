@@ -1,9 +1,9 @@
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
-from csp.constants import NONCE as CSP_NONCE
 import environ
+from csp.constants import NONCE as CSP_NONCE
 
 # Detect if running tests
 TESTING = "pytest" in sys.modules or "test" in sys.argv

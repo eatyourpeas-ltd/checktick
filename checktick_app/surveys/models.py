@@ -319,8 +319,8 @@ class Organization(models.Model):
         Returns:
             The generated setup token
         """
-        from datetime import timedelta
         import secrets
+        from datetime import timedelta
 
         self.setup_token = secrets.token_urlsafe(32)
         self.setup_expires_at = timezone.now() + timedelta(days=expires_days)
@@ -1844,7 +1844,7 @@ Return the translation as JSON following the exact structure specified in the sy
                 # Log the problematic JSON for debugging
                 logger.error(f"JSON decode error at position {e.pos}: {str(e)}")
                 logger.error(
-                    f"Context around error (chars {max(0, e.pos-100)}:{e.pos+100}): {json_text[max(0, e.pos-100):e.pos+100]}"
+                    f"Context around error (chars {max(0, e.pos - 100)}:{e.pos + 100}): {json_text[max(0, e.pos - 100) : e.pos + 100]}"
                 )
 
                 # Try to salvage the JSON by fixing common issues
@@ -3316,6 +3316,7 @@ class AuditLog(models.Model):
         EMAIL_CHANGED = "email_changed", "Email Address Changed"
         USER_CREATED = "user_created", "User Account Created"
         USER_DEACTIVATED = "user_deactivated", "User Account Deactivated"
+        USER_DELETED = "user_deleted", "User Account Deleted"
         # Data governance actions
         DATA_EXPORTED = "data_exported", "Data Exported"
         # Promotion lifecycle actions
@@ -5195,7 +5196,9 @@ class PlatformKeyVersion(models.Model):
         status = (
             "active"
             if self.is_active()
-            else "retired" if self.retired_at else "pending"
+            else "retired"
+            if self.retired_at
+            else "pending"
         )
         return f"Platform Key {self.version} ({status})"
 

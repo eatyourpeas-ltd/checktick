@@ -7,7 +7,11 @@ from django.utils import timezone as _tz
 from django.views.generic import RedirectView
 
 from checktick_app.core.models import UserAPIKey
-from checktick_app.core.views import BrandedPasswordResetView, confirm_email
+from checktick_app.core.views import (
+    BrandedPasswordResetView,
+    confirm_email,
+    resend_confirmation_email,
+)
 from checktick_app.core.views_2fa import TwoFactorLoginView
 
 
@@ -79,6 +83,11 @@ urlpatterns = [
         "accounts/confirm-email/<str:token>/",
         confirm_email,
         name="confirm_email",
+    ),
+    path(
+        "accounts/resend-confirmation/",
+        resend_confirmation_email,
+        name="resend_confirmation",
     ),
     path("", include("checktick_app.core.urls")),
     path("surveys/", include("checktick_app.surveys.urls")),

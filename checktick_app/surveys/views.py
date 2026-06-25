@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import csv
 import io
 import json
 import logging
 import re
 import secrets
+from copy import deepcopy
 from typing import Any, Iterable, Union
 
 from django import forms
@@ -62,6 +62,9 @@ from .models import (
     SurveyQuestion,
     SurveyQuestionCondition,
     SurveyResponse,
+    Team,
+    TeamMembership,
+    UserSurveyKEKEscrow,
 )
 from .permissions import (
     can_change_survey_style,
@@ -511,6 +514,7 @@ def _verify_captcha(request: HttpRequest) -> bool:
 
 
 @login_required
+@email_confirmed_required
 def survey_list(request: HttpRequest) -> HttpResponse:
     """Display surveys the user has access to, grouped by access type.
 
@@ -1538,8 +1542,10 @@ def _inject_dataset_options(questions: list) -> None:
     """
     from .snomed_resolver import (
         SnomedUnavailableError,
-        get_options as snomed_get_options,
         options_as_value_label,
+    )
+    from .snomed_resolver import (
+        get_options as snomed_get_options,
     )
 
     snomed_cache: dict[int, list[dict[str, str]]] = {}
@@ -2162,6 +2168,7 @@ def _serialize_question_for_builder(
 
 
 @login_required
+@email_confirmed_required
 @ratelimit(key="user", rate="100/h", block=True)
 def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
@@ -6503,8 +6510,10 @@ def survey_export_csv(
     try:
         from .snomed_resolver import (
             SnomedUnavailableError,
-            get_options as snomed_get_options,
             options_as_dict,
+        )
+        from .snomed_resolver import (
+            get_options as snomed_get_options,
         )
 
         for q in questions:
@@ -7636,7 +7645,9 @@ def _validate_and_process_image(uploaded_file) -> tuple[bool, str]:
             img_format = (
                 "PNG"
                 if ext == ".png"
-                else "JPEG" if ext in (".jpg", ".jpeg") else "WEBP"
+                else "JPEG"
+                if ext in (".jpg", ".jpeg")
+                else "WEBP"
             )
             img.save(buffer, format=img_format, quality=85)
             buffer.seek(0)
@@ -8967,8 +8978,10 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
 
     from .snomed_resolver import (
         SnomedUnavailableError,
-        get_options as snomed_get_options,
         parse_option_pairs,
+    )
+    from .snomed_resolver import (
+        get_options as snomed_get_options,
     )
 
     logger_detail = logging.getLogger(__name__)
@@ -9462,6 +9475,8 @@ def snomed_search(request: HttpRequest) -> JsonResponse:
     from .snomed_resolver import (
         SnomedUnavailableError,
         parse_option_pairs,
+    )
+    from .snomed_resolver import (
         search as snomed_search_fn,
     )
 
@@ -9502,8 +9517,10 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
 
     from .snomed_resolver import (
         SnomedUnavailableError,
-        get_options as snomed_get_options,
         options_as_dict,
+    )
+    from .snomed_resolver import (
+        get_options as snomed_get_options,
     )
 
     user = request.user

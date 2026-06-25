@@ -275,8 +275,8 @@ def email_confirmed_required(view_func):
             # Redirect to home with message
             messages.warning(
                 request,
-                "Please confirm your email address before accessing this feature. "
-                "Check your inbox for the confirmation email.",
+                "Nearly there! Please confirm your email to get started. "
+                "Check your inbox for the confirmation email. Visit the home page to resend if needed.",
             )
             return redirect("core:home")
 

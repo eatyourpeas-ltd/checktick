@@ -1,10 +1,11 @@
-from decimal import Decimal
 import logging
 import os
+from decimal import Decimal
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login, views as auth_views
+from django.contrib.auth import login
+from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
@@ -199,6 +200,17 @@ def _get_public_pricing_context() -> dict:
 
 def home(request):
     context = _get_public_pricing_context()
+
+    # Show email confirmation notice to authenticated users with unconfirmed email
+    if request.user.is_authenticated and not request.user.profile.email_confirmed:
+        # Add context variable so template can show resend option
+        context["show_email_confirmation_notice"] = True
+        # Also add a message that explains the resend functionality
+        messages.warning(
+            request,
+            "Nearly there! Check your email and confirm your account. You can request a new confirmation email by following Profile > Email Notification Preferences in the menu in the top-right corner.",
+        )
+
     return render(request, "core/home.html", context)
 
 
@@ -322,6 +334,32 @@ def healthz(request):
 
 @login_required
 def profile(request):
+    # Handle resend confirmation email
+    if request.method == "POST" and request.POST.get("action") == "resend_confirmation":
+        if not request.user.profile.email_confirmed:
+            try:
+                from .email_confirmation import EmailConfirmationManager
+
+                EmailConfirmationManager.send_confirmation_email(request.user, request)
+                messages.success(
+                    request,
+                    "Confirmation email has been sent. Please check your inbox.",
+                )
+            except Exception as e:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.error(
+                    f"Failed to resend confirmation email to {request.user.email}: {e}"
+                )
+                messages.error(
+                    request,
+                    "Failed to send confirmation email. Please try again later.",
+                )
+        else:
+            messages.info(request, "Your email is already confirmed.")
+        return redirect("core:profile")
+
     sb = None
     # Handle language preference form submission
     if request.method == "POST" and request.POST.get("action") == "update_language":
@@ -710,6 +748,7 @@ def signup(request):
 
 def confirm_email(request, token):
     """Handle email confirmation via token."""
+    from .email_confirmation import EmailConfirmationManager
 
     user = EmailConfirmationManager.verify_token(token)
 
@@ -746,6 +785,37 @@ def confirm_email(request, token):
             return redirect("core:home")
     else:
         messages.error(request, "Invalid or expired confirmation link.")
+
+    return redirect("core:home")
+
+
+def resend_confirmation_email(request):
+    """Resend confirmation email to the current user."""
+    if not request.user.is_authenticated:
+        messages.error(request, "You must be logged in to resend confirmation email.")
+        return redirect("login")
+
+    if request.user.profile.email_confirmed:
+        messages.info(request, "Your email is already confirmed.")
+        return redirect("core:home")
+
+    try:
+        from .email_confirmation import EmailConfirmationManager
+
+        EmailConfirmationManager.send_confirmation_email(request.user, request)
+        messages.success(
+            request, "Confirmation email has been resent. Please check your inbox."
+        )
+    except Exception as e:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(
+            f"Failed to resend confirmation email to {request.user.email}: {e}"
+        )
+        messages.error(
+            request, "Failed to send confirmation email. Please try again later."
+        )
 
     return redirect("core:home")
 

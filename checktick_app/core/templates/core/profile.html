@@ -353,12 +353,44 @@
         {% include "components/icons/envelope.html" with classes="w-5 h-5 text-base-content" %}
         <span>Email Notification Preferences</span>
       </h2>
+      <div class="divider text-sm text-base-content">Email Confirmation</div>
+      {% if user.profile.email_confirmed %}
+        <p class="text-success">Your email address is confirmed.</p>
+      {% else %}
+        <alert class="alert alert-warning">
+          <span class="font-bold">Your email address is not yet confirmed. Please check your email for a confirmation link.</span>
+        </alert>
+        <form method="post" class="mt-4">
+          {% csrf_token %}
+          <input
+            type="hidden"
+            name="action"
+            value="resend_confirmation"
+          />
+          <button type="submit" class="btn btn-outline btn-secondary">
+            <svg
+              class="w-4 h-4 mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+              ></path>
+            </svg>
+            Resend Confirmation Email
+          </button>
+        </form>
+      {% endif %}
+      <div class="divider text-sm text-base-content">Account Notifications</div>
       <p class="text-base-content">Control which email notifications you receive. Note: Security-related emails (like password changes) are always sent for your account protection.</p>
       <form method="post" class="mt-4">
         {% csrf_token %}
         <input type="hidden" name="action" value="update_email_prefs" />
         <div class="space-y-4">
-          <div class="divider text-sm text-base-content">Account Notifications</div>
           <div class="form-control">
             <label class="label cursor-pointer justify-start gap-3">
               {{ email_prefs_form.send_welcome_email }}
