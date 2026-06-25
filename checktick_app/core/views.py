@@ -1,10 +1,11 @@
-from decimal import Decimal
 import logging
 import os
+from decimal import Decimal
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login, views as auth_views
+from django.contrib.auth import login
+from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
@@ -284,7 +285,7 @@ def healthz(request):
 
         vault_health = VaultClient().health_check()
         if vault_health.get("sealed"):
-            logger.warning("healthz: Vault is sealed")
+            logger.error("healthz: Vault is sealed")
             status["vault"] = "sealed"
             status["status"] = "degraded"
             http_status = 503
