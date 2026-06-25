@@ -284,7 +284,7 @@ def healthz(request):
 
         vault_health = VaultClient().health_check()
         if vault_health.get("sealed"):
-            logger.warning("healthz: Vault is sealed")
+            logger.error("healthz: Vault is sealed")
             status["vault"] = "sealed"
             status["status"] = "degraded"
             http_status = 503
