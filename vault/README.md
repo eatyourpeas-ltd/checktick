@@ -78,3 +78,14 @@ This checks:
 - Audit logging enabled
 - Platform master key exists
 - SecretID rotation policy
+
+Vault status can be checked in production:
+
+```bash
+export VAULT_ADDR=https://your-vault-url:8200
+vault status
+```
+
+Whether the vault is sealed or unsealed is reported from CheckTick using the `healthz` endpoint.
+
+This is polled periodically by the external logging service and alerts the DevOps team if down.
