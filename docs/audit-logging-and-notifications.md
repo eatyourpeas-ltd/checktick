@@ -26,7 +26,7 @@ CheckTick uses a unified `AuditLog` model for all security-relevant events. The 
 - **Structured metadata**: JSON field for additional context
 - **Email notifications**: Email notifications are sent for critical security events to DevOps via SMTP. The list of recipients is configured in the `ADMINS` variable in `settings.py` and accepts the CTO email address by default.
 
-**🔒 Patient Data Never in Logs Guarantee**
+**Patient Data Never in Logs Guarantee**
 
 Under no circumstances does patient identifiable information appear in log files. The logging system is explicitly designed to exclude:
 
@@ -36,6 +36,7 @@ Under no circumstances does patient identifiable information appear in log files
 - Any form of patient-identifiable information from survey data
 
 **Only non-identifiable data is logged:**
+
 - Anonymous user identifiers (`user.username`, not full names)
 - Numeric database IDs (surveys, teams, organizations, responses)
 - Event types and ISO 8601 timestamps
