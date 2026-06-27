@@ -138,7 +138,7 @@ class LoggingContextMiddleware:
 
     def __call__(self, request):
         # Import here to avoid circular imports
-        from checktick_app.core.logging_context import (
+        from checktick_app.core.logging.logging_context import (
             ctx_remote_addr,
             ctx_request_id,
             ctx_user_id,

@@ -1,15 +1,17 @@
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
-from csp.constants import NONCE as CSP_NONCE
 import environ
+from csp.constants import NONCE as CSP_NONCE
+from django.conf import ENVIRONMENT_VARIABLE
 
 # Detect if running tests
 TESTING = "pytest" in sys.modules or "test" in sys.argv
 
 env = environ.Env(
     DEBUG=(bool, False),
+    ENVIRONMENT=(str, "development"),
     SECRET_KEY=(str, ""),
     ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
     SECURE_SSL_REDIRECT=(bool, False),
@@ -94,6 +96,7 @@ if env_file.exists():
     environ.Env.read_env(env_file)
 
 DEBUG = env("DEBUG")
+ENVIRONMENT = env("ENVIRONMENT", default="development")
 SECRET_KEY = env("SECRET_KEY") or os.urandom(32)
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 
