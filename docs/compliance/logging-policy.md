@@ -7,117 +7,281 @@ category: dspt-9-it-protection
 
 **Policy Owner:** {{ cto_name }} (CTO) | **Review Date:** [Insert Date]
 
+---
+
 ## 1. Scope
 
-This policy covers the generation, protection, and retention of audit logs for all {{ platform_name }} systems processing NHS data.
+This policy defines the generation, storage, retention, and review of logs within {{ platform_name }} systems that process NHS-related data.
 
-## 2. Log Retention Schedule
+It distinguishes between:
 
-{{ platform_name }} adopts a 'Retain by Default' posture. Logs are stored securely within our cloud infrastructure (hosting provider).
+- **Application logs (operational & infrastructure logging)**
+- **Audit logs (security and compliance events stored in the database)**
+
+These two systems serve different purposes and have different retention and governance requirements.
+
+---
+
+## 2. Logging Architecture Overview
+
+{{ platform_name }} uses a **dual-layer logging model**:
+
+### 2.1 Operational Logs (Infrastructure / Observability)
+
+- Emitted as **structured JSON to stdout**
+- Captured by the hosting platform (e.g. Northflank / Azure / AWS)
+- Optionally forwarded to external log systems (e.g. OpenObserve)
+- Used for:
+  - System debugging
+  - Performance monitoring
+  - Infrastructure diagnostics
+  - Error tracking
+
+These logs are **ephemeral unless explicitly stored by the hosting platform or log aggregator**.
+
+---
+
+### 2.2 Audit Logs (Security & Compliance)
+
+A separate persistent audit trail is stored in the application database using the `AuditLog` model.
+
+These logs are:
+
+- Stored in **PostgreSQL**
+- Immutable once written (append-only pattern)
+- Used for:
+  - Security auditing
+  - Compliance reporting
+  - Access tracking
+  - Governance review
+
+They represent the **system of record for security-relevant events**.
+
+---
+
+## 3. Log Retention Schedule
+
+### 3.1 Operational Logs
+
+Retention is determined by the hosting or log aggregation platform.
 
 | Log Type | Minimum Retention | Purpose |
 | :--- | :--- | :--- |
-| **Authentication Logs** | 12 Months | To trace account compromises or brute-force attempts. |
-| **Application Audit** | 12 Months | To track changes to patient data or survey logic. |
-| **Network Ingress** | 12 Months | To identify source IPs and potential DDoS/SQLi patterns. |
-| **System Errors** | 6 Months | To monitor for stability and potential exploit attempts. |
+| Application Logs | 6–12 months (platform dependent) | Debugging and system monitoring |
+| Infrastructure Logs | 6–12 months (platform dependent) | System health and performance monitoring |
 
-## 3. Traceability (End-to-End)
+---
 
-To satisfy NCSC guidelines, every logged event must contain:
+### 3.2 Audit Logs (Database)
 
-* **Timestamp:** Synchronized via NTP to UTC.
-* **Identity:** The User ID or Service Account involved.
-* **Source:** The originating IP address (X-Forwarded-For headers are preserved).
-* **Outcome:** Success or failure of the requested action.
+Audit logs stored in PostgreSQL are retained for:
 
-## 4. Protection of Logs
-
-* **Integrity:** Logs are stored in a read-only format for standard users.
-* **Access:** Only platform superusers (CTO/DPO) have access to the log review dashboard.
-* **Availability:** Logs are backed up alongside our primary database to prevent loss during a system failure.
-
-## 5. Review Procedure
-
-* **Automated:** Email alerts for 'Level: Error' or 'Level: Critical' events.
-* **Quarterly:** CTO and DPO review logs via the Platform Admin dashboard (`/platform-admin/logs/`) to:
-  * Analyse 'Authentication Success/Fail' ratios for unusual patterns
-  * Review critical and warning events
-  * Verify no unauthorized access attempts
-  * Document findings for DPST compliance
-* **On-Demand:** Security events can be reviewed at any time through the dashboard with filtering by severity, action type, date range, and search.
-
-## 6. Platform Admin Log Dashboard
-
-The Platform Admin dashboard provides superuser-only access to:
-
-* **Application Logs:** All `AuditLog` entries from the database including authentication events, 2FA actions, account changes, and survey access.
-* **Infrastructure Logs:** Container/application logs from the hosting provider (if configured via `HOSTING_API_TOKEN`, `HOSTING_PROJECT_ID`, `HOSTING_SERVICE_ID`).
-
-**⚠️ Patient Data Never in Logs:**
-Under no circumstances does patient identifiable information appear in log files. The logging system is designed with explicit PII exclusion:
-- Patient names, dates of birth, addresses, or NHS numbers ❌ NEVER in logs
-- Encrypted survey responses (`enc_demographics`, `enc_answers`) ❌ NEVER logged
-- Sensitive health data from survey answers
-
-**Patient Data NEVER in logs**
-
-Only non-identifiable data is logged:
-- Anonymous user identifiers (`user.username`, not full names)
-- Numeric database IDs (surveys, teams, organizations, responses)
-- Event types and ISO 8601 timestamps
-- IP addresses and user agents (for security monitoring)
-- Non-sensitive metadata (`subscription_status`, `payment_provider`)
-- Error messages without patient context
-
-### Log Categories Tracked
-
-| Category | Events Logged |
-| :--- | :--- |
-| **Authentication** | login_success, login_failed, logout, account_locked |
-| **Two-Factor Auth** | 2fa_enabled, 2fa_disabled, 2fa_verified, 2fa_failed, backup_codes_generated, backup_code_used |
-| **Account Changes** | password_changed, password_reset, email_changed, user_created, user_deactivated |
-| **Data Access** | survey unlock, key recovery, data exports |
-
-### Severity Levels
-
-* **Critical:** Account locked, 2FA disabled, password changed, user deactivated, key recovery
-* **Warning:** Login failed, 2FA failed
-* **Info:** All other events
-
-## 7. Hosting Provider Audit Logs
-
-The Platform Admin Log Dashboard captures application and container logs, but does **not** capture hosting provider platform-level events. These must be reviewed separately via the hosting provider's dashboard.
-
-### Events Not Captured in Platform Admin Dashboard
-
-| Event Type | Where to Review | Why It Matters |
+| Log Type | Minimum Retention | Purpose |
 | :--- | :--- | :--- |
-| Container console access (SSH/exec) | Hosting provider audit log | Tracks who accessed the container shell |
-| Environment variable changes | Hosting provider audit log | Configuration and secrets modifications |
-| Deployments and rollbacks | Hosting provider audit log | Code changes to production |
-| Scaling and resource changes | Hosting provider audit log | Infrastructure modifications |
-| Team member access changes | Hosting provider audit log | Who has platform access |
+| Security Audit Logs | 12 Months | Authentication, access control, and security events |
+| Data Governance Logs | 12 Months | Data export, retention, and deletion tracking |
 
-### Northflank Audit Log Location
+---
 
-For Northflank-hosted deployments:
+## 4. Audit Log Model (System of Record)
 
-1. Log in to [Northflank Dashboard](https://app.northflank.com)
-2. Navigate to **Settings → Audit Log**
-3. Review events for the relevant time period
+Audit logs are implemented using the `AuditLog` model and represent the authoritative compliance record.
 
-### Quarterly Review Checklist
+### 4.1 Scope Classification
 
-During quarterly CTO/DPO log reviews, check **both** sources:
+Audit events are categorised as:
 
-- [ ] **Platform Admin Dashboard** (`/platform-admin/logs/`)
-  - [ ] Application Logs: Review CRITICAL and WARNING events
-  - [ ] Infrastructure Logs: Review ERROR-level container logs
-- [ ] **Hosting Provider Audit Log** (e.g., Northflank Settings → Audit Log)
-  - [ ] Container console access sessions
-  - [ ] Environment variable modifications
-  - [ ] Deployment activity
-  - [ ] Team member access changes
+- **Security**
+  - Authentication events
+  - Password changes
+  - 2FA changes
+  - Account locking
 
-Document findings from both sources for DPST evidence.
+- **Account**
+  - User creation and deletion
+  - Profile changes
+
+- **Data Governance**
+  - Data exports
+  - Retention actions
+  - Key recovery
+
+- **Organisation / Survey**
+  - Structural and administrative changes
+
+---
+
+### 4.2 Data Captured
+
+Each audit log entry includes:
+
+- Actor (user performing the action)
+- Target user (if applicable)
+- Action type (e.g. login_success, password_changed)
+- Severity (INFO, WARNING, CRITICAL)
+- IP address
+- User agent
+- Metadata (structured JSON context)
+- Timestamp (auto-generated)
+
+---
+
+### 4.3 Immutability
+
+Audit logs are:
+
+- Append-only
+- Not modified after creation
+- Not deleted except under explicit legal retention processes
+
+This ensures forensic integrity.
+
+---
+
+## 5. Traceability Requirements
+
+To satisfy NCSC and NHS-aligned requirements, both operational and audit logs must support traceability.
+
+### 5.1 Operational Logs
+
+Each event should include:
+
+- Timestamp (UTC, NTP synchronised)
+- Request ID / Correlation ID
+- User ID (if applicable)
+- Source IP address
+- Service/component name
+- Environment (production/staging)
+
+---
+
+### 5.2 Audit Logs
+
+Audit logs MUST include:
+
+- Actor identity (or system actor)
+- Action performed
+- Timestamp
+- IP address (where available)
+- Outcome (implicit via action type)
+- Severity classification
+
+---
+
+## 6. Protection of Logs
+
+### 6.1 Operational Logs
+
+- Stored in hosting platform logging system or external aggregator
+- Access restricted to platform administrators
+- May include transient system diagnostics
+
+### 6.2 Audit Logs
+
+- Stored in PostgreSQL with restricted access
+- Accessible only to authorised administrative roles (CTO/DPO)
+- Treated as compliance evidence
+- Included in governance reviews
+
+---
+
+## 7. Patient Data Handling
+
+{{ platform_name }} is designed to ensure that:
+
+### 7.1 Operational Logs
+
+- Patient-identifiable data is **not intentionally logged**
+- Sensitive payloads are protected via:
+  - encryption at application level
+  - redaction filters in logging pipeline
+- Logs are considered **non-primary storage and not a data store**
+
+### 7.2 Audit Logs
+
+- Do not contain raw patient survey responses
+- May contain metadata identifiers (e.g. survey IDs, organisation IDs)
+- Do not contain decrypted sensitive health data
+
+> The system is designed such that patient-identifiable information is not logged under normal operation. Logging safeguards and redaction filters provide an additional defensive layer.
+
+---
+
+## 8. Severity Levels
+
+### Operational Logs
+
+- ERROR: System failures requiring attention
+- WARNING: Degraded or unexpected behaviour
+- INFO: Normal operational events
+
+### Audit Logs
+
+- CRITICAL: Security-impacting actions (account lock, password change, key recovery)
+- WARNING: Suspicious or failed authentication events
+- INFO: Standard system and administrative actions
+
+---
+
+## 9. Review Procedures
+
+### 9.1 Operational Logs
+
+- Reviewed via hosting platform dashboards or log aggregator
+- Used for:
+  - debugging incidents
+  - monitoring system health
+  - investigating failures
+
+### 9.2 Audit Logs (Database)
+
+Reviewed quarterly by CTO/DPO:
+
+- Authentication success/failure trends
+- Security events (critical/warning)
+- Data export activity
+- Account changes and administrative actions
+
+---
+
+## 10. Hosting Provider Audit Logs
+
+Platform-level logs (outside application scope) include:
+
+- Deployment events
+- Environment variable changes
+- Container access sessions
+- Infrastructure scaling actions
+
+These are reviewed separately in the hosting provider dashboard (e.g. Northflank).
+
+---
+
+## 11. Separation of Concerns Summary
+
+| Layer | Storage | Purpose | Retention |
+| :--- | :--- | :--- | :--- |
+| Operational Logs | Stdout → platform/log aggregator | Debugging & observability | Platform-defined |
+| Audit Logs | PostgreSQL (`AuditLog` model) | Security & compliance | 12 months minimum |
+| Hosting Logs | Provider dashboard | Infrastructure governance | Provider-defined |
+
+---
+
+## 12. Quarterly Compliance Review Checklist
+
+- [ ] Audit logs reviewed (security + governance events)
+- [ ] Authentication anomalies assessed
+- [ ] Data export events reviewed
+- [ ] Hosting provider audit logs reviewed
+- [ ] Retention policies validated
+- [ ] Logging redaction rules reviewed
+- [ ] No patient data observed in logs
+
+---
+
+## 13. Key Principle
+
+> Operational logs help us run the system.
+> Audit logs prove what happened.
+
+Both are required, but they serve fundamentally different compliance and engineering purposes.
