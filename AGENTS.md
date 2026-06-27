@@ -62,3 +62,35 @@ It signposts common workflows and links to the full docs instead of duplicating 
 
 - Keep changes minimal and scoped to the request.
 - Prefer existing scripts in `s/` over ad-hoc commands when available.
+
+## Logging
+
+This is a medical application so never log patient data or sensitive credentials.
+Never log request bodies.
+Never log decrypted survey objects.
+Never log ORM models directly.
+The JSON formatter will catch some of these but it's better to avoid logging them altogether.
+
+For example, instead of:
+
+```python
+logger.debug(settings.__dict__)
+```
+
+or
+
+```python
+logger.info(os.environ)
+```
+
+always log only the specific configuration values you're interested in:
+
+```python
+logger.info(
+    "Vault configured",
+    extra={
+        "vault_enabled": settings.VAULT_ENABLED,
+        "vault_url": settings.VAULT_ADDR,
+    },
+)
+```

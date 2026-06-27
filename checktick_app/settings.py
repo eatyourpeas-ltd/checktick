@@ -682,44 +682,56 @@ LOGGING = {
     "disable_existing_loggers": False,
     "filters": {
         "context_filter": {
-            "()": "checktick_app.core.logging_context.LoggingContextFilter",
+            "()": "checktick_app.core.logging.logging_context.LoggingContextFilter",
+        },
+        "redaction_filter": {
+            "()": "checktick_app.core.logging.redaction_filter.RedactionFilter",
         },
     },
     "formatters": {
-        "verbose": {
-            "format": "[{levelname}] {asctime} [RID:{request_id}] [UID:{user_id}] [IP:{remote_addr}] {name} {message}",
-            "style": "{",
+        "json": {
+            "()": "checktick_app.core.logging.json_formatter.JSONFormatter",
         },
-        "simple": {
-            "format": "[{levelname}] {message}",
+        "verbose": {
+            "format": "[{levelname}] {asctime} [RID:{request_id}] "
+            "[UID:{user_id}] [IP:{remote_addr}] {name} {message}",
             "style": "{",
         },
     },
     "handlers": {
+        #
+        # Primary log output.
+        # Northflank captures stdout and ships it to OpenObserve.
+        #
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
-            "filters": ["context_filter"],
+            "formatter": "json",
+            "filters": [
+                "context_filter",
+                "redaction_filter",
+            ],
         },
-        "openobserve": {
-            "()": "checktick_app.core.log_exporters.OpenObserveExporter",
-            "level": "ERROR",
-            "base_url": LOGS_BASE_URL,
-            "key": LOGS_KEY,
-            "organization": LOGS_ORGANISATION,
-            "stream_name": LOGS_STREAM_NAME,
-            "filters": ["context_filter"],  # filter to redact
-        },
+        #
+        # Django error emails
+        #
         "mail_admins": {
             "level": "ERROR",
             "class": "django.utils.log.AdminEmailHandler",
             "include_html": True,
             "formatter": "verbose",
-            "filters": ["context_filter"],  # filter to redact
+            "filters": [
+                "context_filter",
+                "redaction_filter",
+            ],
         },
     },
+    #
+    # Root logger
+    #
     "root": {
-        "handlers": ["console", "openobserve"],
+        "handlers": [
+            "console",
+        ],
         "level": "INFO",
     },
     "loggers": {
@@ -733,32 +745,44 @@ LOGGING = {
             "level": "WARNING",
             "propagate": False,
         },
-        # Email notifications for Django request errors
+        #
+        # Email notifications for uncaught request errors
+        #
         "django.request": {
-            "handlers": ["console", "mail_admins"],
+            "handlers": [
+                "console",
+                "mail_admins",
+            ],
             "level": "ERROR",
             "propagate": False,
         },
+        #
+        # Application
+        #
         "checktick_app": {
             "handlers": ["console"],
-            "level": "ERROR",
+            "level": "INFO",
             "propagate": False,
         },
-        # Email-specific logging
+        #
+        # Email
+        #
         "checktick_app.core.email_utils": {
             "handlers": ["console"],
             "level": "DEBUG" if DEBUG else "INFO",
             "propagate": False,
         },
-        # OIDC debugging
+        #
+        # OIDC
+        #
         "mozilla_django_oidc": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": "DEBUG" if DEBUG else "INFO",
             "propagate": False,
         },
         "checktick_app.core.auth": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": "DEBUG" if DEBUG else "INFO",
             "propagate": False,
         },
     },

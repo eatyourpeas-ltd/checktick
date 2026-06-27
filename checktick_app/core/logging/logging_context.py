@@ -4,6 +4,8 @@ import contextvars
 import logging
 from typing import Optional
 
+from django.conf import settings
+
 # Thread-safe context variables for request identity
 # Using contextvars for async compatibility (though Django is primarily sync)
 ctx_user_id: contextvars.ContextVar[Optional[int]] = contextvars.ContextVar(
@@ -27,4 +29,7 @@ class LoggingContextFilter(logging.Filter):
         record.user_id = ctx_user_id.get()
         record.remote_addr = ctx_remote_addr.get()
         record.request_id = ctx_request_id.get()
+        record.project = getattr(settings, "BRAND_NAME", "checktick")
+        record.environment = settings.ENVIRONMENT
+        record.service = "django"
         return True
