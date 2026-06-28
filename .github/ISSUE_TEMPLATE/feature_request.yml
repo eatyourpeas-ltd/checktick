@@ -50,7 +50,7 @@ body:
       description: Describe your proposed solution in detail
       placeholder: "How would you like this feature to work? Be as specific as possible."
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: user-story
@@ -121,7 +121,7 @@ body:
         - Major (substantial architectural changes)
         - Not sure
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: priority
