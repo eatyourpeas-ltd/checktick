@@ -339,14 +339,37 @@ def profile(request):
             try:
                 from .email_confirmation import EmailConfirmationManager
 
-                EmailConfirmationManager.send_confirmation_email(request.user, request)
-                messages.success(
-                    request,
-                    "Confirmation email has been sent. Please check your inbox.",
+                confirmation, success, error_info = (
+                    EmailConfirmationManager.send_confirmation_email(
+                        request.user, request
+                    )
                 )
+                if success:
+                    messages.success(
+                        request,
+                        "Confirmation email has been sent. Please check your inbox.",
+                    )
+                else:
+                    logger.warning(
+                        "Failed to send confirmation email",
+                        extra={
+                            "username": request.user.username,
+                            "email": request.user.email,
+                            "error_info": error_info,
+                        },
+                    )
+                    messages.error(
+                        request,
+                        "Failed to send confirmation email. Please try again later.",
+                    )
             except Exception as e:
                 logger.error(
-                    f"Failed to resend confirmation email to {request.user.email}: {e}"
+                    "Failed to resend confirmation email",
+                    extra={
+                        "email": request.user.email,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
                 )
                 messages.error(
                     request,
@@ -688,18 +711,67 @@ def signup(request):
             try:
                 from .email_confirmation import EmailConfirmationManager
 
-                EmailConfirmationManager.send_confirmation_email(user, request)
+                confirmation, email_success, error_info = (
+                    EmailConfirmationManager.send_confirmation_email(user, request)
+                )
 
                 # If user came from a survey invitation, store the URL for after confirmation
                 if next_url:
                     request.session["post_confirmation_redirect"] = next_url
 
-                messages.info(
-                    request,
-                    "Please check your email to confirm your account before accessing features.",
-                )
+                if email_success:
+                    messages.info(
+                        request,
+                        "Please check your email to confirm your account before accessing features.",
+                    )
+                else:
+                    # Email failed to send - this might indicate an invalid email address
+                    logger.warning(
+                        "Email confirmation delivery failed",
+                        extra={
+                            "username": user.username,
+                            "email": user.email,
+                            "error_info": error_info,
+                        },
+                    )
+
+                    # Check if this is a permanent delivery failure that indicates an invalid email
+                    # Common patterns for emails that bounce immediately:
+                    if error_info and error_info.get("type") in [
+                        "SMTPRecipientsRefused",
+                        "gaierror",
+                    ]:
+                        # These errors typically indicate invalid email addresses
+                        # As a medical application, we can only store information on valid accounts
+                        logger.warning(
+                            "Deleting account due to invalid email address",
+                            extra={
+                                "username": user.username,
+                                "email": user.email,
+                                "error_type": error_info.get("type"),
+                            },
+                        )
+                        user.delete()
+                        messages.error(
+                            request,
+                            "We apologise that it has not been possible to create an account with this email address as it has been rejected by your provider. If you are sure the email address is correct please contact us on info@checktick.uk",
+                        )
+                        return redirect("core:signup")
+                    else:
+                        # Other errors might be temporary - don't delete account
+                        messages.warning(
+                            request,
+                            "We had trouble sending a confirmation email. Please contact support if you don't receive it.",
+                        )
             except Exception as e:
-                logger.error(f"Failed to send confirmation email to {user.email}: {e}")
+                logger.error(
+                    "Failed to send confirmation email",
+                    extra={
+                        "email": user.email,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                )
                 messages.warning(
                     request,
                     "We had trouble sending a confirmation email. Please contact support if you don't receive it.",
@@ -709,10 +781,26 @@ def signup(request):
             try:
                 from .email_utils import send_welcome_email
 
-                send_welcome_email(user)
+                welcome_sent = send_welcome_email(user)
+                if not welcome_sent:
+                    # If welcome email failed to send, this might indicate an invalid email
+                    logger.warning(
+                        "Welcome email failed for user",
+                        extra={
+                            "username": user.username,
+                            "email": user.email,
+                        },
+                    )
             except Exception as e:
                 # Don't block signup if email fails
-                logger.error(f"Failed to send welcome email to {user.username}: {e}")
+                logger.error(
+                    "Failed to send welcome email",
+                    extra={
+                        "username": user.username,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                )
 
             # Handle tier-based signup flow
             # For all tiers, redirect to home since email is not confirmed yet
@@ -791,13 +879,33 @@ def resend_confirmation_email(request):
     try:
         from .email_confirmation import EmailConfirmationManager
 
-        EmailConfirmationManager.send_confirmation_email(request.user, request)
-        messages.success(
-            request, "Confirmation email has been resent. Please check your inbox."
+        confirmation, success, error_info = (
+            EmailConfirmationManager.send_confirmation_email(request.user, request)
         )
+        if success:
+            messages.success(
+                request, "Confirmation email has been resent. Please check your inbox."
+            )
+        else:
+            logger.warning(
+                "Failed to send confirmation email",
+                extra={
+                    "username": request.user.username,
+                    "email": request.user.email,
+                    "error_info": error_info,
+                },
+            )
+            messages.error(
+                request, "Failed to send confirmation email. Please try again later."
+            )
     except Exception as e:
         logger.error(
-            f"Failed to resend confirmation email to {request.user.email}: {e}"
+            "Failed to resend confirmation email",
+            extra={
+                "email": request.user.email,
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+            },
         )
         messages.error(
             request, "Failed to send confirmation email. Please try again later."

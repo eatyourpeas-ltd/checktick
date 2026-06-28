@@ -67,10 +67,13 @@ class TestEmailConfirmationManager(TestCase):
 
         # This test mainly checks that the method runs without error
         # Actual email sending is tested separately
-        confirmation = EmailConfirmationManager.send_confirmation_email(self.user)
+        result = EmailConfirmationManager.send_confirmation_email(self.user)
+        confirmation, success, error_info = result
 
         self.assertIsNotNone(confirmation)
-        self.assertEqual(confirmation.user, self.user)
+        # In test environment, email sending should succeed
+        self.assertTrue(success)
+        self.assertIsNone(error_info)
         # Token should be created
         self.assertTrue(EmailConfirmationToken.objects.filter(user=self.user).exists())
 
