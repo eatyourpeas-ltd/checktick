@@ -19,7 +19,8 @@ class EmailAuthenticationForm(AuthenticationForm):
 
 
 class SignupForm(UserCreationForm):
-    email = forms.EmailField(required=True)
+    email = forms.EmailField(required=True, label="Email address")
+    email_confirm = forms.EmailField(required=True, label="Confirm email address")
 
     class Meta(UserCreationForm.Meta):
         model = User
@@ -37,6 +38,18 @@ class SignupForm(UserCreationForm):
                 "This email address cannot be used. Please use a different address or sign in."
             )
         return email
+
+    def clean(self):
+        cleaned_data = super().clean()
+        email = cleaned_data.get("email")
+        email_confirm = cleaned_data.get("email_confirm")
+
+        if email and email_confirm and email != email_confirm:
+            raise forms.ValidationError(
+                {"email_confirm": "The two email addresses didn't match."}
+            )
+
+        return cleaned_data
 
     def save(self, commit=True):
         email = self.cleaned_data["email"].strip().lower()

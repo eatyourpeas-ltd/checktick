@@ -45,6 +45,7 @@ class TestEmailConfirmationIntegration(TestCase):
             reverse("core:signup"),
             {
                 "email": "newuser@example.com",
+                "email_confirm": "newuser@example.com",
                 "password1": "complexpassword123!",
                 "password2": "complexpassword123!",
             },
@@ -57,6 +58,23 @@ class TestEmailConfirmationIntegration(TestCase):
         user = User.objects.get(email="newuser@example.com")
         # Email should be unconfirmed initially
         self.assertFalse(user.profile.email_confirmed)
+
+    def test_signup_with_mismatched_emails_form_is_invalid(self):
+        """Test that signup form with mismatched emails is invalid."""
+        from checktick_app.core.forms import SignupForm
+
+        form_data = {
+            "email": "unique-test@example.com",
+            "email_confirm": "different-unique-test@example.com",
+            "password1": "testpass123!",  # nosec: test password
+            "password2": "testpass123!",  # nosec: test password
+        }
+        form = SignupForm(data=form_data)
+        self.assertFalse(form.is_valid())
+        self.assertIn("email_confirm", form.errors)
+
+        # User should not be created
+        self.assertFalse(User.objects.filter(email="unique-test@example.com").exists())
 
     def test_protected_features_require_confirmation(self):
         """Test that protected features require email confirmation."""

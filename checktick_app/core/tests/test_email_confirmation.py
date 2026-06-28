@@ -223,6 +223,7 @@ class TestSignupWithEmailConfirmation(TestCase):
             reverse("core:signup"),
             {
                 "email": "newuser@example.com",
+                "email_confirm": "newuser@example.com",
                 "password1": "complexpassword123!",
                 "password2": "complexpassword123!",
             },
@@ -246,6 +247,7 @@ class TestSignupWithEmailConfirmation(TestCase):
             reverse("core:signup"),
             {
                 "email": "brandtest@example.com",
+                "email_confirm": "brandtest@example.com",
                 "password1": "complexpassword123!",
                 "password2": "complexpassword123!",
             },
@@ -278,7 +280,6 @@ class TestSignupWithEmailConfirmation(TestCase):
         self.assertIn(
             "CheckTick",
             confirmation_email.body,
-            "Expected brand name 'CheckTick' in email body",
         )
 
 
