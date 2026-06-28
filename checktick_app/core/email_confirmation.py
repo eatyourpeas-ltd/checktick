@@ -1,5 +1,6 @@
-import uuid
 from datetime import timedelta
+import logging
+import uuid
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -10,6 +11,8 @@ from django.utils import timezone
 from django.utils.crypto import get_random_string
 
 from .models import SiteBranding
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 

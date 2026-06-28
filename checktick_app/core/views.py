@@ -1,11 +1,10 @@
+from decimal import Decimal
 import logging
 import os
-from decimal import Decimal
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login
-from django.contrib.auth import views as auth_views
+from django.contrib.auth import login, views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
@@ -340,14 +339,37 @@ def profile(request):
             try:
                 from .email_confirmation import EmailConfirmationManager
 
-                EmailConfirmationManager.send_confirmation_email(request.user, request)
-                messages.success(
-                    request,
-                    "Confirmation email has been sent. Please check your inbox.",
+                confirmation, success, error_info = (
+                    EmailConfirmationManager.send_confirmation_email(
+                        request.user, request
+                    )
                 )
+                if success:
+                    messages.success(
+                        request,
+                        "Confirmation email has been sent. Please check your inbox.",
+                    )
+                else:
+                    logger.warning(
+                        "Failed to send confirmation email",
+                        extra={
+                            "username": request.user.username,
+                            "email": request.user.email,
+                            "error_info": error_info,
+                        },
+                    )
+                    messages.error(
+                        request,
+                        "Failed to send confirmation email. Please try again later.",
+                    )
             except Exception as e:
                 logger.error(
-                    f"Failed to resend confirmation email to {request.user.email}: {e}"
+                    "Failed to resend confirmation email",
+                    extra={
+                        "email": request.user.email,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
                 )
                 messages.error(
                     request,
@@ -857,13 +879,33 @@ def resend_confirmation_email(request):
     try:
         from .email_confirmation import EmailConfirmationManager
 
-        EmailConfirmationManager.send_confirmation_email(request.user, request)
-        messages.success(
-            request, "Confirmation email has been resent. Please check your inbox."
+        confirmation, success, error_info = (
+            EmailConfirmationManager.send_confirmation_email(request.user, request)
         )
+        if success:
+            messages.success(
+                request, "Confirmation email has been resent. Please check your inbox."
+            )
+        else:
+            logger.warning(
+                "Failed to send confirmation email",
+                extra={
+                    "username": request.user.username,
+                    "email": request.user.email,
+                    "error_info": error_info,
+                },
+            )
+            messages.error(
+                request, "Failed to send confirmation email. Please try again later."
+            )
     except Exception as e:
         logger.error(
-            f"Failed to resend confirmation email to {request.user.email}: {e}"
+            "Failed to resend confirmation email",
+            extra={
+                "email": request.user.email,
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+            },
         )
         messages.error(
             request, "Failed to send confirmation email. Please try again later."
