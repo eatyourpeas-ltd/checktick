@@ -1,5 +1,5 @@
-from datetime import timedelta
 import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -24,7 +24,12 @@ class EmailConfirmationManager:
 
     @staticmethod
     def send_confirmation_email(user, request=None):
-        """Send email confirmation to user."""
+        """Send email confirmation to user.
+
+        Returns:
+            tuple: (confirmation, success, error_info) where success is boolean
+                   and error_info contains details about any delivery issues
+        """
         from .email_confirmation import EmailConfirmationToken
 
         # Create or update confirmation token
@@ -68,16 +73,32 @@ class EmailConfirmationManager:
         html_message = render_to_string("emails/confirm_email.html", context)
         text_message = render_to_string("emails/confirm_email.txt", context)
 
-        send_mail(
-            subject=subject,
-            message=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            html_message=html_message,
-            fail_silently=not settings.DEBUG,
-        )
-
-        return confirmation
+        try:
+            send_mail(
+                subject=subject,
+                message=text_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                html_message=html_message,
+                fail_silently=not settings.DEBUG,
+            )
+            return confirmation, True, None
+        except Exception as e:
+            # Log the specific error for debugging
+            error_info = {
+                "type": type(e).__name__,
+                "message": str(e),
+                "email": user.email,
+            }
+            logger.warning(
+                "Email confirmation delivery failed",
+                extra={
+                    "email": user.email,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                },
+            )
+            return confirmation, False, error_info
 
     @staticmethod
     def verify_token(token):

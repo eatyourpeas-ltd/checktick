@@ -67,6 +67,8 @@ Tier features and limits may be adjusted with reasonable notice to users.
 * You are responsible for maintaining the confidentiality of your account credentials
 * You must notify us immediately of any unauthorized access to your account
 * You may not share your account with others or allow others to access your account
+* As a medical application, we are required to maintain data integrity and compliance. We may automatically verify the validity of your email address during registration by attempting to send a confirmation email
+* Accounts registered with invalid or non-existent email addresses may be automatically deleted as part of our compliance requirements to ensure data is only stored for legitimate users
 
 ### 3.2 Encryption Keys
 
