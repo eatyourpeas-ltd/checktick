@@ -6,7 +6,6 @@ from django.db import migrations, models
 def copy_email_tokens_to_user_profiles(apps, schema_editor):
     """Copy email confirmation tokens from EmailConfirmationToken to UserProfile."""
     EmailConfirmationToken = apps.get_model("core", "EmailConfirmationToken")
-    UserProfile = apps.get_model("core", "UserProfile")
 
     # Copy token data to user profiles
     for token in EmailConfirmationToken.objects.select_related("user__profile"):

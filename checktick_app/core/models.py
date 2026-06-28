@@ -656,8 +656,8 @@ class Payment(models.Model):
 
         Format: INV-YYYYMMDD-XXXXXXXX
         """
-        import uuid
         from datetime import date
+        import uuid
 
         today = date.today()
         unique_part = uuid.uuid4().hex[:8].upper()

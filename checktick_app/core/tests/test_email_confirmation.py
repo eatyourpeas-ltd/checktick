@@ -15,7 +15,7 @@ PASSWORD = "testpass123"
 
 
 class TestEmailConfirmationModel(TestCase):
-    """Test the EmailConfirmationToken model."""
+    """Test email confirmation functionality using UserProfile fields."""
 
     def setUp(self):
         self.user = User.objects.create_user(
