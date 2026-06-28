@@ -129,6 +129,7 @@ class TestSignupEnumeration:
             url,
             {
                 "email": "existing@example.com",
+                "email_confirm": "existing@example.com",
                 "password1": "strongpassword123",
                 "password2": "strongpassword123",
             },
@@ -163,6 +164,7 @@ class TestSignupEnumeration:
             url,
             {
                 "email": "newuser@example.com",
+                "email_confirm": "newuser@example.com",
                 "password1": "strongpassword123",
                 "password2": "differentpassword",
             },
@@ -394,12 +396,15 @@ class TestSurveyUsersEnumeration:
         Tier limit checks are mocked here — they are tested separately."""
         client.force_login(org_admin)
         url = reverse("surveys:survey_users", kwargs={"slug": survey.slug})
-        with patch(
-            "checktick_app.core.tier_limits.check_collaboration_limit",
-            return_value=(True, ""),
-        ), patch(
-            "checktick_app.core.tier_limits.check_collaborators_per_survey_limit",
-            return_value=(True, ""),
+        with (
+            patch(
+                "checktick_app.core.tier_limits.check_collaboration_limit",
+                return_value=(True, ""),
+            ),
+            patch(
+                "checktick_app.core.tier_limits.check_collaborators_per_survey_limit",
+                return_value=(True, ""),
+            ),
         ):
             response = client.post(
                 url,

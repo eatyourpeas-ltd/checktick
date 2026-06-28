@@ -440,6 +440,7 @@ def test_signup_invalid_email_error_xss_escaped(client):
         reverse("core:signup"),
         data={
             "email": SCRIPT_TAG,  # not a valid email
+            "email_confirm": SCRIPT_TAG,  # not a valid email
             "password1": "Str0ng!Pass",
             "password2": "Str0ng!Pass",
         },
@@ -458,6 +459,7 @@ def test_signup_password_mismatch_error_xss_escaped(client):
         reverse("core:signup"),
         data={
             "email": "test@example.com",
+            "email_confirm": "test@example.com",
             "password1": f"Pa55word{SCRIPT_TAG}",
             "password2": "differentpass",
         },
@@ -484,6 +486,7 @@ def test_signup_duplicate_email_error_does_not_echo_xss(client, django_user_mode
         reverse("core:signup"),
         data={
             "email": f"existing@example.com{SCRIPT_TAG}",
+            "email_confirm": f"existing@example.com{SCRIPT_TAG}",
             "password1": "Str0ng!Pass1",
             "password2": "Str0ng!Pass1",
         },
@@ -502,6 +505,7 @@ def test_signup_success_redirects_without_echoing_payload(client):
         reverse("core:signup"),
         data={
             "email": "newuser@example.com",
+            "email_confirm": "newuser@example.com",
             "password1": "Str0ng!Pass1",
             "password2": "Str0ng!Pass1",
         },

@@ -99,6 +99,7 @@ def test_signup_as_simple_user(client):
         reverse("core:signup"),
         data={
             "email": email,
+            "email_confirm": email,
             "password1": password,
             "password2": password,
             "account_type": "simple",
@@ -282,6 +283,7 @@ def test_signup_with_duplicate_email_fails(client):
         reverse("core:signup"),
         data={
             "email": email,
+            "email_confirm": email,
             "password1": password,
             "password2": password,
             "account_type": "simple",
