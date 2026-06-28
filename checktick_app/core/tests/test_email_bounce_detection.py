@@ -148,7 +148,6 @@ class TestEmailBounceDetection(TestCase):
         """Test that send_confirmation_email returns the correct tuple format."""
         from checktick_app.core.email_confirmation import (
             EmailConfirmationManager,
-            EmailConfirmationToken,
         )
 
         # Create a test user
@@ -169,7 +168,7 @@ class TestEmailBounceDetection(TestCase):
         self.assertIsNone(error_info)
 
         # Check that a token was created
-        self.assertTrue(EmailConfirmationToken.objects.filter(user=user).exists())
+        self.assertIsNotNone(user.profile.email_confirmation_token)
 
     @patch("checktick_app.core.email_confirmation.send_mail")
     def test_send_confirmation_email_with_error_returns_correct_tuple(

@@ -253,6 +253,9 @@ class UserProfile(models.Model):
 
     # Email confirmation
     email_confirmed = models.BooleanField(default=False)
+    # Email confirmation token fields for storing tokens directly in profile
+    email_confirmation_token = models.CharField(max_length=64, blank=True, null=True)
+    email_confirmation_token_expires = models.DateTimeField(blank=True, null=True)
 
     # Account tier and limits
     account_tier = models.CharField(
@@ -653,8 +656,8 @@ class Payment(models.Model):
 
         Format: INV-YYYYMMDD-XXXXXXXX
         """
-        from datetime import date
         import uuid
+        from datetime import date
 
         today = date.today()
         unique_part = uuid.uuid4().hex[:8].upper()

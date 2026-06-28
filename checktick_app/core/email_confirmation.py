@@ -1,6 +1,6 @@
-from datetime import timedelta
 import logging
 import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -10,7 +10,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
-from .models import SiteBranding
+from .models import SiteBranding, UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -30,25 +30,21 @@ class EmailConfirmationManager:
         """Send email confirmation to user.
 
         Returns:
-            tuple: (confirmation, success, error_info) where success is boolean
+            tuple: (token, success, error_info) where success is boolean
                    and error_info contains details about any delivery issues
         """
-        from .email_confirmation import EmailConfirmationToken
+        # Create or update confirmation token in user profile
+        token = EmailConfirmationManager.generate_token()
+        expires_at = timezone.now() + timedelta(hours=24)
 
-        # Create or update confirmation token
-        confirmation, created = EmailConfirmationToken.objects.get_or_create(
-            user=user,
-            defaults={
-                "token": EmailConfirmationManager.generate_token(),
-                "expires_at": timezone.now() + timedelta(hours=24),
-            },
+        user.profile.email_confirmation_token = token
+        user.profile.email_confirmation_token_expires = expires_at
+        user.profile.save(
+            update_fields=[
+                "email_confirmation_token",
+                "email_confirmation_token_expires",
+            ]
         )
-
-        if not created:
-            # Update the token and expiry if it already exists
-            confirmation.token = EmailConfirmationManager.generate_token()
-            confirmation.expires_at = timezone.now() + timedelta(hours=24)
-            confirmation.save()
 
         # Get branding info
         branding = SiteBranding.objects.first()
@@ -62,14 +58,14 @@ class EmailConfirmationManager:
         else:
             base_url = getattr(settings, "SITE_URL", "https://checktick.example.com")
 
-        confirmation_url = f"{base_url}/accounts/confirm-email/{confirmation.token}/"
+        confirmation_url = f"{base_url}/accounts/confirm-email/{token}/"
 
         # Render email content
         context = {
             "user": user,
             "confirmation_url": confirmation_url,
             "brand_title": settings.BRAND_TITLE,
-            "expires_at": confirmation.expires_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "expires_at": expires_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
         }
 
         subject = f"Please confirm your email address - {settings.BRAND_TITLE}"
@@ -85,7 +81,7 @@ class EmailConfirmationManager:
                 html_message=html_message,
                 fail_silently=not settings.DEBUG,
             )
-            return confirmation, True, None
+            return token, True, None
         except Exception as e:
             # Log the specific error for debugging
             error_info = {
@@ -101,48 +97,31 @@ class EmailConfirmationManager:
                     "error_message": str(e),
                 },
             )
-            return confirmation, False, error_info
+            return token, False, error_info
 
     @staticmethod
     def verify_token(token):
         """Verify an email confirmation token."""
-        from .email_confirmation import EmailConfirmationToken
-
         try:
-            confirmation = EmailConfirmationToken.objects.select_related("user").get(
-                token=token, expires_at__gt=timezone.now()
+            # Look for token in user profiles instead
+            user_profile = UserProfile.objects.select_related("user").get(
+                email_confirmation_token=token,
+                email_confirmation_token_expires__gt=timezone.now(),
             )
 
-            user = confirmation.user
+            user = user_profile.user
             user.profile.email_confirmed = True
-            user.profile.save(update_fields=["email_confirmed"])
-
-            # Mark this confirmation as used
-            confirmation.delete()
+            # Clear the token fields after successful confirmation
+            user.profile.email_confirmation_token = None
+            user.profile.email_confirmation_token_expires = None
+            user.profile.save(
+                update_fields=[
+                    "email_confirmed",
+                    "email_confirmation_token",
+                    "email_confirmation_token_expires",
+                ]
+            )
 
             return user
-        except EmailConfirmationToken.DoesNotExist:
+        except UserProfile.DoesNotExist:
             return None
-
-
-class EmailConfirmationToken(models.Model):
-    """Model to store email confirmation tokens."""
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="email_confirmation_token"
-    )
-    token = models.CharField(max_length=64, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
-
-    class Meta:
-        db_table = "email_confirmation_token"
-        indexes = [
-            models.Index(fields=["token"]),
-            models.Index(fields=["expires_at"]),
-        ]
-
-    def is_expired(self):
-        """Check if the confirmation token has expired."""
-        return self.expires_at < timezone.now()
