@@ -15,7 +15,7 @@ PASSWORD = "testpass123"
 
 
 class TestEmailConfirmationModel(TestCase):
-    """Test the EmailConfirmationToken model."""
+    """Test email confirmation functionality using UserProfile fields."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -62,32 +62,37 @@ class TestEmailConfirmationManager(TestCase):
         """Test sending confirmation email."""
         from checktick_app.core.email_confirmation import (
             EmailConfirmationManager,
-            EmailConfirmationToken,
         )
 
         # This test mainly checks that the method runs without error
         # Actual email sending is tested separately
         result = EmailConfirmationManager.send_confirmation_email(self.user)
-        confirmation, success, error_info = result
+        token, success, error_info = result
 
-        self.assertIsNotNone(confirmation)
+        self.assertIsNotNone(token)
         # In test environment, email sending should succeed
         self.assertTrue(success)
         self.assertIsNone(error_info)
-        # Token should be created
-        self.assertTrue(EmailConfirmationToken.objects.filter(user=self.user).exists())
+        # Token should be created in user profile
+        self.assertIsNotNone(self.user.profile.email_confirmation_token)
 
     def test_verify_token_success(self):
         """Test successful token verification."""
         from checktick_app.core.email_confirmation import (
             EmailConfirmationManager,
-            EmailConfirmationToken,
         )
 
-        # Create a confirmation token
+        # Create a confirmation token in user profile
         token = EmailConfirmationManager.generate_token()
-        EmailConfirmationToken.objects.create(
-            user=self.user, token=token, expires_at=timezone.now() + timedelta(hours=24)
+        self.user.profile.email_confirmation_token = token
+        self.user.profile.email_confirmation_token_expires = timezone.now() + timedelta(
+            hours=24
+        )
+        self.user.profile.save(
+            update_fields=[
+                "email_confirmation_token",
+                "email_confirmation_token_expires",
+            ]
         )
 
         # Verify the token
@@ -97,8 +102,8 @@ class TestEmailConfirmationManager(TestCase):
         # User's email should be confirmed
         self.user.refresh_from_db()
         self.assertTrue(self.user.profile.email_confirmed)
-        # Token should be deleted after use
-        self.assertFalse(EmailConfirmationToken.objects.filter(token=token).exists())
+        # Token should be cleared after use
+        self.assertIsNone(self.user.profile.email_confirmation_token)
 
     def test_verify_token_invalid(self):
         """Test verifying an invalid token."""
@@ -112,14 +117,18 @@ class TestEmailConfirmationManager(TestCase):
         """Test verifying an expired token."""
         from checktick_app.core.email_confirmation import (
             EmailConfirmationManager,
-            EmailConfirmationToken,
         )
 
         expired_token = EmailConfirmationManager.generate_token()
-        EmailConfirmationToken.objects.create(
-            user=self.user,
-            token=expired_token,
-            expires_at=timezone.now() - timedelta(hours=1),
+        self.user.profile.email_confirmation_token = expired_token
+        self.user.profile.email_confirmation_token_expires = timezone.now() - timedelta(
+            hours=1
+        )
+        self.user.profile.save(
+            update_fields=[
+                "email_confirmation_token",
+                "email_confirmation_token_expires",
+            ]
         )
 
         result = EmailConfirmationManager.verify_token(expired_token)
@@ -146,13 +155,19 @@ class TestEmailConfirmationViews(TestCase):
         """Test confirming email with a valid token."""
         from checktick_app.core.email_confirmation import (
             EmailConfirmationManager,
-            EmailConfirmationToken,
         )
 
-        # Create a confirmation token
+        # Create a confirmation token in user profile
         token = EmailConfirmationManager.generate_token()
-        EmailConfirmationToken.objects.create(
-            user=self.user, token=token, expires_at=timezone.now() + timedelta(hours=24)
+        self.user.profile.email_confirmation_token = token
+        self.user.profile.email_confirmation_token_expires = timezone.now() + timedelta(
+            hours=24
+        )
+        self.user.profile.save(
+            update_fields=[
+                "email_confirmation_token",
+                "email_confirmation_token_expires",
+            ]
         )
 
         # Access the confirmation URL
@@ -168,8 +183,9 @@ class TestEmailConfirmationViews(TestCase):
         self.user.refresh_from_db()
         self.assertTrue(self.user.profile.email_confirmed)
 
-        # Token should be deleted
-        self.assertFalse(EmailConfirmationToken.objects.filter(token=token).exists())
+        # Token should be cleared from user profile
+        self.user.refresh_from_db()
+        self.assertIsNone(self.user.profile.email_confirmation_token)
 
     def test_confirm_email_view_invalid_token(self):
         """Test confirming email with an invalid token."""
@@ -189,14 +205,18 @@ class TestEmailConfirmationViews(TestCase):
         """Test confirming email with an expired token."""
         from checktick_app.core.email_confirmation import (
             EmailConfirmationManager,
-            EmailConfirmationToken,
         )
 
         expired_token = EmailConfirmationManager.generate_token()
-        EmailConfirmationToken.objects.create(
-            user=self.user,
-            token=expired_token,
-            expires_at=timezone.now() - timedelta(hours=1),
+        self.user.profile.email_confirmation_token = expired_token
+        self.user.profile.email_confirmation_token_expires = timezone.now() - timedelta(
+            hours=1
+        )
+        self.user.profile.save(
+            update_fields=[
+                "email_confirmation_token",
+                "email_confirmation_token_expires",
+            ]
         )
 
         response = self.client.get(
@@ -220,7 +240,6 @@ class TestSignupWithEmailConfirmation(TestCase):
 
     def test_signup_creates_unconfirmed_user(self):
         """Test that signup creates a user with unconfirmed email."""
-        from checktick_app.core.email_confirmation import EmailConfirmationToken
 
         response = self.client.post(
             reverse("core:signup"),
@@ -239,8 +258,8 @@ class TestSignupWithEmailConfirmation(TestCase):
         user = User.objects.get(email="newuser@example.com")
         self.assertFalse(user.profile.email_confirmed)
 
-        # Confirmation token should be created
-        self.assertTrue(EmailConfirmationToken.objects.filter(user=user).exists())
+        # Confirmation token should be created in user profile
+        self.assertIsNotNone(user.profile.email_confirmation_token)
 
     def test_signup_confirmation_email_includes_brand_name(self):
         """Test that signup confirmation email subject includes the platform brand name."""
