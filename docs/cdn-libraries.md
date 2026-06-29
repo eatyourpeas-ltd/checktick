@@ -49,25 +49,25 @@ Current SHA-384 SRI values:
 ### HTMX 2.0.10
 
 ```text
-sha384-q2oWHKMnJry5BOtYUZkXcyieUmqzXIjdmKDYicmMspegPENZr4UrGc656JYEgJoo
+sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V
 ```
 
 ### SortableJS 1.15.7
 
 ```text
-sha384-pAVIuzMQbJcj7JX9XYTtp8sSNh3OvFXn0g9ldX+lANHPoXFdYVKw/2G1gS/eU62A
+sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc
 ```
 
 ### axe-core 4.12.1
 
 ```text
-sha384-BdMxweAM6a5IkRxVOGXhKT5nagnyiRc1i78hWgYKq7oOcHRcKBNtbeufhvCSqldt
+sha384-JQegRXq6EhTiWoGPFDmqbJNsDow5BoSsGhnaeDzGp+qyOFCuMZZ24qY2fz3FxZF5
 ```
 
 ### ReDoc 2.5.3
 
 ```text
-sha384-wGl2vRYcqJBa50CzY6euuShOQuBMr6jGCJwEZd2GpPR6Ht+9GDtNpAPpA5QAr7GJ
+sha384-xiEssMQFSpSfLbzRZCGfxxIM5QDb2DTrU6vyoZdp2sV1L6pmOMy6MpTtUoLbpC96
 ```
 
 ### NHS Frontend 8.1.0

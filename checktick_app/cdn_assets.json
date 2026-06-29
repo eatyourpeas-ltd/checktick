@@ -7,7 +7,7 @@
       "version": "2.0.10",
       "static_file": "js/htmx.min.js",
       "source_path": "dist/htmx.min.js",
-      "sri": "sha384-q2oWHKMnJry5BOtYUZkXcyieUmqzXIjdmKDYicmMspegPENZr4UrGc656JYEgJoo",
+      "sri": "sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V",
       "purpose": "Dynamic HTML updates without JavaScript"
     },
     {
@@ -17,7 +17,7 @@
       "version": "1.15.7",
       "static_file": "js/sortable.min.js",
       "source_path": "Sortable.min.js",
-      "sri": "sha384-pAVIuzMQbJcj7JX9XYTtp8sSNh3OvFXn0g9ldX+lANHPoXFdYVKw/2G1gS/eU62A",
+      "sri": "sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc",
       "purpose": "Drag-and-drop reordering"
     },
     {
@@ -27,7 +27,7 @@
       "version": "4.12.1",
       "static_file": "js/axe-core.min.js",
       "source_path": "axe.min.js",
-      "sri": "sha384-BdMxweAM6a5IkRxVOGXhKT5nagnyiRc1i78hWgYKq7oOcHRcKBNtbeufhvCSqldt",
+      "sri": "sha384-JQegRXq6EhTiWoGPFDmqbJNsDow5BoSsGhnaeDzGp+qyOFCuMZZ24qY2fz3FxZF5",
       "purpose": "WCAG accessibility testing"
     },
     {
@@ -37,7 +37,7 @@
       "version": "2.5.3",
       "static_file": "js/redoc.standalone.min.js",
       "source_path": "bundles/redoc.standalone.js",
-      "sri": "sha384-wGl2vRYcqJBa50CzY6euuShOQuBMr6jGCJwEZd2GpPR6Ht+9GDtNpAPpA5QAr7GJ",
+      "sri": "sha384-xiEssMQFSpSfLbzRZCGfxxIM5QDb2DTrU6vyoZdp2sV1L6pmOMy6MpTtUoLbpC96",
       "purpose": "OpenAPI interactive documentation"
     },
     {
