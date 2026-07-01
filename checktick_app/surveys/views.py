@@ -2712,6 +2712,19 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             )
             return redirect("surveys:dashboard", slug=slug)
 
+        elif action == "reopen":
+            # Reopen a closed survey
+            survey.status = Survey.Status.PUBLISHED
+            survey.closed_at = None
+            survey.closed_by = None
+            survey.save()
+
+            messages.success(
+                request,
+                "Survey has been reopened and is now accepting responses.",
+            )
+            return redirect("surveys:dashboard", slug=slug)
+
         elif action == "publish":
             # Publishing for the first time
             prev_status = survey.status
@@ -3529,6 +3542,22 @@ def get_qr_code(request: HttpRequest, slug: str) -> JsonResponse:
 def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
+
+    # Check if this is a reopen action
+    action = request.POST.get("action")
+    if action == "reopen":
+        # Reopen a closed survey
+        survey.status = Survey.Status.PUBLISHED
+        survey.closed_at = None
+        survey.closed_by = None
+        survey.save()
+
+        messages.success(
+            request,
+            "Survey has been reopened and is now accepting responses.",
+        )
+        return redirect("surveys:dashboard", slug=slug)
+
     # Parse fields
     status = request.POST.get("status") or survey.status
     visibility = request.POST.get("visibility") or survey.visibility
