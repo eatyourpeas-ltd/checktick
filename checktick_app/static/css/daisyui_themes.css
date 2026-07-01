@@ -1,13 +1,13 @@
 @import "tailwindcss";
 @plugin "daisyui" {
-  themes: all;
-  /* Excluding properties to avoid Tailwind CSS v4 build warning about @property --radialprogress
+    themes: all;
+    /* Excluding properties to avoid Tailwind CSS v4 build warning about @property --radialprogress
    * See: https://github.com/saadeghi/daisyui/issues/3882
    * WARNING: Remove this exclusion if:
    *   - The issue is fixed in future versions of Tailwind/daisyUI
    *   - You need to use the radial-progress component
    */
-  exclude: properties;
+    exclude: properties;
 }
 @plugin "@tailwindcss/typography";
 
@@ -20,90 +20,167 @@
  */
 
 @layer components {
-  script[data-question-payload] {
-    display: none;
-  }
+    script[data-question-payload] {
+        display: none;
+    }
 
-  .builder-question-card,
-  .builder-editor-card {
-    border: 1px solid color-mix(in oklch, var(--color-base-300) 70%, transparent);
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    transition: border-color 150ms ease, box-shadow 150ms ease,
-      background-color 150ms ease;
-  }
+    .builder-question-card,
+    .builder-editor-card {
+        border: 1px solid
+            color-mix(in oklch, var(--color-base-300) 70%, transparent);
+        user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        transition:
+            border-color 150ms ease,
+            box-shadow 150ms ease,
+            background-color 150ms ease;
+    }
 
-  .builder-question-card {
-    background-color: var(--color-base-200);
-    cursor: grab;
-  }
-  .builder-question-card:active {
-    cursor: grabbing;
-  }
+    .builder-question-card {
+        background-color: var(--color-base-200);
+        cursor: grab;
+    }
+    .builder-question-card:active {
+        cursor: grabbing;
+    }
 
-  .builder-editor-card {
-    background-color: var(--color-base-100);
-  }
+    .builder-editor-card {
+        background-color: var(--color-base-100);
+    }
 
-  .builder-question-card:hover,
-  .builder-question-card:focus-within {
-    background-color: color-mix(in oklch, var(--color-base-200) 70%, var(--color-base-300) 30%);
-  }
+    .builder-question-card:hover,
+    .builder-question-card:focus-within {
+        background-color: color-mix(
+            in oklch,
+            var(--color-base-200) 70%,
+            var(--color-base-300) 30%
+        );
+    }
 
-  .builder-question-card:active,
-  .builder-question-card.sortable-chosen,
-  .builder-question-card.sortable-ghost {
-    background-color: color-mix(in oklch, var(--color-base-200) 55%, var(--color-base-300) 45%);
-  }
+    .builder-question-card:active,
+    .builder-question-card.sortable-chosen,
+    .builder-question-card.sortable-ghost {
+        background-color: color-mix(
+            in oklch,
+            var(--color-base-200) 55%,
+            var(--color-base-300) 45%
+        );
+    }
 
-  .builder-question-card.sortable-ghost {
-    opacity: 0.9;
-  }
+    .builder-question-card.sortable-ghost {
+        opacity: 0.9;
+    }
 
-  li.sortable-chosen .builder-question-card,
-  li.sortable-ghost .builder-question-card {
-    box-shadow: 0 10px 25px -15px rgba(34, 34, 55, 0.45),
-      0 8px 12px -12px rgba(34, 34, 55, 0.4);
-  }
+    li.sortable-chosen .builder-question-card,
+    li.sortable-ghost .builder-question-card {
+        box-shadow:
+            0 10px 25px -15px rgba(34, 34, 55, 0.45),
+            0 8px 12px -12px rgba(34, 34, 55, 0.4);
+    }
 
-  .builder-question-card.is-active,
-  .builder-editor-card.is-active {
-    border-width: 3px;
-    border-color: var(--p);
-    box-shadow: 0 0 0 1px color-mix(in oklch, var(--p) 35%, transparent);
-  }
+    .builder-question-card.is-active,
+    .builder-editor-card.is-active {
+        border-width: 3px;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 1px
+            color-mix(in oklch, var(--color-primary) 35%, transparent);
+    }
 
-  .btn.builder-edit-button {
-    background-color: var(--color-accent);
-    border-color: color-mix(in oklch, var(--color-accent) 70%, transparent);
-    color: var(--color-accent-content);
-    transition: background-color 150ms ease, border-color 150ms ease,
-      color 150ms ease;
-  }
+    .btn.builder-edit-button {
+        background-color: var(--color-accent);
+        border-color: color-mix(in oklch, var(--color-accent) 70%, transparent);
+        color: var(--color-accent-content);
+        transition:
+            background-color 150ms ease,
+            border-color 150ms ease,
+            color 150ms ease;
+    }
 
-  .btn.builder-edit-button:hover {
-    background-color: color-mix(in oklch, var(--color-accent) 85%, black 15%);
-  }
+    .btn.builder-edit-button:hover {
+        background-color: color-mix(
+            in oklch,
+            var(--color-accent) 85%,
+            black 15%
+        );
+    }
 
-  .btn.builder-edit-button.is-active {
-    background-color: color-mix(in oklch, var(--color-accent) 55%, var(--color-primary) 45%);
-    border-color: var(--color-primary);
-    color: var(--pc);
-  }
+    .btn.builder-edit-button.is-active {
+        background-color: color-mix(
+            in oklch,
+            var(--color-accent) 55%,
+            var(--color-primary) 45%
+        );
+        border-color: var(--color-primary);
+        color: var(--color-primary-content);
+    }
 
-  [data-drag-ignore] {
-    cursor: pointer;
-  }
+    [data-drag-ignore] {
+        cursor: pointer;
+    }
 
-  /* DaisyUI 5 doesn't generate radio-primary/checkbox-primary classes, so we add them manually */
-  .radio-primary {
-    color: var(--color-primary);
-  }
+    /* DaisyUI 5 doesn't generate radio-primary/checkbox-primary classes, so we add them manually */
+    .radio-primary {
+        color: var(--color-primary);
+    }
 
-  .checkbox-primary {
-    color: var(--color-primary);
-  }
+    .checkbox-primary {
+        color: var(--color-primary);
+    }
+}
+
+/*
+ * DaisyUI's default light-theme info/error outline button colours are too light
+ * against white/base backgrounds for WCAG AA. Keep semantic btn-info/btn-error
+ * classes in templates, but darken outline foreground/border colours in light
+ * mode and provide matching high-contrast variants for the app dark theme.
+ */
+.btn.btn-outline.btn-info {
+    border-color: #075985 !important;
+    color: #075985 !important;
+}
+
+.btn.btn-outline.btn-info:hover,
+.btn.btn-outline.btn-info:focus-visible {
+    background-color: #075985 !important;
+    border-color: #075985 !important;
+    color: #ffffff !important;
+}
+
+.btn.btn-outline.btn-error {
+    border-color: #b91c1c !important;
+    color: #b91c1c !important;
+}
+
+.btn.btn-outline.btn-error:hover,
+.btn.btn-outline.btn-error:focus-visible {
+    background-color: #b91c1c !important;
+    border-color: #b91c1c !important;
+    color: #ffffff !important;
+}
+
+[data-theme="checktick-dark"] .btn.btn-outline.btn-info {
+    border-color: #7dd3fc !important;
+    color: #7dd3fc !important;
+}
+
+[data-theme="checktick-dark"] .btn.btn-outline.btn-info:hover,
+[data-theme="checktick-dark"] .btn.btn-outline.btn-info:focus-visible {
+    background-color: #7dd3fc !important;
+    border-color: #7dd3fc !important;
+    color: #082f49 !important;
+}
+
+[data-theme="checktick-dark"] .btn.btn-outline.btn-error {
+    border-color: #fca5a5 !important;
+    color: #fca5a5 !important;
+}
+
+[data-theme="checktick-dark"] .btn.btn-outline.btn-error:hover,
+[data-theme="checktick-dark"] .btn.btn-outline.btn-error:focus-visible {
+    background-color: #fca5a5 !important;
+    border-color: #fca5a5 !important;
+    color: #7f1d1d !important;
 }
 
 /*
@@ -114,26 +191,26 @@
  * Placed outside @layer for higher specificity.
  */
 .prose pre {
-  background-color: var(--color-base-300) !important;
-  color: var(--color-base-content) !important;
+    background-color: var(--color-base-300) !important;
+    color: var(--color-base-content) !important;
 }
 
 .prose pre code,
 .prose pre code[class*="language-"] {
-  background-color: transparent !important;
-  color: inherit !important;
+    background-color: transparent !important;
+    color: inherit !important;
 }
 
 .prose :not(pre) > code {
-  background-color: var(--color-base-200) !important;
-  color: var(--color-base-content) !important;
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
+    background-color: var(--color-base-200) !important;
+    color: var(--color-base-content) !important;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
 }
 
 /* stylelint-disable at-rule-no-unknown */
 :root {
-  --theme-root: ":root";
-  --theme-list: "checktick-light" "checktick-dark";
+    --theme-root: ":root";
+    --theme-list: "checktick-light" "checktick-dark";
 }
 /* stylelint-enable at-rule-no-unknown */
