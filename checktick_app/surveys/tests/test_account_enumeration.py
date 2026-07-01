@@ -19,9 +19,10 @@ Findings covered
 Brute-force lockout
 -------------------
 Also checks that ``AXES_LOCKOUT_PARAMETERS`` is configured as a list-of-lists
-so that axes tracks *username* and *IP* independently.  The previous flat-list
-format locked only on the combination (username AND ip_address), which allowed
-an attacker to bypass the per-account lockout by rotating source IP addresses.
+scoped to the submitted username/email address.  IP-based credential-stuffing
+protection should be handled separately so unrelated failures from a shared
+NAT/proxy/VPN IP cannot force legitimate users straight to the account lockout
+page.
 
 Timing side-channel (org_setup)
 --------------------------------
@@ -428,50 +429,46 @@ class TestSurveyUsersEnumeration:
 
 
 class TestAxesLockoutConfiguration:
-    """Verify that AXES_LOCKOUT_PARAMETERS is structured to prevent IP-rotation
-    bypass of per-account lockouts."""
+    """Verify that account lockout is scoped to submitted email address only."""
 
     def test_lockout_parameters_is_list_of_lists(self):
         """
         Users authenticate with their email address, submitted under the form
-        field named 'username' (Django's AuthenticationForm convention).  Axes
-        tracks lockouts using that field value, so 'username' in axes terms
+        field named 'username' (Django's AuthenticationForm convention). Axes
+        tracks lockouts using that field value, so 'username' in Axes terms
         means the user's email address in this application.
 
-        A flat list ``["username", "ip_address"]`` locks only on the
-        *combination*, letting an attacker rotate IPs to keep targeting the same
-        email address indefinitely.
-
-        The correct form ``[["username"], ["ip_address"]]`` tracks each
-        dimension independently, so hitting the limit on either one locks out.
+        Keep the list-of-lists structure expected by django-axes while avoiding
+        standalone IP account lockout. A separate ['ip_address'] dimension makes
+        unrelated failures from a shared NAT/proxy/VPN IP lock out legitimate
+        users before their own account has reached the failure limit.
         """
         params = settings.AXES_LOCKOUT_PARAMETERS
         assert isinstance(params, list), "AXES_LOCKOUT_PARAMETERS must be a list"
         for item in params:
             assert isinstance(item, list), (
                 f"AXES_LOCKOUT_PARAMETERS items must be lists (got {type(item).__name__!r}: {item!r}). "
-                "A flat list locks only on the combination; use a list-of-lists to lock independently."
+                "Use a list-of-lists so Axes treats each configured parameter set explicitly."
             )
 
-    def test_lockout_tracks_email_address_independently(self):
-        """The email address is submitted under the 'username' form field
-        (required by Django's AuthenticationForm).  It must appear as a
-        standalone axes tracking dimension so that IP rotation cannot bypass
-        a per-account lockout."""
+    def test_lockout_tracks_email_address(self):
+        """The email address must be the account lockout dimension."""
         params = settings.AXES_LOCKOUT_PARAMETERS
         standalone_keys = {frozenset(item) for item in params if isinstance(item, list)}
         assert frozenset(["username"]) in standalone_keys, (
-            "AXES_LOCKOUT_PARAMETERS must include ['username'] as a standalone "
-            "dimension.  In this app 'username' holds the email address; "
-            "locking by it independently prevents IP-rotation bypass."
+            "AXES_LOCKOUT_PARAMETERS must include ['username'] as the account "
+            "lockout dimension. In this app 'username' holds the email address."
         )
 
-    def test_lockout_tracks_ip_independently(self):
-        """IP address must appear as a standalone dimension to rate-limit
-        credential-stuffing targeting many email addresses from one source."""
+    def test_lockout_does_not_track_ip_as_account_lockout_dimension(self):
+        """Standalone IP lockout causes false account lockouts on shared IPs."""
         params = settings.AXES_LOCKOUT_PARAMETERS
         standalone_keys = {frozenset(item) for item in params if isinstance(item, list)}
-        assert frozenset(["ip_address"]) in standalone_keys, (
-            "AXES_LOCKOUT_PARAMETERS must include ['ip_address'] as a standalone "
-            "dimension to rate-limit credential-stuffing from a single IP."
+        assert frozenset(["ip_address"]) not in standalone_keys, (
+            "IP-based credential-stuffing protection should be implemented with "
+            "a separate request rate limit, not as an Axes account lockout dimension."
         )
+
+    def test_successful_login_resets_failed_attempts(self):
+        """Successful authentication should clear stale failed-attempt counters."""
+        assert settings.AXES_RESET_ON_SUCCESS is True
