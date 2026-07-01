@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import csv
 import io
 import json
 import logging
 import re
 import secrets
+from copy import deepcopy
 from typing import Any, Iterable, Union
 
 from django import forms
@@ -1541,8 +1541,10 @@ def _inject_dataset_options(questions: list) -> None:
     """
     from .snomed_resolver import (
         SnomedUnavailableError,
-        get_options as snomed_get_options,
         options_as_value_label,
+    )
+    from .snomed_resolver import (
+        get_options as snomed_get_options,
     )
 
     snomed_cache: dict[int, list[dict[str, str]]] = {}
@@ -2265,10 +2267,17 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
                 ]
     # Derived status
     is_live = survey.is_live()
+    is_closed = survey.is_closed
+    is_closed_early = survey.is_closed_early
     visible = (
         survey.get_visibility_display()
         if hasattr(survey, "get_visibility_display")
         else "Authenticated"
+    )
+
+    # Debug information
+    print(
+        f"Survey {survey.slug}: is_closed={is_closed}, is_closed_early={is_closed_early}, closed_at={survey.closed_at}, end_at={survey.end_at}"
     )
     groups = (
         survey.question_groups.filter(owner=request.user)
@@ -2309,6 +2318,8 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         "total": total,
         "groups": groups,
         "is_live": is_live,
+        "is_closed": is_closed,
+        "is_closed_early": is_closed_early,
         "visible": visible,
         "today_count": today_count,
         "last7_count": last7_count,
@@ -6507,8 +6518,10 @@ def survey_export_csv(
     try:
         from .snomed_resolver import (
             SnomedUnavailableError,
-            get_options as snomed_get_options,
             options_as_dict,
+        )
+        from .snomed_resolver import (
+            get_options as snomed_get_options,
         )
 
         for q in questions:
@@ -7640,7 +7653,9 @@ def _validate_and_process_image(uploaded_file) -> tuple[bool, str]:
             img_format = (
                 "PNG"
                 if ext == ".png"
-                else "JPEG" if ext in (".jpg", ".jpeg") else "WEBP"
+                else "JPEG"
+                if ext in (".jpg", ".jpeg")
+                else "WEBP"
             )
             img.save(buffer, format=img_format, quality=85)
             buffer.seek(0)
@@ -8971,8 +8986,10 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
 
     from .snomed_resolver import (
         SnomedUnavailableError,
-        get_options as snomed_get_options,
         parse_option_pairs,
+    )
+    from .snomed_resolver import (
+        get_options as snomed_get_options,
     )
 
     logger_detail = logging.getLogger(__name__)
@@ -9466,6 +9483,8 @@ def snomed_search(request: HttpRequest) -> JsonResponse:
     from .snomed_resolver import (
         SnomedUnavailableError,
         parse_option_pairs,
+    )
+    from .snomed_resolver import (
         search as snomed_search_fn,
     )
 
@@ -9506,8 +9525,10 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
 
     from .snomed_resolver import (
         SnomedUnavailableError,
-        get_options as snomed_get_options,
         options_as_dict,
+    )
+    from .snomed_resolver import (
+        get_options as snomed_get_options,
     )
 
     user = request.user

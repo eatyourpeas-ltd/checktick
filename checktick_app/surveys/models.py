@@ -319,8 +319,8 @@ class Organization(models.Model):
         Returns:
             The generated setup token
         """
-        from datetime import timedelta
         import secrets
+        from datetime import timedelta
 
         self.setup_token = secrets.token_urlsafe(32)
         self.setup_expires_at = timezone.now() + timedelta(days=expires_days)
@@ -2256,6 +2256,16 @@ Return the translation as JSON following the exact structure specified in the sy
     def is_closed(self) -> bool:
         """Check if survey is closed."""
         return self.status == self.Status.CLOSED or self.closed_at is not None
+
+    @property
+    def is_closed_early(self) -> bool:
+        """Check if survey is closed before its end date."""
+        return (
+            self.is_closed
+            and self.end_at
+            and self.closed_at
+            and self.closed_at < self.end_at
+        )
 
 
 class SurveyQuestion(models.Model):
@@ -5196,7 +5206,9 @@ class PlatformKeyVersion(models.Model):
         status = (
             "active"
             if self.is_active()
-            else "retired" if self.retired_at else "pending"
+            else "retired"
+            if self.retired_at
+            else "pending"
         )
         return f"Platform Key {self.version} ({status})"
 

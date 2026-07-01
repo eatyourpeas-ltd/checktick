@@ -103,7 +103,18 @@
 
 <div class="flex flex-wrap gap-2 items-center mb-2">
   <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Visibility" %}: {{ visible }}</span>
-  <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Window" %}: {{ survey.start_at|default:'—' }} → {{ survey.end_at|default:'—' }}</span>
+  {% if is_closed_early %}
+    <span class="badge bg-error text-error-content border border-error/30">{% trans "Closed Early" %}</span>
+    <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Days remaining" %}: 0</span>
+  {% elif is_closed %}
+    <span class="badge bg-error text-error-content border border-error/30">{% trans "Closed" %}</span>
+    <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Days remaining" %}: 0</span>
+  {% else %}
+    <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Window" %}: {{ survey.start_at|default:'—' }} → {{ survey.end_at|default:'—' }}</span>
+    {% if survey.end_at %}
+      <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Days remaining" %}: {{ survey.days_remaining|default:0 }}</span>
+    {% endif %}
+  {% endif %}
   <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Total responses" %}: {{ total }}{% if survey.max_responses %} / {{ survey.max_responses }}{% endif %}</span>
   {% if survey.visibility == 'token' or survey.visibility == 'authenticated' %}
     {% if invites_sent > 0 %}
