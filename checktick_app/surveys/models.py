@@ -2257,6 +2257,16 @@ Return the translation as JSON following the exact structure specified in the sy
         """Check if survey is closed."""
         return self.status == self.Status.CLOSED or self.closed_at is not None
 
+    @property
+    def is_closed_early(self) -> bool:
+        """Check if survey is closed before its end date."""
+        return (
+            self.is_closed
+            and self.end_at
+            and self.closed_at
+            and self.closed_at < self.end_at
+        )
+
 
 class SurveyQuestion(models.Model):
     class Types(models.TextChoices):

@@ -103,7 +103,18 @@
 
 <div class="flex flex-wrap gap-2 items-center mb-2">
   <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Visibility" %}: {{ visible }}</span>
-  <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Window" %}: {{ survey.start_at|default:'—' }} → {{ survey.end_at|default:'—' }}</span>
+  {% if is_closed_early %}
+    <span class="badge bg-error text-error-content border border-error/30">{% trans "Closed Early" %}</span>
+    <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Days remaining" %}: 0</span>
+  {% elif is_closed %}
+    <span class="badge bg-error text-error-content border border-error/30">{% trans "Closed" %}</span>
+    <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Days remaining" %}: 0</span>
+  {% else %}
+    <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Window" %}: {{ survey.start_at|default:'—' }} → {{ survey.end_at|default:'—' }}</span>
+    {% if survey.end_at %}
+      <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Days remaining" %}: {{ survey.days_remaining|default:0 }}</span>
+    {% endif %}
+  {% endif %}
   <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Total responses" %}: {{ total }}{% if survey.max_responses %} / {{ survey.max_responses }}{% endif %}</span>
   {% if survey.visibility == 'token' or survey.visibility == 'authenticated' %}
     {% if invites_sent > 0 %}
@@ -118,10 +129,14 @@
       {% include "components/icons/cloud-upload.html" with classes="w-5 h-5 mr-1" %}
       {% trans "Publish Survey" %}
     </a>
-  {% elif survey.status == 'published' %}
+  {% elif survey.status == 'published' or survey.status == 'closed' %}
     <a class="btn btn-primary btn-sm flex-shrink-0{% if survey.questions.count == 0 %} btn-disabled{% endif %}" href="{% if survey.questions.count > 0 %}{% url 'surveys:publish_settings' slug=survey.slug %}{% else %}#{% endif %}"{% if survey.questions.count == 0 %} aria-disabled="true" title="{% trans 'Add questions before publishing' %}"{% endif %}>
       {% include "components/icons/pencil.html" with classes="w-4 h-4 mr-1" %}
-      {% trans "Edit Publication" %}
+      {% if is_closed %}
+        {% trans "Reopen Survey" %}
+      {% else %}
+        {% trans "Edit Publication" %}
+      {% endif %}
     </a>
   {% endif %}
   <a class="btn btn-primary btn-sm flex-shrink-0{% if survey.questions.count == 0 %} btn-disabled{% endif %}" href="{% if survey.questions.count > 0 %}/surveys/{{ survey.slug }}/preview/{% else %}#{% endif %}"{% if survey.questions.count == 0 %} aria-disabled="true" title="{% trans 'Add questions before previewing' %}"{% endif %}>{% trans "Survey Preview (read-only)" %}</a>

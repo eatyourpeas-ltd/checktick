@@ -2265,10 +2265,17 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
                 ]
     # Derived status
     is_live = survey.is_live()
+    is_closed = survey.is_closed
+    is_closed_early = survey.is_closed_early
     visible = (
         survey.get_visibility_display()
         if hasattr(survey, "get_visibility_display")
         else "Authenticated"
+    )
+
+    # Debug information
+    print(
+        f"Survey {survey.slug}: is_closed={is_closed}, is_closed_early={is_closed_early}, closed_at={survey.closed_at}, end_at={survey.end_at}"
     )
     groups = (
         survey.question_groups.filter(owner=request.user)
@@ -2309,6 +2316,8 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         "total": total,
         "groups": groups,
         "is_live": is_live,
+        "is_closed": is_closed,
+        "is_closed_early": is_closed_early,
         "visible": visible,
         "today_count": today_count,
         "last7_count": last7_count,
@@ -2698,6 +2707,19 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             messages.success(
                 request,
                 f"Survey has been closed. Data will be retained for {survey.retention_months} months.",
+            )
+            return redirect("surveys:dashboard", slug=slug)
+
+        elif action == "reopen":
+            # Reopen a closed survey
+            survey.status = Survey.Status.PUBLISHED
+            survey.closed_at = None
+            survey.closed_by = None
+            survey.save()
+
+            messages.success(
+                request,
+                "Survey has been reopened and is now accepting responses.",
             )
             return redirect("surveys:dashboard", slug=slug)
 
@@ -3518,6 +3540,22 @@ def get_qr_code(request: HttpRequest, slug: str) -> JsonResponse:
 def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
+
+    # Check if this is a reopen action
+    action = request.POST.get("action")
+    if action == "reopen":
+        # Reopen a closed survey
+        survey.status = Survey.Status.PUBLISHED
+        survey.closed_at = None
+        survey.closed_by = None
+        survey.save()
+
+        messages.success(
+            request,
+            "Survey has been reopened and is now accepting responses.",
+        )
+        return redirect("surveys:dashboard", slug=slug)
+
     # Parse fields
     status = request.POST.get("status") or survey.status
     visibility = request.POST.get("visibility") or survey.visibility

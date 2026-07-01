@@ -35,6 +35,18 @@
       <form method="post" id="publish-form" action="{% url 'surveys:publish_settings' slug=survey.slug %}">
         {% csrf_token %}
 
+        {% if survey.is_closed %}
+        <div class="alert alert-warning mb-6">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div>
+            <h3 class="font-bold">{% trans "Survey Closed" %}</h3>
+            <p>{% trans "This survey has been closed. You can extend the survey by changing the end date or reopen it to accept new responses." %}</p>
+          </div>
+        </div>
+        {% endif %}
+
         <div class="grid md:grid-cols-2 gap-6 mb-6">
           <div>
             <label class="label flex items-center gap-2">
@@ -43,13 +55,13 @@
                 <span class="link link-hover text-sm">{% trans "What's this?" %}</span>
               </a>
             </label>
-            <select class="select select-bordered w-full" name="visibility" required {% if survey.status == 'published' %}disabled{% endif %}>
+            <select class="select select-bordered w-full" name="visibility" required {% if survey.status == 'published' or survey.status == 'closed' %}disabled{% endif %}>
               <option value="authenticated" {% if survey.visibility == 'authenticated' %}selected{% endif %}>{% trans "Authenticated" %}</option>
               <option value="public" {% if survey.visibility == 'public' %}selected{% endif %}>{% trans "Public" %}</option>
               <option value="unlisted" {% if survey.visibility == 'unlisted' %}selected{% endif %}>{% trans "Unlisted" %}</option>
               <option value="token" {% if survey.visibility == 'token' %}selected{% endif %}>{% trans "Invite token" %}</option>
             </select>
-            {% if survey.status == 'published' %}
+            {% if survey.status == 'published' or survey.status == 'closed' %}
             <input type="hidden" name="visibility" value="{{ survey.visibility }}" />
             <label class="label">
               <span class="label-text-alt opacity-70">{% trans "Visibility cannot be changed after publishing" %}</span>
@@ -75,17 +87,24 @@
             <label class="label">
               <span class="label-text font-semibold">{% trans "Start at" %}</span>
             </label>
-            <input class="input input-bordered w-full" name="start_at" type="datetime-local" value="{% if survey.start_at %}{{ survey.start_at|date:'Y-m-d\\TH:i' }}{% endif %}" />
+            <input class="input input-bordered w-full" name="start_at" type="datetime-local" value="{% if survey.start_at %}{{ survey.start_at|date:'Y-m-d\TH:i' }}{% endif %}" {% if survey.status == 'published' or survey.status == 'closed' %}disabled{% endif %} />
+            {% if survey.status == 'published' or survey.status == 'closed' %}
+            <input type="hidden" name="start_at" value="{% if survey.start_at %}{{ survey.start_at|date:'Y-m-d\TH:i' }}{% endif %}" />
+            <label class="label">
+              <span class="label-text-alt opacity-70">{% trans "Start date cannot be changed after publishing" %}</span>
+            </label>
+            {% else %}
             <label class="label">
               <span class="label-text-alt opacity-70">{% trans "Leave blank to start immediately" %}</span>
             </label>
+            {% endif %}
           </div>
 
           <div>
             <label class="label">
               <span class="label-text font-semibold">{% trans "End at" %}</span>
             </label>
-            <input class="input input-bordered w-full" name="end_at" type="datetime-local" value="{% if survey.end_at %}{{ survey.end_at|date:'Y-m-d\\TH:i' }}{% endif %}" />
+            <input class="input input-bordered w-full" name="end_at" type="datetime-local" value="{% if survey.end_at %}{{ survey.end_at|date:'Y-m-d\TH:i' }}{% endif %}" />
             <label class="label">
               <span class="label-text-alt opacity-70">{% trans "Leave blank for no end date" %}</span>
             </label>
@@ -269,13 +288,19 @@
         <div class="flex items-center justify-between gap-4">
           <a href="{% url 'surveys:dashboard' slug=survey.slug %}" class="btn btn-ghost">{% trans "Cancel" %}</a>
           <div class="flex gap-2">
-            {% if survey.status == 'published' %}
+            {% if survey.status == 'published' or survey.status == 'closed' %}
               <button type="submit" name="action" value="save" class="btn btn-primary">
                 {% trans "Save Changes" %}
               </button>
-              <button type="submit" name="action" value="close" class="btn btn-error btn-outline">
-                {% trans "Close Survey" %}
-              </button>
+              {% if survey.is_closed %}
+                <button type="submit" name="action" value="reopen" class="btn btn-success btn-outline">
+                  {% trans "Reopen Survey" %}
+                </button>
+              {% else %}
+                <button type="submit" name="action" value="close" class="btn btn-error btn-outline" onclick="return confirm('{% trans "Are you sure you want to close this survey? This action cannot be undone." %}')">
+                  {% trans "Close Survey" %}
+                </button>
+              {% endif %}
             {% else %}
               <button type="submit" name="action" value="publish" class="btn btn-primary btn-lg" id="publish-btn">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -393,24 +418,7 @@
   updateVisibility();
 
   // Handle close survey confirmation
-  publishForm.addEventListener('submit', function(e) {
-    const actionButton = document.activeElement;
-    if (actionButton && actionButton.name === 'action' && actionButton.value === 'close') {
-      e.preventDefault();
-
-      const retentionMonths = {{ survey.retention_months|default:12 }};
-      const message = `{% trans "Are you sure you want to close this survey?" %}\n\n` +
-                      `{% trans "This action will:" %}\n` +
-                      `• {% trans "Stop accepting new responses immediately" %}\n` +
-                      `• {% trans "Start the retention period countdown" %}\n` +
-                      `• {% trans "Schedule automatic deletion after" %} ${retentionMonths} {% trans "months" %}\n\n` +
-                      `{% trans "You can still download survey data during the retention period." %}`;
-
-      if (confirm(message)) {
-        publishForm.submit();
-      }
-    }
-  });
+  // Using inline onclick handler instead
 
   // Handle async email sending
   publishForm.addEventListener('submit', function(e) {

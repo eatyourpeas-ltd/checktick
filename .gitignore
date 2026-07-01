@@ -28,6 +28,9 @@ pnpm-lock.yaml
 dist/
 .parcel-cache/
 
+# zed
+.zed/
+
 # Env
 .env
 
