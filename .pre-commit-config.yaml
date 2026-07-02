@@ -8,14 +8,14 @@ repos:
   - repo: https://github.com/GitGuardian/ggshield
     rev: v1.43.0
     hooks:
-        - id: ggshield
-          name: ggshield secret scan (pre-commit)
-          args: ["secret", "scan", "pre-commit", "--verbose"]
-          stages: [pre-commit]
-        - id: ggshield
-          name: ggshield secret scan (pre-push)
-          args: ["secret", "scan", "pre-push", "--verbose"]
-          stages: [pre-push]
+      - id: ggshield
+        name: ggshield secret scan (pre-commit)
+        args: ["secret", "scan", "pre-commit", "--verbose"]
+        stages: [pre-commit]
+      - id: ggshield
+        name: ggshield secret scan (pre-push)
+        args: ["secret", "scan", "pre-push", "--verbose"]
+        stages: [pre-push]
 
   # Semgrep - catches security issues similar to CodeQL (XSS, injection, etc.)
   - repo: https://github.com/semgrep/semgrep
@@ -52,8 +52,8 @@ repos:
             with open('README.md', 'r') as f:
                 content = f.read()
             new_content = re.sub(
-                r'https://img\.shields\.io/badge/version-[^-]+-5fcfdd\?style=for-the-badge',
-                f'https://img.shields.io/badge/version-{version}-5fcfdd?style=for-the-badge',
+                r'(https://img\.shields\.io/badge/version-)[^-]+(-5fcfdd\?style=[a-z-]+)',
+                rf'\g<1>{version}\g<2>',
                 content
             )
             if new_content != content:
