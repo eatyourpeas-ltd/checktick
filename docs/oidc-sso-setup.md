@@ -52,18 +52,26 @@ OIDC_OP_JWKS_ENDPOINT_AZURE=https://login.microsoftonline.com/common/discovery/v
 3. Click **New registration**
 4. Configure:
    - **Name**: `CheckTick Healthcare Platform`
-   - **Supported account types**:
-     - **Multitenant**: "Accounts in any organisational directory" (for multiple hospitals)
-     - **Single tenant**: "Accounts in this organisational directory only" (for single organisation)
+   - **Supported account types**: **Accounts in any organizational directory and personal Microsoft accounts**
+     - This is the recommended audience for CheckTick. It allows clinicians to sign in with personal Microsoft accounts (e.g. `outlook.com`, `hotmail.com`) today, and is also ready for future organizational SSO (e.g. NHS Login, hospital M365 tenants) without re-registering the app.
+     - Other options:
+       - **Accounts in this organizational directory only** (single tenant): use only if all clinicians belong to one Entra ID tenant. The configured `OIDC_OP_TENANT_ID_AZURE` will be used in endpoint URLs.
+       - **Accounts in any organizational directory** (multitenant org): work/school accounts only; personal Microsoft accounts will be rejected with `unauthorized_client`.
+       - **Personal Microsoft accounts only**: consumers only; no organizational SSO.
    - **Redirect URI**:
-     - **Type**: Web
+     - **Type**: Web (not SPA — CheckTick is a confidential client that stores a client secret server-side)
      - **URL**: `https://your-checktick-domain.com/oidc/callback/`
      - **Development**: Also add `http://localhost:8000/oidc/callback/`
+
+> **Important — audience changes are not editable on an existing registration.**
+> Azure does not allow changing `signInAudience` via the Manifest editor after creation (you will see `invalid specified value for property signInAudience` or `Property api.requestedAccessTokenVersion is invalid`). To switch audiences, create a **new** app registration with the desired account type selected at creation time. Azure automatically sets `requestedAccessTokenVersion: 1` for the personal+org audience — no manifest editing is required.
+>
+> **Token version note:** The personal+org audience requires access token version 1. This only affects the format of access tokens sent to Graph; the OIDC ID tokens that `mozilla-django-oidc` validates are still v2.0 RS256 and are validated against the v2.0 discovery/keys endpoints. No code changes are required.
 
 ### Step 2: Configure Application Settings
 
 1. **Authentication** tab:
-   - Under **Redirect URIs**, ensure your callback URLs are listed
+   - Under **Redirect URIs**, ensure your callback URLs are listed (platform type **Web**)
    - **Front-channel logout URL**: `https://your-checktick-domain.com/accounts/logout/`
    - **Implicit grant and hybrid flows**: Leave unchecked (CheckTick uses authorization code flow)
 
@@ -74,12 +82,13 @@ OIDC_OP_JWKS_ENDPOINT_AZURE=https://login.microsoftonline.com/common/discovery/v
    - **Copy the secret value** (this is your `OIDC_RP_CLIENT_SECRET_AZURE`)
 
 3. **API permissions** tab:
-   - Ensure these permissions are present:
+   - Ensure these delegated permissions are present:
      - `openid` (OpenID Connect sign-in)
      - `profile` (View users' basic profile)
      - `email` (View users' email address)
      - `User.Read` (Read user profiles)
    - Click **Grant admin consent** if you have admin rights
+   - These permissions work for both personal and organizational accounts
 
 ### Step 3: Note Configuration Values
 
@@ -87,6 +96,8 @@ From the **Overview** tab, copy:
 
 - **Application (client) ID** → `OIDC_RP_CLIENT_ID_AZURE`
 - **Directory (tenant) ID** → `OIDC_OP_TENANT_ID_AZURE`
+
+> **Tenant ID usage:** CheckTick uses `OIDC_OP_TENANT_ID_AZURE` to build the Azure authorize/token/JWKS endpoint URLs. For the recommended personal+org audience, the tenant placeholder `/common/` is used at runtime (the configured tenant ID is still required for documentation and for future single-tenant deployments). If `OIDC_OP_TENANT_ID_AZURE` is empty, CheckTick falls back to `/common/`.
 
 ### Step 4: Configure External User Access (Optional)
 
@@ -314,11 +325,18 @@ OIDC Key = PBKDF2(
    - Verify client ID and secret in environment variables
    - Check for extra spaces or quotes
 
-3. **"Access denied"**:
+3. **"unauthorized_client: The client does not exist or is not enabled for consumers"**:
+   - The app registration's supported account types do not include personal Microsoft accounts, but the user is signing in with a personal account (`outlook.com`, `hotmail.com`, etc.).
+   - Fix: create a new app registration with **Accounts in any organizational directory and personal Microsoft accounts** (see Step 1). This audience cannot be enabled on an existing org-only registration via the Manifest editor.
+
+4. **"invalid specified value for property signInAudience"** or **"Property api.requestedAccessTokenVersion is invalid"** when saving the manifest:
+   - Azure does not allow changing `signInAudience` on an existing registration. Create a new registration with the desired audience selected at creation time instead.
+
+5. **"Access denied"**:
    - Verify API permissions in Azure AD
    - Check OAuth consent screen configuration in Google
 
-4. **"Email not found"**:
+6. **"Email not found"**:
    - Ensure `email` scope is requested
    - For Azure: verify `User.Read` permission
 

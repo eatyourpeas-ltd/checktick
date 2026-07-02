@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for taking the time to report a bug! Please search existing issues first to avoid duplicates.
 
-        **Note**: If you're using the hosted version at https://checktick.eatyourpeas.dev and dealing with sensitive data, please ensure you don't include any patient information or real survey data in this report.
+        **Note**: If you're using the hosted version at https://checktick.uk and dealing with sensitive data, please ensure you don't include any patient information or real survey data in this report.
 
   - type: dropdown
     id: deployment-type
@@ -16,7 +16,7 @@ body:
       label: Deployment Type
       description: Are you using the hosted version or self-hosting?
       options:
-        - Hosted version (checktick.eatyourpeas.dev)
+        - Hosted version (checktick.uk)
         - Self-hosted (Docker)
         - Self-hosted (other)
         - Local development

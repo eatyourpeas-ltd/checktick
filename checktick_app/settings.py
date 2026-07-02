@@ -586,7 +586,7 @@ else:
 # Email configuration
 ADMINS = [
     # Add your admin email(s) here as tuples of (name, email)
-    # Example: ADMINS = [("DevOps Team", "devops@eatyourpeas.dev")]
+    # Example: ADMINS = [("DevOps Team", "devops@checktick.uk")]
     ("DevOps Team", CTO_EMAIL),
 ]
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@example.com")
@@ -817,7 +817,26 @@ if DEBUG:
     OIDC_BASE_URL = "http://localhost:8000"
 else:
     # Production
-    OIDC_BASE_URL = "https://checktick.eatyourpeas.dev"
+    OIDC_BASE_URL = "https://checktick.uk"
+
+# Azure OIDC endpoints are tenant-aware. ``/common/`` works for multitenant
+# org+personal audiences, but using the configured tenant ID makes the
+# audience explicit and avoids ambiguity when the app is single-tenant.
+# Fall back to ``common`` if no tenant ID is configured.
+_AZURE_TENANT = OIDC_OP_TENANT_ID_AZURE or "common"
+OIDC_OP_AUTHORIZATION_ENDPOINT_AZURE = (
+    f"https://login.microsoftonline.com/{_AZURE_TENANT}/oauth2/v2.0/authorize"
+)
+OIDC_OP_TOKEN_ENDPOINT_AZURE = (
+    f"https://login.microsoftonline.com/{_AZURE_TENANT}/oauth2/v2.0/token"
+)
+OIDC_OP_USER_ENDPOINT_AZURE = "https://graph.microsoft.com/oidc/userinfo"
+# JWKS endpoint is left configurable via env (defaults to common discovery)
+# so it can be overridden for sovereign clouds or single-tenant deployments.
+if not OIDC_OP_JWKS_ENDPOINT_AZURE:
+    OIDC_OP_JWKS_ENDPOINT_AZURE = (
+        f"https://login.microsoftonline.com/{_AZURE_TENANT}/discovery/v2.0/keys"
+    )
 
 # OIDC Provider Configuration
 OIDC_PROVIDERS = {
@@ -833,9 +852,9 @@ OIDC_PROVIDERS = {
     "azure": {
         "OIDC_RP_CLIENT_ID": OIDC_RP_CLIENT_ID_AZURE,
         "OIDC_RP_CLIENT_SECRET": OIDC_RP_CLIENT_SECRET_AZURE,
-        "OIDC_OP_AUTHORIZATION_ENDPOINT": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-        "OIDC_OP_TOKEN_ENDPOINT": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-        "OIDC_OP_USER_ENDPOINT": "https://graph.microsoft.com/oidc/userinfo",
+        "OIDC_OP_AUTHORIZATION_ENDPOINT": OIDC_OP_AUTHORIZATION_ENDPOINT_AZURE,
+        "OIDC_OP_TOKEN_ENDPOINT": OIDC_OP_TOKEN_ENDPOINT_AZURE,
+        "OIDC_OP_USER_ENDPOINT": OIDC_OP_USER_ENDPOINT_AZURE,
         "OIDC_OP_JWKS_ENDPOINT": OIDC_OP_JWKS_ENDPOINT_AZURE,
         "OIDC_RP_SCOPES": "openid email profile",
     },

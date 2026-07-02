@@ -160,7 +160,7 @@ Maintainers can help with this conversion process.
 
 1. **Search first**: Check existing discussions, issues, and documentation
 2. **Check the docs**: Browse `/docs` folder and the live documentation
-3. **Try the demo**: Test functionality at <https://checktick.eatyourpeas.dev>
+3. **Try the demo**: Test functionality at <https://checktick.uk>
 4. **Gather information**: Have your environment details ready
 
 ### When Posting
@@ -193,8 +193,8 @@ When asking questions or reporting issues:
 
 ## Need More Help?
 
-- **Documentation**: <https://checktick.eatyourpeas.dev/docs/>
-- **Demo Environment**: <https://checktick.eatyourpeas.dev>
+- **Documentation**: <https://checktick.uk/docs/>
+- **Demo Environment**: <https://checktick.uk>
 - **Discussions**: <https://github.com/eatyourpeas/checktick/discussions>
 - **Issues**: <https://github.com/eatyourpeas/checktick/issues>
 - **Security**: <https://github.com/eatyourpeas/checktick/security/advisories/new>
