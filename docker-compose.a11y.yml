@@ -1,0 +1,35 @@
+# Docker Compose override for LOCAL accessibility testing.
+# Usage: s/test --a11y-only
+
+services:
+  a11y:
+    build:
+      context: .
+      dockerfile: Dockerfile.a11y
+    environment:
+      DATABASE_URL: postgres://checktick:checktick@db:5432/checktick
+      SECRET_KEY: dev-secret-key-not-for-production
+      ALLOWED_HOSTS: "*"
+      DEBUG: "True"
+      DJANGO_SETTINGS_MODULE: checktick_app.settings
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      EXTERNAL_DATASET_API_URL: ${EXTERNAL_DATASET_API_URL:-https://api.rcpch.ac.uk}
+      EXTERNAL_DATASET_API_KEY: ${EXTERNAL_DATASET_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_URL: ${LLM_URL:-}
+      LLM_AUTH_TYPE: ${LLM_AUTH_TYPE:-apim}
+      BRAND_TITLE: ${BRAND_TITLE:-CheckTick}
+      BRAND_ICON_URL: ${BRAND_ICON_URL:-}
+      BRAND_ICON_URL_DARK: ${BRAND_ICON_URL_DARK:-}
+      BRAND_THEME: ${BRAND_THEME:-checktick-light}
+      BRAND_THEME_PRESET_LIGHT: ${BRAND_THEME_PRESET_LIGHT:-lofi}
+      BRAND_THEME_PRESET_DARK: ${BRAND_THEME_PRESET_DARK:-dim}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - media_data:/app/media
+    command: >
+      sh -lc "npm install && npm run build:css && python manage.py migrate --noinput && python -m pytest tests/test_accessibility.py -v -n auto"
