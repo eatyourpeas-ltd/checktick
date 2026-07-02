@@ -183,7 +183,11 @@ elif ! docker info >/dev/null 2>&1; then
     exit 1
 elif docker compose ps --status running --services 2>/dev/null | grep -q '^web$'; then
     # Container already up
-    EXEC_PREFIX=(docker compose exec web)
+    if [ -t 0 ]; then
+        EXEC_PREFIX=(docker compose exec web)
+    else
+        EXEC_PREFIX=(docker compose exec -T web)
+    fi
 else
     # Container not running — try to start it
     if ! command -v docker >/dev/null 2>&1; then
@@ -204,7 +208,11 @@ else
         sleep 2
     done
     echo "✅ Web container is ready."
-    EXEC_PREFIX=(docker compose exec web)
+    if [ -t 0 ]; then
+        EXEC_PREFIX=(docker compose exec web)
+    else
+        EXEC_PREFIX=(docker compose exec -T web)
+    fi
 fi
 
 echo "🧪 Running tests..."
