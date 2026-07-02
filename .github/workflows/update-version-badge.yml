@@ -36,10 +36,7 @@ jobs:
           print(data['tool']['poetry']['version'])
           PY
           )
-          {
-            echo "version=$VERSION"
-            echo "Version: $VERSION"
-          } >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Update README badge
         env:
