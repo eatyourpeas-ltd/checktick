@@ -1,7 +1,12 @@
 name: Update Version Badge
 
+# Runs on pull requests targeting main. When a PR changes pyproject.toml,
+# this reads the new version and updates the README badge on the PR branch
+# itself (PR branches are not branch-protected, so the bot can push back).
+# When the PR merges, pyproject.toml and README.md land together and the
+# badge is already in sync — no post-merge push to main required.
 on:
-  push:
+  pull_request:
     branches:
       - main
     paths:
@@ -16,8 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # Need full history to diff, and a token that can push back.
-          fetch-depth: 0
+          # Checkout the PR head so we push back to the PR branch.
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract version from pyproject.toml
@@ -68,7 +74,7 @@ jobs:
           print(f"Updated README version badge to {version} ({n} replacement(s)).")
           PY
 
-      - name: Commit and push changes
+      - name: Commit and push to PR branch
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -80,5 +86,5 @@ jobs:
           else
             git add README.md
             git commit -m "ci: update version badge to ${VERSION}"
-            git push origin main
+            git push
           fi
