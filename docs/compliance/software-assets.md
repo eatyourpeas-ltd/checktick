@@ -6,7 +6,7 @@ category: dspt-4-managing-access
 # Software Asset & Configuration Register
 
 **Version:** 2.0
-**Last Updated:** March 2026
+**Last Updated:** July 2026
 **Owner:** CTO
 
 ## 1. Asset Management Process
@@ -107,20 +107,22 @@ CSS. No JavaScript framework is shipped to the browser.
 | **Tailwind CSS** | CSS Framework | ^4.1.17 | Utility-first CSS generation |
 | **@tailwindcss/cli** | Build Tool | ^4.1.17 | CSS compilation |
 | **@tailwindcss/typography** | CSS Plugin | ^0.5.19 | Prose typography styles |
-| **DaisyUI** | Component Library | ^5.4.7 | UI component themes |
+| **DaisyUI** | Component Library | 5.6.7 | UI component themes |
 
 ---
 
-## 5. Self-Hosted JavaScript Assets
+## 5. Self-Hosted Frontend Assets
 
-Served from `checktick_app/static/js/` with SHA-384 Subresource Integrity
-(SRI) verification. No external CDN calls are made in production.
+Served from `checktick_app/static/` with SHA-384 Subresource Integrity
+(SRI) verification and tracked in `checktick_app/cdn_assets.json`. No external CDN calls are made in production.
 
 | Asset Name | Version | SRI Verified | Purpose |
 | :--- | :--- | :--- | :--- |
-| **ReDoc** | 2.5.2 | ✅ Yes | API documentation rendering |
-| **axe-core** | 4.11.1 | ✅ Yes | Accessibility testing |
+| **HTMX** | 2.0.10 | ✅ Yes | Dynamic HTML updates without JavaScript |
+| **ReDoc** | 2.5.3 | ✅ Yes | API documentation rendering |
+| **axe-core** | 4.12.1 | ✅ Yes | Accessibility testing |
 | **SortableJS** | 1.15.7 | ✅ Yes | Drag-and-drop UI |
+| **NHS Frontend** | 8.1.0 | ✅ Yes | NHS design system styling |
 
 ---
 

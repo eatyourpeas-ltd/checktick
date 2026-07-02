@@ -137,7 +137,7 @@ BRAND_ICON_SIZE=6  # Converts to w-6 h-6
 
 ### Theme Preset Variables
 
-CheckTick uses **daisyUI v5.4.7** with 32 built-in theme presets:
+CheckTick uses **daisyUI v5.6.7** with built-in theme presets loaded via `themes: all`:
 
 ```bash
 # Default logical theme (checktick-light or checktick-dark)

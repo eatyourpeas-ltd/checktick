@@ -12,7 +12,7 @@ Suppose you are doing a research project which includes asking an already publis
 
 There are a range of different ways to create surveys. Most users are familiar with builders where questions types are dragged onto a canvas. CheckTick offers this together with branching where users can change the questions offered based on previous answers. But CheckTick also has a Text Editor - users can type the questions in as a list, or paste them in from somewhere else to create a survey. Or, use the AI Assistant which can suggest questions and generate the survey automatically.
 
-In the NHS it is important that survey creators reach all patients, irrespective of language or disability - CheckTick surveys meet the rigorous WCAG AA accessibility standards, and can be published instantaneously in 12 different languages.
+In the NHS it is important that survey creators reach all patients, irrespective of language or disability - CheckTick surveys are designed to support and tested against WCAG 2.2 AA accessibility standards, and can be published instantaneously in 12 different languages.
 
 CheckTick takes data and data governance very seriously. As the custodian of patient data, CheckTick complies with the key UK and NHS standards:
 

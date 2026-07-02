@@ -6,7 +6,7 @@ priority: 1
 
 # Accessibility
 
-CheckTick is designed with accessibility in mind, following **WCAG 2.1 AA** guidelines to ensure surveys are usable by people with disabilities, including those using screen readers, keyboard navigation, and other assistive technologies.
+CheckTick is designed to support and tested against **WCAG 2.2 AA** guidelines so surveys are usable by people with disabilities, including those using screen readers, keyboard navigation, and other assistive technologies.
 
 ## Target Audience
 
@@ -21,6 +21,8 @@ Our accessibility focus prioritises **survey respondents** - the patients, profe
 | 2.1.1 Keyboard Accessible | ✅ | All controls keyboard operable, orderable questions have keyboard alternative |
 | 2.4.1 Bypass Blocks | ✅ | Skip-to-content link for survey forms |
 | 2.4.6 Headings & Labels | ✅ | Proper label associations, descriptive headings |
+| 2.5.7 Dragging Movements | ✅ | Keyboard alternatives for orderable questions |
+| 2.5.8 Target Size (Minimum) | ✅ | Touch targets tested with axe-core WCAG 2.2 rules |
 | 3.3.1 Error Identification | ✅ | Validation errors announced to screen readers |
 | 3.3.2 Labels or Instructions | ✅ | All form controls have accessible names |
 | 4.1.2 Name, Role, Value | ✅ | ARIA attributes for custom widgets |
@@ -99,14 +101,23 @@ Our accessibility focus prioritises **survey respondents** - the patients, profe
 
 ## Colour Contrast
 
-CheckTick uses [DaisyUI](https://daisyui.com/) themes which are designed to meet WCAG AA contrast requirements. The default themes (`checktick-light` and `checktick-dark`) provide:
+CheckTick uses [DaisyUI](https://daisyui.com/) themes which are designed to meet WCAG AA contrast requirements. The default themes (`checktick-light` and `checktick-dark`) are tested against WCAG 2.2 AA rules and provide:
 
 - Minimum 4.5:1 contrast ratio for normal text
 - Minimum 3:1 contrast ratio for large text and UI components
 
 ### Custom Themes
 
-Organisations can create custom themes. When doing so, verify contrast using:
+Organisations can create custom themes. When doing so, use DaisyUI semantic token pairs so foreground and background colours stay accessible across light and dark themes:
+
+- `bg-primary` with `text-primary-content`
+- `bg-secondary` with `text-secondary-content`
+- `bg-accent` with `text-accent-content`
+- `bg-neutral` with `text-neutral-content`
+- `bg-info`, `bg-success`, `bg-warning`, and `bg-error` with their matching `*-content` classes
+- `bg-base-*` with `text-base-content`
+
+Also verify contrast using:
 
 - [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/)
 - Browser developer tools accessibility audits
@@ -149,26 +160,27 @@ Screen readers will announce:
 CheckTick includes automated accessibility tests using Playwright and axe-core:
 
 ```bash
-# Run all accessibility tests
-docker compose exec web pytest tests/test_accessibility.py -v
+# Run all accessibility tests locally in the Chromium-capable container
+s/test --a11y-only
 
-# Run specific test class
-docker compose exec web pytest tests/test_accessibility.py::TestSurveyFormAccessibility -v
+# Run a specific accessibility test selection via the same container
+s/test --a11y-only -k TestSurveyFormAccessibility
 
-# Run with visible browser (useful for debugging)
-docker compose exec web pytest tests/test_accessibility.py -v --headed
+# Run without xdist if you need simpler logs
+s/test --a11y-only --serial
 ```
 
-The tests verify WCAG 2.1 AA compliance across:
+The tests verify WCAG 2.2 AA accessibility across:
 
 - Public pages (home, login, signup, docs)
 - Survey forms (the primary respondent experience)
 - Authenticated pages (dashboard, builder, settings)
-- Survey preview mode
+- Public marketing pages
+- Platform admin dashboard
 
 ### Dashboard Accessibility Test Button
 
-Survey creators can test their custom styles using the built-in accessibility test button on the survey dashboard (Survey style section). This runs axe-core against the survey preview and displays any violations.
+Survey creators can test their custom styles using the built-in accessibility test button on the survey dashboard (Survey style section). This runs the self-hosted `axe-core` asset against the survey preview with WCAG 2.2 AA tags and displays any violations.
 
 ### Command Line Testing
 
@@ -176,13 +188,22 @@ Run accessibility audits using axe-core CLI:
 
 ```bash
 # Install axe-core CLI
-npm install -g @axe-core/cli@4.11.1
+npm install -g @axe-core/cli
 
 # Run against local development server
 axe http://localhost:8000/surveys/your-survey-slug/
 ```
 
-### Manual Testing Checklist
+### Local Container Troubleshooting
+
+The local accessibility workflow uses `Dockerfile.a11y` and `docker-compose.a11y.yml` because the normal development `web` container intentionally does not include Chromium.
+
+- If Docker is not running, start Docker Desktop and rerun `s/test --a11y-only`.
+- If the first run is slow, allow the Chromium-capable image to build; later runs should use Docker layer cache.
+- If logs are noisy, use `s/test --a11y-only --serial`.
+- CI still installs Chromium directly in the GitHub Actions runner; the local container is designed to match CI test behaviour as closely as practical.
+
+## Manual Testing Checklist
 
 - [ ] Complete entire survey using only keyboard
 - [ ] Navigate survey with screen reader enabled
@@ -209,7 +230,7 @@ If you encounter accessibility barriers, please:
 
 ## Resources
 
-- [WCAG 2.1 Guidelines](https://www.w3.org/WAI/WCAG21/quickref/)
+- [WCAG 2.2 Guidelines](https://www.w3.org/WAI/WCAG22/quickref/)
 - [DaisyUI Accessibility](https://daisyui.com/docs/accessibility/)
 - [NHS Digital Accessibility Guidelines](https://service-manual.nhs.uk/accessibility)
 - [WebAIM](https://webaim.org/)

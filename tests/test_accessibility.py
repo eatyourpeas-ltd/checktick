@@ -12,8 +12,8 @@ Note: These tests require playwright to be installed:
     playwright install chromium
 """
 
-import pytest
 from django.contrib.auth.models import User
+import pytest
 
 from checktick_app.surveys.models import Organization, Survey, SurveyQuestion
 

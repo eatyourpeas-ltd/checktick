@@ -15,9 +15,9 @@ category: dspt-9-it-protection
 
 To prevent "Magecart" style supply chain attacks, we self-host critical JS libraries:
 
-* **HTMX / SortableJS / axe-core:** Versions are pinned in the workflow environment.
-* **Automation:** The workflow downloads the source, calculates the SHA-384 hash, and verifies it matches our local version.
-* **Template Sync:** If a change is needed, the workflow automatically updates `integrity` attributes in our Django templates (`base.html`, `builder.html`, etc.) and opens a PR for human review.
+* **HTMX / SortableJS / axe-core / ReDoc / NHS Frontend:** Versions, static paths, source paths, and SHA-384 SRI hashes are tracked in `checktick_app/cdn_assets.json`.
+* **Automation:** The update workflow downloads the source from the manifest-defined package/source, calculates the SHA-384 hash, and verifies it matches our local version.
+* **Template Sync:** Django templates read CDN paths and SRI hashes from the manifest-backed `cdn_assets` context variable rather than hardcoding integrity attributes.
 
 ## 3. Code Scanning (`CodeQL`)
 
