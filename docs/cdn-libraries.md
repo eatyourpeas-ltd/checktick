@@ -61,7 +61,7 @@ sha384-pAVIuzMQbJcj7JX9XYTtp8sSNh3OvFXn0g9ldX+lANHPoXFdYVKw/2G1gS/eU62A
 ### axe-core 4.12.1
 
 ```text
-sha384-BdMxweAM6a5IkRxVOGXhKT5nagnyiRc1i78hWgYKq7oOcHRcKBNtbeufhvCSqldt
+sha384-JQegRXq6EhTiWoGPFDmqbJNsDow5BoSsGhnaeDzGp+qyOFCuMZZ24qY2fz3FxZF5
 ```
 
 ### ReDoc 2.5.3

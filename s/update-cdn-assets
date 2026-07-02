@@ -263,7 +263,7 @@ update_dep() {
 
   local tmpdir
   tmpdir=$(mktemp -d)
-  trap 'rm -rf "$tmpdir"' EXIT
+  trap "rm -rf '$tmpdir'" EXIT
 
   echo "Updating $name ($key): $pkg@$target_ver"
   echo "Packing npm artifact..."
