@@ -70,7 +70,7 @@ docker compose -f docker-compose.registry.yml up -d
 
 **Docker Images:** [ghcr.io/eatyourpeas/checktick](https://github.com/eatyourpeas/checktick/pkgs/container/checktick)
 
-**Full Documentation:** See [Self-Hosting Guides](https://checktick.eatyourpeas.dev/docs/self-hosting-quickstart/)
+**Full Documentation:** See [Self-Hosting Guides](https://checktick.uk/docs/self-hosting-quickstart/)
 
 ## Versioning & Deployment
 
@@ -82,7 +82,7 @@ For release, container tags, and publish trigger rules, see [docs/versioning-and
 
 - **[Discussions](https://github.com/eatyourpeas/checktick/discussions)** - For questions, ideas, and community support
 - **[Issues](https://github.com/eatyourpeas/checktick/issues)** - For bug reports and specific feature requests
-- **[Documentation](https://checktick.eatyourpeas.dev/docs/)** - Complete guides and API documentation
+- **[Documentation](https://checktick.uk/docs/)** - Complete guides and API documentation
 
 ### When to use what?
 

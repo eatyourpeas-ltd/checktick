@@ -66,7 +66,7 @@ body:
       label: Deployment Context
       description: How are you using CheckTick?
       options:
-        - Hosted version (checktick.eatyourpeas.dev)
+        - Hosted version (checktick.uk)
         - Self-hosted (production)
         - Self-hosted (development/testing)
         - Local development
@@ -161,6 +161,6 @@ body:
         - 📚 **Documentation**: Check the `/docs` folder for detailed guides
         - 🔍 **Search**: Look through existing issues and discussions
         - 💬 **Community**: Engage with other users in discussions
-        - 🚀 **Hosted Service**: For hosted service support, mention you're using checktick.eatyourpeas.dev
+        - 🚀 **Hosted Service**: For hosted service support, mention you're using checktick.uk
 
         We'll do our best to help you succeed with CheckTick!

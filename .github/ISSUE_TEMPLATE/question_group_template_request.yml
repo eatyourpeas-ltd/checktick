@@ -11,7 +11,7 @@ body:
         CheckTick maintains a collection of validated, reusable Question Group Templates (such as PHQ-9, GAD-7, etc.) that are available to all users. These templates help users quickly add standardised questionnaires to their surveys.
 
         Before requesting a new template, please:
-        1. Check the [existing templates](https://checktick.eatyourpeas.com/templates/) to see if it already exists
+        1. Check the [existing templates](https://checktick.uk/templates/) to see if it already exists
         2. Search existing issues to avoid duplicates
         3. Ensure this is a validated, published questionnaire (not a custom/draft instrument)
         4. Verify you have permission to share this questionnaire (check licensing/copyright)
@@ -132,7 +132,7 @@ body:
     id: template-content
     attributes:
       label: Template Content
-      description: Provide the questions in markdown format (see [documentation](https://checktick.eatyourpeas.com/docs/import/))
+      description: Provide the questions in markdown format (see [documentation](https://checktick.uk/docs/import/))
       placeholder: |
         # Template Name {template-id}
 
@@ -282,4 +282,4 @@ body:
         2. Publish it at organisation level (if you're in an organisation)
         3. Once reviewed and approved, we can promote it to global level
 
-        **For more information**, see the [Question Group Template documentation](https://checktick.eatyourpeas.com/docs/publish-question-groups/).
+        **For more information**, see the [Question Group Template documentation](https://checktick.uk/docs/publish-question-groups/).
