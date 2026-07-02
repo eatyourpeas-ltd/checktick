@@ -1,7 +1,7 @@
 """
 Accessibility tests using Playwright + axe-core.
 
-These tests verify WCAG 2.1 AA compliance across key pages.
+These tests verify WCAG 2.2 AA accessibility across key pages.
 Run with: pytest tests/test_accessibility.py -v
 
 For parallel execution with xdist:
@@ -33,6 +33,7 @@ pytestmark = [
 ]
 
 TEST_PASSWORD = "testpass123!"  # nosec: test password
+WCAG_22_AA_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]
 
 
 # Use pytest-playwright's built-in page fixture (xdist compatible)
@@ -65,7 +66,7 @@ def run_axe_test(page, axe, url):
         options={
             "runOnly": {
                 "type": "tag",
-                "values": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+                "values": WCAG_22_AA_TAGS,
             }
         },
     )
@@ -139,27 +140,27 @@ class TestPublicPageAccessibility:
     """Test accessibility of public pages."""
 
     def test_home_page_accessibility(self, page, axe, live_server):
-        """Test that the home page meets WCAG 2.1 AA standards."""
+        """Test that the home page meets WCAG 2.2 AA standards."""
         results = run_axe_test(page, axe, f"{live_server.url}/")
         assert_no_violations(results, "home page")
 
     def test_login_page_accessibility(self, page, axe, live_server):
-        """Test that the login page meets WCAG 2.1 AA standards."""
+        """Test that the login page meets WCAG 2.2 AA standards."""
         results = run_axe_test(page, axe, f"{live_server.url}/accounts/login/")
         assert_no_violations(results, "login page")
 
     def test_signup_page_accessibility(self, page, axe, live_server):
-        """Test that the signup page meets WCAG 2.1 AA standards."""
+        """Test that the signup page meets WCAG 2.2 AA standards."""
         results = run_axe_test(page, axe, f"{live_server.url}/signup/")
         assert_no_violations(results, "signup page")
 
     def test_docs_page_accessibility(self, page, axe, live_server):
-        """Test that the documentation index page meets WCAG 2.1 AA standards."""
+        """Test that the documentation index page meets WCAG 2.2 AA standards."""
         results = run_axe_test(page, axe, f"{live_server.url}/docs/")
         assert_no_violations(results, "docs index page")
 
     def test_docs_content_page_accessibility(self, page, axe, live_server):
-        """Test that a documentation content page meets WCAG 2.1 AA standards."""
+        """Test that a documentation content page meets WCAG 2.2 AA standards."""
         results = run_axe_test(page, axe, f"{live_server.url}/docs/getting-started/")
         assert_no_violations(results, "docs content page")
 
@@ -215,7 +216,7 @@ class TestSurveyFormAccessibility:
     """Test accessibility of survey forms - the primary respondent experience."""
 
     def test_survey_form_accessibility(self, page, axe, live_server, published_survey):
-        """Test that survey forms meet WCAG 2.1 AA standards."""
+        """Test that survey forms meet WCAG 2.2 AA standards."""
         survey, _ = published_survey
         results = run_axe_test(page, axe, f"{live_server.url}/surveys/{survey.slug}/")
         assert_no_violations(results, "survey form")
@@ -241,7 +242,7 @@ class TestSurveyFormAccessibility:
                 options={
                     "runOnly": {
                         "type": "tag",
-                        "values": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+                        "values": WCAG_22_AA_TAGS,
                     }
                 },
             )
@@ -282,7 +283,7 @@ class TestAuthenticatedPageAccessibility:
     """Test accessibility of authenticated pages."""
 
     def test_survey_list_accessibility(self, page, axe, live_server, user_with_survey):
-        """Test that survey list page meets WCAG 2.1 AA standards."""
+        """Test that survey list page meets WCAG 2.2 AA standards."""
         user, _ = user_with_survey
         login_user(page, live_server, user.username, TEST_PASSWORD)
         results = run_axe_test(page, axe, f"{live_server.url}/surveys/")
@@ -291,7 +292,7 @@ class TestAuthenticatedPageAccessibility:
     def test_survey_dashboard_accessibility(
         self, page, axe, live_server, user_with_survey
     ):
-        """Test that survey dashboard meets WCAG 2.1 AA standards."""
+        """Test that survey dashboard meets WCAG 2.2 AA standards."""
         user, survey = user_with_survey
         login_user(page, live_server, user.username, TEST_PASSWORD)
         results = run_axe_test(
@@ -300,7 +301,7 @@ class TestAuthenticatedPageAccessibility:
         assert_no_violations(results, "survey dashboard")
 
     def test_profile_page_accessibility(self, page, axe, live_server, user_with_survey):
-        """Test that user profile page meets WCAG 2.1 AA standards."""
+        """Test that user profile page meets WCAG 2.2 AA standards."""
         user, _ = user_with_survey
         login_user(page, live_server, user.username, TEST_PASSWORD)
         results = run_axe_test(page, axe, f"{live_server.url}/profile")
@@ -309,7 +310,7 @@ class TestAuthenticatedPageAccessibility:
     def test_question_builder_accessibility(
         self, page, axe, live_server, user_with_survey
     ):
-        """Test that question builder (groups) page meets WCAG 2.1 AA standards."""
+        """Test that question builder (groups) page meets WCAG 2.2 AA standards."""
         user, survey = user_with_survey
         login_user(page, live_server, user.username, TEST_PASSWORD)
         results = run_axe_test(
@@ -323,7 +324,7 @@ class TestPublicMarketingPages:
     """Test accessibility of public marketing/info pages."""
 
     def test_pricing_page_accessibility(self, page, axe, live_server):
-        """Test that pricing page meets WCAG 2.1 AA standards."""
+        """Test that pricing page meets WCAG 2.2 AA standards."""
         results = run_axe_test(page, axe, f"{live_server.url}/pricing")
         assert_no_violations(results, "pricing page")
 
@@ -350,7 +351,7 @@ class TestPlatformAdminAccessibility:
     def test_platform_admin_dashboard_accessibility(
         self, page, axe, live_server, superuser
     ):
-        """Test that platform admin dashboard meets WCAG 2.1 AA standards."""
+        """Test that platform admin dashboard meets WCAG 2.2 AA standards."""
         login_user(page, live_server, superuser.username, TEST_PASSWORD)
         results = run_axe_test(page, axe, f"{live_server.url}/platform-admin/")
         assert_no_violations(results, "platform admin dashboard")

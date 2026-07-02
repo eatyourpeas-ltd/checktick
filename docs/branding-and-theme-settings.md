@@ -322,7 +322,7 @@ For advanced customization beyond preset themes, use the daisyUI Theme Generator
 
 **Use preset themes when:**
 
-- You're happy with one of the 32 built-in themes
+- You're happy with one of the enabled daisyUI preset themes
 - You want quick, professional results
 - You don't have specific brand color requirements
 
@@ -549,7 +549,9 @@ The build process:
 
 ### Accessibility Considerations
 
-- Maintain sufficient color contrast (WCAG AA minimum: 4.5:1)
+- Maintain sufficient color contrast (WCAG 2.2 AA minimum: 4.5:1 for normal text)
+- Prefer daisyUI semantic colour pairs such as `bg-primary` with `text-primary-content`
+- Test custom survey themes with the dashboard “Test Accessibility” action
 - Test themes with screen readers
 - Don't rely on color alone to convey information
 - Consider colorblind users when choosing colors

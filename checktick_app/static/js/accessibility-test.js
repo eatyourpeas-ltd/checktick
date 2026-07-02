@@ -1,7 +1,7 @@
 /**
  * Accessibility Test Module
  *
- * Uses axe-core to run WCAG 2.1 AA accessibility checks on survey styles.
+ * Uses axe-core to run WCAG 2.2 AA accessibility checks on survey styles.
  * This script loads axe-core dynamically and runs tests against the survey preview.
  */
 
@@ -74,11 +74,11 @@
     const axe = window.axe;
     const frameDoc = iframe.contentDocument || iframe.contentWindow.document;
 
-    // Configure axe to focus on WCAG 2.1 AA
+    // Configure axe to focus on WCAG 2.2 AA.
     const config = {
       runOnly: {
         type: "tag",
-        values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+        values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"],
       },
       rules: {
         // Focus on color contrast and form accessibility
@@ -124,7 +124,7 @@
           </svg>
           <div>
             <h3 class="font-bold">All accessibility checks passed!</h3>
-            <p class="text-sm">${passCount} WCAG 2.1 AA rules checked. Your survey style meets accessibility standards.</p>
+            <p class="text-sm">${passCount} WCAG 2.2 AA rules checked. Your survey style meets accessibility standards.</p>
           </div>
         </div>
       `;
@@ -213,7 +213,7 @@
     // Summary stats
     html += `
       <div class="mt-4 text-xs opacity-60">
-        <p>Tested against WCAG 2.1 AA standards using axe-core ${
+        <p>Tested against WCAG 2.2 AA standards using axe-core ${
           window.axe ? window.axe.version : "N/A"
         }</p>
         <p>${passCount} rules passed • ${

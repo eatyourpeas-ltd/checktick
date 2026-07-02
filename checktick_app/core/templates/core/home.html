@@ -96,7 +96,7 @@
         <div class="card-body flex flex-col flex-1">
           <div class="flex-1">
             <div class="flex items-center gap-3">
-              <span class="text-info">{% include 'components/icons/llm.html' with classes='w-8 h-8' %}</span>
+              <span class="inline-flex rounded-full bg-info p-2 text-info-content">{% include 'components/icons/llm.html' with classes='w-8 h-8' %}</span>
               <h3 class="card-title text-base-content">{% trans 'AI-Powered Survey Generation' %}</h3>
             </div>
             <ul class="mt-3 space-y-1 text-base-content">
@@ -160,7 +160,7 @@
         <div class="card-body flex flex-col flex-1">
           <div class="flex-1">
             <div class="flex items-center gap-3">
-              <span class="text-info">{% include 'components/icons/shield-check.html' with classes='w-8 h-8' %}</span>
+              <span class="inline-flex rounded-full bg-info p-2 text-info-content">{% include 'components/icons/shield-check.html' with classes='w-8 h-8' %}</span>
               <h3 class="card-title text-base-content">{% trans 'NHS-Grade Security' %}</h3>
             </div>
             <ul class="mt-3 space-y-1 text-base-content">
@@ -180,9 +180,9 @@
           </div>
           <div class="card-actions justify-end pt-2">
             {% if user.is_authenticated %}
-              <a class="btn btn-sm btn-info btn-outline" href="{% url 'core:docs_page' slug='data-governance' %}">{% trans 'Security docs' %}</a>
+              <a class="btn btn-sm bg-info text-info-content border-info hover:bg-info/90 hover:border-info/90" href="{% url 'core:docs_page' slug='data-governance' %}">{% trans 'Security docs' %}</a>
             {% else %}
-              <a class="btn btn-sm btn-info btn-outline" href="{% url 'core:docs_page' slug='data-governance' %}">{% trans 'Learn about security' %}</a>
+              <a class="btn btn-sm bg-info text-info-content border-info hover:bg-info/90 hover:border-info/90" href="{% url 'core:docs_page' slug='data-governance' %}">{% trans 'Learn about security' %}</a>
             {% endif %}
           </div>
         </div>
@@ -227,12 +227,12 @@
         <div class="card-body flex flex-col flex-1">
           <div class="flex-1">
             <div class="flex items-center gap-3">
-              <span class="text-info">{% include 'components/icons/language.html' with classes='w-8 h-8' %}</span>
+              <span class="inline-flex rounded-full bg-info p-2 text-info-content">{% include 'components/icons/language.html' with classes='w-8 h-8' %}</span>
               <h3 class="card-title text-base-content">{% trans 'Accessibility & Inclusion' %}</h3>
             </div>
             <ul class="mt-3 space-y-1 text-base-content">
               <li class="flex gap-2">
-                <span class="text-info" aria-hidden="true">–</span> {% trans 'WCAG 2.1 AA compliant surveys for screen readers and keyboard navigation' %}
+                <span class="text-info" aria-hidden="true">–</span> {% trans 'Designed to support and tested against WCAG 2.2 AA for screen readers and keyboard navigation' %}
               </li>
               <li class="flex gap-2">
                 <span class="text-info" aria-hidden="true">–</span> {% trans 'Translation support for Arabic, Welsh, Urdu, Polish, and more' %}

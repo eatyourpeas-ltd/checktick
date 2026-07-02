@@ -15,9 +15,10 @@ It signposts common workflows and links to the full docs instead of duplicating 
 
 ### 1. Run tests (default for feature/bug-fix work)
 
-- Use `s/test --no-a11y`.
-- If the Docker web container is not running, the script will start it automatically.
-- Accessibility tests require a separate environment and should not be part of the default local validation path.
+- Use `s/test --no-a11y` for the default non-accessibility test suite.
+- Use `s/test --a11y-only` for the Playwright/axe-core accessibility suite in the dedicated local Chromium container. Add `--serial` if you need simpler logs.
+- If the Docker web container is not running, the script will start it automatically for non-accessibility tests.
+- Accessibility tests use `Dockerfile.a11y` and `docker-compose.a11y.yml` because the normal web container intentionally does not include Chromium.
 
 ### 2. Test fallback when Docker is not running
 
@@ -37,6 +38,14 @@ It signposts common workflows and links to the full docs instead of duplicating 
   - These appear in the [GitHub Packages Registry](https://github.com/eatyourpeas-ltd/checktick/pkgs/container/checktick)
 - See `docs/versioning-and-deployment.md` for full trigger and tagging rules.
 - Typically bumped by CTO; agents should follow semver conventions if contributing version changes.
+
+## Accessibility and Theming
+
+- CheckTick is designed to support and tested against **WCAG 2.2 AA**. See `docs/accessibility.md` and `docs/testing-webapp.md` for the full posture and test workflow.
+- Automated accessibility tests live in `tests/test_accessibility.py` and use Playwright plus axe-core WCAG tags, including `wcag22aa`.
+- The dashboard custom-theme tester is `checktick_app/static/js/accessibility-test.js`; it loads the self-hosted axe-core asset and should stay aligned with the automated WCAG tag set.
+- Theming uses Tailwind CSS v4 and daisyUI v5.6 presets from `checktick_app/static/css/daisyui_themes.css`; details are in `docs/themes.md` and `docs/self-hosting-themes.md`.
+- Prefer daisyUI semantic colour pairs such as `bg-primary` with `text-primary-content`, `bg-info` with `text-info-content`, and `bg-base-*` with `text-base-content`. Avoid standalone accent text classes on base backgrounds unless contrast has been checked.
 
 ## CDN / Self-Hosted JS Dependencies
 

@@ -15,7 +15,11 @@ LINT_CMD="poetry run ruff check --fix . && poetry run black . && poetry run isor
 
 if docker compose ps --status running --services 2>/dev/null | grep -q '^web$'; then
   echo "🐳 Running lint in existing web container..."
-  docker compose exec web bash -c "$LINT_CMD"
+  if [ -t 0 ]; then
+    docker compose exec web bash -c "$LINT_CMD"
+  else
+    docker compose exec -T web bash -c "$LINT_CMD"
+  fi
 else
   echo "🐳 No running web container found — starting one with docker compose run..."
   docker compose run --rm web bash -c "$LINT_CMD"

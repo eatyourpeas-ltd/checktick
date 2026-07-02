@@ -37,6 +37,9 @@ dist/
 # VSCode
 .vscode/
 
+#Zed
+.zed/
+
 # Docker
 .docker/
 

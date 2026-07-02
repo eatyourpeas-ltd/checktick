@@ -27,7 +27,7 @@
       "version": "4.12.1",
       "static_file": "js/axe-core.min.js",
       "source_path": "axe.min.js",
-      "sri": "sha384-BdMxweAM6a5IkRxVOGXhKT5nagnyiRc1i78hWgYKq7oOcHRcKBNtbeufhvCSqldt",
+      "sri": "sha384-JQegRXq6EhTiWoGPFDmqbJNsDow5BoSsGhnaeDzGp+qyOFCuMZZ24qY2fz3FxZF5",
       "purpose": "WCAG accessibility testing"
     },
     {

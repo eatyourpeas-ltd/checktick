@@ -14,7 +14,7 @@ This guide covers the technical implementation of CheckTick's theming system for
 ## Technology Stack
 
 - **Tailwind CSS v4.1.17** - Utility-first CSS framework with CSS-based configuration
-- **daisyUI v5.4.7** - Component library with 32 built-in theme presets
+- **daisyUI v5.6.7** - Component library with built-in WCAG-aware theme presets
 - **@tailwindcss/typography** - Rich text styling for prose content
 - **@tailwindcss/cli v4.1.17** - Separate build tool package for Tailwind v4
 
@@ -44,15 +44,9 @@ Example configuration structure:
 
 ## daisyUI v5 Themes
 
-All 32 daisyUI themes are loaded in CheckTick:
+All daisyUI theme presets are loaded in CheckTick via `themes: all`:
 
-**20 Light Themes:**
-
-- light, cupcake, bumblebee, emerald, corporate, retro, cyberpunk, valentine, garden, lofi, pastel, fantasy, nord, cmyk, autumn, acid, lemonade, winter, nord, sunset
-
-**12 Dark Themes:**
-
-- dark, synthwave, halloween, forest, aqua, black, luxury, dracula, business, night, coffee, dim
+The application exposes curated light and dark preset lists from `checktick_app/core/themes.py` and builds all enabled daisyUI presets into the shared stylesheet. Defaults are configured through environment variables and branding settings rather than hardcoded in templates.
 
 Themes are applied via the `data-theme` attribute on `<html>` or `<body>`:
 
@@ -299,7 +293,7 @@ light_css, dark_css = generate_theme_css_for_brand(
 - Who: Organisation admin (superuser) in the Profile page
 - Applies to: Entire site by default
 - What you can configure:
-  - **Theme presets**: Choose from 20 light themes and 12 dark themes (daisyUI v5.4.7 presets)
+  - **Theme presets**: Choose from the enabled daisyUI v5.6 presets
     - Default light: `nord` (clean, minimal design)
     - Default dark: `business` (professional dark theme)
     - Can be changed via dropdown selectors in Profile page
@@ -381,6 +375,26 @@ Tip: Most users should just select a preset. Custom CSS is only needed for uniqu
 
 These overrides only apply on survey pages and do not affect the rest of the site.
 
+## WCAG 2.2 theme guidance
+
+DaisyUI presets provide accessible semantic colour tokens when they are used as pairs. Prefer semantic utilities over hardcoded foreground/background combinations:
+
+| Background | Foreground |
+| --- | --- |
+| `bg-primary` | `text-primary-content` |
+| `bg-secondary` | `text-secondary-content` |
+| `bg-accent` | `text-accent-content` |
+| `bg-neutral` | `text-neutral-content` |
+| `bg-info` | `text-info-content` |
+| `bg-success` | `text-success-content` |
+| `bg-warning` | `text-warning-content` |
+| `bg-error` | `text-error-content` |
+| `bg-base-100`, `bg-base-200`, `bg-base-300` | `text-base-content` |
+
+Avoid using standalone accent text classes such as `text-info` on `bg-base-*` backgrounds for meaningful text unless contrast has been checked. For badges, alerts, buttons, and cards, prefer DaisyUI components or explicit semantic pairs so custom themes remain testable against WCAG 2.2 AA.
+
+Survey creators can run the dashboard “Test Accessibility” action for custom survey styles. Developers can run the equivalent automated suite locally with `s/test --a11y-only`.
+
 ## Acceptable daisyUI builder CSS
 
 **Note**: Most users should just select a theme preset in Profile settings. This section is for advanced customization only.
@@ -393,7 +407,7 @@ Paste only variable assignments from the [daisyUI Theme Generator](https://daisy
 --depth: 0;
 ```
 
-We map these to daisyUI runtime variables (e.g., `--p`, `--b1`, etc.) and inject them under the `checktick-light` and `checktick-dark` theme selectors. Avoid pasting arbitrary CSS rules; stick to variables for predictable results.
+We map these to daisyUI runtime variables and inject them under the `checktick-light` and `checktick-dark` theme selectors. Avoid pasting arbitrary CSS rules; stick to variables for predictable results.
 
 ## Troubleshooting
 
@@ -491,7 +505,7 @@ If running under Docker, rebuild the image or ensure your build step runs inside
 
 - **CLI**: Uses `@tailwindcss/cli` package (separate from main `tailwindcss` package)
 - **No config file**: Configuration moved to CSS using `@import`, `@plugin`, and `@theme` directives
-- **daisyUI v5**: All 39 themes loaded via `@plugin "daisyui" { themes: all; }` in `daisyui_themes.css`
+- **daisyUI v5.6**: All enabled daisyUI presets loaded via `@plugin "daisyui" { themes: all; }` in `daisyui_themes.css`
 
 ### Single stylesheet entry
 
