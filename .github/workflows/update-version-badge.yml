@@ -1,0 +1,90 @@
+name: Update Version Badge
+
+# Runs on pull requests targeting main. When a PR changes pyproject.toml,
+# this reads the new version and updates the README badge on the PR branch
+# itself (PR branches are not branch-protected, so the bot can push back).
+# When the PR merges, pyproject.toml and README.md land together and the
+# badge is already in sync — no post-merge push to main required.
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "pyproject.toml"
+
+permissions:
+  contents: write
+
+jobs:
+  update-badge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Checkout the PR head so we push back to the PR branch.
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from pyproject.toml
+        id: version
+        run: |
+          VERSION=$(python3 - <<'PY'
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+          print(data['tool']['poetry']['version'])
+          PY
+          )
+          {
+            echo "version=$VERSION"
+            echo "Version: $VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update README badge
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+
+          version = os.environ["VERSION"]
+          with open('README.md', 'r') as f:
+              content = f.read()
+
+          # Match the existing version badge regardless of style suffix,
+          # replacing only the version segment while preserving the rest.
+          pattern = re.compile(
+              r'(https://img\.shields\.io/badge/version-)[^-]+(-5fcfdd\?style=[a-z-]+)'
+          )
+          new_content, n = pattern.subn(
+              rf'\g<1>{version}\g<2>', content
+          )
+
+          if n == 0:
+              print("No version badge found to update (regex did not match).")
+              sys.exit(1)
+
+          if new_content == content:
+              print(f"Badge already at version {version}, nothing to do.")
+              sys.exit(0)
+
+          with open('README.md', 'w') as f:
+              f.write(new_content)
+          print(f"Updated README version badge to {version} ({n} replacement(s)).")
+          PY
+
+      - name: Commit and push to PR branch
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "No changes to commit (badge already up to date)."
+          else
+            git add README.md
+            git commit -m "ci: update version badge to ${VERSION}"
+            git push
+          fi
