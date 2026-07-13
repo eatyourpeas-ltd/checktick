@@ -7,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl git nodejs npm gettext && rm -rf /var/lib/apt/lists/*
 
+# pip is pinned in pyproject.toml/lockfile (single source of truth) and installed by `poetry install`
 RUN pip install --no-cache-dir poetry==${POETRY_VERSION}
 
 # Install sct binary (SNOMED CT toolchain) — pre-built release, no Rust needed
