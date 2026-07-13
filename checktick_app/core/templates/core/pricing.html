@@ -1,756 +1,1453 @@
-{% extends "base.html" %}
-{% load static %}
-{% load i18n %}
-
-{% block title %}{% trans "Pricing" %} - {{ brand.title }}{% endblock %}
-
-{% block content %}
-<div class="container mx-auto px-4 py-8 max-w-7xl"
-     {% if auto_open_checkout %}data-auto-open-checkout="true"{% endif %}
-     {% if pending_tier %}data-pending-tier="{{ pending_tier }}"{% endif %}>
-  <!-- Header -->
-  <div class="text-center mb-12">
-    <h1 class="text-4xl font-bold mb-4">{% trans "Choose Your Plan" %}</h1>
-    <p class="text-lg text-base-content max-w-2xl mx-auto">
-      {% trans "CheckTick is a secure, privacy-focused survey platform designed for healthcare research, clinical audits, and quality improvement projects." %}
-    </p>
-    {% if active_public_promotions %}
-    <div class="mt-4 inline-flex items-center gap-2 rounded-full border border-warning/40 bg-warning/10 px-4 py-2 text-sm">
-      <span class="font-semibold">{% trans "Active offers:" %}</span>
-      <span>
-        {% for promo in active_public_promotions %}
-          {{ promo.short_text }}{% if promo.ends_at %} · {% trans "ends" %} {{ promo.ends_at|date:'d M' }}{% endif %}{% if not forloop.last %} · {% endif %}
-        {% endfor %}
-      </span>
-    </div>
-    {% endif %}
-  </div>
-
-  <!-- Pricing Cards -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-12">
-
-    <!-- Individual Free (3 Surveys) -->
-    <div class="card bg-base-100 shadow-xl border border-base-300">
-      <div class="card-body">
-        <h2 class="card-title text-2xl mb-2">{% trans "Individual" %}</h2>
-        <div class="mb-4">
-          <span class="text-3xl font-bold">{% trans "Free" %}</span>
-          <p class="text-sm text-base-content">{% trans "Up to 3 surveys" %}</p>
-          {% if promotions_by_tier.free %}
-          <p class="text-xs text-warning mt-1">{{ promotions_by_tier.free.short_text }}</p>
-          {% endif %}
+{% extends "base.html" %} {% load static %} {% load i18n %} {% block title %}{%
+trans "Pricing" %} - {{ brand.title }}{% endblock %} {% block content %}
+<div
+    class="container mx-auto px-4 py-8 max-w-7xl"
+    {%
+    if
+    auto_open_checkout
+    %}data-auto-open-checkout="true"
+    {%
+    endif
+    %}
+    {%
+    if
+    pending_tier
+    %}data-pending-tier="{{ pending_tier }}"
+    {%
+    endif
+    %}
+>
+    <!-- Header -->
+    <div class="text-center mb-12">
+        <h1 class="text-4xl font-bold mb-4">{% trans "Choose Your Plan" %}</h1>
+        <p class="text-lg text-base-content max-w-2xl mx-auto">
+            {% trans "CheckTick is a secure, privacy-focused survey platform
+            designed for healthcare research, clinical audits, and quality
+            improvement projects." %}
+        </p>
+        {% if active_public_promotions %}
+        <div
+            class="mt-4 inline-flex items-center gap-2 rounded-full border border-warning/40 bg-warning/10 px-4 py-2 text-sm"
+        >
+            <span class="font-semibold">{% trans "Active offers:" %}</span>
+            <span>
+                {% for promo in active_public_promotions %} {{ promo.short_text
+                }}{% if promo.ends_at %} · {% trans "ends" %} {{
+                promo.ends_at|date:'d M' }}{% endif %}{% if not forloop.last %}
+                · {% endif %} {% endfor %}
+            </span>
         </div>
-
-        <div class="divider"></div>
-
-        <ul class="space-y-3 grow">
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Up to 3 active surveys" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Unlimited responses" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Personal encryption" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Export to CSV, JSON, Excel" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Create and publish datasets" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "AI-assisted survey generator" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-            <span>{% trans "No API access" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-            <span>{% trans "No Custom Survey Themes/Icons" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-            <span class="text-base-content">{% trans "No collaboration" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-            <span class="text-base-content">{% trans "No patient data templates (all surveys encrypted)" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-            <span class="text-base-content">{% trans "3 survey limit enforced" %}</span>
-          </li>
-        </ul>
-
-        <div class="card-actions mt-6">
-          {% if user.is_authenticated %}
-            {% if user.profile.account_tier == 'free' %}
-              <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
-            {% else %}
-              <a href="{% url 'core:subscription_portal' %}" class="btn btn-outline btn-block">{% trans "Manage Subscription" %}</a>
-            {% endif %}
-          {% else %}
-            <a href="/signup/" class="btn btn-outline btn-block">{% trans "Get Started" %}</a>
-          {% endif %}
-        </div>
-      </div>
+        {% endif %}
     </div>
 
-    <!-- Individual Unlimited -->
-    <div class="card bg-base-100 shadow-xl border-2 border-primary relative">
-      <div class="badge badge-primary absolute -top-3 left-1/2 -translate-x-1/2">{% trans "Popular" %}</div>
-      <div class="card-body">
-        <h2 class="card-title text-2xl mb-2">{% trans "Individual Pro" %}</h2>
-        <div class="mb-4">
-          <span class="text-3xl font-bold">{{ tier_display.pro }}</span>
-          <span class="text-base-content">/{% trans "month" %}</span>
-          <p class="text-sm text-base-content">{% trans "Unlimited surveys" %}</p>
-          <p class="text-xs text-base-content">{% trans "inc. VAT" %}</p>
-          {% if promotions_by_tier.pro %}
-          <p class="text-xs text-warning mt-1">{{ promotions_by_tier.pro.short_text }}{% if promotions_by_tier.pro.ends_at %} · {% trans "ends" %} {{ promotions_by_tier.pro.ends_at|date:'d M' }}{% endif %}</p>
-          {% endif %}
+    <!-- Pricing Cards -->
+    <div
+        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-12"
+    >
+        <!-- Individual Free (3 Surveys) -->
+        <div class="card bg-base-100 shadow-xl border border-base-300">
+            <div class="card-body">
+                <h2 class="card-title text-2xl mb-2">
+                    {% trans "Individual" %}
+                </h2>
+                <div class="mb-4">
+                    <span class="text-3xl font-bold">{% trans "Free" %}</span>
+                    <p class="text-sm text-base-content">
+                        {% trans "Up to 3 surveys" %}
+                    </p>
+                    {% if promotions_by_tier.free %}
+                    <p class="text-xs text-warning mt-1">
+                        {{ promotions_by_tier.free.short_text }}
+                    </p>
+                    {% endif %}
+                </div>
+
+                <div class="divider"></div>
+
+                <ul class="space-y-3 grow">
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Up to 3 active surveys" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Unlimited responses" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Personal encryption" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Export to CSV, JSON, Excel" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Create and publish datasets" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "AI-assisted survey generator" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"
+                            ></path>
+                        </svg>
+                        <span>{% trans "No API access" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"
+                            ></path>
+                        </svg>
+                        <span>{% trans "No Custom Survey Themes/Icons" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"
+                            ></path>
+                        </svg>
+                        <span class="text-base-content"
+                            >{% trans "No collaboration" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"
+                            ></path>
+                        </svg>
+                        <span class="text-base-content"
+                            >{% trans "No patient data templates (all surveys
+                            encrypted)" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"
+                            ></path>
+                        </svg>
+                        <span class="text-base-content"
+                            >{% trans "3 survey limit enforced" %}</span
+                        >
+                    </li>
+                </ul>
+
+                <div class="card-actions mt-6">
+                    {% if user.is_authenticated %} {% if
+                    user.profile.account_tier == 'free' %}
+                    <div class="badge badge-success w-full p-4">
+                        {% trans "Current Plan" %}
+                    </div>
+                    {% else %}
+                    <a
+                        href="{% url 'core:subscription_portal' %}"
+                        class="btn btn-outline btn-block"
+                        >{% trans "Manage Subscription" %}</a
+                    >
+                    {% endif %} {% else %}
+                    <a href="/signup/" class="btn btn-outline btn-block"
+                        >{% trans "Get Started" %}</a
+                    >
+                    {% endif %}
+                </div>
+            </div>
         </div>
 
-        <div class="divider"></div>
+        <!-- Individual Unlimited -->
+        <div
+            class="card bg-base-100 shadow-xl border-2 border-primary relative"
+        >
+            <div
+                class="badge badge-primary absolute -top-3 left-1/2 -translate-x-1/2"
+            >
+                {% trans "Popular" %}
+            </div>
+            <div class="card-body">
+                <h2 class="card-title text-2xl mb-2">
+                    {% trans "Individual Pro" %}
+                </h2>
+                <div class="mb-4">
+                    <span class="text-3xl font-bold"
+                        >{{ tier_display.pro }}</span
+                    >
+                    <span class="text-base-content">/{% trans "month" %}</span>
+                    <p class="text-sm text-base-content">
+                        {% trans "Unlimited surveys" %}
+                    </p>
+                    <p class="text-xs text-base-content">
+                        {% trans "inc. VAT" %}
+                    </p>
+                    {% if promotions_by_tier.pro %}
+                    <p class="text-xs text-warning mt-1">
+                        {{ promotions_by_tier.pro.short_text }}{% if
+                        promotions_by_tier.pro.ends_at %} · {% trans "ends" %}
+                        {{ promotions_by_tier.pro.ends_at|date:'d M' }}{% endif
+                        %}
+                    </p>
+                    {% endif %}
+                </div>
 
-        <ul class="space-y-3 grow">
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span class="font-semibold">{% trans "Unlimited active surveys" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Everything in Individual" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span class="font-semibold">{% trans "Patient data templates (NHS numbers, clinical data)" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Advanced survey features" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span class="font-semibold">{% trans "API Access" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span class="font-semibold">{% trans "Per survey theming" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span class="font-semibold">{% trans "Priority email support" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-            <span class="text-base-content">{% trans "No team collaboration" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-            <span class="text-base-content">{% trans "No custom platform branding" %}</span>
-          </li>
-        </ul>
+                <div class="divider"></div>
 
-        <div class="card-actions mt-6">
-          {% if user.is_authenticated and not self_hosted %}
-            {% if user.profile.account_tier == 'pro' %}
-              <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
-            {% elif user.profile.account_tier == 'free' %}
-              <form method="post" action="{% url 'core:start_checkout' %}">
-                {% csrf_token %}
-                <input type="hidden" name="tier" value="pro">
-                <button type="submit" class="btn btn-primary btn-block">
-                  {% trans "Subscribe Now" %}
-                </button>
-              </form>
-            {% else %}
-              <a href="{% url 'core:subscription_portal' %}" class="btn btn-outline btn-block">{% trans "Manage Subscription" %}</a>
-            {% endif %}
-          {% elif not user.is_authenticated %}
-            <a href="/signup/" class="btn btn-primary btn-block">{% trans "Get Started" %}</a>
-          {% endif %}
+                <ul class="space-y-3 grow">
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span class="font-semibold"
+                            >{% trans "Unlimited active surveys" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Everything in Individual" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span class="font-semibold"
+                            >{% trans "Patient data templates (NHS numbers,
+                            clinical data)" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Advanced survey features" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span class="font-semibold"
+                            >{% trans "API Access" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span class="font-semibold"
+                            >{% trans "Per survey theming" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span class="font-semibold"
+                            >{% trans "Priority email support" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"
+                            ></path>
+                        </svg>
+                        <span class="text-base-content"
+                            >{% trans "No team collaboration" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-base-content/30 shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"
+                            ></path>
+                        </svg>
+                        <span class="text-base-content"
+                            >{% trans "No custom platform branding" %}</span
+                        >
+                    </li>
+                </ul>
+
+                <div class="card-actions mt-6">
+                    {% if user.is_authenticated and not self_hosted %} {% if
+                    user.profile.account_tier == 'pro' %}
+                    <div class="badge badge-success w-full p-4">
+                        {% trans "Current Plan" %}
+                    </div>
+                    {% elif user.profile.account_tier == 'free' %}
+                    <form
+                        method="post"
+                        action="{% url 'core:start_checkout' %}"
+                    >
+                        {% csrf_token %}
+                        <input type="hidden" name="tier" value="pro" />
+                        <button type="submit" class="btn btn-primary btn-block">
+                            {% trans "Subscribe Now" %}
+                        </button>
+                    </form>
+                    {% else %}
+                    <a
+                        href="{% url 'core:subscription_portal' %}"
+                        class="btn btn-outline btn-block"
+                        >{% trans "Manage Subscription" %}</a
+                    >
+                    {% endif %} {% elif not user.is_authenticated %}
+                    <a href="/signup/" class="btn btn-primary btn-block"
+                        >{% trans "Get Started" %}</a
+                    >
+                    {% endif %}
+                </div>
+            </div>
         </div>
-      </div>
+
+        <!-- Team Plans (Combined Card) -->
+        <div class="card bg-base-100 shadow-xl border-2 border-primary">
+            <div class="card-body">
+                <div
+                    class="badge badge-primary absolute -top-3 left-1/2 -translate-x-1/2"
+                >
+                    {% trans "Most Popular" %}
+                </div>
+                <h2 class="card-title text-2xl mb-2">{% trans "Team" %}</h2>
+
+                {# Team Size Selector #}
+                <div class="form-control mb-4">
+                    <label for="team-size-selector" class="label">
+                        <span class="label-text font-semibold"
+                            >{% trans "Select team size:" %}</span
+                        >
+                    </label>
+                    <select
+                        id="team-size-selector"
+                        class="select select-bordered w-full"
+                    >
+                        <option
+                            value="team_small"
+                            data-price="{{ tier_pounds.team_small }}"
+                            data-members="{{ subscription_tiers.team_small.max_members }}"
+                            data-price-id="{{ price_ids.team_small }}"
+                        >
+                            {% trans "Small" %} - {{
+                            subscription_tiers.team_small.max_members }} {%
+                            trans "members" %} - {{ tier_display.team_small
+                            }}/{% trans "month" %} {% if
+                            promotions_by_tier.team_small %} - {{
+                            promotions_by_tier.team_small.short_text }}{% endif
+                            %}
+                        </option>
+                        <option
+                            value="team_medium"
+                            data-price="{{ tier_pounds.team_medium }}"
+                            data-members="{{ subscription_tiers.team_medium.max_members }}"
+                            data-price-id="{{ price_ids.team_medium }}"
+                        >
+                            {% trans "Medium" %} - {{
+                            subscription_tiers.team_medium.max_members }} {%
+                            trans "members" %} - {{ tier_display.team_medium
+                            }}/{% trans "month" %} {% if
+                            promotions_by_tier.team_medium %} - {{
+                            promotions_by_tier.team_medium.short_text }}{% endif
+                            %}
+                        </option>
+                        <option
+                            value="team_large"
+                            data-price="{{ tier_pounds.team_large }}"
+                            data-members="{{ subscription_tiers.team_large.max_members }}"
+                            data-price-id="{{ price_ids.team_large }}"
+                        >
+                            {% trans "Large" %} - {{
+                            subscription_tiers.team_large.max_members }} {%
+                            trans "members" %} - {{ tier_display.team_large
+                            }}/{% trans "month" %} {% if
+                            promotions_by_tier.team_large %} - {{
+                            promotions_by_tier.team_large.short_text }}{% endif
+                            %}
+                        </option>
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <span class="text-3xl font-bold" id="team-price-display"
+                        >{{ tier_display.team_small }}</span
+                    >
+                    <span class="text-base-content">/{% trans "month" %}</span>
+                    <p
+                        class="text-sm text-base-content"
+                        id="team-members-display"
+                    >
+                        {% trans "Up to" %} 5 {% trans "team members" %}
+                    </p>
+                    <p class="text-xs text-base-content">
+                        {% trans "inc. VAT" %}
+                    </p>
+                    {% if promotions_by_tier.team_small or
+                    promotions_by_tier.team_medium or
+                    promotions_by_tier.team_large %}
+                    <p class="text-xs text-warning mt-1">
+                        {% if promotions_by_tier.team_small %}{% trans "Small"
+                        %}: {{ promotions_by_tier.team_small.short_text }}{%
+                        endif %} {% if promotions_by_tier.team_medium %} · {%
+                        trans "Medium" %}: {{
+                        promotions_by_tier.team_medium.short_text }}{% endif %}
+                        {% if promotions_by_tier.team_large %} · {% trans
+                        "Large" %}: {{ promotions_by_tier.team_large.short_text
+                        }}{% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+
+                <div class="divider"></div>
+
+                <ul class="space-y-3 grow">
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Everything in Individual Pro" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span class="font-semibold"
+                            >{% trans "Up to 50 active surveys" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span class="font-semibold"
+                            >{% trans "Full team collaboration" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span
+                            >{% trans "Viewer role (read-only access)" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span
+                            >{% trans "Unlimited collaborators per survey"
+                            %}</span
+                        >
+                    </li>
+                </ul>
+
+                <div class="card-actions mt-6">
+                    {% if user.is_authenticated and not self_hosted %} {% if
+                    user.profile.account_tier in
+                    'team_small,team_medium,team_large' %}
+                    <div class="badge badge-success w-full p-4">
+                        {% trans "Current Plan" %}
+                    </div>
+                    {% else %}
+                    <form
+                        method="post"
+                        action="{% url 'core:start_checkout' %}"
+                        id="team-checkout-form"
+                    >
+                        {% csrf_token %}
+                        <input
+                            type="hidden"
+                            name="tier"
+                            value="team_small"
+                            id="team-tier-input"
+                        />
+                        <button
+                            type="submit"
+                            class="btn btn-primary btn-block"
+                            id="team-checkout-btn"
+                        >
+                            {% trans "Subscribe Now" %}
+                        </button>
+                    </form>
+                    {% endif %} {% elif not user.is_authenticated %}
+                    <a href="/signup/" class="btn btn-primary btn-block"
+                        >{% trans "Get Started" %}</a
+                    >
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Organisation -->
+        <div class="card bg-base-100 shadow-xl border border-base-300">
+            <div class="card-body">
+                <h2 class="card-title text-2xl mb-2">
+                    {% trans "Organisation" %}
+                </h2>
+                <div class="mb-4">
+                    <span class="text-3xl font-bold">{% trans "Custom" %}</span>
+                    <p class="text-sm text-base-content">
+                        {% trans "Per-user pricing" %}
+                    </p>
+                </div>
+
+                <div class="divider"></div>
+
+                <ul class="space-y-3 grow">
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Everything in Team plans" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span class="font-semibold"
+                            >{% trans "Unlimited team members" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span class="font-semibold"
+                            >{% trans "Unlimited surveys" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Organisation-level encryption" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span
+                            >{% trans "Webhooks & advanced integrations"
+                            %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Priority support" %}</span>
+                    </li>
+                </ul>
+
+                <div class="card-actions mt-6">
+                    <a
+                        href="mailto:hello@checktick.com?subject=Organisation%20Plan%20Enquiry"
+                        class="btn btn-secondary btn-block"
+                    >
+                        <svg
+                            class="w-5 h-5 mr-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                            ></path>
+                        </svg>
+                        {% trans "Contact Sales" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Enterprise (Self-Hosted) -->
+        <div class="card bg-base-100 shadow-xl border border-base-300">
+            <div class="card-body">
+                <h2 class="card-title text-2xl mb-2">
+                    {% trans "Enterprise" %}
+                </h2>
+                <div class="mb-4">
+                    <span class="text-3xl font-bold"
+                        >{% trans "Self-Hosted" %}</span
+                    >
+                    <p class="text-sm text-base-content">
+                        {% trans "Your infrastructure" %}
+                    </p>
+                </div>
+
+                <div class="divider"></div>
+
+                <ul class="space-y-3 grow">
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Everything in Organisation" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span class="font-semibold"
+                            >{% trans "Complete data control" %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Host on your servers" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span class="font-semibold"
+                            >{% trans "Custom branding (logo, themes, fonts)"
+                            %}</span
+                        >
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "SSO/OIDC integration" %}</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg
+                            class="w-5 h-5 text-success shrink-0 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"
+                            ></path>
+                        </svg>
+                        <span>{% trans "Dedicated support & SLA" %}</span>
+                    </li>
+                </ul>
+
+                <div class="card-actions mt-6">
+                    <a
+                        href="mailto:hello@checktick.com?subject=Enterprise%20Plan%20Enquiry"
+                        class="btn btn-secondary btn-block"
+                    >
+                        <svg
+                            class="w-5 h-5 mr-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                            ></path>
+                        </svg>
+                        {% trans "Contact Sales" %}
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Team Plans (Combined Card) -->
-    <div class="card bg-base-100 shadow-xl border-2 border-primary">
-      <div class="card-body">
-        <div class="badge badge-primary mb-2">{% trans "Most Popular" %}</div>
-        <h2 class="card-title text-2xl mb-2">{% trans "Team" %}</h2>
-
-        {# Team Size Selector #}
-        <div class="form-control mb-4">
-          <label for="team-size-selector" class="label">
-            <span class="label-text font-semibold">{% trans "Select team size:" %}</span>
-          </label>
-          <select id="team-size-selector" class="select select-bordered w-full">
-            <option value="team_small" data-price="{{ tier_pounds.team_small }}" data-members="{{ subscription_tiers.team_small.max_members }}" data-price-id="{{ price_ids.team_small }}">
-              {% trans "Small" %} - {{ subscription_tiers.team_small.max_members }} {% trans "members" %} - {{ tier_display.team_small }}/{% trans "month" %}
-              {% if promotions_by_tier.team_small %} - {{ promotions_by_tier.team_small.short_text }}{% endif %}
-            </option>
-            <option value="team_medium" data-price="{{ tier_pounds.team_medium }}" data-members="{{ subscription_tiers.team_medium.max_members }}" data-price-id="{{ price_ids.team_medium }}">
-              {% trans "Medium" %} - {{ subscription_tiers.team_medium.max_members }} {% trans "members" %} - {{ tier_display.team_medium }}/{% trans "month" %}
-              {% if promotions_by_tier.team_medium %} - {{ promotions_by_tier.team_medium.short_text }}{% endif %}
-            </option>
-            <option value="team_large" data-price="{{ tier_pounds.team_large }}" data-members="{{ subscription_tiers.team_large.max_members }}" data-price-id="{{ price_ids.team_large }}">
-              {% trans "Large" %} - {{ subscription_tiers.team_large.max_members }} {% trans "members" %} - {{ tier_display.team_large }}/{% trans "month" %}
-              {% if promotions_by_tier.team_large %} - {{ promotions_by_tier.team_large.short_text }}{% endif %}
-            </option>
-          </select>
-        </div>
-
-        <div class="mb-4">
-          <span class="text-3xl font-bold" id="team-price-display">{{ tier_display.team_small }}</span>
-          <span class="text-base-content">/{% trans "month" %}</span>
-          <p class="text-sm text-base-content" id="team-members-display">{% trans "Up to" %} 5 {% trans "team members" %}</p>
-          <p class="text-xs text-base-content">{% trans "inc. VAT" %}</p>
-          {% if promotions_by_tier.team_small or promotions_by_tier.team_medium or promotions_by_tier.team_large %}
-          <p class="text-xs text-warning mt-1">
-            {% if promotions_by_tier.team_small %}{% trans "Small" %}: {{ promotions_by_tier.team_small.short_text }}{% endif %}
-            {% if promotions_by_tier.team_medium %} · {% trans "Medium" %}: {{ promotions_by_tier.team_medium.short_text }}{% endif %}
-            {% if promotions_by_tier.team_large %} · {% trans "Large" %}: {{ promotions_by_tier.team_large.short_text }}{% endif %}
-          </p>
-          {% endif %}
-        </div>
-
-        <div class="divider"></div>
-
-        <ul class="space-y-3 grow">
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Everything in Individual Pro" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span class="font-semibold">{% trans "Up to 50 active surveys" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span class="font-semibold">{% trans "Full team collaboration" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Viewer role (read-only access)" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Unlimited collaborators per survey" %}</span>
-          </li>
-        </ul>
-
-        <div class="card-actions mt-6">
-          {% if user.is_authenticated and not self_hosted %}
-            {% if user.profile.account_tier in 'team_small,team_medium,team_large' %}
-              <div class="badge badge-success w-full p-4">{% trans "Current Plan" %}</div>
-            {% else %}
-              <form method="post" action="{% url 'core:start_checkout' %}" id="team-checkout-form">
-                {% csrf_token %}
-                <input type="hidden" name="tier" value="team_small" id="team-tier-input">
-                <button type="submit" class="btn btn-primary btn-block" id="team-checkout-btn">
-                  {% trans "Subscribe Now" %}
-                </button>
-              </form>
-            {% endif %}
-          {% elif not user.is_authenticated %}
-            <a href="/signup/" class="btn btn-primary btn-block">{% trans "Get Started" %}</a>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-    <!-- Organisation -->
-    <div class="card bg-base-100 shadow-xl border border-base-300">
-      <div class="card-body">
-        <h2 class="card-title text-2xl mb-2">{% trans "Organisation" %}</h2>
-        <div class="mb-4">
-          <span class="text-3xl font-bold">{% trans "Custom" %}</span>
-          <p class="text-sm text-base-content">{% trans "Per-user pricing" %}</p>
-        </div>
-
-        <div class="divider"></div>
-
-        <ul class="space-y-3 grow">
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Everything in Team plans" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span class="font-semibold">{% trans "Unlimited team members" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span class="font-semibold">{% trans "Unlimited surveys" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Organisation-level encryption" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Webhooks & advanced integrations" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Priority support" %}</span>
-          </li>
-        </ul>
-
-        <div class="card-actions mt-6">
-          <a href="mailto:hello@checktick.com?subject=Organisation%20Plan%20Enquiry" class="btn btn-secondary btn-block">
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-            </svg>
-            {% trans "Contact Sales" %}
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Enterprise (Self-Hosted) -->
-    <div class="card bg-base-100 shadow-xl border border-base-300">
-      <div class="card-body">
-        <h2 class="card-title text-2xl mb-2">{% trans "Enterprise" %}</h2>
-        <div class="mb-4">
-          <span class="text-3xl font-bold">{% trans "Self-Hosted" %}</span>
-          <p class="text-sm text-base-content">{% trans "Your infrastructure" %}</p>
-        </div>
-
-        <div class="divider"></div>
-
-        <ul class="space-y-3 grow">
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Everything in Organisation" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span class="font-semibold">{% trans "Complete data control" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Host on your servers" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span class="font-semibold">{% trans "Custom branding (logo, themes, fonts)" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "SSO/OIDC integration" %}</span>
-          </li>
-          <li class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>{% trans "Dedicated support & SLA" %}</span>
-          </li>
-        </ul>
-
-        <div class="card-actions mt-6">
-          <a href="mailto:hello@checktick.com?subject=Enterprise%20Plan%20Enquiry" class="btn btn-secondary btn-block">
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-            </svg>
-            {% trans "Contact Sales" %}
-          </a>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- Feature Comparison Table -->
-  <div class="card bg-base-100 shadow-xl mb-12">
-    <div class="card-body">
-      <h2 class="card-title text-2xl mb-6">{% trans "Detailed Feature Comparison" %}</h2>
-      <div class="overflow-x-auto">
-        <table class="table table-zebra">
-          <thead>
-            <tr>
-              <th>{% trans "Feature" %}</th>
-              <th class="text-center">{% trans "Individual" %}<br><span class="text-xs font-normal">(3 surveys)</span></th>
-              <th class="text-center">{% trans "Individual Pro" %}<br><span class="text-xs font-normal">(Unlimited)</span></th>
-              <th class="text-center">{% trans "Team Small" %}<br><span class="text-xs font-normal">(5 members)</span></th>
-              <th class="text-center">{% trans "Team Medium" %}<br><span class="text-xs font-normal">(10 members)</span></th>
-              <th class="text-center">{% trans "Team Large" %}<br><span class="text-xs font-normal">(20 members)</span></th>
-              <th class="text-center">{% trans "Enterprise" %}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="font-semibold">{% trans "Active Surveys" %}</td>
-              <td class="text-center">3</td>
-              <td class="text-center">∞</td>
-              <td class="text-center">50</td>
-              <td class="text-center">50</td>
-              <td class="text-center">50</td>
-              <td class="text-center">∞</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Responses per Survey" %}</td>
-              <td class="text-center">∞</td>
-              <td class="text-center">∞</td>
-              <td class="text-center">∞</td>
-              <td class="text-center">∞</td>
-              <td class="text-center">∞</td>
-              <td class="text-center">∞</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Data Export" %}</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "API Access" %}</td>
-              <td class="text-center">—</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Personal Encryption" %}</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Patient Data Templates" %}</td>
-              <td class="text-center">—</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Dataset Creation & Sharing" %}</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "AI-Assisted Survey Generator" %}</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Team Members" %}</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">5</td>
-              <td class="text-center">10</td>
-              <td class="text-center">20</td>
-              <td class="text-center">∞</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Team Collaboration" %}</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">✓ Full</td>
-              <td class="text-center">✓ Full</td>
-              <td class="text-center">✓ Full</td>
-              <td class="text-center">✓ Full</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Collaborators per Survey" %}</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">∞</td>
-              <td class="text-center">∞</td>
-              <td class="text-center">∞</td>
-              <td class="text-center">∞</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Viewer Role (Read-Only)" %}</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Role-Based Permissions" %}</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-              <td class="text-center">✓</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Organisation Encryption" %}</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">✓</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Audit Logs" %}</td>
-              <td class="text-center">Basic</td>
-              <td class="text-center">Basic</td>
-              <td class="text-center">Basic</td>
-              <td class="text-center">Basic</td>
-              <td class="text-center">Basic</td>
-              <td class="text-center">Advanced</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Self-Hosted Option" %}</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">✓</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Custom Branding" %}</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">✓ Platform Level</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "Branding Options" %}</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">Logo, Themes, Fonts</td>
-            </tr>
-            <tr>
-              <td class="font-semibold">{% trans "SSO/OIDC" %}</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">—</td>
-              <td class="text-center">✓</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- FAQ Section -->
-  <div class="mb-12">
-    <h2 class="text-3xl font-bold text-center mb-8">{% trans "Frequently Asked Questions" %}</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div class="card bg-base-100 shadow">
+    <!-- Feature Comparison Table -->
+    <div class="card bg-base-100 shadow-xl mb-12">
         <div class="card-body">
-          <h3 class="font-semibold text-lg">{% trans "Can I upgrade later?" %}</h3>
-          <p class="text-base-content">{% trans "Yes! You can upgrade from Individual to Individual Pro, or convert to an Organisation account at any time. Your existing surveys will be migrated automatically." %}</p>
+            <h2 class="card-title text-2xl mb-6">
+                {% trans "Detailed Feature Comparison" %}
+            </h2>
+            <div class="overflow-x-auto">
+                <table class="table table-zebra">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Feature" %}</th>
+                            <th class="text-center">
+                                {% trans "Individual" %}<br /><span
+                                    class="text-xs font-normal"
+                                    >(3 surveys)</span
+                                >
+                            </th>
+                            <th class="text-center">
+                                {% trans "Individual Pro" %}<br /><span
+                                    class="text-xs font-normal"
+                                    >(Unlimited)</span
+                                >
+                            </th>
+                            <th class="text-center">
+                                {% trans "Team Small" %}<br /><span
+                                    class="text-xs font-normal"
+                                    >(5 members)</span
+                                >
+                            </th>
+                            <th class="text-center">
+                                {% trans "Team Medium" %}<br /><span
+                                    class="text-xs font-normal"
+                                    >(10 members)</span
+                                >
+                            </th>
+                            <th class="text-center">
+                                {% trans "Team Large" %}<br /><span
+                                    class="text-xs font-normal"
+                                    >(20 members)</span
+                                >
+                            </th>
+                            <th class="text-center">
+                                {% trans "Enterprise" %}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Active Surveys" %}
+                            </td>
+                            <td class="text-center">3</td>
+                            <td class="text-center">∞</td>
+                            <td class="text-center">50</td>
+                            <td class="text-center">50</td>
+                            <td class="text-center">50</td>
+                            <td class="text-center">∞</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Responses per Survey" %}
+                            </td>
+                            <td class="text-center">∞</td>
+                            <td class="text-center">∞</td>
+                            <td class="text-center">∞</td>
+                            <td class="text-center">∞</td>
+                            <td class="text-center">∞</td>
+                            <td class="text-center">∞</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Data Export" %}
+                            </td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "API Access" %}
+                            </td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Personal Encryption" %}
+                            </td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Patient Data Templates" %}
+                            </td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Dataset Creation & Sharing" %}
+                            </td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "AI-Assisted Survey Generator" %}
+                            </td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Team Members" %}
+                            </td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">5</td>
+                            <td class="text-center">10</td>
+                            <td class="text-center">20</td>
+                            <td class="text-center">∞</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Team Collaboration" %}
+                            </td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">✓ Full</td>
+                            <td class="text-center">✓ Full</td>
+                            <td class="text-center">✓ Full</td>
+                            <td class="text-center">✓ Full</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Collaborators per Survey" %}
+                            </td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">∞</td>
+                            <td class="text-center">∞</td>
+                            <td class="text-center">∞</td>
+                            <td class="text-center">∞</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Viewer Role (Read-Only)" %}
+                            </td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Role-Based Permissions" %}
+                            </td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                            <td class="text-center">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Organisation Encryption" %}
+                            </td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Audit Logs" %}
+                            </td>
+                            <td class="text-center">Basic</td>
+                            <td class="text-center">Basic</td>
+                            <td class="text-center">Basic</td>
+                            <td class="text-center">Basic</td>
+                            <td class="text-center">Basic</td>
+                            <td class="text-center">Advanced</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Self-Hosted Option" %}
+                            </td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Custom Branding" %}
+                            </td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">✓ Platform Level</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "Branding Options" %}
+                            </td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">Logo, Themes, Fonts</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">
+                                {% trans "SSO/OIDC" %}
+                            </td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-center">✓</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
-      </div>
-
-      <div class="card bg-base-100 shadow">
-        <div class="card-body">
-          <h3 class="font-semibold text-lg">{% trans "Do you support NHS terminology and datasets?" %}</h3>
-          <p class="text-base-content">{% trans "Yes! CheckTick includes built-in support for NHS Data Dictionary datasets, including ethnicity codes, sex, gender identity, and other standardised healthcare terminology. You can also create custom datasets for your specific needs." %}</p>
-        </div>
-      </div>
-
-      <div class="card bg-base-100 shadow">
-        <div class="card-body">
-          <h3 class="font-semibold text-lg">{% trans "What's the difference between Individual and Individual Pro?" %}</h3>
-          <p class="text-base-content">{% trans "Individual (free) accounts can have up to 3 active surveys (all encrypted). Individual Pro removes the survey limit and adds patient data templates for collecting NHS numbers and clinical information. For team collaboration with multiple users, choose from our Team plans (5-20 members) or Organisation tier for larger teams with advanced features." %}</p>
-        </div>
-      </div>
-
-      <div class="card bg-base-100 shadow">
-        <div class="card-body">
-          <h3 class="font-semibold text-lg">{% trans "Is my data secure and safe?" %}</h3>
-          <p class="text-base-content">{% trans "Yes. All CheckTick surveys are encrypted by default using AES-256-GCM encryption. Every survey is protected before storage, and only you can decrypt it with your password or recovery phrase. The platform is designed specifically for healthcare research with privacy and security as core principles." %}</p>
-        </div>
-      </div>
     </div>
-  </div>
 
-  <!-- CTA Section -->
-  <div class="text-center bg-base-200 rounded-box p-8">
-    <h2 class="text-3xl font-bold mb-4">{% trans "Ready to get started?" %}</h2>
-    <p class="text-lg text-base-content mb-6 max-w-2xl mx-auto">
-      {% trans "Create your free account today and start building secure, privacy-focused surveys in minutes." %}
-    </p>
-    <div class="flex gap-4 justify-center flex-wrap">
-      <a href="/signup/" class="btn btn-primary btn-lg">{% trans "Create Free Account" %}</a>
-      <a href="{% url 'core:docs_page' slug='getting-started' %}" class="btn btn-outline btn-lg">{% trans "View Documentation" %}</a>
+    <!-- FAQ Section -->
+    <div class="mb-12">
+        <h2 class="text-3xl font-bold text-center mb-8">
+            {% trans "Frequently Asked Questions" %}
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="card bg-base-100 shadow">
+                <div class="card-body">
+                    <h3 class="font-semibold text-lg">
+                        {% trans "Can I upgrade later?" %}
+                    </h3>
+                    <p class="text-base-content">
+                        {% trans "Yes! You can upgrade from Individual to
+                        Individual Pro, or convert to an Organisation account at
+                        any time. Your existing surveys will be migrated
+                        automatically." %}
+                    </p>
+                </div>
+            </div>
+
+            <div class="card bg-base-100 shadow">
+                <div class="card-body">
+                    <h3 class="font-semibold text-lg">
+                        {% trans "Do you support NHS terminology and datasets?"
+                        %}
+                    </h3>
+                    <p class="text-base-content">
+                        {% trans "Yes! CheckTick includes built-in support for
+                        NHS Data Dictionary datasets, including ethnicity codes,
+                        sex, gender identity, and other standardised healthcare
+                        terminology. You can also create custom datasets for
+                        your specific needs." %}
+                    </p>
+                </div>
+            </div>
+
+            <div class="card bg-base-100 shadow">
+                <div class="card-body">
+                    <h3 class="font-semibold text-lg">
+                        {% trans "What's the difference between Individual and
+                        Individual Pro?" %}
+                    </h3>
+                    <p class="text-base-content">
+                        {% trans "Individual (free) accounts can have up to 3
+                        active surveys (all encrypted). Individual Pro removes
+                        the survey limit and adds patient data templates for
+                        collecting NHS numbers and clinical information. For
+                        team collaboration with multiple users, choose from our
+                        Team plans (5-20 members) or Organisation tier for
+                        larger teams with advanced features." %}
+                    </p>
+                </div>
+            </div>
+
+            <div class="card bg-base-100 shadow">
+                <div class="card-body">
+                    <h3 class="font-semibold text-lg">
+                        {% trans "Is my data secure and safe?" %}
+                    </h3>
+                    <p class="text-base-content">
+                        {% trans "Yes. All CheckTick surveys are encrypted by
+                        default using AES-256-GCM encryption. Every survey is
+                        protected before storage, and only you can decrypt it
+                        with your password or recovery phrase. The platform is
+                        designed specifically for healthcare research with
+                        privacy and security as core principles." %}
+                    </p>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
+
+    <!-- CTA Section -->
+    <div class="text-center bg-base-200 rounded-box p-8">
+        <h2 class="text-3xl font-bold mb-4">
+            {% trans "Ready to get started?" %}
+        </h2>
+        <p class="text-lg text-base-content mb-6 max-w-2xl mx-auto">
+            {% trans "Create your free account today and start building secure,
+            privacy-focused surveys in minutes." %}
+        </p>
+        <div class="flex gap-4 justify-center flex-wrap">
+            <a href="/signup/" class="btn btn-primary btn-lg"
+                >{% trans "Create Free Account" %}</a
+            >
+            <a
+                href="{% url 'core:docs_page' slug='getting-started' %}"
+                class="btn btn-outline btn-lg"
+                >{% trans "View Documentation" %}</a
+            >
+        </div>
+    </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
+{% endblock %} {% block extra_js %}
 <script nonce="{{ request.csp_nonce }}">
-document.addEventListener('DOMContentLoaded', function() {
-  // Team size selector functionality
-  const teamSelector = document.getElementById('team-size-selector');
-  const teamTierInput = document.getElementById('team-tier-input');
-  const teamPriceDisplay = document.getElementById('team-price-display');
-  const teamMembersDisplay = document.getElementById('team-members-display');
+    document.addEventListener("DOMContentLoaded", function () {
+        // Team size selector functionality
+        const teamSelector = document.getElementById("team-size-selector");
+        const teamTierInput = document.getElementById("team-tier-input");
+        const teamPriceDisplay = document.getElementById("team-price-display");
+        const teamMembersDisplay = document.getElementById(
+            "team-members-display",
+        );
 
-  if (teamSelector && teamTierInput) {
-    teamSelector.addEventListener('change', function() {
-      const selected = this.options[this.selectedIndex];
-      const tier = selected.value;
-      const price = selected.dataset.price;
-      const members = selected.dataset.members;
+        if (teamSelector && teamTierInput) {
+            teamSelector.addEventListener("change", function () {
+                const selected = this.options[this.selectedIndex];
+                const tier = selected.value;
+                const price = selected.dataset.price;
+                const members = selected.dataset.members;
 
-      // Update display
-      if (teamPriceDisplay) teamPriceDisplay.textContent = '£' + price;
-      if (teamMembersDisplay) teamMembersDisplay.textContent = 'Up to ' + members + ' team members';
+                // Update display
+                if (teamPriceDisplay)
+                    teamPriceDisplay.textContent = "£" + price;
+                if (teamMembersDisplay)
+                    teamMembersDisplay.textContent =
+                        "Up to " + members + " team members";
 
-      // Update hidden tier input for form submission
-      teamTierInput.value = tier;
-    });
-  }
-
-  // Auto-open checkout for users redirected from signup with a pending tier
-  const container = document.querySelector('[data-auto-open-checkout]');
-  if (container && container.dataset.autoOpenCheckout === 'true') {
-    const pendingTier = container.dataset.pendingTier;
-    if (pendingTier) {
-      // Find the appropriate form and submit it
-      let formToSubmit = null;
-
-      if (pendingTier === 'pro') {
-        // Find the Pro tier form (has hidden input with value="pro")
-        const proForms = document.querySelectorAll('form input[name="tier"][value="pro"]');
-        if (proForms.length > 0) {
-          formToSubmit = proForms[0].closest('form');
+                // Update hidden tier input for form submission
+                teamTierInput.value = tier;
+            });
         }
-      } else if (pendingTier.startsWith('team_')) {
-        // Set the team selector to the correct tier and submit
-        const teamForm = document.getElementById('team-checkout-form');
-        if (teamForm && teamSelector && teamTierInput) {
-          // Select the correct team size
-          for (let i = 0; i < teamSelector.options.length; i++) {
-            if (teamSelector.options[i].value === pendingTier) {
-              teamSelector.selectedIndex = i;
-              teamTierInput.value = pendingTier;
-              break;
+
+        // Auto-open checkout for users redirected from signup with a pending tier
+        const container = document.querySelector("[data-auto-open-checkout]");
+        if (container && container.dataset.autoOpenCheckout === "true") {
+            const pendingTier = container.dataset.pendingTier;
+            if (pendingTier) {
+                // Find the appropriate form and submit it
+                let formToSubmit = null;
+
+                if (pendingTier === "pro") {
+                    // Find the Pro tier form (has hidden input with value="pro")
+                    const proForms = document.querySelectorAll(
+                        'form input[name="tier"][value="pro"]',
+                    );
+                    if (proForms.length > 0) {
+                        formToSubmit = proForms[0].closest("form");
+                    }
+                } else if (pendingTier.startsWith("team_")) {
+                    // Set the team selector to the correct tier and submit
+                    const teamForm =
+                        document.getElementById("team-checkout-form");
+                    if (teamForm && teamSelector && teamTierInput) {
+                        // Select the correct team size
+                        for (let i = 0; i < teamSelector.options.length; i++) {
+                            if (teamSelector.options[i].value === pendingTier) {
+                                teamSelector.selectedIndex = i;
+                                teamTierInput.value = pendingTier;
+                                break;
+                            }
+                        }
+                        formToSubmit = teamForm;
+                    }
+                }
+
+                // Auto-submit after a brief delay to let user see the page
+                if (formToSubmit) {
+                    setTimeout(function () {
+                        formToSubmit.submit();
+                    }, 500);
+                }
             }
-          }
-          formToSubmit = teamForm;
         }
-      }
-
-      // Auto-submit after a brief delay to let user see the page
-      if (formToSubmit) {
-        setTimeout(function() {
-          formToSubmit.submit();
-        }, 500);
-      }
-    }
-  }
-});
+    });
 </script>
 {% endblock %}
