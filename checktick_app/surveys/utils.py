@@ -1,14 +1,40 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import os
 import secrets
-from typing import Tuple
+from typing import Optional, Tuple
 
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime as _parse_datetime
+
+
+def parse_datetime_aware(value: Optional[str]) -> Optional[datetime]:
+    """
+    Parse a datetime string from form input into a timezone-aware datetime.
+
+    Form fields submit values like ``2026-07-13T17:49`` with no offset, so
+    ``django.utils.dateparse.parse_datetime`` returns a naive datetime, which
+    triggers ``RuntimeWarning: DateTimeField received a naive datetime`` when
+    ``USE_TZ`` is active. This helper localizes naive results to the current
+    timezone so they can be safely assigned to model fields.
+
+    Returns ``None`` if ``value`` is falsy or unparseable.
+    """
+    if not value:
+        return None
+    parsed = _parse_datetime(value)
+    if parsed is None:
+        return None
+    if timezone.is_naive(parsed):
+        parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+    return parsed
+
 
 # BIP39 English word list (first 100 words for brevity - full list has 2048)
 # In production, use the complete BIP39 wordlist

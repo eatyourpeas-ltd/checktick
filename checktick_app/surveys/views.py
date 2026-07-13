@@ -79,7 +79,7 @@ from .permissions import (
     require_can_edit_dataset,
     require_can_view,
 )
-from .utils import verify_key
+from .utils import parse_datetime_aware, verify_key
 
 logger = logging.getLogger(__name__)
 
@@ -2665,10 +2665,8 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
         invite_emails = request.POST.get("invite_emails", "").strip()
 
         # Parse dates
-        from django.utils.dateparse import parse_datetime
-
-        start_at = parse_datetime(start_at_str) if start_at_str else None
-        end_at = parse_datetime(end_at_str) if end_at_str else None
+        start_at = parse_datetime_aware(start_at_str)
+        end_at = parse_datetime_aware(end_at_str)
 
         if max_responses:
             try:
@@ -3571,12 +3569,10 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
     )
 
     # Coerce types
-    from django.utils.dateparse import parse_datetime
-
     if start_at:
-        start_at = parse_datetime(start_at)
+        start_at = parse_datetime_aware(start_at)
     if end_at:
-        end_at = parse_datetime(end_at)
+        end_at = parse_datetime_aware(end_at)
     if max_responses:
         try:
             max_responses = int(max_responses)
@@ -4016,15 +4012,13 @@ def _apply_pending_publish_settings(survey: Survey, pending: dict) -> None:
     Helper function to apply pending publish settings to a survey.
     Used by survey_encryption_setup after encryption is configured.
     """
-    from django.utils.dateparse import parse_datetime
-
     # Set status to PUBLISHED (this is a publish action)
     survey.status = Survey.Status.PUBLISHED
     survey.visibility = pending.get("visibility", survey.visibility)
     start_at_str = pending.get("start_at")
     end_at_str = pending.get("end_at")
-    survey.start_at = parse_datetime(start_at_str) if start_at_str else None
-    survey.end_at = parse_datetime(end_at_str) if end_at_str else None
+    survey.start_at = parse_datetime_aware(start_at_str)
+    survey.end_at = parse_datetime_aware(end_at_str)
     survey.max_responses = pending.get("max_responses")
     survey.captcha_required = pending.get("captcha_required", False)
     survey.no_patient_data_ack = pending.get("no_patient_data_ack", False)
@@ -4488,10 +4482,9 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
         except ValueError:
             count = 0
         note = (request.POST.get("note") or "").strip()
-        from django.utils.dateparse import parse_datetime
 
         expires_raw = request.POST.get("expires_at")
-        expires_at = parse_datetime(expires_raw) if expires_raw else None
+        expires_at = parse_datetime_aware(expires_raw)
         created = []
         for _ in range(max(0, min(count, 1000))):
             t = SurveyAccessToken(

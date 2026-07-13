@@ -4,6 +4,22 @@ import logging
 from django.utils import timezone
 
 
+class VerboseFormatter(logging.Formatter):
+    """
+    Human-readable formatter for local dev console output.
+
+    Defaults request_id / user_id / remote_addr to None on the record before
+    formatting so the format string never raises KeyError, even if a handler
+    is configured without LoggingContextFilter (e.g. early startup logs).
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        for attr in ("request_id", "user_id", "remote_addr"):
+            if not hasattr(record, attr):
+                setattr(record, attr, None)
+        return super().format(record)
+
+
 class JSONFormatter(logging.Formatter):
     def format(self, record):
         payload = {

@@ -1,12 +1,25 @@
 import os
 from pathlib import Path
 import sys
+import warnings
 
 from csp.constants import NONCE as CSP_NONCE
 import environ
 
 # Detect if running tests
 TESTING = "pytest" in sys.modules or "test" in sys.argv
+
+# Silence the RemovedInDjango60Warning that Django 5.x emits whenever the
+# FORMS_URLFIELD_ASSUME_HTTPS transitional setting is explicitly set. We keep
+# the setting True so that forms.URLField assumes HTTPS (matching production
+# behaviour behind Northflank) without per-field assume_scheme kwargs. The
+# setting and this warning both go away in Django 6.0, at which point HTTPS
+# becomes the unconditional default and this filter can be removed.
+warnings.filterwarnings(
+    "ignore",
+    message=r"The FORMS_URLFIELD_ASSUME_HTTPS transitional setting is deprecated\.",
+    category=DeprecationWarning,
+)
 
 env = environ.Env(
     DEBUG=(bool, False),
@@ -436,8 +449,10 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 
 # Forms configuration
-# Set default URL scheme to HTTPS for Django 6.0+ compatibility
-# Always True to silence Django 6.0 deprecation warnings and enforce HTTPS assumption
+# Opt into HTTPS as the assumed scheme for forms.URLField. Without this,
+# Django 5.x warns on every URLField instantiation and defaults to http.
+# The setting is removed in Django 6.0 (HTTPS becomes unconditional); the
+# deprecation warning for setting it is silenced via the filter above.
 FORMS_URLFIELD_ASSUME_HTTPS = True
 
 # When running behind a reverse proxy (e.g., Northflank), trust forwarded proto/host
@@ -698,6 +713,7 @@ LOGGING = {
             "()": "checktick_app.core.logging.json_formatter.JSONFormatter",
         },
         "verbose": {
+            "()": "checktick_app.core.logging.json_formatter.VerboseFormatter",
             "format": "[{levelname}] {asctime} [RID:{request_id}] "
             "[UID:{user_id}] [IP:{remote_addr}] {name} {message}",
             "style": "{",
@@ -710,7 +726,9 @@ LOGGING = {
         #
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "json",
+            # JSON for production (OpenObserve ingests stdout); readable
+            # lines for local dev so the console isn't a wall of JSON.
+            "formatter": "verbose" if DEBUG else "json",
             "filters": [
                 "context_filter",
                 "redaction_filter",
