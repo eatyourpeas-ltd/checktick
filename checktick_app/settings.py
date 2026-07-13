@@ -1,9 +1,9 @@
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
-from csp.constants import NONCE as CSP_NONCE
 import environ
+from csp.constants import NONCE as CSP_NONCE
 
 # Detect if running tests
 TESTING = "pytest" in sys.modules or "test" in sys.argv
@@ -698,6 +698,7 @@ LOGGING = {
             "()": "checktick_app.core.logging.json_formatter.JSONFormatter",
         },
         "verbose": {
+            "()": "checktick_app.core.logging.json_formatter.VerboseFormatter",
             "format": "[{levelname}] {asctime} [RID:{request_id}] "
             "[UID:{user_id}] [IP:{remote_addr}] {name} {message}",
             "style": "{",
@@ -710,7 +711,9 @@ LOGGING = {
         #
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "json",
+            # JSON for production (OpenObserve ingests stdout); readable
+            # lines for local dev so the console isn't a wall of JSON.
+            "formatter": "verbose" if DEBUG else "json",
             "filters": [
                 "context_filter",
                 "redaction_filter",
