@@ -7,8 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl nodejs npm gettext && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip to fix CVE-2026-1703 (path traversal vulnerability)
-RUN pip install --no-cache-dir --upgrade pip>=26.0
+# pip is pinned in pyproject.toml/lockfile (single source of truth) and installed by `poetry install`
 RUN pip install --no-cache-dir poetry==${POETRY_VERSION}
 
 # Install sct binary (SNOMED CT toolchain) — pre-built release, no Rust needed
