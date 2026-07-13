@@ -2,20 +2,8 @@
 trans "Pricing" %} - {{ brand.title }}{% endblock %} {% block content %}
 <div
     class="container mx-auto px-4 py-8 max-w-7xl"
-    {%
-    if
-    auto_open_checkout
-    %}data-auto-open-checkout="true"
-    {%
-    endif
-    %}
-    {%
-    if
-    pending_tier
-    %}data-pending-tier="{{ pending_tier }}"
-    {%
-    endif
-    %}
+    {% if auto_open_checkout %}data-auto-open-checkout="true"{% endif %}
+    {% if pending_tier %}data-pending-tier="{{ pending_tier }}"{% endif%}
 >
     <!-- Header -->
     <div class="text-center mb-12">
@@ -251,8 +239,7 @@ trans "Pricing" %} - {{ brand.title }}{% endblock %} {% block content %}
                 </ul>
 
                 <div class="card-actions mt-6">
-                    {% if user.is_authenticated %} {% if
-                    user.profile.account_tier == 'free' %}
+                    {% if user.is_authenticated %} {% if user.profile.account_tier == 'free' %}
                     <div class="badge badge-success w-full p-4">
                         {% trans "Current Plan" %}
                     </div>
@@ -470,8 +457,7 @@ trans "Pricing" %} - {{ brand.title }}{% endblock %} {% block content %}
                 </ul>
 
                 <div class="card-actions mt-6">
-                    {% if user.is_authenticated and not self_hosted %} {% if
-                    user.profile.account_tier == 'pro' %}
+                    {% if user.is_authenticated and not self_hosted %} {% if user.profile.account_tier == 'pro' %}
                     <div class="badge badge-success w-full p-4">
                         {% trans "Current Plan" %}
                     </div>
@@ -528,13 +514,7 @@ trans "Pricing" %} - {{ brand.title }}{% endblock %} {% block content %}
                             data-members="{{ subscription_tiers.team_small.max_members }}"
                             data-price-id="{{ price_ids.team_small }}"
                         >
-                            {% trans "Small" %} - {{
-                            subscription_tiers.team_small.max_members }} {%
-                            trans "members" %} - {{ tier_display.team_small
-                            }}/{% trans "month" %} {% if
-                            promotions_by_tier.team_small %} - {{
-                            promotions_by_tier.team_small.short_text }}{% endif
-                            %}
+                            {% trans "Small" %} - {{ subscription_tiers.team_small.max_members }} {% trans "members" %}
                         </option>
                         <option
                             value="team_medium"
@@ -542,13 +522,7 @@ trans "Pricing" %} - {{ brand.title }}{% endblock %} {% block content %}
                             data-members="{{ subscription_tiers.team_medium.max_members }}"
                             data-price-id="{{ price_ids.team_medium }}"
                         >
-                            {% trans "Medium" %} - {{
-                            subscription_tiers.team_medium.max_members }} {%
-                            trans "members" %} - {{ tier_display.team_medium
-                            }}/{% trans "month" %} {% if
-                            promotions_by_tier.team_medium %} - {{
-                            promotions_by_tier.team_medium.short_text }}{% endif
-                            %}
+                            {% trans "Medium" %} - {{ subscription_tiers.team_medium.max_members }} {% trans "members" %}
                         </option>
                         <option
                             value="team_large"
@@ -556,13 +530,7 @@ trans "Pricing" %} - {{ brand.title }}{% endblock %} {% block content %}
                             data-members="{{ subscription_tiers.team_large.max_members }}"
                             data-price-id="{{ price_ids.team_large }}"
                         >
-                            {% trans "Large" %} - {{
-                            subscription_tiers.team_large.max_members }} {%
-                            trans "members" %} - {{ tier_display.team_large
-                            }}/{% trans "month" %} {% if
-                            promotions_by_tier.team_large %} - {{
-                            promotions_by_tier.team_large.short_text }}{% endif
-                            %}
+                            {% trans "Large" %} - {{ subscription_tiers.team_large.max_members }} {% trans "members" %}
                         </option>
                     </select>
                 </div>
@@ -581,18 +549,11 @@ trans "Pricing" %} - {{ brand.title }}{% endblock %} {% block content %}
                     <p class="text-xs text-base-content">
                         {% trans "inc. VAT" %}
                     </p>
-                    {% if promotions_by_tier.team_small or
-                    promotions_by_tier.team_medium or
-                    promotions_by_tier.team_large %}
+                    {% if promotions_by_tier.team_small or promotions_by_tier.team_medium or promotions_by_tier.team_large %}
                     <p class="text-xs text-warning mt-1">
-                        {% if promotions_by_tier.team_small %}{% trans "Small"
-                        %}: {{ promotions_by_tier.team_small.short_text }}{%
-                        endif %} {% if promotions_by_tier.team_medium %} · {%
-                        trans "Medium" %}: {{
-                        promotions_by_tier.team_medium.short_text }}{% endif %}
-                        {% if promotions_by_tier.team_large %} · {% trans
-                        "Large" %}: {{ promotions_by_tier.team_large.short_text
-                        }}{% endif %}
+                        {% if promotions_by_tier.team_small %}{% trans "Small"%}: {{ promotions_by_tier.team_small.short_text }}{% endif %}
+                        {% if promotions_by_tier.team_medium %} · {%trans "Medium" %}: {{ promotions_by_tier.team_medium.short_text }}{% endif %}
+                        {% if promotions_by_tier.team_large %} · {% trans "Large" %}: {{ promotions_by_tier.team_large.short_text }}{% endif %}
                     </p>
                     {% endif %}
                 </div>
@@ -692,9 +653,8 @@ trans "Pricing" %} - {{ brand.title }}{% endblock %} {% block content %}
                 </ul>
 
                 <div class="card-actions mt-6">
-                    {% if user.is_authenticated and not self_hosted %} {% if
-                    user.profile.account_tier in
-                    'team_small,team_medium,team_large' %}
+                    {% if user.is_authenticated and not self_hosted %}
+                        {% if user.profile.account_tier in 'team_small,team_medium,team_large' %}
                     <div class="badge badge-success w-full p-4">
                         {% trans "Current Plan" %}
                     </div>
@@ -1388,7 +1348,7 @@ trans "Pricing" %} - {{ brand.title }}{% endblock %} {% block content %}
             "team-members-display",
         );
 
-        if (teamSelector && teamTierInput) {
+        if (teamSelector) {
             teamSelector.addEventListener("change", function () {
                 const selected = this.options[this.selectedIndex];
                 const tier = selected.value;
@@ -1403,7 +1363,7 @@ trans "Pricing" %} - {{ brand.title }}{% endblock %} {% block content %}
                         "Up to " + members + " team members";
 
                 // Update hidden tier input for form submission
-                teamTierInput.value = tier;
+                if (teamTierInput) teamTierInput.value = tier;
             });
         }
 
