@@ -12,9 +12,7 @@
     <div class="text-center mb-12">
         <h1 class="text-4xl font-bold mb-4">{% trans "Choose Your Plan" %}</h1>
         <p class="text-lg text-base-content max-w-2xl mx-auto">
-            {% trans "CheckTick is a secure, privacy-focused survey platform
-            designed for healthcare research, clinical audits, and quality
-            improvement projects." %}
+            {% trans "CheckTick is a secure, privacy-focused survey platform designed for healthcare research, clinical audits, and quality improvement projects." %}
         </p>
         {% if active_public_promotions %}
         <div
@@ -22,10 +20,9 @@
         >
             <span class="font-semibold">{% trans "Active offers:" %}</span>
             <span>
-                {% for promo in active_public_promotions %} {{ promo.short_text
-                }}{% if promo.ends_at %} · {% trans "ends" %} {{
-                promo.ends_at|date:'d M' }}{% endif %}{% if not forloop.last %}
-                · {% endif %} {% endfor %}
+                {% for promo in active_public_promotions %} {{ promo.short_text }}
+                {% if promo.ends_at %} · {% trans "ends" %} {{ promo.ends_at|date:'d M' }}{% endif %}
+                {% if not forloop.last %}· {% endif %} {% endfor %}
             </span>
         </div>
         {% endif %}
