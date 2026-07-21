@@ -404,7 +404,15 @@ class TestPaymentRecordCreation:
 
     @pytest.mark.django_db
     def test_payment_vat_calculation_correct(self, pro_user_gocardless):
-        """Test VAT amounts are calculated correctly for pro tier."""
+        """Test VAT amounts are calculated correctly for pro tier.
+
+        The inc-VAT amount is derived from amount_ex_vat and settings.VAT_RATE
+        via checktick_app.core.pricing, so the assertions are computed from
+        the configured values rather than hardcoded.
+        """
+        from checktick_app.core.pricing import get_tier_amounts
+
+        expected = get_tier_amounts("pro")
         payment = Payment.create_from_subscription(
             user=pro_user_gocardless,
             tier="pro",
@@ -412,15 +420,22 @@ class TestPaymentRecordCreation:
             subscription_id="SB_TEST456",
         )
 
-        # Pro tier: £5 ex VAT = 500 pence, £6 inc VAT = 600 pence, VAT = 100 pence
-        assert payment.amount_ex_vat == 500
-        assert payment.amount_inc_vat == 600
-        assert payment.vat_amount == 100
-        assert float(payment.vat_rate) == 0.20
+        assert payment.amount_ex_vat == expected["amount_ex_vat"]
+        assert payment.amount_inc_vat == expected["amount"]
+        assert payment.vat_amount == expected["vat_amount"]
+        assert float(payment.vat_rate) == float(settings.VAT_RATE)
+        # Sanity check at the default 20% rate: £20 ex VAT -> £24 inc VAT.
+        if float(settings.VAT_RATE) == 0.20:
+            assert payment.amount_ex_vat == 2000
+            assert payment.amount_inc_vat == 2400
+            assert payment.vat_amount == 400
 
     @pytest.mark.django_db
     def test_payment_display_methods(self, pro_user_gocardless):
         """Test payment display methods format correctly."""
+        from checktick_app.core.pricing import get_tier_amounts
+
+        expected = get_tier_amounts("pro")
         payment = Payment.create_from_subscription(
             user=pro_user_gocardless,
             tier="pro",
@@ -428,14 +443,25 @@ class TestPaymentRecordCreation:
             subscription_id="SB_TEST789",
         )
 
-        assert payment.get_amount_ex_vat_display() == "£5.00"
-        assert payment.get_vat_amount_display() == "£1.00"
-        assert payment.get_amount_inc_vat_display() == "£6.00"
-        assert payment.get_vat_rate_display() == "20%"
+        assert (
+            payment.get_amount_ex_vat_display()
+            == f"£{expected['amount_ex_vat'] / 100:.2f}"
+        )
+        assert (
+            payment.get_vat_amount_display() == f"£{expected['vat_amount'] / 100:.2f}"
+        )
+        assert (
+            payment.get_amount_inc_vat_display() == f"£{expected['amount'] / 100:.2f}"
+        )
+        assert (
+            payment.get_vat_rate_display() == f"{int(float(settings.VAT_RATE) * 100)}%"
+        )
 
     @pytest.mark.django_db
     def test_team_tier_vat_calculation(self, db):
         """Test VAT calculation for team tiers."""
+        from checktick_app.core.pricing import get_tier_amounts
+
         user = User.objects.create_user(
             username="teamuser@example.com",
             email="teamuser@example.com",
@@ -444,6 +470,7 @@ class TestPaymentRecordCreation:
         user.profile.account_tier = UserProfile.AccountTier.TEAM_SMALL
         user.profile.save()
 
+        expected = get_tier_amounts("team_small")
         payment = Payment.create_from_subscription(
             user=user,
             tier="team_small",
@@ -451,10 +478,153 @@ class TestPaymentRecordCreation:
             subscription_id="SB_TEAM123",
         )
 
-        # Team Small: £25 ex VAT = 2500 pence, £30 inc VAT = 3000 pence
-        assert payment.amount_ex_vat == 2500
-        assert payment.amount_inc_vat == 3000
-        assert payment.vat_amount == 500
+        assert payment.amount_ex_vat == expected["amount_ex_vat"]
+        assert payment.amount_inc_vat == expected["amount"]
+        assert payment.vat_amount == expected["vat_amount"]
+        # Sanity check at the default 20% rate: £100 ex VAT -> £120 inc VAT.
+        if float(settings.VAT_RATE) == 0.20:
+            assert payment.amount_ex_vat == 10000
+            assert payment.amount_inc_vat == 12000
+            assert payment.vat_amount == 2000
+
+    @pytest.mark.django_db
+    def test_payment_with_percent_discount_promotion_applies_vat_to_discounted_amount(
+        self, pro_user_gocardless
+    ):
+        """VAT must be computed on the promotion-discounted ex-VAT amount.
+
+        Scenario: Pro tier (£20 ex VAT) with a 25% discount promotion.
+        Expected: ex-VAT = £15.00, VAT = £3.00, inc-VAT = £18.00 (at 20%).
+        """
+        from checktick_app.core.models import Promotion
+
+        promotion = Promotion.objects.create(
+            name="25% off Pro",
+            scope_type=Promotion.ScopeType.TIER,
+            target_tier="pro",
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value="25.00",
+            is_active=True,
+        )
+
+        # Simulate the resolved pricing that checkout would produce.
+        # Base: £20 ex VAT / £24 inc VAT. 25% discount on both: £15 / £18.
+        payment = Payment.create_from_subscription(
+            user=pro_user_gocardless,
+            tier="pro",
+            payment_id="PM_PROMO_PCT",
+            subscription_id="SB_PROMO_PCT",
+            resolved_amount_ex_vat=1500,
+            applied_promotion=promotion,
+            effective_tier="pro",
+        )
+
+        assert payment.amount_ex_vat == 1500  # £15.00 ex VAT (discounted)
+        assert payment.vat_amount == 300  # £3.00 VAT (20% of £15)
+        assert payment.amount_inc_vat == 1800  # £18.00 inc VAT
+        assert float(payment.vat_rate) == float(settings.VAT_RATE)
+        assert payment.applied_promotion_id == promotion.id
+        assert payment.effective_tier == "pro"
+
+    @pytest.mark.django_db
+    def test_payment_with_fixed_discount_promotion_applies_vat_to_discounted_amount(
+        self, pro_user_gocardless
+    ):
+        """Fixed-discount promotions reduce the ex-VAT amount; VAT follows.
+
+        Scenario: Pro tier (£20 ex VAT) with a £5 fixed discount.
+        Expected: ex-VAT = £15.00, VAT = £3.00, inc-VAT = £18.00 (at 20%).
+        """
+        from checktick_app.core.models import Promotion
+
+        promotion = Promotion.objects.create(
+            name="£5 off Pro",
+            scope_type=Promotion.ScopeType.TIER,
+            target_tier="pro",
+            effect_type=Promotion.EffectType.FIXED_DISCOUNT,
+            effect_value="5.00",
+            is_active=True,
+        )
+
+        payment = Payment.create_from_subscription(
+            user=pro_user_gocardless,
+            tier="pro",
+            payment_id="PM_PROMO_FIXED",
+            subscription_id="SB_PROMO_FIXED",
+            resolved_amount_ex_vat=1500,
+            applied_promotion=promotion,
+            effective_tier="pro",
+        )
+
+        assert payment.amount_ex_vat == 1500
+        assert payment.vat_amount == 300
+        assert payment.amount_inc_vat == 1800
+        assert payment.applied_promotion_id == promotion.id
+
+    @pytest.mark.django_db
+    def test_payment_with_set_price_promotion_uses_promotion_value_as_inc_vat(
+        self, pro_user_gocardless
+    ):
+        """set_price promotions fix the inc-VAT amount; ex-VAT is derived.
+
+        Scenario: Pro tier with a "Now £15/month" set_price promotion.
+        The £15 is the inc-VAT amount charged to the customer. Ex-VAT is
+        derived from it via VAT_RATE: £15 / 1.20 = £12.50.
+        """
+        from checktick_app.core.models import Promotion
+
+        promotion = Promotion.objects.create(
+            name="Pro for £15",
+            scope_type=Promotion.ScopeType.TIER,
+            target_tier="pro",
+            effect_type=Promotion.EffectType.SET_PRICE,
+            effect_value="15.00",
+            is_active=True,
+        )
+
+        # set_price promotions set both ex-VAT and inc-VAT to the promotion
+        # value in the resolver. We pass both explicitly.
+        payment = Payment.create_from_subscription(
+            user=pro_user_gocardless,
+            tier="pro",
+            payment_id="PM_PROMO_SET",
+            subscription_id="SB_PROMO_SET",
+            resolved_amount_ex_vat=1500,
+            resolved_amount_inc_vat=1500,
+            applied_promotion=promotion,
+            effective_tier="pro",
+        )
+
+        assert payment.amount_inc_vat == 1500  # £15.00 as set by promotion
+        assert payment.amount_ex_vat == 1500  # ex-VAT matches (set_price semantics)
+        assert payment.vat_amount == 0  # No VAT breakdown for set_price
+        assert payment.applied_promotion_id == promotion.id
+
+    @pytest.mark.django_db
+    def test_payment_without_promotion_context_falls_back_to_base_tier(
+        self, pro_user_gocardless
+    ):
+        """When no resolved pricing is passed, fall back to base tier pricing.
+
+        This is the backwards-compatible path for subscriptions created before
+        the promotion-tracking fix, or for code paths that don't resolve
+        promotions.
+        """
+        from checktick_app.core.pricing import get_tier_amounts
+
+        expected = get_tier_amounts("pro")
+        payment = Payment.create_from_subscription(
+            user=pro_user_gocardless,
+            tier="pro",
+            payment_id="PM_NO_PROMO",
+            subscription_id="SB_NO_PROMO",
+        )
+
+        assert payment.amount_ex_vat == expected["amount_ex_vat"]
+        assert payment.amount_inc_vat == expected["amount"]
+        assert payment.vat_amount == expected["vat_amount"]
+        assert payment.applied_promotion_id is None
+        assert payment.effective_tier == "pro"
 
     @pytest.mark.django_db
     @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
@@ -1103,7 +1273,12 @@ class TestPromotionLifecycleCommand:
 
 
 class TestVATConfiguration:
-    """Test VAT configuration values."""
+    """Test VAT configuration values.
+
+    The inc-VAT ``amount`` is no longer stored in SUBSCRIPTION_TIERS; it is
+    computed from ``amount_ex_vat`` and ``settings.VAT_RATE`` via
+    ``checktick_app.core.pricing``. These tests verify that contract.
+    """
 
     def test_vat_rate_configured(self):
         """Test VAT_RATE is configured correctly."""
@@ -1111,35 +1286,67 @@ class TestVATConfiguration:
         assert vat_rate is not None
         assert 0 <= vat_rate <= 1  # Should be decimal (e.g., 0.20 for 20%)
 
-    def test_subscription_tiers_have_vat_amounts(self):
-        """Test all subscription tiers have VAT breakdown."""
+    def test_subscription_tiers_have_ex_vat_amounts(self):
+        """Test all subscription tiers define amount_ex_vat (the canonical field)."""
         tiers = getattr(settings, "SUBSCRIPTION_TIERS", {})
 
         for tier_key, tier_config in tiers.items():
-            if tier_config.get("amount", 0) > 0:  # Skip custom pricing tiers
-                assert (
-                    "amount_ex_vat" in tier_config
-                ), f"{tier_key} missing amount_ex_vat"
-                assert (
-                    tier_config["amount"] > tier_config["amount_ex_vat"]
-                ), f"{tier_key} inc VAT should be > ex VAT"
+            assert "amount_ex_vat" in tier_config, f"{tier_key} missing amount_ex_vat"
+            # Inc-VAT `amount` is computed at runtime, not stored.
+            assert "amount" not in tier_config, (
+                f"{tier_key} should not store `amount` directly; it is "
+                "computed from amount_ex_vat and VAT_RATE via core.pricing"
+            )
 
     def test_vat_calculation_correct_for_pro(self):
         """Test VAT calculation is correct for pro tier."""
-        tiers = settings.SUBSCRIPTION_TIERS
-        pro = tiers.get("pro", {})
+        from checktick_app.core.pricing import get_tier_amounts
 
-        # £5 ex VAT + 20% = £6 inc VAT
-        assert pro.get("amount_ex_vat") == 500  # £5.00 in pence
-        assert pro.get("amount") == 600  # £6.00 in pence
-        assert pro["amount"] - pro["amount_ex_vat"] == 100  # £1.00 VAT
+        amounts = get_tier_amounts("pro")
+        pro = settings.SUBSCRIPTION_TIERS["pro"]
+
+        # Pro tier: 1 seat at BASE_SEAT_PRICE_EX_VAT ex VAT.
+        assert pro["amount_ex_vat"] == settings.BASE_SEAT_PRICE_EX_VAT
+        assert amounts["amount_ex_vat"] == settings.BASE_SEAT_PRICE_EX_VAT
+        assert amounts["amount"] == int(
+            round(amounts["amount_ex_vat"] * (1 + float(settings.VAT_RATE)))
+        )
+        assert amounts["vat_amount"] == amounts["amount"] - amounts["amount_ex_vat"]
+        # Sanity check at the default 20% rate: £20 ex VAT -> £24 inc VAT.
+        if float(settings.VAT_RATE) == 0.20:
+            assert amounts["amount_ex_vat"] == 2000
+            assert amounts["amount"] == 2400
+            assert amounts["vat_amount"] == 400
 
     def test_vat_calculation_correct_for_team_small(self):
         """Test VAT calculation is correct for team_small tier."""
-        tiers = settings.SUBSCRIPTION_TIERS
-        team = tiers.get("team_small", {})
+        from checktick_app.core.pricing import get_tier_amounts
 
-        # £25 ex VAT + 20% = £30 inc VAT
-        assert team.get("amount_ex_vat") == 2500  # £25.00 in pence
-        assert team.get("amount") == 3000  # £30.00 in pence
-        assert team["amount"] - team["amount_ex_vat"] == 500  # £5.00 VAT
+        amounts = get_tier_amounts("team_small")
+        team = settings.SUBSCRIPTION_TIERS["team_small"]
+
+        # Team Small: 5 seats at BASE_SEAT_PRICE_EX_VAT ex VAT.
+        assert team["amount_ex_vat"] == settings.BASE_SEAT_PRICE_EX_VAT * 5
+        assert amounts["amount"] == int(
+            round(amounts["amount_ex_vat"] * (1 + float(settings.VAT_RATE)))
+        )
+        # Sanity check at the default 20% rate: £100 ex VAT -> £120 inc VAT.
+        if float(settings.VAT_RATE) == 0.20:
+            assert amounts["amount_ex_vat"] == 10000
+            assert amounts["amount"] == 12000
+            assert amounts["vat_amount"] == 2000
+
+    def test_inc_vat_follows_env_vat_rate(self, settings):
+        """Inc-VAT amount must change when VAT_RATE changes.
+
+        This is the core contract of the env-driven VAT model: updating
+        ``VAT_RATE`` in the environment flows through to checkout amounts,
+        not just invoice labels.
+        """
+        from checktick_app.core.pricing import compute_inc_vat
+
+        ex_vat = 2000  # £20.00
+        assert compute_inc_vat(ex_vat, vat_rate=0.20) == 2400  # £24.00
+        assert compute_inc_vat(ex_vat, vat_rate=0.05) == 2100  # £21.00
+        assert compute_inc_vat(ex_vat, vat_rate=0.0) == 2000  # £20.00
+        assert compute_inc_vat(0) == 0

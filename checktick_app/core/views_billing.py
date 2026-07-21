@@ -919,12 +919,24 @@ def handle_gocardless_payment_confirmed(event: dict) -> None:
             if profile.subscription_current_period_end:
                 billing_period_end = profile.subscription_current_period_end.date()
 
+            # Pass the resolved pricing from checkout (includes any applied
+            # promotion) so VAT is computed on the actually-charged amount,
+            # not the base tier price. Falls back to base tier pricing if the
+            # cache is empty (e.g. subscriptions created before this fix).
+            resolved_ex_vat = (
+                profile.last_checkout_amount_ex_vat
+                if profile.last_checkout_amount_ex_vat
+                else None
+            )
             payment = Payment.create_from_subscription(
                 user=profile.user,
                 tier=profile.account_tier,
                 payment_id=payment_id,
                 subscription_id=subscription_id,
                 billing_period_end=billing_period_end,
+                resolved_amount_ex_vat=resolved_ex_vat,
+                applied_promotion=profile.last_checkout_applied_promotion,
+                effective_tier=profile.last_checkout_effective_tier,
             )
             logger.info(
                 f"Created payment record {payment.invoice_number} for {profile.user.username}"

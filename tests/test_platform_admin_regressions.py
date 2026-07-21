@@ -49,13 +49,19 @@ def test_organization(db, superuser):
 
 @pytest.mark.django_db
 def test_checkout_uses_active_pricing_override(monkeypatch):
+    from checktick_app.core.pricing import get_tier_amounts
+
     user = User.objects.create_user(
         username="billing_regression",
         email="billing-regression@test.com",
         password=TEST_PASSWORD,
     )
-    overridden_amount = settings.SUBSCRIPTION_TIERS["pro"]["amount"] + 111
-    overridden_amount_ex_vat = settings.SUBSCRIPTION_TIERS["pro"]["amount_ex_vat"] + 93
+    base_amount_ex_vat = get_tier_amounts("pro")["amount_ex_vat"]
+    overridden_amount_ex_vat = base_amount_ex_vat + 93
+    # Inc-VAT amount is derived from amount_ex_vat and VAT_RATE at save time.
+    overridden_amount = int(
+        round(overridden_amount_ex_vat * (1 + float(settings.VAT_RATE)))
+    )
     PricingOverride.objects.create(
         tier="pro",
         amount=overridden_amount,
@@ -86,12 +92,14 @@ def test_checkout_uses_active_pricing_override(monkeypatch):
 
 @pytest.mark.django_db
 def test_checkout_uses_account_promotion_amount(monkeypatch):
+    from checktick_app.core.pricing import get_tier_amounts
+
     user = User.objects.create_user(
         username="billing_promo_regression",
         email="billing-promo-regression@test.com",
         password=TEST_PASSWORD,
     )
-    base_amount = settings.SUBSCRIPTION_TIERS["pro"]["amount"]
+    base_amount = get_tier_amounts("pro")["amount"]
     Promotion.objects.create(
         name="Account fixed discount",
         scope_type=Promotion.ScopeType.ACCOUNT,
@@ -134,7 +142,9 @@ def test_checkout_uses_team_targeted_promotion_amount(monkeypatch):
         owner=user,
         size=Team.Size.SMALL,
     )
-    base_amount = settings.SUBSCRIPTION_TIERS["team_small"]["amount"]
+    from checktick_app.core.pricing import get_tier_amounts
+
+    base_amount = get_tier_amounts("team_small")["amount"]
     Promotion.objects.create(
         name="Team fixed discount",
         scope_type=Promotion.ScopeType.ACCOUNT,

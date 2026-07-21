@@ -302,6 +302,35 @@ class UserProfile(models.Model):
         help_text="When the current subscription period ends",
     )
 
+    # Cached resolved pricing from the most recent checkout. Populated by
+    # billing.create_subscription_for_user when the subscription is created, so
+    # the webhook handler can record the actually-charged amount (including any
+    # applied promotion) on the Payment record rather than the base tier price.
+    # Stored in pence. Inc-VAT is recomputed from ex-VAT and VAT_RATE at read
+    # time via checktick_app.core.pricing to stay consistent with the env.
+    last_checkout_amount_ex_vat = models.IntegerField(
+        default=0,
+        help_text="Ex-VAT pence actually charged at the most recent checkout "
+        "(includes any applied promotion). Used by the payment webhook to "
+        "create an accurate Payment record.",
+    )
+    last_checkout_applied_promotion = models.ForeignKey(
+        "core.Promotion",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="applied_checkouts",
+        help_text="Promotion applied at the most recent checkout, if any.",
+    )
+    last_checkout_effective_tier = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        help_text="Effective tier after any tier-override promotion at the most "
+        "recent checkout. May differ from account_tier when a promotion "
+        "upgrades the subscriber.",
+    )
+
     # Enterprise branding (UI-based, only for Enterprise tier or self-hosted)
     custom_branding_enabled = models.BooleanField(
         default=False,
@@ -611,6 +640,25 @@ class Payment(models.Model):
     )
     currency = models.CharField(max_length=3, default="GBP")
 
+    # Promotion applied at checkout, if any. Stored on the Payment record so the
+    # platform admin billing view and VAT CSV export can attribute discounted
+    # revenue to a specific promotion for audit and reconciliation.
+    applied_promotion = models.ForeignKey(
+        "core.Promotion",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="payments",
+        help_text="Promotion applied at checkout that reduced the charged amount, if any.",
+    )
+    effective_tier = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        help_text="Effective tier after any tier-override promotion at checkout. "
+        "May differ from `tier` when a promotion upgraded the subscriber.",
+    )
+
     # Customer details at time of payment (for invoice)
     customer_email = models.EmailField(help_text="Customer email at time of payment")
     customer_name = models.CharField(
@@ -672,30 +720,61 @@ class Payment(models.Model):
         subscription_id: str = "",
         billing_period_start=None,
         billing_period_end=None,
+        *,
+        resolved_amount_ex_vat: int | None = None,
+        resolved_amount_inc_vat: int | None = None,
+        applied_promotion=None,
+        effective_tier: str = "",
     ):
         """Create a payment record from a subscription confirmation.
 
         Args:
             user: Django User instance
-            tier: Subscription tier
+            tier: Subscription tier (the tier the user subscribed to)
             payment_id: Payment ID from provider
             subscription_id: Subscription ID from provider
             billing_period_start: Start of billing period
             billing_period_end: End of billing period
+            resolved_amount_ex_vat: Ex-VAT pence actually charged at checkout,
+                including any applied promotion. When provided, this is used as
+                the canonical ex-VAT amount and VAT is computed from it via
+                ``settings.VAT_RATE``. When omitted, falls back to the base
+                tier price (no promotion) for backwards compatibility.
+            resolved_amount_inc_vat: Inc-VAT pence actually charged at checkout.
+                When provided, used directly instead of recomputing from
+                ``resolved_amount_ex_vat``. Useful for ``set_price`` promotions
+                where the inc-VAT amount is the promotion value.
+            applied_promotion: ``Promotion`` instance applied at checkout, if
+                any. Stored on the Payment record for audit and reconciliation.
+            effective_tier: Effective tier after any tier-override promotion.
+                May differ from ``tier`` when a promotion upgraded the subscriber.
 
         Returns:
             Payment instance
         """
         from datetime import date
 
-        from django.conf import settings
+        from checktick_app.core.pricing import compute_inc_vat, get_tier_amounts
 
-        # Get tier pricing
+        # Get tier pricing (inc VAT computed from amount_ex_vat and VAT_RATE)
         tier_config = getattr(settings, "SUBSCRIPTION_TIERS", {}).get(tier, {})
-        amount_ex_vat = tier_config.get("amount_ex_vat", 0)
-        amount_inc_vat = tier_config.get("amount", 0)
-        vat_amount = amount_inc_vat - amount_ex_vat
         vat_rate = getattr(settings, "VAT_RATE", 0.20)
+
+        if resolved_amount_ex_vat is not None:
+            # Promotion-discounted checkout: use the resolved ex-VAT amount as
+            # canonical and compute VAT from it via the configured VAT_RATE.
+            amount_ex_vat = int(resolved_amount_ex_vat)
+            if resolved_amount_inc_vat is not None:
+                amount_inc_vat = int(resolved_amount_inc_vat)
+            else:
+                amount_inc_vat = compute_inc_vat(amount_ex_vat, vat_rate=vat_rate)
+            vat_amount = amount_inc_vat - amount_ex_vat
+        else:
+            # No promotion context provided: fall back to base tier pricing.
+            amounts = get_tier_amounts(tier, vat_rate=vat_rate)
+            amount_ex_vat = amounts["amount_ex_vat"]
+            amount_inc_vat = amounts["amount"]
+            vat_amount = amounts["vat_amount"]
 
         return cls.objects.create(
             user=user,
@@ -716,6 +795,8 @@ class Payment(models.Model):
             customer_name=user.get_full_name() or user.username,
             status=cls.PaymentStatus.CONFIRMED,
             confirmed_at=timezone.now(),
+            applied_promotion=applied_promotion,
+            effective_tier=effective_tier or tier,
         )
 
     def get_amount_ex_vat_display(self) -> str:
@@ -810,6 +891,11 @@ class PricingOverride(models.Model):
     Only tiers with fixed amounts (pro, team_*) are overridable here.
     Organisation and Enterprise use bespoke per-contract pricing.
 
+    ``amount_ex_vat`` is the canonical field. The inc-VAT ``amount`` is derived
+    from it at save time using ``settings.VAT_RATE`` so that stored overrides
+    stay consistent with the configured VAT rate. The runtime inc-VAT value is
+    recomputed by :func:`checktick_app.core.pricing.get_effective_tiers`.
+
     When ``is_active`` is False the entry is ignored and settings.py values apply.
     """
 
@@ -827,10 +913,12 @@ class PricingOverride(models.Model):
         help_text="Subscription tier this override applies to",
     )
     amount = models.IntegerField(
-        help_text="Price inclusive of VAT in pence (e.g. 600 = £6.00)"
+        help_text="Price inclusive of VAT in pence. Auto-computed from amount_ex_vat "
+        "and VAT_RATE on save (e.g. 2400 = £24.00 at 20% VAT)."
     )
     amount_ex_vat = models.IntegerField(
-        help_text="Price exclusive of VAT in pence (e.g. 500 = £5.00)"
+        help_text="Price exclusive of VAT in pence (e.g. 2000 = £20.00). This is "
+        "the canonical field; the inc-VAT amount is derived from it."
     )
     is_active = models.BooleanField(
         default=True,
@@ -851,23 +939,27 @@ class PricingOverride(models.Model):
         verbose_name_plural = "Pricing Overrides"
 
     def __str__(self) -> str:
-        return f"{self.get_tier_display()} override: £{self.amount / 100:.2f} inc VAT"
+        return f"{self.get_tier_display()} override: £{self.amount_ex_vat / 100:.2f} ex VAT"
+
+    def save(self, *args, **kwargs):
+        """Derive ``amount`` (inc VAT) from ``amount_ex_vat`` using ``VAT_RATE``."""
+        from checktick_app.core.pricing import compute_inc_vat
+
+        self.amount = compute_inc_vat(int(self.amount_ex_vat))
+        super().save(*args, **kwargs)
 
     @classmethod
     def get_effective_tiers(cls) -> dict:
         """Return SUBSCRIPTION_TIERS merged with any active database overrides.
 
         The returned dict has the same structure as settings.SUBSCRIPTION_TIERS.
-        Active overrides replace ``amount`` and ``amount_ex_vat`` for their tier.
+        Active overrides replace ``amount_ex_vat`` for their tier, and the
+        inc-VAT ``amount`` is computed from ``settings.VAT_RATE`` via
+        :func:`checktick_app.core.pricing.get_effective_tiers`.
         """
-        import copy
+        from checktick_app.core.pricing import get_effective_tiers as _get
 
-        tiers = copy.deepcopy(settings.SUBSCRIPTION_TIERS)
-        for override in cls.objects.filter(is_active=True):
-            if override.tier in tiers:
-                tiers[override.tier]["amount"] = override.amount
-                tiers[override.tier]["amount_ex_vat"] = override.amount_ex_vat
-        return tiers
+        return _get()
 
 
 class Promotion(models.Model):

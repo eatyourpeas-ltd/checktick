@@ -76,6 +76,17 @@ Key rules:
 2. Promotion outputs are bounded by business constraints (for example, no negative charge amounts).
 3. Effective tier/price decisions are reproducible from persisted metadata.
 
+## VAT on discounted checkouts
+
+When a promotion reduces the charged amount, VAT is computed on the **discounted** ex-VAT amount, not the base tier price. The flow is:
+
+1. At checkout, `billing.create_subscription_for_user` resolves the effective pricing via `promotion_resolver.resolve_effective_pricing_for_user` (or `_for_team`), which returns `effective_amount_ex_vat_pence` and `effective_amount_pence` after applying any promotion.
+2. The resolved ex-VAT amount, applied promotion, and effective tier are cached on `UserProfile` (`last_checkout_amount_ex_vat`, `last_checkout_applied_promotion`, `last_checkout_effective_tier`) so the webhook handler can retrieve them when the payment confirms.
+3. When the `payments.confirmed` webhook fires, `handle_gocardless_payment_confirmed` passes the cached pricing into `Payment.create_from_subscription` via the `resolved_amount_ex_vat` / `applied_promotion` / `effective_tier` keyword arguments.
+4. `Payment.create_from_subscription` uses the resolved ex-VAT amount as canonical and computes VAT from it via `settings.VAT_RATE` (see `checktick_app/core/pricing.py`). The `Payment` record stores the discounted ex-VAT, VAT, and inc-VAT amounts, plus a FK to the applied `Promotion`.
+
+This ensures VAT returns generated from the Platform Admin billing view and the Django admin CSV export reflect the actually-charged amounts, with promotion attribution for audit.
+
 ## Organization checkout
 
 Organization checkout applies effective pricing with the same guardrails used across other billing entry points.

@@ -18,16 +18,21 @@ CheckTick uses a secure payment provider to handle all billing. We offer flexibl
 
 ## Pricing
 
-All prices are **inclusive of 20% UK VAT**. Base rate: £5 per seat (ex VAT) = £6 per seat (inc VAT).
+All prices are **inclusive of UK VAT at the configured rate** (default 20%).
+The base rate is **£20 per seat (ex VAT)**, which yields **£24 per seat (inc VAT)**
+when `VAT_RATE=0.20`. Both the per-seat base price and the VAT rate are driven
+by environment variables, so changing `VAT_RATE` (or `BASE_SEAT_PRICE_EX_VAT`)
+flows through to checkout amounts, invoices, and the public pricing page
+without a code deploy.
 
 ### Default Hosted Prices
 
-Hosted pricing defaults are configured in application settings and used for checkout unless overridden by Platform Admin:
+Hosted pricing defaults are configured in application settings and used for checkout unless overridden by Platform Admin. The values below assume the default `VAT_RATE=0.20` and `BASE_SEAT_PRICE_EX_VAT=20`:
 
-- **Individual Pro:** £6/month (inc VAT), £5/month (ex VAT)
-- **Team Small (5 seats):** £30/month (inc VAT), £25/month (ex VAT)
-- **Team Medium (15 seats):** £90/month (inc VAT), £75/month (ex VAT)
-- **Team Large (50 seats):** £300/month (inc VAT), £250/month (ex VAT)
+- **Individual Pro:** £24/month (inc VAT), £20/month (ex VAT)
+- **Team Small (5 seats):** £120/month (inc VAT), £100/month (ex VAT)
+- **Team Medium (15 seats):** £360/month (inc VAT), £300/month (ex VAT)
+- **Team Large (50 seats):** £1,200/month (inc VAT), £1,000/month (ex VAT)
 
 Organisation and Enterprise pricing remain bespoke.
 
@@ -45,7 +50,7 @@ Organisation and Enterprise pricing remain bespoke.
 
 **Individual Pro**
 
-- £6/month (inc VAT) - 1 seat
+- £24/month (inc VAT) - 1 seat
 - Unlimited surveys
 - Unlimited responses
 - Collaboration features
@@ -57,7 +62,7 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 
 **Team Small**
 
-- £30/month (inc VAT) - 5 seats
+- £120/month (inc VAT) - 5 seats
 - 5 team members
 - Unlimited active surveys
 - Role-based access (Admin/Creator/Viewer)
@@ -65,14 +70,14 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 
 **Team Medium**
 
-- £90/month (inc VAT) - 15 seats
+- £360/month (inc VAT) - 15 seats
 - 15 team members
 - Unlimited active surveys
 - All Team Small features
 
 **Team Large**
 
-- £300/month (inc VAT) - 50 seats
+- £1,200/month (inc VAT) - 50 seats
 - 50 team members
 - Unlimited active surveys
 - All Team Medium features
@@ -81,7 +86,7 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 
 **Organisation**
 
-- Bespoke pricing (£6/seat/month inc VAT)
+- Bespoke per-seat pricing (default £24/seat/month inc VAT)
 - Custom number of seats
 - Multiple teams within organisation
 - Private datasets
@@ -100,7 +105,10 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 
 ## VAT Information
 
-All prices include UK VAT at 20%. VAT invoices are automatically sent on subscription confirmation containing:
+All prices include UK VAT at the configured rate (default 20%). The VAT rate is
+read from the `VAT_RATE` environment variable, and inc-VAT amounts are computed
+from the ex-VAT base at runtime via `checktick_app/core/pricing.py`. VAT invoices
+are automatically sent on subscription confirmation containing:
 
 - Unique invoice number
 - Invoice date
@@ -395,7 +403,7 @@ For more details, see our [Refund Policy](/docs/refund-policy/).
 
 Organisations are billed per user per month:
 
-- **Base rate**: £30/user/month
+- **Base rate**: £24/user/month (inc VAT) at the default `VAT_RATE=0.20`, derived from the `BASE_SEAT_PRICE_EX_VAT` setting (£20 ex VAT)
 - **Minimum commitment**: Contact sales
 - **Annual discounts**: Available for yearly contracts
 - **Invoice billing**: Available for organisations
@@ -463,8 +471,8 @@ Each invoice includes:
 
 ### VAT for UK Customers
 
-- UK VAT (20%) applies to all customers
-- VAT is automatically added at checkout
+- UK VAT at the configured `VAT_RATE` (default 20%) applies to all customers
+- VAT is automatically computed from the ex-VAT base at checkout
 - VAT invoices are available for download
 
 ## Troubleshooting

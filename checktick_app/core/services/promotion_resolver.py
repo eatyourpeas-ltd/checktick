@@ -9,11 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from checktick_app.core.models import PricingOverride, Promotion, UserProfile
+from checktick_app.core.models import Promotion, UserProfile
 
 
 @dataclass
@@ -66,9 +65,15 @@ def _select_best_promotion(queryset, at_time) -> Promotion | None:
 
 
 def _get_tier_pricing(tier: str) -> tuple[int, int]:
-    tiers = PricingOverride.get_effective_tiers()
-    cfg = tiers.get(tier, settings.SUBSCRIPTION_TIERS.get(tier, {}))
-    return int(cfg.get("amount", 0)), int(cfg.get("amount_ex_vat", 0))
+    """Return (inc_vat_pence, ex_vat_pence) for a tier, honouring overrides.
+
+    Inc-VAT is computed from ``amount_ex_vat`` and ``settings.VAT_RATE`` via
+    :func:`checktick_app.core.pricing.get_effective_tier_amounts`.
+    """
+    from checktick_app.core.pricing import get_effective_tier_amounts
+
+    amounts = get_effective_tier_amounts(tier)
+    return amounts["amount"], amounts["amount_ex_vat"]
 
 
 def _apply_effect(
