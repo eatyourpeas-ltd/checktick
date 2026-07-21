@@ -349,7 +349,11 @@ class PaymentAdmin(admin.ModelAdmin):
         for payment in queryset:
             promotion_name = ""
             if payment.applied_promotion_id:
-                promotion_name = payment.applied_promotion.name if payment.applied_promotion else f"(deleted #{payment.applied_promotion_id})"
+                promotion_name = (
+                    payment.applied_promotion.name
+                    if payment.applied_promotion
+                    else f"(deleted #{payment.applied_promotion_id})"
+                )
             writer.writerow(
                 [
                     payment.invoice_number,

@@ -815,7 +815,9 @@ def send_subscription_created_email(
     from checktick_app.core.pricing import compute_inc_vat, get_tier_amounts
 
     profile = getattr(user, "profile", None)
-    resolved_ex_vat = getattr(profile, "last_checkout_amount_ex_vat", 0) if profile else 0
+    resolved_ex_vat = (
+        getattr(profile, "last_checkout_amount_ex_vat", 0) if profile else 0
+    )
     if resolved_ex_vat:
         amount_ex_vat_pence = int(resolved_ex_vat)
         amount_inc_vat_pence = compute_inc_vat(amount_ex_vat_pence)

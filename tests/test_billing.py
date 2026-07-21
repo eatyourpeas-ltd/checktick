@@ -488,6 +488,145 @@ class TestPaymentRecordCreation:
             assert payment.vat_amount == 2000
 
     @pytest.mark.django_db
+    def test_payment_with_percent_discount_promotion_applies_vat_to_discounted_amount(
+        self, pro_user_gocardless
+    ):
+        """VAT must be computed on the promotion-discounted ex-VAT amount.
+
+        Scenario: Pro tier (£20 ex VAT) with a 25% discount promotion.
+        Expected: ex-VAT = £15.00, VAT = £3.00, inc-VAT = £18.00 (at 20%).
+        """
+        from checktick_app.core.models import Promotion
+
+        promotion = Promotion.objects.create(
+            name="25% off Pro",
+            scope_type=Promotion.ScopeType.TIER,
+            target_tier="pro",
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value="25.00",
+            is_active=True,
+        )
+
+        # Simulate the resolved pricing that checkout would produce.
+        # Base: £20 ex VAT / £24 inc VAT. 25% discount on both: £15 / £18.
+        payment = Payment.create_from_subscription(
+            user=pro_user_gocardless,
+            tier="pro",
+            payment_id="PM_PROMO_PCT",
+            subscription_id="SB_PROMO_PCT",
+            resolved_amount_ex_vat=1500,
+            applied_promotion=promotion,
+            effective_tier="pro",
+        )
+
+        assert payment.amount_ex_vat == 1500  # £15.00 ex VAT (discounted)
+        assert payment.vat_amount == 300  # £3.00 VAT (20% of £15)
+        assert payment.amount_inc_vat == 1800  # £18.00 inc VAT
+        assert float(payment.vat_rate) == float(settings.VAT_RATE)
+        assert payment.applied_promotion_id == promotion.id
+        assert payment.effective_tier == "pro"
+
+    @pytest.mark.django_db
+    def test_payment_with_fixed_discount_promotion_applies_vat_to_discounted_amount(
+        self, pro_user_gocardless
+    ):
+        """Fixed-discount promotions reduce the ex-VAT amount; VAT follows.
+
+        Scenario: Pro tier (£20 ex VAT) with a £5 fixed discount.
+        Expected: ex-VAT = £15.00, VAT = £3.00, inc-VAT = £18.00 (at 20%).
+        """
+        from checktick_app.core.models import Promotion
+
+        promotion = Promotion.objects.create(
+            name="£5 off Pro",
+            scope_type=Promotion.ScopeType.TIER,
+            target_tier="pro",
+            effect_type=Promotion.EffectType.FIXED_DISCOUNT,
+            effect_value="5.00",
+            is_active=True,
+        )
+
+        payment = Payment.create_from_subscription(
+            user=pro_user_gocardless,
+            tier="pro",
+            payment_id="PM_PROMO_FIXED",
+            subscription_id="SB_PROMO_FIXED",
+            resolved_amount_ex_vat=1500,
+            applied_promotion=promotion,
+            effective_tier="pro",
+        )
+
+        assert payment.amount_ex_vat == 1500
+        assert payment.vat_amount == 300
+        assert payment.amount_inc_vat == 1800
+        assert payment.applied_promotion_id == promotion.id
+
+    @pytest.mark.django_db
+    def test_payment_with_set_price_promotion_uses_promotion_value_as_inc_vat(
+        self, pro_user_gocardless
+    ):
+        """set_price promotions fix the inc-VAT amount; ex-VAT is derived.
+
+        Scenario: Pro tier with a "Now £15/month" set_price promotion.
+        The £15 is the inc-VAT amount charged to the customer. Ex-VAT is
+        derived from it via VAT_RATE: £15 / 1.20 = £12.50.
+        """
+        from checktick_app.core.models import Promotion
+
+        promotion = Promotion.objects.create(
+            name="Pro for £15",
+            scope_type=Promotion.ScopeType.TIER,
+            target_tier="pro",
+            effect_type=Promotion.EffectType.SET_PRICE,
+            effect_value="15.00",
+            is_active=True,
+        )
+
+        # set_price promotions set both ex-VAT and inc-VAT to the promotion
+        # value in the resolver. We pass both explicitly.
+        payment = Payment.create_from_subscription(
+            user=pro_user_gocardless,
+            tier="pro",
+            payment_id="PM_PROMO_SET",
+            subscription_id="SB_PROMO_SET",
+            resolved_amount_ex_vat=1500,
+            resolved_amount_inc_vat=1500,
+            applied_promotion=promotion,
+            effective_tier="pro",
+        )
+
+        assert payment.amount_inc_vat == 1500  # £15.00 as set by promotion
+        assert payment.amount_ex_vat == 1500  # ex-VAT matches (set_price semantics)
+        assert payment.vat_amount == 0  # No VAT breakdown for set_price
+        assert payment.applied_promotion_id == promotion.id
+
+    @pytest.mark.django_db
+    def test_payment_without_promotion_context_falls_back_to_base_tier(
+        self, pro_user_gocardless
+    ):
+        """When no resolved pricing is passed, fall back to base tier pricing.
+
+        This is the backwards-compatible path for subscriptions created before
+        the promotion-tracking fix, or for code paths that don't resolve
+        promotions.
+        """
+        from checktick_app.core.pricing import get_tier_amounts
+
+        expected = get_tier_amounts("pro")
+        payment = Payment.create_from_subscription(
+            user=pro_user_gocardless,
+            tier="pro",
+            payment_id="PM_NO_PROMO",
+            subscription_id="SB_NO_PROMO",
+        )
+
+        assert payment.amount_ex_vat == expected["amount_ex_vat"]
+        assert payment.amount_inc_vat == expected["amount"]
+        assert payment.vat_amount == expected["vat_amount"]
+        assert payment.applied_promotion_id is None
+        assert payment.effective_tier == "pro"
+
+    @pytest.mark.django_db
     @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
     def test_payment_confirmed_webhook_creates_payment_record(
         self, mock_validate, pro_user_gocardless
