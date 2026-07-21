@@ -183,6 +183,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "get_amount_ex_vat_display",
         "get_vat_amount_display",
         "get_amount_inc_vat_display",
+        "applied_promotion",
         "status",
     )
     list_filter = (
@@ -190,6 +191,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "tier",
         "invoice_date",
         "payment_provider",
+        "applied_promotion",
     )
     search_fields = (
         "invoice_number",
@@ -234,6 +236,7 @@ class PaymentAdmin(admin.ModelAdmin):
             {
                 "fields": (
                     "tier",
+                    "effective_tier",
                     "billing_period_start",
                     "billing_period_end",
                 ),
@@ -248,6 +251,7 @@ class PaymentAdmin(admin.ModelAdmin):
                     "vat_amount",
                     "amount_inc_vat",
                     "currency",
+                    "applied_promotion",
                 ),
             },
         ),
@@ -336,12 +340,16 @@ class PaymentAdmin(admin.ModelAdmin):
                 "VAT Rate %",
                 "VAT Amount GBP",
                 "Total (inc VAT) GBP",
+                "Applied Promotion",
                 "Status",
             ]
         )
 
         # Data rows
         for payment in queryset:
+            promotion_name = ""
+            if payment.applied_promotion_id:
+                promotion_name = payment.applied_promotion.name if payment.applied_promotion else f"(deleted #{payment.applied_promotion_id})"
             writer.writerow(
                 [
                     payment.invoice_number,
@@ -349,9 +357,10 @@ class PaymentAdmin(admin.ModelAdmin):
                     payment.subscription_id,
                     payment.tier,
                     f"{payment.amount_ex_vat / 100:.2f}",
-                    f"{float(payment.vat_rate) * 100:.0f}",
+                    f"{float(payment.vat_rate) * 100:.0f}%",
                     f"{payment.vat_amount / 100:.2f}",
                     f"{payment.amount_inc_vat / 100:.2f}",
+                    promotion_name,
                     payment.status,
                 ]
             )
@@ -373,6 +382,7 @@ class PaymentAdmin(admin.ModelAdmin):
                 "",
                 f"{total_vat:.2f}",
                 f"{total_inc_vat:.2f}",
+                "",
                 f"{confirmed_payments.count()} confirmed",
             ]
         )

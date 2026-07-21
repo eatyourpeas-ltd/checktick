@@ -106,7 +106,10 @@
               <th>{% trans "Invoice" %}</th>
               <th>{% trans "Customer" %}</th>
               <th>{% trans "Tier" %}</th>
-              <th>{% trans "Amount" %}</th>
+              <th>{% trans "Ex VAT" %}</th>
+              <th>{% trans "VAT" %}</th>
+              <th>{% trans "Inc VAT" %}</th>
+              <th>{% trans "Promotion" %}</th>
               <th>{% trans "Status" %}</th>
               <th>{% trans "Provider Ref" %}</th>
               <th>{% trans "Actions" %}</th>
@@ -122,7 +125,16 @@
                   <div class="text-xs text-base-content/70">{{ payment.customer_email }}</div>
                 </td>
                 <td><span class="badge badge-ghost badge-sm">{{ payment.tier }}</span></td>
-                <td>£{{ payment.amount_inc_vat|floatformat:-2 }}</td>
+                <td>£{{ payment.amount_ex_vat|floatformat:-2 }}</td>
+                <td>£{{ payment.vat_amount|floatformat:-2 }}</td>
+                <td class="font-semibold">£{{ payment.amount_inc_vat|floatformat:-2 }}</td>
+                <td>
+                  {% if payment.applied_promotion %}
+                    <span class="badge badge-info badge-sm" title="{{ payment.applied_promotion.name }}">{{ payment.applied_promotion.name|truncatechars:20 }}</span>
+                  {% else %}
+                    <span class="text-xs text-base-content/40">—</span>
+                  {% endif %}
+                </td>
                 <td>
                   {% if payment.status == 'confirmed' %}
                     <span class="badge badge-success badge-sm">{{ payment.get_status_display }}</span>

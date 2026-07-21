@@ -670,7 +670,10 @@ def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
 
     subscription_id = subscription.get("id", "")
 
-    # Update user profile
+    # Cache the resolved pricing on the user profile so the payment webhook
+    # handler can record the actually-charged amount (including any applied
+    # promotion) on the Payment record, rather than the base tier price.
+    # This ensures VAT is computed on the discounted amount, not the base.
     profile = user.profile
     profile.payment_subscription_id = subscription_id
     profile.subscription_status = "pending"  # Will become active via webhook
@@ -678,12 +681,18 @@ def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
     profile.tier_changed_at = (
         settings.timezone.now() if hasattr(settings, "timezone") else None
     )
+    profile.last_checkout_amount_ex_vat = resolution.effective_amount_ex_vat_pence
+    profile.last_checkout_applied_promotion = resolution.applied_promotion
+    profile.last_checkout_effective_tier = resolution.effective_tier
     profile.save(
         update_fields=[
             "payment_subscription_id",
             "subscription_status",
             "account_tier",
             "tier_changed_at",
+            "last_checkout_amount_ex_vat",
+            "last_checkout_applied_promotion",
+            "last_checkout_effective_tier",
             "updated_at",
         ]
     )

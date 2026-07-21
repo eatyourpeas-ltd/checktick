@@ -808,13 +808,24 @@ def send_subscription_created_email(
 
     branding = get_platform_branding()
 
-    # Get tier pricing info (inc VAT computed from amount_ex_vat and VAT_RATE)
-    from checktick_app.core.pricing import get_tier_amounts
+    # Get tier pricing info (inc VAT computed from amount_ex_vat and VAT_RATE).
+    # If the user has a cached checkout resolution (i.e. a promotion was
+    # applied at checkout), use the actually-charged amounts so the invoice
+    # matches what GoCardless charged and what the Payment record stores.
+    from checktick_app.core.pricing import compute_inc_vat, get_tier_amounts
 
-    amounts = get_tier_amounts(tier)
-    amount_inc_vat = amounts["amount"] / 100  # Convert pence to pounds
-    amount_ex_vat = amounts["amount_ex_vat"] / 100
-    vat_amount = amounts["vat_amount"] / 100
+    profile = getattr(user, "profile", None)
+    resolved_ex_vat = getattr(profile, "last_checkout_amount_ex_vat", 0) if profile else 0
+    if resolved_ex_vat:
+        amount_ex_vat_pence = int(resolved_ex_vat)
+        amount_inc_vat_pence = compute_inc_vat(amount_ex_vat_pence)
+    else:
+        amounts = get_tier_amounts(tier)
+        amount_ex_vat_pence = amounts["amount_ex_vat"]
+        amount_inc_vat_pence = amounts["amount"]
+    amount_inc_vat = amount_inc_vat_pence / 100  # Convert pence to pounds
+    amount_ex_vat = amount_ex_vat_pence / 100
+    vat_amount = (amount_inc_vat_pence - amount_ex_vat_pence) / 100
     vat_rate = getattr(settings, "VAT_RATE", 0.20) * 100  # As percentage
 
     # Invoice details
