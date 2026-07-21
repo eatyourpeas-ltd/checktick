@@ -67,6 +67,18 @@ It signposts common workflows and links to the full docs instead of duplicating 
 
 - Python dependencies are managed via Poetry (`pyproject.toml` / `poetry.lock`).
 
+## Billing / Pricing
+
+- **Canonical source:** `checktick_app/core/pricing.py` is the single source of truth for converting ex-VAT tier prices into inc-VAT amounts using `settings.VAT_RATE`.
+- **Env-driven VAT:** Only `amount_ex_vat` is stored in `settings.SUBSCRIPTION_TIERS`. The inc-VAT `amount` is computed at runtime via `pricing.get_tier_amounts()` / `pricing.get_effective_tiers()`. **Never hardcode inc-VAT `amount` values in `SUBSCRIPTION_TIERS` or in templates/tests** — always read them through the pricing helpers so changing `VAT_RATE` flows through.
+- **Per-seat base:** `settings.BASE_SEAT_PRICE_EX_VAT` (env: `BASE_SEAT_PRICE_EX_VAT`, default £20.00) is the building block for Pro and Team tiers and the default for Organisation per-seat billing.
+- **Precedence chain:** `settings.SUBSCRIPTION_TIERS` (base) → `PricingOverride` rows (Platform Admin overrides, replace `amount_ex_vat`) → `Promotion` records (account > tier > platform scope, applied at checkout).
+- **PricingOverride model:** `amount_ex_vat` is canonical; `amount` is auto-derived in `save()` from `amount_ex_vat` and `VAT_RATE`.
+- **Public pricing page:** `views._get_public_pricing_context` reads from `PricingOverride.get_effective_tiers()` (which delegates to `pricing.get_effective_tiers`). Templates must read `tier_display` / `tier_pounds` / `subscription_tiers` from that context — never hardcode £ amounts.
+- **User-facing upgrade messages** in `tier_limits.py` use `_tier_price_pounds(tier)` so they stay in sync with `VAT_RATE` and `BASE_SEAT_PRICE_EX_VAT`.
+- **Docs:** `docs/billing-and-subscriptions.md` and `docs/pricing-summary.md` describe the default prices (assuming `VAT_RATE=0.20` and `BASE_SEAT_PRICE_EX_VAT=20`). Update both whenever the defaults change.
+- **Env files:** `.env.example` and `.env.selfhost` document `VAT_RATE`, `BASE_SEAT_PRICE_EX_VAT`, `VAT_NUMBER`, `COMPANY_NAME`, `COMPANY_ADDRESS`, `COMPANY_REGISTRATION_NUMBER`.
+
 ## Notes
 
 - Keep changes minimal and scoped to the request.

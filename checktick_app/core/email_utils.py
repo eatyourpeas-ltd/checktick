@@ -808,11 +808,13 @@ def send_subscription_created_email(
 
     branding = get_platform_branding()
 
-    # Get tier pricing info
-    tier_config = getattr(settings, "SUBSCRIPTION_TIERS", {}).get(tier, {})
-    amount_inc_vat = tier_config.get("amount", 0) / 100  # Convert pence to pounds
-    amount_ex_vat = tier_config.get("amount_ex_vat", 0) / 100
-    vat_amount = amount_inc_vat - amount_ex_vat
+    # Get tier pricing info (inc VAT computed from amount_ex_vat and VAT_RATE)
+    from checktick_app.core.pricing import get_tier_amounts
+
+    amounts = get_tier_amounts(tier)
+    amount_inc_vat = amounts["amount"] / 100  # Convert pence to pounds
+    amount_ex_vat = amounts["amount_ex_vat"] / 100
+    vat_amount = amounts["vat_amount"] / 100
     vat_rate = getattr(settings, "VAT_RATE", 0.20) * 100  # As percentage
 
     # Invoice details

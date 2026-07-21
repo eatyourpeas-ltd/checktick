@@ -6,8 +6,8 @@ priority: 2
 
 # CheckTick Pricing Summary
 
-**Date: December 2025**
-**Version: 1.1**
+**Date: July 2026**
+**Version: 2.0**
 
 ---
 
@@ -16,6 +16,8 @@ priority: 2
 CheckTick is a secure survey platform designed for healthcare and research organisations. We offer tiered pricing to accommodate individuals, teams, and enterprise deployments.
 
 All payments are processed securely through our UK-based payment provider.
+
+All prices below assume the default `VAT_RATE=0.20` (20% UK VAT) and `BASE_SEAT_PRICE_EX_VAT=20` (£20 per seat ex VAT). Both are environment variables; changing them updates checkout amounts, invoices, and the public pricing page without a code deploy.
 
 ---
 
@@ -26,7 +28,7 @@ All payments are processed securely through our UK-based payment provider.
 | Plan | Monthly Price (inc VAT) | Key Features |
 |------|--------------------------|--------------|
 | **Free** | £0 | Up to 3 active surveys (all encrypted), unlimited responses, no patient data templates |
-| **Pro** | £6 | Unlimited encrypted surveys, patient data collection, collaboration, email support |
+| **Pro** | £24 | Unlimited encrypted surveys, patient data collection, collaboration, email support |
 
 ---
 
@@ -36,9 +38,9 @@ Fixed-price plans for collaborative teams.
 
 | Plan | Monthly Price (inc VAT) | Members | Surveys |
 |------|--------------------------|---------|---------|
-| **Team Small** | £30 | 5 | 50 |
-| **Team Medium** | £90 | 15 | 50 |
-| **Team Large** | £300 | 50 | 50 |
+| **Team Small** | £120 | 5 | 50 |
+| **Team Medium** | £360 | 15 | 50 |
+| **Team Large** | £1,200 | 50 | 50 |
 
 All team plans include: Role-based access (Admin/Creator/Viewer), team encryption management.
 
@@ -50,7 +52,7 @@ Per-seat pricing for larger organisations requiring flexible user counts.
 
 | Component | Monthly Price |
 |-----------|---------------|
-| **Per user (typical hosted rate)** | £6/user (inc VAT) |
+| **Per user (typical hosted rate)** | £24/user (inc VAT) |
 
 #### Included Features
 
@@ -66,10 +68,10 @@ Per-seat pricing for larger organisations requiring flexible user counts.
 
 | Users | Monthly | Annual | Annual Saving |
 |-------|---------|--------|---------------|
-| 10 | £300 | £3,000 | £600 |
-| 25 | £750 | £7,500 | £1,500 |
-| 50 | £1,500 | £15,000 | £3,000 |
-| 100 | £3,000 | £30,000 | £6,000 |
+| 10 | £1,200 | £12,000 | £2,400 |
+| 25 | £3,000 | £30,000 | £6,000 |
+| 50 | £6,000 | £60,000 | £12,000 |
+| 100 | £12,000 | £120,000 | £24,000 |
 
 ---
 
@@ -97,7 +99,7 @@ Enterprise tier provides a fully independent deployment of the CheckTick platfor
 | Component | Description | Typical Cost |
 |-----------|-------------|--------------|
 | **Base Platform Fee** | Annual licence and support | £5,000 - £10,000/year |
-| **Per-seat Licensing** | Per user per year | £300/user/year |
+| **Per-seat Licensing** | Per user per year (based on £20/seat/month ex VAT) | £288/user/year (inc VAT at 20%) |
 | **Infrastructure** | Cloud hosting, database, vault, backups, monitoring | £3,000 - £15,000/year |
 | **Custom Development** | Bespoke features (if required) | Quoted separately |
 
@@ -105,10 +107,10 @@ Enterprise tier provides a fully independent deployment of the CheckTick platfor
 
 | Deployment | Users | Platform | Seats | Infrastructure | Total Annual |
 |------------|-------|----------|-------|----------------|--------------|
-| Small NHS Trust | 25 | £5,000 | £7,500 | £5,000 | **£17,500** |
-| Medium NHS Trust | 75 | £7,500 | £22,500 | £8,000 | **£38,000** |
-| Large NHS Trust | 150 | £10,000 | £45,000 | £12,000 | **£67,000** |
-| Academic Institution | 50 | £5,000 | £15,000 | £6,000 | **£26,000** |
+| Small NHS Trust | 25 | £5,000 | £7,200 | £5,000 | **£17,200** |
+| Medium NHS Trust | 75 | £7,500 | £21,600 | £8,000 | **£37,100** |
+| Large NHS Trust | 150 | £10,000 | £43,200 | £12,000 | **£65,200** |
+| Academic Institution | 50 | £5,000 | £14,400 | £6,000 | **£25,400** |
 
 *Infrastructure costs vary by: hosting region, redundancy requirements, backup frequency, and compliance needs.*
 
@@ -164,5 +166,5 @@ Optional paid support contracts are available for self-hosted customers.
 **CheckTick**
 *Secure surveys for healthcare and research*
 
-Document version: 1.2
-Last updated: 2 May 2026
+Document version: 2.0
+Last updated: 21 July 2026

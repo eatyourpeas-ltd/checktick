@@ -10,6 +10,21 @@ from typing import Any
 from django.conf import settings
 
 
+def _tier_price_pounds(tier: str) -> str:
+    """Return the inc-VAT monthly price for a tier as a pound string (e.g. '£24').
+
+    Reads from the central pricing helper so messages stay in sync with
+    ``VAT_RATE`` and ``BASE_SEAT_PRICE_EX_VAT``.
+    """
+    from checktick_app.core.pricing import get_tier_amounts
+
+    amount = get_tier_amounts(tier)["amount"]
+    if amount <= 0:
+        return "£?"
+    pounds = amount / 100
+    return f"£{int(pounds)}" if pounds == int(pounds) else f"£{pounds:.2f}"
+
+
 @dataclass
 class TierLimits:
     """Limits for a specific account tier."""
@@ -237,7 +252,11 @@ def check_survey_creation_limit(user) -> tuple[bool, str]:
     if survey_count >= limits.max_surveys:
         # Customize message based on current tier
         if effective_tier == "free":
-            upgrade_msg = "Upgrade to Pro (£5/mo) for unlimited surveys or Team Small (£25/mo) for team collaboration."
+            upgrade_msg = (
+                f"Upgrade to Pro ({_tier_price_pounds('pro')}/mo) for unlimited "
+                f"surveys or Team Small ({_tier_price_pounds('team_small')}/mo) "
+                "for team collaboration."
+            )
         elif effective_tier.startswith("team_"):
             upgrade_msg = "Upgrade to Organisation tier for unlimited surveys."
         else:
@@ -426,7 +445,7 @@ def check_patient_data_permission(user) -> tuple[bool, str]:
     if not limits.can_collect_patient_data:
         return False, (
             "Collecting patient data (NHS numbers, clinical information) requires a paid subscription. "
-            "Upgrade to Pro (£5/mo) or higher. Note: All surveys are encrypted, this only controls "
+            f"Upgrade to Pro ({_tier_price_pounds('pro')}/mo) or higher. Note: All surveys are encrypted, this only controls "
             "access to specialized patient data templates."
         )
 
@@ -521,7 +540,7 @@ def check_team_creation_permission(user) -> tuple[bool, str]:
     if not limits.can_create_teams:
         return False, (
             "Creating teams requires Team tier or higher. "
-            "Upgrade to Team Small (£25/mo) to enable team collaboration."
+            f"Upgrade to Team Small ({_tier_price_pounds('team_small')}/mo) to enable team collaboration."
         )
 
     return True, ""

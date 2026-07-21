@@ -326,8 +326,10 @@ class Command(BaseCommand):
                             "payment_customer_id": f"demo-org-cust-{user.id}",
                             "payment_subscription_id": f"demo-org-sub-{user.id}",
                             "price_per_seat": (
-                                500 if billing_type == "per_seat" else None
-                            ),  # £5.00
+                                getattr(settings, "BASE_SEAT_PRICE_EX_VAT", 2000)
+                                if billing_type == "per_seat"
+                                else None
+                            ),  # £20.00 ex VAT (env-driven)
                             "flat_rate_price": (
                                 10000 if billing_type == "flat_rate" else None
                             ),  # £100.00

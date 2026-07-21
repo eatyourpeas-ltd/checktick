@@ -1487,7 +1487,6 @@ def pricing_overrides(request: HttpRequest) -> HttpResponse:
     GET  – show current effective prices and any active overrides.
     POST – save updated prices for one or more tiers, or deactivate overrides.
     """
-    from django.conf import settings
 
     from checktick_app.core.models import PricingOverride
 
@@ -1499,22 +1498,23 @@ def pricing_overrides(request: HttpRequest) -> HttpResponse:
         return redirect("core:platform_admin_pricing")
 
     if request.method == "POST":
+        from checktick_app.core.pricing import compute_inc_vat
+
         for tier, _label in PricingOverride.OVERRIDABLE_TIERS:
-            amount_str = request.POST.get(f"{tier}_amount", "").strip()
             amount_ex_vat_str = request.POST.get(f"{tier}_amount_ex_vat", "").strip()
             is_active = request.POST.get(f"{tier}_active") == "on"
 
-            if not amount_str or not amount_ex_vat_str:
-                # No value submitted for this tier – deactivate any existing override
+            if not amount_ex_vat_str:
+                # No ex-VAT value submitted for this tier – deactivate any
+                # existing override. The inc-VAT field is now derived from
+                # amount_ex_vat at save time, so it is not required as input.
                 PricingOverride.objects.filter(tier=tier).update(is_active=False)
                 continue
 
             try:
-                # Accept either pound (e.g. "6.00") or pence (e.g. "600") input
-                amount_raw = float(amount_str)
+                # Accept either pound (e.g. "20.00") or pence (e.g. "2000") input.
+                # Values < 1000 are treated as pounds and converted to pence.
                 amount_ex_vat_raw = float(amount_ex_vat_str)
-                # If value looks like pounds (< 1000) convert to pence
-                amount = int(amount_raw * 100) if amount_raw < 1000 else int(amount_raw)
                 amount_ex_vat = (
                     int(amount_ex_vat_raw * 100)
                     if amount_ex_vat_raw < 1000
@@ -1523,6 +1523,12 @@ def pricing_overrides(request: HttpRequest) -> HttpResponse:
             except ValueError:
                 messages.error(request, f"Invalid price value for {tier}.")
                 continue
+
+            # ``amount`` (inc VAT) is derived from amount_ex_vat and VAT_RATE.
+            # It is recomputed in PricingOverride.save() but we pass a consistent
+            # value here for clarity and in case save() is bypassed via
+            # update_or_create's bulk path on some Django versions.
+            amount = compute_inc_vat(amount_ex_vat)
 
             PricingOverride.objects.update_or_create(
                 tier=tier,
@@ -1539,20 +1545,22 @@ def pricing_overrides(request: HttpRequest) -> HttpResponse:
         return redirect("core:platform_admin_pricing")
 
     # Build display data: settings defaults alongside any active override
+    from checktick_app.core.pricing import get_tier_amounts
+
     effective_tiers = PricingOverride.get_effective_tiers()
     overrides_by_tier = {o.tier: o for o in PricingOverride.objects.all()}
 
     tier_rows = []
     for tier, label in PricingOverride.OVERRIDABLE_TIERS:
-        settings_cfg = settings.SUBSCRIPTION_TIERS.get(tier, {})
+        settings_amounts = get_tier_amounts(tier)
         effective_cfg = effective_tiers.get(tier, {})
         override = overrides_by_tier.get(tier)
         tier_rows.append(
             {
                 "key": tier,
                 "label": label,
-                "settings_amount": settings_cfg.get("amount", 0),
-                "settings_amount_ex_vat": settings_cfg.get("amount_ex_vat", 0),
+                "settings_amount": settings_amounts["amount"],
+                "settings_amount_ex_vat": settings_amounts["amount_ex_vat"],
                 "effective_amount": effective_cfg.get("amount", 0),
                 "effective_amount_ex_vat": effective_cfg.get("amount_ex_vat", 0),
                 "override": override,

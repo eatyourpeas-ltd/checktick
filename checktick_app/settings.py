@@ -190,23 +190,38 @@ PAYMENT_WEBHOOK_SECRET = (
 
 # VAT Configuration
 # Set these in environment or override in local settings
+# VAT_RATE drives the inc-VAT amounts everywhere in the app: tier amounts are
+# computed from the ex-VAT base via this rate (see core.pricing.get_tier_amounts).
+# Do NOT hardcode inc-VAT values in SUBSCRIPTION_TIERS; only `amount_ex_vat`
+# (and the optional `base_seat_price_ex_vat` for per-seat tiers) is canonical.
 VAT_RATE = float(os.environ.get("VAT_RATE", "0.20"))  # 20% UK VAT
 VAT_NUMBER = os.environ.get("VAT_NUMBER", "")  # Your VAT registration number
 COMPANY_NAME = os.environ.get("COMPANY_NAME", "CheckTick Ltd")
 COMPANY_ADDRESS = os.environ.get("COMPANY_ADDRESS", "123 Business Street, London, UK")
 COMPANY_REGISTRATION_NUMBER = os.environ.get("COMPANY_REGISTRATION_NUMBER", "12345678")
 
+# Base per-seat price (ex VAT), in pence. Used as the building block for all
+# fixed-seat tiers and as the default for organisation per-seat billing.
+# Override via the BASE_SEAT_PRICE_EX_VAT environment variable (in pounds, e.g. "20").
+BASE_SEAT_PRICE_EX_VAT = int(
+    float(os.environ.get("BASE_SEAT_PRICE_EX_VAT", "20.0")) * 100
+)  # 2000 pence = £20.00 ex VAT per seat
+
 # Subscription Tiers Configuration
 # GoCardless uses amounts directly (not price IDs like Paddle)
-# Amounts are in minor currency units (pence for GBP)
-# All amounts are INCLUSIVE of VAT at the configured VAT_RATE
-# Base price: £5 per seat (ex VAT), £6 per seat (inc VAT at 20%)
+# Amounts are in minor currency units (pence for GBP).
+#
+# Only `amount_ex_vat` is canonical here. The inc-VAT `amount` is computed at
+# runtime from `amount_ex_vat` and `VAT_RATE` via `checktick_app.core.pricing`
+# (see `get_tier_amounts()` / `get_effective_tiers()`). This keeps VAT
+# calculations driven by the VAT_RATE environment variable as required.
+#
+# Base price: £20 per seat (ex VAT) → £24 per seat (inc VAT at 20%).
 SUBSCRIPTION_TIERS = {
     "pro": {
         "name": "Pro",
         "seats": 1,
-        "amount": 600,  # £6.00/month (£5.00 + 20% VAT)
-        "amount_ex_vat": 500,  # £5.00/month excluding VAT
+        "amount_ex_vat": BASE_SEAT_PRICE_EX_VAT,  # £20.00/month ex VAT per seat
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
@@ -215,8 +230,7 @@ SUBSCRIPTION_TIERS = {
     "team_small": {
         "name": "Team (Small)",
         "seats": 5,
-        "amount": 3000,  # £30.00/month (£25.00 + 20% VAT) - 5 seats × £6
-        "amount_ex_vat": 2500,  # £25.00/month excluding VAT - 5 seats × £5
+        "amount_ex_vat": BASE_SEAT_PRICE_EX_VAT * 5,  # £100.00/month ex VAT - 5 seats
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
@@ -226,8 +240,7 @@ SUBSCRIPTION_TIERS = {
     "team_medium": {
         "name": "Team (Medium)",
         "seats": 15,
-        "amount": 9000,  # £90.00/month (£75.00 + 20% VAT) - 15 seats × £6
-        "amount_ex_vat": 7500,  # £75.00/month excluding VAT - 15 seats × £5
+        "amount_ex_vat": BASE_SEAT_PRICE_EX_VAT * 15,  # £300.00/month ex VAT - 15 seats
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
@@ -237,8 +250,8 @@ SUBSCRIPTION_TIERS = {
     "team_large": {
         "name": "Team (Large)",
         "seats": 50,
-        "amount": 30000,  # £300.00/month (£250.00 + 20% VAT) - 50 seats × £6
-        "amount_ex_vat": 25000,  # £250.00/month excluding VAT - 50 seats × £5
+        "amount_ex_vat": BASE_SEAT_PRICE_EX_VAT
+        * 50,  # £1000.00/month ex VAT - 50 seats
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
@@ -248,19 +261,17 @@ SUBSCRIPTION_TIERS = {
     "organization": {
         "name": "Organisation",
         "seats": None,  # Bespoke - depends on number of seats required
-        "amount": 0,  # Custom pricing - contact sales
-        "amount_ex_vat": 0,
+        "amount_ex_vat": 0,  # Custom pricing - contact sales
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
         "max_members": None,  # Configured per organisation
-        "description": "Organisation with custom seat allocation (£5/seat ex VAT)",
+        "description": "Organisation with custom seat allocation (per-seat ex VAT)",
     },
     "enterprise": {
         "name": "Enterprise",
         "seats": None,  # Unlimited
-        "amount": 0,  # Custom pricing - includes hosting and support
-        "amount_ex_vat": 0,
+        "amount_ex_vat": 0,  # Custom pricing - includes hosting and support
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,

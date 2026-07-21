@@ -688,13 +688,14 @@ class Payment(models.Model):
         """
         from datetime import date
 
-        from django.conf import settings
+        from checktick_app.core.pricing import get_tier_amounts
 
-        # Get tier pricing
+        # Get tier pricing (inc VAT computed from amount_ex_vat and VAT_RATE)
         tier_config = getattr(settings, "SUBSCRIPTION_TIERS", {}).get(tier, {})
-        amount_ex_vat = tier_config.get("amount_ex_vat", 0)
-        amount_inc_vat = tier_config.get("amount", 0)
-        vat_amount = amount_inc_vat - amount_ex_vat
+        amounts = get_tier_amounts(tier)
+        amount_ex_vat = amounts["amount_ex_vat"]
+        amount_inc_vat = amounts["amount"]
+        vat_amount = amounts["vat_amount"]
         vat_rate = getattr(settings, "VAT_RATE", 0.20)
 
         return cls.objects.create(
@@ -810,6 +811,11 @@ class PricingOverride(models.Model):
     Only tiers with fixed amounts (pro, team_*) are overridable here.
     Organisation and Enterprise use bespoke per-contract pricing.
 
+    ``amount_ex_vat`` is the canonical field. The inc-VAT ``amount`` is derived
+    from it at save time using ``settings.VAT_RATE`` so that stored overrides
+    stay consistent with the configured VAT rate. The runtime inc-VAT value is
+    recomputed by :func:`checktick_app.core.pricing.get_effective_tiers`.
+
     When ``is_active`` is False the entry is ignored and settings.py values apply.
     """
 
@@ -827,10 +833,12 @@ class PricingOverride(models.Model):
         help_text="Subscription tier this override applies to",
     )
     amount = models.IntegerField(
-        help_text="Price inclusive of VAT in pence (e.g. 600 = £6.00)"
+        help_text="Price inclusive of VAT in pence. Auto-computed from amount_ex_vat "
+        "and VAT_RATE on save (e.g. 2400 = £24.00 at 20% VAT)."
     )
     amount_ex_vat = models.IntegerField(
-        help_text="Price exclusive of VAT in pence (e.g. 500 = £5.00)"
+        help_text="Price exclusive of VAT in pence (e.g. 2000 = £20.00). This is "
+        "the canonical field; the inc-VAT amount is derived from it."
     )
     is_active = models.BooleanField(
         default=True,
@@ -851,23 +859,27 @@ class PricingOverride(models.Model):
         verbose_name_plural = "Pricing Overrides"
 
     def __str__(self) -> str:
-        return f"{self.get_tier_display()} override: £{self.amount / 100:.2f} inc VAT"
+        return f"{self.get_tier_display()} override: £{self.amount_ex_vat / 100:.2f} ex VAT"
+
+    def save(self, *args, **kwargs):
+        """Derive ``amount`` (inc VAT) from ``amount_ex_vat`` using ``VAT_RATE``."""
+        from checktick_app.core.pricing import compute_inc_vat
+
+        self.amount = compute_inc_vat(int(self.amount_ex_vat))
+        super().save(*args, **kwargs)
 
     @classmethod
     def get_effective_tiers(cls) -> dict:
         """Return SUBSCRIPTION_TIERS merged with any active database overrides.
 
         The returned dict has the same structure as settings.SUBSCRIPTION_TIERS.
-        Active overrides replace ``amount`` and ``amount_ex_vat`` for their tier.
+        Active overrides replace ``amount_ex_vat`` for their tier, and the
+        inc-VAT ``amount`` is computed from ``settings.VAT_RATE`` via
+        :func:`checktick_app.core.pricing.get_effective_tiers`.
         """
-        import copy
+        from checktick_app.core.pricing import get_effective_tiers as _get
 
-        tiers = copy.deepcopy(settings.SUBSCRIPTION_TIERS)
-        for override in cls.objects.filter(is_active=True):
-            if override.tier in tiers:
-                tiers[override.tier]["amount"] = override.amount
-                tiers[override.tier]["amount_ex_vat"] = override.amount_ex_vat
-        return tiers
+        return _get()
 
 
 class Promotion(models.Model):
