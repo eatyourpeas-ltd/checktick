@@ -25,22 +25,22 @@ All prices below assume the default `VAT_RATE=0.20` (20% UK VAT) and `BASE_SEAT_
 
 ### Individual Plans
 
-| Plan | Monthly Price (inc VAT) | Key Features |
-|------|--------------------------|--------------|
-| **Free** | £0 | Up to 3 active surveys (all encrypted), unlimited responses, no patient data templates |
-| **Pro** | £24 | Unlimited encrypted surveys, patient data collection, collaboration, email support |
+| Plan | Monthly (inc VAT) | Annual (inc VAT) | Key Features |
+|------|-------------------|------------------|--------------|
+| **Free** | £0 | £0 | Up to 3 active surveys (all encrypted), unlimited responses, no patient data templates |
+| **Pro** | £24/month | £230.40/year (£19.20/mo equiv) | Unlimited encrypted surveys, patient data collection, collaboration, email support |
 
 ---
 
 ### Team Plans
 
-Fixed-price plans for collaborative teams.
+Fixed-price plans for collaborative teams. Annual billing includes a 20% discount.
 
-| Plan | Monthly Price (inc VAT) | Members | Surveys |
-|------|--------------------------|---------|---------|
-| **Team Small** | £120 | 5 | 50 |
-| **Team Medium** | £360 | 15 | 50 |
-| **Team Large** | £1,200 | 50 | 50 |
+| Plan | Monthly (inc VAT) | Annual (inc VAT) | Members | Surveys |
+|------|-------------------|------------------|---------|---------|
+| **Team Small** | £120/month | £1,152/year (£96/mo equiv) | 5 | 50 |
+| **Team Medium** | £360/month | £3,456/year (£288/mo equiv) | 15 | 50 |
+| **Team Large** | £1,200/month | £11,520/year (£960/mo equiv) | 50 | 50 |
 
 All team plans include: Role-based access (Admin/Creator/Viewer), team encryption management.
 

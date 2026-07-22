@@ -1484,6 +1484,45 @@ class TestAnnualBillingPricing:
             assert annual["amount_ex_vat"] == 96000  # £960.00
             assert annual["amount"] == 115200  # £1,152.00 inc VAT
 
+    @pytest.mark.django_db
+    def test_annual_billing_with_percent_discount_promotion_stacks(self):
+        """Annual discount + promotion discount stack correctly.
+
+        Scenario: Pro annual (£192 ex VAT after 20% annual discount) with a
+        10% promotion. The promotion applies on top of the annual-discounted
+        base: £192 × 0.90 = £172.80 ex VAT.
+        """
+        from checktick_app.core.models import Promotion
+        from checktick_app.core.services.promotion_resolver import (
+            resolve_effective_pricing_for_user,
+        )
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        user = User.objects.create_user(
+            username="annual-promo@example.com",
+            email="annual-promo@example.com",
+            password="TestPass123!",
+        )
+
+        promotion = Promotion.objects.create(
+            name="10% off annual",
+            scope_type=Promotion.ScopeType.TIER,
+            target_tier="pro",
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value="10.00",
+            is_active=True,
+        )
+
+        resolution = resolve_effective_pricing_for_user(
+            user, base_tier="pro", billing_cycle="annual"
+        )
+
+        # Annual base: £192 ex VAT. 10% promotion: £192 × 0.90 = £172.80
+        assert resolution.base_amount_ex_vat_pence == 19200
+        assert resolution.effective_amount_ex_vat_pence == 17280
+        assert resolution.applied_promotion.id == promotion.id
+
 
 class TestBillingCycleModelFields:
     """Test that Payment and UserProfile have billing_cycle fields."""

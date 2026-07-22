@@ -253,11 +253,13 @@ def pricing(request):
     # Check if coming from signup with a pending tier selection
     auto_open_checkout = request.session.pop("auto_open_checkout", False)
     pending_tier = request.session.get("pending_tier", "")
+    pending_billing_cycle = request.session.get("pending_billing_cycle", "monthly")
 
     context = {
         "self_hosted": False,  # Always False here since we redirect above
         "auto_open_checkout": auto_open_checkout,
         "pending_tier": pending_tier,
+        "pending_billing_cycle": pending_billing_cycle,
     }
     context.update(_get_public_pricing_context())
     return render(request, "core/pricing.html", context)
@@ -710,6 +712,15 @@ def signup(request):
     selected_tier = (
         request.POST.get("tier", "free").lower() if request.method == "POST" else "free"
     )
+    # Get billing cycle before form validation (not a form field, just POST data)
+    # nosemgrep: python.django.security.django-using-request-post-after-is-valid
+    selected_billing_cycle = (
+        request.POST.get("billing_cycle", "monthly").lower()
+        if request.method == "POST"
+        else "monthly"
+    )
+    if selected_billing_cycle not in ("monthly", "annual"):
+        selected_billing_cycle = "monthly"
 
     if request.method == "POST":
         form = SignupForm(request.POST)
@@ -825,6 +836,8 @@ def signup(request):
             if selected_tier in ("pro", "team_small", "team_medium", "team_large"):
                 # Store tier choice for after email confirmation
                 request.session["pending_tier"] = selected_tier
+                # Store billing cycle choice (monthly/annual) for checkout after confirmation
+                request.session["pending_billing_cycle"] = selected_billing_cycle
                 messages.warning(
                     request,
                     "Please confirm your email address before accessing premium features.",
