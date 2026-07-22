@@ -26,6 +26,22 @@
             </span>
         </div>
         {% endif %}
+
+        <!-- Monthly/Annual billing toggle -->
+        {% if annual_discount_percent > 0 %}
+        <div class="mt-6 inline-flex items-center gap-3">
+            <span class="text-sm font-medium" id="billing-label-monthly">{% trans "Monthly" %}</span>
+            <label class="swap swap-rotate">
+                <input type="checkbox" id="billing-cycle-toggle" />
+                <div class="swap-on">✓</div>
+                <div class="swap-off">✗</div>
+            </label>
+            <span class="text-sm font-medium" id="billing-label-annual">
+                {% trans "Annual" %}
+                <span class="badge badge-success badge-sm">{% blocktrans with discount=annual_discount_percent %}Save {{ discount }}%{% endblocktrans %}</span>
+            </span>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Pricing Cards -->
@@ -271,14 +287,14 @@
                     {% trans "Individual Pro" %}
                 </h2>
                 <div class="mb-4">
-                    <span class="text-3xl font-bold"
+                    <span class="text-3xl font-bold" id="pro-price-display"
                         >{{ tier_display.pro }}</span
                     >
                     <span class="text-base-content">/{% trans "month" %}</span>
                     <p class="text-sm text-base-content">
                         {% trans "Unlimited surveys" %}
                     </p>
-                    <p class="text-xs text-base-content">
+                    <p class="text-xs text-base-content" id="pro-billing-note">
                         {% trans "inc. VAT" %}
                     </p>
                     {% if promotions_by_tier.pro %}
@@ -461,9 +477,11 @@
                     <form
                         method="post"
                         action="{% url 'core:start_checkout' %}"
+                        id="pro-checkout-form"
                     >
                         {% csrf_token %}
                         <input type="hidden" name="tier" value="pro" />
+                        <input type="hidden" name="billing_cycle" value="monthly" id="pro-billing-cycle-input" />
                         <button type="submit" class="btn btn-primary btn-block">
                             {% trans "Subscribe Now" %}
                         </button>
@@ -664,6 +682,7 @@
                             value="team_small"
                             id="team-tier-input"
                         />
+                        <input type="hidden" name="billing_cycle" value="monthly" id="team-billing-cycle-input" />
                         <button
                             type="submit"
                             class="btn btn-primary btn-block"
@@ -1333,6 +1352,85 @@
 
                 // Update hidden tier input for form submission
                 if (teamTierInput) teamTierInput.value = tier;
+            });
+        }
+
+        // Billing cycle toggle (monthly/annual)
+        const billingToggle = document.getElementById("billing-cycle-toggle");
+        const proPriceDisplay = document.getElementById("pro-price-display");
+        const proBillingNote = document.getElementById("pro-billing-note");
+        const proBillingInput = document.getElementById("pro-billing-cycle-input");
+        const teamBillingInput = document.getElementById("team-billing-cycle-input");
+        const monthlyLabel = document.getElementById("billing-label-monthly");
+        const annualLabel = document.getElementById("billing-label-annual");
+
+        // Monthly and annual price data from the context
+        const monthlyPrices = {
+            pro: "{{ tier_display.pro }}",
+            team_small: "{{ tier_display.team_small }}",
+            team_medium: "{{ tier_display.team_medium }}",
+            team_large: "{{ tier_display.team_large }}",
+        };
+        const annualPrices = {
+            pro: "{{ tier_display_annual.pro }}",
+            team_small: "{{ tier_display_annual.team_small }}",
+            team_medium: "{{ tier_display_annual.team_medium }}",
+            team_large: "{{ tier_display_annual.team_large }}",
+        };
+        // Annual per-month-equivalent (annual price / 12) for display
+        const annualMonthlyEquiv = {
+            pro: {{ tier_pounds_annual.pro }} / 12,
+            team_small: {{ tier_pounds_annual.team_small }} / 12,
+            team_medium: {{ tier_pounds_annual.team_medium }} / 12,
+            team_large: {{ tier_pounds_annual.team_large }} / 12,
+        };
+
+        function updateBillingDisplay(isAnnual) {
+            const cycle = isAnnual ? "annual" : "monthly";
+            const prices = isAnnual ? annualPrices : monthlyPrices;
+
+            // Update Pro price display
+            if (proPriceDisplay) {
+                if (isAnnual) {
+                    // Show annual per-month-equivalent as headline, with /year note
+                    const equiv = annualMonthlyEquiv.pro;
+                    proPriceDisplay.textContent = "£" + equiv.toFixed(2);
+                } else {
+                    proPriceDisplay.textContent = prices.pro;
+                }
+            }
+            if (proBillingNote) {
+                proBillingNote.textContent = isAnnual
+                    ? "billed annually (inc. VAT)"
+                    : "inc. VAT";
+            }
+
+            // Update hidden billing_cycle inputs
+            if (proBillingInput) proBillingInput.value = cycle;
+            if (teamBillingInput) teamBillingInput.value = cycle;
+
+            // Update team price display if a team tier is selected
+            if (teamSelector && teamPriceDisplay) {
+                const selected = teamSelector.options[teamSelector.selectedIndex];
+                if (selected) {
+                    const tier = selected.value;
+                    if (isAnnual) {
+                        const equiv = annualMonthlyEquiv[tier];
+                        teamPriceDisplay.textContent = "£" + equiv.toFixed(2);
+                    } else {
+                        teamPriceDisplay.textContent = prices[tier];
+                    }
+                }
+            }
+
+            // Highlight the active label
+            if (monthlyLabel) monthlyLabel.classList.toggle("font-bold", !isAnnual);
+            if (annualLabel) annualLabel.classList.toggle("font-bold", isAnnual);
+        }
+
+        if (billingToggle) {
+            billingToggle.addEventListener("change", function () {
+                updateBillingDisplay(this.checked);
             });
         }
 

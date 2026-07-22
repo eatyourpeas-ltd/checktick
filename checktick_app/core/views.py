@@ -124,8 +124,10 @@ def _select_best_promotion(promotions, specificity: int):
 
 def _get_public_pricing_context() -> dict:
     from checktick_app.core.models import PricingOverride, Promotion
+    from checktick_app.core.pricing import get_effective_tiers
 
     effective_tiers = PricingOverride.get_effective_tiers()
+    effective_tiers_annual = get_effective_tiers(billing_cycle="annual")
 
     def _to_pounds(pence: int) -> str:
         pounds = pence / 100
@@ -137,6 +139,16 @@ def _get_public_pricing_context() -> dict:
         if cfg.get("amount", 0) > 0
     }
     tier_pounds = {key: cfg["amount"] // 100 for key, cfg in effective_tiers.items()}
+
+    # Annual prices for the monthly/annual toggle on the pricing page.
+    tier_display_annual = {
+        key: _to_pounds(cfg["amount"])
+        for key, cfg in effective_tiers_annual.items()
+        if cfg.get("amount", 0) > 0
+    }
+    tier_pounds_annual = {
+        key: cfg["amount"] // 100 for key, cfg in effective_tiers_annual.items()
+    }
 
     now = timezone.now()
     promotions_qs = (
@@ -191,6 +203,11 @@ def _get_public_pricing_context() -> dict:
         "subscription_tiers": effective_tiers,
         "tier_display": tier_display,
         "tier_pounds": tier_pounds,
+        "tier_display_annual": tier_display_annual,
+        "tier_pounds_annual": tier_pounds_annual,
+        "annual_discount_percent": float(
+            getattr(settings, "ANNUAL_DISCOUNT_PERCENT", 20)
+        ),
         "promotions_by_tier": promotions_by_tier,
         "active_public_promotions": promotion_summaries,
         "homepage_promotion": homepage_promotion,
