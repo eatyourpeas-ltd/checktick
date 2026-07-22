@@ -666,6 +666,54 @@ class TestPaymentRecordCreation:
         assert payment.payment_id == "PM_WEBHOOK123"
         assert payment.user == pro_user_gocardless
 
+    @pytest.mark.django_db
+    @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
+    def test_payment_confirmed_webhook_uses_cached_annual_billing_cycle(
+        self, mock_validate, pro_user_gocardless
+    ):
+        """Webhook creates Payment with billing_cycle from cached profile."""
+        mock_validate.return_value = True
+
+        # Simulate an annual checkout having cached the billing cycle
+        profile = pro_user_gocardless.profile
+        profile.last_checkout_billing_cycle = "annual"
+        profile.last_checkout_amount_ex_vat = 19200  # £192 ex VAT (annual discounted)
+        profile.save(
+            update_fields=[
+                "last_checkout_billing_cycle",
+                "last_checkout_amount_ex_vat",
+            ]
+        )
+
+        payload = {
+            "events": [
+                {
+                    "id": "EV_CONFIRM_ANNUAL",
+                    "resource_type": "payments",
+                    "action": "confirmed",
+                    "links": {
+                        "payment": "PM_WEBHOOK_ANNUAL",
+                        "subscription": profile.payment_subscription_id,
+                    },
+                }
+            ]
+        }
+
+        client = Client()
+        response = client.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert Payment.objects.count() == 1
+        payment = Payment.objects.first()
+        assert payment.billing_cycle == "annual"
+        # Should use the cached annual ex-VAT amount, not the monthly base
+        assert payment.amount_ex_vat == 19200
+        assert payment.amount_inc_vat == 23040  # £230.40 inc VAT at 20%
+
 
 class TestRefundWebhookLifecycle:
     """Test refund lifecycle updates driven by payment provider webhooks."""

@@ -333,11 +333,16 @@ def start_checkout(request: HttpRequest) -> HttpResponse:
     from checktick_app.core.billing import get_or_create_redirect_flow
 
     tier = request.POST.get("tier", "pro")
+    billing_cycle = request.POST.get("billing_cycle", "monthly")
 
     # Validate tier
     if tier not in settings.SUBSCRIPTION_TIERS:
         messages.error(request, "Invalid subscription tier selected.")
         return redirect("core:pricing")
+
+    # Validate billing cycle
+    if billing_cycle not in ("monthly", "annual"):
+        billing_cycle = "monthly"
 
     # Generate a unique session token
     import uuid
@@ -347,6 +352,7 @@ def start_checkout(request: HttpRequest) -> HttpResponse:
     # Store checkout info in session
     request.session["checkout_session_token"] = session_token
     request.session["checkout_tier"] = tier
+    request.session["checkout_billing_cycle"] = billing_cycle
 
     # Build success URL
     success_url = request.build_absolute_uri(reverse("core:checkout_complete"))
@@ -363,7 +369,9 @@ def start_checkout(request: HttpRequest) -> HttpResponse:
             messages.error(request, "Failed to create checkout session.")
             return redirect("core:pricing")
 
-        logger.info(f"User {request.user.username} starting checkout for tier: {tier}")
+        logger.info(
+            f"User {request.user.username} starting checkout for tier: {tier} ({billing_cycle})"
+        )
         return redirect(redirect_url)
 
     except Exception as e:
@@ -395,6 +403,7 @@ def checkout_complete(request: HttpRequest) -> HttpResponse:
     # Get session data
     session_token = request.session.get("checkout_session_token")
     tier = request.session.get("checkout_tier", "pro")
+    billing_cycle = request.session.get("checkout_billing_cycle", "monthly")
 
     if not session_token:
         messages.error(request, "Checkout session expired. Please try again.")
@@ -413,6 +422,7 @@ def checkout_complete(request: HttpRequest) -> HttpResponse:
             user=request.user,
             tier=tier,
             mandate_id=mandate_id,
+            billing_cycle=billing_cycle,
         )
 
         # For team tiers, create the team immediately (don't wait for webhook)
@@ -784,8 +794,8 @@ def handle_gocardless_subscription_created(event: dict) -> None:
 
     # Send welcome email
     try:
-        # Determine billing cycle from subscription metadata if available
-        billing_cycle = "monthly"  # Default, can be enhanced with API lookup
+        # Determine billing cycle from cached checkout info
+        billing_cycle = profile.last_checkout_billing_cycle or "monthly"
         send_subscription_created_email(
             profile.user, profile.account_tier, billing_cycle
         )
@@ -928,12 +938,14 @@ def handle_gocardless_payment_confirmed(event: dict) -> None:
                 if profile.last_checkout_amount_ex_vat
                 else None
             )
+            billing_cycle = profile.last_checkout_billing_cycle or "monthly"
             payment = Payment.create_from_subscription(
                 user=profile.user,
                 tier=profile.account_tier,
                 payment_id=payment_id,
                 subscription_id=subscription_id,
                 billing_period_end=billing_period_end,
+                billing_cycle=billing_cycle,
                 resolved_amount_ex_vat=resolved_ex_vat,
                 applied_promotion=profile.last_checkout_applied_promotion,
                 effective_tier=profile.last_checkout_effective_tier,
