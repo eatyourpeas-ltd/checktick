@@ -31,8 +31,8 @@
         {% if annual_discount_percent > 0 %}
         <div class="mt-6 inline-flex flex-col items-center gap-2">
           <div class="join" role="group" aria-label="{% trans 'Billing cycle' %}">
-            <button type="button" class="btn join-item btn-sm btn-primary" id="billing-toggle-monthly" onclick="setBillingCycle(false)">{% trans "Monthly" %}</button>
-            <button type="button" class="btn join-item btn-sm btn-outline" id="billing-toggle-annual" onclick="setBillingCycle(true)">
+            <button type="button" class="btn join-item btn-sm btn-primary" id="billing-toggle-monthly">{% trans "Monthly" %}</button>
+            <button type="button" class="btn join-item btn-sm btn-outline" id="billing-toggle-annual">
               {% trans "Annual" %}
               <span class="badge badge-success badge-xs ml-1">{% blocktrans with discount=annual_discount_percent %}Save {{ discount }}%{% endblocktrans %}</span>
             </button>
@@ -1358,7 +1358,6 @@
         const proBillingNote = document.getElementById("pro-billing-note");
         const proBillingInput = document.getElementById("pro-billing-cycle-input");
         const teamBillingInput = document.getElementById("team-billing-cycle-input");
-        const teamPriceDisplay = document.getElementById("team-price-display");
         const teamPeriod = document.getElementById("team-period");
         const toggleMonthly = document.getElementById("billing-toggle-monthly");
         const toggleAnnual = document.getElementById("billing-toggle-annual");
@@ -1418,6 +1417,17 @@
 
         // Expose globally for inline onclick handlers
         window.setBillingCycle = setBillingCycle;
+
+        // Wire up toggle buttons (CSP-safe: no inline onclick)
+        if (toggleMonthly) {
+            toggleMonthly.addEventListener("click", function () {
+                setBillingCycle(false);
+            });
+        }
+        if (toggleAnnual) {
+            toggleAnnual.addEventListener("click", function () {
+                setBillingCycle(true);
+            });
         }
 
         // Auto-open checkout for users redirected from signup with a pending tier
