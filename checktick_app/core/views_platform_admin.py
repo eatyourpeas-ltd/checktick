@@ -1735,15 +1735,26 @@ def platform_admin_billing_refund(
     requested_amount_pence = _coerce_amount_pence(
         request.POST.get("refund_amount_pence", "")
     )
-    if (
-        requested_amount_pence is not None
-        and requested_amount_pence != payment.amount_inc_vat
-    ):
-        messages.error(
-            request,
-            "Partial refunds are not currently supported. Submit the full payment amount.",
-        )
-        return redirect(return_url)
+    if requested_amount_pence is not None:
+        # Full refunds are always allowed. Partial refunds are allowed for
+        # annual subscriptions (pro-rata per refund policy §4.5). Monthly
+        # subscriptions must refund the full amount.
+        if requested_amount_pence == payment.amount_inc_vat:
+            refund_amount_pence = payment.amount_inc_vat
+        elif (
+            payment.billing_cycle == "annual"
+            and 0 < requested_amount_pence < payment.amount_inc_vat
+        ):
+            refund_amount_pence = requested_amount_pence
+        else:
+            messages.error(
+                request,
+                "Partial refunds are only supported for annual subscriptions. "
+                "Submit the full payment amount for monthly refunds.",
+            )
+            return redirect(return_url)
+    else:
+        refund_amount_pence = payment.amount_inc_vat
 
     payment_client = PaymentClient()
     refunded_invoice_number = payment.invoice_number
@@ -1761,7 +1772,7 @@ def platform_admin_billing_refund(
 
             refund = payment_client.refund_payment(
                 locked_payment.payment_id,
-                amount=locked_payment.amount_inc_vat,
+                amount=refund_amount_pence,
                 total_amount_confirmation=locked_payment.amount_inc_vat,
                 metadata={
                     "invoice_number": locked_payment.invoice_number,
@@ -1771,6 +1782,9 @@ def platform_admin_billing_refund(
                     "adjustment_type": "refund",
                     "adjustment_status": "requested",
                     "policy_version": REFUND_POLICY_VERSION,
+                    "billing_cycle": locked_payment.billing_cycle,
+                    "is_partial_refund": refund_amount_pence
+                    < locked_payment.amount_inc_vat,
                 },
             )
 
@@ -1790,10 +1804,11 @@ def platform_admin_billing_refund(
                     "provider_refund_id": refund.get("id", ""),
                     "refund_reason_code": refund_reason_code,
                     "refund_reason": refund_reason,
-                    "amount_pence": locked_payment.amount_inc_vat,
+                    "amount_pence": refund_amount_pence,
                     "adjustment_type": "refund",
                     "adjustment_status": "requested",
-                    "supports_partial_refunds": False,
+                    "supports_partial_refunds": locked_payment.billing_cycle
+                    == "annual",
                     "supports_credit_adjustments": False,
                     "refund_policy_version": REFUND_POLICY_VERSION,
                 },

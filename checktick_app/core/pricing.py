@@ -86,6 +86,54 @@ def compute_annual_amount(monthly_amount_pence: int) -> int:
     return int(math.floor(annual + 0.5))
 
 
+def compute_pro_rata_refund(
+    amount_inc_vat_pence: int,
+    *,
+    billing_cycle: str,
+    days_elapsed: int,
+    total_days: int,
+) -> int:
+    """Compute a pro-rata refund amount for a cancelled subscription.
+
+    For annual subscriptions, the refund is proportional to the time
+    remaining: ``amount × (days_remaining / total_days)``. For monthly
+    subscriptions, the full amount is refunded (existing behaviour — monthly
+    subscriptions run to the end of the billing period).
+
+    Per the refund policy (docs/refund-policy.md §4.5):
+    - 14-day right to cancel for first-time subscribers (full refund)
+    - After 14 days, pro-rated refunds may be considered for annual subscriptions
+
+    Args:
+        amount_inc_vat_pence: The inc-VAT amount paid, in pence.
+        billing_cycle: ``"monthly"`` or ``"annual"``.
+        days_elapsed: Days since the payment was confirmed.
+        total_days: Total days in the billing period (30 for monthly, 365 for annual).
+
+    Returns:
+        Refund amount in pence, rounded to the nearest penny. Returns 0 if
+        the billing period has fully elapsed.
+    """
+    if amount_inc_vat_pence <= 0:
+        return 0
+
+    # Monthly subscriptions always refund the full amount (existing behaviour).
+    # The subscription runs until the end of the billing period, so there's
+    # no pro-rata calculation needed.
+    if billing_cycle != "annual":
+        return amount_inc_vat_pence
+
+    if total_days <= 0:
+        return 0
+
+    days_remaining = max(0, total_days - days_elapsed)
+    if days_remaining == 0:
+        return 0
+
+    refund = amount_inc_vat_pence * days_remaining / total_days
+    return int(math.floor(refund + 0.5))
+
+
 def get_tier_amounts(
     tier: str,
     *,

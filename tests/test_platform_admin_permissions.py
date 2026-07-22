@@ -1156,6 +1156,8 @@ class TestPlatformBillingAccess:
                 "adjustment_type": "refund",
                 "adjustment_status": "requested",
                 "policy_version": "2026-05-31",
+                "billing_cycle": "monthly",
+                "is_partial_refund": False,
             },
         )
 
