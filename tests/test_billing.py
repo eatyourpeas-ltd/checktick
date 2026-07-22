@@ -1435,3 +1435,92 @@ class TestAnnualBillingPricing:
         ):
             assert annual["amount_ex_vat"] == 96000  # £960.00
             assert annual["amount"] == 115200  # £1,152.00 inc VAT
+
+
+class TestBillingCycleModelFields:
+    """Test that Payment and UserProfile have billing_cycle fields."""
+
+    @pytest.mark.django_db
+    def test_payment_has_billing_cycle_field_with_monthly_default(self, db):
+        """Payment.billing_cycle defaults to 'monthly'."""
+        user = User.objects.create_user(
+            username="bc-test@example.com",
+            email="bc-test@example.com",
+            password="TestPass123!",
+        )
+        payment = Payment.objects.create(
+            user=user,
+            invoice_number="INV-BC-TEST",
+            invoice_date=date.today(),
+            payment_provider="gocardless",
+            payment_id="PM-BC-TEST",
+            subscription_id="SB-BC-TEST",
+            tier="pro",
+            amount_ex_vat=2000,
+            vat_amount=400,
+            amount_inc_vat=2400,
+            vat_rate=0.20,
+            customer_email=user.email,
+            customer_name=user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        assert payment.billing_cycle == "monthly"
+
+    @pytest.mark.django_db
+    def test_payment_can_store_annual_billing_cycle(self, db):
+        """Payment.billing_cycle can be set to 'annual'."""
+        user = User.objects.create_user(
+            username="bc-annual@example.com",
+            email="bc-annual@example.com",
+            password="TestPass123!",
+        )
+        payment = Payment.objects.create(
+            user=user,
+            invoice_number="INV-BC-ANNUAL",
+            invoice_date=date.today(),
+            payment_provider="gocardless",
+            payment_id="PM-BC-ANNUAL",
+            subscription_id="SB-BC-ANNUAL",
+            tier="pro",
+            amount_ex_vat=19200,
+            vat_amount=3840,
+            amount_inc_vat=23040,
+            vat_rate=0.20,
+            billing_cycle="annual",
+            customer_email=user.email,
+            customer_name=user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        assert payment.billing_cycle == "annual"
+
+    @pytest.mark.django_db
+    def test_userprofile_has_last_checkout_billing_cycle_field(self, db):
+        """UserProfile.last_checkout_billing_cycle defaults to 'monthly'."""
+        user = User.objects.create_user(
+            username="profile-bc@example.com",
+            email="profile-bc@example.com",
+            password="TestPass123!",
+        )
+        assert user.profile.last_checkout_billing_cycle == "monthly"
+
+    @pytest.mark.django_db
+    def test_payment_create_from_subscription_accepts_billing_cycle(self, db):
+        """Payment.create_from_subscription accepts billing_cycle kwarg."""
+        from checktick_app.core.pricing import get_tier_amounts
+
+        user = User.objects.create_user(
+            username="create-bc@example.com",
+            email="create-bc@example.com",
+            password="TestPass123!",
+        )
+        expected = get_tier_amounts("pro", billing_cycle="annual")
+        payment = Payment.create_from_subscription(
+            user=user,
+            tier="pro",
+            payment_id="PM-CREATE-BC",
+            subscription_id="SB-CREATE-BC",
+            billing_cycle="annual",
+        )
+        assert payment.billing_cycle == "annual"
+        assert payment.amount_ex_vat == expected["amount_ex_vat"]
+        assert payment.amount_inc_vat == expected["amount"]

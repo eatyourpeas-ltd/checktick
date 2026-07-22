@@ -330,6 +330,14 @@ class UserProfile(models.Model):
         "recent checkout. May differ from account_tier when a promotion "
         "upgrades the subscriber.",
     )
+    last_checkout_billing_cycle = models.CharField(
+        max_length=10,
+        choices=[("monthly", "Monthly"), ("annual", "Annual")],
+        default="monthly",
+        help_text="Billing cycle selected at the most recent checkout (monthly or "
+        "annual). Used by the payment webhook to create an accurate Payment "
+        "record with the correct interval and amount.",
+    )
 
     # Enterprise branding (UI-based, only for Enterprise tier or self-hosted)
     custom_branding_enabled = models.BooleanField(
@@ -625,6 +633,12 @@ class Payment(models.Model):
         blank=True,
         help_text="End of billing period",
     )
+    billing_cycle = models.CharField(
+        max_length=10,
+        choices=[("monthly", "Monthly"), ("annual", "Annual")],
+        default="monthly",
+        help_text="Billing cycle for this payment (monthly or annual)",
+    )
 
     # Amounts (stored in pence/minor currency units)
     amount_ex_vat = models.IntegerField(help_text="Amount excluding VAT in pence")
@@ -721,6 +735,7 @@ class Payment(models.Model):
         billing_period_start=None,
         billing_period_end=None,
         *,
+        billing_cycle: str = "monthly",
         resolved_amount_ex_vat: int | None = None,
         resolved_amount_inc_vat: int | None = None,
         applied_promotion=None,
@@ -735,6 +750,9 @@ class Payment(models.Model):
             subscription_id: Subscription ID from provider
             billing_period_start: Start of billing period
             billing_period_end: End of billing period
+            billing_cycle: ``"monthly"`` (default) or ``"annual"``. Used to
+                compute the correct amount when no ``resolved_amount_ex_vat``
+                is provided (backwards-compat fallback).
             resolved_amount_ex_vat: Ex-VAT pence actually charged at checkout,
                 including any applied promotion. When provided, this is used as
                 the canonical ex-VAT amount and VAT is computed from it via
@@ -770,8 +788,11 @@ class Payment(models.Model):
                 amount_inc_vat = compute_inc_vat(amount_ex_vat, vat_rate=vat_rate)
             vat_amount = amount_inc_vat - amount_ex_vat
         else:
-            # No promotion context provided: fall back to base tier pricing.
-            amounts = get_tier_amounts(tier, vat_rate=vat_rate)
+            # No promotion context provided: fall back to base tier pricing,
+            # adjusted for the billing cycle.
+            amounts = get_tier_amounts(
+                tier, billing_cycle=billing_cycle, vat_rate=vat_rate
+            )
             amount_ex_vat = amounts["amount_ex_vat"]
             amount_inc_vat = amounts["amount"]
             vat_amount = amounts["vat_amount"]
@@ -786,6 +807,7 @@ class Payment(models.Model):
             tier=tier,
             billing_period_start=billing_period_start,
             billing_period_end=billing_period_end,
+            billing_cycle=billing_cycle,
             amount_ex_vat=amount_ex_vat,
             vat_amount=vat_amount,
             amount_inc_vat=amount_inc_vat,
