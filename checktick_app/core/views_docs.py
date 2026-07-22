@@ -97,77 +97,77 @@ DOC_CATEGORIES = {
         "order": 10,
         "icon": "♿",
     },
-    "getting-involved": {
-        "title": "Getting Involved",
-        "order": 11,
-        "icon": "🤝",
-    },
     "billing": {
         "title": "Billing",
-        "order": 11.5,
+        "order": 11,
         "icon": "💳",
+    },
+    "getting-involved": {
+        "title": "Getting Involved",
+        "order": 12,
+        "icon": "🤝",
     },
     # DSPT (Data Security and Protection Toolkit) categories
     # These map to the 10 NHS DSPT standards
     "dspt-overview": {
         "title": "DSPT Overview",
-        "order": 12,
+        "order": 13,
         "icon": "📋",
     },
     "dspt-1-confidential-data": {
         "title": "1. Personal Confidential Data",
-        "order": 13,
+        "order": 14,
         "icon": "🔐",
     },
     "dspt-2-staff-responsibilities": {
         "title": "2. Staff Responsibilities",
-        "order": 14,
+        "order": 15,
         "icon": "👥",
     },
     "dspt-3-training": {
         "title": "3. Training",
-        "order": 15,
+        "order": 16,
         "icon": "🎓",
     },
     "dspt-4-managing-access": {
         "title": "4. Managing Data Access",
-        "order": 16,
+        "order": 17,
         "icon": "🔑",
     },
     "dspt-5-process-reviews": {
         "title": "5. Process Reviews",
-        "order": 17,
+        "order": 18,
         "icon": "📊",
     },
     "dspt-6-incidents": {
         "title": "6. Responding to Incidents",
-        "order": 18,
+        "order": 19,
         "icon": "🚨",
     },
     "dspt-7-continuity": {
         "title": "7. Continuity Planning",
-        "order": 19,
+        "order": 20,
         "icon": "🔄",
     },
     "dspt-8-unsupported-systems": {
         "title": "8. Unsupported Systems",
-        "order": 20,
+        "order": 21,
         "icon": "⚠️",
     },
     "dspt-9-it-protection": {
         "title": "9. IT Protection",
-        "order": 21,
+        "order": 22,
         "icon": "🛡️",
     },
     "dspt-10-suppliers": {
         "title": "10. Accountable Suppliers",
-        "order": 22,
+        "order": 23,
         "icon": "🤝",
     },
     # Clinical Safety (DCB0129)
     "clinical-safety": {
         "title": "Clinical Safety",
-        "order": 23,
+        "order": 24,
         "icon": "🏥",
     },
 }
