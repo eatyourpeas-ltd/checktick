@@ -135,6 +135,13 @@ class Organization(models.Model):
         default="",
         help_text="Internal notes about billing arrangements",
     )
+    billing_cycle = models.CharField(
+        max_length=10,
+        choices=[("monthly", "Monthly"), ("annual", "Annual")],
+        default="monthly",
+        help_text="Billing cycle for this organisation (monthly or annual). "
+        "Annual applies the configured ANNUAL_DISCOUNT_PERCENT.",
+    )
 
     # Payment provider integration (provider-agnostic)
     payment_customer_id = models.CharField(

@@ -908,6 +908,9 @@ def organization_create(request: HttpRequest) -> HttpResponse:
         billing_type = request.POST.get(
             "billing_type", Organization.BillingType.PER_SEAT
         )
+        billing_cycle = request.POST.get("billing_cycle", "monthly")
+        if billing_cycle not in ("monthly", "annual"):
+            billing_cycle = "monthly"
         price_per_seat = request.POST.get("price_per_seat", "").strip()
         flat_rate_price = request.POST.get("flat_rate_price", "").strip()
         max_seats = request.POST.get("max_seats", "").strip()
@@ -969,6 +972,7 @@ def organization_create(request: HttpRequest) -> HttpResponse:
             name=name,
             owner=owner,
             billing_type=billing_type,
+            billing_cycle=billing_cycle,
             price_per_seat=parsed_price_per_seat,
             flat_rate_price=parsed_flat_rate_price,
             max_seats=parsed_max_seats,
@@ -1056,6 +1060,9 @@ def organization_edit(request: HttpRequest, org_id: int) -> HttpResponse:
     if request.method == "POST":
         name = request.POST.get("name", org.name).strip()
         billing_type = request.POST.get("billing_type", org.billing_type)
+        billing_cycle = request.POST.get("billing_cycle", org.billing_cycle)
+        if billing_cycle not in ("monthly", "annual"):
+            billing_cycle = "monthly"
         price_per_seat = request.POST.get("price_per_seat", "").strip()
         flat_rate_price = request.POST.get("flat_rate_price", "").strip()
         max_seats = request.POST.get("max_seats", "").strip()
@@ -1105,6 +1112,7 @@ def organization_edit(request: HttpRequest, org_id: int) -> HttpResponse:
         # Update fields
         org.name = name
         org.billing_type = billing_type
+        org.billing_cycle = billing_cycle
         org.price_per_seat = parsed_price_per_seat
         org.flat_rate_price = parsed_flat_rate_price
         org.max_seats = parsed_max_seats

@@ -66,6 +66,26 @@ def compute_inc_vat(amount_ex_vat: int, vat_rate: float | None = None) -> int:
     return int(math.floor(inc + 0.5))
 
 
+def compute_annual_amount(monthly_amount_pence: int) -> int:
+    """Compute the annual ex-VAT amount from a monthly ex-VAT amount.
+
+    Applies the configured ``ANNUAL_DISCOUNT_PERCENT`` to ``monthly × 12``.
+    Used for organisation per-seat and flat-rate billing where the monthly
+    amount is bespoke (not from ``SUBSCRIPTION_TIERS``).
+
+    Args:
+        monthly_amount_pence: Monthly price ex VAT in pence.
+
+    Returns:
+        Annual price ex VAT in pence, rounded to the nearest penny.
+    """
+    if monthly_amount_pence <= 0:
+        return 0
+    discount = float(getattr(settings, "ANNUAL_DISCOUNT_PERCENT", 20))
+    annual = monthly_amount_pence * 12 * (1 - discount / 100)
+    return int(math.floor(annual + 0.5))
+
+
 def get_tier_amounts(
     tier: str,
     *,
