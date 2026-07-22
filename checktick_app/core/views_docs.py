@@ -102,6 +102,11 @@ DOC_CATEGORIES = {
         "order": 11,
         "icon": "🤝",
     },
+    "billing": {
+        "title": "Billing",
+        "order": 11.5,
+        "icon": "💳",
+    },
     # DSPT (Data Security and Protection Toolkit) categories
     # These map to the 10 NHS DSPT standards
     "dspt-overview": {
