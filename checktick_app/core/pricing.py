@@ -66,7 +66,12 @@ def compute_inc_vat(amount_ex_vat: int, vat_rate: float | None = None) -> int:
     return int(math.floor(inc + 0.5))
 
 
-def get_tier_amounts(tier: str, *, vat_rate: float | None = None) -> TierAmounts:
+def get_tier_amounts(
+    tier: str,
+    *,
+    billing_cycle: str = "monthly",
+    vat_rate: float | None = None,
+) -> TierAmounts:
     """Return the ex-VAT, inc-VAT, and VAT-only amounts for a tier in pence.
 
     Reads from ``settings.SUBSCRIPTION_TIERS`` directly. For tiers that may be
@@ -75,6 +80,11 @@ def get_tier_amounts(tier: str, *, vat_rate: float | None = None) -> TierAmounts
 
     Args:
         tier: Tier key (e.g. ``"pro"``, ``"team_small"``).
+        billing_cycle: ``"monthly"`` (default) or ``"annual"``. For annual,
+            the monthly ``amount_ex_vat`` is multiplied by 12 and the
+            configured annual discount (``settings.ANNUAL_DISCOUNT_PERCENT``)
+            is applied. VAT is then computed on the discounted annual ex-VAT
+            amount.
         vat_rate: Optional VAT rate override. Defaults to ``settings.VAT_RATE``.
 
     Returns:
@@ -82,7 +92,8 @@ def get_tier_amounts(tier: str, *, vat_rate: float | None = None) -> TierAmounts
         All values are 0 for unknown tiers.
     """
     cfg = getattr(settings, "SUBSCRIPTION_TIERS", {}).get(tier, {})
-    amount_ex_vat = int(cfg.get("amount_ex_vat", 0))
+    monthly_ex_vat = int(cfg.get("amount_ex_vat", 0))
+    amount_ex_vat = _apply_billing_cycle(monthly_ex_vat, cfg, billing_cycle)
     amount = compute_inc_vat(amount_ex_vat, vat_rate=vat_rate)
     return {
         "amount_ex_vat": amount_ex_vat,
@@ -91,16 +102,64 @@ def get_tier_amounts(tier: str, *, vat_rate: float | None = None) -> TierAmounts
     }
 
 
-def _tier_with_amount(tier_cfg: dict, vat_rate: float | None = None) -> dict:
-    """Return a copy of a tier config dict with a computed ``amount`` field."""
+def _apply_billing_cycle(
+    monthly_ex_vat: int, tier_cfg: dict, billing_cycle: str
+) -> int:
+    """Apply the billing cycle multiplier and discount to a monthly ex-VAT amount.
+
+    For ``monthly``: returns the amount unchanged.
+    For ``annual``: returns ``monthly × 12 × (1 - discount_percent / 100)``,
+    rounded to the nearest penny. Falls back to monthly if the tier doesn't
+    define a ``billing_cycles`` config (e.g. organisation/enterprise).
+
+    The discount is read from ``settings.ANNUAL_DISCOUNT_PERCENT`` at call time
+    (not from the tier config dict) so that ``override_settings`` works in
+    tests and so changing the env var flows through without a restart.
+    """
+    if billing_cycle == "monthly":
+        return monthly_ex_vat
+
+    cycles = tier_cfg.get("billing_cycles") if tier_cfg else None
+    if not cycles or billing_cycle not in cycles:
+        # Tier doesn't support this billing cycle (e.g. bespoke tiers).
+        # Fall back to the monthly amount.
+        return monthly_ex_vat
+
+    if billing_cycle == "annual":
+        # Read the discount from settings at call time so override_settings
+        # works in tests and env changes flow through without a restart.
+        discount_percent = float(getattr(settings, "ANNUAL_DISCOUNT_PERCENT", 20))
+        annual_ex_vat = monthly_ex_vat * 12 * (1 - discount_percent / 100)
+        return int(math.floor(annual_ex_vat + 0.5))
+
+    # Unknown billing cycle — fall back to monthly.
+    return monthly_ex_vat
+
+
+def _tier_with_amount(
+    tier_cfg: dict,
+    *,
+    billing_cycle: str = "monthly",
+    vat_rate: float | None = None,
+) -> dict:
+    """Return a copy of a tier config dict with a computed ``amount`` field.
+
+    The ``amount_ex_vat`` is adjusted for the billing cycle (annual applies
+    the discount), and ``amount`` (inc VAT) is computed from it.
+    """
     cfg = copy.deepcopy(tier_cfg)
-    amount_ex_vat = int(cfg.get("amount_ex_vat", 0))
+    monthly_ex_vat = int(cfg.get("amount_ex_vat", 0))
+    amount_ex_vat = _apply_billing_cycle(monthly_ex_vat, cfg, billing_cycle)
     cfg["amount_ex_vat"] = amount_ex_vat
     cfg["amount"] = compute_inc_vat(amount_ex_vat, vat_rate=vat_rate)
     return cfg
 
 
-def get_effective_tiers(*, vat_rate: float | None = None) -> dict:
+def get_effective_tiers(
+    *,
+    billing_cycle: str = "monthly",
+    vat_rate: float | None = None,
+) -> dict:
     """Return all tiers with Platform Admin overrides applied and inc-VAT computed.
 
     This is the canonical entry point for code that needs the full tier dict
@@ -108,9 +167,11 @@ def get_effective_tiers(*, vat_rate: float | None = None) -> dict:
 
     1. Deep-copies ``settings.SUBSCRIPTION_TIERS``.
     2. Applies any active ``PricingOverride`` rows (replacing ``amount_ex_vat``).
-    3. Computes ``amount`` (inc VAT) from ``amount_ex_vat`` and ``VAT_RATE``.
+    3. Computes ``amount`` (inc VAT) from ``amount_ex_vat`` and ``VAT_RATE``,
+       adjusted for the billing cycle.
 
     Args:
+        billing_cycle: ``"monthly"`` (default) or ``"annual"``.
         vat_rate: Optional VAT rate override. Defaults to ``settings.VAT_RATE``.
 
     Returns:
@@ -124,15 +185,21 @@ def get_effective_tiers(*, vat_rate: float | None = None) -> dict:
         if override.tier in tiers:
             tiers[override.tier]["amount_ex_vat"] = int(override.amount_ex_vat)
     return {
-        key: _tier_with_amount(cfg, vat_rate=vat_rate) for key, cfg in tiers.items()
+        key: _tier_with_amount(cfg, billing_cycle=billing_cycle, vat_rate=vat_rate)
+        for key, cfg in tiers.items()
     }
 
 
 def get_effective_tier_amounts(
-    tier: str, *, vat_rate: float | None = None
+    tier: str,
+    *,
+    billing_cycle: str = "monthly",
+    vat_rate: float | None = None,
 ) -> TierAmounts:
     """Like :func:`get_tier_amounts` but honours active ``PricingOverride`` rows."""
-    cfg = get_effective_tiers(vat_rate=vat_rate).get(tier, {})
+    cfg = get_effective_tiers(billing_cycle=billing_cycle, vat_rate=vat_rate).get(
+        tier, {}
+    )
     amount_ex_vat = int(cfg.get("amount_ex_vat", 0))
     amount = int(cfg.get("amount", compute_inc_vat(amount_ex_vat, vat_rate=vat_rate)))
     return {

@@ -1350,3 +1350,88 @@ class TestVATConfiguration:
         assert compute_inc_vat(ex_vat, vat_rate=0.05) == 2100  # £21.00
         assert compute_inc_vat(ex_vat, vat_rate=0.0) == 2000  # £20.00
         assert compute_inc_vat(0) == 0
+
+
+class TestAnnualBillingPricing:
+    """Test annual billing price calculation.
+
+    Annual billing applies a configurable discount (default 20%) to the
+    monthly price × 12. VAT is computed on the discounted annual ex-VAT
+    amount, not the undiscounted amount.
+    """
+
+    def test_annual_discount_percent_configured(self):
+        """ANNUAL_DISCOUNT_PERCENT is configured and sensible."""
+        discount = getattr(settings, "ANNUAL_DISCOUNT_PERCENT", None)
+        assert discount is not None
+        assert 0 <= float(discount) <= 100
+
+    def test_tiers_have_billing_cycles_config(self):
+        """Fixed-price tiers define billing_cycles with monthly and annual."""
+        tiers = settings.SUBSCRIPTION_TIERS
+        for tier_key in ("pro", "team_small", "team_medium", "team_large"):
+            cfg = tiers[tier_key]
+            assert "billing_cycles" in cfg, f"{tier_key} missing billing_cycles"
+            cycles = cfg["billing_cycles"]
+            assert "monthly" in cycles, f"{tier_key} missing monthly cycle"
+            assert "annual" in cycles, f"{tier_key} missing annual cycle"
+            assert cycles["monthly"]["interval_unit"] == "monthly"
+            assert cycles["annual"]["interval_unit"] == "yearly"
+
+    def test_annual_price_calculation_for_pro(self):
+        """Annual Pro price = monthly × 12 × (1 - discount).
+
+        At £20/mo ex VAT and 20% annual discount:
+            £20 × 12 = £240, × 0.80 = £192 ex VAT per year.
+        """
+        from checktick_app.core.pricing import get_tier_amounts
+
+        monthly = get_tier_amounts("pro", billing_cycle="monthly")
+        annual = get_tier_amounts("pro", billing_cycle="annual")
+
+        discount = float(settings.ANNUAL_DISCOUNT_PERCENT) / 100
+        expected_annual_ex = int(round(monthly["amount_ex_vat"] * 12 * (1 - discount)))
+        assert annual["amount_ex_vat"] == expected_annual_ex
+        # Sanity check at defaults (£20/mo, 20% discount, 20% VAT)
+        if float(settings.VAT_RATE) == 0.20 and discount == 0.20:
+            assert annual["amount_ex_vat"] == 19200  # £192.00 ex VAT
+            assert annual["amount"] == 23040  # £230.40 inc VAT
+            assert annual["vat_amount"] == 3840  # £38.40 VAT
+
+    def test_annual_price_with_zero_discount(self):
+        """With 0% annual discount, annual = monthly × 12 exactly."""
+        from checktick_app.core.pricing import get_tier_amounts
+
+        monthly = get_tier_amounts("pro", billing_cycle="monthly")
+        with override_settings(ANNUAL_DISCOUNT_PERCENT=0):
+            annual = get_tier_amounts("pro", billing_cycle="annual")
+        assert annual["amount_ex_vat"] == monthly["amount_ex_vat"] * 12
+
+    def test_annual_vat_computed_on_discounted_amount(self):
+        """VAT must be computed on the discounted annual ex-VAT, not base."""
+        from checktick_app.core.pricing import compute_inc_vat, get_tier_amounts
+
+        annual = get_tier_amounts("pro", billing_cycle="annual")
+        # VAT should equal compute_inc_vat(discounted_ex_vat) - discounted_ex_vat
+        assert annual["amount"] == compute_inc_vat(annual["amount_ex_vat"])
+        assert annual["vat_amount"] == annual["amount"] - annual["amount_ex_vat"]
+
+    def test_monthly_billing_is_default_and_backwards_compatible(self):
+        """Calling get_tier_amounts without billing_cycle returns monthly."""
+        from checktick_app.core.pricing import get_tier_amounts
+
+        default = get_tier_amounts("pro")
+        monthly = get_tier_amounts("pro", billing_cycle="monthly")
+        assert default == monthly
+
+    def test_annual_price_for_team_small(self):
+        """Team Small annual = 5 seats × £20 × 12 × 0.80 = £960 ex VAT."""
+        from checktick_app.core.pricing import get_tier_amounts
+
+        annual = get_tier_amounts("team_small", billing_cycle="annual")
+        if (
+            float(settings.VAT_RATE) == 0.20
+            and float(settings.ANNUAL_DISCOUNT_PERCENT) == 20
+        ):
+            assert annual["amount_ex_vat"] == 96000  # £960.00
+            assert annual["amount"] == 115200  # £1,152.00 inc VAT
