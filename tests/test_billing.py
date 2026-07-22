@@ -1524,3 +1524,137 @@ class TestBillingCycleModelFields:
         assert payment.billing_cycle == "annual"
         assert payment.amount_ex_vat == expected["amount_ex_vat"]
         assert payment.amount_inc_vat == expected["amount"]
+
+
+class TestCheckoutBillingCycle:
+    """Test that billing_cycle flows through the checkout flow to GoCardless.
+
+    These tests verify that create_subscription_for_user:
+    1. Accepts a billing_cycle parameter
+    2. Passes the correct interval_unit to GoCardless (yearly for annual)
+    3. Caches the billing cycle on UserProfile for the webhook handler
+    4. Computes the correct annual amount (with discount)
+    """
+
+    @pytest.mark.django_db
+    def test_annual_checkout_passes_yearly_interval_to_gocardless(self, monkeypatch):
+        """Annual checkout sends interval_unit='yearly' to GoCardless."""
+        from checktick_app.core.billing import create_subscription_for_user
+
+        user = User.objects.create_user(
+            username="annual-checkout@example.com",
+            email="annual-checkout@example.com",
+            password="TestPass123!",
+        )
+
+        captured = {}
+
+        def fake_create_subscription(**kwargs):
+            captured.update(kwargs)
+            return {"id": "SUB_ANNUAL_123"}
+
+        monkeypatch.setattr(
+            "checktick_app.core.billing.payment_client.create_subscription",
+            fake_create_subscription,
+        )
+
+        create_subscription_for_user(
+            user=user,
+            tier="pro",
+            mandate_id="MD123",
+            billing_cycle="annual",
+        )
+
+        assert captured["interval_unit"] == "yearly"
+        assert captured["interval"] == 1
+        # Annual amount should be discounted: £20 × 12 × 0.80 = £192 ex VAT,
+        # £230.40 inc VAT at 20%.
+        assert captured["amount"] == 23040
+
+    @pytest.mark.django_db
+    def test_monthly_checkout_passes_monthly_interval_to_gocardless(self, monkeypatch):
+        """Monthly checkout (default) sends interval_unit='monthly'."""
+        from checktick_app.core.billing import create_subscription_for_user
+
+        user = User.objects.create_user(
+            username="monthly-checkout@example.com",
+            email="monthly-checkout@example.com",
+            password="TestPass123!",
+        )
+
+        captured = {}
+
+        def fake_create_subscription(**kwargs):
+            captured.update(kwargs)
+            return {"id": "SUB_MONTHLY_123"}
+
+        monkeypatch.setattr(
+            "checktick_app.core.billing.payment_client.create_subscription",
+            fake_create_subscription,
+        )
+
+        # No billing_cycle kwarg — should default to monthly
+        create_subscription_for_user(
+            user=user,
+            tier="pro",
+            mandate_id="MD456",
+        )
+
+        assert captured["interval_unit"] == "monthly"
+        assert captured["interval"] == 1
+        # Monthly: £20 ex VAT, £24 inc VAT at 20%
+        assert captured["amount"] == 2400
+
+    @pytest.mark.django_db
+    def test_annual_checkout_caches_billing_cycle_on_profile(self, monkeypatch):
+        """Annual checkout caches billing_cycle on UserProfile for webhook."""
+        from checktick_app.core.billing import create_subscription_for_user
+
+        user = User.objects.create_user(
+            username="cache-annual@example.com",
+            email="cache-annual@example.com",
+            password="TestPass123!",
+        )
+
+        monkeypatch.setattr(
+            "checktick_app.core.billing.payment_client.create_subscription",
+            lambda **kwargs: {"id": "SUB_CACHE_123"},
+        )
+
+        create_subscription_for_user(
+            user=user,
+            tier="pro",
+            mandate_id="MD789",
+            billing_cycle="annual",
+        )
+
+        user.profile.refresh_from_db()
+        assert user.profile.last_checkout_billing_cycle == "annual"
+        assert user.profile.last_checkout_amount_ex_vat == 19200  # £192 ex VAT
+
+    @pytest.mark.django_db
+    def test_monthly_checkout_caches_monthly_on_profile(self, monkeypatch):
+        """Monthly checkout caches 'monthly' on UserProfile."""
+        from checktick_app.core.billing import create_subscription_for_user
+
+        user = User.objects.create_user(
+            username="cache-monthly@example.com",
+            email="cache-monthly@example.com",
+            password="TestPass123!",
+        )
+
+        monkeypatch.setattr(
+            "checktick_app.core.billing.payment_client.create_subscription",
+            lambda **kwargs: {"id": "SUB_CACHE_456"},
+        )
+
+        create_subscription_for_user(
+            user=user,
+            tier="pro",
+            mandate_id="MD000",
+            billing_cycle="monthly",
+        )
+
+        user.profile.refresh_from_db()
+        assert user.profile.last_checkout_billing_cycle == "monthly"
+        assert user.profile.last_checkout_amount_ex_vat == 2000  # £20 ex VAT
