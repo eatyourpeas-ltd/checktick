@@ -89,7 +89,11 @@ This ensures VAT returns generated from the Platform Admin billing view and the 
 
 ## Organization checkout
 
-Organization checkout applies effective pricing with the same guardrails used across other billing entry points.
+Organization checkout applies effective pricing with the same guardrails used across other billing entry points. Organisations support both monthly and annual billing cycles (set by the platform admin per-org). For annual org billing, the `compute_annual_amount()` helper in `pricing.py` applies the configured `ANNUAL_DISCOUNT_PERCENT` to the monthly per-seat or flat-rate amount × 12.
+
+## Billing cycle switching
+
+Existing subscribers can switch between monthly and annual billing from the subscription portal. Because GoCardless doesn't support changing `interval_unit` on an existing subscription, the `switch_billing_cycle` view cancels the old subscription and creates a new one with the new billing cycle, reusing the existing Direct Debit mandate. The new subscription's amount and interval are computed via the same pricing helpers used at checkout.
 
 ## Refund Lifecycle and Reconciliation
 
@@ -97,9 +101,10 @@ Organization checkout applies effective pricing with the same guardrails used ac
 
 Platform admin billing supports operator-initiated refund actions with policy constraints:
 
-1. Hosted reference flow automates full refunds only.
-2. Reason code is mandatory.
-3. Additional free-text reason is required when reason code is `other`.
+1. Hosted reference flow supports full refunds for all billing cycles.
+2. **Partial (pro-rata) refunds** are supported for annual subscriptions. The refund amount is calculated by `compute_pro_rata_refund()` in `pricing.py` as `amount × (days_remaining / total_days)`. Monthly subscriptions always refund the full amount.
+3. Reason code is mandatory.
+4. Additional free-text reason is required when reason code is `other`.
 
 ## Webhook-driven lifecycle states
 

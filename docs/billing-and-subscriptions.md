@@ -396,7 +396,7 @@ In accordance with UK Consumer Contracts Regulations:
 - **14-day right to cancel** for consumers on initial subscriptions
 - **No automatic refunds** on subscription renewals or unused subscription periods
 - We may grant refunds at our discretion beyond the 14-day period - contact us to discuss
-- **Pro-rated refunds** for annual plans may be considered for exceptional circumstances
+- **Pro-rated refunds** for annual plans are supported via the platform admin billing view. The refund amount is calculated as `amount × (days_remaining / total_days)`, rounded to the nearest penny. Monthly subscriptions always refund the full amount.
 
 ### Requesting a Refund
 
@@ -420,12 +420,28 @@ For more details, see our [Refund Policy](/docs/refund-policy/).
 
 ### Organisation Billing
 
-Organisations are billed per user per month:
+Organisations are billed per user per month, with a choice of monthly or
+annual billing cycle set by the platform admin:
 
 - **Base rate**: £24/user/month (inc VAT) at the default `VAT_RATE=0.20`, derived from the `BASE_SEAT_PRICE_EX_VAT` setting (£20 ex VAT)
+- **Annual billing**: When the org's billing cycle is set to annual, the annual discount (`ANNUAL_DISCOUNT_PERCENT`, default 20%) is applied to the monthly rate × 12. The platform admin sets this per-organisation in the org form.
 - **Minimum commitment**: Contact sales
-- **Annual discounts**: Available for yearly contracts
 - **Invoice billing**: Available for organisations
+
+### Switching Billing Cycle
+
+Existing subscribers can switch between monthly and annual billing at any time
+from the subscription portal. Because GoCardless doesn't support changing the
+`interval_unit` on an existing subscription, switching cancels the current
+subscription and creates a new one with the new billing cycle, reusing the
+existing Direct Debit mandate (no re-authorisation needed).
+
+- **Monthly → Annual**: The new annual subscription charges the discounted
+  annual amount on the next billing date.
+- **Annual → Monthly**: The new monthly subscription charges the standard
+  monthly amount on the next billing date.
+- The old subscription remains active until the end of its current billing
+  period; the new subscription starts immediately.
 
 ### Managing Team Members
 
