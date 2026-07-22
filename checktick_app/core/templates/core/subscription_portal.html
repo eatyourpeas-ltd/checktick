@@ -41,6 +41,9 @@
               {{ subscription_status|title }}
             </div>
           {% endif %}
+          {% if billing_cycle and billing_cycle != 'monthly' %}
+            <div class="badge badge-lg badge-secondary">{{ billing_cycle|title }}</div>
+          {% endif %}
         </div>
 
         {% if payment_environment == 'sandbox' %}

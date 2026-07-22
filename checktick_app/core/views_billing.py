@@ -85,6 +85,7 @@ def subscription_portal(request: HttpRequest) -> HttpResponse:
     context = {
         "current_tier": profile.account_tier,
         "subscription_status": profile.subscription_status,
+        "billing_cycle": profile.last_checkout_billing_cycle or "monthly",
         "payment_customer_id": profile.payment_customer_id,
         "payment_subscription_id": profile.payment_subscription_id,
         "payment_environment": settings.PAYMENT_ENVIRONMENT,

@@ -180,6 +180,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "invoice_date",
         "user",
         "tier",
+        "billing_cycle",
         "get_amount_ex_vat_display",
         "get_vat_amount_display",
         "get_amount_inc_vat_display",
@@ -189,6 +190,7 @@ class PaymentAdmin(admin.ModelAdmin):
     list_filter = (
         "status",
         "tier",
+        "billing_cycle",
         "invoice_date",
         "payment_provider",
         "applied_promotion",
@@ -336,6 +338,7 @@ class PaymentAdmin(admin.ModelAdmin):
                 "Invoice Date",
                 "Subscription ID",
                 "Tier",
+                "Billing Cycle",
                 "Amount (ex VAT) GBP",
                 "VAT Rate %",
                 "VAT Amount GBP",
@@ -360,6 +363,7 @@ class PaymentAdmin(admin.ModelAdmin):
                     payment.invoice_date.isoformat(),
                     payment.subscription_id,
                     payment.tier,
+                    payment.billing_cycle,
                     f"{payment.amount_ex_vat / 100:.2f}",
                     f"{float(payment.vat_rate) * 100:.0f}%",
                     f"{payment.vat_amount / 100:.2f}",
@@ -379,6 +383,7 @@ class PaymentAdmin(admin.ModelAdmin):
         writer.writerow(
             [
                 "TOTALS",
+                "",
                 "",
                 "",
                 "",

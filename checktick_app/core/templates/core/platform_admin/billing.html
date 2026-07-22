@@ -106,6 +106,7 @@
               <th>{% trans "Invoice" %}</th>
               <th>{% trans "Customer" %}</th>
               <th>{% trans "Tier" %}</th>
+              <th>{% trans "Cycle" %}</th>
               <th>{% trans "Ex VAT" %}</th>
               <th>{% trans "VAT" %}</th>
               <th>{% trans "Inc VAT" %}</th>
@@ -125,6 +126,7 @@
                   <div class="text-xs text-base-content/70">{{ payment.customer_email }}</div>
                 </td>
                 <td><span class="badge badge-ghost badge-sm">{{ payment.tier }}</span></td>
+                <td><span class="badge badge-ghost badge-sm">{{ payment.billing_cycle }}</span></td>
                 <td>£{{ payment.amount_ex_vat|floatformat:-2 }}</td>
                 <td>£{{ payment.vat_amount|floatformat:-2 }}</td>
                 <td class="font-semibold">£{{ payment.amount_inc_vat|floatformat:-2 }}</td>

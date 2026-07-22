@@ -210,7 +210,11 @@ BASE_SEAT_PRICE_EX_VAT = int(
 # Annual billing discount, applied to (monthly price × 12).
 # Default 20% — effectively ~2.4 months free. Override via the
 # ANNUAL_DISCOUNT_PERCENT environment variable (as a percentage, e.g. "20").
-ANNUAL_DISCOUNT_PERCENT = float(os.environ.get("ANNUAL_DISCOUNT_PERCENT", "20"))
+# Values <= 1 are treated as fractions (e.g. 0.20 = 20%) for convenience.
+_raw_annual_discount = float(os.environ.get("ANNUAL_DISCOUNT_PERCENT", "20"))
+ANNUAL_DISCOUNT_PERCENT = (
+    _raw_annual_discount * 100 if _raw_annual_discount <= 1 else _raw_annual_discount
+)
 
 # Subscription Tiers Configuration
 # GoCardless uses amounts directly (not price IDs like Paddle)
