@@ -95,7 +95,7 @@
       <h3 class="card-title">{% trans "Payment Timeline" %}</h3>
       <p class="text-sm text-base-content/70">
         {% blocktrans with policy_version=refund_policy_version %}
-        Refund policy {{ policy_version }}: full-payment refunds only. Partial refunds and automated credits are tracked as policy exceptions.
+        Refund policy {{ policy_version }}: full refunds for all billing cycles. Pro-rata partial refunds supported for annual subscriptions.
         {% endblocktrans %}
       </p>
       <div class="overflow-x-auto">
@@ -168,6 +168,9 @@
                         {% endfor %}
                       </select>
                       <input type="text" name="refund_reason" class="input input-bordered input-xs w-40" placeholder="{% trans 'Reason' %}">
+                      {% if payment.billing_cycle == 'annual' %}
+                      <input type="number" name="refund_amount_pence" class="input input-bordered input-xs w-40" placeholder="{% trans 'Partial amount (pence) — leave blank for full' %}" min="0" max="{{ payment.amount_inc_vat }}">
+                      {% endif %}
                       <button type="submit" class="btn btn-xs btn-error btn-outline">{% trans "Refund" %}</button>
                     </form>
                   {% else %}
