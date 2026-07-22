@@ -178,6 +178,83 @@ def cancel_subscription(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @billing_enabled_required
+@require_http_methods(["POST"])
+@ratelimit(key="user", rate="5/h", block=True)
+def switch_billing_cycle(request: HttpRequest) -> HttpResponse:
+    """Switch the billing cycle on an existing subscription.
+
+    GoCardless doesn't support changing interval_unit on an existing
+    subscription, so switching requires cancelling the old subscription
+    and creating a new one with the new billing cycle. The user's mandate
+    is reused (no need to re-authorise Direct Debit).
+    """
+    from checktick_app.core.billing import create_subscription_for_user
+
+    user = request.user
+    profile = user.profile
+
+    if not profile.payment_subscription_id or profile.payment_provider != "gocardless":
+        messages.error(request, "No active subscription found.")
+        return redirect("core:subscription_portal")
+
+    new_cycle = request.POST.get("billing_cycle", "").strip().lower()
+    if new_cycle not in ("monthly", "annual"):
+        messages.error(request, "Invalid billing cycle selected.")
+        return redirect("core:subscription_portal")
+
+    current_cycle = profile.last_checkout_billing_cycle or "monthly"
+    if new_cycle == current_cycle:
+        messages.info(request, f"You are already on {current_cycle} billing.")
+        return redirect("core:subscription_portal")
+
+    if not profile.payment_mandate_id:
+        messages.error(
+            request,
+            "No payment mandate found. Please contact support to switch billing cycle.",
+        )
+        return redirect("core:subscription_portal")
+
+    tier = profile.account_tier
+
+    try:
+        # Cancel the existing subscription (runs until end of current period)
+        payment_client.cancel_subscription(profile.payment_subscription_id)
+        logger.info(
+            f"Cancelled subscription {profile.payment_subscription_id} for "
+            f"{user.username} to switch from {current_cycle} to {new_cycle}"
+        )
+
+        # Create a new subscription with the new billing cycle, reusing the mandate
+        new_subscription_id = create_subscription_for_user(
+            user=user,
+            tier=tier,
+            mandate_id=profile.payment_mandate_id,
+            billing_cycle=new_cycle,
+        )
+
+        messages.success(
+            request,
+            f"Your billing cycle has been switched to {new_cycle}. "
+            "Your old subscription has been cancelled and a new one created. "
+            "You will be charged at the new rate on your next billing date.",
+        )
+        logger.info(
+            f"Switched {user.username} from {current_cycle} to {new_cycle}: "
+            f"new subscription {new_subscription_id}"
+        )
+
+    except PaymentAPIError as e:
+        logger.error(f"Error switching billing cycle for {user.username}: {e}")
+        messages.error(
+            request,
+            "Unable to switch billing cycle. Please try again or contact support.",
+        )
+
+    return redirect("core:subscription_portal")
+
+
+@login_required
+@billing_enabled_required
 @require_http_methods(["GET"])
 def payment_history(request: HttpRequest) -> HttpResponse:
     """Show payment history page.

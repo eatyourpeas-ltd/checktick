@@ -109,6 +109,38 @@
       {% if payment_subscription_id and subscription_status == 'active' %}
         <div class="card bg-base-100 shadow-xl">
           <div class="card-body">
+            <h3 class="card-title">{% trans "Switch Billing Cycle" %}</h3>
+            <p>
+              {% if billing_cycle == 'monthly' %}
+                {% trans "You are currently billed monthly. Switch to annual billing to save 20% — effectively getting ~2.4 months free per year." %}
+              {% else %}
+                {% trans "You are currently billed annually. Switch back to monthly billing at any time." %}
+              {% endif %}
+            </p>
+            <p class="text-sm text-base-content/70">
+              {% trans "Switching cancels your current subscription and creates a new one. You will be charged at the new rate on your next billing date." %}
+            </p>
+            <div class="card-actions justify-end">
+              <form method="post" action="{% url 'core:switch_billing_cycle' %}"
+                    data-confirm-message="{% trans 'Are you sure you want to switch your billing cycle? Your current subscription will be cancelled and a new one created.' %}">
+                {% csrf_token %}
+                <input type="hidden" name="billing_cycle" value="{% if billing_cycle == 'monthly' %}annual{% else %}monthly{% endif %}" />
+                <button type="submit" class="btn btn-primary btn-outline">
+                  {% if billing_cycle == 'monthly' %}
+                    {% trans "Switch to Annual (Save 20%)" %}
+                  {% else %}
+                    {% trans "Switch to Monthly" %}
+                  {% endif %}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if payment_subscription_id and subscription_status == 'active' %}
+        <div class="card bg-base-100 shadow-xl">
+          <div class="card-body">
             <h3 class="card-title">{% trans "Cancel Subscription" %}</h3>
 
             {% if not can_downgrade %}
