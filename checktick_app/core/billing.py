@@ -334,8 +334,12 @@ class PaymentClient:
             data["subscriptions"]["start_date"] = start_date
 
         logger.info(
-            f"Creating subscription ({self.environment}): mandate={mandate_id}, "
-            f"amount={amount} {currency}, interval={interval} {interval_unit}"
+            "Creating subscription (%s): interval=%s %s, amount=%s %s",
+            self.environment,
+            interval,
+            interval_unit,
+            amount,
+            currency,
         )
         response = self._make_request("POST", "/subscriptions", data=data)
         subscription = response.get("subscriptions", {})

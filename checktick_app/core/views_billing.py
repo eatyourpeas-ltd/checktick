@@ -220,12 +220,15 @@ def switch_billing_cycle(request: HttpRequest) -> HttpResponse:
         # Cancel the existing subscription (runs until end of current period)
         payment_client.cancel_subscription(profile.payment_subscription_id)
         logger.info(
-            f"Cancelled subscription {profile.payment_subscription_id} for "
-            f"{user.username} to switch from {current_cycle} to {new_cycle}"
+            "Cancelled subscription to switch billing cycle from %s to %s",
+            current_cycle,
+            new_cycle,
         )
 
-        # Create a new subscription with the new billing cycle, reusing the mandate
-        new_subscription_id = create_subscription_for_user(
+        # Create a new subscription with the new billing cycle, reusing the mandate.
+        # The returned subscription ID is intentionally not logged to avoid
+        # leaking sensitive identifiers in clear text (CodeQL).
+        create_subscription_for_user(
             user=user,
             tier=tier,
             mandate_id=profile.payment_mandate_id,
@@ -239,8 +242,9 @@ def switch_billing_cycle(request: HttpRequest) -> HttpResponse:
             "You will be charged at the new rate on your next billing date.",
         )
         logger.info(
-            f"Switched {user.username} from {current_cycle} to {new_cycle}: "
-            f"new subscription {new_subscription_id}"
+            "Switched billing cycle from %s to %s: new subscription created",
+            current_cycle,
+            new_cycle,
         )
 
     except PaymentAPIError as e:
@@ -448,7 +452,9 @@ def start_checkout(request: HttpRequest) -> HttpResponse:
             return redirect("core:pricing")
 
         logger.info(
-            f"User {request.user.username} starting checkout for tier: {tier} ({billing_cycle})"
+            "Starting checkout for tier: %s (%s)",
+            tier,
+            billing_cycle,
         )
         return redirect(redirect_url)
 
