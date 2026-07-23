@@ -333,14 +333,7 @@ class PaymentClient:
         if start_date:
             data["subscriptions"]["start_date"] = start_date
 
-        logger.info(
-            "Creating subscription (%s): interval=%s %s, amount=%s %s",
-            self.environment,
-            interval,
-            interval_unit,
-            amount,
-            currency,
-        )  # lgtm[py/clear-text-logging-sensitive-data]
+        logger.info("Creating subscription (%s)", self.environment)
         response = self._make_request("POST", "/subscriptions", data=data)
         subscription = response.get("subscriptions", {})
         logger.info(

@@ -219,11 +219,7 @@ def switch_billing_cycle(request: HttpRequest) -> HttpResponse:
     try:
         # Cancel the existing subscription (runs until end of current period)
         payment_client.cancel_subscription(profile.payment_subscription_id)
-        logger.info(
-            "Cancelled subscription to switch billing cycle from %s to %s",
-            current_cycle,
-            new_cycle,
-        )  # lgtm[py/clear-text-logging-sensitive-data]
+        logger.info("Cancelled subscription to switch billing cycle")
 
         # Create a new subscription with the new billing cycle, reusing the mandate.
         # The returned subscription ID is intentionally not logged to avoid
@@ -241,11 +237,7 @@ def switch_billing_cycle(request: HttpRequest) -> HttpResponse:
             "Your old subscription has been cancelled and a new one created. "
             "You will be charged at the new rate on your next billing date.",
         )
-        logger.info(
-            "Switched billing cycle from %s to %s: new subscription created",
-            current_cycle,
-            new_cycle,
-        )  # lgtm[py/clear-text-logging-sensitive-data]
+        logger.info("Switched billing cycle: new subscription created")
 
     except PaymentAPIError as e:
         logger.error(f"Error switching billing cycle for {user.username}: {e}")
@@ -451,11 +443,7 @@ def start_checkout(request: HttpRequest) -> HttpResponse:
             messages.error(request, "Failed to create checkout session.")
             return redirect("core:pricing")
 
-        logger.info(
-            "Starting checkout for tier: %s (%s)",
-            tier,
-            billing_cycle,
-        )  # lgtm[py/clear-text-logging-sensitive-data]
+        logger.info("Starting checkout for selected tier")
         return redirect(redirect_url)
 
     except Exception as e:
