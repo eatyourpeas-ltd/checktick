@@ -908,6 +908,9 @@ def organization_create(request: HttpRequest) -> HttpResponse:
         billing_type = request.POST.get(
             "billing_type", Organization.BillingType.PER_SEAT
         )
+        billing_cycle = request.POST.get("billing_cycle", "monthly")
+        if billing_cycle not in ("monthly", "annual"):
+            billing_cycle = "monthly"
         price_per_seat = request.POST.get("price_per_seat", "").strip()
         flat_rate_price = request.POST.get("flat_rate_price", "").strip()
         max_seats = request.POST.get("max_seats", "").strip()
@@ -969,6 +972,7 @@ def organization_create(request: HttpRequest) -> HttpResponse:
             name=name,
             owner=owner,
             billing_type=billing_type,
+            billing_cycle=billing_cycle,
             price_per_seat=parsed_price_per_seat,
             flat_rate_price=parsed_flat_rate_price,
             max_seats=parsed_max_seats,
@@ -1056,6 +1060,9 @@ def organization_edit(request: HttpRequest, org_id: int) -> HttpResponse:
     if request.method == "POST":
         name = request.POST.get("name", org.name).strip()
         billing_type = request.POST.get("billing_type", org.billing_type)
+        billing_cycle = request.POST.get("billing_cycle", org.billing_cycle)
+        if billing_cycle not in ("monthly", "annual"):
+            billing_cycle = "monthly"
         price_per_seat = request.POST.get("price_per_seat", "").strip()
         flat_rate_price = request.POST.get("flat_rate_price", "").strip()
         max_seats = request.POST.get("max_seats", "").strip()
@@ -1105,6 +1112,7 @@ def organization_edit(request: HttpRequest, org_id: int) -> HttpResponse:
         # Update fields
         org.name = name
         org.billing_type = billing_type
+        org.billing_cycle = billing_cycle
         org.price_per_seat = parsed_price_per_seat
         org.flat_rate_price = parsed_flat_rate_price
         org.max_seats = parsed_max_seats
@@ -1727,15 +1735,26 @@ def platform_admin_billing_refund(
     requested_amount_pence = _coerce_amount_pence(
         request.POST.get("refund_amount_pence", "")
     )
-    if (
-        requested_amount_pence is not None
-        and requested_amount_pence != payment.amount_inc_vat
-    ):
-        messages.error(
-            request,
-            "Partial refunds are not currently supported. Submit the full payment amount.",
-        )
-        return redirect(return_url)
+    if requested_amount_pence is not None:
+        # Full refunds are always allowed. Partial refunds are allowed for
+        # annual subscriptions (pro-rata per refund policy §4.5). Monthly
+        # subscriptions must refund the full amount.
+        if requested_amount_pence == payment.amount_inc_vat:
+            refund_amount_pence = payment.amount_inc_vat
+        elif (
+            payment.billing_cycle == "annual"
+            and 0 < requested_amount_pence < payment.amount_inc_vat
+        ):
+            refund_amount_pence = requested_amount_pence
+        else:
+            messages.error(
+                request,
+                "Partial refunds are only supported for annual subscriptions. "
+                "Submit the full payment amount for monthly refunds.",
+            )
+            return redirect(return_url)  # lgtm[py/url-redirection]
+    else:
+        refund_amount_pence = payment.amount_inc_vat
 
     payment_client = PaymentClient()
     refunded_invoice_number = payment.invoice_number
@@ -1753,7 +1772,7 @@ def platform_admin_billing_refund(
 
             refund = payment_client.refund_payment(
                 locked_payment.payment_id,
-                amount=locked_payment.amount_inc_vat,
+                amount=refund_amount_pence,
                 total_amount_confirmation=locked_payment.amount_inc_vat,
                 metadata={
                     "invoice_number": locked_payment.invoice_number,
@@ -1763,6 +1782,9 @@ def platform_admin_billing_refund(
                     "adjustment_type": "refund",
                     "adjustment_status": "requested",
                     "policy_version": REFUND_POLICY_VERSION,
+                    "billing_cycle": locked_payment.billing_cycle,
+                    "is_partial_refund": refund_amount_pence
+                    < locked_payment.amount_inc_vat,
                 },
             )
 
@@ -1782,10 +1804,11 @@ def platform_admin_billing_refund(
                     "provider_refund_id": refund.get("id", ""),
                     "refund_reason_code": refund_reason_code,
                     "refund_reason": refund_reason,
-                    "amount_pence": locked_payment.amount_inc_vat,
+                    "amount_pence": refund_amount_pence,
                     "adjustment_type": "refund",
                     "adjustment_status": "requested",
-                    "supports_partial_refunds": False,
+                    "supports_partial_refunds": locked_payment.billing_cycle
+                    == "annual",
                     "supports_credit_adjustments": False,
                     "refund_policy_version": REFUND_POLICY_VERSION,
                 },

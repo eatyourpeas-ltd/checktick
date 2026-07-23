@@ -666,6 +666,54 @@ class TestPaymentRecordCreation:
         assert payment.payment_id == "PM_WEBHOOK123"
         assert payment.user == pro_user_gocardless
 
+    @pytest.mark.django_db
+    @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
+    def test_payment_confirmed_webhook_uses_cached_annual_billing_cycle(
+        self, mock_validate, pro_user_gocardless
+    ):
+        """Webhook creates Payment with billing_cycle from cached profile."""
+        mock_validate.return_value = True
+
+        # Simulate an annual checkout having cached the billing cycle
+        profile = pro_user_gocardless.profile
+        profile.last_checkout_billing_cycle = "annual"
+        profile.last_checkout_amount_ex_vat = 19200  # £192 ex VAT (annual discounted)
+        profile.save(
+            update_fields=[
+                "last_checkout_billing_cycle",
+                "last_checkout_amount_ex_vat",
+            ]
+        )
+
+        payload = {
+            "events": [
+                {
+                    "id": "EV_CONFIRM_ANNUAL",
+                    "resource_type": "payments",
+                    "action": "confirmed",
+                    "links": {
+                        "payment": "PM_WEBHOOK_ANNUAL",
+                        "subscription": profile.payment_subscription_id,
+                    },
+                }
+            ]
+        }
+
+        client = Client()
+        response = client.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert Payment.objects.count() == 1
+        payment = Payment.objects.first()
+        assert payment.billing_cycle == "annual"
+        # Should use the cached annual ex-VAT amount, not the monthly base
+        assert payment.amount_ex_vat == 19200
+        assert payment.amount_inc_vat == 23040  # £230.40 inc VAT at 20%
+
 
 class TestRefundWebhookLifecycle:
     """Test refund lifecycle updates driven by payment provider webhooks."""
@@ -1350,3 +1398,351 @@ class TestVATConfiguration:
         assert compute_inc_vat(ex_vat, vat_rate=0.05) == 2100  # £21.00
         assert compute_inc_vat(ex_vat, vat_rate=0.0) == 2000  # £20.00
         assert compute_inc_vat(0) == 0
+
+
+class TestAnnualBillingPricing:
+    """Test annual billing price calculation.
+
+    Annual billing applies a configurable discount (default 20%) to the
+    monthly price × 12. VAT is computed on the discounted annual ex-VAT
+    amount, not the undiscounted amount.
+    """
+
+    def test_annual_discount_percent_configured(self):
+        """ANNUAL_DISCOUNT_PERCENT is configured and sensible."""
+        discount = getattr(settings, "ANNUAL_DISCOUNT_PERCENT", None)
+        assert discount is not None
+        assert 0 <= float(discount) <= 100
+
+    def test_tiers_have_billing_cycles_config(self):
+        """Fixed-price tiers define billing_cycles with monthly and annual."""
+        tiers = settings.SUBSCRIPTION_TIERS
+        for tier_key in ("pro", "team_small", "team_medium", "team_large"):
+            cfg = tiers[tier_key]
+            assert "billing_cycles" in cfg, f"{tier_key} missing billing_cycles"
+            cycles = cfg["billing_cycles"]
+            assert "monthly" in cycles, f"{tier_key} missing monthly cycle"
+            assert "annual" in cycles, f"{tier_key} missing annual cycle"
+            assert cycles["monthly"]["interval_unit"] == "monthly"
+            assert cycles["annual"]["interval_unit"] == "yearly"
+
+    def test_annual_price_calculation_for_pro(self):
+        """Annual Pro price = monthly × 12 × (1 - discount).
+
+        At £20/mo ex VAT and 20% annual discount:
+            £20 × 12 = £240, × 0.80 = £192 ex VAT per year.
+        """
+        from checktick_app.core.pricing import get_tier_amounts
+
+        monthly = get_tier_amounts("pro", billing_cycle="monthly")
+        annual = get_tier_amounts("pro", billing_cycle="annual")
+
+        discount = float(settings.ANNUAL_DISCOUNT_PERCENT) / 100
+        expected_annual_ex = int(round(monthly["amount_ex_vat"] * 12 * (1 - discount)))
+        assert annual["amount_ex_vat"] == expected_annual_ex
+        # Sanity check at defaults (£20/mo, 20% discount, 20% VAT)
+        if float(settings.VAT_RATE) == 0.20 and discount == 0.20:
+            assert annual["amount_ex_vat"] == 19200  # £192.00 ex VAT
+            assert annual["amount"] == 23040  # £230.40 inc VAT
+            assert annual["vat_amount"] == 3840  # £38.40 VAT
+
+    def test_annual_price_with_zero_discount(self):
+        """With 0% annual discount, annual = monthly × 12 exactly."""
+        from checktick_app.core.pricing import get_tier_amounts
+
+        monthly = get_tier_amounts("pro", billing_cycle="monthly")
+        with override_settings(ANNUAL_DISCOUNT_PERCENT=0):
+            annual = get_tier_amounts("pro", billing_cycle="annual")
+        assert annual["amount_ex_vat"] == monthly["amount_ex_vat"] * 12
+
+    def test_annual_vat_computed_on_discounted_amount(self):
+        """VAT must be computed on the discounted annual ex-VAT, not base."""
+        from checktick_app.core.pricing import compute_inc_vat, get_tier_amounts
+
+        annual = get_tier_amounts("pro", billing_cycle="annual")
+        # VAT should equal compute_inc_vat(discounted_ex_vat) - discounted_ex_vat
+        assert annual["amount"] == compute_inc_vat(annual["amount_ex_vat"])
+        assert annual["vat_amount"] == annual["amount"] - annual["amount_ex_vat"]
+
+    def test_monthly_billing_is_default_and_backwards_compatible(self):
+        """Calling get_tier_amounts without billing_cycle returns monthly."""
+        from checktick_app.core.pricing import get_tier_amounts
+
+        default = get_tier_amounts("pro")
+        monthly = get_tier_amounts("pro", billing_cycle="monthly")
+        assert default == monthly
+
+    def test_annual_price_for_team_small(self):
+        """Team Small annual = 5 seats × £20 × 12 × 0.80 = £960 ex VAT."""
+        from checktick_app.core.pricing import get_tier_amounts
+
+        annual = get_tier_amounts("team_small", billing_cycle="annual")
+        if (
+            float(settings.VAT_RATE) == 0.20
+            and float(settings.ANNUAL_DISCOUNT_PERCENT) == 20
+        ):
+            assert annual["amount_ex_vat"] == 96000  # £960.00
+            assert annual["amount"] == 115200  # £1,152.00 inc VAT
+
+    @pytest.mark.django_db
+    def test_annual_billing_with_percent_discount_promotion_stacks(self):
+        """Annual discount + promotion discount stack correctly.
+
+        Scenario: Pro annual (£192 ex VAT after 20% annual discount) with a
+        10% promotion. The promotion applies on top of the annual-discounted
+        base: £192 × 0.90 = £172.80 ex VAT.
+        """
+        from django.contrib.auth import get_user_model
+
+        from checktick_app.core.models import Promotion
+        from checktick_app.core.services.promotion_resolver import (
+            resolve_effective_pricing_for_user,
+        )
+
+        User = get_user_model()
+        user = User.objects.create_user(
+            username="annual-promo@example.com",
+            email="annual-promo@example.com",
+            password="TestPass123!",
+        )
+
+        promotion = Promotion.objects.create(
+            name="10% off annual",
+            scope_type=Promotion.ScopeType.TIER,
+            target_tier="pro",
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value="10.00",
+            is_active=True,
+        )
+
+        resolution = resolve_effective_pricing_for_user(
+            user, base_tier="pro", billing_cycle="annual"
+        )
+
+        # Annual base: £192 ex VAT. 10% promotion: £192 × 0.90 = £172.80
+        assert resolution.base_amount_ex_vat_pence == 19200
+        assert resolution.effective_amount_ex_vat_pence == 17280
+        assert resolution.applied_promotion.id == promotion.id
+
+
+class TestBillingCycleModelFields:
+    """Test that Payment and UserProfile have billing_cycle fields."""
+
+    @pytest.mark.django_db
+    def test_payment_has_billing_cycle_field_with_monthly_default(self, db):
+        """Payment.billing_cycle defaults to 'monthly'."""
+        user = User.objects.create_user(
+            username="bc-test@example.com",
+            email="bc-test@example.com",
+            password="TestPass123!",
+        )
+        payment = Payment.objects.create(
+            user=user,
+            invoice_number="INV-BC-TEST",
+            invoice_date=date.today(),
+            payment_provider="gocardless",
+            payment_id="PM-BC-TEST",
+            subscription_id="SB-BC-TEST",
+            tier="pro",
+            amount_ex_vat=2000,
+            vat_amount=400,
+            amount_inc_vat=2400,
+            vat_rate=0.20,
+            customer_email=user.email,
+            customer_name=user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        assert payment.billing_cycle == "monthly"
+
+    @pytest.mark.django_db
+    def test_payment_can_store_annual_billing_cycle(self, db):
+        """Payment.billing_cycle can be set to 'annual'."""
+        user = User.objects.create_user(
+            username="bc-annual@example.com",
+            email="bc-annual@example.com",
+            password="TestPass123!",
+        )
+        payment = Payment.objects.create(
+            user=user,
+            invoice_number="INV-BC-ANNUAL",
+            invoice_date=date.today(),
+            payment_provider="gocardless",
+            payment_id="PM-BC-ANNUAL",
+            subscription_id="SB-BC-ANNUAL",
+            tier="pro",
+            amount_ex_vat=19200,
+            vat_amount=3840,
+            amount_inc_vat=23040,
+            vat_rate=0.20,
+            billing_cycle="annual",
+            customer_email=user.email,
+            customer_name=user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+        assert payment.billing_cycle == "annual"
+
+    @pytest.mark.django_db
+    def test_userprofile_has_last_checkout_billing_cycle_field(self, db):
+        """UserProfile.last_checkout_billing_cycle defaults to 'monthly'."""
+        user = User.objects.create_user(
+            username="profile-bc@example.com",
+            email="profile-bc@example.com",
+            password="TestPass123!",
+        )
+        assert user.profile.last_checkout_billing_cycle == "monthly"
+
+    @pytest.mark.django_db
+    def test_payment_create_from_subscription_accepts_billing_cycle(self, db):
+        """Payment.create_from_subscription accepts billing_cycle kwarg."""
+        from checktick_app.core.pricing import get_tier_amounts
+
+        user = User.objects.create_user(
+            username="create-bc@example.com",
+            email="create-bc@example.com",
+            password="TestPass123!",
+        )
+        expected = get_tier_amounts("pro", billing_cycle="annual")
+        payment = Payment.create_from_subscription(
+            user=user,
+            tier="pro",
+            payment_id="PM-CREATE-BC",
+            subscription_id="SB-CREATE-BC",
+            billing_cycle="annual",
+        )
+        assert payment.billing_cycle == "annual"
+        assert payment.amount_ex_vat == expected["amount_ex_vat"]
+        assert payment.amount_inc_vat == expected["amount"]
+
+
+class TestCheckoutBillingCycle:
+    """Test that billing_cycle flows through the checkout flow to GoCardless.
+
+    These tests verify that create_subscription_for_user:
+    1. Accepts a billing_cycle parameter
+    2. Passes the correct interval_unit to GoCardless (yearly for annual)
+    3. Caches the billing cycle on UserProfile for the webhook handler
+    4. Computes the correct annual amount (with discount)
+    """
+
+    @pytest.mark.django_db
+    def test_annual_checkout_passes_yearly_interval_to_gocardless(self, monkeypatch):
+        """Annual checkout sends interval_unit='yearly' to GoCardless."""
+        from checktick_app.core.billing import create_subscription_for_user
+
+        user = User.objects.create_user(
+            username="annual-checkout@example.com",
+            email="annual-checkout@example.com",
+            password="TestPass123!",
+        )
+
+        captured = {}
+
+        def fake_create_subscription(**kwargs):
+            captured.update(kwargs)
+            return {"id": "SUB_ANNUAL_123"}
+
+        monkeypatch.setattr(
+            "checktick_app.core.billing.payment_client.create_subscription",
+            fake_create_subscription,
+        )
+
+        create_subscription_for_user(
+            user=user,
+            tier="pro",
+            mandate_id="MD123",
+            billing_cycle="annual",
+        )
+
+        assert captured["interval_unit"] == "yearly"
+        assert captured["interval"] == 1
+        # Annual amount should be discounted: £20 × 12 × 0.80 = £192 ex VAT,
+        # £230.40 inc VAT at 20%.
+        assert captured["amount"] == 23040
+
+    @pytest.mark.django_db
+    def test_monthly_checkout_passes_monthly_interval_to_gocardless(self, monkeypatch):
+        """Monthly checkout (default) sends interval_unit='monthly'."""
+        from checktick_app.core.billing import create_subscription_for_user
+
+        user = User.objects.create_user(
+            username="monthly-checkout@example.com",
+            email="monthly-checkout@example.com",
+            password="TestPass123!",
+        )
+
+        captured = {}
+
+        def fake_create_subscription(**kwargs):
+            captured.update(kwargs)
+            return {"id": "SUB_MONTHLY_123"}
+
+        monkeypatch.setattr(
+            "checktick_app.core.billing.payment_client.create_subscription",
+            fake_create_subscription,
+        )
+
+        # No billing_cycle kwarg — should default to monthly
+        create_subscription_for_user(
+            user=user,
+            tier="pro",
+            mandate_id="MD456",
+        )
+
+        assert captured["interval_unit"] == "monthly"
+        assert captured["interval"] == 1
+        # Monthly: £20 ex VAT, £24 inc VAT at 20%
+        assert captured["amount"] == 2400
+
+    @pytest.mark.django_db
+    def test_annual_checkout_caches_billing_cycle_on_profile(self, monkeypatch):
+        """Annual checkout caches billing_cycle on UserProfile for webhook."""
+        from checktick_app.core.billing import create_subscription_for_user
+
+        user = User.objects.create_user(
+            username="cache-annual@example.com",
+            email="cache-annual@example.com",
+            password="TestPass123!",
+        )
+
+        monkeypatch.setattr(
+            "checktick_app.core.billing.payment_client.create_subscription",
+            lambda **kwargs: {"id": "SUB_CACHE_123"},
+        )
+
+        create_subscription_for_user(
+            user=user,
+            tier="pro",
+            mandate_id="MD789",
+            billing_cycle="annual",
+        )
+
+        user.profile.refresh_from_db()
+        assert user.profile.last_checkout_billing_cycle == "annual"
+        assert user.profile.last_checkout_amount_ex_vat == 19200  # £192 ex VAT
+
+    @pytest.mark.django_db
+    def test_monthly_checkout_caches_monthly_on_profile(self, monkeypatch):
+        """Monthly checkout caches 'monthly' on UserProfile."""
+        from checktick_app.core.billing import create_subscription_for_user
+
+        user = User.objects.create_user(
+            username="cache-monthly@example.com",
+            email="cache-monthly@example.com",
+            password="TestPass123!",
+        )
+
+        monkeypatch.setattr(
+            "checktick_app.core.billing.payment_client.create_subscription",
+            lambda **kwargs: {"id": "SUB_CACHE_456"},
+        )
+
+        create_subscription_for_user(
+            user=user,
+            tier="pro",
+            mandate_id="MD000",
+            billing_cycle="monthly",
+        )
+
+        user.profile.refresh_from_db()
+        assert user.profile.last_checkout_billing_cycle == "monthly"
+        assert user.profile.last_checkout_amount_ex_vat == 2000  # £20 ex VAT

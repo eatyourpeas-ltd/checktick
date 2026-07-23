@@ -207,6 +207,15 @@ BASE_SEAT_PRICE_EX_VAT = int(
     float(os.environ.get("BASE_SEAT_PRICE_EX_VAT", "20.0")) * 100
 )  # 2000 pence = £20.00 ex VAT per seat
 
+# Annual billing discount, applied to (monthly price × 12).
+# Default 20% — effectively ~2.4 months free. Override via the
+# ANNUAL_DISCOUNT_PERCENT environment variable (as a percentage, e.g. "20").
+# Values <= 1 are treated as fractions (e.g. 0.20 = 20%) for convenience.
+_raw_annual_discount = float(os.environ.get("ANNUAL_DISCOUNT_PERCENT", "20"))
+ANNUAL_DISCOUNT_PERCENT = (
+    _raw_annual_discount * 100 if _raw_annual_discount <= 1 else _raw_annual_discount
+)
+
 # Subscription Tiers Configuration
 # GoCardless uses amounts directly (not price IDs like Paddle)
 # Amounts are in minor currency units (pence for GBP).
@@ -217,6 +226,18 @@ BASE_SEAT_PRICE_EX_VAT = int(
 # calculations driven by the VAT_RATE environment variable as required.
 #
 # Base price: £20 per seat (ex VAT) → £24 per seat (inc VAT at 20%).
+# Each fixed-price tier defines a `billing_cycles` sub-dict with `monthly` and
+# `annual` entries. The annual cycle applies ANNUAL_DISCOUNT_PERCENT to the
+# monthly price × 12. Organisation and Enterprise are bespoke and don't
+# define billing_cycles.
+BILLING_CYCLES_DEFAULT = {
+    "monthly": {"interval_unit": "monthly", "interval": 1, "discount_percent": 0},
+    "annual": {
+        "interval_unit": "yearly",
+        "interval": 1,
+        "discount_percent": ANNUAL_DISCOUNT_PERCENT,
+    },
+}
 SUBSCRIPTION_TIERS = {
     "pro": {
         "name": "Pro",
@@ -225,6 +246,7 @@ SUBSCRIPTION_TIERS = {
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
+        "billing_cycles": BILLING_CYCLES_DEFAULT,
         "description": "Individual professional with encryption and unlimited surveys",
     },
     "team_small": {
@@ -234,6 +256,7 @@ SUBSCRIPTION_TIERS = {
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
+        "billing_cycles": BILLING_CYCLES_DEFAULT,
         "max_members": 5,
         "description": "Small team with up to 5 members",
     },
@@ -244,6 +267,7 @@ SUBSCRIPTION_TIERS = {
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
+        "billing_cycles": BILLING_CYCLES_DEFAULT,
         "max_members": 15,
         "description": "Medium team with up to 15 members",
     },
@@ -255,6 +279,7 @@ SUBSCRIPTION_TIERS = {
         "currency": "GBP",
         "interval_unit": "monthly",
         "interval": 1,
+        "billing_cycles": BILLING_CYCLES_DEFAULT,
         "max_members": 50,
         "description": "Large team with up to 50 members",
     },

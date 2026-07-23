@@ -89,13 +89,17 @@
             <span class="text-sm text-base-content/60">{% trans "Billing Type" %}</span>
             <div class="font-medium">{{ org.get_billing_type_display }}</div>
           </div>
+          <div>
+            <span class="text-sm text-base-content/60">{% trans "Billing Cycle" %}</span>
+            <div class="font-medium">{{ org.get_billing_cycle_display }}</div>
+          </div>
           {% if org.billing_type == 'per_seat' and org.price_per_seat %}
           <div>
             <span class="text-sm text-base-content/60">{% trans "Price/Seat" %}</span>
-            <div class="font-medium">£{{ org.price_per_seat }}/{% trans "month" %}</div>
+            <div class="font-medium">£{{ org.price_per_seat }}/{% if org.billing_cycle == 'annual' %}{% trans "month" %}{% else %}{% trans "month" %}{% endif %}</div>
           </div>
           <div>
-            <span class="text-sm text-base-content/60">{% trans "Est. Monthly" %}</span>
+            <span class="text-sm text-base-content/60">{% if org.billing_cycle == 'annual' %}{% trans "Est. Annual" %}{% else %}{% trans "Est. Monthly" %}{% endif %}</span>
             <div class="font-medium text-primary">£{{ org.monthly_cost }}</div>
           </div>
           {% endif %}

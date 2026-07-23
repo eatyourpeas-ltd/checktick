@@ -26,6 +26,19 @@
             </span>
         </div>
         {% endif %}
+
+        <!-- Monthly/Annual billing toggle -->
+        {% if annual_discount_percent > 0 %}
+        <div class="mt-6 inline-flex flex-col items-center gap-2">
+          <div class="join" role="group" aria-label="{% trans 'Billing cycle' %}">
+            <button type="button" class="btn join-item btn-sm btn-primary" id="billing-toggle-monthly">{% trans "Monthly" %}</button>
+            <button type="button" class="btn join-item btn-sm btn-outline" id="billing-toggle-annual">
+              {% trans "Annual" %}
+              <span class="badge badge-success badge-xs ml-1">{% blocktrans with discount=annual_discount_percent %}Save {{ discount }}%{% endblocktrans %}</span>
+            </button>
+          </div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Pricing Cards -->
@@ -214,8 +227,7 @@
                             ></path>
                         </svg>
                         <span class="text-base-content"
-                            >{% trans "No patient data templates (all surveys
-                            encrypted)" %}</span
+                            >{% trans "No patient data templates (all surveys encrypted)" %}</span
                         >
                     </li>
                     <li class="flex items-start gap-2">
@@ -272,22 +284,20 @@
                     {% trans "Individual Pro" %}
                 </h2>
                 <div class="mb-4">
-                    <span class="text-3xl font-bold"
+                    <span class="text-3xl font-bold" id="pro-price-display"
                         >{{ tier_display.pro }}</span
                     >
-                    <span class="text-base-content">/{% trans "month" %}</span>
+                    <span class="text-base-content" id="pro-period">/{% trans "month" %}</span>
                     <p class="text-sm text-base-content">
                         {% trans "Unlimited surveys" %}
                     </p>
-                    <p class="text-xs text-base-content">
+                    <p class="text-xs text-base-content" id="pro-billing-note">
                         {% trans "inc. VAT" %}
                     </p>
                     {% if promotions_by_tier.pro %}
                     <p class="text-xs text-warning mt-1">
-                        {{ promotions_by_tier.pro.short_text }}{% if
-                        promotions_by_tier.pro.ends_at %} · {% trans "ends" %}
-                        {{ promotions_by_tier.pro.ends_at|date:'d M' }}{% endif
-                        %}
+                        {{ promotions_by_tier.pro.short_text }}
+                        {% if promotions_by_tier.pro.ends_at %} · {% trans "ends" %} {{ promotions_by_tier.pro.ends_at|date:'d M' }}{% endif %}
                     </p>
                     {% endif %}
                 </div>
@@ -343,10 +353,9 @@
                                 d="M5 13l4 4L19 7"
                             ></path>
                         </svg>
-                        <span class="font-semibold"
-                            >{% trans "Patient data templates (NHS numbers,
-                            clinical data)" %}</span
-                        >
+                        <span class="font-semibold">
+                            {% trans "Patient data templates (NHS numbers, clinical data)" %}
+                        </span>
                     </li>
                     <li class="flex items-start gap-2">
                         <svg
@@ -465,9 +474,11 @@
                     <form
                         method="post"
                         action="{% url 'core:start_checkout' %}"
+                        id="pro-checkout-form"
                     >
                         {% csrf_token %}
                         <input type="hidden" name="tier" value="pro" />
+                        <input type="hidden" name="billing_cycle" value="monthly" id="pro-billing-cycle-input" />
                         <button type="submit" class="btn btn-primary btn-block">
                             {% trans "Subscribe Now" %}
                         </button>
@@ -539,7 +550,7 @@
                     <span class="text-3xl font-bold" id="team-price-display"
                         >{{ tier_display.team_small }}</span
                     >
-                    <span class="text-base-content">/{% trans "month" %}</span>
+                    <span class="text-base-content" id="team-period">/{% trans "month" %}</span>
                     <p
                         class="text-sm text-base-content"
                         id="team-members-display"
@@ -645,10 +656,7 @@
                                 d="M5 13l4 4L19 7"
                             ></path>
                         </svg>
-                        <span
-                            >{% trans "Unlimited collaborators per survey"
-                            %}</span
-                        >
+                        <span>{% trans "Unlimited collaborators per survey" %}</span>
                     </li>
                 </ul>
 
@@ -658,7 +666,7 @@
                     <div class="badge badge-success w-full p-4">
                         {% trans "Current Plan" %}
                     </div>
-                    {% else %}
+                        {% else %}
                     <form
                         method="post"
                         action="{% url 'core:start_checkout' %}"
@@ -671,6 +679,7 @@
                             value="team_small"
                             id="team-tier-input"
                         />
+                        <input type="hidden" name="billing_cycle" value="monthly" id="team-billing-cycle-input" />
                         <button
                             type="submit"
                             class="btn btn-primary btn-block"
@@ -679,11 +688,12 @@
                             {% trans "Subscribe Now" %}
                         </button>
                     </form>
-                    {% endif %} {% elif not user.is_authenticated %}
+                    {% endif %}
+                    {% elif not user.is_authenticated %}
                     <a href="/signup/" class="btn btn-primary btn-block"
                         >{% trans "Get Started" %}</a
                     >
-                    {% endif %}
+                {% endif %}
                 </div>
             </div>
         </div>
@@ -787,8 +797,7 @@
                             ></path>
                         </svg>
                         <span
-                            >{% trans "Webhooks & advanced integrations"
-                            %}</span
+                            >{% trans "Webhooks & advanced integrations"%}</span
                         >
                     </li>
                     <li class="flex items-start gap-2">
@@ -915,10 +924,7 @@
                                 d="M5 13l4 4L19 7"
                             ></path>
                         </svg>
-                        <span class="font-semibold"
-                            >{% trans "Custom branding (logo, themes, fonts)"
-                            %}</span
-                        >
+                        <span class="font-semibold">{% trans "Custom branding (logo, themes, fonts)" %}</span>
                     </li>
                     <li class="flex items-start gap-2">
                         <svg
@@ -1256,10 +1262,7 @@
                         {% trans "Can I upgrade later?" %}
                     </h3>
                     <p class="text-base-content">
-                        {% trans "Yes! You can upgrade from Individual to
-                        Individual Pro, or convert to an Organisation account at
-                        any time. Your existing surveys will be migrated
-                        automatically." %}
+                        {% trans "Yes! You can upgrade from Individual to Individual Pro, or convert to an Organisation account at any time. Your existing surveys will be migrated automatically." %}
                     </p>
                 </div>
             </div>
@@ -1267,15 +1270,10 @@
             <div class="card bg-base-100 shadow">
                 <div class="card-body">
                     <h3 class="font-semibold text-lg">
-                        {% trans "Do you support NHS terminology and datasets?"
-                        %}
+                        {% trans "Do you support NHS terminology and datasets?"%}
                     </h3>
                     <p class="text-base-content">
-                        {% trans "Yes! CheckTick includes built-in support for
-                        NHS Data Dictionary datasets, including ethnicity codes,
-                        sex, gender identity, and other standardised healthcare
-                        terminology. You can also create custom datasets for
-                        your specific needs." %}
+                        {% trans "Yes! CheckTick includes built-in support for NHS Data Dictionary datasets, including ethnicity codes, sex, gender identity, and other standardised healthcare terminology. You can also create custom datasets for your specific needs." %}
                     </p>
                 </div>
             </div>
@@ -1283,17 +1281,10 @@
             <div class="card bg-base-100 shadow">
                 <div class="card-body">
                     <h3 class="font-semibold text-lg">
-                        {% trans "What's the difference between Individual and
-                        Individual Pro?" %}
+                        {% trans "What's the difference between Individual and Individual Pro?" %}
                     </h3>
                     <p class="text-base-content">
-                        {% trans "Individual (free) accounts can have up to 3
-                        active surveys (all encrypted). Individual Pro removes
-                        the survey limit and adds patient data templates for
-                        collecting NHS numbers and clinical information. For
-                        team collaboration with multiple users, choose from our
-                        Team plans (5-20 members) or Organisation tier for
-                        larger teams with advanced features." %}
+                        {% trans "Individual (free) accounts can have up to 3 active surveys (all encrypted). Individual Pro removes the survey limit and adds patient data templates for collecting NHS numbers and clinical information. For team collaboration with multiple users, choose from our Team plans (5-20 members) or Organisation tier for larger teams with advanced features." %}
                     </p>
                 </div>
             </div>
@@ -1304,12 +1295,7 @@
                         {% trans "Is my data secure and safe?" %}
                     </h3>
                     <p class="text-base-content">
-                        {% trans "Yes. All CheckTick surveys are encrypted by
-                        default using AES-256-GCM encryption. Every survey is
-                        protected before storage, and only you can decrypt it
-                        with your password or recovery phrase. The platform is
-                        designed specifically for healthcare research with
-                        privacy and security as core principles." %}
+                        {% trans "Yes. All CheckTick surveys are encrypted by default using AES-256-GCM encryption. Every survey is protected before storage, and only you can decrypt it with your password or recovery phrase. The platform is designed specifically for healthcare research with privacy and security as core principles." %}
                     </p>
                 </div>
             </div>
@@ -1322,8 +1308,7 @@
             {% trans "Ready to get started?" %}
         </h2>
         <p class="text-lg text-base-content mb-6 max-w-2xl mx-auto">
-            {% trans "Create your free account today and start building secure,
-            privacy-focused surveys in minutes." %}
+            {% trans "Create your free account today and start building secure, privacy-focused surveys in minutes." %}
         </p>
         <div class="flex gap-4 justify-center flex-wrap">
             <a href="/signup/" class="btn btn-primary btn-lg"
@@ -1364,6 +1349,84 @@
 
                 // Update hidden tier input for form submission
                 if (teamTierInput) teamTierInput.value = tier;
+            });
+        }
+
+        // Billing cycle toggle (monthly/annual)
+        const proPriceDisplay = document.getElementById("pro-price-display");
+        const proPeriod = document.getElementById("pro-period");
+        const proBillingNote = document.getElementById("pro-billing-note");
+        const proBillingInput = document.getElementById("pro-billing-cycle-input");
+        const teamBillingInput = document.getElementById("team-billing-cycle-input");
+        const teamPeriod = document.getElementById("team-period");
+        const toggleMonthly = document.getElementById("billing-toggle-monthly");
+        const toggleAnnual = document.getElementById("billing-toggle-annual");
+
+        // Monthly and annual price data from the context (full amounts, not per-month)
+        const monthlyPrices = {
+            pro: "{{ tier_display.pro }}",
+            team_small: "{{ tier_display.team_small }}",
+            team_medium: "{{ tier_display.team_medium }}",
+            team_large: "{{ tier_display.team_large }}",
+        };
+        const annualPrices = {
+            pro: "{{ tier_display_annual.pro }}",
+            team_small: "{{ tier_display_annual.team_small }}",
+            team_medium: "{{ tier_display_annual.team_medium }}",
+            team_large: "{{ tier_display_annual.team_large }}",
+        };
+
+        function setBillingCycle(isAnnual) {
+            const cycle = isAnnual ? "annual" : "monthly";
+            const prices = isAnnual ? annualPrices : monthlyPrices;
+            const period = isAnnual ? "{% trans 'year' %}" : "{% trans 'month' %}";
+
+            // Update Pro price display
+            if (proPriceDisplay) proPriceDisplay.textContent = prices.pro;
+            if (proPeriod) proPeriod.textContent = "/" + period;
+            if (proBillingNote) {
+                proBillingNote.textContent = isAnnual
+                    ? "billed annually (inc. VAT)"
+                    : "inc. VAT";
+            }
+
+            // Update hidden billing_cycle inputs
+            if (proBillingInput) proBillingInput.value = cycle;
+            if (teamBillingInput) teamBillingInput.value = cycle;
+
+            // Update team price display if a team tier is selected
+            if (teamSelector && teamPriceDisplay) {
+                const selected = teamSelector.options[teamSelector.selectedIndex];
+                if (selected) {
+                    const tier = selected.value;
+                    teamPriceDisplay.textContent = prices[tier];
+                }
+            }
+            if (teamPeriod) teamPeriod.textContent = "/" + period;
+
+            // Highlight the active toggle button
+            if (toggleMonthly) {
+                toggleMonthly.classList.toggle("btn-primary", !isAnnual);
+                toggleMonthly.classList.toggle("btn-outline", isAnnual);
+            }
+            if (toggleAnnual) {
+                toggleAnnual.classList.toggle("btn-primary", isAnnual);
+                toggleAnnual.classList.toggle("btn-outline", !isAnnual);
+            }
+        }
+
+        // Expose globally for inline onclick handlers
+        window.setBillingCycle = setBillingCycle;
+
+        // Wire up toggle buttons (CSP-safe: no inline onclick)
+        if (toggleMonthly) {
+            toggleMonthly.addEventListener("click", function () {
+                setBillingCycle(false);
+            });
+        }
+        if (toggleAnnual) {
+            toggleAnnual.addEventListener("click", function () {
+                setBillingCycle(true);
             });
         }
 

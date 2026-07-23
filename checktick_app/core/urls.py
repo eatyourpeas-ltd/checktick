@@ -142,6 +142,11 @@ urlpatterns = [
         name="cancel_subscription",
     ),
     path(
+        "subscription/switch-cycle/",
+        views_billing.switch_billing_cycle,
+        name="switch_billing_cycle",
+    ),
+    path(
         "subscription/payment-history/",
         views_billing.payment_history,
         name="payment_history",

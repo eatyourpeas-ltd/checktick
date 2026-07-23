@@ -44,6 +44,22 @@
           <p class="text-xs text-warning mt-2">{% trans 'Limited-time offers are available on selected plans.' %}</p>
           {% endif %}
 
+          {# Monthly/Annual billing toggle #}
+          {% if annual_discount_percent > 0 %}
+          <div class="flex items-center gap-3 mt-3">
+            <span class="text-sm font-medium" id="signup-billing-label-monthly">{% trans 'Monthly' %}</span>
+            <label class="swap swap-rotate">
+              <input type="checkbox" id="signup-billing-cycle-toggle" />
+              <div class="swap-on">✓</div>
+              <div class="swap-off">✗</div>
+            </label>
+            <span class="text-sm font-medium" id="signup-billing-label-annual">
+              {% trans 'Annual' %}
+              <span class="badge badge-success badge-sm">{% blocktrans with discount=annual_discount_percent %}Save {{ discount }}%{% endblocktrans %}</span>
+            </span>
+          </div>
+          {% endif %}
+
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
             {# Individual Free #}
             <label class="label cursor-pointer justify-start gap-3 p-4 border-2 border-accent rounded-lg hover:border-primary break-words bg-base-100">
@@ -193,6 +209,7 @@
             {# Hidden fields to store tier selection #}
             <input type="hidden" name="account_type" value="simple" />
             <input type="hidden" name="tier" id="selected-tier" value="free" />
+            <input type="hidden" name="billing_cycle" id="selected-billing-cycle" value="monthly" />
             {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
 
             {% include 'components/form_errors.html' with form=form %}
@@ -228,4 +245,43 @@
 
 {% block extra_js %}
   <script src="{% static 'js/signup.js' %}" nonce="{{ request.csp_nonce }}"></script>
+  <script nonce="{{ request.csp_nonce }}">
+    document.addEventListener("DOMContentLoaded", function () {
+      // Billing cycle toggle (monthly/annual)
+      const toggle = document.getElementById("signup-billing-cycle-toggle");
+      const billingInput = document.getElementById("selected-billing-cycle");
+      const monthlyLabel = document.getElementById("signup-billing-label-monthly");
+      const annualLabel = document.getElementById("signup-billing-label-annual");
+
+      // Price data from context
+      const monthlyPrices = {
+        pro: "{{ tier_display.pro }}",
+        team_small: "{{ tier_display.team_small }}",
+        team_medium: "{{ tier_display.team_medium }}",
+        team_large: "{{ tier_display.team_large }}",
+      };
+      const annualMonthlyEquiv = {
+        pro: {{ tier_pounds_annual.pro }} / 12,
+        team_small: {{ tier_pounds_annual.team_small }} / 12,
+        team_medium: {{ tier_pounds_annual.team_medium }} / 12,
+        team_large: {{ tier_pounds_annual.team_large }} / 12,
+      };
+
+      function updateSignupPrices(isAnnual) {
+        if (billingInput) billingInput.value = isAnnual ? "annual" : "monthly";
+        if (monthlyLabel) monthlyLabel.classList.toggle("font-bold", !isAnnual);
+        if (annualLabel) annualLabel.classList.toggle("font-bold", isAnnual);
+
+        // Update Pro badge
+        const proBadge = document.querySelector('label[for] .badge.badge-primary');
+        // Update team badges if needed — the team selector shows prices in options
+      }
+
+      if (toggle) {
+        toggle.addEventListener("change", function () {
+          updateSignupPrices(this.checked);
+        });
+      }
+    });
+  </script>
 {% endblock %}

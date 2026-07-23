@@ -818,11 +818,17 @@ def send_subscription_created_email(
     resolved_ex_vat = (
         getattr(profile, "last_checkout_amount_ex_vat", 0) if profile else 0
     )
+    cached_billing_cycle = (
+        getattr(profile, "last_checkout_billing_cycle", "monthly")
+        if profile
+        else "monthly"
+    )
     if resolved_ex_vat:
         amount_ex_vat_pence = int(resolved_ex_vat)
         amount_inc_vat_pence = compute_inc_vat(amount_ex_vat_pence)
     else:
-        amounts = get_tier_amounts(tier)
+        # Fall back to tier pricing for the cached billing cycle (monthly default)
+        amounts = get_tier_amounts(tier, billing_cycle=cached_billing_cycle)
         amount_ex_vat_pence = amounts["amount_ex_vat"]
         amount_inc_vat_pence = amounts["amount"]
     amount_inc_vat = amount_inc_vat_pence / 100  # Convert pence to pounds

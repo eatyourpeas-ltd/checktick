@@ -94,8 +94,8 @@ Refunds are processed through our payment provider. This does not affect your st
 
 For platform-admin initiated refunds in the hosted reference deployment:
 
-* Refund automation currently supports **full-payment refunds only**
-* **Partial refunds are policy-restricted** in the current hosted admin flow
+* Refund automation supports **full-payment refunds** for all billing cycles
+* **Partial (pro-rata) refunds** are supported for **annual subscriptions** only, calculated as `amount × (days_remaining / total_days)`. Monthly subscriptions always refund the full amount.
 * Operators must provide a **reason code** for each refund request
 * If the reason code is **Other**, a free-text explanation is required
 * Refund status is reconciled from provider webhook events and recorded in audit metadata
@@ -165,8 +165,9 @@ The following situations are **not** eligible for refunds:
 
 For annual subscriptions:
 
-* 14-day consumer right to cancel applies to first-time subscribers only
+* 14-day consumer right to cancel applies to first-time subscribers only (full refund)
 * After 14 days or once the service has been used, refunds are only available for service unavailability or technical issues
+* Pro-rated refunds are supported via the platform admin billing view. The refund amount is calculated as `amount × (days_remaining / 365)`, rounded to the nearest penny. For example, cancelling after 6 months of a 12-month annual subscription refunds approximately 50% of the annual charge.
 * Pro-rated refunds may be considered for exceptional circumstances at our discretion
 
 ### 4.6 Wire Transfer Payments

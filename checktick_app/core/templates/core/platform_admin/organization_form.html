@@ -149,6 +149,16 @@
 
       <div class="form-control mb-4">
         <label class="label">
+          <span class="label-text">{% trans "Billing Cycle" %}</span>
+        </label>
+        <select name="billing_cycle" id="billing_cycle" class="select select-bordered">
+          <option value="monthly" {% if editing and org.billing_cycle == 'monthly' %}selected{% endif %}{% if not editing and form_data.billing_cycle == 'monthly' %}selected{% endif %}>{% trans "Monthly" %}</option>
+          <option value="annual" {% if editing and org.billing_cycle == 'annual' %}selected{% endif %}{% if not editing and form_data.billing_cycle == 'annual' %}selected{% endif %}>{% trans "Annual (20% discount)" %}</option>
+        </select>
+      </div>
+
+      <div class="form-control mb-4">
+        <label class="label">
           <span class="label-text">{% trans "Maximum Seats (optional)" %}</span>
         </label>
         <input type="number" name="max_seats" min="1"

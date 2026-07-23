@@ -64,15 +64,17 @@ def _select_best_promotion(queryset, at_time) -> Promotion | None:
     return active[0]
 
 
-def _get_tier_pricing(tier: str) -> tuple[int, int]:
+def _get_tier_pricing(tier: str, *, billing_cycle: str = "monthly") -> tuple[int, int]:
     """Return (inc_vat_pence, ex_vat_pence) for a tier, honouring overrides.
 
     Inc-VAT is computed from ``amount_ex_vat`` and ``settings.VAT_RATE`` via
-    :func:`checktick_app.core.pricing.get_effective_tier_amounts`.
+    :func:`checktick_app.core.pricing.get_effective_tier_amounts`. The
+    billing_cycle parameter controls whether the monthly or annual price
+    (with discount) is returned.
     """
     from checktick_app.core.pricing import get_effective_tier_amounts
 
-    amounts = get_effective_tier_amounts(tier)
+    amounts = get_effective_tier_amounts(tier, billing_cycle=billing_cycle)
     return amounts["amount"], amounts["amount_ex_vat"]
 
 
@@ -123,12 +125,16 @@ def resolve_effective_pricing_for_user(
     user,
     at_time=None,
     base_tier: str | None = None,
+    *,
+    billing_cycle: str = "monthly",
 ) -> PromotionResolution:
     """Resolve effective promotion and price for a user account."""
     at = at_time or timezone.now()
     profile = UserProfile.get_or_create_for_user(user)
     tier = base_tier or profile.account_tier
-    base_amount, base_amount_ex_vat = _get_tier_pricing(tier)
+    base_amount, base_amount_ex_vat = _get_tier_pricing(
+        tier, billing_cycle=billing_cycle
+    )
 
     promotions = Promotion.objects.filter(
         Q(scope_type=Promotion.ScopeType.PLATFORM)
@@ -159,12 +165,16 @@ def resolve_effective_pricing_for_team(
     team,
     at_time=None,
     base_tier: str | None = None,
+    *,
+    billing_cycle: str = "monthly",
 ) -> PromotionResolution:
     """Resolve effective promotion and price for a team account."""
     at = at_time or timezone.now()
     owner_profile = UserProfile.get_or_create_for_user(team.owner)
     tier = base_tier or owner_profile.account_tier
-    base_amount, base_amount_ex_vat = _get_tier_pricing(tier)
+    base_amount, base_amount_ex_vat = _get_tier_pricing(
+        tier, billing_cycle=billing_cycle
+    )
 
     promotions = Promotion.objects.filter(
         Q(scope_type=Promotion.ScopeType.PLATFORM)

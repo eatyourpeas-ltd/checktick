@@ -85,6 +85,7 @@ def subscription_portal(request: HttpRequest) -> HttpResponse:
     context = {
         "current_tier": profile.account_tier,
         "subscription_status": profile.subscription_status,
+        "billing_cycle": profile.last_checkout_billing_cycle or "monthly",
         "payment_customer_id": profile.payment_customer_id,
         "payment_subscription_id": profile.payment_subscription_id,
         "payment_environment": settings.PAYMENT_ENVIRONMENT,
@@ -170,6 +171,79 @@ def cancel_subscription(request: HttpRequest) -> HttpResponse:
         messages.error(
             request,
             "Unable to cancel subscription. Please try again or contact support.",
+        )
+
+    return redirect("core:subscription_portal")
+
+
+@login_required
+@billing_enabled_required
+@require_http_methods(["POST"])
+@ratelimit(key="user", rate="5/h", block=True)
+def switch_billing_cycle(request: HttpRequest) -> HttpResponse:
+    """Switch the billing cycle on an existing subscription.
+
+    GoCardless doesn't support changing interval_unit on an existing
+    subscription, so switching requires cancelling the old subscription
+    and creating a new one with the new billing cycle. The user's mandate
+    is reused (no need to re-authorise Direct Debit).
+    """
+    from checktick_app.core.billing import create_subscription_for_user
+
+    user = request.user
+    profile = user.profile
+
+    if not profile.payment_subscription_id or profile.payment_provider != "gocardless":
+        messages.error(request, "No active subscription found.")
+        return redirect("core:subscription_portal")
+
+    new_cycle = request.POST.get("billing_cycle", "").strip().lower()
+    if new_cycle not in ("monthly", "annual"):
+        messages.error(request, "Invalid billing cycle selected.")
+        return redirect("core:subscription_portal")
+
+    current_cycle = profile.last_checkout_billing_cycle or "monthly"
+    if new_cycle == current_cycle:
+        messages.info(request, f"You are already on {current_cycle} billing.")
+        return redirect("core:subscription_portal")
+
+    if not profile.payment_mandate_id:
+        messages.error(
+            request,
+            "No payment mandate found. Please contact support to switch billing cycle.",
+        )
+        return redirect("core:subscription_portal")
+
+    tier = profile.account_tier
+
+    try:
+        # Cancel the existing subscription (runs until end of current period)
+        payment_client.cancel_subscription(profile.payment_subscription_id)
+        logger.info("Cancelled subscription to switch billing cycle")
+
+        # Create a new subscription with the new billing cycle, reusing the mandate.
+        # The returned subscription ID is intentionally not logged to avoid
+        # leaking sensitive identifiers in clear text (CodeQL).
+        create_subscription_for_user(
+            user=user,
+            tier=tier,
+            mandate_id=profile.payment_mandate_id,
+            billing_cycle=new_cycle,
+        )
+
+        messages.success(
+            request,
+            f"Your billing cycle has been switched to {new_cycle}. "
+            "Your old subscription has been cancelled and a new one created. "
+            "You will be charged at the new rate on your next billing date.",
+        )
+        logger.info("Switched billing cycle: new subscription created")
+
+    except PaymentAPIError as e:
+        logger.error(f"Error switching billing cycle for {user.username}: {e}")
+        messages.error(
+            request,
+            "Unable to switch billing cycle. Please try again or contact support.",
         )
 
     return redirect("core:subscription_portal")
@@ -333,11 +407,16 @@ def start_checkout(request: HttpRequest) -> HttpResponse:
     from checktick_app.core.billing import get_or_create_redirect_flow
 
     tier = request.POST.get("tier", "pro")
+    billing_cycle = request.POST.get("billing_cycle", "monthly")
 
     # Validate tier
     if tier not in settings.SUBSCRIPTION_TIERS:
         messages.error(request, "Invalid subscription tier selected.")
         return redirect("core:pricing")
+
+    # Validate billing cycle
+    if billing_cycle not in ("monthly", "annual"):
+        billing_cycle = "monthly"
 
     # Generate a unique session token
     import uuid
@@ -347,6 +426,7 @@ def start_checkout(request: HttpRequest) -> HttpResponse:
     # Store checkout info in session
     request.session["checkout_session_token"] = session_token
     request.session["checkout_tier"] = tier
+    request.session["checkout_billing_cycle"] = billing_cycle
 
     # Build success URL
     success_url = request.build_absolute_uri(reverse("core:checkout_complete"))
@@ -363,7 +443,7 @@ def start_checkout(request: HttpRequest) -> HttpResponse:
             messages.error(request, "Failed to create checkout session.")
             return redirect("core:pricing")
 
-        logger.info(f"User {request.user.username} starting checkout for tier: {tier}")
+        logger.info("Starting checkout for selected tier")
         return redirect(redirect_url)
 
     except Exception as e:
@@ -395,6 +475,7 @@ def checkout_complete(request: HttpRequest) -> HttpResponse:
     # Get session data
     session_token = request.session.get("checkout_session_token")
     tier = request.session.get("checkout_tier", "pro")
+    billing_cycle = request.session.get("checkout_billing_cycle", "monthly")
 
     if not session_token:
         messages.error(request, "Checkout session expired. Please try again.")
@@ -413,6 +494,7 @@ def checkout_complete(request: HttpRequest) -> HttpResponse:
             user=request.user,
             tier=tier,
             mandate_id=mandate_id,
+            billing_cycle=billing_cycle,
         )
 
         # For team tiers, create the team immediately (don't wait for webhook)
@@ -784,8 +866,8 @@ def handle_gocardless_subscription_created(event: dict) -> None:
 
     # Send welcome email
     try:
-        # Determine billing cycle from subscription metadata if available
-        billing_cycle = "monthly"  # Default, can be enhanced with API lookup
+        # Determine billing cycle from cached checkout info
+        billing_cycle = profile.last_checkout_billing_cycle or "monthly"
         send_subscription_created_email(
             profile.user, profile.account_tier, billing_cycle
         )
@@ -928,12 +1010,14 @@ def handle_gocardless_payment_confirmed(event: dict) -> None:
                 if profile.last_checkout_amount_ex_vat
                 else None
             )
+            billing_cycle = profile.last_checkout_billing_cycle or "monthly"
             payment = Payment.create_from_subscription(
                 user=profile.user,
                 tier=profile.account_tier,
                 payment_id=payment_id,
                 subscription_id=subscription_id,
                 billing_period_end=billing_period_end,
+                billing_cycle=billing_cycle,
                 resolved_amount_ex_vat=resolved_ex_vat,
                 applied_promotion=profile.last_checkout_applied_promotion,
                 effective_tier=profile.last_checkout_effective_tier,

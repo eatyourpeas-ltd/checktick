@@ -124,8 +124,10 @@ def _select_best_promotion(promotions, specificity: int):
 
 def _get_public_pricing_context() -> dict:
     from checktick_app.core.models import PricingOverride, Promotion
+    from checktick_app.core.pricing import get_effective_tiers
 
     effective_tiers = PricingOverride.get_effective_tiers()
+    effective_tiers_annual = get_effective_tiers(billing_cycle="annual")
 
     def _to_pounds(pence: int) -> str:
         pounds = pence / 100
@@ -137,6 +139,16 @@ def _get_public_pricing_context() -> dict:
         if cfg.get("amount", 0) > 0
     }
     tier_pounds = {key: cfg["amount"] // 100 for key, cfg in effective_tiers.items()}
+
+    # Annual prices for the monthly/annual toggle on the pricing page.
+    tier_display_annual = {
+        key: _to_pounds(cfg["amount"])
+        for key, cfg in effective_tiers_annual.items()
+        if cfg.get("amount", 0) > 0
+    }
+    tier_pounds_annual = {
+        key: cfg["amount"] // 100 for key, cfg in effective_tiers_annual.items()
+    }
 
     now = timezone.now()
     promotions_qs = (
@@ -191,6 +203,11 @@ def _get_public_pricing_context() -> dict:
         "subscription_tiers": effective_tiers,
         "tier_display": tier_display,
         "tier_pounds": tier_pounds,
+        "tier_display_annual": tier_display_annual,
+        "tier_pounds_annual": tier_pounds_annual,
+        "annual_discount_percent": float(
+            getattr(settings, "ANNUAL_DISCOUNT_PERCENT", 20)
+        ),
         "promotions_by_tier": promotions_by_tier,
         "active_public_promotions": promotion_summaries,
         "homepage_promotion": homepage_promotion,
@@ -236,11 +253,13 @@ def pricing(request):
     # Check if coming from signup with a pending tier selection
     auto_open_checkout = request.session.pop("auto_open_checkout", False)
     pending_tier = request.session.get("pending_tier", "")
+    pending_billing_cycle = request.session.get("pending_billing_cycle", "monthly")
 
     context = {
         "self_hosted": False,  # Always False here since we redirect above
         "auto_open_checkout": auto_open_checkout,
         "pending_tier": pending_tier,
+        "pending_billing_cycle": pending_billing_cycle,
     }
     context.update(_get_public_pricing_context())
     return render(request, "core/pricing.html", context)
@@ -693,6 +712,15 @@ def signup(request):
     selected_tier = (
         request.POST.get("tier", "free").lower() if request.method == "POST" else "free"
     )
+    # Get billing cycle before form validation (not a form field, just POST data)
+    # nosemgrep: python.django.security.django-using-request-post-after-is-valid
+    selected_billing_cycle = (
+        request.POST.get("billing_cycle", "monthly").lower()
+        if request.method == "POST"
+        else "monthly"
+    )
+    if selected_billing_cycle not in ("monthly", "annual"):
+        selected_billing_cycle = "monthly"
 
     if request.method == "POST":
         form = SignupForm(request.POST)
@@ -808,6 +836,8 @@ def signup(request):
             if selected_tier in ("pro", "team_small", "team_medium", "team_large"):
                 # Store tier choice for after email confirmation
                 request.session["pending_tier"] = selected_tier
+                # Store billing cycle choice (monthly/annual) for checkout after confirmation
+                request.session["pending_billing_cycle"] = selected_billing_cycle
                 messages.warning(
                     request,
                     "Please confirm your email address before accessing premium features.",

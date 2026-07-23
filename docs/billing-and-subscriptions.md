@@ -25,14 +25,33 @@ by environment variables, so changing `VAT_RATE` (or `BASE_SEAT_PRICE_EX_VAT`)
 flows through to checkout amounts, invoices, and the public pricing page
 without a code deploy.
 
+### Monthly and Annual Billing
+
+Pro and Team tiers support both **monthly** and **annual** billing. Annual
+billing applies a configurable discount (default 20%, set via
+`ANNUAL_DISCOUNT_PERCENT`) to the equivalent monthly price × 12. VAT is
+computed on the discounted annual ex-VAT amount.
+
+At the default `ANNUAL_DISCOUNT_PERCENT=20`, annual subscribers save
+approximately 2.4 months' worth of fees compared to monthly billing.
+
 ### Default Hosted Prices
 
-Hosted pricing defaults are configured in application settings and used for checkout unless overridden by Platform Admin. The values below assume the default `VAT_RATE=0.20` and `BASE_SEAT_PRICE_EX_VAT=20`:
+Hosted pricing defaults are configured in application settings and used for checkout unless overridden by Platform Admin. The values below assume the default `VAT_RATE=0.20`, `BASE_SEAT_PRICE_EX_VAT=20`, and `ANNUAL_DISCOUNT_PERCENT=20`:
+
+**Monthly billing:**
 
 - **Individual Pro:** £24/month (inc VAT), £20/month (ex VAT)
 - **Team Small (5 seats):** £120/month (inc VAT), £100/month (ex VAT)
 - **Team Medium (15 seats):** £360/month (inc VAT), £300/month (ex VAT)
 - **Team Large (50 seats):** £1,200/month (inc VAT), £1,000/month (ex VAT)
+
+**Annual billing (20% discount):**
+
+- **Individual Pro:** £230.40/year (inc VAT), £192/year (ex VAT) — equivalent to £19.20/month
+- **Team Small (5 seats):** £1,152/year (inc VAT), £960/year (ex VAT) — equivalent to £96/month
+- **Team Medium (15 seats):** £3,456/year (inc VAT), £2,880/year (ex VAT) — equivalent to £288/month
+- **Team Large (50 seats):** £11,520/year (inc VAT), £9,600/year (ex VAT) — equivalent to £960/month
 
 Organisation and Enterprise pricing remain bespoke.
 
@@ -377,7 +396,7 @@ In accordance with UK Consumer Contracts Regulations:
 - **14-day right to cancel** for consumers on initial subscriptions
 - **No automatic refunds** on subscription renewals or unused subscription periods
 - We may grant refunds at our discretion beyond the 14-day period - contact us to discuss
-- **Pro-rated refunds** for annual plans may be considered for exceptional circumstances
+- **Pro-rated refunds** for annual plans are supported via the platform admin billing view. The refund amount is calculated as `amount × (days_remaining / total_days)`, rounded to the nearest penny. Monthly subscriptions always refund the full amount.
 
 ### Requesting a Refund
 
@@ -401,12 +420,28 @@ For more details, see our [Refund Policy](/docs/refund-policy/).
 
 ### Organisation Billing
 
-Organisations are billed per user per month:
+Organisations are billed per user per month, with a choice of monthly or
+annual billing cycle set by the platform admin:
 
 - **Base rate**: £24/user/month (inc VAT) at the default `VAT_RATE=0.20`, derived from the `BASE_SEAT_PRICE_EX_VAT` setting (£20 ex VAT)
+- **Annual billing**: When the org's billing cycle is set to annual, the annual discount (`ANNUAL_DISCOUNT_PERCENT`, default 20%) is applied to the monthly rate × 12. The platform admin sets this per-organisation in the org form.
 - **Minimum commitment**: Contact sales
-- **Annual discounts**: Available for yearly contracts
 - **Invoice billing**: Available for organisations
+
+### Switching Billing Cycle
+
+Existing subscribers can switch between monthly and annual billing at any time
+from the subscription portal. Because GoCardless doesn't support changing the
+`interval_unit` on an existing subscription, switching cancels the current
+subscription and creates a new one with the new billing cycle, reusing the
+existing Direct Debit mandate (no re-authorisation needed).
+
+- **Monthly → Annual**: The new annual subscription charges the discounted
+  annual amount on the next billing date.
+- **Annual → Monthly**: The new monthly subscription charges the standard
+  monthly amount on the next billing date.
+- The old subscription remains active until the end of its current billing
+  period; the new subscription starts immediately.
 
 ### Managing Team Members
 

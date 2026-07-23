@@ -333,10 +333,7 @@ class PaymentClient:
         if start_date:
             data["subscriptions"]["start_date"] = start_date
 
-        logger.info(
-            f"Creating subscription ({self.environment}): mandate={mandate_id}, "
-            f"amount={amount} {currency}, interval={interval} {interval_unit}"
-        )
+        logger.info("Creating subscription (%s)", self.environment)
         response = self._make_request("POST", "/subscriptions", data=data)
         subscription = response.get("subscriptions", {})
         logger.info(
@@ -617,13 +614,18 @@ def complete_mandate_setup(
     return customer_id, mandate_id
 
 
-def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
+def create_subscription_for_user(
+    user, tier: str, mandate_id: str, billing_cycle: str = "monthly"
+) -> str:
     """Create a subscription for a user.
 
     Args:
         user: Django User instance
         tier: The subscription tier (must match key in SUBSCRIPTION_TIERS)
         mandate_id: The GoCardless mandate ID
+        billing_cycle: ``"monthly"`` (default) or ``"annual"``. Determines the
+            GoCardless interval and the amount charged (annual applies the
+            configured discount).
 
     Returns:
         Subscription ID
@@ -636,30 +638,46 @@ def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
     if not tier_config:
         raise ValueError(f"Unknown subscription tier: {tier}")
 
+    # Resolve the billing cycle config (interval_unit / interval) from the
+    # tier's billing_cycles sub-dict. Falls back to the tier's top-level
+    # interval_unit / interval for tiers without billing_cycles (e.g. org).
+    cycles = tier_config.get("billing_cycles", {})
+    cycle_cfg = cycles.get(billing_cycle, {})
+    interval_unit = cycle_cfg.get(
+        "interval_unit", tier_config.get("interval_unit", "monthly")
+    )
+    interval = cycle_cfg.get("interval", tier_config.get("interval", 1))
+
     if tier.startswith("team_"):
         existing_team = Team.objects.filter(owner=user).first()
         if existing_team is not None:
             resolution = resolve_effective_pricing_for_team(
                 existing_team,
                 base_tier=tier,
+                billing_cycle=billing_cycle,
             )
         else:
-            resolution = resolve_effective_pricing_for_user(user, base_tier=tier)
+            resolution = resolve_effective_pricing_for_user(
+                user, base_tier=tier, billing_cycle=billing_cycle
+            )
     else:
-        resolution = resolve_effective_pricing_for_user(user, base_tier=tier)
+        resolution = resolve_effective_pricing_for_user(
+            user, base_tier=tier, billing_cycle=billing_cycle
+        )
 
     subscription = payment_client.create_subscription(
         mandate_id=mandate_id,
         amount=resolution.effective_amount_pence,
         currency=tier_config.get("currency", "GBP"),
-        interval_unit=tier_config.get("interval_unit", "monthly"),
-        interval=tier_config.get("interval", 1),
+        interval_unit=interval_unit,
+        interval=interval,
         name=tier_config.get("name", f"CheckTick {tier.title()} Plan"),
         metadata={
             "user_id": str(user.id),
             "username": user.username,
             "tier": tier,
             "effective_tier": resolution.effective_tier,
+            "billing_cycle": billing_cycle,
             "applied_promotion_id": (
                 str(resolution.applied_promotion.id)
                 if resolution.applied_promotion
@@ -684,6 +702,7 @@ def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
     profile.last_checkout_amount_ex_vat = resolution.effective_amount_ex_vat_pence
     profile.last_checkout_applied_promotion = resolution.applied_promotion
     profile.last_checkout_effective_tier = resolution.effective_tier
+    profile.last_checkout_billing_cycle = billing_cycle
     profile.save(
         update_fields=[
             "payment_subscription_id",
@@ -693,6 +712,7 @@ def create_subscription_for_user(user, tier: str, mandate_id: str) -> str:
             "last_checkout_amount_ex_vat",
             "last_checkout_applied_promotion",
             "last_checkout_effective_tier",
+            "last_checkout_billing_cycle",
             "updated_at",
         ]
     )
