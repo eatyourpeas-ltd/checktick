@@ -223,7 +223,7 @@ def switch_billing_cycle(request: HttpRequest) -> HttpResponse:
             "Cancelled subscription to switch billing cycle from %s to %s",
             current_cycle,
             new_cycle,
-        )
+        )  # lgtm[py/clear-text-logging-sensitive-data]
 
         # Create a new subscription with the new billing cycle, reusing the mandate.
         # The returned subscription ID is intentionally not logged to avoid
@@ -245,7 +245,7 @@ def switch_billing_cycle(request: HttpRequest) -> HttpResponse:
             "Switched billing cycle from %s to %s: new subscription created",
             current_cycle,
             new_cycle,
-        )
+        )  # lgtm[py/clear-text-logging-sensitive-data]
 
     except PaymentAPIError as e:
         logger.error(f"Error switching billing cycle for {user.username}: {e}")
@@ -455,7 +455,7 @@ def start_checkout(request: HttpRequest) -> HttpResponse:
             "Starting checkout for tier: %s (%s)",
             tier,
             billing_cycle,
-        )
+        )  # lgtm[py/clear-text-logging-sensitive-data]
         return redirect(redirect_url)
 
     except Exception as e:

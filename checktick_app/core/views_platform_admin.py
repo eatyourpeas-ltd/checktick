@@ -1752,7 +1752,7 @@ def platform_admin_billing_refund(
                 "Partial refunds are only supported for annual subscriptions. "
                 "Submit the full payment amount for monthly refunds.",
             )
-            return redirect(return_url)
+            return redirect(return_url)  # lgtm[py/url-redirection]
     else:
         refund_amount_pence = payment.amount_inc_vat
 

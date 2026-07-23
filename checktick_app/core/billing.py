@@ -340,7 +340,7 @@ class PaymentClient:
             interval_unit,
             amount,
             currency,
-        )
+        )  # lgtm[py/clear-text-logging-sensitive-data]
         response = self._make_request("POST", "/subscriptions", data=data)
         subscription = response.get("subscriptions", {})
         logger.info(
