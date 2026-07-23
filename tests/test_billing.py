@@ -1492,11 +1492,12 @@ class TestAnnualBillingPricing:
         10% promotion. The promotion applies on top of the annual-discounted
         base: £192 × 0.90 = £172.80 ex VAT.
         """
+        from django.contrib.auth import get_user_model
+
         from checktick_app.core.models import Promotion
         from checktick_app.core.services.promotion_resolver import (
             resolve_effective_pricing_for_user,
         )
-        from django.contrib.auth import get_user_model
 
         User = get_user_model()
         user = User.objects.create_user(

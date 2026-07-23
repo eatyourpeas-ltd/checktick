@@ -1,7 +1,7 @@
 """Tests for the public pricing context and billing cycle display."""
 
-import pytest
 from django.conf import settings
+import pytest
 
 from checktick_app.core.views import _get_public_pricing_context
 

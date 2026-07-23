@@ -1,7 +1,7 @@
 """Tests for organisation annual billing."""
 
-import pytest
 from django.conf import settings
+import pytest
 
 from checktick_app.surveys.models import Organization
 

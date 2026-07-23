@@ -1,9 +1,9 @@
 """Tests for switching billing cycle on an existing subscription."""
 
-import pytest
 from django.contrib.auth import get_user_model
 from django.test import Client
 from django.urls import reverse
+import pytest
 
 from checktick_app.core.models import UserProfile
 

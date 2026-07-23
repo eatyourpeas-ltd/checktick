@@ -1,11 +1,12 @@
 """Tests for pro-rata refunds on annual subscriptions."""
 
-import pytest
 from datetime import date
 from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import Client
 from django.urls import reverse
+import pytest
 
 from checktick_app.core.models import Payment, UserProfile
 
