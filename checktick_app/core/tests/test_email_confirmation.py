@@ -231,6 +231,50 @@ class TestEmailConfirmationViews(TestCase):
         self.user.refresh_from_db()
         self.assertFalse(self.user.profile.email_confirmed)
 
+    def test_confirm_email_view_already_confirmed_user_gets_friendly_message(self):
+        """A logged-in, already-confirmed user clicking a stale/used token
+        (e.g. after an email client pre-fetched the link) should see a
+        friendly "already confirmed" message, not the scary error.
+        """
+        # Simulate the post-prefetch state: email confirmed, token cleared.
+        self.user.profile.email_confirmed = True
+        self.user.profile.email_confirmation_token = None
+        self.user.profile.email_confirmation_token_expires = None
+        self.user.profile.save(
+            update_fields=[
+                "email_confirmed",
+                "email_confirmation_token",
+                "email_confirmation_token_expires",
+            ]
+        )
+
+        self.client.login(username="testuser", password=PASSWORD)
+        response = self.client.get(
+            reverse("confirm_email", kwargs={"token": "stale-or-used-token"})
+        )
+
+        self.assertEqual(response.status_code, 302)
+        # Should still be confirmed
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.profile.email_confirmed)
+        # Should show the friendly info message, not the error
+        messages_list = list(response.wsgi_request._messages)
+        # Fallback: inspect the messages via the response context is not
+        # available on a redirect, so re-fetch via the messages framework.
+        from django.contrib.messages import get_messages
+
+        # The redirect target renders messages; follow it to inspect them.
+        followed = self.client.get(response.url, follow=True)
+        all_messages = list(get_messages(followed.wsgi_request))
+        self.assertTrue(
+            any(m.message == "Welcome to CheckTick! Your email is confirmed and you can now access all features." for m in all_messages),
+            "Expected welcome message for confirmed user",
+        )
+        self.assertFalse(
+            any(m.message == "Invalid or expired confirmation link." for m in all_messages),
+            "Should not show the error message for an already-confirmed user",
+        )
+
 
 class TestSignupWithEmailConfirmation(TestCase):
     """Test signup flow with email confirmation."""
