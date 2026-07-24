@@ -504,6 +504,31 @@ class TestSurveyExportFileSecurity:
         assert "login" in response.url
         assert response["Content-Type"] != "text/csv"
 
+    def test_file_download_rejects_non_owner_with_valid_token(
+        self, client, other_user, export_with_token
+    ):
+        """
+        A non-owner holding a valid (e.g. leaked) token must still be denied.
+
+        The token is a second factor, not a replacement for authorisation.
+        Only the survey owner (or their seniors: org owner, org admins,
+        active data custodians) may download exported survey data. This is
+        the core security property for a sensitive-data export route.
+        """
+        client.force_login(other_user)
+        url = reverse(
+            "surveys:survey_export_file",
+            kwargs={
+                "slug": export_with_token.survey.slug,
+                "export_id": export_with_token.id,
+                "token": export_with_token.download_token,
+            },
+        )
+        response = client.get(url)
+
+        assert response.status_code == 403
+        assert response["Content-Type"] != "text/csv"
+
     def test_file_download_rejects_cross_survey_token_reuse(
         self, client, user, export_with_token, other_survey_export
     ):
@@ -696,8 +721,10 @@ class TestExportPermissionEnforcement:
         )
         assert client.get(download_url).status_code == 403
 
-        # Download file - token-based access allows any authenticated user
-        # (The token IS the permission - like a share link)
+        # Download file - the token is a second factor, NOT a replacement
+        # for authorisation. A non-owner with a valid (leaked) token must
+        # still be denied: only the survey owner (or their seniors — org
+        # owner, org admins, active data custodians) may download exports.
         file_url = reverse(
             "surveys:survey_export_file",
             kwargs={
@@ -706,8 +733,8 @@ class TestExportPermissionEnforcement:
                 "token": export.download_token,
             },
         )
-        # Valid token = access granted (token is the security mechanism)
-        assert client.get(file_url).status_code == 200
+        # Valid token + no permission = 403, never the CSV.
+        assert client.get(file_url).status_code == 403
 
     def test_export_routes_allowed_for_owner(self, client, user, closed_survey):
         """Survey owner should have access to all export routes."""
