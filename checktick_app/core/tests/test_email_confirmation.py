@@ -396,3 +396,102 @@ class TestOIDCUserCompatibility(TestCase):
         oidc_record = self.user.oidc
         self.assertTrue(oidc_record.email_verified)
         self.assertFalse(self.user.profile.email_confirmed)
+
+
+class TestResendConfirmationFlow(TestCase):
+    """Test the full resend-confirmation -> click-link -> access-app flow.
+
+    Reproduces the reported issue where the link from a *resent* confirmation
+    email always appears expired when the user clicks it.
+    """
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username="resenduser", email="resend@example.com", password=PASSWORD
+        )
+        # Simulate the post-signup state: unconfirmed email with an initial
+        # (now-expired) token, exactly what a user would see if they let the
+        # first link lapse and then hit "resend".
+        self.user.profile.email_confirmed = False
+        self.user.profile.email_confirmation_token = "initial-expired-token"
+        self.user.profile.email_confirmation_token_expires = timezone.now() - timedelta(
+            hours=1
+        )
+        self.user.profile.save(
+            update_fields=[
+                "email_confirmed",
+                "email_confirmation_token",
+                "email_confirmation_token_expires",
+            ]
+        )
+
+    def test_resent_link_grants_access(self):
+        """The link in a resent confirmation email must verify and confirm the user."""
+        from checktick_app.core.email_confirmation import EmailConfirmationManager
+        from django.core import mail
+
+        # Log in as the unconfirmed user (as they would be after signup) and
+        # trigger a resend via the dedicated resend view.
+        self.client.login(username="resenduser", password=PASSWORD)
+        response = self.client.post(reverse("resend_confirmation"))
+        self.assertEqual(response.status_code, 302)
+
+        # A confirmation email should have been sent.
+        confirmation = None
+        for email in mail.outbox:
+            if "confirm" in email.subject.lower():
+                confirmation = email
+                break
+        self.assertIsNotNone(confirmation, "Resent confirmation email was not sent")
+
+        # Extract the token from the confirmation URL in the email body.
+        # URL format: .../accounts/confirm-email/<token>/
+        import re
+
+        match = re.search(r"/accounts/confirm-email/([A-Za-z0-9]+)/", confirmation.body)
+        self.assertIsNotNone(match, "Confirmation URL not found in email body")
+        resent_token = match.group(1)
+
+        # The persisted token on the profile must match the one in the email.
+        self.user.refresh_from_db()
+        self.assertEqual(
+            self.user.profile.email_confirmation_token,
+            resent_token,
+            "Token in email does not match token stored on profile",
+        )
+        self.assertIsNotNone(self.user.profile.email_confirmation_token_expires)
+        self.assertGreater(
+            self.user.profile.email_confirmation_token_expires,
+            timezone.now(),
+            "Resent token must not already be expired",
+        )
+
+        # Log out so we click the link as an anonymous visitor (the common case).
+        self.client.logout()
+
+        # Click the link from the email.
+        confirm_response = self.client.get(
+            reverse("confirm_email", kwargs={"token": resent_token})
+        )
+        self.assertEqual(confirm_response.status_code, 302)
+
+        # The user's email should now be confirmed.
+        self.user.refresh_from_db()
+        self.assertTrue(
+            self.user.profile.email_confirmed,
+            "Resent confirmation link did not confirm the user's email",
+        )
+
+        # And the token should be cleared.
+        self.assertIsNone(self.user.profile.email_confirmation_token)
+
+        # The user should now be able to access a protected view that previously
+        # required email confirmation (e.g. survey creation).
+        self.client.login(username="resenduser", password=PASSWORD)
+        protected = self.client.get(reverse("surveys:create"))
+        self.assertEqual(
+            protected.status_code,
+            200,
+            "Confirmed user should be able to access protected features",
+        )
