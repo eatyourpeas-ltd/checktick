@@ -54,7 +54,7 @@ locked in `poetry.lock` for reproducible builds.
 | **gunicorn** | WSGI Server | ^22.0.0 | Production application server |
 | **djangorestframework-simplejwt** | Authentication | ^5.3.1 | JWT token management |
 | **markdown** | Content | ^3.6 | Markdown rendering |
-| **pymdown-extensions** | Content | ^10.0 | Extended Markdown support |
+| **pymdown-extensions** | Content | >=11.0.1 | Extended Markdown support |
 | **pygments** | Syntax | ^2.18.0 | Code highlighting (1 active CVE — local only, monitored) |
 | **inflection** | Utilities | ^0.5.1 | String inflection |
 | **uritemplate** | API | ^4.1.1 | URI template handling |
