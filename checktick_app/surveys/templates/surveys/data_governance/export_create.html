@@ -57,7 +57,7 @@
                         autocomplete="new-password"
                     />
                     <label class="label">
-                        <span class="label-text-alt text-gray-500">
+                        <span class="label-text-alt text-gray-500 whitespace-normal break-words min-w-0">
                             {% trans "Recommended for sensitive data. The ZIP file will be encrypted with this password." %}
                         </span>
                     </label>
@@ -66,7 +66,7 @@
                 <div class="divider"></div>
 
                 <div class="form-control">
-                    <label class="label cursor-pointer justify-start gap-3">
+                    <label class="label cursor-pointer justify-start gap-3 items-start">
                         <input
                             type="checkbox"
                             name="attestation_accepted"
@@ -74,9 +74,9 @@
                             class="checkbox checkbox-primary"
                             required
                         />
-                        <span class="label-text">
+                        <span class="label-text whitespace-normal break-words min-w-0 flex-1">
                             {% blocktrans %}
-                            I confirm that I am authorized to export this data and will handle it in accordance with applicable data protection policies.
+                            I confirm that I am authorised to export this data and will handle it in accordance with applicable data protection policies.
                             {% endblocktrans %}
                         </span>
                     </label>

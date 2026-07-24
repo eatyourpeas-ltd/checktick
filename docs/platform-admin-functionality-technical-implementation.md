@@ -44,6 +44,8 @@ Platform admin endpoints are superuser-only and protected by explicit controls:
 
 Design intent: administrative workflows are explicit, auditable, and fail-closed when authorization fails.
 
+**Data access boundary:** Platform Admins are deliberately excluded from survey response data. They cannot view, download, or export survey data, and `can_export_survey_data` returns `False` for platform admin status alone. Platform Admin capabilities are limited to account/billing/promotions operations and platform-level log review. A Platform Admin may only access survey data if they independently hold an in-survey role (survey owner, organisation owner/admin, or active data custodian). This boundary is enforced by the permission helpers in `checktick_app/surveys/permissions.py` and locked down by automated tests in `checktick_app/surveys/tests/test_data_governance_views.py`.
+
 ## Account and Billing Operations
 
 Platform admin supports operational workflows across account types and tiers:

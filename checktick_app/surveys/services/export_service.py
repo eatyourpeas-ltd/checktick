@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.urls import reverse
 from django.utils import timezone
 
 if TYPE_CHECKING:
@@ -312,8 +313,17 @@ class ExportService:
         if export.is_download_url_expired:
             raise ValueError("Download URL has expired")
 
-        # Return URL pattern for downloading the export
-        return f"/api/surveys/{export.survey_id}/exports/{export.id}/download/{export.download_token}/"
+        # Reverse the named route so the URL can never drift from the URL conf.
+        # The route is surveys:survey_export_file:
+        #   <slug:slug>/export/<uuid:export_id>/download/<str:token>/
+        return reverse(
+            "surveys:survey_export_file",
+            kwargs={
+                "slug": export.survey.slug,
+                "export_id": export.id,
+                "token": export.download_token,
+            },
+        )
 
     @classmethod
     @transaction.atomic

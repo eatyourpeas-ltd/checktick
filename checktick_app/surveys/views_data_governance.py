@@ -134,7 +134,11 @@ def survey_export_download(
 ) -> HttpResponse:
     """Display download link for an export."""
     survey = get_object_or_404(Survey, slug=slug)
-    export = get_object_or_404(DataExport, id=export_id, survey=survey)
+    export = get_object_or_404(
+        DataExport.objects.select_related("survey"),
+        id=export_id,
+        survey=survey,
+    )
 
     require_can_export_survey_data(request.user, survey)
 
@@ -155,9 +159,20 @@ def survey_export_download(
 def survey_export_file(
     request: HttpRequest, slug: str, export_id: str, token: str
 ) -> HttpResponse:
-    """Download the actual export file (validates token)."""
+    """Download the actual export file (validates token + permission)."""
     survey = get_object_or_404(Survey, slug=slug)
-    export = get_object_or_404(DataExport, id=export_id, survey=survey)
+    export = get_object_or_404(
+        DataExport.objects.select_related("survey"),
+        id=export_id,
+        survey=survey,
+    )
+
+    # Permission check: only the survey owner (or their seniors — org owner,
+    # org admins, active data custodians) may download exported survey data.
+    # The token is a second factor (a share-link-style secret), not a
+    # replacement for authorisation — a leaked token must not let an
+    # unrelated user exfiltrate patient data.
+    require_can_export_survey_data(request.user, survey)
 
     # Validate download token
     if not ExportService.validate_download_token(export, token):

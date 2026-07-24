@@ -43,6 +43,14 @@ Access to data exports is strictly controlled based on your role:
 - Can only view or edit survey structure (if editor)
 - For data access, they must request the survey creator or organisation owner to download on their behalf
 
+### Platform Admins
+
+- **Cannot download data** - Deliberately excluded from all survey data access
+- Platform Admins (superusers) manage platform-level concerns only: account provisioning, billing, pricing overrides, promotions, and infrastructure/audit log review
+- They **cannot** view, download, or export survey responses, even with a valid download token
+- This is a deliberate security boundary: CheckTick staff and platform operators must not be able to read patient data
+- A Platform Admin can only download survey data if they independently satisfy one of the roles above (e.g. they are the survey's owner, an organisation owner/admin, or an active data custodian for that survey) — the `can_export_survey_data` permission helper enforces this and does not grant access on the basis of platform admin status alone
+
 ## When Can I Download Data?
 
 ### After Survey Closure

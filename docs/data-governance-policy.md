@@ -380,6 +380,18 @@ Participants can object to processing based on:
 
 **Access:** Cannot download survey data
 
+### 6.7 Platform Administrators
+
+**Responsibilities:**
+
+- Manage account provisioning, billing, pricing overrides, and promotions
+- Review platform-level audit and infrastructure logs
+- Operate platform-level administrative workflows (account status, refunds)
+
+**Access:** **Cannot view, download, or export survey response data.** Platform Administrators (superusers) are deliberately excluded from all survey data access. The `can_export_survey_data` permission helper does not grant access on the basis of platform admin status; a Platform Admin can only access survey data if they independently satisfy another role (survey owner, organisation owner/admin, or active data custodian for that survey).
+
+**Rationale:** CheckTick staff and platform operators must not be able to read patient or respondent data. This boundary is enforced in code by the permission helpers in `checktick_app/surveys/permissions.py` and is locked down by automated tests in `checktick_app/surveys/tests/test_data_governance_views.py`.
+
 ---
 
 ## 7. Security Measures

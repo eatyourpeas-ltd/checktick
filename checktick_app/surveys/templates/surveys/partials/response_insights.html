@@ -1,4 +1,4 @@
-{% comment %} 
+{% comment %}
 Response Insights Partial Displays answer distribution charts for
 survey responses. This partial is designed to be easily swappable for a
 JavaScript charting library (e.g., Plotly) in the future. Expected context: -
@@ -6,10 +6,10 @@ analytics: ResponseAnalytics object with distributions - survey: Survey object
 (for linking/context) To swap to Plotly later: 1. Change this partial to render
 a container div with data attributes 2. Add a script block that initializes
 Plotly charts from the data 3. The view/service stays the same - just the
-rendering changes 
-{% endcomment %} 
+rendering changes
+{% endcomment %}
 
-{% load i18n %} 
+{% load i18n %}
 {% if analytics.distributions %}
 <div class="mt-6">
     <details class="collapse collapse-arrow bg-base-100 shadow-sm" open>
@@ -48,14 +48,12 @@ rendering changes
                         {# Question header #}
                         <h4 class="card-title text-sm font-medium mb-3">
                             {{ dist.question_text }}
-                            <span class="badge badge-ghost badge-sm ml-auto"
-                                >{{ dist.total_responses }} {% trans "responses"
-                                %}</span
-                            >
+                            <span class="badge badge-ghost badge-sm ml-auto">
+                                {{ dist.total_responses }} {% trans "responses"%}
+                            </span>
                         </h4>
 
-                        {# Chart container - data attributes for future JS
-                        library #}
+                        {# Chart container - data attributes for future JS library #}
                         <div
                             class="response-chart"
                             data-question-id="{{ dist.question_id }}"
@@ -72,12 +70,13 @@ rendering changes
                                         title="{{ option.label }}"
                                     >
                                         {% if dist.question_type == 'yesno' %}
-                                        {% if option.label == 'Yes' %}
-                                        <span class="text-success">✓</span>
-                                        {% else %}
-                                        <span class="text-error">✗</span>
-                                        {% endif %} {% endif %} {{ option.label
-                                        }}
+                                            {% if option.label == 'Yes' %}
+                                                <span class="text-success">✓</span>
+                                            {% else %}
+                                                <span class="text-error">✗</span>
+                                            {% endif %}
+                                        {% endif %}
+                                        {{ option.label }}
                                     </span>
 
                                     {# Bar #}
