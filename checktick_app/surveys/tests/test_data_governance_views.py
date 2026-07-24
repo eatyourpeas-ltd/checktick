@@ -632,6 +632,114 @@ class TestSurveyExportFileSecurity:
         assert "== token" not in src
         assert "== export.download_token" not in src
 
+    def test_platform_admin_cannot_download_survey_data(
+        self, client, closed_survey, user
+    ):
+        """
+        Platform Admins (superusers) must NOT be able to download survey data.
+
+        This is a deliberate security boundary: CheckTick staff and platform
+        operators must not be able to read patient/respondent data. The
+        permission helper `can_export_survey_data` returns False for a
+        platform admin who does not independently hold an in-survey role
+        (owner / org owner / org admin / active data custodian), and the
+        export file view enforces this even when a valid token is present.
+        """
+        from checktick_app.surveys.models import SurveyResponse
+        from checktick_app.surveys.permissions import can_export_survey_data
+
+        # Create a response + export owned by `user` (not the platform admin).
+        SurveyResponse.objects.create(
+            survey=closed_survey,
+            submitted_by=user,
+            submitted_at=timezone.now(),
+            answers={"q": "a"},
+        )
+        export = ExportService.create_export(
+            survey=closed_survey, user=user, password=None
+        )
+
+        # Platform admin who has no relationship to this survey.
+        platform_admin = User.objects.create_user(
+            username="platform-admin",
+            email="platform-admin@example.com",
+            password=TEST_PASSWORD,
+            is_superuser=True,
+            is_staff=True,
+        )
+
+        # 1. Permission helper must deny.
+        assert can_export_survey_data(platform_admin, closed_survey) is False
+
+        # 2. The download page (which calls require_can_export_survey_data)
+        #    must deny with 403.
+        client.force_login(platform_admin)
+        download_page_url = reverse(
+            "surveys:survey_export_download",
+            kwargs={"slug": closed_survey.slug, "export_id": export.id},
+        )
+        assert client.get(download_page_url).status_code == 403
+
+        # 3. The file download route must deny even with a valid token.
+        file_url = reverse(
+            "surveys:survey_export_file",
+            kwargs={
+                "slug": closed_survey.slug,
+                "export_id": export.id,
+                "token": export.download_token,
+            },
+        )
+        response = client.get(file_url)
+        assert response.status_code == 403
+        assert response["Content-Type"] != "text/csv"
+
+    def test_platform_admin_who_is_also_owner_can_download(
+        self, client, closed_survey, user
+    ):
+        """
+        A Platform Admin who is *also* the survey owner can download.
+
+        The exclusion is based on role, not user identity: a platform admin
+        who independently holds an in-survey role (here: survey owner) is
+        granted access through that role. This guards against an over-broad
+        denial that would lock owners out of their own surveys after being
+        granted platform admin status.
+        """
+        from checktick_app.surveys.models import SurveyResponse
+        from checktick_app.surveys.permissions import can_export_survey_data
+
+        SurveyResponse.objects.create(
+            survey=closed_survey,
+            submitted_by=user,
+            submitted_at=timezone.now(),
+            answers={"q": "a"},
+        )
+        export = ExportService.create_export(
+            survey=closed_survey, user=user, password=None
+        )
+
+        # Promote the survey owner to platform admin.
+        user.is_superuser = True
+        user.is_staff = True
+        user.save()
+
+        # Permission helper grants via the owner branch, not the platform-admin
+        # branch (there is no platform-admin branch).
+        assert can_export_survey_data(user, closed_survey) is True
+
+        client.force_login(user)
+        file_url = reverse(
+            "surveys:survey_export_file",
+            kwargs={
+                "slug": closed_survey.slug,
+                "export_id": export.id,
+                "token": export.download_token,
+            },
+        )
+        response = client.get(file_url)
+        assert response.status_code == 200
+        assert response["Content-Type"] == "text/csv"
+
 
 # ========== Survey Close Integration Test ==========
 

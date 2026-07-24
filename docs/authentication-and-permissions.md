@@ -433,7 +433,7 @@ Core permission checks in `checktick_app/surveys/permissions.py`:
 | `can_create_datasets` | Create new datasets |
 | `can_edit_dataset` | Edit existing datasets |
 | `can_close_survey` | Close/archive surveys |
-| `can_export_survey_data` | Export survey responses |
+| `can_export_survey_data` | Export survey responses (owner / org owner / org admin / active data custodian only — Platform Admins are deliberately excluded) |
 | `can_extend_retention` | Extend data retention periods |
 | `can_manage_legal_hold` | Manage legal hold status |
 | `can_manage_data_custodians` | Manage data custodian assignments |

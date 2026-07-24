@@ -33,11 +33,15 @@ Not everyone can access survey data. Access is strictly controlled based on role
 |------|-------------------|-------------------|---------------------|
 | **Survey Creator** | ✅ Own surveys | ✅ Own surveys | ✅ Own surveys |
 | **Organisation Owner** | ✅ All org surveys | ✅ All org surveys | ✅ All org surveys |
+| **Organisation Admin** | ✅ All org surveys | ✅ All org surveys | ✅ All org surveys |
 | **Data Custodian*** | ❌ No | ✅ Assigned surveys | ❌ No |
 | **Editor** | ❌ No | ❌ No | ❌ No |
 | **Viewer** | ❌ No | ❌ No | ❌ No |
+| **Platform Admin** | ❌ No | ❌ No | ❌ No |
 
 \* *Optional role - can be assigned per survey for data management delegation*
+
+**Platform Admins are deliberately excluded from survey data access.** Platform Admins (superusers) manage platform-level concerns only — account provisioning, billing, pricing overrides, promotions, and infrastructure/audit log review. They **cannot** view, download, or export survey responses, and `can_export_survey_data` returns `False` for them unless they also happen to be the survey's owner, an organisation owner/admin, or an active data custodian. This is a deliberate security boundary: CheckTick staff and platform operators must not be able to read patient data, and the permission helper enforces it. See [Platform Admin Functionality](platform-admin-functionality-technical-implementation.md) for the scope of platform admin capabilities.
 
 **Organisation Administrative Authority**
 To ensure accountability, every CheckTick Organisation must have at least one designated Owner.
