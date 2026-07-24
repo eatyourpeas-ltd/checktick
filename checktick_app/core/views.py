@@ -897,7 +897,10 @@ def confirm_email(request, token):
         # the token before the user clicks. In that case the user is genuinely
         # confirmed, so show a friendly message instead of a scary error.
         if request.user.is_authenticated and request.user.profile.email_confirmed:
-            messages.success(request, "Welcome to CheckTick! Your email is confirmed and you can now access all features.")
+            messages.success(
+                request,
+                "Welcome to CheckTick! Your email is confirmed and you can now access all features.",
+            )
         else:
             messages.error(request, "Invalid or expired confirmation link.")
 

@@ -258,7 +258,7 @@ class TestEmailConfirmationViews(TestCase):
         self.user.refresh_from_db()
         self.assertTrue(self.user.profile.email_confirmed)
         # Should show the friendly info message, not the error
-        messages_list = list(response.wsgi_request._messages)
+
         # Fallback: inspect the messages via the response context is not
         # available on a redirect, so re-fetch via the messages framework.
         from django.contrib.messages import get_messages
@@ -267,11 +267,18 @@ class TestEmailConfirmationViews(TestCase):
         followed = self.client.get(response.url, follow=True)
         all_messages = list(get_messages(followed.wsgi_request))
         self.assertTrue(
-            any(m.message == "Welcome to CheckTick! Your email is confirmed and you can now access all features." for m in all_messages),
+            any(
+                m.message
+                == "Welcome to CheckTick! Your email is confirmed and you can now access all features."
+                for m in all_messages
+            ),
             "Expected welcome message for confirmed user",
         )
         self.assertFalse(
-            any(m.message == "Invalid or expired confirmation link." for m in all_messages),
+            any(
+                m.message == "Invalid or expired confirmation link."
+                for m in all_messages
+            ),
             "Should not show the error message for an already-confirmed user",
         )
 
@@ -472,7 +479,6 @@ class TestResendConfirmationFlow(TestCase):
 
     def test_resent_link_grants_access(self):
         """The link in a resent confirmation email must verify and confirm the user."""
-        from checktick_app.core.email_confirmation import EmailConfirmationManager
         from django.core import mail
 
         # Log in as the unconfirmed user (as they would be after signup) and
