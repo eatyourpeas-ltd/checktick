@@ -134,7 +134,11 @@ def survey_export_download(
 ) -> HttpResponse:
     """Display download link for an export."""
     survey = get_object_or_404(Survey, slug=slug)
-    export = get_object_or_404(DataExport, id=export_id, survey=survey)
+    export = get_object_or_404(
+        DataExport.objects.select_related("survey"),
+        id=export_id,
+        survey=survey,
+    )
 
     require_can_export_survey_data(request.user, survey)
 

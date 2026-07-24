@@ -8,6 +8,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.urls import reverse
 from django.utils import timezone
 import pytest
 
@@ -167,14 +168,27 @@ class TestExportService:
         assert export.encryption_key_id is None
 
     def test_get_download_url(self, survey_with_responses, user):
-        """Should generate download URL from export."""
+        """Should generate download URL that reverses to the file route."""
         with patch.object(ExportService, "_generate_csv", return_value="mock,csv"):
             export = ExportService.create_export(survey_with_responses, user)
 
         url = ExportService.get_download_url(export)
 
+        # The URL must reverse to the named file-download route and contain the
+        # real token + export id. This locks down the previous bug where the
+        # service hand-built a /api/surveys/... URL that 404'd.
+        expected = reverse(
+            "surveys:survey_export_file",
+            kwargs={
+                "slug": export.survey.slug,
+                "export_id": export.id,
+                "token": export.download_token,
+            },
+        )
+        assert url == expected
         assert export.download_token in url
         assert str(export.id) in url
+        assert export.survey.slug in url
 
     def test_get_download_url_fails_for_expired(self, survey_with_responses, user):
         """Should raise error for expired download URL."""
