@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "checktick"
-version = "0.7.7"
+version = "0.7.8"
 description = "Secure, server-rendered survey platform for medical audit and research"
 authors = ["CheckTick Maintainers <simon@eatyourpeas.co.uk>"]
 readme = "README.md"
@@ -28,7 +28,7 @@ gunicorn = "^22.0.0"
 djangorestframework-simplejwt = "^5.3.1"
 pyjwt = ">=2.13.0"
 markdown = ">=3.10.1"
-pymdown-extensions = ">=10.21.3"
+pymdown-extensions = ">=11.0.1"
 pygments = "^2.18.0"
 inflection = "^0.5.1"
 uritemplate = "^4.1.1"

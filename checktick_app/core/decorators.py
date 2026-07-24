@@ -272,12 +272,9 @@ def email_confirmed_required(view_func):
         if user_has_oidc or user_has_confirmed_email:
             return view_func(request, *args, **kwargs)
         else:
-            # Redirect to home with message
-            messages.warning(
-                request,
-                "Nearly there! Please confirm your email to get started. "
-                "Check your inbox for the confirmation email. Visit the home page to resend if needed.",
-            )
+            # Redirect to home; the home view renders the canonical
+            # "confirm your email" notice (with resend instructions) so we
+            # don't add a duplicate message here.
             return redirect("core:home")
 
     return _wrapped_view

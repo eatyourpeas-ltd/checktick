@@ -891,7 +891,18 @@ def confirm_email(request, token):
             )
             return redirect("core:home")
     else:
-        messages.error(request, "Invalid or expired confirmation link.")
+        # verify_token returns None when the token is missing, expired, or has
+        # already been consumed. Email clients and security scanners commonly
+        # pre-fetch the confirmation link, which confirms the email and clears
+        # the token before the user clicks. In that case the user is genuinely
+        # confirmed, so show a friendly message instead of a scary error.
+        if request.user.is_authenticated and request.user.profile.email_confirmed:
+            messages.success(
+                request,
+                "Welcome to CheckTick! Your email is confirmed and you can now access all features.",
+            )
+        else:
+            messages.error(request, "Invalid or expired confirmation link.")
 
     return redirect("core:home")
 
