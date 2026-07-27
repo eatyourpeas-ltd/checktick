@@ -579,7 +579,7 @@ def test_update_command_builds_to_temp_then_atomically_swaps(tmp_path, monkeypat
             out_flag = cmd.index("--output")
             ndjson_tmp = cmd[out_flag + 1]
             with open(ndjson_tmp, "w") as fh:
-                fh.write("{\"_type\":\"sct_provenance\"}\n")
+                fh.write('{"_type":"sct_provenance"}\n')
         # Simulate sct sqlite writing the temp db file.
         if cmd[:2] == ["sct", "sqlite"]:
             out_flag = cmd.index("--output")
@@ -588,10 +588,16 @@ def test_update_command_builds_to_temp_then_atomically_swaps(tmp_path, monkeypat
             # Write a real (empty) SQLite db so the subsequent
             # seed_snomed_datasets call can open it without error.
             conn = sqlite3.connect(sqlite_tmp)
-            conn.execute("CREATE TABLE concepts (id TEXT PRIMARY KEY, preferred_term TEXT, active INTEGER)")
-            conn.execute("CREATE TABLE refset_members (refset_id TEXT, referenced_component_id TEXT)")
+            conn.execute(
+                "CREATE TABLE concepts (id TEXT PRIMARY KEY, preferred_term TEXT, active INTEGER)"
+            )
+            conn.execute(
+                "CREATE TABLE refset_members (refset_id TEXT, referenced_component_id TEXT)"
+            )
             conn.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)")
-            conn.execute("INSERT INTO metadata (key, value) VALUES ('release_date', '2026-07-01')")
+            conn.execute(
+                "INSERT INTO metadata (key, value) VALUES ('release_date', '2026-07-01')"
+            )
             conn.commit()
             conn.close()
         return SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -623,9 +629,9 @@ def test_update_command_builds_to_temp_then_atomically_swaps(tmp_path, monkeypat
         "sct sqlite must not write to the canonical snomed.db path — "
         "that causes SQLITE_BUSY when gunicorn holds read-only connections."
     )
-    assert sqlite_out.endswith(".db.new"), (
-        f"sct sqlite output should be a .db.new temp path, got {sqlite_out}"
-    )
+    assert sqlite_out.endswith(
+        ".db.new"
+    ), f"sct sqlite output should be a .db.new temp path, got {sqlite_out}"
 
     # 3. The temp path must be on the same filesystem as snomed.db so that
     #    os.replace is an atomic rename (not a copy).
@@ -638,7 +644,10 @@ def test_update_command_builds_to_temp_then_atomically_swaps(tmp_path, monkeypat
     # 5. The canonical snomed.db is now a valid SQLite db (the one sct sqlite
     #    wrote to the temp path, then os.replace'd into place).
     conn = sqlite3.connect(str(db_path))
-    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    tables = {
+        row[0]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
     assert "concepts" in tables
     assert "metadata" in tables
     conn.close()
