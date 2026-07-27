@@ -3,7 +3,18 @@ Management command to check for and apply SNOMED CT database updates.
 
 Uses the `sct` binary's two-step approach:
   1. `sct trud check` — lightweight check against TRUD API (exit 0=current, 2=update, 1=error)
-  2. `sct trud download --pipeline` — download + build snomed.db only if needed
+  2. `sct trud download` (no --pipeline) + explicit `sct ndjson` + `sct sqlite`,
+     followed by an atomic `os.replace()` into the canonical snomed.db path.
+
+The pipeline is split deliberately rather than using `sct trud download --pipeline`:
+the pipeline mode writes SQLite directly to the canonical snomed.db path, which is
+held open read-only by gunicorn workers (SnomedResolver thread-local connections).
+`sct sqlite` then cannot get the exclusive lock it needs to clear and rebuild,
+failing with SQLITE_BUSY ("database is locked"). By building to a temp file on the
+same volume and `os.replace()`-ing it into place, the swap is atomic on POSIX and
+no exclusive lock is ever held against the live snomed.db. This makes the command
+safe to run while the web app is serving traffic, and therefore safe to run from a
+scheduled job.
 
 This avoids the cost of a full download when there is nothing new, making it
 safe to run frequently (e.g. as a daily cron / Northflank scheduled job).
@@ -228,7 +239,26 @@ class Command(BaseCommand):
                     self.stdout.write(check_result.stderr.strip())
                 sys.exit(1)
 
-        # ── Step 2: download + build pipeline ─────────────────────────────
+        # ── Step 2: download + build (explicit two-step, atomic swap) ─────
+        #
+        # We deliberately do NOT use `sct trud download --pipeline`. The
+        # pipeline mode chains ndjson + sqlite and writes the SQLite file
+        # directly to the canonical snomed.db path. That file is held open
+        # read-only by gunicorn workers (SnomedResolver thread-local
+        # connections), so `sct sqlite` cannot get the exclusive lock it
+        # needs to clear and rebuild — failing with SQLITE_BUSY ("database
+        # is locked").
+        #
+        # Instead we run the three steps ourselves:
+        #   1. `sct trud download`           — fetch + verify the RF2 zip
+        #   2. `sct ndjson --rf2 <zip>`      — build NDJSON to a temp path
+        #   3. `sct sqlite --ndjson <ndjson> --output <tmp>.db`
+        #                                    — build SQLite to a fresh file
+        #                                    nobody else has open
+        # Then atomically `os.replace(tmp_db, snomed.db)`. POSIX guarantees
+        # this is atomic: readers either keep their already-open fd on the
+        # old inode, or open the new inode on the next request. No exclusive
+        # lock is ever held against the live snomed.db.
         if needs_update:
             if force:
                 self.stdout.write(
@@ -242,19 +272,31 @@ class Command(BaseCommand):
                 f"   This may take several minutes (UK Monolith ~1.8 GB)."
             )
 
-            if dry_run:
-                self.stdout.write(
-                    f"   [DRY RUN] would run: sct trud download --edition {edition} "
-                    f"--pipeline --data-dir {data_dir}"
-                )
-                return
-
             # Redirect TMPDIR to the mounted volume so that sct's intermediate
             # files (ndjson extraction, SQLite build) do not fill the container's
             # ephemeral storage and trigger an eviction/OOM kill.
             tmp_dir = str(data_dir / "tmp")
             Path(tmp_dir).mkdir(parents=True, exist_ok=True)
 
+            sct_env = {
+                **os.environ,
+                "TRUD_API_KEY": trud_api_key,
+                "TMPDIR": tmp_dir,
+                "TEMP": tmp_dir,
+                "TMP": tmp_dir,
+            }
+
+            if dry_run:
+                self.stdout.write(
+                    f"   [DRY RUN] would run:\n"
+                    f"     sct trud download --edition {edition} --output-dir {data_dir}\n"
+                    f"     sct ndjson --rf2 <zip> --output <tmp>.ndjson\n"
+                    f"     sct sqlite --ndjson <tmp>.ndjson --output <tmp>.db\n"
+                    f"     os.replace(<tmp>.db, {snomed_db})"
+                )
+                return
+
+            # ── Step 2a: download the RF2 zip (no pipeline) ───────────────
             download_result = subprocess.run(
                 [
                     "sct",
@@ -264,18 +306,9 @@ class Command(BaseCommand):
                     edition,
                     "--output-dir",
                     str(data_dir),
-                    "--data-dir",
-                    str(data_dir),
-                    "--pipeline",
                 ],
                 text=True,
-                env={
-                    **os.environ,
-                    "TRUD_API_KEY": trud_api_key,
-                    "TMPDIR": tmp_dir,
-                    "TEMP": tmp_dir,
-                    "TMP": tmp_dir,
-                },
+                env=sct_env,
             )
 
             if download_result.returncode != 0:
@@ -287,20 +320,112 @@ class Command(BaseCommand):
                 )
                 sys.exit(download_result.returncode)
 
-            # sct writes a release-versioned filename (e.g. uk_sct2mo_42.1.0_….db).
-            # Rename it to the canonical path that SNOMED_DB_PATH points to.
-            versioned_dbs = sorted(data_dir.glob("uk_sct2mo_*.db"))
-            if versioned_dbs:
-                versioned_db = versioned_dbs[-1]
-                versioned_db.rename(snomed_db)
-                self.stdout.write(f"   Renamed {versioned_db.name} → {snomed_db.name}")
-            elif not snomed_db.exists():
+            # Locate the downloaded zip. sct writes a release-versioned name
+            # like uk_sct2mo_42.3.0_20260701000001Z.zip.
+            zips = sorted(data_dir.glob("uk_sct2mo_*.zip"))
+            if not zips:
                 self.stdout.write(
                     self.style.ERROR(
-                        f"❌ No .db file found in {data_dir} after build — rename failed."
+                        f"❌ No uk_sct2mo_*.zip found in {data_dir} after download."
                     )
                 )
                 sys.exit(1)
+            rf2_zip = zips[-1]
+            self.stdout.write(f"   Downloaded: {rf2_zip.name}")
+
+            # ── Step 2b: build NDJSON to a temp path ─────────────────────
+            ndjson_tmp = data_dir / f"{rf2_zip.stem}.ndjson"
+            self.stdout.write(f"   → Running: sct ndjson ({rf2_zip.name})")
+            ndjson_result = subprocess.run(
+                [
+                    "sct",
+                    "ndjson",
+                    "--rf2",
+                    str(rf2_zip),
+                    "--output",
+                    str(ndjson_tmp),
+                ],
+                text=True,
+                env=sct_env,
+            )
+
+            if ndjson_result.returncode != 0:
+                self.stdout.write(
+                    self.style.ERROR(
+                        f"❌ sct ndjson failed (exit {ndjson_result.returncode}).\n"
+                        "   Check the output above for details."
+                    )
+                )
+                sys.exit(ndjson_result.returncode)
+
+            if not ndjson_tmp.exists():
+                self.stdout.write(
+                    self.style.ERROR(
+                        f"❌ sct ndjson reported success but {ndjson_tmp.name} "
+                        "was not written."
+                    )
+                )
+                sys.exit(1)
+
+            # ── Step 2c: build SQLite to a fresh temp path (no lock conflict)
+            # The temp path is on the same volume as snomed.db so that
+            # os.replace() is a same-filesystem rename (atomic on POSIX).
+            sqlite_tmp = data_dir / f"{rf2_zip.stem}.db.new"
+            # Make sure we never reuse a stale temp file from a previous run.
+            if sqlite_tmp.exists():
+                sqlite_tmp.unlink()
+
+            self.stdout.write(f"   → Running: sct sqlite → {sqlite_tmp.name}")
+            sqlite_result = subprocess.run(
+                [
+                    "sct",
+                    "sqlite",
+                    "--ndjson",
+                    str(ndjson_tmp),
+                    "--output",
+                    str(sqlite_tmp),
+                ],
+                text=True,
+                env=sct_env,
+            )
+
+            if sqlite_result.returncode != 0:
+                self.stdout.write(
+                    self.style.ERROR(
+                        f"❌ sct sqlite failed (exit {sqlite_result.returncode}).\n"
+                        "   Check the output above for details."
+                    )
+                )
+                # Clean up the partial temp db so the next run starts fresh.
+                if sqlite_tmp.exists():
+                    sqlite_tmp.unlink()
+                sys.exit(sqlite_result.returncode)
+
+            if not sqlite_tmp.exists():
+                self.stdout.write(
+                    self.style.ERROR(
+                        f"❌ sct sqlite reported success but {sqlite_tmp.name} "
+                        "was not written."
+                    )
+                )
+                sys.exit(1)
+
+            # ── Step 2d: atomic swap into place ───────────────────────────
+            # os.replace is atomic on POSIX when src and dst are on the same
+            # filesystem (they are — both are in data_dir). Gunicorn workers
+            # holding read-only connections to the old inode continue to see
+            # the old snomed.db until they reconnect; new connections open the
+            # new inode. No exclusive lock is required against the live file.
+            os.replace(sqlite_tmp, snomed_db)
+            self.stdout.write(
+                f"   Atomically swapped {sqlite_tmp.name} → {snomed_db.name}"
+            )
+
+            # Clean up the NDJSON intermediate to free volume space.
+            try:
+                ndjson_tmp.unlink()
+            except OSError:
+                pass
 
             self.stdout.write(self.style.SUCCESS("✅ snomed.db rebuilt successfully."))
 

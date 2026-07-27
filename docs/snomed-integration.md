@@ -167,7 +167,9 @@ python manage.py seed_snomed_datasets --dry-run
 
 ### `update_snomed_db`
 
-Checks TRUD for a newer SNOMED CT UK Monolith release. If one is found, downloads and rebuilds `snomed.db` via `sct trud download --pipeline`, then updates `snomed_release_date` on all SNOMED descriptor records.
+Checks TRUD for a newer SNOMED CT UK Monolith release. If one is found, downloads and rebuilds `snomed.db`, then updates `snomed_release_date` on all SNOMED descriptor records.
+
+The rebuild is performed as three explicit steps (`sct trud download`, `sct ndjson`, `sct sqlite`) rather than `sct trud download --pipeline`. The final `sct sqlite` step writes to a temp file on the same volume as `snomed.db`, then `os.replace()` atomically swaps it into place. This avoids a SQLite `SQLITE_BUSY` ("database is locked") failure when gunicorn workers hold read-only connections to the existing `snomed.db` — the live file is never locked for writing. As a result the command is **safe to run while the web app is serving traffic**, and is suitable for a scheduled job.
 
 Use `--prune` when running updates on constrained volumes. It removes stale `tmp/`, downloaded zip files, and old versioned `uk_sct2*.db` artefacts before the update check/build starts.
 
@@ -178,9 +180,9 @@ python manage.py update_snomed_db --dry-run  # check for new release only
 python manage.py update_snomed_db --force --prune  # free space before rebuild
 ```
 
-SNOMED CT UK is published infrequently. For self-hosted deployments, prefer a **manual in-container update** during a planned maintenance window (for example monthly or only when you want to refresh terminology), rather than a scheduled cron job.
+The command's preflight step (`sct trud check`) is a lightweight API call that returns "up to date" without downloading anything when there is no new release. This makes the command cheap to run on a schedule — most invocations are no-ops. SNOMED CT UK is published roughly monthly, so a daily or weekly scheduled run is reasonable. See [Scheduled Tasks](self-hosting-scheduled-tasks.md) for Northflank setup.
 
-See [Scheduled Tasks](self-hosting-scheduled-tasks.md) for Northflank setup.
+> **Memory note:** the `sct ndjson` step loads the full RF2 release into memory before writing NDJSON. UK Monolith's peak RSS during this step exceeds 4 GiB in practice — 4 GiB is *not* enough and the job will be OOM-killed (exit `-9`) partway through `sct ndjson`. Allocate **8 GiB** to the update job. The volume size is not the relevant resource for this failure.
 
 ---
 
