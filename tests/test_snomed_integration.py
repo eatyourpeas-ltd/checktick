@@ -12,6 +12,7 @@ All tests are offline — no real snomed.db required.
 """
 
 from io import StringIO
+import os
 import sqlite3
 from types import SimpleNamespace
 
@@ -527,3 +528,156 @@ def test_update_command_dry_run_no_db_path(monkeypatch):
             call_command("update_snomed_db", dry_run=True, stdout=out)
     assert exc_info.value.code == 1
     assert "SNOMED_DB_PATH" in out.getvalue()
+
+
+@pytest.mark.django_db
+def test_update_command_dry_run_shows_explicit_steps(tmp_path, monkeypatch):
+    """Dry-run output describes the explicit ndjson/sqlite/swap steps.
+
+    This guards the move away from `sct trud download --pipeline` toward the
+    explicit two-step build + atomic swap, which avoids SQLITE_BUSY when
+    gunicorn workers hold read-only connections to the live snomed.db.
+
+    Uses --force so the dry-run flows through the check step and reaches the
+    build section that prints the explicit step descriptions.
+    """
+    db_path = tmp_path / "snomed.db"
+    db_path.touch()
+    out = StringIO()
+    with override_settings(SNOMED_DB_PATH=str(db_path), TRUD_API_KEY="dummy-key"):
+        call_command("update_snomed_db", force=True, dry_run=True, stdout=out)
+    text = out.getvalue()
+    # The dry-run should mention each explicit step, not --pipeline.
+    assert "sct ndjson" in text
+    assert "sct sqlite" in text
+    assert "os.replace" in text
+    assert "--pipeline" not in text
+
+
+@pytest.mark.django_db
+def test_update_command_builds_to_temp_then_atomically_swaps(tmp_path, monkeypatch):
+    """The build writes SQLite to a temp path, then os.replace()s it into place.
+
+    Verifies the lock-conflict fix: sct sqlite must never write directly to the
+    canonical snomed.db path (which gunicorn holds read-only). Instead it writes
+    to <stem>.db.new on the same volume, and the management command atomically
+    swaps it into place.
+    """
+    db_path = tmp_path / "snomed.db"
+    db_path.touch()
+    zip_path = tmp_path / "uk_sct2mo_42.3.0_20260701000001Z.zip"
+    zip_path.touch()
+
+    # Track the subprocess invocations and the temp sqlite output path.
+    seen_cmds: list[list[str]] = []
+    sqlite_tmp_path_holder: dict[str, object] = {}
+
+    def fake_run(cmd, **kwargs):
+        seen_cmds.append(cmd)
+        # Simulate sct ndjson writing the NDJSON intermediate file.
+        if cmd[:2] == ["sct", "ndjson"]:
+            out_flag = cmd.index("--output")
+            ndjson_tmp = cmd[out_flag + 1]
+            with open(ndjson_tmp, "w") as fh:
+                fh.write("{\"_type\":\"sct_provenance\"}\n")
+        # Simulate sct sqlite writing the temp db file.
+        if cmd[:2] == ["sct", "sqlite"]:
+            out_flag = cmd.index("--output")
+            sqlite_tmp = cmd[out_flag + 1]
+            sqlite_tmp_path_holder["path"] = sqlite_tmp
+            # Write a real (empty) SQLite db so the subsequent
+            # seed_snomed_datasets call can open it without error.
+            conn = sqlite3.connect(sqlite_tmp)
+            conn.execute("CREATE TABLE concepts (id TEXT PRIMARY KEY, preferred_term TEXT, active INTEGER)")
+            conn.execute("CREATE TABLE refset_members (refset_id TEXT, referenced_component_id TEXT)")
+            conn.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)")
+            conn.execute("INSERT INTO metadata (key, value) VALUES ('release_date', '2026-07-01')")
+            conn.commit()
+            conn.close()
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    replaced: dict[str, object] = {}
+    real_replace = os.replace
+
+    def fake_replace(src, dst):
+        replaced["src"] = str(src)
+        replaced["dst"] = str(dst)
+        real_replace(src, dst)
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    monkeypatch.setattr("os.replace", fake_replace)
+
+    out = StringIO()
+    with override_settings(SNOMED_DB_PATH=str(db_path), TRUD_API_KEY="dummy-key"):
+        call_command("update_snomed_db", force=True, stdout=out)
+
+    # 1. The download step must NOT use --pipeline.
+    download_cmd = next(c for c in seen_cmds if c[:3] == ["sct", "trud", "download"])
+    assert "--pipeline" not in download_cmd
+
+    # 2. sct sqlite must write to a temp path, NOT the canonical snomed.db.
+    sqlite_cmd = next(c for c in seen_cmds if c[:2] == ["sct", "sqlite"])
+    out_flag = sqlite_cmd.index("--output")
+    sqlite_out = sqlite_cmd[out_flag + 1]
+    assert sqlite_out != str(db_path), (
+        "sct sqlite must not write to the canonical snomed.db path — "
+        "that causes SQLITE_BUSY when gunicorn holds read-only connections."
+    )
+    assert sqlite_out.endswith(".db.new"), (
+        f"sct sqlite output should be a .db.new temp path, got {sqlite_out}"
+    )
+
+    # 3. The temp path must be on the same filesystem as snomed.db so that
+    #    os.replace is an atomic rename (not a copy).
+    assert os.path.dirname(sqlite_out) == str(tmp_path)
+
+    # 4. os.replace must swap the temp file into the canonical path.
+    assert replaced["src"] == sqlite_tmp_path_holder["path"]
+    assert replaced["dst"] == str(db_path)
+
+    # 5. The canonical snomed.db is now a valid SQLite db (the one sct sqlite
+    #    wrote to the temp path, then os.replace'd into place).
+    conn = sqlite3.connect(str(db_path))
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert "concepts" in tables
+    assert "metadata" in tables
+    conn.close()
+
+    # 6. The temp file is gone after the swap.
+    assert not os.path.exists(sqlite_out)
+
+
+@pytest.mark.django_db
+def test_update_command_sqlite_failure_cleans_temp_and_exits(tmp_path, monkeypatch):
+    """If sct sqlite fails, the partial temp db is removed and the command exits non-zero.
+
+    Prevents a stale .db.new from a failed run causing confusion on the next run.
+    """
+    db_path = tmp_path / "snomed.db"
+    db_path.touch()
+    zip_path = tmp_path / "uk_sct2mo_42.3.0_20260701000001Z.zip"
+    zip_path.touch()
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["sct", "sqlite"]:
+            out_flag = cmd.index("--output")
+            sqlite_tmp = cmd[out_flag + 1]
+            # Simulate sct sqlite writing a partial file then failing.
+            with open(sqlite_tmp, "wb") as fh:
+                fh.write(b"partial")
+            return SimpleNamespace(returncode=1, stdout="", stderr="boom")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    out = StringIO()
+    with override_settings(SNOMED_DB_PATH=str(db_path), TRUD_API_KEY="dummy-key"):
+        with pytest.raises(SystemExit) as exc_info:
+            call_command("update_snomed_db", force=True, stdout=out)
+
+    assert exc_info.value.code == 1
+    # The partial temp db must have been cleaned up.
+    leftover = list(tmp_path.glob("*.db.new"))
+    assert leftover == [], f"Expected no stale .db.new files, found {leftover}"
+    # The canonical snomed.db must be untouched.
+    assert db_path.exists()

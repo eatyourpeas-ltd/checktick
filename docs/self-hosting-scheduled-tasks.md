@@ -76,19 +76,21 @@ python manage.py sync_nhs_dd_datasets --force
 python manage.py sync_nhs_dd_datasets --dataset smoking_status_code
 ```
 
-### 5. SNOMED CT Update (Optional, Manual — requires TRUD API key)
+### 5. SNOMED CT Update (Optional — requires TRUD API key)
 
-The `update_snomed_db` management command is intended to run infrequently from inside the container shell (for example monthly, or when you want to refresh terminology):
+The `update_snomed_db` management command can be run either manually or on a schedule. It is safe to run while the web app is serving traffic because the rebuild writes to a temp file and atomically swaps it into place (no exclusive SQLite lock is held against the live `snomed.db`).
 
-1. **Check for a new release** — calls `sct trud check`, which hits the TRUD API and exits immediately (exit 0) if there is nothing new. The 1.8 GB download only starts if a new release is detected (exit 2).
-2. **Download and rebuild snomed.db** — runs `sct trud download --pipeline`, producing a fresh SQLite database on the `snomed-data` volume.
+1. **Check for a new release** — calls `sct trud check`, which hits the TRUD API and exits immediately (exit 0) if there is nothing new. The 1.8 GB download only starts if a new release is detected (exit 2). This makes the command cheap to run on a schedule — most invocations are no-ops.
+2. **Download and rebuild snomed.db** — runs `sct trud download` (no `--pipeline`), then `sct ndjson` and `sct sqlite` explicitly, writing the SQLite file to a temp path on the `snomed-data` volume. The temp file is then `os.replace()`-ed over the canonical `snomed.db` atomically.
 3. **Refresh dataset descriptors** — automatically re-runs `seed_snomed_datasets --force` to update member counts and the release date in Postgres.
 
 **Optional**: If `TRUD_API_KEY` is not set the command exits cleanly.
 
-**Frequency**: Infrequent/manual is recommended for self-hosted deployments.
+**Frequency**: SNOMED CT UK is published roughly monthly. A daily or weekly scheduled run is reasonable — the preflight check makes most runs no-ops. See the Northflank / Kubernetes sections below for cron job setup.
 
-> **TRUD maintenance windows**: TRUD is offline weekdays 18:00–08:00 UK time (and midnight–06:00). Run manual updates during UK business hours to avoid false failures.
+> **Memory**: the `sct ndjson` step loads the full RF2 release into memory before writing NDJSON. UK Monolith's peak RSS during this step exceeds 4 GiB in practice — 4 GiB is *not* enough and the job will be OOM-killed (exit `-9`) partway through `sct ndjson`. Allocate **8 GiB** to the update job. The volume size is not the relevant resource for this failure.
+
+> **TRUD maintenance windows**: TRUD is offline weekdays 18:00–08:00 UK time (and midnight–06:00). Schedule the cron during UK business hours to avoid false failures.
 
 **Initial Setup**: Seed the SNOMED CT dataset descriptors once after building snomed.db:
 
@@ -304,19 +306,27 @@ Northflank provides native cron job support, making this the simplest option.
    - **Schedule**: `0 5 * * 0` (runs at 5 AM UTC every Sunday - weekly)
    - **Command**: `python manage.py sync_nhs_dd_datasets`
 
-#### 5. SNOMED CT Manual Maintenance (No Cron Job)
+#### 5. SNOMED CT Update Cron Job (Optional — requires TRUD API key)
 
-If you use SNOMED CT, run updates manually from the web service/container shell during a maintenance window:
+`update_snomed_db` is safe to run on a schedule because the rebuild writes to a temp file and atomically swaps it into place (no exclusive SQLite lock against the live `snomed.db`), and the preflight `sct trud check` makes most runs no-ops when there is no new release.
+
+1. Click **"Add Service"** → **"Cron Job"**
+2. Configure the job:
+   - **Name**: `checktick-snomed-update`
+   - **Docker Image**: Use the same image as your web service
+   - **Schedule**: `0 9 * * 1` (runs at 9 AM UTC every Monday — weekly is plenty; SNOMED CT UK publishes roughly monthly)
+   - **Command**: `python manage.py update_snomed_db --prune`
+   - **Volumes**: Mount the same `snomed-data` volume used by the web service, RW
+   - **Environment**: `TRUD_API_KEY` and `SNOMED_DB_PATH` (same values as the web service)
+   - **Resources**: Set the memory limit to **8 GiB** — the `sct ndjson` step's peak RSS exceeds 4 GiB in practice on UK Monolith, and a 4 GiB limit will OOM-kill the job (exit `-9`) partway through `sct ndjson`. The job pod is short-lived (only runs during a build), so this is a peak limit, not a steady-state cost.
+3. **Concurrency policy**: set to Forbid (a second run while one is in progress would contend for the volume).
+
+Run a one-off `--force --prune` job the first time to build `snomed.db`, then let the cron keep it current.
 
 ```bash
-# Check for a new release (no download)
-python manage.py update_snomed_db --dry-run
-
-# Rebuild safely on persistent storage with cleanup first
+# First-time build (run as a one-off job, not the cron)
 python manage.py update_snomed_db --force --prune
 ```
-
-Recommended cadence is monthly (or on demand), since releases are infrequent.
 
 #### 6. Create Global Templates Sync Cron Job
 
@@ -614,6 +624,66 @@ kubectl create job --from=cronjob/checktick-data-governance manual-test-1
 
 # Check logs
 kubectl logs -l job-name=manual-test-1
+```
+
+#### SNOMED CT update CronJob
+
+`update_snomed_db` is safe to run on a schedule: the rebuild writes to a temp file and atomically swaps it into place, so it does not conflict with gunicorn's read-only connections to the live `snomed.db`. The preflight `sct trud check` makes most runs no-ops when there is no new release.
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: checktick-snomed-update
+  namespace: checktick
+spec:
+  schedule: "0 9 * * 1" # 9 AM UTC every Monday (weekly; SNOMED UK publishes ~monthly)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: snomed-update
+              image: ghcr.io/eatyourpeas/checktick:latest
+              command:
+                - python
+                - manage.py
+                - update_snomed_db
+                - --prune
+              envFrom:
+                - configMapRef:
+                    name: checktick-config
+                - secretRef:
+                    name: checktick-secrets
+              volumeMounts:
+                - name: snomed-data
+                  mountPath: /app/data
+              resources:
+                requests:
+                  memory: "2Gi"
+                  cpu: "250m"
+                limits:
+                  # sct ndjson's peak RSS exceeds 4 GiB on UK Monolith in
+                  # practice — 4 GiB will OOM-kill the job (exit -9) partway
+                  # through sct ndjson. 8 GiB is the proven-safe limit.
+                  # The job pod is short-lived, so this is a peak limit.
+                  memory: "8Gi"
+                  cpu: "1"
+          volumes:
+            - name: snomed-data
+              persistentVolumeClaim:
+                claimName: snomed-data
+```
+
+Run a one-off `--force --prune` job the first time to build `snomed.db`:
+
+```bash
+kubectl create job --from=cronjob/checktick-snomed-update snomed-initial-build \
+  -- /bin/sh -c "python manage.py update_snomed_db --force --prune"
 ```
 
 ---
