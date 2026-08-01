@@ -9,7 +9,7 @@ category: dspt-6-incidents
 - **Reviewer:** CTO (with AI-assisted static review)
 - **Scope:** Full static security review of the CheckTick platform covering authentication and redirect flows, email rendering, settings hardening, DRF defaults, HashiCorp Vault integration, LLM (AI survey generator + translation), the public REST API, OIDC SSO, user-uploaded icons and survey images, user/organisation management, billing webhooks, and styling/theme CSS.
 - **Method:** Static source review of `checktick_app/core/views.py`, `checktick_app/core/email_utils.py`, `checktick_app/core/oidc_views.py`, `checktick_app/core/views_billing.py`, `checktick_app/core/theme_utils.py`, `checktick_app/core/models.py`, `checktick_app/surveys/views.py`, `checktick_app/surveys/vault_client.py`, `checktick_app/surveys/llm_client.py`, `checktick_app/surveys/models.py`, `checktick_app/api/authentication.py`, `checktick_app/api/views.py`, `checktick_app/settings.py`, and the relevant templates. Cross-referenced against the documented security model in `docs/vault.md`, `docs/llm-security.md`, `docs/api.md`, and `docs/security-overview.md`.
-- **Status:** 🔶 Findings identified — remediation pending CTO approval
+- **Status:** 🔶 Remediation in progress — F6 and F12 resolved; 15 findings remain open
 
 ---
 
@@ -19,8 +19,8 @@ This consolidated review identifies **17 findings (F1–F17)**: 2 High, 6 Medium
 
 | Ref | Severity | Area | Title | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **F6** | **High** | Vault / Recovery | Web recovery console bypasses Shamir custodian-share control | Open |
-| **F12** | **High** | Survey images | SVG upload → stored XSS via direct `/media/` access | Open |
+| **F6** | **High** | Vault / Recovery | Web recovery console bypasses Shamir custodian-share control | Resolved 01/08/2026 |
+| **F12** | **High** | Survey images | SVG upload → stored XSS via direct `/media/` access | Resolved 01/08/2026 |
 | F1 | Medium | Auth / Redirects | Open redirect via protocol-relative `next` URLs | Open |
 | F2 | Medium | Email | HTML injection into team/org invitation emails | Open |
 | F7 | Medium | LLM | Debug dump writes full LLM payloads to world-readable `/tmp` | Open |
@@ -37,7 +37,7 @@ This consolidated review identifies **17 findings (F1–F17)**: 2 High, 6 Medium
 | F17 | Low | OIDC | Runtime mutation of global settings in callback view (thread-safety) | Open |
 | F5 | Info | Email | F-string email builders bypass template autoescaping | Open |
 
-**Priority for next patch:** F6, F12, F1, F2, F7, F8, F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items.
+**Priority for next patch:** F1, F2, F7, F8, F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items. F6 and F12 were resolved on 1 August 2026.
 
 ---
 
@@ -91,6 +91,8 @@ Pick one of the following, in order of preference:
 Either way, `RecoveryRequest.execute_recovery` (the model method) should be deleted or refactored so it cannot read the custodian component from settings. The setting itself should be removed from the codebase entirely (not just commented out) so that any deploy that sets it fails loudly.
 
 **Regression risk:** Medium. The web recovery console is a superuser-only workflow; removing it changes operator behaviour. Coordinate with the platform-admin runbook (`docs/compliance/recovery-dashboard.md`) before merging. The management command path is unaffected.
+
+**Resolution (1 August 2026):** The web execution endpoint was removed, admin operators are directed to `execute_platform_recovery`, the model method requires a caller-supplied custodian component, and startup rejects `PLATFORM_CUSTODIAN_COMPONENT` in the environment. Recovery therefore requires 3 of 4 custodian shares on a secure terminal.
 
 ---
 
@@ -164,7 +166,9 @@ Stored XSS. Any survey creator can plant a script that runs in the CheckTick ori
 
 4. **For the `SiteBranding.icon_file` upload** (`core/views.py` L529–534, which assigns `request.FILES["icon_file"]` directly to a `FileField` with no validation at all), apply the same restriction. That path is superuser-only, which reduces the risk, but it is currently a completely unvalidated file upload — a superuser could upload a `.html` file. At minimum, restrict to the same image allowlist.
 
-**Regression risk:** Low for option 1. Image-choice questions will no longer accept SVG; existing SVG uploads will need migration. Run `s/test --no-a11y` after the change. Add a regression test asserting `.svg` uploads are rejected and that `.svg` files served from `/media/` get `Content-Disposition: attachment`.
+**Regression risk:** Low for option 1. Image-choice questions no longer accept SVG. Run `s/test --no-a11y` after the change.
+
+**Resolution (1 August 2026):** SVG was removed from the server-side extension and MIME allowlists and from the browser file picker. Pillow continues to verify raster content, and animated PNG/WebP variants are now rejected so image choices remain static. A production audit found zero SVG-backed `QuestionImage` records and zero `.svg` files under `MEDIA_ROOT`, so no legacy migration or media-header exception was required. Regression tests verify that a script-bearing SVG and an animated allowed-format image are rejected without persistence.
 
 ---
 
@@ -837,8 +841,8 @@ The `verify_gocardless_webhook_signature` implementation (L659–700) is correct
 
 | Ref | Severity | Owner | Effort | Target release | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| F6 | High | CTO | Medium (remove web path + runbook update) | **Next patch — prioritise** | Threat-model impact; coordinate with `docs/compliance/recovery-dashboard.md` |
-| F12 | High | CTO | Small (remove SVG from allowlist) + migration | **Next patch — prioritise** | Stored XSS; same class as AD1 |
+| F6 | High | CTO | Medium (remove web path + runbook update) | **Resolved 01/08/2026** | Web execution removed; CLI requires 3 of 4 shares |
+| F12 | High | CTO | Small (remove SVG from allowlist + production media audit) | **Resolved 01/08/2026** | SVG rejected; audit confirmed no legacy SVG media |
 | F1 | Medium | CTO | Small (swap validator in 2 sites) | Next patch | |
 | F2 | Medium | CTO | Medium (2 new templates + escape fallbacks) | Next patch | |
 | F7 | Medium | CTO | Small (relocate/redact dump) | Next patch | |
@@ -861,7 +865,7 @@ Validation for all fixes: `s/test --no-a11y` and `s/lint` per `AGENTS.md`. Speci
 - **F2:** assert a team name containing `<a>` is entity-escaped in the rendered email body.
 - **F6:** assert the web recovery path either redirects to the CLI or requires custodian shares, and that `settings.PLATFORM_CUSTODIAN_COMPONENT` is not read by any web-reachable code path.
 - **F8:** assert an anonymous request to `/api/datasets/` returns only global datasets and that `/api/datasets/{key}/` for a non-global dataset returns 401/404 for anonymous callers.
-- **F12:** assert `.svg` uploads are rejected and that existing SVGs in `/media/` are served with `Content-Disposition: attachment`.
+- **F12:** assert script-bearing `.svg` uploads and animated variants of allowed raster formats are rejected without persistence; production audit confirmed no existing SVG media requiring cleanup.
 - **F14:** replay the same webhook twice and assert no duplicate `Payment` rows.
 - **F16:** assert `}` in `theme_css_light` is stripped before rendering.
 - **F17:** concurrent Google + Azure callbacks both authenticate successfully (load test in staging).

@@ -216,6 +216,60 @@ class TestImageUploadView:
         data = response.json()
         assert data["success"] is False
 
+    def test_upload_rejects_svg_with_script(self, client, image_question):
+        """SVG documents must not be stored where scripts can execute same-origin."""
+        client.login(username="testuser", password=TEST_PASSWORD)
+        url = reverse(
+            "surveys:builder_question_image_upload",
+            kwargs={"slug": image_question.survey.slug, "qid": image_question.id},
+        )
+        malicious_svg = SimpleUploadedFile(
+            "stored-xss.svg",
+            b'<svg xmlns="http://www.w3.org/2000/svg" onload="fetch(\'/api/\')"/>',
+            content_type="image/svg+xml",
+        )
+
+        response = client.post(
+            url, {"image": malicious_svg, "label": "Stored XSS payload"}
+        )
+
+        assert response.status_code == 400
+        assert response.json()["success"] is False
+        assert image_question.images.count() == 0
+
+    def test_upload_rejects_animated_image(self, client, image_question):
+        """Animated variants of allowed raster formats must be rejected."""
+        from PIL import Image
+
+        frames = [
+            Image.new("RGB", (10, 10), color="red"),
+            Image.new("RGB", (10, 10), color="blue"),
+        ]
+        buffer = io.BytesIO()
+        frames[0].save(
+            buffer,
+            format="PNG",
+            save_all=True,
+            append_images=frames[1:],
+            duration=100,
+            loop=0,
+        )
+        animated_image = SimpleUploadedFile(
+            "animated.png", buffer.getvalue(), content_type="image/png"
+        )
+        client.login(username="testuser", password=TEST_PASSWORD)
+        url = reverse(
+            "surveys:builder_question_image_upload",
+            kwargs={"slug": image_question.survey.slug, "qid": image_question.id},
+        )
+
+        response = client.post(url, {"image": animated_image, "label": "Animated"})
+
+        assert response.status_code == 400
+        assert response.json()["success"] is False
+        assert "Animated images are not supported" in response.json()["error"]
+        assert image_question.images.count() == 0
+
 
 class TestImageDeleteView:
     """Tests for the image delete endpoint."""

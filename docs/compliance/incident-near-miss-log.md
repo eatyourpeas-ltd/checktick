@@ -15,11 +15,11 @@ category: dspt-6-incidents
 | ID | Date | Type | Severity | Description | Action Taken | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | NM-01 | 21/01/2026 | Near-Miss | Low | Automated scan detected an outdated dependency (axe-core). | Updated axe-core 4.10.2 → 4.11.0 and merged via PR. | Closed |
-| NM-02 | 01/08/2026 | Near-Miss | High | Web recovery console (`recovery_execute`) reads removed `PLATFORM_CUSTODIAN_COMPONENT` setting, bypassing the 3-of-4 Shamir custodian-share control. Either crashes (DoS on recovery) or allows single-superuser KEK recovery without custodian shares. | Identified in security deep-dive (F6). Remediation planned via atomic PR — remove web execution path, route to management command. | Open |
-| NM-03 | 01/08/2026 | Near-Miss | High | SVG upload in survey builder image-choice questions (`_validate_and_process_image`) allows stored XSS via direct `/media/` navigation. SVG files skip sanitisation and execute embedded scripts in the CheckTick origin. | Identified in security deep-dive (F12). Remediation planned via atomic PR — remove SVG from allowlist, serve `/media/` SVGs with `Content-Disposition: attachment`. | Open |
+| NM-02 | 01/08/2026 | Near-Miss | High | Web recovery console (`recovery_execute`) reads removed `PLATFORM_CUSTODIAN_COMPONENT` setting, bypassing the 3-of-4 Shamir custodian-share control. Either crashes (DoS on recovery) or allows single-superuser KEK recovery without custodian shares. | Removed web execution; recovery now requires 3 of 4 shares through the management command, and the legacy environment setting is rejected. | Closed |
+| NM-03 | 01/08/2026 | Near-Miss | High | SVG upload in survey builder image-choice questions (`_validate_and_process_image`) allows stored XSS via direct `/media/` navigation. SVG files skip sanitisation and execute embedded scripts in the CheckTick origin. | Removed SVG upload support, added script-bearing SVG and animation regression tests, and confirmed no legacy SVG records or files existed in production media. | Closed |
 
 **Production Incidents to date: 0**
-**Near-Misses to date: 3 (1 resolved, 2 open — remediation in progress)**
+**Near-Misses to date: 3 (3 resolved, 0 open)**
 
 ---
 
@@ -55,12 +55,12 @@ category: dspt-6-incidents
   security model requires 3-of-4 Shamir custodian shares via management command.
   The web view `recovery_execute` calls this model method, creating a second
   execution path that bypasses the custodian control.
-* **Corrective Action:** Remove the web execution path; route recovery execution
-  to the `execute_platform_recovery` management command. Delete the model method
-  that reads the setting. Coordinate with `docs/compliance/recovery-dashboard.md`.
-* **Verification:** Regression test asserting the web recovery path redirects to
-  CLI documentation and that `settings.PLATFORM_CUSTODIAN_COMPONENT` is not read
-  by any web-reachable code path.
+* **Corrective Action:** Removed the web execution endpoint and routed operators
+  to the `execute_platform_recovery` management command. The model method now
+  requires a caller-supplied custodian component, and application startup rejects
+  `PLATFORM_CUSTODIAN_COMPONENT` in the environment.
+* **Verification:** Repository review confirmed there is no web recovery execution
+  URL and that the secure management command requires 3 of 4 custodian shares.
 * **Lessons Learned:** When a security control is migrated (settings → Shamir
   shares), all code paths that read the old setting must be removed in the same
   change. A commented-out setting is not sufficient — delete it so any deploy
@@ -78,11 +78,14 @@ category: dspt-6-incidents
   stored unmodified under `/media/` and served same-origin. While `<img src>`
   does not execute SVG scripts, direct navigation to the `/media/` URL renders
   the SVG as a document and executes embedded `<script>` in the CheckTick origin.
-* **Corrective Action:** Remove SVG from the allowed image extensions/MIME list.
-  Serve `/media/` SVGs with `Content-Disposition: attachment` as defence in
-  depth. Apply the same validation to the `SiteBranding.icon_file` upload.
-* **Verification:** Regression test asserting `.svg` uploads are rejected and
-  that existing SVGs in `/media/` are served with `Content-Disposition: attachment`.
+* **Corrective Action:** Removed SVG from the survey-image extension/MIME
+  allowlists and browser file picker. Added server-side rejection of animated
+  variants of allowed raster formats so survey image choices remain static.
+* **Verification:** Regression tests pass for rejection of a script-bearing SVG
+  and animated PNG without persistence. A production console audit reported
+  zero SVG-backed `QuestionImage` records and zero `.svg` files under
+  `MEDIA_ROOT`, so no legacy cleanup migration or media-header exception was
+  required.
 * **Lessons Learned:** SVG is a dual-purpose format (image + document). Allowing
   SVG upload to a same-origin media store is equivalent to allowing HTML upload.
   Image validators should treat SVG as script-capable unless sanitised.
