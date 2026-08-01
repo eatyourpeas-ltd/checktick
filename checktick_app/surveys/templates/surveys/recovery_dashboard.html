@@ -55,7 +55,7 @@
         <div class="stat">
             <div class="stat-title">{% trans "Ready to Execute" %}</div>
             <div class="stat-value text-success">{{ stats.ready }}</div>
-            <div class="stat-desc">{% trans "Can be completed now" %}</div>
+            <div class="stat-desc">{% trans "Awaiting CLI execution" %}</div>
         </div>
     </div>
 
@@ -186,15 +186,6 @@
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm('{% trans "SUPERUSER OVERRIDE: Approve as secondary approver? This will start the time delay period." %}')">
                                     {% trans "Approve (Secondary)" %}
-                                </button>
-                            </form>
-                        {% endif %}
-
-                        {% if request.status == 'ready_for_execution' %}
-                            <form method="post" action="{% url 'surveys:recovery_execute' request_id=request.id %}" class="inline">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('{% trans "Execute recovery? This will decrypt the survey data. This action is logged." %}')">
-                                    {% trans "Execute Recovery" %}
                                 </button>
                             </form>
                         {% endif %}

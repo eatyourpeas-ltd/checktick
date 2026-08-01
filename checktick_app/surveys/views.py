@@ -10519,53 +10519,6 @@ def recovery_reject(request: HttpRequest, request_id: str) -> HttpResponse:
     return redirect("surveys:recovery_detail", request_id=request_id)
 
 
-@login_required
-@superuser_required
-@require_http_methods(["POST"])
-@ratelimit(key="user", rate="3/h", block=True)
-def recovery_execute(request: HttpRequest, request_id: str) -> HttpResponse:
-    """
-    Recovery execution endpoint for the Platform Recovery Console.
-
-    This view is intentionally a no-op. Executing a recovery requires the
-    platform custodian component, which must be reconstructed from 3 of 4
-    Shamir custodian shares on a secure terminal via the
-    ``execute_platform_recovery`` management command. The web console must
-    NOT be able to execute recovery on its own — doing so would let a single
-    superuser decrypt any user's survey KEK without custodian participation,
-    defeating the split-knowledge control documented in ``docs/vault.md``
-    ("Platform Key Rotation") and ``docs/compliance/recovery-dashboard.md``.
-
-    See F6 in ``docs/compliance/security-review-august-2026.md``.
-
-    The route is preserved so the existing template form posts somewhere
-    meaningful; the operator is redirected to the request detail page with
-    guidance to use the management command.
-    """
-    recovery_request = get_object_or_404(RecoveryRequest, id=request_id)
-
-    logger.warning(
-        f"SUPERUSER ACTION: {request.user.email} attempted web-based execution "
-        f"of recovery request {recovery_request.request_code} "
-        f"(user: {recovery_request.user.email}, "
-        f"survey: {recovery_request.survey.slug}) — refused; operator directed to "
-        f"the execute_platform_recovery management command"
-    )
-
-    messages.error(
-        request,
-        "Recovery cannot be executed from the web console. Platform recovery "
-        "requires 3 of 4 custodian shares to be presented on a secure terminal. "
-        "Run: python manage.py execute_platform_recovery "
-        f"{recovery_request.request_code} --custodian-share-1=<share1> "
-        "--custodian-share-2=<share2> --custodian-share-3=<share3> "
-        "--executor=<your-email>. See docs/compliance/recovery-dashboard.md "
-        "and python manage.py execute_platform_recovery --help.",
-    )
-
-    return redirect("surveys:recovery_detail", request_id=request_id)
-
-
 # =============================================================================
 # ADMIN RECOVERY DASHBOARD (Organization/Team Admins)
 # =============================================================================

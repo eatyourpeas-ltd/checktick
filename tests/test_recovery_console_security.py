@@ -9,8 +9,9 @@ secure terminal and calls `shamir.reconstruct_secret`.
 
 These tests verify that the web recovery console cannot bypass that control:
 
-1. The `recovery_execute` view must NOT execute recovery. It must refuse and
-   redirect the operator to the management command.
+1. The `recovery_execute` web endpoint must NOT exist — there is no URL or
+   view. Execution is CLI-only via the `execute_platform_recovery` management
+   command.
 2. `RecoveryRequest.execute_recovery` must NOT read the custodian component from
    `settings.PLATFORM_CUSTODIAN_COMPONENT`. The model method must require the
    custodian component as an explicit argument (or be removed entirely).
@@ -22,7 +23,6 @@ These tests verify that the web recovery console cannot bypass that control:
 import inspect
 
 from django.contrib.auth import get_user_model
-from django.contrib.messages import get_messages
 from django.urls import reverse
 import pytest
 
@@ -105,37 +105,29 @@ class TestRecoveryExecuteViewDoesNotBypassCustodianControl:
     """F6: the web recovery console must not be a single-party decryption
     primitive. Execution must go through the management command."""
 
-    def test_execute_view_does_not_call_execute_recovery(
-        self, client, superuser, ready_recovery_request, monkeypatch
-    ):
-        """Posting to recovery_execute must not invoke the model's
-        execute_recovery() method — that method reaches for the custodian
-        component and would bypass the Shamir control."""
+    def test_execute_route_removed(self, client, superuser, ready_recovery_request):
+        """The web execution endpoint must not exist at all — there is no
+        `recovery_execute` URL or view. Execution is CLI-only (F6)."""
+        from django.urls import NoReverseMatch
+
         rr = ready_recovery_request
 
-        # If the view (or anything it calls) tries to execute recovery via the
-        # model method, this sentinel will be invoked and the test fails.
-        called = {"flag": False}
+        # The URL name must be gone.
+        with pytest.raises(NoReverseMatch):
+            reverse("surveys:recovery_execute", kwargs={"request_id": rr.id})
 
-        def _fail(*args, **kwargs):
-            called["flag"] = True
-
-        monkeypatch.setattr(RecoveryRequest, "execute_recovery", _fail)
-
+        # A direct POST to the old path must 404, not silently execute.
         client.force_login(superuser)
-        url = reverse("surveys:recovery_execute", kwargs={"request_id": rr.id})
         response = client.post(
-            url,
+            f"/surveys/recovery/{rr.id}/execute/",
             data={
                 "new_password": "NewStrongPass!234",
                 "confirm_password": "NewStrongPass!234",
             },
         )
-
-        # The view must not execute recovery.
-        assert not called["flag"], (
-            "recovery_execute called RecoveryRequest.execute_recovery — the web "
-            "console must not be able to execute recovery without custodian shares"
+        assert response.status_code == 404, (
+            "The /recovery/<id>/execute/ route still resolves — it must be "
+            "removed so the web console cannot execute recovery"
         )
 
         # The request must remain ready (not completed) — no silent execution.
@@ -143,41 +135,6 @@ class TestRecoveryExecuteViewDoesNotBypassCustodianControl:
         assert rr.status == RecoveryRequest.Status.READY_FOR_EXECUTION
         assert rr.executed_by is None
         assert rr.completed_at is None
-
-        # The operator must be redirected (not shown a 500, not a 200 success).
-        assert response.status_code == 302
-
-    def test_execute_view_redirects_with_management_command_guidance(
-        self, client, superuser, ready_recovery_request
-    ):
-        """The refusal must be loud: the operator should be told to use the
-        management command, not presented with a generic error."""
-        rr = ready_recovery_request
-
-        client.force_login(superuser)
-        url = reverse("surveys:recovery_execute", kwargs={"request_id": rr.id})
-        response = client.post(
-            url,
-            data={
-                "new_password": "NewStrongPass!234",
-                "confirm_password": "NewStrongPass!234",
-            },
-            follow=False,
-        )
-
-        assert response.status_code == 302
-
-        # Follow the redirect and inspect the messages framework.
-        follow_response = client.get(response.url)
-        messages = [str(m) for m in get_messages(follow_response.wsgi_request)]
-        joined = " ".join(messages).lower()
-
-        # The guidance must point at the management command, not just say
-        # "an error occurred".
-        assert "execute_platform_recovery" in joined, (
-            "Operator must be told to use the execute_platform_recovery "
-            f"management command; got messages: {messages}"
-        )
 
     def test_detail_page_no_execute_button_or_modal(
         self, client, superuser, ready_recovery_request
