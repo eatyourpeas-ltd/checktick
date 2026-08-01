@@ -4,6 +4,7 @@ import sys
 import warnings
 
 from csp.constants import NONCE as CSP_NONCE
+from django.core.exceptions import ImproperlyConfigured
 import environ
 
 # Detect if running tests
@@ -950,9 +951,22 @@ OIDC_LOGOUT_REDIRECT_URL = "/"  # Where to go after logout
 VAULT_ADDR = env("VAULT_ADDR", default="https://vault.checktick.internal:8200")
 VAULT_ROLE_ID = env("VAULT_ROLE_ID", default="")
 VAULT_SECRET_ID = env("VAULT_SECRET_ID", default="")
-# Note: PLATFORM_CUSTODIAN_COMPONENT removed for security
-# Platform recovery now requires 3 custodian shares via management command
-# See: python manage.py execute_platform_recovery --help
+
+# SECURITY: PLATFORM_CUSTODIAN_COMPONENT must NEVER be set as an environment
+# variable. The custodian component is split into Shamir shares held by
+# custodians and is only ever reconstructed on a secure terminal by the
+# ``execute_platform_recovery`` management command (3 of 4 shares required).
+# Allowing it to be set via env would let a single superuser decrypt any
+# user's survey KEK from the web console, defeating the split-knowledge
+# control. See F6 in docs/compliance/security-review-august-2026.md and
+# docs/vault.md ("Platform Key Rotation").
+if os.environ.get("PLATFORM_CUSTODIAN_COMPONENT"):
+    raise ImproperlyConfigured(
+        "PLATFORM_CUSTODIAN_COMPONENT must not be set. The platform custodian "
+        "component is reconstructed from 3 of 4 Shamir custodian shares via the "
+        "execute_platform_recovery management command. See "
+        "docs/compliance/security-review-august-2026.md (F6)."
+    )
 
 # SNOMED CT Configuration
 # Path to the snomed.db SQLite file built by the sct binary

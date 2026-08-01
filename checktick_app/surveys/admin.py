@@ -1116,24 +1116,26 @@ class RecoveryRequestAdmin(admin.ModelAdmin):
     @admin.action(description="Execute Recovery (after time delay)")
     def execute_recovery(self, request, queryset):
         """
-        Execute recovery for requests that have passed time delay.
+        Point operators at the secure execution path.
 
-        NOTE: This action requires a new password to be set for each user.
-        For actual execution with Vault integration, use the Platform Recovery Console
-        which provides a secure interface for entering the new password.
+        Recovery execution requires the platform custodian component, which is
+        reconstructed from 3 of 4 Shamir custodian shares on a secure terminal
+        via the ``execute_platform_recovery`` management command. The admin
+        action and the web recovery console deliberately do NOT execute
+        recovery — doing so would bypass the split-knowledge control. See F6
+        in docs/compliance/security-review-august-2026.md.
         """
-        # Since we need a password per request, redirect to the recovery console
         if queryset.count() > 1:
             messages.error(
                 request,
-                "Recovery execution must be done one at a time through the "
-                "Platform Recovery Console to set each user's new password securely.",
+                "Recovery execution must be done one at a time.",
             )
             return
 
         recovery_request = queryset.first()
 
-        # Validate status
+        # Validate status so the operator gets clear feedback before reaching
+        # for the management command.
         if recovery_request.status == RecoveryRequest.Status.IN_TIME_DELAY:
             if (
                 recovery_request.time_delay_until
@@ -1159,17 +1161,15 @@ class RecoveryRequestAdmin(admin.ModelAdmin):
             )
             return
 
-        # Redirect to recovery console for secure password entry
-        from django.urls import reverse
-
-        recovery_url = reverse(
-            "surveys:recovery_detail", kwargs={"request_id": recovery_request.id}
-        )
         messages.info(
             request,
-            f"Request {recovery_request.request_code} is ready. "
-            f"Please use the Platform Recovery Console to execute with a new password: "
-            f"{request.build_absolute_uri(recovery_url)}",
+            f"Request {recovery_request.request_code} is ready. Execute it from a "
+            f"secure terminal with custodian shares: "
+            f"python manage.py execute_platform_recovery "
+            f"{recovery_request.request_code} --custodian-share-1=<share1> "
+            f"--custodian-share-2=<share2> --custodian-share-3=<share3> "
+            f"--executor=<your-email>. See docs/compliance/recovery-dashboard.md "
+            f"and python manage.py execute_platform_recovery --help.",
         )
 
 

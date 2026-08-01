@@ -4718,23 +4718,44 @@ class RecoveryRequest(models.Model):
 
         return False
 
-    def execute_recovery(self, admin: User, new_password: str) -> bytes:
+    def execute_recovery(
+        self,
+        admin: User,
+        new_password: str,
+        *,
+        custodian_component: bytes,
+    ) -> bytes:
         """
         Execute the recovery - decrypt escrowed KEK and re-encrypt with new password.
 
         Returns the recovered survey KEK.
+
+        Security: the platform custodian component must be supplied by the caller
+        (reconstructed from 3 of 4 Shamir shares via the
+        ``execute_platform_recovery`` management command). This method must NEVER
+        read the custodian component from settings — doing so would let a single
+        superuser decrypt any user's survey KEK without custodian participation,
+        defeating the split-knowledge control documented in ``docs/vault.md``
+        ("Platform Key Rotation") and ``docs/compliance/recovery-dashboard.md``.
+        See F6 in ``docs/compliance/security-review-august-2026.md``.
         """
         if self.status != self.Status.READY_FOR_EXECUTION:
             raise ValueError(
                 f"Cannot execute: status is {self.status}, expected ready_for_execution"
             )
 
-        from django.conf import settings
+        if not isinstance(custodian_component, (bytes, bytearray)):
+            raise TypeError("custodian_component must be bytes")
+        if len(custodian_component) == 0:
+            raise ValueError(
+                "custodian_component must be reconstructed from custodian shares "
+                "and supplied explicitly; it must never be read from settings"
+            )
+        custodian_component = bytes(custodian_component)
 
         from .vault_client import get_vault_client
 
         vault = get_vault_client()
-        custodian_component = bytes.fromhex(settings.PLATFORM_CUSTODIAN_COMPONENT)
 
         # Recover KEK from Vault
         survey_kek = vault.recover_user_survey_kek(

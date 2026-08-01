@@ -53,7 +53,6 @@ from .models import (
     OrganizationMembership,
     PublishedQuestionGroup,
     QuestionGroup,
-    RecoveryAuditEntry,
     RecoveryRequest,
     Survey,
     SurveyAccessToken,
@@ -10526,107 +10525,43 @@ def recovery_reject(request: HttpRequest, request_id: str) -> HttpResponse:
 @ratelimit(key="user", rate="3/h", block=True)
 def recovery_execute(request: HttpRequest, request_id: str) -> HttpResponse:
     """
-    Execute a recovery request that has passed the time delay (superuser).
+    Recovery execution endpoint for the Platform Recovery Console.
 
-    Rate limited: 3 executions/hour (very sensitive operation).
+    This view is intentionally a no-op. Executing a recovery requires the
+    platform custodian component, which must be reconstructed from 3 of 4
+    Shamir custodian shares on a secure terminal via the
+    ``execute_platform_recovery`` management command. The web console must
+    NOT be able to execute recovery on its own — doing so would let a single
+    superuser decrypt any user's survey KEK without custodian participation,
+    defeating the split-knowledge control documented in ``docs/vault.md``
+    ("Platform Key Rotation") and ``docs/compliance/recovery-dashboard.md``.
 
-    Requires:
-    - new_password: The user's new password for re-encrypting the survey KEK
+    See F6 in ``docs/compliance/security-review-august-2026.md``.
+
+    The route is preserved so the existing template form posts somewhere
+    meaningful; the operator is redirected to the request detail page with
+    guidance to use the management command.
     """
     recovery_request = get_object_or_404(RecoveryRequest, id=request_id)
 
-    # Validate new password was provided
-    new_password = request.POST.get("new_password", "").strip()
-    confirm_password = request.POST.get("confirm_password", "").strip()
+    logger.warning(
+        f"SUPERUSER ACTION: {request.user.email} attempted web-based execution "
+        f"of recovery request {recovery_request.request_code} "
+        f"(user: {recovery_request.user.email}, "
+        f"survey: {recovery_request.survey.slug}) — refused; operator directed to "
+        f"the execute_platform_recovery management command"
+    )
 
-    if not new_password:
-        messages.error(request, "A new password is required to execute recovery.")
-        return redirect("surveys:recovery_detail", request_id=request_id)
-
-    if len(new_password) < 8:
-        messages.error(request, "Password must be at least 8 characters long.")
-        return redirect("surveys:recovery_detail", request_id=request_id)
-
-    if new_password != confirm_password:
-        messages.error(request, "Passwords do not match.")
-        return redirect("surveys:recovery_detail", request_id=request_id)
-
-    # Check if in time delay and ready
-    if recovery_request.status == RecoveryRequest.Status.IN_TIME_DELAY:
-        if (
-            recovery_request.time_delay_until
-            and timezone.now() >= recovery_request.time_delay_until
-        ):
-            recovery_request.status = RecoveryRequest.Status.READY_FOR_EXECUTION
-            recovery_request.save(update_fields=["status"])
-        else:
-            messages.error(request, "Time delay has not completed yet.")
-            return redirect("surveys:recovery_detail", request_id=request_id)
-
-    # Check status
-    if recovery_request.status != RecoveryRequest.Status.READY_FOR_EXECUTION:
-        messages.error(request, "This request is not ready for execution.")
-        return redirect("surveys:recovery_detail", request_id=request_id)
-
-    try:
-        # Execute recovery via model method (handles Vault integration)
-        recovery_request.execute_recovery(admin=request.user, new_password=new_password)
-
-        # Create audit entry for the superuser action
-        recovery_request._create_audit_entry(
-            event_type="recovery_executed_superuser",
-            severity=RecoveryAuditEntry.Severity.CRITICAL,
-            actor_type="superuser",
-            actor_id=request.user.id,
-            actor_email=request.user.email,
-            details={
-                "action": "execute_recovery",
-                "source": "platform_recovery_console",
-                "superuser_override": True,
-            },
-        )
-
-        # Log superuser action
-        logger.warning(
-            f"SUPERUSER ACTION: {request.user.email} executed recovery for request "
-            f"{recovery_request.request_code} (user: {recovery_request.user.email}, "
-            f"survey: {recovery_request.survey.slug})"
-        )
-
-        # Send completion notification to the user
-        try:
-            from checktick_app.core.email_utils import send_recovery_completed_email
-
-            survey_url = request.build_absolute_uri(
-                reverse(
-                    "surveys:dashboard", kwargs={"slug": recovery_request.survey.slug}
-                )
-            )
-            send_recovery_completed_email(
-                to_email=recovery_request.user.email,
-                user_name=recovery_request.user.get_full_name()
-                or recovery_request.user.username,
-                request_id=recovery_request.request_code,
-                survey_name=recovery_request.survey.name,
-                survey_url=survey_url,
-            )
-        except Exception as email_err:
-            logger.error(f"Failed to send recovery completion email: {email_err}")
-
-        messages.success(
-            request,
-            "Recovery has been executed successfully. The user's survey data has been "
-            "re-encrypted with their new password and they have been notified by email.",
-        )
-
-    except ValueError as e:
-        messages.error(request, str(e))
-    except Exception as e:
-        logger.error(f"Recovery execution failed: {e}")
-        messages.error(
-            request,
-            f"Error executing recovery: {e}. Please check Vault connectivity and try again.",
-        )
+    messages.error(
+        request,
+        "Recovery cannot be executed from the web console. Platform recovery "
+        "requires 3 of 4 custodian shares to be presented on a secure terminal. "
+        "Run: python manage.py execute_platform_recovery "
+        f"{recovery_request.request_code} --custodian-share-1=<share1> "
+        "--custodian-share-2=<share2> --custodian-share-3=<share3> "
+        "--executor=<your-email>. See docs/compliance/recovery-dashboard.md "
+        "and python manage.py execute_platform_recovery --help.",
+    )
 
     return redirect("surveys:recovery_detail", request_id=request_id)
 
