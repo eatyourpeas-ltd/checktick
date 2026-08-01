@@ -124,7 +124,18 @@ def test_signup_only_stores_safe_post_confirmation_redirects(
     )
 
     assert response.status_code == 302
+    assert response["Location"] == reverse("core:home")
     assert client.session.get("post_confirmation_redirect") == expected_redirect
+
+    user = get_user_model().objects.get(email="redirect-test@example.com")
+    assert user.profile.email_confirmed is False
+
+    home_response = client.get(response["Location"])
+    assert home_response.status_code == 200
+    assert (
+        b"Please check your email to confirm your account before accessing features."
+        in home_response.content
+    )
 
 
 @pytest.mark.django_db
