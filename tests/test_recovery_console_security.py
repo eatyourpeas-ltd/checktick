@@ -179,6 +179,40 @@ class TestRecoveryExecuteViewDoesNotBypassCustodianControl:
             f"management command; got messages: {messages}"
         )
 
+    def test_detail_page_no_execute_button_or_modal(
+        self, client, superuser, ready_recovery_request
+    ):
+        """The recovery detail page must not render an "Execute Recovery" button
+        or the password-entry modal — execution is CLI-only (F6)."""
+        rr = ready_recovery_request
+        client.force_login(superuser)
+
+        url = reverse("surveys:recovery_detail", kwargs={"request_id": rr.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        body = response.content.decode()
+
+        # The old execute button / modal must be gone.
+        assert "execute_modal" not in body, (
+            "recovery_detail.html still renders the execute_modal dialog — "
+            "the web console must not present an execution UI"
+        )
+        assert 'name="new_password"' not in body, (
+            "recovery_detail.html still renders a new_password form field — "
+            "execution must not be possible from the web console"
+        )
+
+        # The page must instead surface the CLI guidance for a ready request.
+        assert "execute_platform_recovery" in body, (
+            "recovery_detail.html must show the execute_platform_recovery "
+            "management command for ready-for-execution requests"
+        )
+        assert rr.request_code in body, (
+            "The CLI guidance must include the request code so the operator "
+            "can copy-paste the command"
+        )
+
 
 # ---------------------------------------------------------------------------
 # 2. The model method must not read the custodian component from settings
