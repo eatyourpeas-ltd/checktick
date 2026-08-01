@@ -9,7 +9,7 @@ category: dspt-6-incidents
 - **Reviewer:** CTO (with AI-assisted static review)
 - **Scope:** Full static security review of the CheckTick platform covering authentication and redirect flows, email rendering, settings hardening, DRF defaults, HashiCorp Vault integration, LLM (AI survey generator + translation), the public REST API, OIDC SSO, user-uploaded icons and survey images, user/organisation management, billing webhooks, and styling/theme CSS.
 - **Method:** Static source review of `checktick_app/core/views.py`, `checktick_app/core/email_utils.py`, `checktick_app/core/oidc_views.py`, `checktick_app/core/views_billing.py`, `checktick_app/core/theme_utils.py`, `checktick_app/core/models.py`, `checktick_app/surveys/views.py`, `checktick_app/surveys/vault_client.py`, `checktick_app/surveys/llm_client.py`, `checktick_app/surveys/models.py`, `checktick_app/api/authentication.py`, `checktick_app/api/views.py`, `checktick_app/settings.py`, and the relevant templates. Cross-referenced against the documented security model in `docs/vault.md`, `docs/llm-security.md`, `docs/api.md`, and `docs/security-overview.md`.
-- **Status:** 🔶 Remediation in progress — F1, F6, and F12 resolved; 14 findings remain open
+- **Status:** 🔶 Remediation in progress — F1, F2, F6, and F12 resolved; 13 findings remain open
 
 ---
 
@@ -22,7 +22,7 @@ This consolidated review identifies **17 findings (F1–F17)**: 2 High, 6 Medium
 | **F6** | **High** | Vault / Recovery | Web recovery console bypasses Shamir custodian-share control | Resolved 01/08/2026 |
 | **F12** | **High** | Survey images | SVG upload → stored XSS via direct `/media/` access | Resolved 01/08/2026 |
 | F1 | Medium | Auth / Redirects | Open redirect via protocol-relative `next` URLs | Resolved 01/08/2026 |
-| F2 | Medium | Email | HTML injection into team/org invitation emails | Open |
+| F2 | Medium | Email | HTML injection into team/org invitation emails | Resolved 01/08/2026 |
 | F7 | Medium | LLM | Debug dump writes full LLM payloads to world-readable `/tmp` | Open |
 | F8 | Medium | API | `DataSetViewSet` permission class inconsistent with anonymous access | Open |
 | F13 | Medium | Styling | Survey `icon_url` accepts `javascript:` and `data:` URIs | Open |
@@ -37,7 +37,7 @@ This consolidated review identifies **17 findings (F1–F17)**: 2 High, 6 Medium
 | F17 | Low | OIDC | Runtime mutation of global settings in callback view (thread-safety) | Open |
 | F5 | Info | Email | F-string email builders bypass template autoescaping | Open |
 
-**Priority for next patch:** F2, F7, F8, F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items. F1, F6, and F12 were resolved on 1 August 2026.
+**Priority for next patch:** F7, F8, F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items. F1, F2, F6, and F12 were resolved on 1 August 2026.
 
 ---
 
@@ -245,6 +245,8 @@ Any authenticated user can create a team (or organisation) named, for example:
 2. **Escape the fallback path.** In the `except TemplateDoesNotExist` branches, wrap interpolated user-controlled values with `django.utils.html.escape()`, or — preferably — sanitise the `markdown_to_html()` output with `nh3` before it reaches `content|safe`. This closes the class even if a future template is deleted.
 
 **Regression risk:** Low. Adding templates changes only the rendering source; escaping the fallback changes behaviour only for inputs containing `<`, `>`, `&` — which are not legitimate in team/org names or display names.
+
+**Resolution (1 August 2026):** Added the missing `emails/team_invitation.md` and `emails/org_invitation.md` templates so Django autoescapes team, organisation, and inviter names before Markdown conversion. The `TemplateDoesNotExist` fallbacks now explicitly escape every interpolated dynamic value as defence in depth. Regression tests verify that attacker-controlled anchor markup is rendered as text in both invitation types and remains escaped when the content template is unavailable.
 
 ---
 

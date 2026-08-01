@@ -229,7 +229,8 @@ Each email has two components:
 | `survey_deleted.md` | Survey deletion confirmation | `user.username`, `survey_name`, `survey_slug` |
 | `authenticated_invite_existing_user.md` | Existing-user survey invite | `recipient_name`, `inviter_name`, `survey_name`, `dashboard_url` |
 | `authenticated_invite_new_user.md` | New-user survey invite | `recipient_name`, `inviter_name`, `survey_name`, `register_url` |
-| `team_invitation.md` | Team/org invitation | `recipient_name`, `inviter_name`, `team_name`, `invitation_link` |
+| `team_invitation.md` | Team invitation | `team_name`, `role`, `role_display`, `invited_by_name`, `invited_by_email`, `signup_link`, `organization_name`, `brand_title` |
+| `org_invitation.md` | Organisation invitation | `org_name`, `role`, `role_display`, `invited_by_name`, `invited_by_email`, `signup_link`, `brand_title` |
 | `subscription_created.md` | Subscription started | `user_name`, `plan_name`, `next_payment_date`, `amount`, `currency` |
 | `subscription_cancelled.md` | Subscription cancelled | `user_name`, `plan_name`, `cancelled_at`, `final_access_date` |
 | `subscription_expired.md` | Subscription expired | `user_name`, `expired_at`, `reactivation_url` |
