@@ -12,6 +12,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone, translation
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 
 from checktick_app.surveys.models import (
@@ -704,7 +705,11 @@ def signup(request):
     next_url = request.GET.get("next") or request.POST.get("next")
 
     # Validate next_url to prevent open redirect vulnerabilities
-    if next_url and not next_url.startswith("/"):
+    if next_url and not url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
         next_url = None
 
     # Get selected tier before form validation (not a form field, just POST data)
@@ -970,7 +975,11 @@ def complete_signup(request):
 
         # Get next URL from POST (from hidden field populated via sessionStorage)
         next_url = request.POST.get("next")
-        if next_url and next_url.startswith("/"):
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
             request.session["pending_next_url"] = next_url
 
         # Mark OIDC signup as completed
