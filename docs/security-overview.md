@@ -65,6 +65,12 @@ Each action is verified against the user's role at the appropriate level.
 - Token refresh requires valid refresh token
 - API endpoints enforce same permissions as web UI
 
+#### Safe Signup Redirects
+
+User-controlled `next` values in the password and OIDC signup-completion flows are validated with Django's `url_has_allowed_host_and_scheme`. Redirects are restricted to the current host and must use HTTPS when the incoming request is secure. Protocol-relative, backslash-normalised, and external destinations are rejected. Valid local destinations are retained for use after account setup or email confirmation; an unconfirmed password signup still redirects to the home page and displays the email-confirmation notice.
+
+Regression tests cover accepted and rejected destinations and the unconfirmed-email flow. See F1 in `docs/compliance/security-review-august-2026.md` for the remediation record. The separate OIDC login-entry redirect is tracked as F10.
+
 **Related Documentation**:
 
 - [Authentication & Permissions](/docs/authentication-and-permissions/)
