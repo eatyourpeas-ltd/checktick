@@ -435,12 +435,28 @@ def create_survey_with_escrow(survey, user, user_password):
 
 ### Recover Escrowed KEK
 
-```python
-def execute_platform_recovery(recovery_request, admin_user):
-    """Execute recovery after dual authorization + time delay."""
+Recovery is performed exclusively via the `execute_platform_recovery` management
+command on a secure terminal. The custodian component is reconstructed from
+3 of 4 Shamir shares supplied on the command line — it is **never** read from
+settings or the application environment. The web Platform Recovery Console
+deliberately does not execute recovery; it only takes requests through dual
+approval + time delay and then hands off to the CLI. See F6 in
+`docs/compliance/security-review-august-2026.md`.
 
-    # Get custodian component (from secure offline storage)
-    custodian_component = bytes.fromhex(settings.PLATFORM_CUSTODIAN_COMPONENT)
+```python
+# Reference flow (implemented by the execute_platform_recovery
+# management command — do not call this from web views):
+from checktick_app.surveys.shamir import reconstruct_secret
+from checktick_app.surveys.vault_client import get_vault_client
+
+def execute_platform_recovery(recovery_request, admin_user, share1, share2, share3):
+    """Execute recovery after dual authorization + time delay.
+
+    The custodian component is reconstructed from 3 of 4 Shamir shares supplied
+    by the caller. It must never be read from settings.
+    """
+    # Reconstruct custodian component from shares (in memory only)
+    custodian_component = reconstruct_secret([share1, share2, share3])
 
     vault = get_vault_client()
 
@@ -455,6 +471,11 @@ def execute_platform_recovery(recovery_request, admin_user):
 
     return survey_kek
 ```
+
+> **Security**: `RecoveryRequest.execute_recovery` (the model method) requires
+> the custodian component as an explicit keyword argument and does not read it
+> from settings. The `PLATFORM_CUSTODIAN_COMPONENT` setting has been removed
+> entirely; setting the env var now raises `ImproperlyConfigured` at startup.
 
 ### Organisation/Team Key Derivation
 
@@ -507,7 +528,7 @@ When a user forgets both password AND recovery phrase:
 4. **Secondary admin approves** (dual authorization)
 5. **Time delay starts** (e.g., 24 hours)
 6. **User notified** and can cancel if suspicious
-7. **After delay**, admin executes recovery with new password
+7. **After delay**, a platform admin runs `python manage.py execute_platform_recovery` on a secure terminal, presenting 3 of 4 custodian shares. The web Recovery Console does **not** execute recovery — it only routes the operator to the CLI (see F6 in `docs/compliance/security-review-august-2026.md`).
 8. **KEK re-encrypted** with user's new password
 9. **Audit trail** recorded for compliance
 

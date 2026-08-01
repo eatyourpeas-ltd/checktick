@@ -106,6 +106,27 @@ The SIRO will determine if notification is required. 'High risk' is generally as
 * Unencrypted health data/clinical survey responses are accessed by unauthorized parties.
 * Encryption keys are compromised alongside the database.
 
+#### Response if Encryption Keys Are Compromised
+
+If the platform master key, a custodian share, or an escrowed survey KEK is
+suspected compromised, the response is **not** a single-admin "break-glass"
+decryption. The split-knowledge control must be preserved:
+
+1. **Contain:** Rotate the compromised component. If a custodian share is
+   compromised, rotate all shares via
+   `python manage.py rotate_platform_key_shares` (Option A rotation — the
+   platform master key itself is unchanged, so existing surveys remain
+   decryptable). See [Vault Integration → Platform Key Rotation](/docs/vault/).
+2. **No single-party decryption:** Recovery of any user's survey KEK still
+   requires 3 of 4 custodian shares via the `execute_platform_recovery`
+   management command on a secure terminal. The web Recovery Console cannot
+   execute recovery. See F6 in `docs/compliance/security-review-august-2026.md`.
+3. **Audit:** All custodian-share reconstructions are logged as `CRITICAL`
+   audit events and forwarded to SIEM. Review the audit trail for any
+   reconstruction during the compromise window.
+4. **Notify:** If the compromise enabled access to patient-identifiable survey
+   data, follow the data-subject notification steps in §8.2–8.3 below.
+
 ### 8.2 Content of the Notice
 
 The notification must be sent directly to the individual (via email or post) and contain:

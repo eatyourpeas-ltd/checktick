@@ -360,13 +360,20 @@ The Recovery Dashboard is an administrative interface for managing encryption ke
 │ └─────────────────────────────────────────────────────────────────────┘│
 │                                                                         │
 │ READY FOR EXECUTION: 1                                                  │
-│ ┌─────────────────────────────────────────────────────────────────────┐│
+READY FOR EXECUTION: 1
+┌─────────────────────────────────────────────────────────────────────┐│
 │ │ 🔵 Dr. Robert Taylor │ Annual Audit │ Time delay complete           ││
-│ │    [Execute Recovery] [View Details]                                ││
+│ │    [View Details] [Show CLI Instructions]                          ││
 │ └─────────────────────────────────────────────────────────────────────┘│
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+> **Execution is CLI-only.** The web dashboard does not execute recovery.
+> When a request is `Ready for Execution`, the detail page shows the
+> `execute_platform_recovery` management command (with the request code
+> pre-filled) for the operator to run on a secure terminal with 3 of 4
+> custodian shares. See F6 in `docs/compliance/security-review-august-2026.md`.
 
 ### 7. Audit Trail Viewer
 
@@ -625,8 +632,11 @@ class RecoveryAuditEntry(models.Model):
 # POST /api/admin/recovery/<request_id>/authorize/
 # Submit authorization decision (approve/reject)
 
-# POST /api/admin/recovery/<request_id>/execute/
-# Execute recovery (after time delay)
+# Note: There is no web/HTTP execution endpoint. Recovery is executed
+# exclusively via the `execute_platform_recovery` management command on a
+# secure terminal, which reconstructs the custodian component from 3 of 4
+# Shamir shares supplied on the command line. See F6 in
+# docs/compliance/security-review-august-2026.md.
 
 # DELETE /api/admin/recovery/<request_id>/
 # Cancel recovery request

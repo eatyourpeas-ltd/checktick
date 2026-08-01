@@ -53,7 +53,6 @@ from .models import (
     OrganizationMembership,
     PublishedQuestionGroup,
     QuestionGroup,
-    RecoveryAuditEntry,
     RecoveryRequest,
     Survey,
     SurveyAccessToken,
@@ -10516,117 +10515,6 @@ def recovery_reject(request: HttpRequest, request_id: str) -> HttpResponse:
         messages.success(request, "Recovery request has been rejected.")
     except Exception as e:
         messages.error(request, f"Error rejecting request: {e}")
-
-    return redirect("surveys:recovery_detail", request_id=request_id)
-
-
-@login_required
-@superuser_required
-@require_http_methods(["POST"])
-@ratelimit(key="user", rate="3/h", block=True)
-def recovery_execute(request: HttpRequest, request_id: str) -> HttpResponse:
-    """
-    Execute a recovery request that has passed the time delay (superuser).
-
-    Rate limited: 3 executions/hour (very sensitive operation).
-
-    Requires:
-    - new_password: The user's new password for re-encrypting the survey KEK
-    """
-    recovery_request = get_object_or_404(RecoveryRequest, id=request_id)
-
-    # Validate new password was provided
-    new_password = request.POST.get("new_password", "").strip()
-    confirm_password = request.POST.get("confirm_password", "").strip()
-
-    if not new_password:
-        messages.error(request, "A new password is required to execute recovery.")
-        return redirect("surveys:recovery_detail", request_id=request_id)
-
-    if len(new_password) < 8:
-        messages.error(request, "Password must be at least 8 characters long.")
-        return redirect("surveys:recovery_detail", request_id=request_id)
-
-    if new_password != confirm_password:
-        messages.error(request, "Passwords do not match.")
-        return redirect("surveys:recovery_detail", request_id=request_id)
-
-    # Check if in time delay and ready
-    if recovery_request.status == RecoveryRequest.Status.IN_TIME_DELAY:
-        if (
-            recovery_request.time_delay_until
-            and timezone.now() >= recovery_request.time_delay_until
-        ):
-            recovery_request.status = RecoveryRequest.Status.READY_FOR_EXECUTION
-            recovery_request.save(update_fields=["status"])
-        else:
-            messages.error(request, "Time delay has not completed yet.")
-            return redirect("surveys:recovery_detail", request_id=request_id)
-
-    # Check status
-    if recovery_request.status != RecoveryRequest.Status.READY_FOR_EXECUTION:
-        messages.error(request, "This request is not ready for execution.")
-        return redirect("surveys:recovery_detail", request_id=request_id)
-
-    try:
-        # Execute recovery via model method (handles Vault integration)
-        recovery_request.execute_recovery(admin=request.user, new_password=new_password)
-
-        # Create audit entry for the superuser action
-        recovery_request._create_audit_entry(
-            event_type="recovery_executed_superuser",
-            severity=RecoveryAuditEntry.Severity.CRITICAL,
-            actor_type="superuser",
-            actor_id=request.user.id,
-            actor_email=request.user.email,
-            details={
-                "action": "execute_recovery",
-                "source": "platform_recovery_console",
-                "superuser_override": True,
-            },
-        )
-
-        # Log superuser action
-        logger.warning(
-            f"SUPERUSER ACTION: {request.user.email} executed recovery for request "
-            f"{recovery_request.request_code} (user: {recovery_request.user.email}, "
-            f"survey: {recovery_request.survey.slug})"
-        )
-
-        # Send completion notification to the user
-        try:
-            from checktick_app.core.email_utils import send_recovery_completed_email
-
-            survey_url = request.build_absolute_uri(
-                reverse(
-                    "surveys:dashboard", kwargs={"slug": recovery_request.survey.slug}
-                )
-            )
-            send_recovery_completed_email(
-                to_email=recovery_request.user.email,
-                user_name=recovery_request.user.get_full_name()
-                or recovery_request.user.username,
-                request_id=recovery_request.request_code,
-                survey_name=recovery_request.survey.name,
-                survey_url=survey_url,
-            )
-        except Exception as email_err:
-            logger.error(f"Failed to send recovery completion email: {email_err}")
-
-        messages.success(
-            request,
-            "Recovery has been executed successfully. The user's survey data has been "
-            "re-encrypted with their new password and they have been notified by email.",
-        )
-
-    except ValueError as e:
-        messages.error(request, str(e))
-    except Exception as e:
-        logger.error(f"Recovery execution failed: {e}")
-        messages.error(
-            request,
-            f"Error executing recovery: {e}. Please check Vault connectivity and try again.",
-        )
 
     return redirect("surveys:recovery_detail", request_id=request_id)
 

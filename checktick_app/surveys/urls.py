@@ -68,11 +68,10 @@ urlpatterns = [
         views.recovery_reject,
         name="recovery_reject",
     ),
-    path(
-        "recovery/<uuid:request_id>/execute/",
-        views.recovery_execute,
-        name="recovery_execute",
-    ),
+    # NOTE: There is no web execution endpoint for recovery. Execution requires
+    # 3 of 4 Shamir custodian shares via the `execute_platform_recovery`
+    # management command on a secure terminal. See F6 in
+    # docs/compliance/security-review-august-2026.md.
     # Admin Recovery Dashboard (Organization/Team Admins)
     path(
         "admin/recovery/",

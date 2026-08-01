@@ -296,9 +296,9 @@
                     {% endif %}
 
                     {% if recovery_request.status == 'ready_for_execution' %}
-                        <button class="btn btn-success" onclick="execute_modal.showModal()">
-                            {% trans "Execute Recovery" %}
-                        </button>
+                        <a href="#execute-cli-guidance" class="btn btn-success btn-outline">
+                            {% trans "How to Execute" %}
+                        </a>
                     {% endif %}
 
                     {% if recovery_request.status in rejectable_statuses %}
@@ -337,93 +337,70 @@
 </dialog>
 {% endif %}
 
-<!-- Execute Recovery Modal -->
+<!-- Execute Recovery CLI Guidance (no web execution — see F6 in docs/compliance/security-review-august-2026.md) -->
 {% if recovery_request.status == 'ready_for_execution' %}
-<dialog id="execute_modal" class="modal">
-    <div class="modal-box">
-        <h3 class="font-bold text-lg text-success">{% trans "Execute Key Recovery" %}</h3>
+<div id="execute-cli-guidance" class="card bg-base-100 shadow mt-6">
+    <div class="card-body">
+        <h3 class="font-bold text-lg text-success">{% trans "Ready to Execute" %}</h3>
+
+        <div class="alert alert-info mt-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+                <h4 class="font-bold">{% trans "Execution requires custodian shares" %}</h4>
+                <p class="text-sm">
+                    {% blocktrans %}
+                    Recovery cannot be executed from the web console. The platform
+                    custodian component must be reconstructed from 3 of 4 Shamir
+                    custodian shares on a secure terminal via the
+                    <code>execute_platform_recovery</code> management command.
+                    {% endblocktrans %}
+                </p>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h5 class="font-semibold mb-2">{% trans "Steps" %}</h5>
+            <ol class="list-decimal list-inside text-sm space-y-1">
+                <li>{% trans "Gather 3 of 4 custodian shares from their custodians." %}</li>
+                <li>{% trans "SSH into the production server." %}</li>
+                <li>{% trans "Run the management command below with the shares." %}</li>
+            </ol>
+        </div>
+
+        <div class="mt-4">
+            <h5 class="font-semibold mb-2">{% trans "Command" %}</h5>
+            <pre class="bg-base-300 text-base-content p-4 rounded-lg overflow-x-auto text-sm"><code>python manage.py execute_platform_recovery {{ recovery_request.request_code }} \
+  --custodian-share-1=&lt;share1&gt; \
+  --custodian-share-2=&lt;share2&gt; \
+  --custodian-share-3=&lt;share3&gt; \
+  --executor=&lt;your-email&gt;</code></pre>
+            <p class="text-xs text-base-content/60 mt-2">
+                {% trans "See" %}
+                <code>python manage.py execute_platform_recovery --help</code>
+                {% trans "and" %}
+                <code>docs/compliance/recovery-dashboard.md</code>
+                {% trans "for the full procedure." %}
+            </p>
+        </div>
 
         <div class="alert alert-warning mt-4">
             <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <div>
-                <h4 class="font-bold">{% trans "Critical Operation" %}</h4>
-                <p class="text-sm">{% trans "This will decrypt the user's survey keys from Vault and re-encrypt them with the new password. This action is irreversible and will be logged for audit purposes." %}</p>
+                <h4 class="font-bold">{% trans "Security" %}</h4>
+                <p class="text-sm">
+                    {% blocktrans %}
+                    Shares are only held in memory during execution and are never
+                    persisted to disk or logs. The custodian component is
+                    reconstructed in memory and cleared immediately afterwards.
+                    {% endblocktrans %}
+                </p>
             </div>
         </div>
-
-        <form method="post" action="{% url 'surveys:recovery_execute' request_id=recovery_request.id %}" id="execute_form">
-            {% csrf_token %}
-
-            <div class="form-control mt-4">
-                <label class="label">
-                    <span class="label-text font-medium">{% trans "New Password for User" %}</span>
-                </label>
-                <input type="password" name="new_password" id="new_password" class="input input-bordered" placeholder="{% trans 'Enter new password (min 8 characters)' %}" required minlength="8" />
-                <label class="label">
-                    <span class="label-text-alt text-base-content/60">{% trans "This will become the user's new encryption password" %}</span>
-                </label>
-            </div>
-
-            <div class="form-control mt-2">
-                <label class="label">
-                    <span class="label-text font-medium">{% trans "Confirm Password" %}</span>
-                </label>
-                <input type="password" name="confirm_password" id="confirm_password" class="input input-bordered" placeholder="{% trans 'Confirm new password' %}" required minlength="8" />
-            </div>
-
-            <div class="form-control mt-4">
-                <label class="label cursor-pointer justify-start gap-3">
-                    <input type="checkbox" id="confirm_checkbox" class="checkbox checkbox-warning" required />
-                    <span class="label-text">{% trans "I confirm that I have verified the user's identity and understand this action is irreversible" %}</span>
-                </label>
-            </div>
-
-            <div class="modal-action">
-                <button type="button" class="btn" onclick="execute_modal.close()">{% trans "Cancel" %}</button>
-                <button type="submit" class="btn btn-success" id="execute_btn" disabled>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                    </svg>
-                    {% trans "Execute Recovery" %}
-                </button>
-            </div>
-        </form>
     </div>
-    <form method="dialog" class="modal-backdrop">
-        <button>close</button>
-    </form>
-</dialog>
-
-<script nonce="{{ request.csp_nonce }}">
-document.addEventListener('DOMContentLoaded', function() {
-    const newPassword = document.getElementById('new_password');
-    const confirmPassword = document.getElementById('confirm_password');
-    const confirmCheckbox = document.getElementById('confirm_checkbox');
-    const executeBtn = document.getElementById('execute_btn');
-
-    function validateForm() {
-        const passwordsMatch = newPassword.value === confirmPassword.value;
-        const passwordLongEnough = newPassword.value.length >= 8;
-        const isConfirmed = confirmCheckbox.checked;
-
-        executeBtn.disabled = !(passwordsMatch && passwordLongEnough && isConfirmed);
-
-        // Show password mismatch warning
-        if (confirmPassword.value && !passwordsMatch) {
-            confirmPassword.classList.add('input-error');
-        } else {
-            confirmPassword.classList.remove('input-error');
-        }
-    }
-
-    if (newPassword && confirmPassword && confirmCheckbox && executeBtn) {
-        newPassword.addEventListener('input', validateForm);
-        confirmPassword.addEventListener('input', validateForm);
-        confirmCheckbox.addEventListener('change', validateForm);
-    }
-});
-</script>
+</div>
 {% endif %}
 {% endblock %}
