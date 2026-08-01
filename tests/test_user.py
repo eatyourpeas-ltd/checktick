@@ -90,6 +90,89 @@ def test_signup_as_org_creates_org_and_shows_on_profile(client):
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("next_url", "expected_redirect"),
+    [
+        ("//evil.example/phish", None),
+        ("/\\evil.example/phish", None),
+        ("https://evil.example/phish", None),
+        ("/surveys/", "/surveys/"),
+    ],
+)
+def test_signup_only_stores_safe_post_confirmation_redirects(
+    client, monkeypatch, next_url, expected_redirect
+):
+    """Signup must reject protocol-relative and external redirect targets."""
+    monkeypatch.setattr(
+        "checktick_app.core.views.EmailConfirmationManager.send_confirmation_email",
+        lambda user, request: (None, True, None),
+    )
+    monkeypatch.setattr(
+        "checktick_app.core.email_utils.send_welcome_email", lambda user: True
+    )
+
+    response = client.post(
+        reverse("core:signup"),
+        data={
+            "email": "redirect-test@example.com",
+            "email_confirm": "redirect-test@example.com",
+            "password1": TEST_PASSWORD,
+            "password2": TEST_PASSWORD,
+            "account_type": "simple",
+            "next": next_url,
+        },
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == reverse("core:home")
+    assert client.session.get("post_confirmation_redirect") == expected_redirect
+
+    user = get_user_model().objects.get(email="redirect-test@example.com")
+    assert user.profile.email_confirmed is False
+
+    home_response = client.get(response["Location"])
+    assert home_response.status_code == 200
+    assert (
+        b"Please check your email to confirm your account before accessing features."
+        in home_response.content
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("next_url", "expected_location"),
+    [
+        ("//evil.example/phish", reverse("surveys:list")),
+        ("/\\evil.example/phish", reverse("surveys:list")),
+        ("https://evil.example/phish", reverse("surveys:list")),
+        ("/surveys/", "/surveys/"),
+    ],
+)
+def test_complete_signup_only_redirects_to_safe_urls(
+    client, next_url, expected_location
+):
+    """OIDC signup completion must not redirect to an attacker-controlled host."""
+    user = get_user_model().objects.create_user(
+        username="redirect-oidc@example.com",
+        email="redirect-oidc@example.com",
+        password=TEST_PASSWORD,
+    )
+    UserOIDC.objects.create(user=user, signup_completed=False)
+    client.login(username=user.username, password=TEST_PASSWORD)
+    session = client.session
+    session["needs_signup_completion"] = True
+    session.save()
+
+    response = client.post(
+        reverse("core:complete_signup"),
+        data={"account_type": "simple", "next": next_url},
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == expected_location
+
+
+@pytest.mark.django_db
 def test_signup_as_simple_user(client):
     """Test that signing up as a simple user doesn't create an organization."""
     email = "simpleuser@example.com"

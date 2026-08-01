@@ -9,7 +9,7 @@ category: dspt-6-incidents
 - **Reviewer:** CTO (with AI-assisted static review)
 - **Scope:** Full static security review of the CheckTick platform covering authentication and redirect flows, email rendering, settings hardening, DRF defaults, HashiCorp Vault integration, LLM (AI survey generator + translation), the public REST API, OIDC SSO, user-uploaded icons and survey images, user/organisation management, billing webhooks, and styling/theme CSS.
 - **Method:** Static source review of `checktick_app/core/views.py`, `checktick_app/core/email_utils.py`, `checktick_app/core/oidc_views.py`, `checktick_app/core/views_billing.py`, `checktick_app/core/theme_utils.py`, `checktick_app/core/models.py`, `checktick_app/surveys/views.py`, `checktick_app/surveys/vault_client.py`, `checktick_app/surveys/llm_client.py`, `checktick_app/surveys/models.py`, `checktick_app/api/authentication.py`, `checktick_app/api/views.py`, `checktick_app/settings.py`, and the relevant templates. Cross-referenced against the documented security model in `docs/vault.md`, `docs/llm-security.md`, `docs/api.md`, and `docs/security-overview.md`.
-- **Status:** 🔶 Remediation in progress — F6 and F12 resolved; 15 findings remain open
+- **Status:** 🔶 Remediation in progress — F1, F6, and F12 resolved; 14 findings remain open
 
 ---
 
@@ -21,7 +21,7 @@ This consolidated review identifies **17 findings (F1–F17)**: 2 High, 6 Medium
 | :--- | :--- | :--- | :--- | :--- |
 | **F6** | **High** | Vault / Recovery | Web recovery console bypasses Shamir custodian-share control | Resolved 01/08/2026 |
 | **F12** | **High** | Survey images | SVG upload → stored XSS via direct `/media/` access | Resolved 01/08/2026 |
-| F1 | Medium | Auth / Redirects | Open redirect via protocol-relative `next` URLs | Open |
+| F1 | Medium | Auth / Redirects | Open redirect via protocol-relative `next` URLs | Resolved 01/08/2026 |
 | F2 | Medium | Email | HTML injection into team/org invitation emails | Open |
 | F7 | Medium | LLM | Debug dump writes full LLM payloads to world-readable `/tmp` | Open |
 | F8 | Medium | API | `DataSetViewSet` permission class inconsistent with anonymous access | Open |
@@ -37,7 +37,7 @@ This consolidated review identifies **17 findings (F1–F17)**: 2 High, 6 Medium
 | F17 | Low | OIDC | Runtime mutation of global settings in callback view (thread-safety) | Open |
 | F5 | Info | Email | F-string email builders bypass template autoescaping | Open |
 
-**Priority for next patch:** F1, F2, F7, F8, F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items. F6 and F12 were resolved on 1 August 2026.
+**Priority for next patch:** F2, F7, F8, F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items. F1, F6, and F12 were resolved on 1 August 2026.
 
 ---
 
@@ -209,6 +209,8 @@ if next_url and not url_has_allowed_host_and_scheme(
 Apply the same check in both `signup` (L707) and `complete_signup` (L973). The `complete_signup` path stores `next` from POST (hidden field populated via `sessionStorage`), so it inherits the same weakness.
 
 **Regression risk:** Low. Legitimate relative `next` URLs (e.g. `/surveys/`) continue to pass; only protocol-relative and absolute-URL values are rejected.
+
+**Resolution (1 August 2026):** Both signup entry points now validate `next` with Django's `url_has_allowed_host_and_scheme`, restricted to the current host and requiring HTTPS when the request is secure. Protocol-relative, backslash-normalised, and external absolute URLs are rejected, while local relative paths continue to work. Regression tests cover both the email-confirmation and OIDC signup-completion flows.
 
 ---
 

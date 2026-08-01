@@ -341,6 +341,7 @@ priority: 2
   - **Info:** F5 (f-string email builders bypass autoescaping)
   - No Critical findings; no patient data exposure at rest
   - Remediation tracked as atomic PRs with regression tests per finding
+  - **Remediation status (01/08/2026):** F1, F6, and F12 resolved; 14 findings remain open. F1 signup redirects now use Django host/scheme validation and retain the unconfirmed-email home-page flow.
 - [ ] **Tabletop Exercise (Q3)** - Cyber security simulation [Exercise Summary](/compliance/exercise-summary-2025/)
   - Based on NCSC threat intelligence
   - Test incident response procedures
@@ -615,6 +616,7 @@ priority: 2
 | :--- | :--- | :--- | :--- |
 | 08/02/2026 | 1.0 | Initial 2026 checklist created | Pending |
 | 01/08/2026 | 1.1 | Added Q3 security deep-dive review (17 findings F1–F17) to August | Pending |
+| 01/08/2026 | 1.2 | Recorded F1 open-redirect remediation and updated status to 14 open findings | Pending |
 
 ---
 
