@@ -332,6 +332,15 @@ priority: 2
 
 ### Week 1-4 (Aug 1-31)
 
+- [x] **Security Deep-Dive Review (Q3)** - Application-layer static security review of the CheckTick codebase [Security Review – August 2026](/compliance/security-review-august-2026/)
+  - Scope: authentication/redirects, email rendering, settings hardening, DRF defaults, Vault integration, LLM, REST API, OIDC SSO, icon/image uploads, user management, billing webhooks, styling/theme CSS
+  - 17 findings identified (F1–F17): 2 High, 6 Medium, 8 Low, 1 Info
+  - **High:** F6 (web recovery console bypasses Shamir custodian-share control), F12 (SVG upload → stored XSS via `/media/`)
+  - **Medium:** F1 (open redirect), F2 (HTML injection in invitation emails), F7 (LLM debug dump to `/tmp`), F8 (DataSetViewSet permission inconsistency), F13 (`icon_url` accepts `javascript:`/`data:`), F14 (billing webhook no replay protection)
+  - **Low:** F3 (SECRET_KEY fallback), F4 (DRF default permission), F9 (CSP `style-src 'unsafe-inline'`), F10 (OIDC `next` redirect), F11 (API-key last_used_at write), F15 (LLM prompt-injection docs overclaim), F16 (CSS sanitiser `}` breakout), F17 (OIDC runtime settings mutation race)
+  - **Info:** F5 (f-string email builders bypass autoescaping)
+  - No Critical findings; no patient data exposure at rest
+  - Remediation tracked as atomic PRs with regression tests per finding
 - [ ] **Tabletop Exercise (Q3)** - Cyber security simulation [Exercise Summary](/compliance/exercise-summary-2025/)
   - Based on NCSC threat intelligence
   - Test incident response procedures
@@ -605,6 +614,7 @@ priority: 2
 | Date | Version | Changes | Approved By |
 | :--- | :--- | :--- | :--- |
 | 08/02/2026 | 1.0 | Initial 2026 checklist created | Pending |
+| 01/08/2026 | 1.1 | Added Q3 security deep-dive review (17 findings F1–F17) to August | Pending |
 
 ---
 
@@ -617,5 +627,5 @@ priority: 2
 - Any deviations must be documented in the Risk Register
 - Failed or missed items escalate to board level within 48 hours
 
-**Last Updated:** 08/02/2026
+**Last Updated:** 01/08/2026
 **Next Review:** Monthly at Board Meeting
