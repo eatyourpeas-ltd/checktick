@@ -14,7 +14,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template import TemplateDoesNotExist
 from django.template.loader import render_to_string
-from django.utils.html import strip_tags
+from django.utils.html import escape, strip_tags
 import markdown
 
 
@@ -2142,18 +2142,30 @@ def send_team_invitation_email(
             },
         )
     except TemplateDoesNotExist:
-        org_line = f"as part of **{organization_name}** " if organization_name else ""
-        markdown_content = f"""## You're Invited to Join {team.name}
+        safe_team_name = escape(team.name)
+        safe_organization_name = escape(organization_name) if organization_name else ""
+        safe_invited_by_name = escape(invited_by.get_full_name() or invited_by.username)
+        safe_invited_by_email = escape(invited_by.email)
+        safe_role_display = escape(role_display)
+        safe_signup_link = escape(signup_link)
+        safe_to_email = escape(to_email)
+        safe_brand_title = escape(branding["title"])
+        org_line = (
+            f"as part of **{safe_organization_name}** "
+            if safe_organization_name
+            else ""
+        )
+        markdown_content = f"""## You're Invited to Join {safe_team_name}
 
 Hi there,
 
-**{invited_by.get_full_name() or invited_by.username}** has invited you to join their team on {branding["title"]}.
+**{safe_invited_by_name}** has invited you to join their team on {safe_brand_title}.
 
 ### Invitation Details
 
-- **Team:** {team.name}
-- **Your Role:** {role_display}
-- **Invited by:** {invited_by.get_full_name() or invited_by.username} ({invited_by.email})
+- **Team:** {safe_team_name}
+- **Your Role:** {safe_role_display}
+- **Invited by:** {safe_invited_by_name} ({safe_invited_by_email})
 
 {org_line}
 
@@ -2161,28 +2173,28 @@ Hi there,
 
 To accept this invitation and join the team, create your account:
 
-[**Create Account**]({signup_link})
+[**Create Account**]({safe_signup_link})
 
 Or copy and paste this URL:
 
 ```
-{signup_link}
+{safe_signup_link}
 ```
 
-Once you create your account with **{to_email}**, you'll automatically be added to the team.
+Once you create your account with **{safe_to_email}**, you'll automatically be added to the team.
 
 ### What You'll Be Able to Do
 
-As a **{role_display}**, you'll be able to:
+As a **{safe_role_display}**, you'll be able to:
 {"- Manage team settings and members" if role == "admin" else ""}
 {"- Create and edit surveys" if role in ("admin", "creator") else ""}
 - View team surveys and data
 
 ---
 
-If you have any questions, please contact {invited_by.email}.
+If you have any questions, please contact {safe_invited_by_email}.
 
-The {branding["title"]} Team
+The {safe_brand_title} Team
 """
 
     return send_branded_email(
@@ -2244,35 +2256,42 @@ def send_org_invitation_email(
             },
         )
     except TemplateDoesNotExist:
-        markdown_content = f"""## You're Invited to Join {organization.name}
+        safe_organization_name = escape(organization.name)
+        safe_invited_by_name = escape(invited_by.get_full_name() or invited_by.username)
+        safe_invited_by_email = escape(invited_by.email)
+        safe_role_display = escape(role_display)
+        safe_signup_link = escape(signup_link)
+        safe_to_email = escape(to_email)
+        safe_brand_title = escape(branding["title"])
+        markdown_content = f"""## You're Invited to Join {safe_organization_name}
 
 Hi there,
 
-**{invited_by.get_full_name() or invited_by.username}** has invited you to join their organization on {branding["title"]}.
+**{safe_invited_by_name}** has invited you to join their organization on {safe_brand_title}.
 
 ### Invitation Details
 
-- **Organization:** {organization.name}
-- **Your Role:** {role_display}
-- **Invited by:** {invited_by.get_full_name() or invited_by.username} ({invited_by.email})
+- **Organization:** {safe_organization_name}
+- **Your Role:** {safe_role_display}
+- **Invited by:** {safe_invited_by_name} ({safe_invited_by_email})
 
 ### Get Started
 
 To accept this invitation and join the organization, create your account:
 
-[**Create Account**]({signup_link})
+[**Create Account**]({safe_signup_link})
 
 Or copy and paste this URL:
 
 ```
-{signup_link}
+{safe_signup_link}
 ```
 
-Once you create your account with **{to_email}**, you'll automatically be added to the organization.
+Once you create your account with **{safe_to_email}**, you'll automatically be added to the organization.
 
 ### What You'll Be Able to Do
 
-As a **{role_display}**, you'll be able to:
+As a **{safe_role_display}**, you'll be able to:
 {"- Manage organization settings, teams, and members" if role == "admin" else ""}
 {"- Create and edit surveys across the organization" if role in ("admin", "creator") else ""}
 - View organization surveys and data
@@ -2280,9 +2299,9 @@ As a **{role_display}**, you'll be able to:
 
 ---
 
-If you have any questions, please contact {invited_by.email}.
+If you have any questions, please contact {safe_invited_by_email}.
 
-The {branding["title"]} Team
+The {safe_brand_title} Team
 """
 
     return send_branded_email(

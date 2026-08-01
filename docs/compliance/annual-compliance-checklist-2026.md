@@ -341,7 +341,7 @@ priority: 2
   - **Info:** F5 (f-string email builders bypass autoescaping)
   - No Critical findings; no patient data exposure at rest
   - Remediation tracked as atomic PRs with regression tests per finding
-  - **Remediation status (01/08/2026):** F1, F6, and F12 resolved; 14 findings remain open. F1 signup redirects now use Django host/scheme validation and retain the unconfirmed-email home-page flow.
+  - **Remediation status (01/08/2026):** F1, F2, F6, and F12 resolved; 13 findings remain open. F1 signup redirects now use Django host/scheme validation and retain the unconfirmed-email home-page flow. F2 team and organisation invitation emails now use autoescaped Markdown templates plus explicitly escaped template-missing fallbacks, with regression coverage for both paths.
 - [ ] **Tabletop Exercise (Q3)** - Cyber security simulation [Exercise Summary](/compliance/exercise-summary-2025/)
   - Based on NCSC threat intelligence
   - Test incident response procedures
