@@ -7652,6 +7652,9 @@ def _validate_and_process_image(uploaded_file) -> tuple[bool, str]:
         uploaded_file.seek(0)
         img = Image.open(uploaded_file)
 
+        if getattr(img, "is_animated", False) or getattr(img, "n_frames", 1) > 1:
+            return False, _("Animated images are not supported.")
+
         # Resize if too large
         if img.width > MAX_IMAGE_DIMENSION or img.height > MAX_IMAGE_DIMENSION:
             img.thumbnail(
