@@ -7607,14 +7607,13 @@ def builder_group_questions_reorder(
 MAX_IMAGE_SIZE = 1 * 1024 * 1024  # 1MB
 # Maximum image dimensions
 MAX_IMAGE_DIMENSION = 800
-# Allowed image formats (extensions)
-ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
-# Allowed MIME types
+# Allowed raster image formats (extensions)
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+# Allowed raster image MIME types
 ALLOWED_IMAGE_MIMES = {
     "image/png",
     "image/jpeg",
     "image/webp",
-    "image/svg+xml",
 }
 
 
@@ -7637,16 +7636,12 @@ def _validate_and_process_image(uploaded_file) -> tuple[bool, str]:
     # Check extension
     _base, ext = os.path.splitext(uploaded_file.name.lower())
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
-        return False, _("Invalid image format. Allowed formats: PNG, JPG, WebP, SVG.")
+        return False, _("Invalid image format. Allowed formats: PNG, JPG, WebP.")
 
     # Check MIME type
     content_type = uploaded_file.content_type
     if content_type not in ALLOWED_IMAGE_MIMES:
-        return False, _("Invalid image type. Allowed types: PNG, JPG, WebP, SVG.")
-
-    # For SVG files, we skip dimension checks and PIL processing
-    if ext == ".svg" or content_type == "image/svg+xml":
-        return True, ""
+        return False, _("Invalid image type. Allowed types: PNG, JPG, WebP.")
 
     # Validate the image can be opened and check dimensions
     try:

@@ -219,11 +219,11 @@ Option B" data-options-textarea></textarea>
                       </div>
 
                       <div class="flex items-center gap-2">
-                        <input type="file" id="image-upload-input" accept="image/png,image/jpeg,image/webp,image/svg+xml" class="file-input file-input-bordered file-input-sm w-full max-w-xs" data-image-upload-input />
+                        <input type="file" id="image-upload-input" accept="image/png,image/jpeg,image/webp" class="file-input file-input-bordered file-input-sm w-full max-w-xs" data-image-upload-input />
                         <input type="text" id="image-label-input" class="input input-bordered input-sm flex-1" placeholder="{% trans 'Optional label' %}" data-image-label-input />
                         <button type="button" class="btn btn-sm btn-primary" data-upload-image-btn>{% trans "Upload" %}</button>
                       </div>
-                      <p class="text-xs opacity-60 mt-1">{% trans "Max 1MB per image. Allowed: PNG, JPG, WebP, SVG. Images larger than 800x800 will be resized." %}</p>
+                      <p class="text-xs opacity-60 mt-1">{% trans "Max 1MB per image. Allowed: PNG, JPG, WebP. Images larger than 800x800 will be resized." %}</p>
                     </div>
 
                     <div id="image-upload-placeholder" data-image-upload-placeholder>

@@ -216,6 +216,27 @@ class TestImageUploadView:
         data = response.json()
         assert data["success"] is False
 
+    def test_upload_rejects_svg_with_script(self, client, image_question):
+        """SVG documents must not be stored where scripts can execute same-origin."""
+        client.login(username="testuser", password=TEST_PASSWORD)
+        url = reverse(
+            "surveys:builder_question_image_upload",
+            kwargs={"slug": image_question.survey.slug, "qid": image_question.id},
+        )
+        malicious_svg = SimpleUploadedFile(
+            "stored-xss.svg",
+            b'<svg xmlns="http://www.w3.org/2000/svg" onload="fetch(\'/api/\')"/>',
+            content_type="image/svg+xml",
+        )
+
+        response = client.post(
+            url, {"image": malicious_svg, "label": "Stored XSS payload"}
+        )
+
+        assert response.status_code == 400
+        assert response.json()["success"] is False
+        assert image_question.images.count() == 0
+
 
 class TestImageDeleteView:
     """Tests for the image delete endpoint."""
