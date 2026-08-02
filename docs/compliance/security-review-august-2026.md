@@ -9,7 +9,7 @@ category: dspt-6-incidents
 - **Reviewer:** CTO (with AI-assisted static review)
 - **Scope:** Full static security review of the CheckTick platform covering authentication and redirect flows, email rendering, settings hardening, DRF defaults, HashiCorp Vault integration, LLM (AI survey generator + translation), the public REST API, OIDC SSO, user-uploaded icons and survey images, user/organisation management, billing webhooks, and styling/theme CSS.
 - **Method:** Static source review of `checktick_app/core/views.py`, `checktick_app/core/email_utils.py`, `checktick_app/core/oidc_views.py`, `checktick_app/core/views_billing.py`, `checktick_app/core/theme_utils.py`, `checktick_app/core/models.py`, `checktick_app/surveys/views.py`, `checktick_app/surveys/vault_client.py`, `checktick_app/surveys/llm_client.py`, `checktick_app/surveys/models.py`, `checktick_app/api/authentication.py`, `checktick_app/api/views.py`, `checktick_app/settings.py`, and the relevant templates. Cross-referenced against the documented security model in `docs/vault.md`, `docs/llm-security.md`, `docs/api.md`, and `docs/security-overview.md`.
-- **Status:** 🔶 Remediation in progress — F1, F2, F6, and F12 resolved; 13 findings remain open
+- **Status:** 🔶 Remediation in progress — F1, F2, F6, F7, F8, and F12 resolved; 11 findings remain open
 
 ---
 
@@ -24,7 +24,7 @@ This consolidated review identifies **17 findings (F1–F17)**: 2 High, 6 Medium
 | F1 | Medium | Auth / Redirects | Open redirect via protocol-relative `next` URLs | Resolved 01/08/2026 |
 | F2 | Medium | Email | HTML injection into team/org invitation emails | Resolved 01/08/2026 |
 | F7 | Medium | LLM | Debug dump writes full LLM payloads to world-readable `/tmp` | Resolved 02/08/2026 |
-| F8 | Medium | API | `DataSetViewSet` permission class inconsistent with anonymous access | Open |
+| F8 | Medium | API | `DataSetViewSet` permission class inconsistent with anonymous access | Resolved 02/08/2026 |
 | F13 | Medium | Styling | Survey `icon_url` accepts `javascript:` and `data:` URIs | Open |
 | F14 | Medium | Billing | Webhook has no replay protection (no timestamp/idempotency) | Open |
 | F3 | Low | Settings | Silent `SECRET_KEY` fallback in production | Open |
@@ -37,7 +37,7 @@ This consolidated review identifies **17 findings (F1–F17)**: 2 High, 6 Medium
 | F17 | Low | OIDC | Runtime mutation of global settings in callback view (thread-safety) | Open |
 | F5 | Info | Email | F-string email builders bypass template autoescaping | Open |
 
-**Priority for next patch:** F8, F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items. F1, F2, F6, and F12 were resolved on 1 August 2026; F7 was resolved on 2 August 2026.
+**Priority for next patch:** F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items. F1, F2, F6, and F12 were resolved on 1 August 2026; F7 and F8 were resolved on 2 August 2026.
 
 ---
 
@@ -293,7 +293,7 @@ If an operator enables `LLM_DEBUG_DUMP` to diagnose an LLM issue (a reasonable t
 
 ---
 
-## F8 — `DataSetViewSet` permission class inconsistent with anonymous access (Medium)
+## F8 — `DataSetViewSet` permission class inconsistent with anonymous access (Medium) — RESOLVED 02/08/2026
 
 **Location:** `checktick_app/api/views.py` L330–403
 
@@ -333,6 +333,8 @@ Make the declaration match the intent. Either:
 Option 1 is preferred for minimal churn. Either way, add a regression test that asserts an anonymous request to `/api/datasets/` returns only global datasets and that `/api/datasets/{key}/` for a non-global dataset returns 401/404 for anonymous callers.
 
 **Regression risk:** Low. Behaviour is unchanged; only the declaration becomes honest.
+
+**Remediation (02/08/2026):** The fix went further than either recommended option, after confirming with the product owner that the intended policy is **no anonymous access to the datasets API at all**. The only anonymous consumer was `professional-fields.js`, which fetched `GET /api/datasets/{key}/` from the survey respondent page to populate professional-field dropdowns (employing trust, health board, etc.). Those dropdowns are now rendered server-side, like regular dataset-backed dropdowns: `_get_professional_dataset_options()` (surveys/views.py) materialises the options into the `professional_dataset_options` template context for `survey_detail`, `survey_preview`, and `_handle_participant_submission`, and `detail.html` renders the `<option>`s directly (falling back to a text input if the mapped dataset is missing or inactive). `professional-fields.js` was deleted. With no anonymous callers remaining, the misleading `IsOrgAdminOrCreator` class was replaced by an honestly-named `DataSetAccess` permission that requires authentication for every action and rejects non-safe methods; the `AllowAny` override on `available_tags` was removed so the viewset-level policy applies uniformly; and the anonymous branch in `get_queryset` was retained as documented defence in depth. Regression tests: `checktick_app/api/tests/test_dataset_api.py` asserts anonymous requests to list, retrieve (global and non-global), and `available-tags` are all denied, and `checktick_app/surveys/tests/test_anonymous_access.py::test_anon_respondent_gets_ssr_professional_field_options` asserts an anonymous respondent on a public survey receives server-rendered professional-field options with no client-side call to `/api/datasets/`. Docs updated: `docs/api.md`, `docs/api-datasets.md`, `docs/dataset-loading-architecture.md`.
 
 ---
 
@@ -852,7 +854,7 @@ The `verify_gocardless_webhook_signature` implementation (L659–700) is correct
 | F1 | Medium | CTO | Small (swap validator in 2 sites) | Next patch | |
 | F2 | Medium | CTO | Medium (2 new templates + escape fallbacks) | Next patch | |
 | F7 | Medium | CTO | Small (relocate/redact dump) | **Resolved 02/08/2026** | Private `logs/llm/` dir, 0o600 files, 24h prune, messages omitted, prod gate |
-| F8 | Medium | CTO | Trivial (permission declaration + test) | Next patch | |
+| F8 | Medium | CTO | Trivial (permission declaration + test) | **Resolved 02/08/2026** | API now authenticated-only; professional-field options rendered server-side |
 | F13 | Medium | CTO | Trivial (add protocol validation) | Next patch | Bundle with F1/F10 redirect fixes |
 | F14 | Medium | CTO | Medium (idempotency table + handler audit) | Next minor | Standard webhook hygiene |
 | F3 | Low | CTO | Trivial (settings guard) | Next patch | |
@@ -871,7 +873,7 @@ Validation for all fixes: `s/test --no-a11y` and `s/lint` per `AGENTS.md`. Speci
 - **F2:** assert a team name containing `<a>` is entity-escaped in the rendered email body.
 - **F6:** assert the web recovery path either redirects to the CLI or requires custodian shares, and that `settings.PLATFORM_CUSTODIAN_COMPONENT` is not read by any web-reachable code path.
 - **F7:** assert dumps are written under `settings.BASE_DIR / "logs" / "llm"` with mode `0o600`, the outgoing `messages` payload is absent from the file, dumps are blocked in production without `LLM_DEBUG_DUMP_INSECURE=1`, and files older than 24h are pruned (`tests/test_llm_debug_dump_security.py`).
-- **F8:** assert an anonymous request to `/api/datasets/` returns only global datasets and that `/api/datasets/{key}/` for a non-global dataset returns 401/404 for anonymous callers.
+- **F8:** assert anonymous requests to `/api/datasets/` (list, retrieve, available-tags) are denied, and that an anonymous respondent on a public survey receives server-rendered professional-field options without any client-side `/api/datasets/` call (`checktick_app/api/tests/test_dataset_api.py`, `checktick_app/surveys/tests/test_anonymous_access.py`).
 - **F12:** assert script-bearing `.svg` uploads and animated variants of allowed raster formats are rejected without persistence; production audit confirmed no existing SVG media requiring cleanup.
 - **F14:** replay the same webhook twice and assert no duplicate `Payment` rows.
 - **F16:** assert `}` in `theme_css_light` is stripped before rendering.

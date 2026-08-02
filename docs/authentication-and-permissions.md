@@ -275,10 +275,10 @@ Authenticated users can create custom versions from any global dataset:
 
 ### Enforcement in the API
 
-Dataset API (`/api/datasets/`) is **read-only**:
+Dataset API (`/api/datasets/`) is **read-only** and requires authentication for every endpoint (`DataSetAccess` permission class) — there is no anonymous access. Anonymous survey respondents never call this API; dataset options are rendered server-side into the survey page.
 
-- **Listing**: Returns global datasets plus user's organisation datasets (if in an org)
-- **Retrieve**: Allowed if user can view the dataset (global datasets are public to anonymous users)
+- **Listing**: Returns global datasets plus user's organisation datasets (if in an org) plus their own individual datasets
+- **Retrieve**: Allowed if the authenticated user can view the dataset
 
 All dataset write operations (create, update, delete, publish, custom versions) are performed through the web UI.
 
