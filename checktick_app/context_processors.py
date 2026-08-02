@@ -1,7 +1,7 @@
 import logging
 import os
-import re
 from pathlib import Path
+import re
 import subprocess
 
 from django.conf import settings
@@ -34,12 +34,7 @@ try:
 except Exception:  # pragma: no cover - tolerate missing module during migrations
 
     def sanitize_css_block(css: str) -> str:  # type: ignore[misc]
-        css = (
-            css.replace("<", "")
-            .replace(">", "")
-            .replace("{", "")
-            .replace("}", "")
-        )
+        css = css.replace("<", "").replace(">", "").replace("{", "").replace("}", "")
         css = re.sub(r"url\s*\([^)]*\)?", "", css, flags=re.IGNORECASE)
         css = re.sub(r"https?://\S*", "", css, flags=re.IGNORECASE)
         return css

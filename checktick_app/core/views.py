@@ -533,7 +533,10 @@ def profile(request):
             # vbscript: and any other scheme (security-review F13).  Although
             # this view is superuser-only, the value is rendered across
             # public-facing templates, so we validate at write time as well.
-            for _label, _val in (("Icon URL", _icon_url), ("Dark icon URL", _icon_url_dark)):
+            for _label, _val in (
+                ("Icon URL", _icon_url),
+                ("Dark icon URL", _icon_url_dark),
+            ):
                 if _val and not _val.lower().startswith(("http://", "https://", "/")):
                     messages.error(
                         request,

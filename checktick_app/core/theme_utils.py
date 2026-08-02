@@ -92,12 +92,7 @@ def sanitize_css_block(css: str) -> str:
     Stripping `{}` and url() is therefore safe for the intended input and
     prevents both rule breakout and data exfiltration.
     """
-    css = (
-        css.replace("<", "")
-        .replace(">", "")
-        .replace("{", "")
-        .replace("}", "")
-    )
+    css = css.replace("<", "").replace(">", "").replace("{", "").replace("}", "")
     # Strip url() references (with or without a closing paren) to prevent
     # CSS-based data exfiltration via background-image:url(attacker/?...).
     css = re.sub(r"url\s*\([^)]*\)?", "", css, flags=re.IGNORECASE)

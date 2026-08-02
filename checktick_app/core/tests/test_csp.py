@@ -52,9 +52,9 @@ def test_csp_style_src_does_not_allow_wildcard(client):
     assert m, f"style-src directive not found in CSP: {csp!r}"
     style_src = m.group(1)
     tokens = style_src.split()
-    assert "*" not in tokens, (
-        f"style-src must not allow bare wildcard origin; got: {style_src!r}"
-    )
+    assert (
+        "*" not in tokens
+    ), f"style-src must not allow bare wildcard origin; got: {style_src!r}"
     assert "'self'" in tokens
 
 
@@ -71,9 +71,9 @@ def test_csp_script_src_does_not_allow_unsafe_inline(client):
     m = re.search(r"script-src\s+([^;]+)", csp)
     assert m, f"script-src directive not found in CSP: {csp!r}"
     script_src = m.group(1)
-    assert "'unsafe-inline'" not in script_src, (
-        f"script-src must not allow 'unsafe-inline'; got: {script_src!r}"
-    )
+    assert (
+        "'unsafe-inline'" not in script_src
+    ), f"script-src must not allow 'unsafe-inline'; got: {script_src!r}"
 
 
 def test_style_src_unsafe_inline_is_documented_in_settings():
@@ -118,6 +118,6 @@ def test_style_src_unsafe_inline_documented_in_security_overview():
     """
     doc = settings.BASE_DIR / "docs" / "security-overview.md"
     text = doc.read_text()
-    assert "unsafe-inline" in text, (
-        "security-overview.md must document the style-src 'unsafe-inline' relaxation"
-    )
+    assert (
+        "unsafe-inline" in text
+    ), "security-overview.md must document the style-src 'unsafe-inline' relaxation"
