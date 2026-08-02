@@ -7,9 +7,9 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
-from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -622,9 +622,7 @@ def payment_webhook(request: HttpRequest) -> HttpResponse:
                     )
                     continue
 
-                logger.info(
-                    f"Processing GoCardless event: {event_type} ({event_id})"
-                )
+                logger.info(f"Processing GoCardless event: {event_type} ({event_id})")
                 _dispatch_gocardless_event(event, resource_type, action, event_id)
 
         return JsonResponse({"status": "success"}, status=200)

@@ -1074,9 +1074,7 @@ class TestWebhookReplayProtection:
         assert second.status_code == 200
         # The replay must NOT have re-activated the subscription.
         profile.refresh_from_db()
-        assert (
-            profile.subscription_status == UserProfile.SubscriptionStatus.PAST_DUE
-        )
+        assert profile.subscription_status == UserProfile.SubscriptionStatus.PAST_DUE
         # And no duplicate Payment record.
         assert Payment.objects.filter(payment_id="PM_REPLAY").count() == 1
 
@@ -1119,7 +1117,10 @@ class TestWebhookReplayProtection:
         )
 
         assert response.status_code == 200
-        assert Payment.objects.filter(payment_id__in=["PM_MULTI_1", "PM_MULTI_2"]).count() == 2
+        assert (
+            Payment.objects.filter(payment_id__in=["PM_MULTI_1", "PM_MULTI_2"]).count()
+            == 2
+        )
 
 
 class TestVATCSVExport:
