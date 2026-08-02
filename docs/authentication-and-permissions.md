@@ -222,42 +222,57 @@ Datasets (prefilled dropdown options) have different permission models depending
 
 - **NHS Data Dictionary (NHS DD)**: Global, read-only datasets managed by the platform. Cannot be edited or deleted.
 - **External API datasets**: Global datasets synced from external sources. Read-only for all users.
-- **User-created datasets**: Created by individual users or organisation members, can be personal or organisation-owned, and optionally published globally.
+- **User-created datasets**: Created by users, scoped as **personal** (creator only), **team-shared** (all members of one team), or **organisation-shared** (all members of one organisation), and optionally published globally. A dataset belongs to at most one team or organisation, not both.
 
 ### Individual User Dataset Permissions
 
-Individual users (without organisation membership) can:
+Individual users (without organisation or team creator roles) on a **Pro or higher** tier can:
 
 - **Create datasets**: Create personal datasets
 - **Edit own datasets**: Modify datasets they created
 - **Delete own datasets**: Remove their datasets (unless published with dependents)
-- **Publish globally**: Share their datasets with all users
 - **Create custom versions**: Customize any global dataset
+- **Snapshot SNOMED datasets**: Freeze a SNOMED CT dataset into a personal custom dataset
+- **Request global publication**: Global publishing is performed by platform administrators on request
 
-> **Note**: Dataset creation and publishing is available to all tiers. Future versions may require PRO tier for advanced dataset features.
+> **Tier gate and downgrades**: FREE-tier individual users cannot create or edit datasets. If a Pro user downgrades to FREE, their existing datasets are **frozen**: they remain active and usable in surveys, and the owner can still view and delete them, but cannot edit them or create new ones until upgrading again.
+
+### Team Dataset Roles
+
+For team-shared datasets:
+
+| Role | View / Use | Create & Share with Team | Edit | Delete |
+|------|------------|--------------------------|------|--------|
+| **ADMIN** | Yes | Yes | Yes | Yes* |
+| **CREATOR** | Yes | Yes | Yes | Yes* |
+| **VIEWER** | Yes | No | No | No |
+
+All team members (including VIEWERs) can see and use datasets shared with their team. Team creation/edit rights are role-based and do not additionally require a paid individual tier — the team subscription covers them.
 
 ### Organisation Dataset Roles
 
 For organisation-owned datasets:
 
-| Role | View | Create | Edit | Delete | Publish Globally | Create Custom Version |
-|------|------|--------|------|--------|------------------|----------------------|
-| **ADMIN** | Yes | Yes | Yes | Yes* | Yes | Yes |
-| **CREATOR** | Yes | Yes | Yes | Yes* | Yes | Yes |
-| **VIEWER** | Yes | No | No | No | No | No |
+| Role | View / Use | Create | Edit | Delete | Create Custom Version / Snapshot |
+|------|------------|--------|------|--------|----------------------------------|
+| **ADMIN** | Yes | Yes | Yes | Yes* | Yes |
+| **CREATOR** | Yes | Yes | Yes | Yes* | Yes |
+| **VIEWER** | Yes | No | No | No | No |
+| **DATA_CUSTODIAN** | Yes | No | No | No | No |
 
 *Cannot delete if published globally and other organisations have created custom versions from it
 
+Organisation members who are also in teams see both their organisation's datasets and their teams' shared datasets.
+
+Creating custom versions and snapshotting SNOMED CT datasets both create a new dataset, so they follow the same rules as **Create**. Snapshots created by an org ADMIN/CREATOR are assigned to their organisation; team ADMIN/CREATOR snapshots are shared with their team; individual users' snapshots are personal datasets.
+
 ### Global Dataset Operations
 
-Any authenticated user can:
-
-- View all global datasets (NHS DD, external API, and published user datasets)
-- Create custom versions from any global dataset
+Any authenticated user can view all global datasets (NHS DD, external API, and published user datasets). Users with dataset-creation permission (Pro+ individual users, team/org ADMINs and CREATORs) can additionally create custom versions from any global dataset.
 
 ### Publishing Datasets
 
-Individual users, ADMINs and CREATORs can publish their datasets globally:
+Global publication is performed by platform administrators (Django admin action) on request — there is no self-service publish button in the web app or API:
 
 1. **Publish action**: Makes a dataset available to all users
 2. **Attribution preserved**: Creator/organisation ownership is retained after publishing
@@ -266,18 +281,18 @@ Individual users, ADMINs and CREATORs can publish their datasets globally:
 
 ### Custom Versions
 
-Authenticated users can create custom versions from any global dataset:
+Users with dataset-creation permission can create custom versions from any global dataset:
 
 - **Source flexibility**: Can customize NHS DD datasets, external API datasets, or other users' published datasets
 - **Independence**: Custom versions are independent - changes don't affect the parent
-- **Personal or org-owned**: Custom versions belong to the creating user (individual) or their organisation
-- **Full control**: Custom versions can be edited, deleted, and even published globally
+- **Personal, team, or org-owned**: Custom versions belong to the creating user, their team, or their organisation
+- **Full control**: Custom versions can be edited, deleted, and submitted for global publication
 
 ### Enforcement in the API
 
 Dataset API (`/api/datasets/`) is **read-only** and requires authentication for every endpoint (`DataSetAccess` permission class) — there is no anonymous access. Anonymous survey respondents never call this API; dataset options are rendered server-side into the survey page.
 
-- **Listing**: Returns global datasets plus user's organisation datasets (if in an org) plus their own individual datasets
+- **Listing**: Returns global datasets plus the user's organisation datasets, their teams' shared datasets, and their own personal datasets
 - **Retrieve**: Allowed if the authenticated user can view the dataset
 
 All dataset write operations (create, update, delete, publish, custom versions) are performed through the web UI.

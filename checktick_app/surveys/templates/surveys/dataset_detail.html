@@ -29,6 +29,8 @@
         <a href="{% url 'surveys:dataset_edit' dataset_id=dataset.id %}" class="btn btn-secondary btn-sm">
           {% trans "Edit" %}
         </a>
+      {% endif %}
+      {% if can_delete %}
         <form method="post" action="{% url 'surveys:dataset_delete' dataset_id=dataset.id %}" onsubmit="return confirm('{% trans "Are you sure you want to delete this dataset?" %}');">
           {% csrf_token %}
           <button type="submit" class="btn btn-error btn-sm">
@@ -83,12 +85,16 @@
 
     <div class="stats shadow">
       <div class="stat">
-        <div class="stat-title">{% trans "Organisation" %}</div>
+        <div class="stat-title">{% trans "Shared with" %}</div>
         <div class="stat-value text-2xl">
           {% if dataset.organization %}
             {{ dataset.organization.name }}
-          {% else %}
+          {% elif dataset.team %}
+            {{ dataset.team.name }}
+          {% elif dataset.is_global %}
             <span class="text-gray-400">{% trans "Global" %}</span>
+          {% else %}
+            <span class="text-gray-400">{% trans "Personal" %}</span>
           {% endif %}
         </div>
         {% if dataset.created_by %}

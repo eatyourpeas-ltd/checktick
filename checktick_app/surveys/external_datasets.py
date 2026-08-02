@@ -70,7 +70,7 @@ class DatasetFetchError(Exception):
     pass
 
 
-def get_available_datasets(organization=None) -> dict[str, str]:
+def get_available_datasets(organization=None, team=None, user=None) -> dict[str, str]:
     """
     Return dictionary of available dataset keys and display names.
 
@@ -78,7 +78,9 @@ def get_available_datasets(organization=None) -> dict[str, str]:
     then adds any hardcoded datasets not yet in DB.
 
     Args:
-        organization: Optional organization to filter custom datasets
+        organization: Optional organization to include that org's datasets
+        team: Optional team to include that team's shared datasets
+        user: Optional user to include their personal datasets
 
     Returns:
         Dict of {key: name} for available datasets
@@ -88,15 +90,17 @@ def get_available_datasets(organization=None) -> dict[str, str]:
     datasets = {}
 
     # Get datasets from database
-    # Include: global datasets + org-specific datasets (if org provided)
+    # Include: global datasets + org/team-specific + user's personal datasets
     qs = DataSet.objects.filter(is_active=True)
 
+    scope_q = Q(is_global=True)
     if organization:
-        # Global datasets OR org-specific datasets
-        qs = qs.filter(Q(is_global=True) | Q(organization=organization))
-    else:
-        # Only global datasets if no org context
-        qs = qs.filter(is_global=True)
+        scope_q |= Q(organization=organization)
+    if team:
+        scope_q |= Q(team=team)
+    if user is not None and getattr(user, "is_authenticated", False):
+        scope_q |= Q(created_by=user, organization__isnull=True, team__isnull=True)
+    qs = qs.filter(scope_q)
 
     for dataset in qs:
         datasets[dataset.key] = dataset.name

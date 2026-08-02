@@ -199,7 +199,7 @@ Consider publishing when you've created a dataset that:
 1. Create and refine your dataset
 2. Add descriptive tags for discovery
 3. Write a clear description explaining the use case
-4. Click **"Publish Globally"**
+4. Contact the CheckTick team (or open a GitHub issue) to request global publication — publishing is currently performed by platform administrators
 
 **What happens:**
 
@@ -237,28 +237,34 @@ Tags help organise and find datasets quickly.
 
 ## Permissions
 
-| Action                 | Individual Users | Org VIEWER   | Org CREATOR/ADMIN |
-| ---------------------- | ---------------- | ------------ | ----------------- |
-| View global datasets   | ✅               | ✅           | ✅                |
-| View org datasets      | ❌               | ✅ (own org) | ✅ (own org)      |
-| Create datasets        | ✅\*             | ❌           | ✅                |
-| Edit own datasets      | ✅               | ❌           | ✅ (own org)      |
-| Delete own datasets    | ✅\*\*           | ❌           | ✅ (own org)\*\*  |
-| Create custom versions | ✅\*             | ❌           | ✅                |
-| Snapshot SNOMED sets   | ✅\*             | ❌           | ✅                |
-| Publish globally       | ✅\*             | ❌           | ✅ (own org)      |
+| Action                 | FREE Individual | PRO+ Individual | Team VIEWER | Team CREATOR/ADMIN | Org VIEWER / DATA_CUSTODIAN | Org CREATOR/ADMIN |
+| ---------------------- | --------------- | --------------- | ----------- | ------------------ | --------------------------- | ----------------- |
+| View global datasets   | ✅              | ✅              | ✅          | ✅                 | ✅                          | ✅                |
+| View team datasets     | ❌              | ❌              | ✅ (own team) | ✅ (own team)    | ✅ (own teams)              | ✅ (own teams)    |
+| View org datasets      | ❌              | ❌              | ❌          | ❌                 | ✅ (own org)                | ✅ (own org)      |
+| Create datasets        | ❌\*            | ✅              | ❌          | ✅                 | ❌                          | ✅                |
+| Share with team        | ❌              | ❌              | ❌          | ✅ (own team)      | ❌                          | ❌                |
+| Edit own datasets      | ❌\*            | ✅              | ❌          | ✅ (own team)      | ❌                          | ✅ (own org)      |
+| Delete own datasets    | ✅\*\*          | ✅\*\*          | ❌          | ✅ (own team)\*\*  | ❌                          | ✅ (own org)\*\*  |
+| Create custom versions | ❌\*            | ✅              | ❌          | ✅                 | ❌                          | ✅                |
+| Snapshot SNOMED sets   | ❌\*            | ✅              | ❌          | ✅                 | ❌                          | ✅                |
+| Publish globally       | Via platform admin | Via platform admin | ❌    | Via platform admin | ❌                          | Via platform admin |
 
-\*Individual users can create, customize, and publish datasets. In future releases, this will require a pro account.
+\*Dataset creation requires a **Pro or higher** tier for individual users. If a Pro user downgrades to FREE, their existing datasets are **frozen**: they remain active and usable in surveys (respondents are unaffected), and the owner can still view and delete them, but cannot edit them or create new ones until they upgrade again.
 
 \*\*Cannot delete if published with dependents from other organisations
 
+Global publication is currently performed by platform administrators (Django admin action) on request — there is no self-service publish button in the web app or API.
+
 **Role clarifications:**
 
-- **VIEWER**: Read-only access - can view datasets but cannot create or modify
+- **VIEWER**: Read-only access - can view and use datasets but cannot create or modify
 - **DATA_CUSTODIAN**: Export/recovery role - can view datasets but cannot create or modify
-- **CREATOR/ADMIN**: Full dataset management capabilities for their organisation
+- **CREATOR/ADMIN**: Full dataset management capabilities for their team or organisation
 
-Snapshotting a SNOMED CT dataset and cloning (“Create Custom Version”) both create a new dataset, so they follow the same permission rules as **Create datasets**. Snapshots created by an organisation ADMIN/CREATOR are assigned to their organisation; snapshots by individual users are personal datasets.
+**Dataset scopes:** a dataset is **personal** (visible only to its creator), **team-shared** (visible to all members of one team), **organisation-shared** (visible to all members of one organisation), or **global**. A dataset belongs to at most one team or organisation, not both. Org members who are also in teams see both their org's and their teams' datasets.
+
+Snapshotting a SNOMED CT dataset and cloning (“Create Custom Version”) both create a new dataset, so they follow the same permission rules as **Create datasets**. Snapshots created by an organisation ADMIN/CREATOR are assigned to their organisation; team ADMIN/CREATOR snapshots are shared with their team; individual users' snapshots are personal datasets.
 
 ## Related Documentation
 

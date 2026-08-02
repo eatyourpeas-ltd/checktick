@@ -4,7 +4,9 @@ category: api
 priority: 3
 ---
 
-This document covers the Dataset API endpoints for programmatic access to dataset management.
+This document covers the Dataset API endpoints for programmatic read access to datasets.
+
+> **The dataset API is read-only.** Creating, editing, customising, snapshotting, publishing, and deleting datasets are performed through the web app (see [Datasets and Dropdowns](/docs/datasets-and-dropdowns/)). Non-safe HTTP methods (POST/PATCH/PUT/DELETE) are rejected for all dataset endpoints.
 
 ## Base URL
 
@@ -134,168 +136,6 @@ curl https://checktick.example.com/api/datasets/main_specialty_code/
 }
 ```
 
-### Create Custom Version
-
-Create a customized copy of a global dataset.
-
-```http
-POST /api/datasets/{key}/create-custom/
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "name": "Our Custom Hospital List",
-  "organization": 123
-}
-```
-
-**Requirements:**
-
-- User must be ADMIN or CREATOR in the organization
-- Source dataset must be global (is_global=True)
-
-**Example:**
-
-```bash
-curl -X POST https://checktick.example.com/api/datasets/hospitals_england_wales/create-custom/ \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "London Hospitals (Custom)",
-    "organization": 5
-  }'
-```
-
-**Response:**
-
-```json
-{
-  "key": "hospitals_england_wales_custom_5_1731744000",
-  "name": "London Hospitals (Custom)",
-  "description": "Custom version of Hospitals (England & Wales)",
-  "category": "user_created",
-  "source_type": "manual",
-  "is_custom": true,
-  "is_global": false,
-  "parent": "hospitals_england_wales",
-  "parent_name": "Hospitals (England & Wales)",
-  "organization": 5,
-  "organization_name": "Our Organisation",
-  "tags": ["hospitals"],
-  "options": {
-    "RXX01": "Guy's Hospital",
-    "RXX02": "Royal London Hospital",
-    ...
-  },
-  "is_editable": true
-}
-```
-
-You can now edit this dataset without affecting the original.
-
-### Update Dataset
-
-Update a dataset you own (organization-owned or user-created).
-
-```http
-PATCH /api/datasets/{key}/
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "name": "Updated Name",
-  "description": "Updated description",
-  "tags": ["new", "tags"],
-  "options": {
-    "key1": "value1",
-    "key2": "value2"
-  }
-}
-```
-
-**Restrictions:**
-
-- Cannot update NHS DD datasets (read-only)
-- Can only update datasets your organisation owns
-- User must be ADMIN or CREATOR
-
-**Example:**
-
-```bash
-curl -X PATCH https://checktick.example.com/api/datasets/our_custom_list/ \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "options": {
-      "RXX01": "Guy'\''s Hospital",
-      "RXX03": "St Thomas'\'' Hospital"
-    }
-  }'
-```
-
-### Publish Dataset Globally
-
-Make an organisation-owned dataset available to all users.
-
-```http
-POST /api/datasets/{key}/publish/
-Authorization: Bearer <token>
-```
-
-**Requirements:**
-
-- User must be ADMIN or CREATOR in the dataset's organisation
-- Dataset must be organisation-owned (not already global)
-- Cannot publish NHS DD datasets
-
-**Example:**
-
-```bash
-curl -X POST https://checktick.example.com/api/datasets/our_specialty_codes/publish/ \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
-**Response:**
-
-```json
-{
-  "key": "our_specialty_codes",
-  "name": "Our Specialty Codes",
-  "is_global": true,
-  "published_at": "2024-11-16T14:30:00Z",
-  "organization": 5,
-  "organization_name": "Our Organisation"
-}
-```
-
-Once published:
-
-- Dataset becomes visible to all users
-- Organization retains attribution and edit rights
-- Cannot be deleted while others have created custom versions from it
-
-### Delete Dataset
-
-Soft-delete a dataset you own.
-
-```http
-DELETE /api/datasets/{key}/
-Authorization: Bearer <token>
-```
-
-**Restrictions:**
-
-- Cannot delete NHS DD datasets
-- Cannot delete published datasets if others have created custom versions from them
-- User must be ADMIN or CREATOR
-
-**Example:**
-
-```bash
-curl -X DELETE https://checktick.example.com/api/datasets/old_custom_list/ \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
 ### Get Available Tags
 
 Get all tags with usage counts for filtering.
@@ -324,24 +164,19 @@ curl https://checktick.example.com/api/datasets/available-tags/
 
 ## Permissions Summary
 
-| Endpoint | Anonymous | Individual User | Org VIEWER | Org CREATOR/ADMIN |
-|----------|-----------|-----------------|------------|-------------------|
-| List datasets | ❌ | Global + own | Global + org | Global + org |
-| Get dataset detail | ❌ | Global + own | Global + org | Global + org |
+| Endpoint | Anonymous | Individual User | Team Member | Org Member |
+|----------|-----------|-----------------|-------------|------------|
+| List datasets | ❌ | Global + personal | Global + personal + own teams | Global + personal + own teams + own org |
+| Get dataset detail | ❌ | Global + personal | Global + personal + own teams | Global + personal + own teams + own org |
 | Available tags | ❌ | ✅ | ✅ | ✅ |
-| Create dataset | ❌ | ✅ | ❌ | ✅ (for org) |
-| Create custom version | ❌ | ✅ | ❌ | ✅ |
-| Update dataset | ❌ | ✅ (own only) | ❌ | ✅ (own org) |
-| Publish dataset | ❌ | ✅ (own only) | ❌ | ✅ (own org) |
-| Delete dataset | ❌ | ✅ (own only) | ❌ | ✅ (own org) |
 
 **Role Definitions:**
 
-- **Individual User**: Authenticated user not part of any organisation
-- **Org VIEWER**: Read-only access to organisation datasets
-- **Org CREATOR/ADMIN**: Full dataset management for their organisation
+- **Individual User**: Authenticated user not part of any organisation or team
+- **Team Member**: Sees datasets shared with their teams (all roles); only team ADMIN/CREATOR can manage them (via the web app)
+- **Org Member**: Sees their organisation's datasets (all roles); only org ADMIN/CREATOR can manage them (via the web app)
 
-**Note:** Dataset creation and management is not subject to tier limits. All authenticated users can create custom datasets for their own use.
+Write operations (create, edit, clone, snapshot, delete) are web-app only — see the [dataset permissions table](/docs/datasets/) for who can do what, including the Pro-tier requirement for individual users. The read-only serializer includes `is_editable` and `can_publish` fields reflecting the current user's web-app permissions for each dataset, plus `team` / `team_name` for team-shared datasets.
 
 ## Error Responses
 
@@ -357,11 +192,11 @@ Invalid data or business logic violation:
 
 ### 403 Forbidden
 
-Insufficient permissions:
+Unauthenticated request, or a write method (the dataset API is read-only):
 
 ```json
 {
-  "detail": "You do not have permission to modify NHS Data Dictionary datasets"
+  "detail": "Authentication credentials were not provided."
 }
 ```
 
@@ -377,61 +212,23 @@ Dataset doesn't exist or isn't accessible:
 
 ## Examples
 
-### Create a Custom Regional Hospital List
+### Find Paediatric Datasets
 
 ```bash
-# 1. Find the global hospitals dataset
-curl https://checktick.example.com/api/datasets/hospitals_england_wales/
-
-# 2. Create a custom version
-curl -X POST https://checktick.example.com/api/datasets/hospitals_england_wales/create-custom/ \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "North West Hospitals",
-    "organization": 5
-  }'
-
-# Response includes new key: hospitals_england_wales_custom_5_1731744000
-
-# 3. Update to include only North West hospitals
-curl -X PATCH https://checktick.example.com/api/datasets/hospitals_england_wales_custom_5_1731744000/ \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "options": {
-      "RW3XX": "Royal Manchester Children'\''s Hospital",
-      "RW6XX": "Alder Hey Children'\''s Hospital"
-    },
-    "tags": ["hospitals", "northwest", "paediatric"]
-  }'
-```
-
-### Publish a Curated List
-
-```bash
-# 1. Create your dataset
-curl -X POST https://checktick.example.com/api/datasets/ \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "key": "specialty_codes_cardiology",
-    "name": "Cardiology Specialty Codes",
-    "category": "user_created",
-    "description": "Curated list of cardiology-related specialty codes",
-    "tags": ["cardiology", "specialty", "curated"],
-    "options": {
-      "320": "Cardiology",
-      "321": "Paediatric Cardiology",
-      "325": "Cardiac Surgery"
-    },
-    "organization": 5
-  }'
-
-# 2. Publish globally to share with community
-curl -X POST https://checktick.example.com/api/datasets/specialty_codes_cardiology/publish/ \
+# Filter by tag and search
+curl "https://checktick.example.com/api/datasets/?tags=paediatric&search=hospital" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
+
+### Fetch a Dataset's Options
+
+```bash
+# Retrieve the full option list for a dataset by key
+curl https://checktick.example.com/api/datasets/hospitals_england_wales/ \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+To create, customise, or manage datasets, use the web app: navigate to **Datasets** from the main menu. See [Datasets and Dropdowns](/docs/datasets-and-dropdowns/).
 
 ## Related Documentation
 

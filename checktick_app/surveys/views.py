@@ -6767,7 +6767,11 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
         "professional_ods_on": professional_ods_on,
         "professional_ods_pairs": professional_ods_pairs,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
-        "available_datasets": get_available_datasets(organization=survey.organization),
+        "available_datasets": get_available_datasets(
+            organization=survey.organization,
+            team=survey.team,
+            user=request.user,
+        ),
         "snomed_available": snomed_available,
         "snomed_datasets_meta": snomed_datasets_meta,
     }
@@ -6901,12 +6905,12 @@ def builder_question_create(request: HttpRequest, slug: str) -> HttpResponse:
     # Look up dataset if provided (with access control)
     dataset = None
     if dataset_key:
-        from django.db.models import Q
 
         from .models import DataSet
+        from .permissions import survey_dataset_scope_q
 
         dataset = DataSet.objects.filter(
-            Q(is_global=True) | Q(organization=survey.organization),
+            survey_dataset_scope_q(survey, user=request.user),
             key=dataset_key,
             is_active=True,
         ).first()
@@ -7086,12 +7090,12 @@ def builder_group_question_create(
     # Look up dataset if provided (with access control)
     dataset = None
     if dataset_key:
-        from django.db.models import Q
 
         from .models import DataSet
+        from .permissions import survey_dataset_scope_q
 
         dataset = DataSet.objects.filter(
-            Q(is_global=True) | Q(organization=survey.organization),
+            survey_dataset_scope_q(survey, user=request.user),
             key=dataset_key,
             is_active=True,
         ).first()
@@ -7468,12 +7472,12 @@ def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResp
 
     # Look up dataset if provided (with access control)
     if dataset_key:
-        from django.db.models import Q
 
         from .models import DataSet
+        from .permissions import survey_dataset_scope_q
 
         q.dataset = DataSet.objects.filter(
-            Q(is_global=True) | Q(organization=survey.organization),
+            survey_dataset_scope_q(survey, user=request.user),
             key=dataset_key,
             is_active=True,
         ).first()
@@ -7507,12 +7511,12 @@ def builder_group_question_edit(
 
     # Look up dataset if provided (with access control)
     if dataset_key:
-        from django.db.models import Q
 
         from .models import DataSet
+        from .permissions import survey_dataset_scope_q
 
         q.dataset = DataSet.objects.filter(
-            Q(is_global=True) | Q(organization=survey.organization),
+            survey_dataset_scope_q(survey, user=request.user),
             key=dataset_key,
             is_active=True,
         ).first()
@@ -7900,7 +7904,11 @@ def _inject_datasets_context(session: "LLMConversationSession", survey: Survey) 
     This gives the AI knowledge of the user's accessible datasets so it can emit
     correct `dataset: <key>` lines when generating dropdown questions.
     """
-    available = get_available_datasets(organization=survey.organization)
+    available = get_available_datasets(
+        organization=survey.organization,
+        team=survey.team,
+        user=survey.owner,
+    )
     if not available:
         return
     lines = [f"  - {key}: {name}" for key, name in sorted(available.items())]
@@ -8429,13 +8437,14 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                         dataset = None
                         dataset_key = q.get("dataset_key")
                         if dataset_key:
-                            from django.db.models import Q as _Q
 
                             from .models import DataSet
+                            from .permissions import (
+                                survey_dataset_scope_q as _scope_q,
+                            )
 
                             dataset = DataSet.objects.filter(
-                                _Q(is_global=True)
-                                | _Q(organization=survey.organization),
+                                _scope_q(survey, user=request.user),
                                 key=dataset_key,
                                 is_active=True,
                             ).first()
@@ -8917,18 +8926,15 @@ def dataset_list(request: HttpRequest) -> HttpResponse:
 
     user = request.user
 
-    # Get organizations where user is a member
-    user_orgs = Organization.objects.filter(memberships__user=user)
+    # Build base queryset: global + org + team + personal datasets
+    from .permissions import dataset_visibility_q
 
-    # Build base queryset: global datasets + datasets from user's organizations + individual user datasets
     base_datasets = (
         DataSet.objects.filter(
-            Q(is_global=True)
-            | Q(organization__in=user_orgs)
-            | Q(created_by=user, organization__isnull=True),
+            dataset_visibility_q(user),
             is_active=True,
         )
-        .select_related("organization", "created_by", "parent")
+        .select_related("organization", "team", "created_by", "parent")
         .distinct()
     )
 
@@ -9030,22 +9036,24 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
     logger_detail = logging.getLogger(__name__)
     user = request.user
 
-    # Get user's organizations
-    user_orgs = Organization.objects.filter(memberships__user=user)
+    from .permissions import can_delete_dataset, dataset_visibility_q
 
     # Get dataset and check access
     dataset = get_object_or_404(
         DataSet.objects.filter(
-            Q(is_global=True)
-            | Q(organization__in=user_orgs)
-            | Q(created_by=user, organization__isnull=True),
+            dataset_visibility_q(user),
             is_active=True,
-        ).select_related("organization", "created_by", "parent"),
+        )
+        .select_related("organization", "team", "created_by", "parent")
+        .distinct(),
         id=dataset_id,
     )
 
     # Check if user can edit this dataset
     user_can_edit = can_edit_dataset(user, dataset)
+
+    # Deletion is allowed for creators even when tier-frozen (downgraded)
+    user_can_delete = can_delete_dataset(user, dataset)
 
     # Whether the user may create datasets (gates snapshot/clone buttons)
     user_can_create = can_create_datasets(user)
@@ -9084,6 +9092,7 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
         {
             "dataset": dataset,
             "can_edit": user_can_edit,
+            "can_delete": user_can_delete,
             "can_create": user_can_create,
             "questions_using": questions_using,
             "snomed_options": snomed_options,
@@ -9097,6 +9106,8 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 def dataset_create(request: HttpRequest) -> HttpResponse:
     """Create a new dataset."""
+    from .permissions import get_dataset_shareable_teams
+
     require_can_create_datasets(request.user)
 
     # Get organizations where user is ADMIN or CREATOR
@@ -9108,13 +9119,25 @@ def dataset_create(request: HttpRequest) -> HttpResponse:
         ],
     )
 
+    # Teams the user may share a dataset with (ADMIN/CREATOR role)
+    user_teams = get_dataset_shareable_teams(request.user)
+
     if request.method == "POST":
         # Extract form data
         key = request.POST.get("key", "").strip()
         name = request.POST.get("name", "").strip()
         description = request.POST.get("description", "").strip()
         tags_text = request.POST.get("tags", "").strip()
+        # Single "share with" choice: '', 'org:<id>' or 'team:<id>'
+        # (legacy 'organization' field still accepted for API/backwards compat)
+        share_with = request.POST.get("share_with", "").strip()
         organization_id = request.POST.get("organization", "").strip()
+        team_id = ""
+        if share_with.startswith("org:"):
+            organization_id = share_with[4:]
+        elif share_with.startswith("team:"):
+            team_id = share_with[5:]
+            organization_id = ""
         options_text = request.POST.get("options", "").strip()
 
         # All user-created datasets have these defaults
@@ -9179,6 +9202,16 @@ def dataset_create(request: HttpRequest) -> HttpResponse:
                     )
             except Organization.DoesNotExist:
                 errors.append("Invalid organization selected")
+
+        # Handle team sharing - only teams where user is ADMIN/CREATOR
+        team = None
+        if team_id:
+            try:
+                team = Team.objects.get(id=team_id)
+                if not user_teams.filter(id=team.id).exists():
+                    errors.append("You don't have permission in the selected team")
+            except (Team.DoesNotExist, ValueError):
+                errors.append("Invalid team selected")
 
         # Parse options intelligently
         options = []
@@ -9248,6 +9281,7 @@ def dataset_create(request: HttpRequest) -> HttpResponse:
                 "surveys/dataset_form.html",
                 {
                     "organizations": user_orgs,
+                    "teams": user_teams,
                     "form_data": request.POST,
                     "is_create": True,
                 },
@@ -9261,6 +9295,7 @@ def dataset_create(request: HttpRequest) -> HttpResponse:
             category=category,
             source_type=source_type,
             organization=org,  # Can be None for individual users
+            team=team,  # Optional team sharing (mutually exclusive with org)
             is_global=False,  # Regular users cannot create global datasets
             options=options,
             tags=tags,
@@ -9277,15 +9312,18 @@ def dataset_create(request: HttpRequest) -> HttpResponse:
 
     if clone_from_id:
         try:
-            # Get the source dataset to clone from
-            all_user_orgs = Organization.objects.filter(memberships__user=request.user)
-            clone_source = DataSet.objects.filter(
-                Q(is_global=True)
-                | Q(organization__in=all_user_orgs)
-                | Q(created_by=request.user, organization__isnull=True),
-                is_active=True,
-                id=clone_from_id,
-            ).first()
+            # Get the source dataset to clone from (any dataset visible to the user)
+            from .permissions import dataset_visibility_q
+
+            clone_source = (
+                DataSet.objects.filter(
+                    dataset_visibility_q(request.user),
+                    is_active=True,
+                    id=clone_from_id,
+                )
+                .distinct()
+                .first()
+            )
 
             if clone_source:
                 # Pre-fill form with source dataset data
@@ -9308,6 +9346,7 @@ def dataset_create(request: HttpRequest) -> HttpResponse:
         "surveys/dataset_form.html",
         {
             "organizations": user_orgs,
+            "teams": user_teams,
             "is_create": True,
             "clone_source": clone_source,
             "form_data": initial_data,
@@ -9331,14 +9370,13 @@ def dataset_edit(request: HttpRequest, dataset_id: int) -> HttpResponse:
     )
 
     # Get dataset - check if accessible first
-    all_user_orgs = Organization.objects.filter(memberships__user=user)
+    from .permissions import dataset_visibility_q
+
     dataset = get_object_or_404(
         DataSet.objects.filter(
-            Q(is_global=True)
-            | Q(organization__in=all_user_orgs)
-            | Q(created_by=user, organization__isnull=True),
+            dataset_visibility_q(user),
             is_active=True,
-        ),
+        ).distinct(),
         id=dataset_id,
     )
 
@@ -9481,21 +9519,22 @@ def dataset_edit(request: HttpRequest, dataset_id: int) -> HttpResponse:
 @require_http_methods(["POST"])
 def dataset_delete(request: HttpRequest, dataset_id: int) -> HttpResponse:
     """Soft delete a dataset (set is_active=False)."""
+    from .permissions import dataset_visibility_q, require_can_delete_dataset
+
     user = request.user
 
     # Get dataset - check if accessible first
-    all_user_orgs = Organization.objects.filter(memberships__user=user)
     dataset = get_object_or_404(
         DataSet.objects.filter(
-            Q(is_global=True)
-            | Q(organization__in=all_user_orgs)
-            | Q(created_by=user, organization__isnull=True),
+            dataset_visibility_q(user),
             is_active=True,
-        ),
+        ).distinct(),
         id=dataset_id,
     )
 
-    require_can_edit_dataset(user, dataset)
+    # Deletion uses its own permission: creators keep delete rights even when
+    # tier-frozen (downgraded), unlike editing.
+    require_can_delete_dataset(user, dataset)
 
     # Soft delete
     dataset.is_active = False
@@ -9560,6 +9599,7 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
     """
     import uuid
 
+    from .permissions import dataset_visibility_q, get_dataset_shareable_teams
     from .snomed_resolver import (
         SnomedUnavailableError,
         get_options as snomed_get_options,
@@ -9568,19 +9608,16 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
 
     user = request.user
     # Snapshotting creates a new dataset, so it requires the same permission
-    # as dataset_create (org VIEWERs / DATA_CUSTODIANs cannot create datasets).
+    # as dataset_create (org VIEWERs / DATA_CUSTODIANs and FREE-tier
+    # individual users cannot create datasets).
     require_can_create_datasets(user)
-
-    user_orgs = Organization.objects.filter(memberships__user=user)
 
     dataset = get_object_or_404(
         DataSet.objects.filter(
-            Q(is_global=True)
-            | Q(organization__in=user_orgs)
-            | Q(created_by=user, organization__isnull=True),
+            dataset_visibility_q(user),
             is_active=True,
             category="snomed",
-        ),
+        ).distinct(),
         id=dataset_id,
     )
 
@@ -9599,9 +9636,9 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
     # Convert live SNOMED options to stable key/value mapping for the snapshot.
     options_dict: dict[str, str] = options_as_dict(raw_options)
 
-    # Determine organisation for the snapshot: only assign to an org where the
-    # user can create datasets (ADMIN/CREATOR), mirroring dataset_create.
-    # Otherwise the snapshot is a personal dataset.
+    # Determine scope for the snapshot, mirroring dataset_create:
+    # prefer an org where the user is ADMIN/CREATOR, then a team where the
+    # user is ADMIN/CREATOR, otherwise a personal dataset.
     org = Organization.objects.filter(
         memberships__user=user,
         memberships__role__in=[
@@ -9609,6 +9646,7 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
             OrganizationMembership.Role.CREATOR,
         ],
     ).first()
+    team = None if org else get_dataset_shareable_teams(user).first()
 
     snapshot_key = f"snomed_snapshot_{dataset.key}_{uuid.uuid4().hex[:8]}"
     snapshot = DataSet.objects.create(
@@ -9625,6 +9663,7 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
         tags=dataset.tags or [],
         parent=dataset,
         organization=org,
+        team=team,
         created_by=user,
         is_global=False,
         is_active=True,
@@ -9644,7 +9683,6 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
 def published_templates_list(request):
     """Browse published question group templates."""
     from django.core.paginator import Paginator
-    from django.db.models import Q
 
     user = request.user
 

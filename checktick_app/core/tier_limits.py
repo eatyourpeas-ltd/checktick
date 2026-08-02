@@ -59,6 +59,9 @@ class TierLimits:
     # Patient data and encryption
     can_collect_patient_data: bool  # FREE tier cannot collect patient data
 
+    # Datasets
+    can_create_datasets: bool  # FREE tier cannot create custom datasets
+
     # Support level
     support_level: str  # "community", "email", "priority"
 
@@ -84,6 +87,7 @@ TIER_LIMITS_CONFIG = {
         can_export_data=True,  # Can export own data
         can_use_webhooks=False,
         can_collect_patient_data=False,  # FREE tier cannot use patient_details_encrypted templates (but all surveys are encrypted)
+        can_create_datasets=False,  # FREE tier cannot create custom datasets
         support_level="community",
     ),
     "pro": TierLimits(
@@ -103,6 +107,7 @@ TIER_LIMITS_CONFIG = {
         can_export_data=True,
         can_use_webhooks=False,
         can_collect_patient_data=True,
+        can_create_datasets=True,
         support_level="email",
     ),
     "team_small": TierLimits(
@@ -122,6 +127,7 @@ TIER_LIMITS_CONFIG = {
         can_export_data=True,
         can_use_webhooks=False,
         can_collect_patient_data=True,
+        can_create_datasets=True,
         support_level="email",
     ),
     "team_medium": TierLimits(
@@ -141,6 +147,7 @@ TIER_LIMITS_CONFIG = {
         can_export_data=True,
         can_use_webhooks=False,
         can_collect_patient_data=True,
+        can_create_datasets=True,
         support_level="email",
     ),
     "team_large": TierLimits(
@@ -160,6 +167,7 @@ TIER_LIMITS_CONFIG = {
         can_export_data=True,
         can_use_webhooks=False,
         can_collect_patient_data=True,
+        can_create_datasets=True,
         support_level="email",
     ),
     "organization": TierLimits(
@@ -179,6 +187,7 @@ TIER_LIMITS_CONFIG = {
         can_export_data=True,
         can_use_webhooks=True,
         can_collect_patient_data=True,
+        can_create_datasets=True,
         support_level="email",
     ),
     "enterprise": TierLimits(
@@ -201,6 +210,7 @@ TIER_LIMITS_CONFIG = {
         can_export_data=True,
         can_use_webhooks=True,
         can_collect_patient_data=True,
+        can_create_datasets=True,
         support_level="priority",
     ),
 }
@@ -452,6 +462,40 @@ def check_patient_data_permission(user) -> tuple[bool, str]:
     return True, ""
 
 
+def check_dataset_creation_permission(user) -> tuple[bool, str]:
+    """Check if user's tier allows creating custom datasets.
+
+    Args:
+        user: User object with profile
+
+    Returns:
+        (can_create, reason) - Boolean and error message if not allowed
+
+    Note:
+        This is the tier gate only. Role-based rules (org VIEWER /
+        DATA_CUSTODIAN cannot create datasets) are enforced separately in
+        ``surveys.permissions.can_create_datasets``.
+
+        Existing datasets created before a downgrade remain active and usable
+        in surveys; their owners can still view and delete them, but cannot
+        create new datasets or edit existing ones until they upgrade.
+    """
+    if not hasattr(user, "profile"):
+        return False, "User profile not found"
+
+    effective_tier = user.profile.get_effective_tier()
+    limits = get_tier_limits(effective_tier)
+
+    if not limits.can_create_datasets:
+        return False, (
+            "Creating custom datasets requires a paid subscription. "
+            f"Upgrade to Pro ({_tier_price_pounds('pro')}/mo) or higher. "
+            "Any datasets you already created remain usable in your surveys."
+        )
+
+    return True, ""
+
+
 def get_feature_availability(user) -> dict[str, Any]:
     """Get complete feature availability for a user.
 
@@ -515,6 +559,9 @@ def get_feature_availability(user) -> dict[str, Any]:
         },
         "patient_data": {
             "can_collect": limits.can_collect_patient_data,
+        },
+        "datasets": {
+            "can_create": limits.can_create_datasets,
         },
         "support": {
             "level": limits.support_level,

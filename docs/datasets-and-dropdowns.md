@@ -94,6 +94,12 @@ Use the search box to find datasets by name or description.
 
 ## Creating Custom Datasets
 
+> **Who can create datasets?** Individual users on a **Pro or higher** tier, team members with the **ADMIN** or **CREATOR** role, and organisation members with the **ADMIN** or **CREATOR** role. Read-only roles (**VIEWER**, **DATA_CUSTODIAN**) and FREE-tier individual users can browse and use datasets but cannot create, customise, or snapshot them. See the [permissions table](/docs/datasets/) for details.
+>
+> **Sharing:** when creating a dataset, choose **Personal** (only you), a **team** (visible to all team members), or an **organisation** (visible to all org members). A dataset can be shared with one team or one organisation, not both.
+>
+> **Downgrades:** if you downgrade from Pro to FREE, your existing datasets stay active and keep working in your surveys — you can still view and delete them, but you cannot edit them or create new ones until you upgrade again.
+
 ### Creating from Scratch
 
 1. Navigate to **Datasets** from the main menu
@@ -128,20 +134,26 @@ If a global dataset is _almost_ what you need but requires modifications:
 
 **Example**: Customize the NHS hospital list to only include hospitals in your region.
 
+### Snapshotting a SNOMED CT Dataset
+
+SNOMED CT datasets are fetched live from `snomed.db`, so their options can change when the terminology is updated. If you need a **frozen** copy:
+
+1. Open the SNOMED dataset
+2. Click **"Snapshot to Custom Dataset"** (shown in place of "Create Custom Version" for SNOMED datasets)
+3. A new custom dataset is created with the options fixed at snapshot time, linked back to the original refset
+
+Snapshots follow the same permission rules as creating datasets: if you're an organisation ADMIN or CREATOR the snapshot belongs to your organisation; individual users get a personal dataset.
+
 ## Publishing Your Datasets
 
-Once you've created a valuable dataset, consider sharing it with the community:
-
-1. Open your dataset
-2. Click **"Publish Globally"**
-3. Confirm publication
+Once you've created a valuable dataset, consider sharing it with the community. Global publication is currently handled by the platform administrators — contact the CheckTick team (or open a GitHub issue) to request that your dataset be published globally.
 
 ### ⚠️ Important Publishing Rules
 
 - **Cannot be deleted after publication** if others are using it
 - **Can still be updated** to fix errors or add options
 - **Organisation attribution** is preserved
-- Only **ADMIN** or **CREATOR** roles can publish
+- Only datasets owned by an **ADMIN** or **CREATOR** (or an individual user) are eligible
 
 Think carefully before publishing - is this dataset useful to others? Is it complete and accurate?
 
@@ -162,12 +174,11 @@ You can delete your unpublished datasets anytime. Published datasets can only be
 
 ## API Access
 
-Developers can access datasets programmatically through the API. See the [Dataset API Reference](/docs/api-datasets/) for full details on:
+Developers can read datasets programmatically through the API. The dataset API is **read-only** — creating and managing datasets is done through the web app. See the [Dataset API Reference](/docs/api-datasets/) for full details on:
 
-- Listing available datasets
-- Creating datasets via API
-- Updating dataset options
-- Publishing and managing datasets
+- Listing and searching available datasets
+- Fetching a dataset's options
+- Listing available tags
 
 ## Contributing to the Community
 
@@ -230,10 +241,10 @@ Write helpful descriptions that explain:
 A: Yes! That's one of the main benefits. Any changes to the dataset will automatically appear in all surveys using it.
 
 **Q: What happens if a global dataset gets updated?**
-A: Surveys using that dataset will automatically reflect the changes. If you need a frozen version, create a custom copy.
+A: Surveys using that dataset will automatically reflect the changes. If you need a frozen version, create a custom copy — or for SNOMED CT datasets, use **"Snapshot to Custom Dataset"**.
 
 **Q: Can I share datasets between organisations?**
-A: Not directly, but you can publish your dataset globally to make it available to everyone, or the other organisation can create their own custom version of your published dataset.
+A: Not directly, but you can request global publication of your dataset to make it available to everyone, or the other organisation can create their own custom version of your published dataset.
 
 **Q: How often are NHS DD datasets updated?**
 A: They're automatically synchronized on a scheduled basis (typically weekly). You can see the last sync date on each dataset's detail page.

@@ -4181,6 +4181,14 @@ class DataSet(models.Model):
         related_name="datasets",
         help_text="Organization that owns this dataset (null = global/platform-wide)",
     )
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="datasets",
+        help_text="Team this dataset is shared with (null = personal or org/global)",
+    )
     is_global = models.BooleanField(
         default=False,
         db_index=True,
@@ -4280,6 +4288,7 @@ class DataSet(models.Model):
         indexes = [
             models.Index(fields=["category", "is_active"]),
             models.Index(fields=["organization", "is_active"]),
+            models.Index(fields=["team", "is_active"]),
             models.Index(fields=["is_global", "is_active"]),
             models.Index(fields=["last_synced_at"]),
             models.Index(fields=["is_custom"]),
@@ -4300,6 +4309,14 @@ class DataSet(models.Model):
                     published_at__isnull=True,
                 ),
                 name="platform_global_datasets_no_org",
+            ),
+            # A dataset is scoped to at most one of organization or team
+            models.CheckConstraint(
+                condition=~models.Q(
+                    organization__isnull=False,
+                    team__isnull=False,
+                ),
+                name="dataset_org_or_team_not_both",
             ),
         ]
 

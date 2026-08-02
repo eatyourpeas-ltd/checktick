@@ -58,6 +58,7 @@ class DataSetSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(
         source="organization.name", read_only=True
     )
+    team_name = serializers.CharField(source="team.name", read_only=True)
     created_by_username = serializers.CharField(
         source="created_by.username", read_only=True
     )
@@ -86,6 +87,8 @@ class DataSetSerializer(serializers.ModelSerializer):
             "is_global",
             "organization",
             "organization_name",
+            "team",
+            "team_name",
             "parent",
             "parent_name",
             "options",
@@ -110,37 +113,25 @@ class DataSetSerializer(serializers.ModelSerializer):
             "version",
             "created_by_username",
             "organization_name",
+            "team_name",
             "parent_name",
             "is_editable",
             "can_publish",
         ]
 
     def get_is_editable(self, obj):
-        """Determine if current user can edit this dataset."""
+        """Determine if current user can edit this dataset.
+
+        Delegates to the canonical web permission so the API surface stays
+        consistent (covers org, team, personal, and tier-frozen datasets).
+        """
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False
 
-        # NHS DD datasets are never editable
-        if obj.category == "nhs_dd":
-            return False
+        from checktick_app.surveys.permissions import can_edit_dataset
 
-        # Global datasets without organization can only be edited by superusers
-        if obj.is_global and not obj.organization:
-            return request.user.is_superuser
-
-        # Organization datasets: check if user is admin or creator in that org
-        if obj.organization:
-            membership = OrganizationMembership.objects.filter(
-                organization=obj.organization, user=request.user
-            ).first()
-            if membership and membership.role in [
-                OrganizationMembership.Role.ADMIN,
-                OrganizationMembership.Role.CREATOR,
-            ]:
-                return True
-
-        return False
+        return can_edit_dataset(request.user, obj)
 
     def get_can_publish(self, obj):
         """Determine if current user can publish this dataset globally."""
@@ -359,18 +350,11 @@ class DataSetViewSet(viewsets.ReadOnlyModelViewSet):
         # Defence in depth: DataSetAccess already rejects anonymous callers,
         # but scope to global datasets here as well in case a future action
         # loosens the viewset-level permission.
-        if not user.is_authenticated:
-            queryset = queryset.filter(is_global=True)
-        else:
-            # Get user's organizations
-            user_orgs = Organization.objects.filter(memberships__user=user)
+        # Row-level scoping shared with the web views:
+        # global OR user's orgs OR user's teams OR personal datasets.
+        from checktick_app.surveys.permissions import dataset_visibility_q
 
-            # Filter: global OR in user's organizations OR created by user (individual datasets)
-            queryset = queryset.filter(
-                Q(is_global=True)
-                | Q(organization__in=user_orgs)
-                | Q(created_by=user, organization__isnull=True)
-            )
+        queryset = queryset.filter(dataset_visibility_q(user)).distinct()
 
         # Filter by tags if provided
         tags_param = self.request.query_params.get("tags")
