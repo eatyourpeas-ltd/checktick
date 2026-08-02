@@ -38,7 +38,7 @@ from django_ratelimit.decorators import ratelimit
 
 from checktick_app.context_processors import branding as platform_branding
 from checktick_app.core.decorators import email_confirmed_required
-from checktick_app.core.theme_utils import sanitize_font_family
+from checktick_app.core.theme_utils import is_safe_url, sanitize_font_family
 
 from .color import hex_to_oklch
 from .external_datasets import get_available_datasets
@@ -83,6 +83,24 @@ from .permissions import (
 from .utils import parse_datetime_aware, verify_key
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitise_brand_overrides(overrides: dict) -> dict:
+    """Return a copy of `overrides` with unsafe icon_url / font_css_url dropped.
+
+    Defence-in-depth read-time guard for survey.style fields rendered into
+    <img src>/<link href> attributes.  The write-time validator
+    (survey_style_update) is the primary defence, but values written via admin,
+    import, or legacy data could still reach templates, so we re-check here
+    (security-review F13).
+    """
+    out = dict(overrides)
+    for key in ("icon_url", "font_css_url"):
+        val = out.get(key)
+        if val and not is_safe_url(val):
+            out[key] = None
+    return out
+
 
 # Demographics field definitions: key -> display label
 DEMOGRAPHIC_FIELD_DEFS: dict[str, str] = {
@@ -1214,15 +1232,17 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
     show_professional_details = prof_group is not None and not has_professional_template
     # Style overrides
     style = survey.style or {}
-    brand_overrides = {
-        "title": style.get("title"),
-        "icon_url": style.get("icon_url"),
-        "theme_name": style.get("theme_name"),
-        "font_heading": style.get("font_heading"),
-        "font_body": style.get("font_body"),
-        "primary_hex": style.get("primary_color"),
-        "font_css_url": style.get("font_css_url"),
-    }
+    brand_overrides = _sanitise_brand_overrides(
+        {
+            "title": style.get("title"),
+            "icon_url": style.get("icon_url"),
+            "theme_name": style.get("theme_name"),
+            "font_heading": style.get("font_heading"),
+            "font_body": style.get("font_body"),
+            "primary_hex": style.get("primary_color"),
+            "font_css_url": style.get("font_css_url"),
+        }
+    )
 
     # Build branching configuration for client-side logic
     branching_config = _build_branching_config(qs)
@@ -1321,15 +1341,17 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         for q in qs
     )
     style = survey.style or {}
-    brand_overrides = {
-        "title": style.get("title"),
-        "icon_url": style.get("icon_url"),
-        "theme_name": style.get("theme_name"),
-        "font_heading": style.get("font_heading"),
-        "font_body": style.get("font_body"),
-        "primary_hex": style.get("primary_color"),
-        "font_css_url": style.get("font_css_url"),
-    }
+    brand_overrides = _sanitise_brand_overrides(
+        {
+            "title": style.get("title"),
+            "icon_url": style.get("icon_url"),
+            "theme_name": style.get("theme_name"),
+            "font_heading": style.get("font_heading"),
+            "font_body": style.get("font_body"),
+            "primary_hex": style.get("primary_color"),
+            "font_css_url": style.get("font_css_url"),
+        }
+    )
 
     # Build branching configuration for client-side logic
     branching_config = _build_branching_config(qs)
@@ -2357,15 +2379,17 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         style["theme_css_light"] = _sanitize_css(style.get("theme_css_light") or "")
         style["theme_css_dark"] = _sanitize_css(style.get("theme_css_dark") or "")
         survey.style = style  # mutate in-memory only; not saved
-    brand_overrides = {
-        "title": style.get("title"),
-        "icon_url": style.get("icon_url"),
-        "theme_name": style.get("theme_name"),
-        "font_heading": style.get("font_heading"),
-        "font_body": style.get("font_body"),
-        "primary_hex": style.get("primary_color"),
-        "font_css_url": style.get("font_css_url"),
-    }
+    brand_overrides = _sanitise_brand_overrides(
+        {
+            "title": style.get("title"),
+            "icon_url": style.get("icon_url"),
+            "theme_name": style.get("theme_name"),
+            "font_heading": style.get("font_heading"),
+            "font_body": style.get("font_body"),
+            "primary_hex": style.get("primary_color"),
+            "font_css_url": style.get("font_css_url"),
+        }
+    )
 
     # Compute response analytics for insights charts
     from .services.response_analytics import compute_response_analytics
@@ -4631,6 +4655,19 @@ def survey_style_update(request: HttpRequest, slug: str) -> HttpResponse:
                         "Font stylesheet URL must start with https:// or http://.",
                     )
                     return redirect("surveys:dashboard", slug=slug)
+                # Validate icon_url: only allow http://, https://, and relative
+                # paths starting with `/`.  Rejects javascript:, data:, file:,
+                # vbscript: and any other scheme that could be rendered in a
+                # src/href attribute (security-review F13).  Django's
+                # auto-escaping does not neutralise these schemes.
+                if key == "icon_url" and not val.lower().startswith(
+                    ("http://", "https://", "/")
+                ):
+                    messages.error(
+                        request,
+                        "Icon URL must start with https://, http://, or be a relative path.",
+                    )
+                    return redirect("surveys:dashboard", slug=slug)
                 style[key] = val
             elif key in style:
                 # allow clearing by leaving blank
@@ -4691,15 +4728,17 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
     groups = ordered + sorted(remaining, key=lambda g: ((g.name or "").lower(), g.id))
     # Apply style overrides so navigation reflects survey branding while managing groups
     style = survey.style or {}
-    brand_overrides = {
-        "title": style.get("title"),
-        "icon_url": style.get("icon_url"),
-        "theme_name": style.get("theme_name"),
-        "font_heading": style.get("font_heading"),
-        "font_body": style.get("font_body"),
-        "primary_hex": style.get("primary_color"),
-        "font_css_url": style.get("font_css_url"),
-    }
+    brand_overrides = _sanitise_brand_overrides(
+        {
+            "title": style.get("title"),
+            "icon_url": style.get("icon_url"),
+            "theme_name": style.get("theme_name"),
+            "font_heading": style.get("font_heading"),
+            "font_body": style.get("font_body"),
+            "primary_hex": style.get("primary_color"),
+            "font_css_url": style.get("font_css_url"),
+        }
+    )
     # Map groups to any repeats (collections) they participate in
     group_repeat_map: dict[int, list[CollectionDefinition]] = {}
     for item in CollectionItem.objects.select_related("collection", "group").filter(
@@ -6714,14 +6753,16 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
         for k, v in (professional_ods or {}).items()
     ]
     style = survey.style or {}
-    brand_overrides = {
-        "title": style.get("title"),
-        "icon_url": style.get("icon_url"),
-        "theme_name": style.get("theme_name"),
-        "font_heading": style.get("font_heading"),
-        "font_body": style.get("font_body"),
-        "primary": style.get("primary_color"),
-    }
+    brand_overrides = _sanitise_brand_overrides(
+        {
+            "title": style.get("title"),
+            "icon_url": style.get("icon_url"),
+            "theme_name": style.get("theme_name"),
+            "font_heading": style.get("font_heading"),
+            "font_body": style.get("font_body"),
+            "primary": style.get("primary_color"),
+        }
+    )
     can_edit = can_edit_survey(request.user, survey)
 
     # Check if user can collect patient data (FREE tier cannot)

@@ -1,6 +1,7 @@
 import logging
 import os
 from pathlib import Path
+import re
 import subprocess
 
 from django.conf import settings
@@ -33,7 +34,10 @@ try:
 except Exception:  # pragma: no cover - tolerate missing module during migrations
 
     def sanitize_css_block(css: str) -> str:  # type: ignore[misc]
-        return css.replace("<", "").replace(">", "")
+        css = css.replace("<", "").replace(">", "").replace("{", "").replace("}", "")
+        css = re.sub(r"url\s*\([^)]*\)?", "", css, flags=re.IGNORECASE)
+        css = re.sub(r"https?://\S*", "", css, flags=re.IGNORECASE)
+        return css
 
     def sanitize_font_family(val: str) -> str:  # type: ignore[misc]
         return val.replace("{", "").replace("}", "").replace(";", "")

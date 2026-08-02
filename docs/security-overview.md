@@ -171,7 +171,7 @@ Survey and organisation branding allows owners to supply custom CSS themes. Thre
 
 | Helper | Strips | Applied at |
 |--------|--------|-----------|
-| `sanitize_css_block(css)` | `<` `>` characters | Read-time before rendering theme blocks |
+| `sanitize_css_block(css)` | `<` `>` `{` `}` `url()` `http(s)://` | Read-time before rendering theme blocks |
 | `_sanitize_css_value(val)` | `<` `>` `{` `}` `;` `url()` `http(s)://` | Individual CSS property values |
 | `sanitize_font_family(val)` | `{` `}` `;` `url()` protocol prefixes | Font family strings at write-time |
 
@@ -182,6 +182,8 @@ Sanitization is applied at both **write time** (view layer, before storage) and 
 Survey question text, option labels, and group names are passed through `django.utils.html.strip_tags()` before storage so that HTML markup cannot be re-emitted via the `|safe` builder payload filter.
 
 Font CSS URL fields reject any value that does not begin with `http://` or `https://`, blocking `javascript:` and `data:` URI injection via `<link>` elements.
+
+Survey `icon_url` and platform `SiteBranding.icon_url` / `icon_url_dark` fields reject any value that does not begin with `http://`, `https://`, or `/` (relative path), blocking `javascript:`, `data:`, `file:`, and `vbscript:` URI injection via `<img src>` / `<link rel="icon">` elements. The same check is applied at read time in `_sanitise_brand_overrides` so legacy or admin-written values that bypass the write-time validator are still neutralised before reaching respondent-facing templates.
 
 ##### Survey Answer Storage
 
@@ -205,6 +207,8 @@ CSV formula injection (values beginning with `=`, `@`, `+`, `-`) is blocked at e
 | S13: Font CSS URL | `javascript:`/`data:` URI injection | Protocol allowlist in `survey_style_update` |
 | S14: Theme CSS in respondent views | CSS injection against anonymous respondents | `sanitize_css_block` in `survey_take`/`survey_detail` views |
 | S15: CSV formula injection | Spreadsheet formula execution | Formula prefix stripping in `_format_answer_for_export` |
+| F13: Survey `icon_url` | `javascript:`/`data:` URI in `<img src>` on respondent pages | Protocol allowlist at write-time + `_sanitise_brand_overrides` at read-time |
+| F16: `theme_css_*` `}` breakout | CSS rule injection → data exfiltration via `url()` | `sanitize_css_block` strips `{` `}` and `url()` references |
 
 ---
 
