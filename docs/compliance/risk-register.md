@@ -21,7 +21,7 @@ category: dspt-5-process-reviews
 | **R04** | Insider Threat (Staff Error) | Security | 2 | 3 | **6** | Annual NHS Training; Least Privilege access; Audit logs. | {{ siro_name }} |
 | **R05** | Loss of Staff Laptop | Physical | 2 | 3 | **6** | Full Disk Encryption; Remote wipe capability; No local DB. | {{ cto_name }} |
 | **R06** | Supply Chain: GoCardless Breach | Financial | 1 | 3 | **3** | No banking data stored locally; Rely on provider PCI-DSS. | {{ siro_name }} |
-| **R07** | Application-Layer Vulnerabilities (Aug 2026 review) | Security | 2 | 4 | **8** | 17 findings (F1–F17) identified in static review: 2 High, 6 Medium, 8 Low, 1 Info. F1, F2, F6, and F12 resolved on 01/08/2026 with regression tests; 13 findings remain open. Continue remediation via atomic PRs. See `security-review-august-2026.md`. | {{ cto_name }} |
+| **R07** | Application-Layer Vulnerabilities (Aug 2026 review) | Security | 1 | 4 | **4** | 18 findings (F1–F18) identified in static review: 2 High, 6 Medium, 9 Low, 1 Info. All 18 findings resolved (01–02/08/2026) with regression tests. See `security-review-august-2026.md` and `security-review-log.md`. | {{ cto_name }} |
 
 ## Risk Review Frequency
 
