@@ -36,7 +36,9 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 
+from checktick_app.context_processors import branding as platform_branding
 from checktick_app.core.decorators import email_confirmed_required
+from checktick_app.core.theme_utils import sanitize_font_family
 
 from .color import hex_to_oklch
 from .external_datasets import get_available_datasets
@@ -1257,17 +1259,21 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
             or getattr(settings, "BRAND_ICON_URL", "/static/favicon.ico"),
             "theme_name": brand_overrides.get("theme_name")
             or getattr(settings, "BRAND_THEME", "checktick"),
-            "font_heading": brand_overrides.get("font_heading")
-            or getattr(
-                settings,
-                "BRAND_FONT_HEADING",
-                "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+            "font_heading": sanitize_font_family(
+                brand_overrides.get("font_heading")
+                or getattr(
+                    settings,
+                    "BRAND_FONT_HEADING",
+                    "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+                )
             ),
-            "font_body": brand_overrides.get("font_body")
-            or getattr(
-                settings,
-                "BRAND_FONT_BODY",
-                "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
+            "font_body": sanitize_font_family(
+                brand_overrides.get("font_body")
+                or getattr(
+                    settings,
+                    "BRAND_FONT_BODY",
+                    "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
+                )
             ),
             "font_css_url": brand_overrides.get("font_css_url")
             or getattr(
@@ -1360,17 +1366,21 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
             or getattr(settings, "BRAND_ICON_URL", "/static/favicon.ico"),
             "theme_name": brand_overrides.get("theme_name")
             or getattr(settings, "BRAND_THEME", "checktick"),
-            "font_heading": brand_overrides.get("font_heading")
-            or getattr(
-                settings,
-                "BRAND_FONT_HEADING",
-                "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+            "font_heading": sanitize_font_family(
+                brand_overrides.get("font_heading")
+                or getattr(
+                    settings,
+                    "BRAND_FONT_HEADING",
+                    "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+                )
             ),
-            "font_body": brand_overrides.get("font_body")
-            or getattr(
-                settings,
-                "BRAND_FONT_BODY",
-                "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
+            "font_body": sanitize_font_family(
+                brand_overrides.get("font_body")
+                or getattr(
+                    settings,
+                    "BRAND_FONT_BODY",
+                    "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
+                )
             ),
             "font_css_url": brand_overrides.get("font_css_url")
             or getattr(
@@ -2414,31 +2424,16 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
     ) or brand_overrides.get("primary_hex"):
+        # Management pages always use platform fonts (heading/body/font CSS).
+        # Only non-font branding (title, icon, theme, primary colour) may be
+        # overridden per-survey; survey fonts apply on respondent-facing pages.
+        base_brand = platform_branding(request)["brand"]
         ctx["brand"] = {
-            "title": brand_overrides.get("title")
-            or getattr(settings, "BRAND_TITLE", "CheckTick"),
-            "icon_url": brand_overrides.get("icon_url")
-            or getattr(settings, "BRAND_ICON_URL", "/static/favicon.ico"),
+            **base_brand,
+            "title": brand_overrides.get("title") or base_brand["title"],
+            "icon_url": brand_overrides.get("icon_url") or base_brand["icon_url"],
             "theme_name": brand_overrides.get("theme_name")
-            or getattr(settings, "BRAND_THEME", "checktick"),
-            "font_heading": brand_overrides.get("font_heading")
-            or getattr(
-                settings,
-                "BRAND_FONT_HEADING",
-                "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
-            ),
-            "font_body": brand_overrides.get("font_body")
-            or getattr(
-                settings,
-                "BRAND_FONT_BODY",
-                "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
-            ),
-            "font_css_url": brand_overrides.get("font_css_url")
-            or getattr(
-                settings,
-                "BRAND_FONT_CSS_URL",
-                "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=Merriweather:wght@300;400;700&display=swap",
-            ),
+            or base_brand["theme_name"],
             "primary": hex_to_oklch(brand_overrides.get("primary_hex") or ""),
         }
     return render(request, "surveys/dashboard.html", ctx)
@@ -4769,31 +4764,16 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
     ) or brand_overrides.get("primary_hex"):
+        # Management pages always use platform fonts (heading/body/font CSS).
+        # Only non-font branding (title, icon, theme, primary colour) may be
+        # overridden per-survey; survey fonts apply on respondent-facing pages.
+        base_brand = platform_branding(request)["brand"]
         ctx["brand"] = {
-            "title": brand_overrides.get("title")
-            or getattr(settings, "BRAND_TITLE", "CheckTick"),
-            "icon_url": brand_overrides.get("icon_url")
-            or getattr(settings, "BRAND_ICON_URL", "/static/favicon.ico"),
+            **base_brand,
+            "title": brand_overrides.get("title") or base_brand["title"],
+            "icon_url": brand_overrides.get("icon_url") or base_brand["icon_url"],
             "theme_name": brand_overrides.get("theme_name")
-            or getattr(settings, "BRAND_THEME", "checktick"),
-            "font_heading": brand_overrides.get("font_heading")
-            or getattr(
-                settings,
-                "BRAND_FONT_HEADING",
-                "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
-            ),
-            "font_body": brand_overrides.get("font_body")
-            or getattr(
-                settings,
-                "BRAND_FONT_BODY",
-                "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
-            ),
-            "font_css_url": brand_overrides.get("font_css_url")
-            or getattr(
-                settings,
-                "BRAND_FONT_CSS_URL",
-                "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=Merriweather:wght@300;400;700&display=swap",
-            ),
+            or base_brand["theme_name"],
             "primary": hex_to_oklch(brand_overrides.get("primary_hex") or ""),
         }
     return render(request, "surveys/groups.html", ctx)
@@ -6794,30 +6774,16 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
         "snomed_datasets_meta": snomed_datasets_meta,
     }
     if any(brand_overrides.values()):
+        # Management pages always use platform fonts (heading/body/font CSS).
+        # Only non-font branding (title, icon, theme, primary colour) may be
+        # overridden per-survey; survey fonts apply on respondent-facing pages.
+        base_brand = platform_branding(request)["brand"]
         ctx["brand"] = {
-            "title": brand_overrides.get("title")
-            or getattr(settings, "BRAND_TITLE", "CheckTick"),
-            "icon_url": brand_overrides.get("icon_url")
-            or getattr(settings, "BRAND_ICON_URL", "/static/favicon.ico"),
+            **base_brand,
+            "title": brand_overrides.get("title") or base_brand["title"],
+            "icon_url": brand_overrides.get("icon_url") or base_brand["icon_url"],
             "theme_name": brand_overrides.get("theme_name")
-            or getattr(settings, "BRAND_THEME", "checktick"),
-            "font_heading": brand_overrides.get("font_heading")
-            or getattr(
-                settings,
-                "BRAND_FONT_HEADING",
-                "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
-            ),
-            "font_body": brand_overrides.get("font_body")
-            or getattr(
-                settings,
-                "BRAND_FONT_BODY",
-                "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
-            ),
-            "font_css_url": getattr(
-                settings,
-                "BRAND_FONT_CSS_URL",
-                "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=Merriweather:wght@300;400;700&display=swap",
-            ),
+            or base_brand["theme_name"],
             "primary": brand_overrides.get("primary"),
         }
     return render(
