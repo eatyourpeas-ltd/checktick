@@ -2432,8 +2432,7 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
             **base_brand,
             "title": brand_overrides.get("title") or base_brand["title"],
             "icon_url": brand_overrides.get("icon_url") or base_brand["icon_url"],
-            "theme_name": brand_overrides.get("theme_name")
-            or base_brand["theme_name"],
+            "theme_name": brand_overrides.get("theme_name") or base_brand["theme_name"],
             "primary": hex_to_oklch(brand_overrides.get("primary_hex") or ""),
         }
     return render(request, "surveys/dashboard.html", ctx)
@@ -4772,8 +4771,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             **base_brand,
             "title": brand_overrides.get("title") or base_brand["title"],
             "icon_url": brand_overrides.get("icon_url") or base_brand["icon_url"],
-            "theme_name": brand_overrides.get("theme_name")
-            or base_brand["theme_name"],
+            "theme_name": brand_overrides.get("theme_name") or base_brand["theme_name"],
             "primary": hex_to_oklch(brand_overrides.get("primary_hex") or ""),
         }
     return render(request, "surveys/groups.html", ctx)
@@ -6782,8 +6780,7 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
             **base_brand,
             "title": brand_overrides.get("title") or base_brand["title"],
             "icon_url": brand_overrides.get("icon_url") or base_brand["icon_url"],
-            "theme_name": brand_overrides.get("theme_name")
-            or base_brand["theme_name"],
+            "theme_name": brand_overrides.get("theme_name") or base_brand["theme_name"],
             "primary": brand_overrides.get("primary"),
         }
     return render(
