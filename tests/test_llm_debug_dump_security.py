@@ -14,11 +14,10 @@ Covers the three properties required by the fix:
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 import json
 import os
 import stat
-from datetime import datetime, timedelta
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -98,9 +97,7 @@ def test_dump_blocked_in_production_without_insecure_flag(
     assert not dump_dir.exists()
 
 
-def test_dump_allowed_in_production_with_insecure_flag(
-    monkeypatch, dump_dir, settings
-):
+def test_dump_allowed_in_production_with_insecure_flag(monkeypatch, dump_dir, settings):
     settings.ENVIRONMENT = "production"
     _set_env(monkeypatch, LLM_DEBUG_DUMP="1", LLM_DEBUG_DUMP_INSECURE="1")
 

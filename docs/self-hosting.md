@@ -601,7 +601,7 @@ LOG_FILE_PATH=/var/log/checktick/app.log
 
 ##### LLM debug dumps (development only)
 
-When using the AI Assistant integration you can enable an optional debug dump that writes the full LLM HTTP response to disk for diagnosis.
+When using the AI Assistant integration you can enable an optional debug dump that writes the LLM HTTP response to disk for diagnosis.
 
 Environment variable:
 
@@ -611,8 +611,14 @@ LLM_DEBUG_DUMP=1
 
 What it does:
 
-- Writes a JSON diagnostic file to `/tmp/llm_response_<timestamp>_<id>.json` when an LLM call produces unexpected or empty streaming output.
-- The dump contains the HTTP response body, headers, status code and a small payload preview to help triage provider-specific issues.
+- Writes a JSON diagnostic file to `<BASE_DIR>/logs/llm/llm_response_<timestamp>_<id>.json` when an LLM call produces a response (or, in the streaming path, unexpected/empty output).
+- The dump contains the HTTP response body, headers, and status code to help triage provider-specific issues. The outgoing `messages` payload (which contains user prompts) is **never** written to disk.
+- Files are written with mode `0o600` and the directory with mode `0o700`, so only the application user can read them.
+- Files older than 24 hours are pruned automatically on each dump write.
+
+Production gate:
+
+- In production (`ENVIRONMENT=production`), `LLM_DEBUG_DUMP=1` alone is a no-op. You must also set `LLM_DEBUG_DUMP_INSECURE=1` to acknowledge that response payloads will be written to disk. Each write then emits a `logger.warning` so the enablement is visible in logs.
 
 When to use:
 
@@ -620,15 +626,15 @@ When to use:
 
 Risks and mitigation:
 
-- Dumps may contain user-provided text and potentially sensitive information. Do NOT enable in production or leave enabled long-term.
-- After reproducing the issue, delete dump files from `/tmp` and remove the `LLM_DEBUG_DUMP` env var.
+- Dumps may contain model output that echoes user-supplied text. Do NOT leave enabled long-term, especially in production.
+- After reproducing the issue, remove the `LLM_DEBUG_DUMP` (and `LLM_DEBUG_DUMP_INSECURE`) env vars. Stale files older than 24h are pruned automatically; you can also clear the directory manually.
 
 Quick inspect/remove commands:
 
 ```bash
-ls -1 /tmp/llm_response_*.json | tail -n 20
-jq . /tmp/llm_response_<timestamp>_<id>.json
-rm /tmp/llm_response_*.json
+ls -1 logs/llm/llm_response_*.json | tail -n 20
+jq . logs/llm/llm_response_<timestamp>_<id>.json
+rm logs/llm/llm_response_*.json
 ```
 
 Alternative diagnostics:

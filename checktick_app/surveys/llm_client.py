@@ -78,9 +78,7 @@ def _write_llm_debug_dump(payload: Dict) -> None:
             pass
 
         # Prune files older than the retention window.
-        cutoff = datetime.utcnow().timestamp() - (
-            _LLM_DEBUG_DUMP_MAX_AGE_HOURS * 3600
-        )
+        cutoff = datetime.utcnow().timestamp() - (_LLM_DEBUG_DUMP_MAX_AGE_HOURS * 3600)
         for stale in dump_dir.glob("llm_response_*.json"):
             try:
                 if stale.stat().st_mtime < cutoff:
@@ -784,9 +782,7 @@ class ConversationalSurveyLLM:
                                 "timestamp": datetime.utcnow().strftime(
                                     "%Y%m%dT%H%M%SZ"
                                 ),
-                                "status_code": getattr(
-                                    response, "status_code", None
-                                ),
+                                "status_code": getattr(response, "status_code", None),
                                 "headers": (
                                     dict(response.headers)
                                     if hasattr(response, "headers")
