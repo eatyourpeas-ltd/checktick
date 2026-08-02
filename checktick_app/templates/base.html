@@ -85,7 +85,7 @@
             {% if user.is_authenticated %}
               <li><a href="/surveys">{% trans "Surveys" %}</a></li>
               <li><a href="{% url 'surveys:published_templates_list' %}">{% trans "Question Bank" %}</a></li>
-              {% if can_create_datasets %}
+              {% if can_view_datasets %}
                 <li><a href="{% url 'surveys:dataset_list' %}">{% trans "Datasets" %}</a></li>
               {% endif %}
               {% if can_manage_any_users %}
@@ -122,7 +122,7 @@
           {% if user.is_authenticated %}
             <li><a href="/surveys">{% trans "Surveys" %}</a></li>
             <li><a href="{% url 'surveys:published_templates_list' %}">{% trans "Question Bank" %}</a></li>
-            {% if can_create_datasets %}
+            {% if can_view_datasets %}
               <li><a href="{% url 'surveys:dataset_list' %}">{% trans "Datasets" %}</a></li>
             {% endif %}
             {% if can_manage_any_users %}

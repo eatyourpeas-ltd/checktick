@@ -110,6 +110,7 @@ def can_create_datasets(user) -> bool:
 
     Not allowed:
     - VIEWER role members (read-only, cannot create anything)
+    - DATA_CUSTODIAN role members (export/recovery role, not content creation)
     - Unauthenticated users
 
     Future: Will restrict individual users to pro accounts only.
@@ -135,7 +136,7 @@ def can_create_datasets(user) -> bool:
     ).exists():
         return True
 
-    # User only has VIEWER or EDITOR roles - deny
+    # User only has VIEWER or DATA_CUSTODIAN roles - deny
     return False
 
 
@@ -170,7 +171,7 @@ def can_edit_dataset(user, dataset) -> bool:
 def require_can_create_datasets(user) -> None:
     if not can_create_datasets(user):
         # TODO: Update message when pro accounts are implemented
-        raise PermissionDenied("You must be authenticated to create datasets.")
+        raise PermissionDenied("You do not have permission to create datasets.")
 
 
 def require_can_edit_dataset(user, dataset) -> None:

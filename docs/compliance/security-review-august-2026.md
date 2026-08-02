@@ -9,13 +9,13 @@ category: dspt-6-incidents
 - **Reviewer:** CTO (with AI-assisted static review)
 - **Scope:** Full static security review of the CheckTick platform covering authentication and redirect flows, email rendering, settings hardening, DRF defaults, HashiCorp Vault integration, LLM (AI survey generator + translation), the public REST API, OIDC SSO, user-uploaded icons and survey images, user/organisation management, billing webhooks, and styling/theme CSS.
 - **Method:** Static source review of `checktick_app/core/views.py`, `checktick_app/core/email_utils.py`, `checktick_app/core/oidc_views.py`, `checktick_app/core/views_billing.py`, `checktick_app/core/theme_utils.py`, `checktick_app/core/models.py`, `checktick_app/surveys/views.py`, `checktick_app/surveys/vault_client.py`, `checktick_app/surveys/llm_client.py`, `checktick_app/surveys/models.py`, `checktick_app/api/authentication.py`, `checktick_app/api/views.py`, `checktick_app/settings.py`, and the relevant templates. Cross-referenced against the documented security model in `docs/vault.md`, `docs/llm-security.md`, `docs/api.md`, and `docs/security-overview.md`.
-- **Status:** 🔶 Remediation in progress — F1, F2, F6, F7, F8, and F12 resolved; 11 findings remain open
+- **Status:** 🔶 Remediation in progress — F1, F2, F6, F7, F8, F12, and F18 resolved; 11 findings remain open
 
 ---
 
 ## Summary
 
-This consolidated review identifies **17 findings (F1–F17)**: 2 High, 6 Medium, 8 Low, 1 Info. No finding is assessed Critical, and none involve direct exfiltration of patient data at rest or compromise of at-rest encryption. The two High findings are both stored, authenticated-user-reachable vulnerabilities: a web recovery console that bypasses the documented Shamir custodian-share control (F6), and an SVG upload that enables stored XSS via direct `/media/` access (F12).
+This consolidated review identifies **18 findings (F1–F18)**: 2 High, 6 Medium, 9 Low, 1 Info. No finding is assessed Critical, and none involve direct exfiltration of patient data at rest or compromise of at-rest encryption. The two High findings are both stored, authenticated-user-reachable vulnerabilities: a web recovery console that bypasses the documented Shamir custodian-share control (F6), and an SVG upload that enables stored XSS via direct `/media/` access (F12). F18 was identified during the follow-up audit of the dataset web views performed as part of the F8 remediation.
 
 | Ref | Severity | Area | Title | Status |
 | :--- | :--- | :--- | :--- | :--- |
@@ -35,9 +35,10 @@ This consolidated review identifies **17 findings (F1–F17)**: 2 High, 6 Medium
 | F15 | Low | LLM | Prompt-injection defence overclaimed; output sanitisation is the real boundary | Open |
 | F16 | Low | Styling | `sanitize_css_block` only strips `<>`, allowing `}` breakout | Open |
 | F17 | Low | OIDC | Runtime mutation of global settings in callback view (thread-safety) | Open |
+| F18 | Low | Datasets | SNOMED snapshot view bypasses dataset-creation permission | Resolved 02/08/2026 |
 | F5 | Info | Email | F-string email builders bypass template autoescaping | Open |
 
-**Priority for next patch:** F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items. F1, F2, F6, and F12 were resolved on 1 August 2026; F7 and F8 were resolved on 2 August 2026.
+**Priority for next patch:** F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items. F1, F2, F6, and F12 were resolved on 1 August 2026; F7, F8, and F18 were resolved on 2 August 2026.
 
 ---
 
@@ -776,6 +777,32 @@ Do not mutate global settings. Instead, subclass `mozilla_django_oidc`'s views/b
 Concretely: override `get_settings(attr, *args)` on the callback view (the auth view already does this at L262) to return the provider-specific value from session, and remove the `settings.OIDC_RP_CLIENT_ID = ...` mutations entirely. If `mozilla_django_oidc` does not support per-request config cleanly, run separate URL routes per provider (`/oidc/google/callback/`, `/oidc/azure/callback/`) each backed by a view subclass with hardcoded provider config.
 
 **Regression risk:** Medium. Refactoring the OIDC flow touches authentication; test both Google and Azure login flows end-to-end in staging. The fix is conceptually simple but the `mozilla_django_oidc` API may constrain the approach.
+
+---
+
+## F18 — SNOMED snapshot view bypasses dataset-creation permission (Low) — RESOLVED 02/08/2026
+
+**Location:** `checktick_app/surveys/views.py` (`dataset_snomed_snapshot`), `checktick_app/surveys/templates/surveys/dataset_detail.html`
+
+**Description**
+
+Identified during the follow-up audit of the dataset web views performed as part of the F8 remediation. The dataset management views were audited for consistent enforcement of the creation/publish policy (only survey creators and admins may create or publish datasets; org VIEWERs and DATA_CUSTODIANs are read-only):
+
+- `dataset_create` correctly enforces `require_can_create_datasets` and validates the target organisation against the user's ADMIN/CREATOR memberships.
+- `dataset_edit` / `dataset_delete` correctly enforce `require_can_edit_dataset`.
+- Question-group publishing enforces `can_publish_question_group` (form-level on the web, explicit role checks in the API).
+- **`dataset_snomed_snapshot` did not enforce any creation permission.** Any authenticated user — including org VIEWERs and DATA_CUSTODIANs — could POST to `/surveys/datasets/<id>/snapshot/` and create a new `user_created` dataset, bypassing `require_can_create_datasets`. Worse, the snapshot was assigned to `user_orgs.first()` regardless of the user's role in that organisation, so a VIEWER's snapshot became visible org-wide — and the VIEWER could not subsequently edit or delete it (orphaned data).
+- The dataset detail template also rendered the "Snapshot to Custom Dataset" and "Create Custom Version" buttons to users without creation permission (UI-level only; `dataset_create` itself was correctly guarded).
+
+**Impact**
+
+Privilege boundary inconsistency, not data exposure: read-only org roles could create org-visible datasets via the snapshot path. Snapshot contents are drawn from SNOMED CT reference data the user could already read, so no confidential data is leaked; the impact is unauthorised content creation and org-wide clutter that the creator cannot manage.
+
+**Severity rationale:** Low. Requires authentication; no data exposure; creates only reference-data derived content. But it is a genuine access-control bypass of the documented dataset-creation policy.
+
+**Remediation (02/08/2026):** `dataset_snomed_snapshot` now calls `require_can_create_datasets(user)` before doing any work, mirroring `dataset_create`. Organisation assignment was fixed to select only an organisation where the user holds ADMIN or CREATOR (falling back to a personal dataset for individual users), instead of blindly using the user's first membership. `dataset_detail` now passes a `can_create` flag (from `permissions.can_create_datasets`) and the template gates the snapshot/clone buttons on it. The misleadingly-named `can_create_datasets` context-processor flag (hardcoded `True` for all authenticated users, used only to gate the read-only Datasets nav link) was renamed to `can_view_datasets` so it can never be mistaken for the real permission check, and the stale role comment in `permissions.can_create_datasets` was corrected (org roles are VIEWER/DATA_CUSTODIAN, not EDITOR). Regression tests in `checktick_app/surveys/tests/test_dataset_views.py` assert: anonymous and VIEWER/DATA_CUSTODIAN snapshot attempts are rejected (302/403, no dataset created); CREATOR snapshots succeed and are assigned to their organisation; individual-user snapshots become personal datasets; and the snapshot/clone buttons are hidden from VIEWERs. Docs updated: `docs/datasets.md` permissions table now covers snapshotting and the DATA_CUSTODIAN role.
+
+**Regression risk:** Low. The snapshot flow is unchanged for permitted users; only unauthorised paths are blocked.
 
 ---
 

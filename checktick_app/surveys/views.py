@@ -9047,6 +9047,9 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
     # Check if user can edit this dataset
     user_can_edit = can_edit_dataset(user, dataset)
 
+    # Whether the user may create datasets (gates snapshot/clone buttons)
+    user_can_create = can_create_datasets(user)
+
     # Get questions using this dataset
     questions_using = SurveyQuestion.objects.filter(dataset=dataset).select_related(
         "survey", "group"
@@ -9081,6 +9084,7 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
         {
             "dataset": dataset,
             "can_edit": user_can_edit,
+            "can_create": user_can_create,
             "questions_using": questions_using,
             "snomed_options": snomed_options,
             "snomed_unavailable": snomed_unavailable,
@@ -9563,6 +9567,10 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
     )
 
     user = request.user
+    # Snapshotting creates a new dataset, so it requires the same permission
+    # as dataset_create (org VIEWERs / DATA_CUSTODIANs cannot create datasets).
+    require_can_create_datasets(user)
+
     user_orgs = Organization.objects.filter(memberships__user=user)
 
     dataset = get_object_or_404(
@@ -9591,8 +9599,16 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
     # Convert live SNOMED options to stable key/value mapping for the snapshot.
     options_dict: dict[str, str] = options_as_dict(raw_options)
 
-    # Determine organisation for the snapshot (prefer user's first org, else personal)
-    org = user_orgs.first()
+    # Determine organisation for the snapshot: only assign to an org where the
+    # user can create datasets (ADMIN/CREATOR), mirroring dataset_create.
+    # Otherwise the snapshot is a personal dataset.
+    org = Organization.objects.filter(
+        memberships__user=user,
+        memberships__role__in=[
+            OrganizationMembership.Role.ADMIN,
+            OrganizationMembership.Role.CREATOR,
+        ],
+    ).first()
 
     snapshot_key = f"snomed_snapshot_{dataset.key}_{uuid.uuid4().hex[:8]}"
     snapshot = DataSet.objects.create(

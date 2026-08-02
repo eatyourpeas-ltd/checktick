@@ -245,6 +245,7 @@ Tags help organise and find datasets quickly.
 | Edit own datasets      | ✅               | ❌           | ✅ (own org)      |
 | Delete own datasets    | ✅\*\*           | ❌           | ✅ (own org)\*\*  |
 | Create custom versions | ✅\*             | ❌           | ✅                |
+| Snapshot SNOMED sets   | ✅\*             | ❌           | ✅                |
 | Publish globally       | ✅\*             | ❌           | ✅ (own org)      |
 
 \*Individual users can create, customize, and publish datasets. In future releases, this will require a pro account.
@@ -254,7 +255,10 @@ Tags help organise and find datasets quickly.
 **Role clarifications:**
 
 - **VIEWER**: Read-only access - can view datasets but cannot create or modify
+- **DATA_CUSTODIAN**: Export/recovery role - can view datasets but cannot create or modify
 - **CREATOR/ADMIN**: Full dataset management capabilities for their organisation
+
+Snapshotting a SNOMED CT dataset and cloning (“Create Custom Version”) both create a new dataset, so they follow the same permission rules as **Create datasets**. Snapshots created by an organisation ADMIN/CREATOR are assigned to their organisation; snapshots by individual users are personal datasets.
 
 ## Related Documentation
 

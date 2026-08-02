@@ -36,18 +36,20 @@
           </button>
         </form>
       {% endif %}
-      {% if dataset.category == 'snomed' %}
-        <form method="post" action="{% url 'surveys:dataset_snomed_snapshot' dataset_id=dataset.id %}"
-              onsubmit="return confirm('{% trans "This will snapshot all live SNOMED options into a new Postgres dataset. Continue?" %}');">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-accent btn-sm">
-            {% trans "Snapshot to Custom Dataset" %}
-          </button>
-        </form>
-      {% else %}
-        <a href="{% url 'surveys:dataset_create' %}?clone_from={{ dataset.id }}" class="btn btn-accent btn-sm">
-          {% trans "Create Custom Version" %}
-        </a>
+      {% if can_create %}
+        {% if dataset.category == 'snomed' %}
+          <form method="post" action="{% url 'surveys:dataset_snomed_snapshot' dataset_id=dataset.id %}"
+                onsubmit="return confirm('{% trans "This will snapshot all live SNOMED options into a new Postgres dataset. Continue?" %}');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-accent btn-sm">
+              {% trans "Snapshot to Custom Dataset" %}
+            </button>
+          </form>
+        {% else %}
+          <a href="{% url 'surveys:dataset_create' %}?clone_from={{ dataset.id }}" class="btn btn-accent btn-sm">
+            {% trans "Create Custom Version" %}
+          </a>
+        {% endif %}
       {% endif %}
     </div>
   </div>

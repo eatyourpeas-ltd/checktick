@@ -673,3 +673,145 @@ def test_dataset_delete_blocks_other_org(client, users, org2_dataset):
         reverse("surveys:dataset_delete", kwargs={"dataset_id": org2_dataset.id})
     )
     assert res.status_code == 404
+
+
+# ==============================================================================
+# SNOMED Snapshot View Tests (snapshot creates a dataset, so it must enforce
+# the same permission as dataset_create)
+# ==============================================================================
+
+
+@pytest.fixture
+def snomed_dataset(db):
+    """Create a global SNOMED dataset."""
+    return DataSet.objects.create(
+        key="snomed_test_refset",
+        name="SNOMED Test Refset",
+        category="snomed",
+        source_type="manual",
+        is_global=True,
+        options=[],
+    )
+
+
+@pytest.mark.django_db
+def test_snomed_snapshot_requires_login(client, snomed_dataset):
+    """Test that snapshot requires authentication."""
+    res = client.post(
+        reverse(
+            "surveys:dataset_snomed_snapshot",
+            kwargs={"dataset_id": snomed_dataset.id},
+        )
+    )
+    assert res.status_code == 302  # Redirect to login
+
+
+@pytest.mark.django_db
+def test_snomed_snapshot_blocks_viewer(client, users, org1, snomed_dataset):
+    """Org VIEWERs cannot create datasets, so they must not snapshot either."""
+    admin, creator, viewer, outsider = users
+    client.force_login(viewer)
+    res = client.post(
+        reverse(
+            "surveys:dataset_snomed_snapshot",
+            kwargs={"dataset_id": snomed_dataset.id},
+        )
+    )
+    assert res.status_code == 403
+    assert not DataSet.objects.filter(parent=snomed_dataset).exists()
+
+
+@pytest.mark.django_db
+def test_snomed_snapshot_blocks_data_custodian(client, users, org1, snomed_dataset):
+    """DATA_CUSTODIAN is an export/recovery role and must not create datasets."""
+    admin, creator, viewer, outsider = users
+    OrganizationMembership.objects.create(
+        organization=org1,
+        user=outsider,
+        role=OrganizationMembership.Role.DATA_CUSTODIAN,
+    )
+    client.force_login(outsider)
+    res = client.post(
+        reverse(
+            "surveys:dataset_snomed_snapshot",
+            kwargs={"dataset_id": snomed_dataset.id},
+        )
+    )
+    assert res.status_code == 403
+    assert not DataSet.objects.filter(parent=snomed_dataset).exists()
+
+
+@pytest.mark.django_db
+def test_snomed_snapshot_allows_creator_and_assigns_org(
+    client, users, org1, snomed_dataset, monkeypatch
+):
+    """CREATORs can snapshot; the snapshot is assigned to their org."""
+    admin, creator, viewer, outsider = users
+    monkeypatch.setattr(
+        "checktick_app.surveys.snomed_resolver.get_options",
+        lambda dataset: ["12345 | Test concept"],
+    )
+    client.force_login(creator)
+    res = client.post(
+        reverse(
+            "surveys:dataset_snomed_snapshot",
+            kwargs={"dataset_id": snomed_dataset.id},
+        )
+    )
+    assert res.status_code == 302
+    snapshot = DataSet.objects.get(parent=snomed_dataset)
+    assert snapshot.created_by == creator
+    assert snapshot.organization == org1
+    assert snapshot.is_global is False
+
+
+@pytest.mark.django_db
+def test_snomed_snapshot_individual_user_gets_personal_dataset(
+    client, users, snomed_dataset, monkeypatch
+):
+    """Individual users (no org) can snapshot; result is a personal dataset."""
+    admin, creator, viewer, outsider = users
+    monkeypatch.setattr(
+        "checktick_app.surveys.snomed_resolver.get_options",
+        lambda dataset: ["12345 | Test concept"],
+    )
+    client.force_login(outsider)  # no org membership
+    res = client.post(
+        reverse(
+            "surveys:dataset_snomed_snapshot",
+            kwargs={"dataset_id": snomed_dataset.id},
+        )
+    )
+    assert res.status_code == 302
+    snapshot = DataSet.objects.get(parent=snomed_dataset)
+    assert snapshot.created_by == outsider
+    assert snapshot.organization is None
+
+
+@pytest.mark.django_db
+def test_dataset_detail_hides_snapshot_button_for_viewer(
+    client, users, org1, snomed_dataset
+):
+    """The snapshot button must not render for users who cannot create datasets."""
+    admin, creator, viewer, outsider = users
+    client.force_login(viewer)
+    res = client.get(
+        reverse("surveys:dataset_detail", kwargs={"dataset_id": snomed_dataset.id})
+    )
+    assert res.status_code == 200
+    assert res.context["can_create"] is False
+    assert "Snapshot to Custom Dataset" not in res.content.decode()
+
+
+@pytest.mark.django_db
+def test_dataset_detail_hides_clone_button_for_viewer(
+    client, users, org1, org1_dataset
+):
+    """The clone (Create Custom Version) button must not render for VIEWERs."""
+    admin, creator, viewer, outsider = users
+    client.force_login(viewer)
+    res = client.get(
+        reverse("surveys:dataset_detail", kwargs={"dataset_id": org1_dataset.id})
+    )
+    assert res.status_code == 200
+    assert "Create Custom Version" not in res.content.decode()

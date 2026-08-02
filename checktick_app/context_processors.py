@@ -118,7 +118,7 @@ def branding(request):
     # Compute a lightweight flag to show/hide the User management link
     user = getattr(request, "user", AnonymousUser())
     can_manage_any_users = False
-    can_create_datasets_flag = False
+    can_view_datasets_flag = False
     if user and user.is_authenticated:
         can_manage_any_users = (
             # Organization ownership or admin membership
@@ -132,9 +132,10 @@ def branding(request):
                 user=user, role=TeamMembership.Role.ADMIN
             ).exists()
         )
-        # TODO: In future, restrict dataset creation to pro individual accounts
-        # All authenticated users can create datasets (individual or organization-based)
-        can_create_datasets_flag = True
+        # All authenticated users can browse datasets (read-only list/detail).
+        # Creation is gated separately by permissions.can_create_datasets, which
+        # denies org VIEWER / DATA_CUSTODIAN roles.
+        can_view_datasets_flag = True
 
     # All defaults are defined in settings.py - this is the single source of truth
     # font_heading and font_body are marked safe so Django auto-escaping does not
@@ -381,7 +382,7 @@ def branding(request):
     return {
         "brand": brand,
         "can_manage_any_users": can_manage_any_users,
-        "can_create_datasets": can_create_datasets_flag,
+        "can_view_datasets": can_view_datasets_flag,
         "build": build,
         "debug": settings.DEBUG,
         "self_hosted": getattr(settings, "SELF_HOSTED", False),
