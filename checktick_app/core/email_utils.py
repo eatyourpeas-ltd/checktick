@@ -2,6 +2,22 @@
 
 Supports both platform-level branding (for account emails) and survey-level
 theming (for survey-specific emails).
+
+Convention (F5, security review August 2026):
+    All outbound email bodies MUST be rendered through ``.md`` Markdown
+templates via ``render_to_string`` so Django's autoescaping applies before
+Markdown-to-HTML conversion. Do NOT interpolate cross-user controlled
+values (inviter names, team names, survey titles, recipient names other
+than the recipient's own) directly into the body with f-strings — that
+bypasses autoescaping and reintroduces the F2 HTML-injection class.
+
+    Self-only builders (where the only interpolated user content is the
+recipient's own data, e.g. a payment-failure notice to themselves) are
+not exploitable, but the f-string pattern is fragile: any future builder
+that interpolates a *cross-user* value into an f-string will reopen the
+finding. When adding or editing a builder here, prefer a ``.md`` template;
+if an f-string fallback is unavoidable, explicitly ``escape()`` every
+dynamic value.
 """
 
 from __future__ import annotations
