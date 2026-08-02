@@ -11,6 +11,7 @@ from .models import (
     UserEmailPreferences,
     UserLanguagePreference,
     UserProfile,
+    WebhookEvent,
 )
 
 
@@ -399,3 +400,20 @@ class PaymentAdmin(admin.ModelAdmin):
         response = HttpResponse(output.getvalue(), content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
+
+
+@admin.register(WebhookEvent)
+class WebhookEventAdmin(admin.ModelAdmin):
+    """Read-only audit view of processed webhook events (F14 idempotency log)."""
+
+    list_display = ("event_id", "event_type", "processed_at")
+    list_filter = ("event_type",)
+    search_fields = ("event_id", "event_type")
+    ordering = ["-processed_at"]
+    readonly_fields = ("event_id", "event_type", "processed_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

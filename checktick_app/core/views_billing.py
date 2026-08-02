@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -22,7 +23,7 @@ from checktick_app.core.email_utils import (
     send_subscription_cancelled_email,
     send_subscription_created_email,
 )
-from checktick_app.core.models import Payment, UserProfile
+from checktick_app.core.models import Payment, UserProfile, WebhookEvent
 from checktick_app.surveys.models import AuditLog
 
 from .decorators import email_confirmed_required
@@ -585,75 +586,111 @@ def payment_webhook(request: HttpRequest) -> HttpResponse:
 
         logger.info(f"Received GoCardless webhook with {len(events)} event(s)")
 
-        # GoCardless sends an array of events in each webhook
+        # GoCardless sends an array of events in each webhook. Each event has a
+        # unique ``id`` (``EV...``). Record every processed event id in a
+        # transaction with the event's side effects so a replayed webhook
+        # (captured body+signature) is skipped before any handler runs. This is
+        # the primary defence against the F14 replay-attack vector; the HMAC
+        # signature only proves authenticity, not freshness.
         for event in events:
             resource_type = event.get("resource_type")
             action = event.get("action")
             event_id = event.get("id")
+            event_type = f"{resource_type}.{action}" if resource_type else ""
 
-            logger.info(
-                f"Processing GoCardless event: {resource_type}.{action} ({event_id})"
-            )
+            if not event_id:
+                logger.warning(
+                    "GoCardless event missing id; skipping (cannot deduplicate)"
+                )
+                continue
 
-            # Route to appropriate handler based on resource_type and action
-            if resource_type == "subscriptions":
-                if action == "created":
-                    handle_gocardless_subscription_created(event)
-                elif action == "cancelled":
-                    handle_gocardless_subscription_cancelled(event)
-                elif action == "finished":
-                    handle_gocardless_subscription_finished(event)
-                elif action == "payment_created":
-                    # A payment was created for this subscription
-                    logger.info(f"Subscription payment created: {event_id}")
-                else:
-                    logger.info(f"Ignoring subscription action: {action}")
+            with transaction.atomic():
+                # select_for_update locks the row if it exists, but the
+                # important part is the unique constraint: a concurrent insert
+                # of the same event_id raises IntegrityError. We create the
+                # idempotency record *before* dispatching so a crash mid-handler
+                # leaves the event marked processed (and the side effects are
+                # rolled back by the transaction).
+                _, created = WebhookEvent.objects.get_or_create(
+                    event_id=event_id, defaults={"event_type": event_type}
+                )
+                if not created:
+                    logger.info(
+                        "Skipping already-processed GoCardless event %s (%s)",
+                        event_id,
+                        event_type,
+                    )
+                    continue
 
-            elif resource_type == "payments":
-                if action == "confirmed":
-                    handle_gocardless_payment_confirmed(event)
-                elif action == "failed":
-                    handle_gocardless_payment_failed(event)
-                elif action == "cancelled":
-                    handle_gocardless_payment_cancelled(event)
-                elif action in ["created", "submitted", "paid_out"]:
-                    # Informational events
-                    logger.info(f"Payment {action}: {event_id}")
-                else:
-                    logger.info(f"Ignoring payment action: {action}")
-
-            elif resource_type == "refunds":
-                if action == "created":
-                    handle_gocardless_refund_created(event)
-                elif action == "paid":
-                    handle_gocardless_refund_paid(event)
-                elif action == "failed":
-                    handle_gocardless_refund_failed(event)
-                elif action == "funds_returned":
-                    handle_gocardless_refund_funds_returned(event)
-                elif action == "refund_settled":
-                    handle_gocardless_refund_settled(event)
-                else:
-                    logger.info(f"Ignoring refund action: {action}")
-
-            elif resource_type == "mandates":
-                if action == "active":
-                    handle_gocardless_mandate_active(event)
-                elif action in ["failed", "cancelled", "expired"]:
-                    handle_gocardless_mandate_inactive(event, action)
-                elif action in ["created", "submitted"]:
-                    logger.info(f"Mandate {action}: {event_id}")
-                else:
-                    logger.info(f"Ignoring mandate action: {action}")
-
-            else:
-                logger.info(f"Ignoring resource type: {resource_type}")
+                logger.info(
+                    f"Processing GoCardless event: {event_type} ({event_id})"
+                )
+                _dispatch_gocardless_event(event, resource_type, action, event_id)
 
         return JsonResponse({"status": "success"}, status=200)
 
     except Exception as e:
         logger.error(f"Error processing payment webhook: {e}", exc_info=True)
         return JsonResponse({"error": "Internal error"}, status=500)
+
+
+def _dispatch_gocardless_event(
+    event: dict, resource_type: str | None, action: str | None, event_id: str
+) -> None:
+    """Route a single (already-deduplicated) GoCardless event to its handler."""
+    # Route to appropriate handler based on resource_type and action
+    if resource_type == "subscriptions":
+        if action == "created":
+            handle_gocardless_subscription_created(event)
+        elif action == "cancelled":
+            handle_gocardless_subscription_cancelled(event)
+        elif action == "finished":
+            handle_gocardless_subscription_finished(event)
+        elif action == "payment_created":
+            # A payment was created for this subscription
+            logger.info(f"Subscription payment created: {event_id}")
+        else:
+            logger.info(f"Ignoring subscription action: {action}")
+
+    elif resource_type == "payments":
+        if action == "confirmed":
+            handle_gocardless_payment_confirmed(event)
+        elif action == "failed":
+            handle_gocardless_payment_failed(event)
+        elif action == "cancelled":
+            handle_gocardless_payment_cancelled(event)
+        elif action in ["created", "submitted", "paid_out"]:
+            # Informational events
+            logger.info(f"Payment {action}: {event_id}")
+        else:
+            logger.info(f"Ignoring payment action: {action}")
+
+    elif resource_type == "refunds":
+        if action == "created":
+            handle_gocardless_refund_created(event)
+        elif action == "paid":
+            handle_gocardless_refund_paid(event)
+        elif action == "failed":
+            handle_gocardless_refund_failed(event)
+        elif action == "funds_returned":
+            handle_gocardless_refund_funds_returned(event)
+        elif action == "refund_settled":
+            handle_gocardless_refund_settled(event)
+        else:
+            logger.info(f"Ignoring refund action: {action}")
+
+    elif resource_type == "mandates":
+        if action == "active":
+            handle_gocardless_mandate_active(event)
+        elif action in ["failed", "cancelled", "expired"]:
+            handle_gocardless_mandate_inactive(event, action)
+        elif action in ["created", "submitted"]:
+            logger.info(f"Mandate {action}: {event_id}")
+        else:
+            logger.info(f"Ignoring mandate action: {action}")
+
+    else:
+        logger.info(f"Ignoring resource type: {resource_type}")
 
 
 def verify_gocardless_webhook_signature(request: HttpRequest) -> bool:

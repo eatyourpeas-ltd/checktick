@@ -110,6 +110,10 @@ Platform admin billing supports operator-initiated refund actions with policy co
 
 Refund lifecycle transitions are processed from signed provider webhooks (for example: `created`, `paid`, `failed`, `funds_returned`, `refund_settled`), with idempotent reconciliation.
 
+## Webhook replay protection (F14)
+
+The GoCardless webhook signature (HMAC-SHA256 over the request body in the `Webhook-Signature` header) proves authenticity but not freshness — a captured body+signature can be replayed. Each GoCardless event carries a unique `id` (`EV...`). The `payment_webhook` handler records every processed event id in the `WebhookEvent` model (unique constraint on `event_id`) inside a `transaction.atomic()` block via `WebhookEvent.objects.get_or_create(event_id=...)` *before* dispatching the event to its handler. If the row already exists the event is skipped (logged at INFO) and no handler runs, so a replayed webhook cannot duplicate `Payment` rows, re-send welcome emails, or re-trigger refund side effects. Event routing is centralised in `_dispatch_gocardless_event` so the idempotency guard is the single chokepoint for every resource type (subscriptions, payments, refunds, mandates). Per-handler idempotency (`Payment.objects.filter(payment_id=...).exists()` in `handle_gocardless_payment_confirmed`; `_refund_event_already_logged` for refund handlers) is retained as a defence-in-depth second layer. A read-only `WebhookEventAdmin` provides an audit view of processed events. See `docs/compliance/security-review-august-2026.md` (F14) and `tests/test_billing.py::TestWebhookReplayProtection`.
+
 ## Adjustment reporting
 
 Promotion-linked adjustments are summarized in platform admin billing reporting with bounded query windows and structured metadata for finance and audit workflows.
@@ -132,7 +136,8 @@ Security controls in this implementation include:
 2. Strict HTTP method controls for sensitive endpoints.
 3. Rate limiting on billing and admin operations.
 4. Webhook signature verification with required webhook secret.
-5. CSRF protection on administrative form actions.
+5. Webhook replay protection via `WebhookEvent` event-id idempotency (F14).
+6. CSRF protection on administrative form actions.
 
 ## Self-Hosted Behavior
 
