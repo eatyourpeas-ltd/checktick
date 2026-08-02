@@ -23,7 +23,7 @@ This consolidated review identifies **17 findings (F1–F17)**: 2 High, 6 Medium
 | **F12** | **High** | Survey images | SVG upload → stored XSS via direct `/media/` access | Resolved 01/08/2026 |
 | F1 | Medium | Auth / Redirects | Open redirect via protocol-relative `next` URLs | Resolved 01/08/2026 |
 | F2 | Medium | Email | HTML injection into team/org invitation emails | Resolved 01/08/2026 |
-| F7 | Medium | LLM | Debug dump writes full LLM payloads to world-readable `/tmp` | Open |
+| F7 | Medium | LLM | Debug dump writes full LLM payloads to world-readable `/tmp` | Resolved 02/08/2026 |
 | F8 | Medium | API | `DataSetViewSet` permission class inconsistent with anonymous access | Open |
 | F13 | Medium | Styling | Survey `icon_url` accepts `javascript:` and `data:` URIs | Open |
 | F14 | Medium | Billing | Webhook has no replay protection (no timestamp/idempotency) | Open |
@@ -37,7 +37,7 @@ This consolidated review identifies **17 findings (F1–F17)**: 2 High, 6 Medium
 | F17 | Low | OIDC | Runtime mutation of global settings in callback view (thread-safety) | Open |
 | F5 | Info | Email | F-string email builders bypass template autoescaping | Open |
 
-**Priority for next patch:** F7, F8, F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items. F1, F2, F6, and F12 were resolved on 1 August 2026.
+**Priority for next patch:** F8, F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items. F1, F2, F6, and F12 were resolved on 1 August 2026; F7 was resolved on 2 August 2026.
 
 ---
 
@@ -250,7 +250,7 @@ Any authenticated user can create a team (or organisation) named, for example:
 
 ---
 
-## F7 — LLM debug dump writes full payloads to world-readable `/tmp` (Medium)
+## F7 — LLM debug dump writes full payloads to world-readable `/tmp` (Medium) — RESOLVED 02/08/2026
 
 **Location:** `checktick_app/surveys/llm_client.py` L393–405, L499–511, L701–718
 
@@ -288,6 +288,8 @@ If an operator enables `LLM_DEBUG_DUMP` to diagnose an LLM issue (a reasonable t
 4. Alternatively, remove the dump entirely and rely on the existing `logger.debug` calls (which already truncate to 200–1000 chars and go through the JSON formatter).
 
 **Regression risk:** Low. Debug-only path; no behavioural change when the env var is unset.
+
+**Remediation (02/08/2026):** All three inline dump sites in `checktick_app/surveys/llm_client.py` (`chat`, `chat_with_custom_system_prompt`, `chat_stream`) were replaced with calls to a single `_write_llm_debug_dump` helper. The helper writes to `settings.BASE_DIR / "logs" / "llm"` with file mode `0o600` and directory mode `0o700` (no longer `/tmp`), prunes files older than 24h on each call, omits the outgoing `messages`/`payload_preview` payload so user prompts are never written to disk, and is blocked in production (`settings.ENVIRONMENT == "production"`) unless `LLM_DEBUG_DUMP_INSECURE=1` is also set. When enabled in production, each write emits a warning log. Regression tests in `tests/test_llm_debug_dump_security.py` cover: dump disabled by default, private directory/file modes in dev, messages-omission invariant, production block without the insecure flag, production allow with the insecure flag, 24h retention pruning, and an end-to-end check that `ConversationalSurveyLLM.chat` routes through the helper. All four recommended-fix options were addressed (private path + cleanup, messages omitted, production gate with warning, and the existing `logger.debug` calls remain as the preferred diagnostic path).
 
 ---
 
@@ -849,7 +851,7 @@ The `verify_gocardless_webhook_signature` implementation (L659–700) is correct
 | F12 | High | CTO | Small (remove SVG from allowlist + production media audit) | **Resolved 01/08/2026** | SVG rejected; audit confirmed no legacy SVG media |
 | F1 | Medium | CTO | Small (swap validator in 2 sites) | Next patch | |
 | F2 | Medium | CTO | Medium (2 new templates + escape fallbacks) | Next patch | |
-| F7 | Medium | CTO | Small (relocate/redact dump) | Next patch | |
+| F7 | Medium | CTO | Small (relocate/redact dump) | **Resolved 02/08/2026** | Private `logs/llm/` dir, 0o600 files, 24h prune, messages omitted, prod gate |
 | F8 | Medium | CTO | Trivial (permission declaration + test) | Next patch | |
 | F13 | Medium | CTO | Trivial (add protocol validation) | Next patch | Bundle with F1/F10 redirect fixes |
 | F14 | Medium | CTO | Medium (idempotency table + handler audit) | Next minor | Standard webhook hygiene |
@@ -868,6 +870,7 @@ Validation for all fixes: `s/test --no-a11y` and `s/lint` per `AGENTS.md`. Speci
 - **F1, F10:** assert `//evil.com` and `/\evil.com` are rejected at signup, complete_signup, and OIDC login.
 - **F2:** assert a team name containing `<a>` is entity-escaped in the rendered email body.
 - **F6:** assert the web recovery path either redirects to the CLI or requires custodian shares, and that `settings.PLATFORM_CUSTODIAN_COMPONENT` is not read by any web-reachable code path.
+- **F7:** assert dumps are written under `settings.BASE_DIR / "logs" / "llm"` with mode `0o600`, the outgoing `messages` payload is absent from the file, dumps are blocked in production without `LLM_DEBUG_DUMP_INSECURE=1`, and files older than 24h are pruned (`tests/test_llm_debug_dump_security.py`).
 - **F8:** assert an anonymous request to `/api/datasets/` returns only global datasets and that `/api/datasets/{key}/` for a non-global dataset returns 401/404 for anonymous callers.
 - **F12:** assert script-bearing `.svg` uploads and animated variants of allowed raster formats are rejected without persistence; production audit confirmed no existing SVG media requiring cleanup.
 - **F14:** replay the same webhook twice and assert no duplicate `Payment` rows.

@@ -29,6 +29,85 @@ def _pick_first_key(d: Dict, keys: List[str]) -> tuple[Optional[str], Optional[s
     return None, None
 
 
+# Maximum age (hours) of LLM debug dump files retained on disk.
+_LLM_DEBUG_DUMP_MAX_AGE_HOURS = 24
+
+
+def _llm_debug_dump_enabled() -> bool:
+    """Return True if LLM debug dumps are enabled for this process.
+
+    Dumps are gated by the ``LLM_DEBUG_DUMP`` env var. In production
+    (``settings.ENVIRONMENT == "production"``) the operator must additionally
+    set ``LLM_DEBUG_DUMP_INSECURE=1`` to acknowledge that response payloads
+    will be written to disk; this prevents accidental enablement in prod.
+    """
+    if not os.environ.get("LLM_DEBUG_DUMP"):
+        return False
+    if getattr(settings, "ENVIRONMENT", "development") == "production":
+        if not os.environ.get("LLM_DEBUG_DUMP_INSECURE"):
+            return False
+    return True
+
+
+def _write_llm_debug_dump(payload: Dict) -> None:
+    """Write a redacted LLM diagnostic dump to a private, retention-bounded dir.
+
+    Security properties (addresses security review finding F7):
+
+    * Files are written under ``settings.BASE_DIR / "logs" / "llm"`` with mode
+      ``0o600`` (owner read/write only) rather than world-readable ``/tmp``.
+    * The directory is created with mode ``0o700``.
+    * Files older than 24h are pruned on each call to bound retention/disk use.
+    * The outgoing ``messages`` payload is never written — only the response
+      and metadata supplied by the caller. This keeps user-supplied prompts
+      (which may contain healthcare-adjacent content) out of the dump.
+    * In production, dumps require ``LLM_DEBUG_DUMP_INSECURE=1`` and a warning
+      is logged on each write.
+    """
+    if not _llm_debug_dump_enabled():
+        return
+    try:
+        dump_dir = Path(settings.BASE_DIR) / "logs" / "llm"
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            dump_dir.chmod(0o700)
+        except OSError:
+            # Mode may already be correct or filesystem may not support chmod
+            # (e.g. some container overlays). Non-fatal — file mode below is
+            # the primary guard.
+            pass
+
+        # Prune files older than the retention window.
+        cutoff = datetime.utcnow().timestamp() - (_LLM_DEBUG_DUMP_MAX_AGE_HOURS * 3600)
+        for stale in dump_dir.glob("llm_response_*.json"):
+            try:
+                if stale.stat().st_mtime < cutoff:
+                    stale.unlink()
+            except OSError:
+                pass
+
+        now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        dump_id = uuid.uuid4().hex[:8]
+        filename = dump_dir / f"llm_response_{now}_{dump_id}.json"
+        with open(filename, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=2)
+        try:
+            filename.chmod(0o600)
+        except OSError:
+            pass
+
+        if getattr(settings, "ENVIRONMENT", "development") == "production":
+            logger.warning(
+                "LLM_DEBUG_DUMP_INSECURE is enabled in production; wrote debug "
+                "dump (response only, no user prompts) to %s",
+                filename,
+            )
+        else:
+            logger.warning("Wrote LLM debug dump: %s", filename)
+    except Exception:
+        logger.exception("Failed to write LLM debug dump")
+
+
 def load_system_prompt_from_docs() -> str:
     """
     Load the system prompt from the AI survey generator documentation.
@@ -391,18 +470,14 @@ class ConversationalSurveyLLM:
                     if content.endswith("```"):
                         content = content[:-3].strip()
 
-                # Optional debug dump of full response
-                if os.environ.get("LLM_DEBUG_DUMP"):
-                    try:
-                        now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
-                        dump_id = uuid.uuid4().hex[:8]
-                        filename = f"/tmp/llm_response_{now}_{dump_id}.json"
-                        diag = {"timestamp": now, "response": data}
-                        with open(filename, "w", encoding="utf-8") as fh:
-                            json.dump(diag, fh, ensure_ascii=False, indent=2)
-                        logger.warning("Wrote LLM debug dump: %s", filename)
-                    except Exception:
-                        logger.exception("Failed to write LLM debug dump")
+                # Optional debug dump of full response (response only, no
+                # outgoing messages — see _write_llm_debug_dump for the policy).
+                _write_llm_debug_dump(
+                    {
+                        "timestamp": datetime.utcnow().strftime("%Y%m%dT%H%M%SZ"),
+                        "response": data,
+                    }
+                )
 
                 return content
 
@@ -497,18 +572,13 @@ class ConversationalSurveyLLM:
                     if content.endswith("```"):
                         content = content[:-3].strip()
 
-                # Optional debug dump
-                if os.environ.get("LLM_DEBUG_DUMP"):
-                    try:
-                        now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
-                        dump_id = uuid.uuid4().hex[:8]
-                        filename = f"/tmp/llm_response_{now}_{dump_id}.json"
-                        diag = {"timestamp": now, "response": data}
-                        with open(filename, "w", encoding="utf-8") as fh:
-                            json.dump(diag, fh, ensure_ascii=False, indent=2)
-                        logger.warning("Wrote LLM debug dump: %s", filename)
-                    except Exception:
-                        logger.exception("Failed to write LLM debug dump")
+                # Optional debug dump (response only, no outgoing messages).
+                _write_llm_debug_dump(
+                    {
+                        "timestamp": datetime.utcnow().strftime("%Y%m%dT%H%M%SZ"),
+                        "response": data,
+                    }
+                )
 
                 return content
 
@@ -703,39 +773,24 @@ class ConversationalSurveyLLM:
                         except Exception:
                             body = "<unreadable>"
 
-                        if os.environ.get("LLM_DEBUG_DUMP"):
-                            try:
-                                now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
-                                dump_id = uuid.uuid4().hex[:8]
-                                filename = f"/tmp/llm_response_{now}_{dump_id}.json"
-                                diag = {
-                                    "timestamp": now,
-                                    "status_code": getattr(
-                                        response, "status_code", None
-                                    ),
-                                    "headers": (
-                                        dict(response.headers)
-                                        if hasattr(response, "headers")
-                                        else {}
-                                    ),
-                                    "body": body,
-                                    "payload_preview": (
-                                        payload_preview
-                                        if "payload_preview" in locals()
-                                        else None
-                                    ),
-                                }
-                                with open(filename, "w", encoding="utf-8") as fh:
-                                    json.dump(diag, fh, ensure_ascii=False, indent=2)
-                                logger.warning(
-                                    "Wrote full LLM HTTP response for diagnosis: %s",
-                                    filename,
-                                )
-                            except Exception as e:
-                                logger.error(
-                                    "Failed to write diagnostic LLM response file: %s",
-                                    e,
-                                )
+                        # Optionally dump full HTTP response for diagnosis.
+                        # NOTE: the outgoing payload_preview (which contains user
+                        # prompts) is intentionally omitted to comply with the
+                        # AGENTS.md logging rules. See _write_llm_debug_dump.
+                        _write_llm_debug_dump(
+                            {
+                                "timestamp": datetime.utcnow().strftime(
+                                    "%Y%m%dT%H%M%SZ"
+                                ),
+                                "status_code": getattr(response, "status_code", None),
+                                "headers": (
+                                    dict(response.headers)
+                                    if hasattr(response, "headers")
+                                    else {}
+                                ),
+                                "body": body,
+                            }
+                        )
 
                         logger.warning(
                             "LLM stream produced no content. HTTP %s response body (truncated): %s",
