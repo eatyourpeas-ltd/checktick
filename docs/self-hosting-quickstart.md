@@ -58,6 +58,8 @@ mv .env.example .env
 
 **Required variables — the app will not start without these:**
 
+> **Enforced at startup:** When `ENVIRONMENT=production`, the app raises `ImproperlyConfigured` at boot if `SECRET_KEY` is unset or empty, so a misconfigured production deploy fails fast rather than silently deriving a per-worker random key. Set `SECRET_KEY` before the first production boot. See F3 in `docs/compliance/security-review-august-2026.md`.
+
 | Variable | Description |
 |---|---|
 | `SECRET_KEY` | Django secret key. Generate with: `openssl rand -base64 50` |

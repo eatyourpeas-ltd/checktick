@@ -389,7 +389,8 @@ CheckTick implements defence-in-depth security across multiple layers:
 | Feature | Implementation | Details |
 |---------|----------------|---------|
 | **Session Security** | Django sessions | CSRF protection, Secure/HttpOnly cookies in production |
-| **API Authentication** | Named API keys | MFA-gated issuance, stored as SHA-256 hash, `ct_live_` prefix, revocable |
+| **API Authentication** | Named API keys | MFA-gated issuance, stored as SHA-256 hash, `ct_live_` prefix, revocable; `last_used_at` refreshed at most once per 60s per key (F11) |
+| **API Default Permission** | DRF `IsAuthenticated` | Global DRF default is fail-closed; anonymous-access endpoints declare `AllowAny` explicitly (F4) |
 | **SSO/OIDC** | Google OAuth, Azure AD | Email-based linking, supports external/guest accounts |
 | **Brute Force Protection** | django-axes | Account lockout after 5 failed attempts (1-hour cooldown) |
 | **Password Policy** | Django validators | Strong password requirements enforced |
