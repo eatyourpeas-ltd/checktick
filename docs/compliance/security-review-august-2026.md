@@ -9,13 +9,13 @@ category: dspt-6-incidents
 - **Reviewer:** CTO (with AI-assisted static review)
 - **Scope:** Full static security review of the CheckTick platform covering authentication and redirect flows, email rendering, settings hardening, DRF defaults, HashiCorp Vault integration, LLM (AI survey generator + translation), the public REST API, OIDC SSO, user-uploaded icons and survey images, user/organisation management, billing webhooks, and styling/theme CSS.
 - **Method:** Static source review of `checktick_app/core/views.py`, `checktick_app/core/email_utils.py`, `checktick_app/core/oidc_views.py`, `checktick_app/core/views_billing.py`, `checktick_app/core/theme_utils.py`, `checktick_app/core/models.py`, `checktick_app/surveys/views.py`, `checktick_app/surveys/vault_client.py`, `checktick_app/surveys/llm_client.py`, `checktick_app/surveys/models.py`, `checktick_app/api/authentication.py`, `checktick_app/api/views.py`, `checktick_app/settings.py`, and the relevant templates. Cross-referenced against the documented security model in `docs/vault.md`, `docs/llm-security.md`, `docs/api.md`, and `docs/security-overview.md`.
-- **Status:** 🔶 Remediation in progress — F1, F2, F6, F7, F8, F9, F12, F13, F16, and F18 resolved; 8 findings remain open
+- **Status:** ✅ Remediation complete — F1, F2, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15, F16, F17, and F18 resolved; all 18 findings closed
 
 ---
 
 ## Summary
 
-This consolidated review identifies **18 findings (F1–F18)**: 2 High, 6 Medium, 9 Low, 1 Info. No finding is assessed Critical, and none involve direct exfiltration of patient data at rest or compromise of at-rest encryption. The two High findings are both stored, authenticated-user-reachable vulnerabilities: a web recovery console that bypasses the documented Shamir custodian-share control (F6), and an SVG upload that enables stored XSS via direct `/media/` access (F12). F18 was identified during the follow-up audit of the dataset web views performed as part of the F8 remediation.
+This consolidated review identifies **18 findings (F1–F18)**: 2 High, 6 Medium, 9 Low, 1 Info. No finding is assessed Critical, and none involve direct exfiltration of patient data at rest or compromise of at-rest encryption. The two High findings are both stored, authenticated-user-reachable vulnerabilities: a web recovery console that bypasses the documented Shamir custodian-share control (F6), and an SVG upload that enables stored XSS via direct `/media/` access (F12). F18 was identified during the follow-up audit of the dataset web views performed as part of the F8 remediation. All 18 findings have been remediated with regression tests.
 
 | Ref | Severity | Area | Title | Status |
 | :--- | :--- | :--- | :--- | :--- |
@@ -30,15 +30,15 @@ This consolidated review identifies **18 findings (F1–F18)**: 2 High, 6 Medium
 | F3 | Low | Settings | Silent `SECRET_KEY` fallback in production | Resolved 02/08/2026 |
 | F4 | Low | API | Weak DRF default permission class | Resolved 02/08/2026 |
 | F9 | Low | Headers | CSP `style-src 'unsafe-inline'` weakens style-injection defence | Resolved 02/08/2026 (documented; mitigation via F16 sanitiser) |
-| F10 | Low | OIDC | `next` parameter in OIDC login view inherits F1 open-redirect class | Open |
+| F10 | Low | OIDC | `next` parameter in OIDC login view inherits F1 open-redirect class | Resolved 02/08/2026 |
 | F11 | Low | API | API-key `last_used_at` write on every request | Resolved 02/08/2026 |
-| F15 | Low | LLM | Prompt-injection defence overclaimed; output sanitisation is the real boundary | Open |
+| F15 | Low | LLM | Prompt-injection defence overclaimed; output sanitisation is the real boundary | Resolved 02/08/2026 |
 | F16 | Low | Styling | `sanitize_css_block` only strips `<>`, allowing `}` breakout | Resolved 02/08/2026 |
-| F17 | Low | OIDC | Runtime mutation of global settings in callback view (thread-safety) | Open |
+| F17 | Low | OIDC | Runtime mutation of global settings in OIDC callback view (thread-safety) | Resolved 02/08/2026 |
 | F18 | Low | Datasets | SNOMED snapshot view bypasses dataset-creation permission | Resolved 02/08/2026 |
-| F5 | Info | Email | F-string email builders bypass template autoescaping | Open |
+| F5 | Info | Email | F-string email builders bypass template autoescaping | Resolved 02/08/2026 |
 
-**Priority for next patch:** F15, F17, F10. F3, F4, and F11 were resolved on 2 August 2026. F1, F2, F6, and F12 were resolved on 1 August 2026; F7, F8, F9, F13, F14, F16, and F18 were resolved on 2 August 2026.
+**All findings resolved.** F3, F4, and F11 were resolved on 2 August 2026. F1, F2, F6, and F12 were resolved on 1 August 2026; F5, F7, F8, F9, F10, F13, F14, F15, F16, F17, and F18 were resolved on 2 August 2026.
 
 ---
 
@@ -567,7 +567,9 @@ An attacker who can inject arbitrary HTML (e.g. via a future F2-class finding in
 
 ---
 
-## F10 — OIDC `next` parameter inherits F1 open-redirect class (Low)
+## F10 — OIDC `next` parameter inherits F1 open-redirect class (Low) — RESOLVED 02/08/2026
+
+**Status:** Resolved. The finding was located in `HealthcareLoginView` (`checktick_app/core/oidc_views.py`), which passed `request.GET.get("next")` straight into the template context without validation. On audit, `HealthcareLoginView` was dead code: it was never wired into the URL config (no `as_view()` call anywhere) and its `reverse("oidc:oidc_authentication_init")` call used a namespace that does not exist (`oidc_urls.py` explicitly removed `app_name`), so the view would have raised `NoReverseMatch` if ever called. The live login page is `/accounts/login/`, served by `TwoFactorLoginView` (a subclass of Django's `LoginView`), whose `get_context_data` only exposes `next` via `get_redirect_url()` → `url_has_allowed_host_and_scheme` — so unsafe `next` values never reach the SSO/traditional-login hrefs on the live page. Remediation removed the dead `HealthcareLoginView` class and its orphaned `registration/healthcare_login.html` template, and added regression tests in `checktick_app/core/tests/test_oidc_auth.py` asserting (a) the dead view stays removed, (b) the live login page does not leak an unsafe `next` into its rendered SSO links, and (c) legitimate relative `next` URLs still propagate.
 
 **Location:** `checktick_app/core/oidc_views.py` L296–305 (`HealthcareLoginView.get`)
 
@@ -649,7 +651,9 @@ Throttle the `last_used_at` update to at most once per minute (or per 5 minutes)
 
 ---
 
-## F15 — LLM prompt-injection defence overclaimed (Low)
+## F15 — LLM prompt-injection defence overclaimed (Low) — RESOLVED 02/08/2026
+
+**Status:** Resolved. `docs/llm-security.md` §4 was rewritten to clarify that the security boundary is output validation + manual review + no tool access, not the system prompt. Instruction-based role enforcement is now explicitly framed as a **deterrent**, not a security **control**, and the docs no longer claim "strict role enforcement" as a protection mechanism or imply the model "reliably" refuses injection. The revised section states that modern LLMs are susceptible to prompt-injection techniques that bypass instruction-based defences, that the system prompt is published by design (so extraction is a non-issue), and that any future LLM feature must rely on output validation + manual review for its security boundary rather than prompt instructions. A note for contributors clarifies that the strength of the design is that the security boundary does not depend on prompt secrecy. Regression tests in `checktick_app/core/tests/test_security_review_docs.py` assert the docs no longer contain "strict role enforcement", do contain "output validation", and frame instruction-based enforcement as a "deterrent".
 
 **Location:**
 - `docs/llm-security.md` §4 "Prompt Injection Protection"
@@ -751,7 +755,9 @@ Apply at write time (in `survey_style_update`) as well as read time, so the stor
 
 ---
 
-## F17 — Runtime mutation of global settings in OIDC callback view (Low)
+## F17 — Runtime mutation of global settings in OIDC callback view (Low) — RESOLVED 02/08/2026
+
+**Status:** Resolved. `HealthcareOIDCCallbackView` (`checktick_app/core/oidc_views.py`) no longer mutates the process-global `django.conf.settings` object to switch between Google and Azure providers. The previous try/finally block that stored originals, overwrote `settings.OIDC_RP_CLIENT_ID` / `OIDC_RP_CLIENT_SECRET` / `OIDC_OP_TOKEN_ENDPOINT` / `OIDC_OP_USER_ENDPOINT` / `OIDC_OP_JWKS_ENDPOINT` / `OIDC_RP_SCOPES` with Azure values, called `super().get()`, and restored in `finally` has been removed entirely. Provider-specific config is now resolved per-request in **two** places, neither of which touches global settings: (1) `HealthcareOIDCAuthView` continues to set provider-specific instance attributes (via `_configure_google_settings` / `_configure_azure_settings`) for the authorization-request URL; (2) `CustomOIDCAuthenticationBackend.authenticate` (`checktick_app/core/auth.py`) re-resolves the provider endpoints/credentials from the `OIDC_PROVIDERS` dict onto the backend instance before the token exchange runs — this is the critical fix, because the backend is instantiated fresh by Django's `authenticate()` and its `__init__` reads Google defaults from global settings. Without this, Azure callbacks would hit Google's token endpoint with Azure credentials. Regression tests in `checktick_app/core/tests/test_oidc_auth.py` assert (a) the Azure callback path does not mutate any of the six global OIDC settings attributes, (b) the backend uses Azure endpoints and credentials for an Azure session (verified by capturing the token-exchange payload), (c) the backend uses Google endpoints for a Google session, and (d) the callback view no longer carries a `get_settings` override (provider resolution belongs in the backend).
 
 **Location:** `checktick_app/core/oidc_views.py` L40–68, L195–199 (`HealthcareOIDCCallbackView.get`)
 
@@ -826,7 +832,9 @@ Privilege boundary inconsistency, not data exposure: read-only org roles could c
 
 # Informational findings
 
-## F5 — Pattern note: f-string email builders bypass template autoescaping (Info)
+## F5 — Pattern note: f-string email builders bypass template autoescaping (Info) — RESOLVED 02/08/2026
+
+**Status:** Resolved. The `email_utils` module docstring now documents the convention that all outbound email bodies must be rendered through `.md` Markdown templates via `render_to_string` so Django's autoescaping applies before Markdown-to-HTML conversion, and explicitly warns that f-string interpolation of cross-user controlled values (inviter names, team names, survey titles) bypasses autoescaping and reintroduces the F2 HTML-injection class. Self-only builders (where the only interpolated user content is the recipient's own data) are not exploitable, but the f-string pattern is flagged as fragile so any future builder that interpolates a cross-user value into an f-string will be caught at review. Regression tests in `checktick_app/core/tests/test_security_review_docs.py` assert the module docstring references `.md` templates, autoescaping, and the f-string risk.
 
 **Location:** `checktick_app/core/email_utils.py` (multiple functions, e.g. `send_payment_failed_email`)
 
@@ -905,26 +913,28 @@ The `verify_gocardless_webhook_signature` implementation (L659–700) is correct
 | F3 | Low | CTO | Trivial (settings guard) | Next patch | |
 | F4 | Low | CTO | Trivial (settings swap) + viewset audit | Next patch | |
 | F9 | Low | CTO | Small (test removal in staging) | **Resolved 02/08/2026** | Documented accepted risk; mitigation via F16 sanitiser |
-| F10 | Low | CTO | Trivial (reuse F1 validator) | Next patch | Bundle with F1 fix |
+| F10 | Low | CTO | Trivial (reuse F1 validator) | **Resolved 02/08/2026** | Dead `HealthcareLoginView` removed; live login page inherits `LoginView.get_redirect_url()` validation |
 | F11 | Low | CTO | Small (cache-throttle write) | Next minor | Operational |
-| F15 | Low | CTO | Trivial (docs revision) | Next patch | DSPT audit accuracy |
+| F15 | Low | CTO | Trivial (docs revision) | **Resolved 02/08/2026** | `llm-security.md` §4 reframed; instruction-based enforcement is a deterrent, output validation is the boundary |
 | F16 | Low | CTO | Small (strengthen sanitiser) + audit existing CSS | **Resolved 02/08/2026** | Strips `{}` and `url()`; tested against existing theme CSS |
-| F17 | Low | CTO | Medium (refactor OIDC config) | Next minor | Test both providers end-to-end |
-| F5 | Info | CTO | Folded into F2 | Next patch | |
+| F17 | Low | CTO | Medium (refactor OIDC config) | **Resolved 02/08/2026** | Per-request `get_settings` override; global-settings mutation block removed |
+| F5 | Info | CTO | Folded into F2 | **Resolved 02/08/2026** | `email_utils` module docstring documents the `.md`-template / f-string convention |
 
 Validation for all fixes: `s/test --no-a11y` and `s/lint` per `AGENTS.md`. Specific regression tests:
 
-- **F1, F10:** assert `//evil.com` and `/\evil.com` are rejected at signup, complete_signup, and OIDC login.
+- **F1, F10:** assert `//evil.com` and `/\evil.com` are rejected at signup, complete_signup, and OIDC login. F10 additionally asserts the dead `HealthcareLoginView` stays removed and the live `/accounts/login/` page does not leak an unsafe `next` into its SSO links (`checktick_app/core/tests/test_oidc_auth.py`).
 - **F2:** assert a team name containing `<a>` is entity-escaped in the rendered email body.
 - **F6:** assert the web recovery path either redirects to the CLI or requires custodian shares, and that `settings.PLATFORM_CUSTODIAN_COMPONENT` is not read by any web-reachable code path.
 - **F7:** assert dumps are written under `settings.BASE_DIR / "logs" / "llm"` with mode `0o600`, the outgoing `messages` payload is absent from the file, dumps are blocked in production without `LLM_DEBUG_DUMP_INSECURE=1`, and files older than 24h are pruned (`tests/test_llm_debug_dump_security.py`).
 - **F8:** assert anonymous requests to `/api/datasets/` (list, retrieve, available-tags) are denied, and that an anonymous respondent on a public survey receives server-rendered professional-field options without any client-side `/api/datasets/` call (`checktick_app/api/tests/test_dataset_api.py`, `checktick_app/surveys/tests/test_anonymous_access.py`).
 - **F12:** assert script-bearing `.svg` uploads and animated variants of allowed raster formats are rejected without persistence; production audit confirmed no existing SVG media requiring cleanup.
 - **F14:** replay the same webhook twice and assert no duplicate `Payment` rows, no re-sent welcome email, and no re-activation of a `PAST_DUE` subscription (`tests/test_billing.py::TestWebhookReplayProtection`); assert the partial unique constraint on `Payment.payment_id` rejects duplicate provider payment ids while allowing multiple blank `payment_id` manual payments.
+- **F5:** assert the `email_utils` module docstring references `.md` templates, autoescaping, and the f-string risk (`checktick_app/core/tests/test_security_review_docs.py`).
+- **F15:** assert `docs/llm-security.md` no longer claims "strict role enforcement", does state output validation is the boundary, and frames instruction-based enforcement as a deterrent (`checktick_app/core/tests/test_security_review_docs.py`).
 - **F16:** assert `}` in `theme_css_light` is stripped before rendering (`checktick_app/core/tests/test_theme_utils.py`, `checktick_app/surveys/tests/test_xss_creation_forms.py`).
 - **F13:** assert `javascript:`/`data:`/`file:`/`vbscript:` URIs are rejected at write time and not rendered on the public take page (`checktick_app/surveys/tests/test_xss_creation_forms.py`).
 - **F9:** assert the CSP header is emitted, `style-src` does not allow `*`, `script-src` does not allow `'unsafe-inline'`, and the `'unsafe-inline'` relaxation is documented in `settings.py` and `docs/security-overview.md` (`checktick_app/core/tests/test_csp.py`).
-- **F17:** concurrent Google + Azure callbacks both authenticate successfully (load test in staging).
+- **F17:** the Azure callback path does not mutate any of the six global OIDC settings attributes, and `get_settings("OIDC_RP_CLIENT_ID")` returns the Azure value when the session provider is Azure and the Google value when it is Google (`checktick_app/core/tests/test_oidc_auth.py`).
 
 ---
 

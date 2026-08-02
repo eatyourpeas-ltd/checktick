@@ -334,16 +334,17 @@ priority: 2
 
 - [x] **Security Deep-Dive Review (Q3)** - Application-layer static security review of the CheckTick codebase [Security Review – August 2026](/compliance/security-review-august-2026/)
   - Scope: authentication/redirects, email rendering, settings hardening, DRF defaults, Vault integration, LLM, REST API, OIDC SSO, icon/image uploads, user management, billing webhooks, styling/theme CSS
-  - 17 findings identified (F1–F17): 2 High, 6 Medium, 8 Low, 1 Info
+  - 18 findings identified (F1–F18): 2 High, 6 Medium, 9 Low, 1 Info
   - **High:** F6 (web recovery console bypasses Shamir custodian-share control), F12 (SVG upload → stored XSS via `/media/`)
   - **Medium:** F1 (open redirect), F2 (HTML injection in invitation emails), F7 (LLM debug dump to `/tmp`), F8 (DataSetViewSet permission inconsistency), F13 (`icon_url` accepts `javascript:`/`data:`), F14 (billing webhook no replay protection)
-  - **Low:** F3 (SECRET_KEY fallback), F4 (DRF default permission), F9 (CSP `style-src 'unsafe-inline'`), F10 (OIDC `next` redirect), F11 (API-key last_used_at write), F15 (LLM prompt-injection docs overclaim), F16 (CSS sanitiser `}` breakout), F17 (OIDC runtime settings mutation race)
+  - **Low:** F3 (SECRET_KEY fallback), F4 (DRF default permission), F9 (CSP `style-src 'unsafe-inline'`), F10 (OIDC `next` redirect), F11 (API-key last_used_at write), F15 (LLM prompt-injection docs overclaim), F16 (CSS sanitiser `}` breakout), F17 (OIDC runtime settings mutation race), F18 (SNOMED snapshot bypasses dataset-creation permission)
   - **Info:** F5 (f-string email builders bypass autoescaping)
   - No Critical findings; no patient data exposure at rest
   - Remediation tracked as atomic PRs with regression tests per finding
   - **Remediation status (01/08/2026):** F1, F2, F6, and F12 resolved; 13 findings remain open. F1 signup redirects now use Django host/scheme validation and retain the unconfirmed-email home-page flow. F2 team and organisation invitation emails now use autoescaped Markdown templates plus explicitly escaped template-missing fallbacks, with regression coverage for both paths.
   - **Remediation status (02/08/2026):** F7, F8, F9, F13, F16, and F18 resolved; 8 findings remain open. F7 LLM debug dumps moved to a private, retention-bounded directory with the outgoing messages payload omitted. F8 datasets API now authenticated-only with server-rendered professional-field options. F9 CSP `style-src 'unsafe-inline'` documented as accepted risk with server-side mitigation via the strengthened CSS sanitiser (F16). F13 `icon_url` now validated at write time (http(s):// or relative) and re-checked at read time across all survey views. F16 `sanitize_css_block` now strips `{` `}` and `url()` references, preventing CSS rule breakout and data exfiltration. F18 SNOMED snapshot view now enforces dataset-creation permission.
     - **Remediation status (02/08/2026, hardening batch):** F3, F4, and F11 resolved; 5 findings remain open (F5, F10, F15, F17). F3 settings now raise `ImproperlyConfigured` at startup when `ENVIRONMENT=production` and `SECRET_KEY` is unset/empty (random fallback retained for dev). F4 global DRF default permission changed to `IsAuthenticated` (fail-closed); anonymous-access endpoints already declare `AllowAny`. F11 API-key `last_used_at` write throttled to once per 60s per key via a Django cache marker, removing the per-request UPDATE on `UserAPIKey`.
+    - **Remediation status (02/08/2026, final batch):** F5, F10, F15, and F17 resolved — **all 18 findings now closed**. F5 `email_utils` module docstring now documents the `.md`-template / f-string convention so the F2 HTML-injection class is not reintroduced. F10 dead `HealthcareLoginView` (which carried an unvalidated `next` and used a non-existent reverse namespace) removed; the live `/accounts/login/` page inherits `LoginView.get_redirect_url()` validation. F15 `llm-security.md` §4 reframed — instruction-based role enforcement is a deterrent, not a control; output validation + manual review + no tool access is the boundary. F17 OIDC callback view no longer mutates global `django.conf.settings`; provider config is resolved per-request in `CustomOIDCAuthenticationBackend.authenticate` (re-resolving endpoints/credentials from `OIDC_PROVIDERS` before the token exchange) and in `HealthcareOIDCAuthView` (instance attributes for the authorization URL), eliminating the Google/Azure race condition.
 - [ ] **Tabletop Exercise (Q3)** - Cyber security simulation [Exercise Summary](/compliance/exercise-summary-2025/)
   - Based on NCSC threat intelligence
   - Test incident response procedures
@@ -617,8 +618,11 @@ priority: 2
 | Date | Version | Changes | Approved By |
 | :--- | :--- | :--- | :--- |
 | 08/02/2026 | 1.0 | Initial 2026 checklist created | Pending |
-| 01/08/2026 | 1.1 | Added Q3 security deep-dive review (17 findings F1–F17) to August | Pending |
+| 01/08/2026 | 1.1 | Added Q3 security deep-dive review (18 findings F1–F18) to August | Pending |
 | 01/08/2026 | 1.2 | Recorded F1 open-redirect remediation and updated status to 14 open findings | Pending |
+| 02/08/2026 | 1.3 | Recorded F2/F6/F7/F8/F9/F12/F13/F14/F16/F18 remediation (Medium/Low batch) | Pending |
+| 02/08/2026 | 1.4 | Recorded F3/F4/F11 hardening batch remediation | Pending |
+| 02/08/2026 | 1.5 | Recorded F5/F10/F15/F17 final batch remediation — all 18 findings closed | Pending |
 
 ---
 

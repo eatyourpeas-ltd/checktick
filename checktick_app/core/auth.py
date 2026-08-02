@@ -76,7 +76,22 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
     """
 
     def authenticate(self, request, **credentials):
-        """Override to ensure backend is used during OIDC callback."""
+        """Override to ensure backend is used during OIDC callback.
+
+        F17 (security review August 2026): the backend is instantiated fresh
+        by Django's ``authenticate()`` and its ``__init__`` reads provider
+        endpoints from the *global* ``django.conf.settings`` (which default to
+        Google). For an Azure callback the backend must use Azure's token /
+        userinfo / JWKS endpoints and Azure's client credentials, otherwise the
+        token exchange hits Google's endpoint with Azure credentials and fails.
+        The previous fix removed the global-settings mutation from the
+        callback view (eliminating the race) but the backend still read the
+        Google defaults. Here we re-resolve the provider-specific config from
+        the ``OIDC_PROVIDERS`` dict (keyed by the ``oidc_provider`` session
+        value written by ``HealthcareOIDCAuthView``) onto the backend instance
+        *before* calling ``super().authenticate()``, so the token exchange uses
+        the correct provider's endpoints without touching global settings.
+        """
         logger.info("CustomOIDCAuthenticationBackend.authenticate called")
 
         # Only handle OIDC authentication - if this looks like username/password auth, skip
@@ -85,6 +100,36 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
             return None
 
         self.request = request
+
+        # Re-resolve provider-specific endpoints/credentials from OIDC_PROVIDERS
+        # so the token exchange uses the correct provider. __init__ already ran
+        # (with Google defaults), so we overwrite the instance attributes here.
+        provider = None
+        if request is not None and hasattr(request, "session"):
+            provider = request.session.get("oidc_provider")
+        providers = getattr(settings, "OIDC_PROVIDERS", {}) or {}
+        provider_cfg = providers.get(provider, {}) if provider else {}
+        if provider_cfg:
+            self.OIDC_OP_TOKEN_ENDPOINT = provider_cfg.get(
+                "OIDC_OP_TOKEN_ENDPOINT", self.OIDC_OP_TOKEN_ENDPOINT
+            )
+            self.OIDC_OP_USER_ENDPOINT = provider_cfg.get(
+                "OIDC_OP_USER_ENDPOINT", self.OIDC_OP_USER_ENDPOINT
+            )
+            self.OIDC_OP_JWKS_ENDPOINT = provider_cfg.get(
+                "OIDC_OP_JWKS_ENDPOINT", self.OIDC_OP_JWKS_ENDPOINT
+            )
+            self.OIDC_RP_CLIENT_ID = provider_cfg.get(
+                "OIDC_RP_CLIENT_ID", self.OIDC_RP_CLIENT_ID
+            )
+            self.OIDC_RP_CLIENT_SECRET = provider_cfg.get(
+                "OIDC_RP_CLIENT_SECRET", self.OIDC_RP_CLIENT_SECRET
+            )
+            logger.info(
+                f"Resolved OIDC provider config for '{provider}': "
+                f"token_endpoint={self.OIDC_OP_TOKEN_ENDPOINT}"
+            )
+
         result = super().authenticate(request, **credentials)
         logger.info(f"Authentication result: {result}")
         return result

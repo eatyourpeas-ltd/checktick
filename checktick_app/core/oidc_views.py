@@ -9,9 +9,7 @@ import logging
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import redirect, render
-from django.urls import reverse
-from django.views import View
+from django.shortcuts import redirect
 from mozilla_django_oidc.views import (
     OIDCAuthenticationCallbackView,
     OIDCAuthenticationRequestView,
@@ -23,54 +21,33 @@ logger = logging.getLogger(__name__)
 class HealthcareOIDCCallbackView(OIDCAuthenticationCallbackView):
     """
     Custom OIDC callback view that ensures our authentication backend is used.
+
+    F17 (security review August 2026): provider-specific OIDC config (Google
+    vs Azure) is resolved per-request in ``CustomOIDCAuthenticationBackend.authenticate``
+    (see ``checktick_app/core/auth.py``), which re-resolves the provider
+    endpoints/credentials from the ``OIDC_PROVIDERS`` dict using the
+    ``oidc_provider`` session value. The view must NOT mutate the process-global
+    ``django.conf.settings`` object — in a threaded server two concurrent
+    callbacks (one Google, one Azure) could race on the shared global
+    attributes, causing intermittent auth failures or token validation
+    against the wrong provider. The previous try/finally mutation block has
+    been removed.
     """
 
     def get(self, request):
         """Handle OIDC callback with custom authentication backend."""
         logger.info("Processing OIDC callback...")
 
-        # Get provider from session and configure accordingly
+        # Get provider from session — provider-specific config is resolved
+        # per-request in the authentication backend (F17), so we no longer
+        # mutate global settings to switch between Google and Azure.
         provider = request.session.get("oidc_provider", "google")
         signup_mode = request.session.get("oidc_signup_mode", False)
         logger.info(
             f"Processing callback for provider: {provider}, signup_mode: {signup_mode}"
         )
 
-        # Temporarily modify Django settings for this request
-        original_settings = {}
         try:
-            if provider == "azure":
-                logger.info("Temporarily setting Django settings for Azure")
-                # Store original values
-                original_settings["OIDC_RP_CLIENT_ID"] = settings.OIDC_RP_CLIENT_ID
-                original_settings["OIDC_RP_CLIENT_SECRET"] = (
-                    settings.OIDC_RP_CLIENT_SECRET
-                )
-                original_settings["OIDC_OP_TOKEN_ENDPOINT"] = (
-                    settings.OIDC_OP_TOKEN_ENDPOINT
-                )
-                original_settings["OIDC_OP_USER_ENDPOINT"] = (
-                    settings.OIDC_OP_USER_ENDPOINT
-                )
-                original_settings["OIDC_OP_JWKS_ENDPOINT"] = (
-                    settings.OIDC_OP_JWKS_ENDPOINT
-                )
-                original_settings["OIDC_RP_SCOPES"] = getattr(
-                    settings, "OIDC_RP_SCOPES", "openid email"
-                )
-
-                # Set Azure values
-                settings.OIDC_RP_CLIENT_ID = settings.OIDC_RP_CLIENT_ID_AZURE
-                settings.OIDC_RP_CLIENT_SECRET = settings.OIDC_RP_CLIENT_SECRET_AZURE
-                settings.OIDC_OP_TOKEN_ENDPOINT = settings.OIDC_OP_TOKEN_ENDPOINT_AZURE
-                settings.OIDC_OP_USER_ENDPOINT = settings.OIDC_OP_USER_ENDPOINT_AZURE
-                settings.OIDC_OP_JWKS_ENDPOINT = settings.OIDC_OP_JWKS_ENDPOINT_AZURE
-                settings.OIDC_RP_SCOPES = "openid email profile"
-
-                logger.info(
-                    f"Set Azure token endpoint: {settings.OIDC_OP_TOKEN_ENDPOINT}"
-                )
-
             # Store signup mode flag for callback processing
             if signup_mode:
                 try:
@@ -192,11 +169,6 @@ class HealthcareOIDCCallbackView(OIDCAuthenticationCallbackView):
         except Exception as e:
             logger.error(f"OIDC callback failed: {e}")
             return redirect("/accounts/login/?error=oidc_failed")
-        finally:
-            # Restore original settings
-            for key, value in original_settings.items():
-                setattr(settings, key, value)
-                logger.info(f"Restored {key} to original value")
 
 
 class HealthcareOIDCAuthView(OIDCAuthenticationRequestView):
@@ -279,31 +251,6 @@ class HealthcareOIDCAuthView(OIDCAuthenticationRequestView):
 
         # Fall back to Django settings for other attributes
         return super().get_settings(attr, *args)
-
-
-class HealthcareLoginView(View):
-    """
-    Clinician login page with multiple authentication options.
-
-    Provides:
-    - Traditional email/password (preserves existing encryption)
-    - Google SSO (for personal accounts)
-    - Azure SSO (for hospital accounts)
-    """
-
-    template_name = "registration/healthcare_login.html"
-
-    def get(self, request: HttpRequest) -> HttpResponse:
-        """Display healthcare login options."""
-        context = {
-            "google_login_url": reverse("oidc:oidc_authentication_init")
-            + "?provider=google",
-            "azure_login_url": reverse("oidc:oidc_authentication_init")
-            + "?provider=azure",
-            "traditional_login_url": reverse("login"),
-            "next": request.GET.get("next", "/surveys/"),
-        }
-        return render(request, self.template_name, context)
 
 
 def oidc_logout_view(request: HttpRequest) -> HttpResponse:
