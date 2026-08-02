@@ -9,7 +9,7 @@ category: dspt-6-incidents
 - **Reviewer:** CTO (with AI-assisted static review)
 - **Scope:** Full static security review of the CheckTick platform covering authentication and redirect flows, email rendering, settings hardening, DRF defaults, HashiCorp Vault integration, LLM (AI survey generator + translation), the public REST API, OIDC SSO, user-uploaded icons and survey images, user/organisation management, billing webhooks, and styling/theme CSS.
 - **Method:** Static source review of `checktick_app/core/views.py`, `checktick_app/core/email_utils.py`, `checktick_app/core/oidc_views.py`, `checktick_app/core/views_billing.py`, `checktick_app/core/theme_utils.py`, `checktick_app/core/models.py`, `checktick_app/surveys/views.py`, `checktick_app/surveys/vault_client.py`, `checktick_app/surveys/llm_client.py`, `checktick_app/surveys/models.py`, `checktick_app/api/authentication.py`, `checktick_app/api/views.py`, `checktick_app/settings.py`, and the relevant templates. Cross-referenced against the documented security model in `docs/vault.md`, `docs/llm-security.md`, `docs/api.md`, and `docs/security-overview.md`.
-- **Status:** 🔶 Remediation in progress — F1, F2, F6, F7, F8, F12, and F18 resolved; 11 findings remain open
+- **Status:** 🔶 Remediation in progress — F1, F2, F6, F7, F8, F9, F12, F13, F16, and F18 resolved; 8 findings remain open
 
 ---
 
@@ -25,20 +25,20 @@ This consolidated review identifies **18 findings (F1–F18)**: 2 High, 6 Medium
 | F2 | Medium | Email | HTML injection into team/org invitation emails | Resolved 01/08/2026 |
 | F7 | Medium | LLM | Debug dump writes full LLM payloads to world-readable `/tmp` | Resolved 02/08/2026 |
 | F8 | Medium | API | `DataSetViewSet` permission class inconsistent with anonymous access | Resolved 02/08/2026 |
-| F13 | Medium | Styling | Survey `icon_url` accepts `javascript:` and `data:` URIs | Open |
+| F13 | Medium | Styling | Survey `icon_url` accepts `javascript:` and `data:` URIs | Resolved 02/08/2026 |
 | F14 | Medium | Billing | Webhook has no replay protection (no timestamp/idempotency) | Open |
 | F3 | Low | Settings | Silent `SECRET_KEY` fallback in production | Open |
 | F4 | Low | API | Weak DRF default permission class | Open |
-| F9 | Low | Headers | CSP `style-src 'unsafe-inline'` weakens style-injection defence | Open |
+| F9 | Low | Headers | CSP `style-src 'unsafe-inline'` weakens style-injection defence | Resolved 02/08/2026 (documented; mitigation via F16 sanitiser) |
 | F10 | Low | OIDC | `next` parameter in OIDC login view inherits F1 open-redirect class | Open |
 | F11 | Low | API | API-key `last_used_at` write on every request | Open |
 | F15 | Low | LLM | Prompt-injection defence overclaimed; output sanitisation is the real boundary | Open |
-| F16 | Low | Styling | `sanitize_css_block` only strips `<>`, allowing `}` breakout | Open |
+| F16 | Low | Styling | `sanitize_css_block` only strips `<>`, allowing `}` breakout | Resolved 02/08/2026 |
 | F17 | Low | OIDC | Runtime mutation of global settings in callback view (thread-safety) | Open |
 | F18 | Low | Datasets | SNOMED snapshot view bypasses dataset-creation permission | Resolved 02/08/2026 |
 | F5 | Info | Email | F-string email builders bypass template autoescaping | Open |
 
-**Priority for next patch:** F13, F15, F16, F17. F3, F4, F9, F10, F11, F14 are lower-urgency hardening/operational items. F1, F2, F6, and F12 were resolved on 1 August 2026; F7, F8, and F18 were resolved on 2 August 2026.
+**Priority for next patch:** F15, F17. F3, F4, F10, F11, F14 are lower-urgency hardening/operational items. F1, F2, F6, and F12 were resolved on 1 August 2026; F7, F8, F9, F13, F16, and F18 were resolved on 2 August 2026.
 
 ---
 
@@ -339,7 +339,9 @@ Option 1 is preferred for minimal churn. Either way, add a regression test that 
 
 ---
 
-## F13 — Survey `icon_url` accepts `javascript:` and `data:` URIs (Medium)
+## F13 — Survey `icon_url` accepts `javascript:` and `data:` URIs (Medium) — RESOLVED 02/08/2026
+
+**Status:** Resolved. Protocol validation added at write time in `survey_style_update` (only `http://`, `https://`, and root-relative `/` paths accepted) and at read time via `_sanitise_brand_overrides` across all five survey views that build `brand_overrides` (`survey_detail`, `survey_preview`, `survey_dashboard`, `survey_groups`, `group_builder`). The platform-level `SiteBranding.icon_url` / `icon_url_dark` fields in `core/views.py` received the same write-time validation. Regression tests in `checktick_app/surveys/tests/test_xss_creation_forms.py` cover `javascript:`, `data:`, `file:`, `vbscript:` rejection, safe `http(s)://` and relative-path acceptance, and a defence-in-depth read-time guard asserting a `javascript:` URI stored via an admin/legacy path is not rendered on the public survey take page.
 
 **Location:**
 - `checktick_app/surveys/views.py` L4530–4583 (`survey_style_update`)
@@ -516,7 +518,9 @@ Endpoints that genuinely need anonymous access (health, `available-tags`) alread
 
 ---
 
-## F9 — CSP `style-src 'unsafe-inline'` weakens style-injection defence (Low)
+## F9 — CSP `style-src 'unsafe-inline'` weakens style-injection defence (Low) — RESOLVED 02/08/2026
+
+**Status:** Resolved as documented accepted risk with server-side mitigation. Per the review's recommended fix #3, `'unsafe-inline'` is retained because hCaptcha and DaisyUI genuinely require inline styles, and the relaxation is documented in `checktick_app/settings.py` (comment on the `style-src` directive) and `docs/security-overview.md` (§A03 XSS Prevention → Content Security Policy). The CSS-injection surface that `'unsafe-inline'` would otherwise expose is mitigated server-side by the strengthened `sanitize_css_block` (F16), which strips `{`, `}`, and `url()` references so injected CSS cannot form new rules or exfiltrate via `background-image: url(...)`. Regression tests in `checktick_app/core/tests/test_csp.py` assert the CSP header is emitted, `style-src` does not allow a bare wildcard origin, `script-src` does not carry `'unsafe-inline'`, and the relaxation is documented in both `settings.py` and `docs/security-overview.md` so the accepted risk is auditable.
 
 **Location:** `checktick_app/settings.py` L515–520
 
@@ -673,7 +677,9 @@ No direct security impact, because the real protections (output validation, manu
 
 ---
 
-## F16 — `sanitize_css_block` only strips `<>`, allowing `}` breakout (Low)
+## F16 — `sanitize_css_block` only strips `<>`, allowing `}` breakout (Low) — RESOLVED 02/08/2026
+
+**Status:** Resolved. `sanitize_css_block` in `checktick_app/core/theme_utils.py` now strips `{` and `}` (preventing rule breakout) and `url()` references plus bare `http(s)://` URLs (preventing CSS-based data exfiltration via `background-image: url(attacker/?...)`), in addition to the existing `<` / `>` strip. The fallback in `checktick_app/context_processors.py` was updated to match. Regression tests in `checktick_app/core/tests/test_theme_utils.py` cover angle-bracket breakout, curly-brace breakout, the combined brace + `url()` exfiltration scenario, and preservation of safe `--var: value;` declarations. End-to-end tests in `checktick_app/surveys/tests/test_xss_creation_forms.py` assert a `} [data-theme='custom'] { background: url(...) }` payload stored in `survey.style.theme_css_light` does not produce a usable CSS rule on the dashboard or group-builder pages.
 
 **Location:** `checktick_app/core/theme_utils.py` L60–66
 
@@ -882,15 +888,15 @@ The `verify_gocardless_webhook_signature` implementation (L659–700) is correct
 | F2 | Medium | CTO | Medium (2 new templates + escape fallbacks) | Next patch | |
 | F7 | Medium | CTO | Small (relocate/redact dump) | **Resolved 02/08/2026** | Private `logs/llm/` dir, 0o600 files, 24h prune, messages omitted, prod gate |
 | F8 | Medium | CTO | Trivial (permission declaration + test) | **Resolved 02/08/2026** | API now authenticated-only; professional-field options rendered server-side |
-| F13 | Medium | CTO | Trivial (add protocol validation) | Next patch | Bundle with F1/F10 redirect fixes |
+| F13 | Medium | CTO | Trivial (add protocol validation) | **Resolved 02/08/2026** | Write-time + read-time validation; bundled with F16 styling work |
 | F14 | Medium | CTO | Medium (idempotency table + handler audit) | Next minor | Standard webhook hygiene |
 | F3 | Low | CTO | Trivial (settings guard) | Next patch | |
 | F4 | Low | CTO | Trivial (settings swap) + viewset audit | Next patch | |
-| F9 | Low | CTO | Small (test removal in staging) | Next minor | Hardening; test before merge |
+| F9 | Low | CTO | Small (test removal in staging) | **Resolved 02/08/2026** | Documented accepted risk; mitigation via F16 sanitiser |
 | F10 | Low | CTO | Trivial (reuse F1 validator) | Next patch | Bundle with F1 fix |
 | F11 | Low | CTO | Small (cache-throttle write) | Next minor | Operational |
 | F15 | Low | CTO | Trivial (docs revision) | Next patch | DSPT audit accuracy |
-| F16 | Low | CTO | Small (strengthen sanitiser) + audit existing CSS | Next patch | Test against existing theme CSS |
+| F16 | Low | CTO | Small (strengthen sanitiser) + audit existing CSS | **Resolved 02/08/2026** | Strips `{}` and `url()`; tested against existing theme CSS |
 | F17 | Low | CTO | Medium (refactor OIDC config) | Next minor | Test both providers end-to-end |
 | F5 | Info | CTO | Folded into F2 | Next patch | |
 
@@ -903,7 +909,9 @@ Validation for all fixes: `s/test --no-a11y` and `s/lint` per `AGENTS.md`. Speci
 - **F8:** assert anonymous requests to `/api/datasets/` (list, retrieve, available-tags) are denied, and that an anonymous respondent on a public survey receives server-rendered professional-field options without any client-side `/api/datasets/` call (`checktick_app/api/tests/test_dataset_api.py`, `checktick_app/surveys/tests/test_anonymous_access.py`).
 - **F12:** assert script-bearing `.svg` uploads and animated variants of allowed raster formats are rejected without persistence; production audit confirmed no existing SVG media requiring cleanup.
 - **F14:** replay the same webhook twice and assert no duplicate `Payment` rows.
-- **F16:** assert `}` in `theme_css_light` is stripped before rendering.
+- **F16:** assert `}` in `theme_css_light` is stripped before rendering (`checktick_app/core/tests/test_theme_utils.py`, `checktick_app/surveys/tests/test_xss_creation_forms.py`).
+- **F13:** assert `javascript:`/`data:`/`file:`/`vbscript:` URIs are rejected at write time and not rendered on the public take page (`checktick_app/surveys/tests/test_xss_creation_forms.py`).
+- **F9:** assert the CSP header is emitted, `style-src` does not allow `*`, `script-src` does not allow `'unsafe-inline'`, and the `'unsafe-inline'` relaxation is documented in `settings.py` and `docs/security-overview.md` (`checktick_app/core/tests/test_csp.py`).
 - **F17:** concurrent Google + Azure callbacks both authenticate successfully (load test in staging).
 
 ---

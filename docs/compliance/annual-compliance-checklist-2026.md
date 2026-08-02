@@ -342,6 +342,7 @@ priority: 2
   - No Critical findings; no patient data exposure at rest
   - Remediation tracked as atomic PRs with regression tests per finding
   - **Remediation status (01/08/2026):** F1, F2, F6, and F12 resolved; 13 findings remain open. F1 signup redirects now use Django host/scheme validation and retain the unconfirmed-email home-page flow. F2 team and organisation invitation emails now use autoescaped Markdown templates plus explicitly escaped template-missing fallbacks, with regression coverage for both paths.
+  - **Remediation status (02/08/2026):** F7, F8, F9, F13, F16, and F18 resolved; 8 findings remain open. F7 LLM debug dumps moved to a private, retention-bounded directory with the outgoing messages payload omitted. F8 datasets API now authenticated-only with server-rendered professional-field options. F9 CSP `style-src 'unsafe-inline'` documented as accepted risk with server-side mitigation via the strengthened CSS sanitiser (F16). F13 `icon_url` now validated at write time (http(s):// or relative) and re-checked at read time across all survey views. F16 `sanitize_css_block` now strips `{` `}` and `url()` references, preventing CSS rule breakout and data exfiltration. F18 SNOMED snapshot view now enforces dataset-creation permission.
 - [ ] **Tabletop Exercise (Q3)** - Cyber security simulation [Exercise Summary](/compliance/exercise-summary-2025/)
   - Based on NCSC threat intelligence
   - Test incident response procedures
