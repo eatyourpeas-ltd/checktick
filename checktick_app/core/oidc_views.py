@@ -23,55 +23,24 @@ class HealthcareOIDCCallbackView(OIDCAuthenticationCallbackView):
     Custom OIDC callback view that ensures our authentication backend is used.
 
     F17 (security review August 2026): provider-specific OIDC config (Google
-    vs Azure) is resolved per-request via :meth:`get_settings`, reading the
-    selected provider from the session. The view must NOT mutate the
-    process-global ``django.conf.settings`` object — in a threaded server
-    two concurrent callbacks (one Google, one Azure) could race on the
-    shared global attributes, causing intermittent auth failures or token
-    validation against the wrong provider. The previous try/finally
-    mutation block has been removed.
+    vs Azure) is resolved per-request in ``CustomOIDCAuthenticationBackend.authenticate``
+    (see ``checktick_app/core/auth.py``), which re-resolves the provider
+    endpoints/credentials from the ``OIDC_PROVIDERS`` dict using the
+    ``oidc_provider`` session value. The view must NOT mutate the process-global
+    ``django.conf.settings`` object — in a threaded server two concurrent
+    callbacks (one Google, one Azure) could race on the shared global
+    attributes, causing intermittent auth failures or token validation
+    against the wrong provider. The previous try/finally mutation block has
+    been removed.
     """
-
-    # Mapping of Django settings names to the per-provider keys in the
-    # ``OIDC_PROVIDERS`` dict in settings.py. Mirrors the instance-attribute
-    # map used by ``HealthcareOIDCAuthView.get_settings``.
-    _PROVIDER_SETTING_KEYS = {
-        "OIDC_RP_CLIENT_ID": "OIDC_RP_CLIENT_ID",
-        "OIDC_RP_CLIENT_SECRET": "OIDC_RP_CLIENT_SECRET",
-        "OIDC_OP_AUTHORIZATION_ENDPOINT": "OIDC_OP_AUTHORIZATION_ENDPOINT",
-        "OIDC_OP_TOKEN_ENDPOINT": "OIDC_OP_TOKEN_ENDPOINT",
-        "OIDC_OP_USER_ENDPOINT": "OIDC_OP_USER_ENDPOINT",
-        "OIDC_OP_JWKS_ENDPOINT": "OIDC_OP_JWKS_ENDPOINT",
-        "OIDC_RP_SCOPES": "OIDC_RP_SCOPES",
-    }
-
-    def get_settings(self, attr, *args):
-        """Resolve OIDC settings per-request from the selected provider.
-
-        Falls back to the parent implementation (which reads from
-        ``django.conf.settings``) for any attribute not in the provider map
-        or when no provider is recorded in the session.
-        """
-        provider = None
-        if hasattr(self, "request") and self.request is not None:
-            provider = self.request.session.get("oidc_provider")
-        providers = getattr(settings, "OIDC_PROVIDERS", {}) or {}
-        provider_cfg = providers.get(provider, {}) if provider else {}
-
-        if attr in self._PROVIDER_SETTING_KEYS and provider_cfg:
-            key = self._PROVIDER_SETTING_KEYS[attr]
-            if key in provider_cfg:
-                return provider_cfg[key]
-
-        return super().get_settings(attr, *args)
 
     def get(self, request):
         """Handle OIDC callback with custom authentication backend."""
         logger.info("Processing OIDC callback...")
 
         # Get provider from session — provider-specific config is resolved
-        # per-request in get_settings() above, so we no longer mutate global
-        # settings to switch between Google and Azure (F17).
+        # per-request in the authentication backend (F17), so we no longer
+        # mutate global settings to switch between Google and Azure.
         provider = request.session.get("oidc_provider", "google")
         signup_mode = request.session.get("oidc_signup_mode", False)
         logger.info(

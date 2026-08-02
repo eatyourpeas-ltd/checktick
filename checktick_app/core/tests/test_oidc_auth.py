@@ -297,37 +297,104 @@ def test_oidc_callback_does_not_mutate_global_settings_for_azure(client):
     )
 
 
+def test_oidc_callback_view_has_no_provider_get_settings_override():
+    """F17: the callback view must NOT carry a per-provider ``get_settings``
+    override. Provider resolution lives in the authentication backend
+    (``CustomOIDCAuthenticationBackend.authenticate``), where the token
+    exchange actually runs. A view-level override would be dead code (the
+    view's ``get_settings`` only affects ``LOGIN_REDIRECT_URL`` and
+    ``OIDC_RENEW_ID_TOKEN_EXPIRY_SECONDS``, neither of which is
+    provider-specific) and would reintroduce the pre-existing diagnostic
+    about overriding a ``@staticmethod`` with an instance method."""
+    # The callback view should inherit the parent's get_settings unchanged.
+    assert "get_settings" not in HealthcareOIDCCallbackView.__dict__, (
+        "HealthcareOIDCCallbackView must not override get_settings; provider "
+        "resolution belongs in CustomOIDCAuthenticationBackend.authenticate."
+    )
+
+
 @pytest.mark.django_db
-def test_oidc_callback_resolves_azure_provider_config_per_request(client):
-    """F17: when the session provider is Azure, the callback view's
-    ``get_settings`` must return the Azure values (not the Google defaults
-    stored on the global settings object)."""
+def test_oidc_backend_uses_azure_endpoints_for_azure_session(client):
+    """F17: the authentication backend must use Azure provider endpoints when
+    the session provider is Azure. The backend is instantiated fresh by
+    Django's ``authenticate()`` and its ``__init__`` reads from global settings
+    (which default to Google). The backend's ``authenticate()`` override must
+    re-resolve the provider-specific endpoints from ``OIDC_PROVIDERS`` before
+    the token exchange runs, otherwise Azure logins would hit Google's token
+    endpoint with Azure credentials and fail."""
+    from unittest.mock import patch
+
+    from checktick_app.core.auth import CustomOIDCAuthenticationBackend
+
     factory = RequestFactory()
     request = factory.get("/oidc/callback/?code=test-code&state=test-state")
     request.session = client.session
     request.session["oidc_provider"] = "azure"
     request.session.save()
 
-    view = HealthcareOIDCCallbackView()
-    view.request = request
+    backend = CustomOIDCAuthenticationBackend()
+    # __init__ reads Google defaults from global settings
+    assert backend.OIDC_OP_TOKEN_ENDPOINT == settings.OIDC_OP_TOKEN_ENDPOINT
 
-    resolved = view.get_settings("OIDC_RP_CLIENT_ID")
-    assert resolved == settings.OIDC_RP_CLIENT_ID_AZURE
-    assert resolved != settings.OIDC_RP_CLIENT_ID
+    # Stub the token exchange / verification / user creation so we can assert
+    # on the resolved endpoints without hitting real provider HTTP endpoints.
+    captured_payload = {}
+
+    def fake_get_token(payload):
+        captured_payload.update(payload)
+        return {"id_token": "fake-id-token", "access_token": "fake-access-token"}
+
+    with patch.object(
+        CustomOIDCAuthenticationBackend, "get_token", side_effect=fake_get_token
+    ), patch.object(
+        CustomOIDCAuthenticationBackend, "verify_token", return_value={"sub": "x"}
+    ), patch.object(
+        CustomOIDCAuthenticationBackend, "get_or_create_user", return_value=None
+    ):
+        backend.authenticate(request)
+
+    # The token payload must carry the Azure client id/secret, not Google's.
+    assert captured_payload["client_id"] == settings.OIDC_RP_CLIENT_ID_AZURE
+    assert captured_payload["client_secret"] == settings.OIDC_RP_CLIENT_SECRET_AZURE
+    # And the backend's resolved endpoints must be Azure's.
+    assert backend.OIDC_OP_TOKEN_ENDPOINT == settings.OIDC_OP_TOKEN_ENDPOINT_AZURE
+    assert backend.OIDC_OP_USER_ENDPOINT == settings.OIDC_OP_USER_ENDPOINT_AZURE
+    assert backend.OIDC_OP_JWKS_ENDPOINT == settings.OIDC_OP_JWKS_ENDPOINT_AZURE
+    assert backend.OIDC_RP_CLIENT_ID == settings.OIDC_RP_CLIENT_ID_AZURE
+    assert backend.OIDC_RP_CLIENT_SECRET == settings.OIDC_RP_CLIENT_SECRET_AZURE
 
 
 @pytest.mark.django_db
-def test_oidc_callback_resolves_google_provider_config_per_request(client):
-    """F17: when the session provider is Google (the default), the callback
-    view's ``get_settings`` must return the Google values."""
+def test_oidc_backend_uses_google_endpoints_for_google_session(client):
+    """F17: the authentication backend must use Google provider endpoints when
+    the session provider is Google (the default)."""
+    from unittest.mock import patch
+
+    from checktick_app.core.auth import CustomOIDCAuthenticationBackend
+
     factory = RequestFactory()
     request = factory.get("/oidc/callback/?code=test-code&state=test-state")
     request.session = client.session
     request.session["oidc_provider"] = "google"
     request.session.save()
 
-    view = HealthcareOIDCCallbackView()
-    view.request = request
+    backend = CustomOIDCAuthenticationBackend()
 
-    resolved = view.get_settings("OIDC_RP_CLIENT_ID")
-    assert resolved == settings.OIDC_RP_CLIENT_ID_GOOGLE
+    captured_payload = {}
+
+    def fake_get_token(payload):
+        captured_payload.update(payload)
+        return {"id_token": "fake-id-token", "access_token": "fake-access-token"}
+
+    with patch.object(
+        CustomOIDCAuthenticationBackend, "get_token", side_effect=fake_get_token
+    ), patch.object(
+        CustomOIDCAuthenticationBackend, "verify_token", return_value={"sub": "x"}
+    ), patch.object(
+        CustomOIDCAuthenticationBackend, "get_or_create_user", return_value=None
+    ):
+        backend.authenticate(request)
+
+    assert captured_payload["client_id"] == settings.OIDC_RP_CLIENT_ID_GOOGLE
+    assert backend.OIDC_OP_TOKEN_ENDPOINT == settings.OIDC_OP_TOKEN_ENDPOINT
+    assert backend.OIDC_RP_CLIENT_ID == settings.OIDC_RP_CLIENT_ID_GOOGLE
