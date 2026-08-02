@@ -61,9 +61,10 @@ Each action is verified against the user's role at the appropriate level.
 
 #### API Authentication
 
-- JWT tokens with short expiration (access: 15 min, refresh: 7 days)
-- Token refresh requires valid refresh token
+- Named API keys (MFA-gated issuance, stored as SHA-256 hash, `ct_live_` prefix, revocable)
 - API endpoints enforce same permissions as web UI
+- The global DRF default permission is `IsAuthenticated` (fail-closed); every viewset declares its `permission_classes` explicitly, and endpoints that genuinely require anonymous access (`/api/health`, `/api/docs`, `/api/redoc`, `/api/schema`, `available-tags`) declare `AllowAny` explicitly. A future viewset that forgets the decorator therefore ships with no anonymous read access. See F4 in `docs/compliance/security-review-august-2026.md`.
+- API-key `last_used_at` is refreshed at most once per 60s per key via a Django cache marker, avoiding a synchronous database write on every request. See F11 in `docs/compliance/security-review-august-2026.md`.
 
 #### Safe Signup Redirects
 

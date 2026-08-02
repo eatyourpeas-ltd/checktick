@@ -27,18 +27,18 @@ This consolidated review identifies **18 findings (F1–F18)**: 2 High, 6 Medium
 | F8 | Medium | API | `DataSetViewSet` permission class inconsistent with anonymous access | Resolved 02/08/2026 |
 | F13 | Medium | Styling | Survey `icon_url` accepts `javascript:` and `data:` URIs | Resolved 02/08/2026 |
 | F14 | Medium | Billing | Webhook has no replay protection (no timestamp/idempotency) | Resolved 02/08/2026 |
-| F3 | Low | Settings | Silent `SECRET_KEY` fallback in production | Open |
-| F4 | Low | API | Weak DRF default permission class | Open |
+| F3 | Low | Settings | Silent `SECRET_KEY` fallback in production | Resolved 02/08/2026 |
+| F4 | Low | API | Weak DRF default permission class | Resolved 02/08/2026 |
 | F9 | Low | Headers | CSP `style-src 'unsafe-inline'` weakens style-injection defence | Resolved 02/08/2026 (documented; mitigation via F16 sanitiser) |
 | F10 | Low | OIDC | `next` parameter in OIDC login view inherits F1 open-redirect class | Open |
-| F11 | Low | API | API-key `last_used_at` write on every request | Open |
+| F11 | Low | API | API-key `last_used_at` write on every request | Resolved 02/08/2026 |
 | F15 | Low | LLM | Prompt-injection defence overclaimed; output sanitisation is the real boundary | Open |
 | F16 | Low | Styling | `sanitize_css_block` only strips `<>`, allowing `}` breakout | Resolved 02/08/2026 |
 | F17 | Low | OIDC | Runtime mutation of global settings in callback view (thread-safety) | Open |
 | F18 | Low | Datasets | SNOMED snapshot view bypasses dataset-creation permission | Resolved 02/08/2026 |
 | F5 | Info | Email | F-string email builders bypass template autoescaping | Open |
 
-**Priority for next patch:** F15, F17. F3, F4, F10, F11 are lower-urgency hardening/operational items. F1, F2, F6, and F12 were resolved on 1 August 2026; F7, F8, F9, F13, F14, F16, and F18 were resolved on 2 August 2026.
+**Priority for next patch:** F15, F17, F10. F3, F4, and F11 were resolved on 2 August 2026. F1, F2, F6, and F12 were resolved on 1 August 2026; F7, F8, F9, F13, F14, F16, and F18 were resolved on 2 August 2026.
 
 ---
 
@@ -455,7 +455,9 @@ Regression tests in `tests/test_billing.py::TestWebhookReplayProtection` cover: 
 
 # Low findings
 
-## F3 — Silent `SECRET_KEY` fallback in production (Low / hardening)
+## F3 — Silent `SECRET_KEY` fallback in production (Low / hardening) — RESOLVED 02/08/2026
+
+**Status:** Resolved. `checktick_app/settings.py` now fails fast when `ENVIRONMENT=production` and `SECRET_KEY` is unset or empty, raising `ImproperlyConfigured` at startup with a message directing the operator to set the `SECRET_KEY` environment variable. The random `os.urandom(32).hex()` fallback is retained for development only. Regression tests in `checktick_app/core/tests/test_settings_hardening.py` assert that an unset/empty `SECRET_KEY` in production raises `ImproperlyConfigured` on settings import, that a correctly-set production `SECRET_KEY` imports cleanly, and that the random fallback is still permitted in development.
 
 **Location:** `checktick_app/settings.py` L112
 
@@ -487,7 +489,9 @@ Keep the random fallback for dev only. (Note: `os.urandom(32)` returns `bytes`; 
 
 ---
 
-## F4 — Weak DRF default permission (Low / hardening)
+## F4 — Weak DRF default permission (Low / hardening) — RESOLVED 02/08/2026
+
+**Status:** Resolved. The global DRF default permission class in `checktick_app/settings.py` (`REST_FRAMEWORK.DEFAULT_PERMISSION_CLASSES`) was changed from `rest_framework.permissions.IsAuthenticatedOrReadOnly` to `rest_framework.permissions.IsAuthenticated`, so any future viewset that forgets to declare `permission_classes` ships fail-closed (no anonymous read access) rather than silently exposing anonymous read. Endpoints that genuinely require anonymous access (`/api/health`, `/api/docs`, `/api/redoc`, `/api/schema`, and the `available-tags` action) already declare `AllowAny` explicitly, so no behavioural change is expected. An audit of `grep -r "permission_classes" checktick_app/api/` confirmed every existing viewset declares its intent. Regression tests in `checktick_app/api/tests/test_api_hardening.py` assert the global default is `IsAuthenticated` and that an anonymous GET against a deliberately-undeclared-permission viewset is denied (401/403). The full API test suite (38 tests across `tests/test_api_*.py` and `checktick_app/api/tests/`) passes with no regressions.
 
 **Location:** `checktick_app/settings.py` L600–603
 
@@ -600,7 +604,9 @@ Apply the same `url_has_allowed_host_and_scheme` validation used in F1's fix to 
 
 ---
 
-## F11 — API-key `last_used_at` write on every request (Low)
+## F11 — API-key `last_used_at` write on every request (Low) — RESOLVED 02/08/2026
+
+**Status:** Resolved. `APIKeyAuthentication.authenticate` in `checktick_app/api/authentication.py` now throttles the `last_used_at` write to at most once per 60 seconds per key using a Django cache marker (`apikey_lastused:{api_key.id}`). On each authenticated request, the cache is consulted; only if the marker is absent is `last_used_at` updated and the marker set with a 60s timeout. This removes the synchronous per-request UPDATE on `UserAPIKey` (which under concurrent load serialised on the row lock for that key and added avoidable write traffic to the primary) while preserving the documented "last seen" purpose of the field — `last_used_at` is now at most ~60s stale, which is acceptable. Regression tests in `checktick_app/api/tests/test_api_hardening.py` assert that three requests within the throttle window produce only one `last_used_at` write, and that after the cache marker is cleared the next request refreshes the timestamp.
 
 **Location:** `checktick_app/api/authentication.py` L40–41
 

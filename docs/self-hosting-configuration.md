@@ -30,6 +30,8 @@ DATABASE_URL=postgresql://user:password@host:5432/checktick
 
 ```bash
 # Generate with: openssl rand -base64 50
+# Required in production: the app raises ImproperlyConfigured at startup
+# if ENVIRONMENT=production and SECRET_KEY is unset or empty (F3).
 SECRET_KEY=your-very-long-random-secret-key-here
 
 # Never use DEBUG=True in production

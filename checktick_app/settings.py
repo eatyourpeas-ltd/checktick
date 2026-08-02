@@ -110,7 +110,18 @@ if env_file.exists():
 
 DEBUG = env("DEBUG")
 ENVIRONMENT = env("ENVIRONMENT", default="development")
-SECRET_KEY = env("SECRET_KEY") or os.urandom(32)
+
+# F3 (security review August 2026): fail fast if SECRET_KEY is unset in
+# production. The silent ``os.urandom(32)`` fallback meant each gunicorn worker
+# derived a different random key, intermittently breaking sessions, CSRF tokens,
+# signed cookies, and password-reset/email-confirmation tokens with no log entry
+# or exception. The random fallback is retained for dev only.
+if ENVIRONMENT == "production" and not env("SECRET_KEY", default=""):
+    raise ImproperlyConfigured(
+        "SECRET_KEY must be set in production. Set the SECRET_KEY environment "
+        "variable to a long random value (e.g. `openssl rand -base64 50`)."
+    )
+SECRET_KEY = env("SECRET_KEY") or os.urandom(32).hex()
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 
 # Self-hosted mode - gives all users Enterprise features
@@ -599,8 +610,14 @@ LOGOUT_REDIRECT_URL = "/"
 
 # DRF defaults
 REST_FRAMEWORK = {
+    # F4 (security review August 2026): fail-closed default. Every current
+    # viewset declares ``permission_classes`` explicitly; the permissive
+    # ``IsAuthenticatedOrReadOnly`` default was not load-bearing anywhere but
+    # would silently expose anonymous read access to any future viewset that
+    # forgot the decorator. ``IsAuthenticated`` is the standard hardening
+    # posture for healthcare-adjacent applications.
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
+        "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "checktick_app.api.authentication.APIKeyAuthentication",

@@ -99,6 +99,14 @@ The datasets API (`/api/datasets/`) provides read-only access to shared dropdown
 - Rates configured in `checktick_app/settings.py` under `REST_FRAMEWORK.DEFAULT_THROTTLE_RATES`.
 - The `/api/token` endpoint (legacy, not yet removed) is additionally throttled at **5 requests/minute per IP**.
 
+## Default permission
+
+The global DRF default permission is `IsAuthenticated` (fail-closed). Every viewset declares its `permission_classes` explicitly; endpoints that genuinely require anonymous access (`/api/health`, `/api/docs`, `/api/redoc`, `/api/schema`, and the `available-tags` action) declare `AllowAny` explicitly. A future viewset that forgets to declare `permission_classes` therefore ships with no anonymous read access rather than silently exposing one. See F4 in `docs/compliance/security-review-august-2026.md`.
+
+## API-key `last_used_at` updates
+
+Each API key records a `last_used_at` timestamp shown in the **Account → API Keys** UI. To avoid a synchronous database write on every request (which under concurrent load serialises on the row lock for that key), the timestamp is refreshed at most once per 60 seconds per key via a Django cache marker. `last_used_at` is therefore at most ~60s stale, which is acceptable for its documented "last seen" purpose. See F11 in `docs/compliance/security-review-august-2026.md`.
+
 ## CORS
 
 - Disabled by default. To call the API from another origin, explicitly set `CORS_ALLOWED_ORIGINS` in settings.

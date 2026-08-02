@@ -32,13 +32,25 @@ class APIKeyAuthentication(BaseAuthentication):
         except UserAPIKey.DoesNotExist:
             raise AuthenticationFailed("Invalid API key.")
 
+        from django.core.cache import cache
         from django.utils import timezone
 
         if api_key.expires_at and api_key.expires_at < timezone.now():
             raise AuthenticationFailed("API key has expired.")
 
-        api_key.last_used_at = timezone.now()
-        api_key.save(update_fields=["last_used_at"])
+        # F11 (security review August 2026): throttle the ``last_used_at`` write
+        # to at most once per minute per key. Previously every authenticated API
+        # request issued a synchronous UPDATE on ``UserAPIKey`` before the view
+        # ran, which under concurrent load serialised on the row lock for that
+        # key and added avoidable write traffic to the primary. The cache marker
+        # is set with a 60s timeout; the next request after it expires refreshes
+        # ``last_used_at``. ``last_used_at`` becomes at most ~60s stale, which is
+        # acceptable for its documented "last seen" purpose.
+        cache_key = f"apikey_lastused:{api_key.id}"
+        if not cache.get(cache_key):
+            api_key.last_used_at = timezone.now()
+            api_key.save(update_fields=["last_used_at"])
+            cache.set(cache_key, 1, timeout=60)
 
         return (api_key.user, api_key)
 
