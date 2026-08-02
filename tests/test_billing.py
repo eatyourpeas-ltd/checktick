@@ -1122,6 +1122,94 @@ class TestWebhookReplayProtection:
             == 2
         )
 
+    @pytest.mark.django_db
+    def test_duplicate_provider_payment_id_rejected_by_unique_constraint(self, db):
+        """F14 defence-in-depth: two Payment rows with the same non-empty provider payment_id must be rejected.
+
+        The ``WebhookEvent`` idempotency guard is the primary defence, but a
+        partial unique constraint on ``Payment.payment_id`` is the second
+        layer so a replayed ``payments.confirmed`` cannot create a duplicate
+        Payment row even if the idempotency record is missing.
+        """
+        from django.db import IntegrityError, transaction as db_transaction
+
+        user = User.objects.create_user(
+            username="dup@example.com",
+            email="dup@example.com",
+            password="TestPass123!",
+        )
+        Payment.objects.create(
+            user=user,
+            invoice_number="INV-DUP-1",
+            invoice_date=date(2026, 8, 2),
+            payment_provider="gocardless",
+            payment_id="PM_DUP_UNIQUE",
+            subscription_id="SB_DUP",
+            tier="pro",
+            amount_ex_vat=2000,
+            vat_amount=400,
+            amount_inc_vat=2400,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=user.email,
+            customer_name=user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        with pytest.raises(IntegrityError):
+            with db_transaction.atomic():
+                Payment.objects.create(
+                    user=user,
+                    invoice_number="INV-DUP-2",
+                    invoice_date=date(2026, 8, 2),
+                    payment_provider="gocardless",
+                    payment_id="PM_DUP_UNIQUE",
+                    subscription_id="SB_DUP",
+                    tier="pro",
+                    amount_ex_vat=2000,
+                    vat_amount=400,
+                    amount_inc_vat=2400,
+                    vat_rate=0.20,
+                    currency="GBP",
+                    customer_email=user.email,
+                    customer_name=user.username,
+                    status=Payment.PaymentStatus.CONFIRMED,
+                )
+
+    @pytest.mark.django_db
+    def test_blank_provider_payment_id_allows_multiple_manual_payments(self, db):
+        """Manual/offline payments with a blank payment_id must remain allowed.
+
+        The unique constraint is partial (``payment_id__gt=""``) so the
+        platform admin refund view and refundable-payments query — which both
+        anticipate blank ``payment_id`` records — keep working.
+        """
+        user = User.objects.create_user(
+            username="manual@example.com",
+            email="manual@example.com",
+            password="TestPass123!",
+        )
+        for i in range(2):
+            Payment.objects.create(
+                user=user,
+                invoice_number=f"INV-MANUAL-{i}",
+                invoice_date=date(2026, 8, 2),
+                payment_provider="manual",
+                payment_id="",
+                subscription_id="",
+                tier="pro",
+                amount_ex_vat=2000,
+                vat_amount=400,
+                amount_inc_vat=2400,
+                vat_rate=0.20,
+                currency="GBP",
+                customer_email=user.email,
+                customer_name=user.username,
+                status=Payment.PaymentStatus.CONFIRMED,
+            )
+
+        assert Payment.objects.filter(payment_id="").count() == 2
+
 
 class TestVATCSVExport:
     """Test CSV export for VAT returns contains only financial data."""

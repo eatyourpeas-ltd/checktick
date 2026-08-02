@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 User = get_user_model()
@@ -705,6 +706,23 @@ class Payment(models.Model):
             models.Index(fields=["invoice_date"]),
             models.Index(fields=["status"]),
             models.Index(fields=["user"]),
+        ]
+        constraints = [
+            # F14 defence-in-depth: a provider payment id (e.g. GoCardless
+            # ``PM...``) must map to at most one Payment row. The webhook
+            # handler's ``WebhookEvent`` idempotency guard is the primary
+            # defence against replays; this partial unique constraint is the
+            # second layer, so even if the idempotency record is missing a
+            # replayed ``payments.confirmed`` cannot create a duplicate
+            # Payment row. The constraint is partial (``payment_id != ""``)
+            # so manual/offline payments with a blank ``payment_id`` are still
+            # allowed — the platform admin refund view and the refundable
+            # payments query both anticipate blank ``payment_id`` records.
+            models.UniqueConstraint(
+                fields=["payment_id"],
+                condition=~Q(payment_id=""),
+                name="payment_provider_payment_id_unique",
+            ),
         ]
 
     def __str__(self) -> str:
