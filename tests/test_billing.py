@@ -949,6 +949,268 @@ class TestWebhookSignatureSecurity:
         assert verify_gocardless_webhook_signature(request) is False
 
 
+class TestWebhookReplayProtection:
+    """F14: GoCardless webhook must reject replayed events.
+
+    The webhook signature only proves the body was signed with the webhook
+    secret; it does not prevent a captured body+signature from being replayed.
+    Each GoCardless event carries a unique ``id`` (``EV...``). The handler
+    must record every processed event id and skip re-processing on replay so
+    that a captured webhook cannot duplicate payment records, re-send welcome
+    emails, or re-trigger other side effects.
+    """
+
+    @pytest.fixture
+    def gocardless_user(self, db):
+        """Pro user with a GoCardless subscription and mandate."""
+        user = User.objects.create_user(
+            username="replay@example.com",
+            email="replay@example.com",
+            password="TestPass123!",
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.payment_subscription_id = "SB_REPLAY"
+        user.profile.payment_mandate_id = "MD_REPLAY"
+        user.profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
+        user.profile.payment_customer_id = "CU_REPLAY"
+        user.profile.payment_provider = "gocardless"
+        user.profile.save()
+        return user
+
+    @pytest.mark.django_db
+    @patch("checktick_app.core.views_billing.send_subscription_created_email")
+    @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
+    def test_replayed_subscription_created_event_does_not_resend_email(
+        self, mock_validate, mock_email, gocardless_user
+    ):
+        """Replaying a subscriptions.created event must not re-send the welcome email."""
+        mock_validate.return_value = True
+
+        payload = {
+            "events": [
+                {
+                    "id": "EV_REPLAY_SUB",
+                    "resource_type": "subscriptions",
+                    "action": "created",
+                    "links": {
+                        "subscription": "SB_REPLAY_NEW",
+                        "mandate": "MD_REPLAY",
+                    },
+                }
+            ]
+        }
+
+        client = Client()
+        first = client.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        second = client.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        # Welcome email must be sent exactly once, not on replay.
+        assert mock_email.call_count == 1
+
+    @pytest.mark.django_db
+    @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
+    def test_replayed_payment_confirmed_event_does_not_duplicate_audit_side_effects(
+        self, mock_validate, gocardless_user
+    ):
+        """Replaying a payments.confirmed event must not re-run the handler.
+
+        Even though ``handle_gocardless_payment_confirmed`` guards against
+        duplicate ``Payment`` rows via ``payment_id``, the surrounding handler
+        still re-runs (e.g. reactivating a PAST_DUE subscription, logging).
+        The event-id idempotency check must short-circuit the whole handler on
+        replay.
+        """
+        mock_validate.return_value = True
+
+        # Mark the subscription past_due so the confirmed handler has a
+        # visible side effect (it flips it back to ACTIVE).
+        profile = gocardless_user.profile
+        profile.subscription_status = UserProfile.SubscriptionStatus.PAST_DUE
+        profile.save(update_fields=["subscription_status", "updated_at"])
+
+        payload = {
+            "events": [
+                {
+                    "id": "EV_REPLAY_PAY",
+                    "resource_type": "payments",
+                    "action": "confirmed",
+                    "links": {
+                        "payment": "PM_REPLAY",
+                        "subscription": "SB_REPLAY",
+                    },
+                }
+            ]
+        }
+
+        client = Client()
+        first = client.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        # Flip back to PAST_DUE to make a second replay observable.
+        profile.refresh_from_db()
+        assert profile.subscription_status == UserProfile.SubscriptionStatus.ACTIVE
+        profile.subscription_status = UserProfile.SubscriptionStatus.PAST_DUE
+        profile.save(update_fields=["subscription_status", "updated_at"])
+
+        second = client.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        # The replay must NOT have re-activated the subscription.
+        profile.refresh_from_db()
+        assert profile.subscription_status == UserProfile.SubscriptionStatus.PAST_DUE
+        # And no duplicate Payment record.
+        assert Payment.objects.filter(payment_id="PM_REPLAY").count() == 1
+
+    @pytest.mark.django_db
+    @patch("checktick_app.core.views_billing.verify_gocardless_webhook_signature")
+    def test_distinct_events_in_same_webhook_are_all_processed(
+        self, mock_validate, gocardless_user
+    ):
+        """The idempotency guard must not block distinct event ids in one webhook."""
+        mock_validate.return_value = True
+
+        payload = {
+            "events": [
+                {
+                    "id": "EV_MULTI_1",
+                    "resource_type": "payments",
+                    "action": "confirmed",
+                    "links": {
+                        "payment": "PM_MULTI_1",
+                        "subscription": "SB_REPLAY",
+                    },
+                },
+                {
+                    "id": "EV_MULTI_2",
+                    "resource_type": "payments",
+                    "action": "confirmed",
+                    "links": {
+                        "payment": "PM_MULTI_2",
+                        "subscription": "SB_REPLAY",
+                    },
+                },
+            ]
+        }
+
+        client = Client()
+        response = client.post(
+            reverse("core:payment_webhook"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert (
+            Payment.objects.filter(payment_id__in=["PM_MULTI_1", "PM_MULTI_2"]).count()
+            == 2
+        )
+
+    @pytest.mark.django_db
+    def test_duplicate_provider_payment_id_rejected_by_unique_constraint(self, db):
+        """F14 defence-in-depth: two Payment rows with the same non-empty provider payment_id must be rejected.
+
+        The ``WebhookEvent`` idempotency guard is the primary defence, but a
+        partial unique constraint on ``Payment.payment_id`` is the second
+        layer so a replayed ``payments.confirmed`` cannot create a duplicate
+        Payment row even if the idempotency record is missing.
+        """
+        from django.db import IntegrityError, transaction as db_transaction
+
+        user = User.objects.create_user(
+            username="dup@example.com",
+            email="dup@example.com",
+            password="TestPass123!",
+        )
+        Payment.objects.create(
+            user=user,
+            invoice_number="INV-DUP-1",
+            invoice_date=date(2026, 8, 2),
+            payment_provider="gocardless",
+            payment_id="PM_DUP_UNIQUE",
+            subscription_id="SB_DUP",
+            tier="pro",
+            amount_ex_vat=2000,
+            vat_amount=400,
+            amount_inc_vat=2400,
+            vat_rate=0.20,
+            currency="GBP",
+            customer_email=user.email,
+            customer_name=user.username,
+            status=Payment.PaymentStatus.CONFIRMED,
+        )
+
+        with pytest.raises(IntegrityError):
+            with db_transaction.atomic():
+                Payment.objects.create(
+                    user=user,
+                    invoice_number="INV-DUP-2",
+                    invoice_date=date(2026, 8, 2),
+                    payment_provider="gocardless",
+                    payment_id="PM_DUP_UNIQUE",
+                    subscription_id="SB_DUP",
+                    tier="pro",
+                    amount_ex_vat=2000,
+                    vat_amount=400,
+                    amount_inc_vat=2400,
+                    vat_rate=0.20,
+                    currency="GBP",
+                    customer_email=user.email,
+                    customer_name=user.username,
+                    status=Payment.PaymentStatus.CONFIRMED,
+                )
+
+    @pytest.mark.django_db
+    def test_blank_provider_payment_id_allows_multiple_manual_payments(self, db):
+        """Manual/offline payments with a blank payment_id must remain allowed.
+
+        The unique constraint is partial (``payment_id__gt=""``) so the
+        platform admin refund view and refundable-payments query — which both
+        anticipate blank ``payment_id`` records — keep working.
+        """
+        user = User.objects.create_user(
+            username="manual@example.com",
+            email="manual@example.com",
+            password="TestPass123!",
+        )
+        for i in range(2):
+            Payment.objects.create(
+                user=user,
+                invoice_number=f"INV-MANUAL-{i}",
+                invoice_date=date(2026, 8, 2),
+                payment_provider="manual",
+                payment_id="",
+                subscription_id="",
+                tier="pro",
+                amount_ex_vat=2000,
+                vat_amount=400,
+                amount_inc_vat=2400,
+                vat_rate=0.20,
+                currency="GBP",
+                customer_email=user.email,
+                customer_name=user.username,
+                status=Payment.PaymentStatus.CONFIRMED,
+            )
+
+        assert Payment.objects.filter(payment_id="").count() == 2
+
+
 class TestVATCSVExport:
     """Test CSV export for VAT returns contains only financial data."""
 

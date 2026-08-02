@@ -483,7 +483,7 @@ For security, billing operations are rate-limited:
 - **Webhook callbacks**: 100 per minute per IP
 - **Platform-admin refund action**: 20 attempts per hour per superuser
 
-Webhook callbacks are accepted only when the provider signature is valid and a webhook secret is configured.
+Webhook callbacks are accepted only when the provider signature is valid and a webhook secret is configured. Each event is deduplicated by its provider event id (recorded in the `WebhookEvent` table) so a replayed webhook cannot re-run handlers or duplicate payment records (F14).
 
 ## Invoices & Receipts
 

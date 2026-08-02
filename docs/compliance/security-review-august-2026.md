@@ -26,7 +26,7 @@ This consolidated review identifies **18 findings (F1–F18)**: 2 High, 6 Medium
 | F7 | Medium | LLM | Debug dump writes full LLM payloads to world-readable `/tmp` | Resolved 02/08/2026 |
 | F8 | Medium | API | `DataSetViewSet` permission class inconsistent with anonymous access | Resolved 02/08/2026 |
 | F13 | Medium | Styling | Survey `icon_url` accepts `javascript:` and `data:` URIs | Resolved 02/08/2026 |
-| F14 | Medium | Billing | Webhook has no replay protection (no timestamp/idempotency) | Open |
+| F14 | Medium | Billing | Webhook has no replay protection (no timestamp/idempotency) | Resolved 02/08/2026 |
 | F3 | Low | Settings | Silent `SECRET_KEY` fallback in production | Open |
 | F4 | Low | API | Weak DRF default permission class | Open |
 | F9 | Low | Headers | CSP `style-src 'unsafe-inline'` weakens style-injection defence | Resolved 02/08/2026 (documented; mitigation via F16 sanitiser) |
@@ -38,7 +38,7 @@ This consolidated review identifies **18 findings (F1–F18)**: 2 High, 6 Medium
 | F18 | Low | Datasets | SNOMED snapshot view bypasses dataset-creation permission | Resolved 02/08/2026 |
 | F5 | Info | Email | F-string email builders bypass template autoescaping | Open |
 
-**Priority for next patch:** F15, F17. F3, F4, F10, F11, F14 are lower-urgency hardening/operational items. F1, F2, F6, and F12 were resolved on 1 August 2026; F7, F8, F9, F13, F16, and F18 were resolved on 2 August 2026.
+**Priority for next patch:** F15, F17. F3, F4, F10, F11 are lower-urgency hardening/operational items. F1, F2, F6, and F12 were resolved on 1 August 2026; F7, F8, F9, F13, F14, F16, and F18 were resolved on 2 August 2026.
 
 ---
 
@@ -401,7 +401,7 @@ Allowing `/` (relative paths) is reasonable for self-hosted static icons. Apply 
 
 ---
 
-## F14 — Billing webhook has no replay protection (Medium)
+## F14 — Billing webhook has no replay protection (Medium) — RESOLVED 02/08/2026
 
 **Location:** `checktick_app/core/views_billing.py` L560–700 (`payment_webhook`, `verify_gocardless_webhook_signature`)
 
@@ -444,6 +444,12 @@ An attacker with access to a single captured webhook payload can replay it to du
 3. **Audit each event handler for idempotency** as a defence-in-depth layer, so that even if the idempotency record is missing, re-processing is safe. The `Payment` model should have a unique constraint on the GoCardless payment ID.
 
 **Regression risk:** Low. The idempotency table is additive; existing handlers continue to work. Test with `s/test --no-a11y` and add a test that replays the same webhook twice and asserts no duplicate `Payment` rows.
+
+**Remediation (02/08/2026):** Implemented recommended fix #1. A new `WebhookEvent` model (`checktick_app/core/models.py`, migration `0026_webhookevent`) stores each processed GoCardless event id with a unique constraint on `event_id`. The `payment_webhook` handler now wraps each event in a `transaction.atomic()` block that calls `WebhookEvent.objects.get_or_create(event_id=...)` *before* dispatching; if the row already exists the event is skipped (logged at INFO) and no handler runs. Event routing was extracted into `_dispatch_gocardless_event` so the idempotency guard is the single chokepoint for every resource type (subscriptions, payments, refunds, mandates). The idempotency record is created before the handler runs, so a crash mid-handler rolls back both the side effects and the idempotency row (the event will be retried by GoCardless on the next webhook). Events missing an `id` are skipped with a warning (cannot deduplicate). A read-only `WebhookEventAdmin` provides an audit view of processed events.
+
+Recommended fix #2 (timestamp freshness) was investigated: GoCardless does not include a timestamp in the standard `Webhook-Signature` header (it is a bare HMAC-SHA256 hex digest of the body), so the idempotency check is the primary defence, as the review notes. Recommended fix #3 (per-handler idempotency as defence in depth) is now fully in place: `handle_gocardless_payment_confirmed` guards duplicate `Payment` rows via `Payment.objects.filter(payment_id=...).exists()`, refund handlers deduplicate via `_refund_event_already_logged` against the audit trail, and a partial unique constraint `payment_provider_payment_id_unique` on `Payment.payment_id` (migration `0027_payment_provider_payment_id_unique`, condition `payment_id != ""`) enforces at the database level that a replayed `payments.confirmed` cannot create a duplicate `Payment` row even if the `WebhookEvent` idempotency record is missing. The constraint is partial so manual/offline payments with a blank `payment_id` remain allowed (the platform admin refund view and refundable-payments query both anticipate blank `payment_id` records). The event-id guard makes these per-handler checks a second layer rather than the only layer.
+
+Regression tests in `tests/test_billing.py::TestWebhookReplayProtection` cover: replaying a `subscriptions.created` event does not re-send the welcome email; replaying a `payments.confirmed` event does not re-activate a `PAST_DUE` subscription or duplicate the `Payment` row; and distinct event ids in the same webhook are all processed (the guard does not over-block).
 
 ---
 
@@ -889,7 +895,7 @@ The `verify_gocardless_webhook_signature` implementation (L659–700) is correct
 | F7 | Medium | CTO | Small (relocate/redact dump) | **Resolved 02/08/2026** | Private `logs/llm/` dir, 0o600 files, 24h prune, messages omitted, prod gate |
 | F8 | Medium | CTO | Trivial (permission declaration + test) | **Resolved 02/08/2026** | API now authenticated-only; professional-field options rendered server-side |
 | F13 | Medium | CTO | Trivial (add protocol validation) | **Resolved 02/08/2026** | Write-time + read-time validation; bundled with F16 styling work |
-| F14 | Medium | CTO | Medium (idempotency table + handler audit) | Next minor | Standard webhook hygiene |
+| F14 | Medium | CTO | Medium (idempotency table + handler audit) | **Resolved 02/08/2026** | `WebhookEvent` model + per-event `get_or_create` in `transaction.atomic()` |
 | F3 | Low | CTO | Trivial (settings guard) | Next patch | |
 | F4 | Low | CTO | Trivial (settings swap) + viewset audit | Next patch | |
 | F9 | Low | CTO | Small (test removal in staging) | **Resolved 02/08/2026** | Documented accepted risk; mitigation via F16 sanitiser |
@@ -908,7 +914,7 @@ Validation for all fixes: `s/test --no-a11y` and `s/lint` per `AGENTS.md`. Speci
 - **F7:** assert dumps are written under `settings.BASE_DIR / "logs" / "llm"` with mode `0o600`, the outgoing `messages` payload is absent from the file, dumps are blocked in production without `LLM_DEBUG_DUMP_INSECURE=1`, and files older than 24h are pruned (`tests/test_llm_debug_dump_security.py`).
 - **F8:** assert anonymous requests to `/api/datasets/` (list, retrieve, available-tags) are denied, and that an anonymous respondent on a public survey receives server-rendered professional-field options without any client-side `/api/datasets/` call (`checktick_app/api/tests/test_dataset_api.py`, `checktick_app/surveys/tests/test_anonymous_access.py`).
 - **F12:** assert script-bearing `.svg` uploads and animated variants of allowed raster formats are rejected without persistence; production audit confirmed no existing SVG media requiring cleanup.
-- **F14:** replay the same webhook twice and assert no duplicate `Payment` rows.
+- **F14:** replay the same webhook twice and assert no duplicate `Payment` rows, no re-sent welcome email, and no re-activation of a `PAST_DUE` subscription (`tests/test_billing.py::TestWebhookReplayProtection`); assert the partial unique constraint on `Payment.payment_id` rejects duplicate provider payment ids while allowing multiple blank `payment_id` manual payments.
 - **F16:** assert `}` in `theme_css_light` is stripped before rendering (`checktick_app/core/tests/test_theme_utils.py`, `checktick_app/surveys/tests/test_xss_creation_forms.py`).
 - **F13:** assert `javascript:`/`data:`/`file:`/`vbscript:` URIs are rejected at write time and not rendered on the public take page (`checktick_app/surveys/tests/test_xss_creation_forms.py`).
 - **F9:** assert the CSP header is emitted, `style-src` does not allow `*`, `script-src` does not allow `'unsafe-inline'`, and the `'unsafe-inline'` relaxation is documented in `settings.py` and `docs/security-overview.md` (`checktick_app/core/tests/test_csp.py`).

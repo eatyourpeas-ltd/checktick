@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 User = get_user_model()
@@ -706,6 +707,23 @@ class Payment(models.Model):
             models.Index(fields=["status"]),
             models.Index(fields=["user"]),
         ]
+        constraints = [
+            # F14 defence-in-depth: a provider payment id (e.g. GoCardless
+            # ``PM...``) must map to at most one Payment row. The webhook
+            # handler's ``WebhookEvent`` idempotency guard is the primary
+            # defence against replays; this partial unique constraint is the
+            # second layer, so even if the idempotency record is missing a
+            # replayed ``payments.confirmed`` cannot create a duplicate
+            # Payment row. The constraint is partial (``payment_id != ""``)
+            # so manual/offline payments with a blank ``payment_id`` are still
+            # allowed — the platform admin refund view and the refundable
+            # payments query both anticipate blank ``payment_id`` records.
+            models.UniqueConstraint(
+                fields=["payment_id"],
+                condition=~Q(payment_id=""),
+                name="payment_provider_payment_id_unique",
+            ),
+        ]
 
     def __str__(self) -> str:
         return (
@@ -836,6 +854,46 @@ class Payment(models.Model):
     def get_vat_rate_display(self) -> str:
         """Return formatted VAT rate."""
         return f"{float(self.vat_rate) * 100:.0f}%"
+
+
+class WebhookEvent(models.Model):
+    """Idempotency record for processed payment-provider webhook events.
+
+    GoCardless (and similar providers) sign webhook bodies with an HMAC of the
+    webhook secret, but the signature only proves authenticity — it does not
+    prevent a captured body+signature from being replayed. Each GoCardless
+    event carries a unique ``id`` (``EV...``). The webhook handler records
+    every processed event id here, inside the same transaction as the event's
+    side effects, so that a replayed webhook is skipped before any handler
+    runs. This closes the replay-attack vector described in security finding
+    F14 (see ``docs/compliance/security-review-august-2026.md``).
+    """
+
+    event_id = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="Provider event id (e.g. GoCardless 'EV...' id).",
+    )
+    event_type = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="'{resource_type}.{action}' for GoCardless events.",
+    )
+    processed_at = models.DateTimeField(
+        auto_now_add=True, help_text="When the event was first processed."
+    )
+
+    class Meta:
+        verbose_name = "Processed webhook event"
+        verbose_name_plural = "Processed webhook events"
+        ordering = ["-processed_at"]
+        indexes = [
+            models.Index(fields=["event_id"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.event_type or 'event'} {self.event_id}"
 
 
 class UserAPIKey(models.Model):
