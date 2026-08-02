@@ -5,6 +5,24 @@ from django.utils.safestring import SafeString, mark_safe
 
 _VAR_LINE_RE = re.compile(r"--(?P<key>[a-zA-Z0-9_-]+)\s*:\s*(?P<val>[^;]+);?")
 
+# Schemes permitted for URL fields rendered into src/href attributes
+# (icon_url, font_css_url, etc.).  Relative paths starting with `/` are
+# also permitted for self-hosted static assets.  Rejects javascript:, data:,
+# file:, vbscript: and any other scheme (security-review F13).
+_SAFE_URL_PREFIXES = ("http://", "https://", "/")
+
+
+def is_safe_url(val: str) -> bool:
+    """Return True if `val` is an http(s):// URL or a root-relative path.
+
+    Used to gate URL fields rendered into <img src>/<link href>/<a href>
+    attributes where javascript:/data:/file: schemes would be a latent XSS.
+    Empty strings are treated as safe (no value set).
+    """
+    if not val:
+        return True
+    return val.lower().startswith(_SAFE_URL_PREFIXES)
+
 
 def _sanitize_css_value(val: str) -> str:
     """Strip characters that could break out of a CSS value context.
@@ -58,12 +76,34 @@ def sanitize_font_family(val: str) -> SafeString:
 
 
 def sanitize_css_block(css: str) -> str:
-    """Strip characters that could break out of a <style> block.
+    """Strip characters that could break out of a <style> block or CSS rule.
 
     Used as a last-resort guard on any CSS string rendered with |safe.
-    Removes angle brackets that would allow </style> breakout.
+    Removes:
+    - angle brackets (prevents </style> breakout and <script> injection)
+    - curly braces (prevents closing the wrapping `[data-theme="..."] { ... }`
+      rule early and injecting new rules — security-review F16)
+    - url() references and bare http(s):// URLs (prevents CSS-based data
+      exfiltration via background-image:url(attacker/?leak=...) — F16/F9)
+
+    The existing usage renders `theme_css_light`/`theme_css_dark` as a list of
+    `--var: value;` declarations inside a fixed `[data-theme]` rule, so the
+    input only ever needs values — never rule blocks or external URL loads.
+    Stripping `{}` and url() is therefore safe for the intended input and
+    prevents both rule breakout and data exfiltration.
     """
-    return css.replace("<", "").replace(">", "")
+    css = (
+        css.replace("<", "")
+        .replace(">", "")
+        .replace("{", "")
+        .replace("}", "")
+    )
+    # Strip url() references (with or without a closing paren) to prevent
+    # CSS-based data exfiltration via background-image:url(attacker/?...).
+    css = re.sub(r"url\s*\([^)]*\)?", "", css, flags=re.IGNORECASE)
+    # Strip any bare URL left behind once the url() opener was removed.
+    css = re.sub(r"https?://\S*", "", css, flags=re.IGNORECASE)
+    return css
 
 
 def _map_key(k: str) -> str:

@@ -526,11 +526,27 @@ def profile(request):
         if SiteBranding is not None:
             sb, created = SiteBranding.objects.get_or_create(pk=1)
             sb.default_theme = request.POST.get("default_theme") or sb.default_theme
-            sb.icon_url = (request.POST.get("icon_url") or "").strip()
+            _icon_url = (request.POST.get("icon_url") or "").strip()
+            _icon_url_dark = (request.POST.get("icon_url_dark") or "").strip()
+            # Validate icon URLs: only allow http://, https://, and relative
+            # paths starting with `/`.  Rejects javascript:, data:, file:,
+            # vbscript: and any other scheme (security-review F13).  Although
+            # this view is superuser-only, the value is rendered across
+            # public-facing templates, so we validate at write time as well.
+            for _label, _val in (("Icon URL", _icon_url), ("Dark icon URL", _icon_url_dark)):
+                if _val and not _val.lower().startswith(("http://", "https://", "/")):
+                    messages.error(
+                        request,
+                        _(
+                            f"{_label} must start with https://, http://, or be a relative path."
+                        ),
+                    )
+                    return redirect("core:profile")
+            sb.icon_url = _icon_url
             if request.FILES.get("icon_file"):
                 sb.icon_file = request.FILES["icon_file"]
             # Dark icon fields
-            sb.icon_url_dark = (request.POST.get("icon_url_dark") or "").strip()
+            sb.icon_url_dark = _icon_url_dark
             if request.FILES.get("icon_file_dark"):
                 sb.icon_file_dark = request.FILES["icon_file_dark"]
             sb.font_heading = sanitize_font_family(

