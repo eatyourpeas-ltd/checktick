@@ -366,6 +366,239 @@ def test_dataset_create_allows_creator(client, users, org1):
     assert res.status_code == 200
 
 
+def _set_tier(user, tier):
+    """Set a user's account tier (profiles are auto-created by signal).
+
+    Mutates the user's cached ``profile`` relation (not a fresh instance):
+    the ``save_user_profile`` post-save signal re-saves ``user.profile`` on
+    every ``User.save()`` (e.g. ``update_last_login`` during force_login),
+    which would overwrite the tier with a stale cached copy otherwise.
+    """
+    profile = user.profile
+    profile.account_tier = tier
+    profile.save(update_fields=["account_tier"])
+    return profile
+
+
+@pytest.mark.django_db
+def test_dataset_create_blocks_free_individual_user(client, users):
+    """FREE-tier individual users cannot create datasets (tier gate)."""
+    admin, creator, viewer, outsider = users
+    client.force_login(outsider)  # no org membership, FREE tier by default
+    res = client.get(reverse("surveys:dataset_create"))
+    assert res.status_code == 403
+
+
+@pytest.mark.django_db
+def test_dataset_create_allows_pro_individual_user(client, users):
+    """PRO-tier individual users can create personal datasets."""
+    from checktick_app.core.models import UserProfile
+
+    admin, creator, viewer, outsider = users
+    _set_tier(outsider, UserProfile.AccountTier.PRO)
+    client.force_login(outsider)  # no org membership
+    res = client.get(reverse("surveys:dataset_create"))
+    assert res.status_code == 200
+
+    data = {
+        "name": "My Personal Dataset",
+        "options": "Option 1\nOption 2",
+    }
+    res = client.post(reverse("surveys:dataset_create"), data=data)
+    assert res.status_code == 302
+    dataset = DataSet.objects.get(name="My Personal Dataset")
+    assert dataset.created_by == outsider
+    assert dataset.organization is None  # personal dataset
+    assert dataset.team is None
+    assert dataset.is_global is False
+
+
+@pytest.mark.django_db
+def test_dataset_create_team_creator_can_share_with_team(client, users):
+    """A team ADMIN/CREATOR (no org) can create a dataset shared with their team."""
+    from checktick_app.surveys.models import Team, TeamMembership
+
+    admin, creator, viewer, outsider = users
+    team = Team.objects.create(name="Team X", owner=outsider)
+    TeamMembership.objects.create(
+        team=team, user=outsider, role=TeamMembership.Role.CREATOR
+    )
+    client.force_login(outsider)
+    res = client.get(reverse("surveys:dataset_create"))
+    assert res.status_code == 200
+
+    data = {
+        "name": "Team Shared Dataset",
+        "options": "Option 1\nOption 2",
+        "share_with": f"team:{team.id}",
+    }
+    res = client.post(reverse("surveys:dataset_create"), data=data)
+    assert res.status_code == 302
+    dataset = DataSet.objects.get(name="Team Shared Dataset")
+    assert dataset.created_by == outsider
+    assert dataset.team == team
+    assert dataset.organization is None
+
+
+@pytest.mark.django_db
+def test_dataset_create_team_viewer_blocked(client, users):
+    """A team VIEWER (no org, FREE tier) cannot create datasets."""
+    from checktick_app.surveys.models import Team, TeamMembership
+
+    admin, creator, viewer, outsider = users
+    team = Team.objects.create(name="Team X", owner=admin)
+    TeamMembership.objects.create(
+        team=team, user=outsider, role=TeamMembership.Role.VIEWER
+    )
+    client.force_login(outsider)
+    res = client.get(reverse("surveys:dataset_create"))
+    assert res.status_code == 403
+
+
+@pytest.mark.django_db
+def test_dataset_create_cannot_share_with_other_team(client, users):
+    """Cannot share a dataset with a team the user has no creator role in."""
+    from checktick_app.core.models import UserProfile
+    from checktick_app.surveys.models import Team, TeamMembership
+
+    admin, creator, viewer, outsider = users
+    other_team = Team.objects.create(name="Other Team", owner=admin)
+    TeamMembership.objects.create(
+        team=other_team, user=admin, role=TeamMembership.Role.ADMIN
+    )
+    _set_tier(outsider, UserProfile.AccountTier.PRO)
+    client.force_login(outsider)
+
+    data = {
+        "name": "Sneaky Dataset",
+        "options": "Option 1\nOption 2",
+        "share_with": f"team:{other_team.id}",
+    }
+    res = client.post(reverse("surveys:dataset_create"), data=data)
+    assert res.status_code == 200  # stays on form with error
+    assert not DataSet.objects.filter(name="Sneaky Dataset").exists()
+
+
+@pytest.mark.django_db
+def test_team_members_see_team_datasets(client, users):
+    """All team members (including VIEWERs) can see team-shared datasets."""
+    from checktick_app.surveys.models import Team, TeamMembership
+
+    admin, creator, viewer, outsider = users
+    team = Team.objects.create(name="Team X", owner=admin)
+    TeamMembership.objects.create(team=team, user=admin, role=TeamMembership.Role.ADMIN)
+    TeamMembership.objects.create(
+        team=team, user=outsider, role=TeamMembership.Role.VIEWER
+    )
+    team_ds = DataSet.objects.create(
+        key="team_shared_list",
+        name="Team Shared List",
+        category="user_created",
+        source_type="manual",
+        is_custom=True,
+        team=team,
+        created_by=admin,
+        options={"a": "Option A"},
+    )
+
+    # Team VIEWER can see it in the list and on the detail page (read-only)
+    client.force_login(outsider)
+    res = client.get(reverse("surveys:dataset_list"))
+    assert res.status_code == 200
+    ids = [d.id for d in res.context["page_obj"].object_list]
+    assert team_ds.id in ids
+
+    res = client.get(
+        reverse("surveys:dataset_detail", kwargs={"dataset_id": team_ds.id})
+    )
+    assert res.status_code == 200
+    assert res.context["can_edit"] is False
+
+    # Team ADMIN can edit it
+    client.force_login(admin)
+    res = client.get(
+        reverse("surveys:dataset_detail", kwargs={"dataset_id": team_ds.id})
+    )
+    assert res.status_code == 200
+    assert res.context["can_edit"] is True
+
+
+@pytest.mark.django_db
+def test_non_team_members_cannot_see_team_datasets(client, users):
+    """Users outside the team cannot see team-shared datasets."""
+    from checktick_app.surveys.models import Team, TeamMembership
+
+    admin, creator, viewer, outsider = users
+    team = Team.objects.create(name="Team X", owner=admin)
+    TeamMembership.objects.create(team=team, user=admin, role=TeamMembership.Role.ADMIN)
+    team_ds = DataSet.objects.create(
+        key="team_private_list",
+        name="Team Private List",
+        category="user_created",
+        source_type="manual",
+        is_custom=True,
+        team=team,
+        created_by=admin,
+        options={"a": "Option A"},
+    )
+
+    client.force_login(outsider)  # not in the team
+    res = client.get(
+        reverse("surveys:dataset_detail", kwargs={"dataset_id": team_ds.id})
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.django_db
+def test_downgraded_user_dataset_frozen_but_deletable(client, users):
+    """After a PRO→FREE downgrade, personal datasets are frozen:
+    visible and usable, deletable, but not editable; creation denied."""
+    from checktick_app.core.models import UserProfile
+
+    admin, creator, viewer, outsider = users
+    _set_tier(outsider, UserProfile.AccountTier.PRO)
+    personal_ds = DataSet.objects.create(
+        key="pro_era_list",
+        name="Pro Era List",
+        category="user_created",
+        source_type="manual",
+        is_custom=True,
+        created_by=outsider,
+        options={"a": "Option A"},
+    )
+
+    # Downgrade to FREE
+    _set_tier(outsider, UserProfile.AccountTier.FREE)
+    client.force_login(outsider)
+
+    # Still visible, still active
+    res = client.get(
+        reverse("surveys:dataset_detail", kwargs={"dataset_id": personal_ds.id})
+    )
+    assert res.status_code == 200
+    assert res.context["can_edit"] is False  # frozen
+    assert res.context["can_delete"] is True  # still deletable
+    assert res.context["can_create"] is False
+
+    # Edit is denied
+    res = client.get(
+        reverse("surveys:dataset_edit", kwargs={"dataset_id": personal_ds.id})
+    )
+    assert res.status_code == 403
+
+    # Create is denied
+    res = client.get(reverse("surveys:dataset_create"))
+    assert res.status_code == 403
+
+    # Delete still works
+    res = client.post(
+        reverse("surveys:dataset_delete", kwargs={"dataset_id": personal_ds.id})
+    )
+    assert res.status_code == 302
+    personal_ds.refresh_from_db()
+    assert personal_ds.is_active is False
+
+
 @pytest.mark.django_db
 def test_dataset_create_post_success(client, users, org1):
     """Test creating a dataset via POST."""
@@ -673,3 +906,193 @@ def test_dataset_delete_blocks_other_org(client, users, org2_dataset):
         reverse("surveys:dataset_delete", kwargs={"dataset_id": org2_dataset.id})
     )
     assert res.status_code == 404
+
+
+# ==============================================================================
+# SNOMED Snapshot View Tests (snapshot creates a dataset, so it must enforce
+# the same permission as dataset_create)
+# ==============================================================================
+
+
+@pytest.fixture
+def snomed_dataset(db):
+    """Create a global SNOMED dataset."""
+    return DataSet.objects.create(
+        key="snomed_test_refset",
+        name="SNOMED Test Refset",
+        category="snomed",
+        source_type="manual",
+        is_global=True,
+        options=[],
+    )
+
+
+@pytest.mark.django_db
+def test_snomed_snapshot_requires_login(client, snomed_dataset):
+    """Test that snapshot requires authentication."""
+    res = client.post(
+        reverse(
+            "surveys:dataset_snomed_snapshot",
+            kwargs={"dataset_id": snomed_dataset.id},
+        )
+    )
+    assert res.status_code == 302  # Redirect to login
+
+
+@pytest.mark.django_db
+def test_snomed_snapshot_blocks_viewer(client, users, org1, snomed_dataset):
+    """Org VIEWERs cannot create datasets, so they must not snapshot either."""
+    admin, creator, viewer, outsider = users
+    client.force_login(viewer)
+    res = client.post(
+        reverse(
+            "surveys:dataset_snomed_snapshot",
+            kwargs={"dataset_id": snomed_dataset.id},
+        )
+    )
+    assert res.status_code == 403
+    assert not DataSet.objects.filter(parent=snomed_dataset).exists()
+
+
+@pytest.mark.django_db
+def test_snomed_snapshot_blocks_data_custodian(client, users, org1, snomed_dataset):
+    """DATA_CUSTODIAN is an export/recovery role and must not create datasets."""
+    admin, creator, viewer, outsider = users
+    OrganizationMembership.objects.create(
+        organization=org1,
+        user=outsider,
+        role=OrganizationMembership.Role.DATA_CUSTODIAN,
+    )
+    client.force_login(outsider)
+    res = client.post(
+        reverse(
+            "surveys:dataset_snomed_snapshot",
+            kwargs={"dataset_id": snomed_dataset.id},
+        )
+    )
+    assert res.status_code == 403
+    assert not DataSet.objects.filter(parent=snomed_dataset).exists()
+
+
+@pytest.mark.django_db
+def test_snomed_snapshot_allows_creator_and_assigns_org(
+    client, users, org1, snomed_dataset, monkeypatch
+):
+    """CREATORs can snapshot; the snapshot is assigned to their org."""
+    admin, creator, viewer, outsider = users
+    monkeypatch.setattr(
+        "checktick_app.surveys.snomed_resolver.get_options",
+        lambda dataset: ["12345 | Test concept"],
+    )
+    client.force_login(creator)
+    res = client.post(
+        reverse(
+            "surveys:dataset_snomed_snapshot",
+            kwargs={"dataset_id": snomed_dataset.id},
+        )
+    )
+    assert res.status_code == 302
+    snapshot = DataSet.objects.get(parent=snomed_dataset)
+    assert snapshot.created_by == creator
+    assert snapshot.organization == org1
+    assert snapshot.is_global is False
+
+
+@pytest.mark.django_db
+def test_snomed_snapshot_individual_pro_user_gets_personal_dataset(
+    client, users, snomed_dataset, monkeypatch
+):
+    """PRO individual users (no org) can snapshot; result is a personal dataset."""
+    from checktick_app.core.models import UserProfile
+
+    admin, creator, viewer, outsider = users
+    _set_tier(outsider, UserProfile.AccountTier.PRO)
+    monkeypatch.setattr(
+        "checktick_app.surveys.snomed_resolver.get_options",
+        lambda dataset: ["12345 | Test concept"],
+    )
+    client.force_login(outsider)  # no org membership
+    res = client.post(
+        reverse(
+            "surveys:dataset_snomed_snapshot",
+            kwargs={"dataset_id": snomed_dataset.id},
+        )
+    )
+    assert res.status_code == 302
+    snapshot = DataSet.objects.get(parent=snomed_dataset)
+    assert snapshot.created_by == outsider
+    assert snapshot.organization is None
+    assert snapshot.team is None
+
+
+@pytest.mark.django_db
+def test_snomed_snapshot_blocks_free_individual_user(client, users, snomed_dataset):
+    """FREE individual users cannot snapshot (tier gate on dataset creation)."""
+    admin, creator, viewer, outsider = users
+    client.force_login(outsider)  # no org membership, FREE tier
+    res = client.post(
+        reverse(
+            "surveys:dataset_snomed_snapshot",
+            kwargs={"dataset_id": snomed_dataset.id},
+        )
+    )
+    assert res.status_code == 403
+    assert not DataSet.objects.filter(parent=snomed_dataset).exists()
+
+
+@pytest.mark.django_db
+def test_snomed_snapshot_team_creator_assigns_team(
+    client, users, snomed_dataset, monkeypatch
+):
+    """Team CREATOR snapshots are shared with their team."""
+    from checktick_app.surveys.models import Team, TeamMembership
+
+    admin, creator, viewer, outsider = users
+    team = Team.objects.create(name="Team X", owner=outsider)
+    TeamMembership.objects.create(
+        team=team, user=outsider, role=TeamMembership.Role.CREATOR
+    )
+    monkeypatch.setattr(
+        "checktick_app.surveys.snomed_resolver.get_options",
+        lambda dataset: ["12345 | Test concept"],
+    )
+    client.force_login(outsider)
+    res = client.post(
+        reverse(
+            "surveys:dataset_snomed_snapshot",
+            kwargs={"dataset_id": snomed_dataset.id},
+        )
+    )
+    assert res.status_code == 302
+    snapshot = DataSet.objects.get(parent=snomed_dataset)
+    assert snapshot.team == team
+    assert snapshot.organization is None
+
+
+@pytest.mark.django_db
+def test_dataset_detail_hides_snapshot_button_for_viewer(
+    client, users, org1, snomed_dataset
+):
+    """The snapshot button must not render for users who cannot create datasets."""
+    admin, creator, viewer, outsider = users
+    client.force_login(viewer)
+    res = client.get(
+        reverse("surveys:dataset_detail", kwargs={"dataset_id": snomed_dataset.id})
+    )
+    assert res.status_code == 200
+    assert res.context["can_create"] is False
+    assert "Snapshot to Custom Dataset" not in res.content.decode()
+
+
+@pytest.mark.django_db
+def test_dataset_detail_hides_clone_button_for_viewer(
+    client, users, org1, org1_dataset
+):
+    """The clone (Create Custom Version) button must not render for VIEWERs."""
+    admin, creator, viewer, outsider = users
+    client.force_login(viewer)
+    res = client.get(
+        reverse("surveys:dataset_detail", kwargs={"dataset_id": org1_dataset.id})
+    )
+    assert res.status_code == 200
+    assert "Create Custom Version" not in res.content.decode()

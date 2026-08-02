@@ -105,29 +105,25 @@ def can_create_datasets(user) -> bool:
     """Check if user can create datasets.
 
     Allowed:
-    - Individual users (not part of any organization)
-    - Organization members with ADMIN or CREATOR roles
+    - Organization members with ADMIN or CREATOR roles (org-funded capability)
+    - Team members with ADMIN or CREATOR roles (team-funded capability)
+    - Individual users on a PRO or higher tier
 
     Not allowed:
-    - VIEWER role members (read-only, cannot create anything)
+    - Org VIEWER / DATA_CUSTODIAN role members (read-only roles)
+    - FREE-tier individual users (existing datasets remain usable/deletable
+      but frozen — see ``can_edit_dataset`` / ``can_delete_dataset``)
     - Unauthenticated users
-
-    Future: Will restrict individual users to pro accounts only.
     """
     if not user.is_authenticated:
         return False
 
-    from .models import OrganizationMembership
+    from .models import OrganizationMembership, TeamMembership
 
-    # Check user's organization memberships
-    memberships = OrganizationMembership.objects.filter(user=user)
+    org_memberships = OrganizationMembership.objects.filter(user=user)
 
-    # If user has no org memberships, they're an individual user - allow
-    if not memberships.exists():
-        return True
-
-    # If user has ADMIN or CREATOR role in any org, allow
-    if memberships.filter(
+    # Org ADMIN or CREATOR in any org - allow (organisation-funded)
+    if org_memberships.filter(
         role__in=[
             OrganizationMembership.Role.ADMIN,
             OrganizationMembership.Role.CREATOR,
@@ -135,8 +131,79 @@ def can_create_datasets(user) -> bool:
     ).exists():
         return True
 
-    # User only has VIEWER or EDITOR roles - deny
-    return False
+    # User only holds read-only org roles (VIEWER / DATA_CUSTODIAN) - deny
+    if org_memberships.exists():
+        return False
+
+    # Team ADMIN or CREATOR in any team - allow (team-funded)
+    if TeamMembership.objects.filter(
+        user=user,
+        role__in=[
+            TeamMembership.Role.ADMIN,
+            TeamMembership.Role.CREATOR,
+        ],
+    ).exists():
+        return True
+
+    # Individual user - tier gate (PRO or higher)
+    from checktick_app.core.tier_limits import check_dataset_creation_permission
+
+    allowed, _reason = check_dataset_creation_permission(user)
+    return allowed
+
+
+def survey_dataset_scope_q(survey, user=None):
+    """Django ``Q`` filter for datasets a survey's questions may reference.
+
+    Global datasets, the survey's organisation's datasets, the survey's
+    team's shared datasets, and (when a user is given) that user's personal
+    datasets.
+    """
+    from django.db.models import Q
+
+    scope_q = Q(is_global=True)
+    if survey.organization_id is not None:
+        scope_q |= Q(organization=survey.organization)
+    if survey.team_id is not None:
+        scope_q |= Q(team=survey.team)
+    if user is not None and getattr(user, "is_authenticated", False):
+        scope_q |= Q(created_by=user, organization__isnull=True, team__isnull=True)
+    return scope_q
+
+
+def dataset_visibility_q(user):
+    """Django ``Q`` filter for datasets the user may see.
+
+    Global datasets, datasets belonging to any of the user's organisations,
+    datasets shared with any of the user's teams, and their own personal
+    datasets. All members of a team or organisation (including read-only
+    roles) can see and use the shared datasets.
+    """
+    from django.db.models import Q
+
+    if not user.is_authenticated:
+        return Q(is_global=True)
+    return (
+        Q(is_global=True)
+        | Q(organization__memberships__user=user)
+        | Q(team__memberships__user=user)
+        | Q(created_by=user, organization__isnull=True, team__isnull=True)
+    )
+
+
+def get_dataset_shareable_teams(user):
+    """Teams the user may share a new dataset with (ADMIN/CREATOR role)."""
+    from .models import Team, TeamMembership
+
+    if not user.is_authenticated:
+        return Team.objects.none()
+    return Team.objects.filter(
+        memberships__user=user,
+        memberships__role__in=[
+            TeamMembership.Role.ADMIN,
+            TeamMembership.Role.CREATOR,
+        ],
+    ).distinct()
 
 
 def can_edit_dataset(user, dataset) -> bool:
@@ -152,30 +219,112 @@ def can_edit_dataset(user, dataset) -> bool:
     if dataset.is_global and not user.is_superuser:
         return False
 
-    # Individual user datasets - check if user is the creator
-    if dataset.organization is None:
-        return dataset.created_by == user
+    from .models import TeamMembership
+
+    # Team datasets - user must be ADMIN or CREATOR in the dataset's team
+    if dataset.team_id is not None:
+        return TeamMembership.objects.filter(
+            user=user,
+            team=dataset.team,
+            role__in=[
+                TeamMembership.Role.ADMIN,
+                TeamMembership.Role.CREATOR,
+            ],
+        ).exists()
 
     # Organization datasets - user must be ADMIN or CREATOR in the dataset's organization
-    return OrganizationMembership.objects.filter(
-        user=user,
-        organization=dataset.organization,
-        role__in=[
-            OrganizationMembership.Role.ADMIN,
-            OrganizationMembership.Role.CREATOR,
-        ],
-    ).exists()
+    if dataset.organization_id is not None:
+        return OrganizationMembership.objects.filter(
+            user=user,
+            organization=dataset.organization,
+            role__in=[
+                OrganizationMembership.Role.ADMIN,
+                OrganizationMembership.Role.CREATOR,
+            ],
+        ).exists()
+
+    # Personal datasets - creator only, and their tier/role must still allow
+    # dataset creation. After a downgrade to FREE the dataset is frozen:
+    # still active and usable in surveys, viewable and deletable, but not
+    # editable until the owner upgrades again.
+    return dataset.created_by == user and can_create_datasets(user)
+
+
+def can_delete_dataset(user, dataset) -> bool:
+    """Check if user can delete (soft-delete) a specific dataset.
+
+    Deletion is deliberately NOT tier-gated for personal datasets: after a
+    downgrade the owner keeps the right to remove their own data even though
+    they can no longer create or edit datasets.
+    """
+    if not user.is_authenticated:
+        return False
+
+    # NHS DD datasets cannot be deleted
+    if dataset.category == "nhs_dd" and not dataset.is_custom:
+        return False
+
+    # Global datasets can only be deleted by superusers
+    if dataset.is_global and not user.is_superuser:
+        return False
+
+    from .models import TeamMembership
+
+    # Team datasets - team ADMIN/CREATOR (or the creator themselves)
+    if dataset.team_id is not None:
+        if dataset.created_by == user:
+            return True
+        return TeamMembership.objects.filter(
+            user=user,
+            team=dataset.team,
+            role__in=[
+                TeamMembership.Role.ADMIN,
+                TeamMembership.Role.CREATOR,
+            ],
+        ).exists()
+
+    # Organization datasets - org ADMIN/CREATOR
+    if dataset.organization_id is not None:
+        return OrganizationMembership.objects.filter(
+            user=user,
+            organization=dataset.organization,
+            role__in=[
+                OrganizationMembership.Role.ADMIN,
+                OrganizationMembership.Role.CREATOR,
+            ],
+        ).exists()
+
+    # Personal datasets - creator only, regardless of tier
+    return dataset.created_by == user
 
 
 def require_can_create_datasets(user) -> None:
     if not can_create_datasets(user):
-        # TODO: Update message when pro accounts are implemented
-        raise PermissionDenied("You must be authenticated to create datasets.")
+        # Surface the tier-upgrade message only when the denial is tier-based
+        # (individual user with no org/team creator roles). Org VIEWER /
+        # DATA_CUSTODIAN denials are role-based and get the generic message.
+        if (
+            user.is_authenticated
+            and not OrganizationMembership.objects.filter(user=user).exists()
+        ):
+            from checktick_app.core.tier_limits import (
+                check_dataset_creation_permission,
+            )
+
+            _allowed, reason = check_dataset_creation_permission(user)
+            if reason:
+                raise PermissionDenied(reason)
+        raise PermissionDenied("You do not have permission to create datasets.")
 
 
 def require_can_edit_dataset(user, dataset) -> None:
     if not can_edit_dataset(user, dataset):
         raise PermissionDenied("You do not have permission to edit this dataset.")
+
+
+def require_can_delete_dataset(user, dataset) -> None:
+    if not can_delete_dataset(user, dataset):
+        raise PermissionDenied("You do not have permission to delete this dataset.")
 
 
 # ============================================================================

@@ -36,7 +36,9 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 
+from checktick_app.context_processors import branding as platform_branding
 from checktick_app.core.decorators import email_confirmed_required
+from checktick_app.core.theme_utils import sanitize_font_family
 
 from .color import hex_to_oklch
 from .external_datasets import get_available_datasets
@@ -468,6 +470,44 @@ def _get_professional_group_and_fields(
     # sanitize ods map to only allowed fields
     ods_clean = {k: bool(ods_map.get(k)) for k in PROFESSIONAL_ODS_FIELDS}
     return group, fields, ods_clean
+
+
+def _get_professional_dataset_options() -> dict[str, list[dict[str, str]]]:
+    """Materialise dataset options for professional fields, keyed by field key.
+
+    Professional-field dropdowns (employing trust, health board, etc.) are
+    rendered server-side so that anonymous survey respondents never need to
+    call the datasets REST API (which requires authentication). Returns
+    ``{field_key: [{"value": code, "label": name}, ...], ...}`` for every
+    field in :data:`PROFESSIONAL_FIELD_TO_DATASET` whose dataset exists and
+    is active. Fields whose dataset is missing are omitted so the template
+    can fall back to a text input.
+    """
+    keys = set(PROFESSIONAL_FIELD_TO_DATASET.values())
+    datasets = {
+        ds.key: ds for ds in DataSet.objects.filter(key__in=keys, is_active=True)
+    }
+    options_by_field: dict[str, list[dict[str, str]]] = {}
+    for field_key, dataset_key in PROFESSIONAL_FIELD_TO_DATASET.items():
+        dataset = datasets.get(dataset_key)
+        if dataset is None:
+            continue
+        raw = dataset.options
+        if isinstance(raw, dict) and raw:
+            options_by_field[field_key] = [
+                {"value": code, "label": name} for code, name in raw.items()
+            ]
+        elif isinstance(raw, list) and raw:
+            normalised: list[dict[str, str]] = []
+            for opt in raw:
+                if isinstance(opt, dict):
+                    value = str(opt.get("value", opt.get("label", "")))
+                    label = str(opt.get("label", value))
+                else:
+                    value = label = str(opt)
+                normalised.append({"value": value, "label": label})
+            options_by_field[field_key] = normalised
+    return options_by_field
 
 
 def _survey_collects_patient_data(survey: Survey) -> bool:
@@ -1202,6 +1242,11 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "professional_defs": PROFESSIONAL_FIELD_DEFS,
         "professional_ods": professional_ods,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
+        "professional_dataset_options": (
+            _get_professional_dataset_options()
+            if (show_professional_details or has_professional_template)
+            else {}
+        ),
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
@@ -1214,17 +1259,21 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
             or getattr(settings, "BRAND_ICON_URL", "/static/favicon.ico"),
             "theme_name": brand_overrides.get("theme_name")
             or getattr(settings, "BRAND_THEME", "checktick"),
-            "font_heading": brand_overrides.get("font_heading")
-            or getattr(
-                settings,
-                "BRAND_FONT_HEADING",
-                "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+            "font_heading": sanitize_font_family(
+                brand_overrides.get("font_heading")
+                or getattr(
+                    settings,
+                    "BRAND_FONT_HEADING",
+                    "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+                )
             ),
-            "font_body": brand_overrides.get("font_body")
-            or getattr(
-                settings,
-                "BRAND_FONT_BODY",
-                "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
+            "font_body": sanitize_font_family(
+                brand_overrides.get("font_body")
+                or getattr(
+                    settings,
+                    "BRAND_FONT_BODY",
+                    "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
+                )
             ),
             "font_css_url": brand_overrides.get("font_css_url")
             or getattr(
@@ -1267,6 +1316,10 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
     )
     show_patient_details = patient_group is not None
     show_professional_details = prof_group is not None
+    has_professional_template = any(
+        getattr(q, "type", None) == SurveyQuestion.Types.TEMPLATE_PROFESSIONAL
+        for q in qs
+    )
     style = survey.style or {}
     brand_overrides = {
         "title": style.get("title"),
@@ -1296,6 +1349,11 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "professional_defs": PROFESSIONAL_FIELD_DEFS,
         "professional_ods": professional_ods,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
+        "professional_dataset_options": (
+            _get_professional_dataset_options()
+            if (show_professional_details or has_professional_template)
+            else {}
+        ),
         "is_preview": True,  # Flag to indicate this is preview mode
     }
     if any(
@@ -1308,17 +1366,21 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
             or getattr(settings, "BRAND_ICON_URL", "/static/favicon.ico"),
             "theme_name": brand_overrides.get("theme_name")
             or getattr(settings, "BRAND_THEME", "checktick"),
-            "font_heading": brand_overrides.get("font_heading")
-            or getattr(
-                settings,
-                "BRAND_FONT_HEADING",
-                "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+            "font_heading": sanitize_font_family(
+                brand_overrides.get("font_heading")
+                or getattr(
+                    settings,
+                    "BRAND_FONT_HEADING",
+                    "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+                )
             ),
-            "font_body": brand_overrides.get("font_body")
-            or getattr(
-                settings,
-                "BRAND_FONT_BODY",
-                "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
+            "font_body": sanitize_font_family(
+                brand_overrides.get("font_body")
+                or getattr(
+                    settings,
+                    "BRAND_FONT_BODY",
+                    "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
+                )
             ),
             "font_css_url": brand_overrides.get("font_css_url")
             or getattr(
@@ -2362,31 +2424,15 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
     ) or brand_overrides.get("primary_hex"):
+        # Management pages always use platform fonts (heading/body/font CSS).
+        # Only non-font branding (title, icon, theme, primary colour) may be
+        # overridden per-survey; survey fonts apply on respondent-facing pages.
+        base_brand = platform_branding(request)["brand"]
         ctx["brand"] = {
-            "title": brand_overrides.get("title")
-            or getattr(settings, "BRAND_TITLE", "CheckTick"),
-            "icon_url": brand_overrides.get("icon_url")
-            or getattr(settings, "BRAND_ICON_URL", "/static/favicon.ico"),
-            "theme_name": brand_overrides.get("theme_name")
-            or getattr(settings, "BRAND_THEME", "checktick"),
-            "font_heading": brand_overrides.get("font_heading")
-            or getattr(
-                settings,
-                "BRAND_FONT_HEADING",
-                "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
-            ),
-            "font_body": brand_overrides.get("font_body")
-            or getattr(
-                settings,
-                "BRAND_FONT_BODY",
-                "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
-            ),
-            "font_css_url": brand_overrides.get("font_css_url")
-            or getattr(
-                settings,
-                "BRAND_FONT_CSS_URL",
-                "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=Merriweather:wght@300;400;700&display=swap",
-            ),
+            **base_brand,
+            "title": brand_overrides.get("title") or base_brand["title"],
+            "icon_url": brand_overrides.get("icon_url") or base_brand["icon_url"],
+            "theme_name": brand_overrides.get("theme_name") or base_brand["theme_name"],
             "primary": hex_to_oklch(brand_overrides.get("primary_hex") or ""),
         }
     return render(request, "surveys/dashboard.html", ctx)
@@ -4379,6 +4425,10 @@ def _handle_participant_submission(
     )
     show_patient_details = patient_group is not None
     show_professional_details = prof_group is not None
+    has_professional_template = any(
+        getattr(q, "type", None) == SurveyQuestion.Types.TEMPLATE_PROFESSIONAL
+        for q in qs
+    )
     # Sanitise survey.style CSS in-memory before rendering so that a malicious
     # theme_css_light/dark cannot break out of the <style> block via |safe.
     from checktick_app.core.theme_utils import sanitize_css_block as _sanitize_css
@@ -4406,6 +4456,11 @@ def _handle_participant_submission(
         "professional_defs": PROFESSIONAL_FIELD_DEFS,
         "professional_ods": professional_ods,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
+        "professional_dataset_options": (
+            _get_professional_dataset_options()
+            if (show_professional_details or has_professional_template)
+            else {}
+        ),
         "is_preview": False,  # Flag to indicate this is public submission
         # Progress tracking
         "show_progress": True,
@@ -4708,31 +4763,15 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
     ) or brand_overrides.get("primary_hex"):
+        # Management pages always use platform fonts (heading/body/font CSS).
+        # Only non-font branding (title, icon, theme, primary colour) may be
+        # overridden per-survey; survey fonts apply on respondent-facing pages.
+        base_brand = platform_branding(request)["brand"]
         ctx["brand"] = {
-            "title": brand_overrides.get("title")
-            or getattr(settings, "BRAND_TITLE", "CheckTick"),
-            "icon_url": brand_overrides.get("icon_url")
-            or getattr(settings, "BRAND_ICON_URL", "/static/favicon.ico"),
-            "theme_name": brand_overrides.get("theme_name")
-            or getattr(settings, "BRAND_THEME", "checktick"),
-            "font_heading": brand_overrides.get("font_heading")
-            or getattr(
-                settings,
-                "BRAND_FONT_HEADING",
-                "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
-            ),
-            "font_body": brand_overrides.get("font_body")
-            or getattr(
-                settings,
-                "BRAND_FONT_BODY",
-                "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
-            ),
-            "font_css_url": brand_overrides.get("font_css_url")
-            or getattr(
-                settings,
-                "BRAND_FONT_CSS_URL",
-                "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=Merriweather:wght@300;400;700&display=swap",
-            ),
+            **base_brand,
+            "title": brand_overrides.get("title") or base_brand["title"],
+            "icon_url": brand_overrides.get("icon_url") or base_brand["icon_url"],
+            "theme_name": brand_overrides.get("theme_name") or base_brand["theme_name"],
             "primary": hex_to_oklch(brand_overrides.get("primary_hex") or ""),
         }
     return render(request, "surveys/groups.html", ctx)
@@ -6728,35 +6767,24 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
         "professional_ods_on": professional_ods_on,
         "professional_ods_pairs": professional_ods_pairs,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
-        "available_datasets": get_available_datasets(organization=survey.organization),
+        "available_datasets": get_available_datasets(
+            organization=survey.organization,
+            team=survey.team,
+            user=request.user,
+        ),
         "snomed_available": snomed_available,
         "snomed_datasets_meta": snomed_datasets_meta,
     }
     if any(brand_overrides.values()):
+        # Management pages always use platform fonts (heading/body/font CSS).
+        # Only non-font branding (title, icon, theme, primary colour) may be
+        # overridden per-survey; survey fonts apply on respondent-facing pages.
+        base_brand = platform_branding(request)["brand"]
         ctx["brand"] = {
-            "title": brand_overrides.get("title")
-            or getattr(settings, "BRAND_TITLE", "CheckTick"),
-            "icon_url": brand_overrides.get("icon_url")
-            or getattr(settings, "BRAND_ICON_URL", "/static/favicon.ico"),
-            "theme_name": brand_overrides.get("theme_name")
-            or getattr(settings, "BRAND_THEME", "checktick"),
-            "font_heading": brand_overrides.get("font_heading")
-            or getattr(
-                settings,
-                "BRAND_FONT_HEADING",
-                "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
-            ),
-            "font_body": brand_overrides.get("font_body")
-            or getattr(
-                settings,
-                "BRAND_FONT_BODY",
-                "Merriweather, ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif",
-            ),
-            "font_css_url": getattr(
-                settings,
-                "BRAND_FONT_CSS_URL",
-                "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=Merriweather:wght@300;400;700&display=swap",
-            ),
+            **base_brand,
+            "title": brand_overrides.get("title") or base_brand["title"],
+            "icon_url": brand_overrides.get("icon_url") or base_brand["icon_url"],
+            "theme_name": brand_overrides.get("theme_name") or base_brand["theme_name"],
             "primary": brand_overrides.get("primary"),
         }
     return render(
@@ -6877,12 +6905,12 @@ def builder_question_create(request: HttpRequest, slug: str) -> HttpResponse:
     # Look up dataset if provided (with access control)
     dataset = None
     if dataset_key:
-        from django.db.models import Q
 
         from .models import DataSet
+        from .permissions import survey_dataset_scope_q
 
         dataset = DataSet.objects.filter(
-            Q(is_global=True) | Q(organization=survey.organization),
+            survey_dataset_scope_q(survey, user=request.user),
             key=dataset_key,
             is_active=True,
         ).first()
@@ -7062,12 +7090,12 @@ def builder_group_question_create(
     # Look up dataset if provided (with access control)
     dataset = None
     if dataset_key:
-        from django.db.models import Q
 
         from .models import DataSet
+        from .permissions import survey_dataset_scope_q
 
         dataset = DataSet.objects.filter(
-            Q(is_global=True) | Q(organization=survey.organization),
+            survey_dataset_scope_q(survey, user=request.user),
             key=dataset_key,
             is_active=True,
         ).first()
@@ -7444,12 +7472,12 @@ def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResp
 
     # Look up dataset if provided (with access control)
     if dataset_key:
-        from django.db.models import Q
 
         from .models import DataSet
+        from .permissions import survey_dataset_scope_q
 
         q.dataset = DataSet.objects.filter(
-            Q(is_global=True) | Q(organization=survey.organization),
+            survey_dataset_scope_q(survey, user=request.user),
             key=dataset_key,
             is_active=True,
         ).first()
@@ -7483,12 +7511,12 @@ def builder_group_question_edit(
 
     # Look up dataset if provided (with access control)
     if dataset_key:
-        from django.db.models import Q
 
         from .models import DataSet
+        from .permissions import survey_dataset_scope_q
 
         q.dataset = DataSet.objects.filter(
-            Q(is_global=True) | Q(organization=survey.organization),
+            survey_dataset_scope_q(survey, user=request.user),
             key=dataset_key,
             is_active=True,
         ).first()
@@ -7876,7 +7904,11 @@ def _inject_datasets_context(session: "LLMConversationSession", survey: Survey) 
     This gives the AI knowledge of the user's accessible datasets so it can emit
     correct `dataset: <key>` lines when generating dropdown questions.
     """
-    available = get_available_datasets(organization=survey.organization)
+    available = get_available_datasets(
+        organization=survey.organization,
+        team=survey.team,
+        user=survey.owner,
+    )
     if not available:
         return
     lines = [f"  - {key}: {name}" for key, name in sorted(available.items())]
@@ -8405,13 +8437,14 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                         dataset = None
                         dataset_key = q.get("dataset_key")
                         if dataset_key:
-                            from django.db.models import Q as _Q
 
                             from .models import DataSet
+                            from .permissions import (
+                                survey_dataset_scope_q as _scope_q,
+                            )
 
                             dataset = DataSet.objects.filter(
-                                _Q(is_global=True)
-                                | _Q(organization=survey.organization),
+                                _scope_q(survey, user=request.user),
                                 key=dataset_key,
                                 is_active=True,
                             ).first()
@@ -8893,18 +8926,15 @@ def dataset_list(request: HttpRequest) -> HttpResponse:
 
     user = request.user
 
-    # Get organizations where user is a member
-    user_orgs = Organization.objects.filter(memberships__user=user)
+    # Build base queryset: global + org + team + personal datasets
+    from .permissions import dataset_visibility_q
 
-    # Build base queryset: global datasets + datasets from user's organizations + individual user datasets
     base_datasets = (
         DataSet.objects.filter(
-            Q(is_global=True)
-            | Q(organization__in=user_orgs)
-            | Q(created_by=user, organization__isnull=True),
+            dataset_visibility_q(user),
             is_active=True,
         )
-        .select_related("organization", "created_by", "parent")
+        .select_related("organization", "team", "created_by", "parent")
         .distinct()
     )
 
@@ -9006,22 +9036,27 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
     logger_detail = logging.getLogger(__name__)
     user = request.user
 
-    # Get user's organizations
-    user_orgs = Organization.objects.filter(memberships__user=user)
+    from .permissions import can_delete_dataset, dataset_visibility_q
 
     # Get dataset and check access
     dataset = get_object_or_404(
         DataSet.objects.filter(
-            Q(is_global=True)
-            | Q(organization__in=user_orgs)
-            | Q(created_by=user, organization__isnull=True),
+            dataset_visibility_q(user),
             is_active=True,
-        ).select_related("organization", "created_by", "parent"),
+        )
+        .select_related("organization", "team", "created_by", "parent")
+        .distinct(),
         id=dataset_id,
     )
 
     # Check if user can edit this dataset
     user_can_edit = can_edit_dataset(user, dataset)
+
+    # Deletion is allowed for creators even when tier-frozen (downgraded)
+    user_can_delete = can_delete_dataset(user, dataset)
+
+    # Whether the user may create datasets (gates snapshot/clone buttons)
+    user_can_create = can_create_datasets(user)
 
     # Get questions using this dataset
     questions_using = SurveyQuestion.objects.filter(dataset=dataset).select_related(
@@ -9057,6 +9092,8 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
         {
             "dataset": dataset,
             "can_edit": user_can_edit,
+            "can_delete": user_can_delete,
+            "can_create": user_can_create,
             "questions_using": questions_using,
             "snomed_options": snomed_options,
             "snomed_unavailable": snomed_unavailable,
@@ -9069,6 +9106,8 @@ def dataset_detail(request: HttpRequest, dataset_id: int) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 def dataset_create(request: HttpRequest) -> HttpResponse:
     """Create a new dataset."""
+    from .permissions import get_dataset_shareable_teams
+
     require_can_create_datasets(request.user)
 
     # Get organizations where user is ADMIN or CREATOR
@@ -9080,13 +9119,25 @@ def dataset_create(request: HttpRequest) -> HttpResponse:
         ],
     )
 
+    # Teams the user may share a dataset with (ADMIN/CREATOR role)
+    user_teams = get_dataset_shareable_teams(request.user)
+
     if request.method == "POST":
         # Extract form data
         key = request.POST.get("key", "").strip()
         name = request.POST.get("name", "").strip()
         description = request.POST.get("description", "").strip()
         tags_text = request.POST.get("tags", "").strip()
+        # Single "share with" choice: '', 'org:<id>' or 'team:<id>'
+        # (legacy 'organization' field still accepted for API/backwards compat)
+        share_with = request.POST.get("share_with", "").strip()
         organization_id = request.POST.get("organization", "").strip()
+        team_id = ""
+        if share_with.startswith("org:"):
+            organization_id = share_with[4:]
+        elif share_with.startswith("team:"):
+            team_id = share_with[5:]
+            organization_id = ""
         options_text = request.POST.get("options", "").strip()
 
         # All user-created datasets have these defaults
@@ -9151,6 +9202,16 @@ def dataset_create(request: HttpRequest) -> HttpResponse:
                     )
             except Organization.DoesNotExist:
                 errors.append("Invalid organization selected")
+
+        # Handle team sharing - only teams where user is ADMIN/CREATOR
+        team = None
+        if team_id:
+            try:
+                team = Team.objects.get(id=team_id)
+                if not user_teams.filter(id=team.id).exists():
+                    errors.append("You don't have permission in the selected team")
+            except (Team.DoesNotExist, ValueError):
+                errors.append("Invalid team selected")
 
         # Parse options intelligently
         options = []
@@ -9220,6 +9281,7 @@ def dataset_create(request: HttpRequest) -> HttpResponse:
                 "surveys/dataset_form.html",
                 {
                     "organizations": user_orgs,
+                    "teams": user_teams,
                     "form_data": request.POST,
                     "is_create": True,
                 },
@@ -9233,6 +9295,7 @@ def dataset_create(request: HttpRequest) -> HttpResponse:
             category=category,
             source_type=source_type,
             organization=org,  # Can be None for individual users
+            team=team,  # Optional team sharing (mutually exclusive with org)
             is_global=False,  # Regular users cannot create global datasets
             options=options,
             tags=tags,
@@ -9249,15 +9312,18 @@ def dataset_create(request: HttpRequest) -> HttpResponse:
 
     if clone_from_id:
         try:
-            # Get the source dataset to clone from
-            all_user_orgs = Organization.objects.filter(memberships__user=request.user)
-            clone_source = DataSet.objects.filter(
-                Q(is_global=True)
-                | Q(organization__in=all_user_orgs)
-                | Q(created_by=request.user, organization__isnull=True),
-                is_active=True,
-                id=clone_from_id,
-            ).first()
+            # Get the source dataset to clone from (any dataset visible to the user)
+            from .permissions import dataset_visibility_q
+
+            clone_source = (
+                DataSet.objects.filter(
+                    dataset_visibility_q(request.user),
+                    is_active=True,
+                    id=clone_from_id,
+                )
+                .distinct()
+                .first()
+            )
 
             if clone_source:
                 # Pre-fill form with source dataset data
@@ -9280,6 +9346,7 @@ def dataset_create(request: HttpRequest) -> HttpResponse:
         "surveys/dataset_form.html",
         {
             "organizations": user_orgs,
+            "teams": user_teams,
             "is_create": True,
             "clone_source": clone_source,
             "form_data": initial_data,
@@ -9303,14 +9370,13 @@ def dataset_edit(request: HttpRequest, dataset_id: int) -> HttpResponse:
     )
 
     # Get dataset - check if accessible first
-    all_user_orgs = Organization.objects.filter(memberships__user=user)
+    from .permissions import dataset_visibility_q
+
     dataset = get_object_or_404(
         DataSet.objects.filter(
-            Q(is_global=True)
-            | Q(organization__in=all_user_orgs)
-            | Q(created_by=user, organization__isnull=True),
+            dataset_visibility_q(user),
             is_active=True,
-        ),
+        ).distinct(),
         id=dataset_id,
     )
 
@@ -9453,21 +9519,22 @@ def dataset_edit(request: HttpRequest, dataset_id: int) -> HttpResponse:
 @require_http_methods(["POST"])
 def dataset_delete(request: HttpRequest, dataset_id: int) -> HttpResponse:
     """Soft delete a dataset (set is_active=False)."""
+    from .permissions import dataset_visibility_q, require_can_delete_dataset
+
     user = request.user
 
     # Get dataset - check if accessible first
-    all_user_orgs = Organization.objects.filter(memberships__user=user)
     dataset = get_object_or_404(
         DataSet.objects.filter(
-            Q(is_global=True)
-            | Q(organization__in=all_user_orgs)
-            | Q(created_by=user, organization__isnull=True),
+            dataset_visibility_q(user),
             is_active=True,
-        ),
+        ).distinct(),
         id=dataset_id,
     )
 
-    require_can_edit_dataset(user, dataset)
+    # Deletion uses its own permission: creators keep delete rights even when
+    # tier-frozen (downgraded), unlike editing.
+    require_can_delete_dataset(user, dataset)
 
     # Soft delete
     dataset.is_active = False
@@ -9532,6 +9599,7 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
     """
     import uuid
 
+    from .permissions import dataset_visibility_q, get_dataset_shareable_teams
     from .snomed_resolver import (
         SnomedUnavailableError,
         get_options as snomed_get_options,
@@ -9539,16 +9607,17 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
     )
 
     user = request.user
-    user_orgs = Organization.objects.filter(memberships__user=user)
+    # Snapshotting creates a new dataset, so it requires the same permission
+    # as dataset_create (org VIEWERs / DATA_CUSTODIANs and FREE-tier
+    # individual users cannot create datasets).
+    require_can_create_datasets(user)
 
     dataset = get_object_or_404(
         DataSet.objects.filter(
-            Q(is_global=True)
-            | Q(organization__in=user_orgs)
-            | Q(created_by=user, organization__isnull=True),
+            dataset_visibility_q(user),
             is_active=True,
             category="snomed",
-        ),
+        ).distinct(),
         id=dataset_id,
     )
 
@@ -9567,8 +9636,17 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
     # Convert live SNOMED options to stable key/value mapping for the snapshot.
     options_dict: dict[str, str] = options_as_dict(raw_options)
 
-    # Determine organisation for the snapshot (prefer user's first org, else personal)
-    org = user_orgs.first()
+    # Determine scope for the snapshot, mirroring dataset_create:
+    # prefer an org where the user is ADMIN/CREATOR, then a team where the
+    # user is ADMIN/CREATOR, otherwise a personal dataset.
+    org = Organization.objects.filter(
+        memberships__user=user,
+        memberships__role__in=[
+            OrganizationMembership.Role.ADMIN,
+            OrganizationMembership.Role.CREATOR,
+        ],
+    ).first()
+    team = None if org else get_dataset_shareable_teams(user).first()
 
     snapshot_key = f"snomed_snapshot_{dataset.key}_{uuid.uuid4().hex[:8]}"
     snapshot = DataSet.objects.create(
@@ -9585,6 +9663,7 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
         tags=dataset.tags or [],
         parent=dataset,
         organization=org,
+        team=team,
         created_by=user,
         is_global=False,
         is_active=True,
@@ -9604,7 +9683,6 @@ def dataset_snomed_snapshot(request: HttpRequest, dataset_id: int) -> HttpRespon
 def published_templates_list(request):
     """Browse published question group templates."""
     from django.core.paginator import Paginator
-    from django.db.models import Q
 
     user = request.user
 

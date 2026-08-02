@@ -485,18 +485,18 @@
             {% for field in q.options.fields %}
               {% if field.selected %}
                 <div class="space-y-1" data-professional-field="{{ field.key }}">
-                  {% if professional_field_datasets|dict_get:field.key %}
-                    {# Field has a dataset mapping - use dropdown #}
+                  {% if professional_dataset_options|dict_get:field.key %}
+                    {# Field has a dataset mapping - options rendered server-side #}
                     <label class="label">
                       <span class="label-text">{{ field.label }}</span>
                     </label>
                     <select
                       class="select select-bordered select-sm w-full"
-                      name="q_{{ q.id }}_{{ field.key }}"
-                      data-dataset-field="{{ field.key }}"
-                      data-dataset-key="{{ professional_field_datasets|dict_get:field.key }}">
+                      name="q_{{ q.id }}_{{ field.key }}">
                       <option value="">-- Select {{ field.label }} --</option>
-                      <option value="__loading__" disabled>Loading options...</option>
+                      {% for opt in professional_dataset_options|dict_get:field.key %}
+                        <option value="{{ opt.value }}">{{ opt.value }}: {{ opt.label }}</option>
+                      {% endfor %}
                     </select>
                   {% else %}
                     {# Regular text input #}
@@ -595,8 +595,8 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         {% for key in professional_fields %}
           <div class="space-y-1" data-professional-field="{{ key }}">
-            {% if professional_field_datasets|dict_get:key %}
-              {# Field has a dataset mapping - use dropdown #}
+            {% if professional_dataset_options|dict_get:key %}
+              {# Field has a dataset mapping - options rendered server-side #}
               <label class="label" for="prof_select_{{ key }}">
                 <span class="label-text">{{ professional_defs|dict_get:key }}</span>
               </label>
@@ -604,11 +604,11 @@
                 id="prof_select_{{ key }}"
                 class="select select-bordered select-sm w-full"
                 name="prof_{{ key }}"
-                aria-label="{{ professional_defs|dict_get:key }}"
-                data-dataset-field="{{ key }}"
-                data-dataset-key="{{ professional_field_datasets|dict_get:key }}">
+                aria-label="{{ professional_defs|dict_get:key }}">
                 <option value="">-- Select {{ professional_defs|dict_get:key }} --</option>
-                <option value="__loading__" disabled>Loading options...</option>
+                {% for opt in professional_dataset_options|dict_get:key %}
+                  <option value="{{ opt.value }}">{{ opt.value }}: {{ opt.label }}</option>
+                {% endfor %}
               </select>
             {% else %}
               {# Regular text input #}
@@ -653,8 +653,6 @@
   integrity="{{ cdn_assets.sortablejs.sri }}"
   crossorigin="anonymous"></script>
 <script src="{% static 'js/orderable.js' %}" nonce="{{ request.csp_nonce }}"></script>
-{# Load professional fields script if we have group-level OR question-level professional details #}
-<script src="{% static 'js/professional-fields.js' %}" nonce="{{ request.csp_nonce }}"></script>
 <script src="{% static 'js/followup-fields.js' %}" nonce="{{ request.csp_nonce }}"></script>
 {# Load branching logic script #}
 <script src="{% static 'js/branching.js' %}" nonce="{{ request.csp_nonce }}"></script>

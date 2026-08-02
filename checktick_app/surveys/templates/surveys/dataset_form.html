@@ -66,27 +66,33 @@
       </label>
     </div>
 
-    {% if organizations|length > 1 %}
-    <div class="form-control w-full">
-      <label class="label">
-        <span class="label-text">{% trans "Organisation" %}</span>
-      </label>
-      <select name="organization" class="select select-bordered w-full" {% if not is_create %}disabled{% endif %}>
-        <option value="">{% trans "Personal (Individual Account)" %}</option>
-        {% for org in organizations %}
-          <option value="{{ org.id }}" {% if form_data.organization|stringformat:"s" == org.id|stringformat:"s" %}selected{% endif %}>{{ org.name }}</option>
-        {% endfor %}
-      </select>
-      <label class="label">
-        <span class="label-text-alt">{% trans "Leave as 'Personal' for an individual dataset, or select an organisation" %}</span>
-      </label>
-    </div>
-    {% elif organizations|length == 1 %}
-    <!-- Auto-select single organisation -->
-    <input type="hidden" name="organization" value="{{ organizations.0.id }}">
-    {% else %}
-    <!-- No organisation - individual user -->
-    <input type="hidden" name="organization" value="">
+    {% if is_create %}
+      {% if organizations or teams %}
+      <div class="form-control w-full">
+        <label class="label">
+          <span class="label-text">{% trans "Share with" %}</span>
+        </label>
+        <select name="share_with" class="select select-bordered w-full">
+          <option value="">{% trans "Personal (only you)" %}</option>
+          {% for org in organizations %}
+            {% with oid=org.id|stringformat:"s" %}
+            <option value="org:{{ org.id }}" {% if form_data.share_with == "org:"|add:oid %}selected{% endif %}>{% trans "Organisation" %}: {{ org.name }}</option>
+            {% endwith %}
+          {% endfor %}
+          {% for team in teams %}
+            {% with tid=team.id|stringformat:"s" %}
+            <option value="team:{{ team.id }}" {% if form_data.share_with == "team:"|add:tid %}selected{% endif %}>{% trans "Team" %}: {{ team.name }}</option>
+            {% endwith %}
+          {% endfor %}
+        </select>
+        <label class="label">
+          <span class="label-text-alt">{% trans "Personal datasets are visible only to you. Organisation and team datasets are visible to all their members." %}</span>
+        </label>
+      </div>
+      {% else %}
+      <!-- No organisation or team - personal dataset -->
+      <input type="hidden" name="share_with" value="">
+      {% endif %}
     {% endif %}
 
     <div class="form-control w-full">

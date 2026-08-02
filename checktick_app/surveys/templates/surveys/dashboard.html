@@ -17,9 +17,6 @@
     {% endif %}
   </style>
   {% endif %}
-  {% if survey.style.font_css_url %}
-    <link href="{{ survey.style.font_css_url }}" rel="stylesheet" />
-  {% endif %}
 {% endblock %}
 {% block title %}{% trans "Dashboard" %} - {{ survey.name }}{% endblock %}
 {% block content %}

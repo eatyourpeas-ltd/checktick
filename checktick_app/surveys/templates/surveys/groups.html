@@ -4,10 +4,6 @@
   {% if survey.style.theme_css_light or survey.style.theme_css_dark %}
     <style></style>
   {% endif %}
-  {% if survey.style.font_css_url %}
-    <link href="{{ survey.style.font_css_url }}" rel="stylesheet" />
-  {% endif %}
-
 {% endblock %}
 {% block title %}
   {% trans 'Groups' %}- {{ survey.name }}
