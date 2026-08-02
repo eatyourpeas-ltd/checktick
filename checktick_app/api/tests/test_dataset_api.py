@@ -4,9 +4,11 @@ Tests for external dataset API endpoints.
 These tests verify authentication, permissions, and response formats
 for the dataset endpoints using the database-first architecture.
 
-Permission Model:
-- Dataset list endpoint requires authentication
-- Dataset get endpoint allows anonymous access (for public surveys)
+Permission Model (F8, security review August 2026):
+- ALL dataset endpoints require authentication (session or API key)
+- There is NO anonymous access to any dataset endpoint
+- Anonymous survey respondents never call this API: dataset options are
+  rendered server-side into the survey page
 - Datasets are reference data that authenticated users can access
 
 Architecture:
@@ -134,14 +136,38 @@ def test_list_datasets_requires_authentication(client):
 
 
 @pytest.mark.django_db
-def test_get_dataset_allows_anonymous_access(client):
-    """Anonymous users CAN get dataset details (needed for public surveys)."""
+def test_get_dataset_requires_authentication(client):
+    """F8 regression: anonymous users cannot retrieve datasets.
+
+    Dataset options for public surveys are rendered server-side, so the
+    API has no anonymous callers. Even global datasets require auth.
+    """
     resp = client.get("/api/datasets/hospitals_england_wales/")
-    # Datasets are available without auth for public surveys
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["key"] == "hospitals_england_wales"
-    assert len(data["options"]) == 3
+    assert resp.status_code in (401, 403)
+
+
+@pytest.mark.django_db
+def test_available_tags_requires_authentication(client):
+    """F8 regression: anonymous users cannot access available-tags."""
+    resp = client.get("/api/datasets/available-tags/")
+    assert resp.status_code in (401, 403)
+
+
+@pytest.mark.django_db
+def test_get_non_global_dataset_denied_for_anonymous(client, authenticated_user):
+    """F8 regression: anonymous retrieval of a non-global dataset is denied."""
+    DataSet.objects.create(
+        key="private_dataset",
+        name="Private Dataset",
+        category="user_created",
+        source_type="manual",
+        is_custom=True,
+        is_global=False,
+        created_by=authenticated_user,
+        options=["Option A", "Option B"],
+    )
+    resp = client.get("/api/datasets/private_dataset/")
+    assert resp.status_code in (401, 403, 404)
 
 
 @pytest.mark.django_db

@@ -60,8 +60,13 @@ The template `dataset_detail.html` renders SNOMED options from `snomed_options`
 
 `DataSetViewSet` (api/views.py) exposes datasets to:
 
-- The `professional-fields.js` frontend (professional field dropdowns in surveys)
-- External integrations via the REST API
+- The survey builder (`builder.js` "Load options" button, authenticated session)
+- External integrations via the REST API (API key)
+
+All dataset API endpoints require authentication (`DataSetAccess` permission
+class) — there is no anonymous access. Anonymous survey respondents never
+call this API: all dataset-backed dropdowns are rendered server-side (see
+§4 and §5).
 
 The `DataSetSerializer` serialises `DataSet.options` as-is from Postgres. For
 SNOMED datasets this is `[]`, so **the API currently returns empty options for
@@ -128,17 +133,20 @@ readable preferred term can be recovered at any time by querying `snomed.db`.
 
 ---
 
-## 5 — Professional field dropdowns (special case)
+## 5 — Professional field dropdowns
 
-Professional fields (employing trust, health board, etc.) use a different
-mechanism: the `detail.html` template renders an empty `<select
-data-dataset-key="…">` and `professional-fields.js` fetches options
-asynchronously from `GET /api/datasets/{key}/` after page load. This is the
-only case where the REST API is used at runtime to populate a dropdown in the
-survey respondent view.
+Professional fields (employing trust, health board, etc.) are rendered
+server-side, like regular dataset-backed dropdowns: the views build a
+`professional_dataset_options` context map via
+`_get_professional_dataset_options()` (surveys/views.py), and `detail.html`
+renders the `<option>`s directly into the page. If a mapped dataset is
+missing or inactive, the template falls back to a plain text input.
 
-This pattern is **not used** for regular survey dropdown questions. Those rely on
-`_inject_dataset_options()` at render time.
+Historical note: these fields previously used a client-side fetch
+(`professional-fields.js` → `GET /api/datasets/{key}/`), which required
+anonymous access to the datasets API. That was removed in August 2026
+(security review finding F8) so the API could be restricted to
+authenticated users only.
 
 ---
 

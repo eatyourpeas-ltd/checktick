@@ -14,7 +14,7 @@ This document covers the Dataset API endpoints for programmatic access to datase
 
 ## Authentication
 
-All write operations require JWT authentication. See [API Documentation](/docs/api/) for authentication details.
+All dataset endpoints (read and write) require authentication — there is no anonymous access. Anonymous survey respondents never call this API: dataset options are rendered server-side into the survey page. See [API Documentation](/docs/api/) for authentication details.
 
 ```http
 Authorization: Bearer <your_jwt_token>
@@ -327,7 +327,8 @@ curl https://checktick.example.com/api/datasets/available-tags/
 | Endpoint | Anonymous | Individual User | Org VIEWER | Org CREATOR/ADMIN |
 |----------|-----------|-----------------|------------|-------------------|
 | List datasets | ❌ | Global + own | Global + org | Global + org |
-| Get dataset detail | Global only | Global + own | Global + org | Global + org |
+| Get dataset detail | ❌ | Global + own | Global + org | Global + org |
+| Available tags | ❌ | ✅ | ✅ | ✅ |
 | Create dataset | ❌ | ✅ | ❌ | ✅ (for org) |
 | Create custom version | ❌ | ✅ | ❌ | ✅ |
 | Update dataset | ❌ | ✅ (own only) | ❌ | ✅ (own org) |

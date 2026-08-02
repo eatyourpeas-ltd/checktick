@@ -222,29 +222,25 @@ class DataSetSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class IsOrgAdminOrCreator(permissions.BasePermission):
-    """
-    Permission for dataset access.
+class DataSetAccess(permissions.BasePermission):
+    """Access policy for the read-only dataset API (all actions).
 
-    - LIST: Requires authentication.
-    - RETRIEVE: Anonymous users can retrieve individual datasets (needed for public surveys).
+    Datasets are only available to authenticated users (session or API key).
+    There is NO anonymous access to any dataset endpoint: anonymous survey
+    respondents never call this API because professional-field and dropdown
+    options are rendered server-side into the survey page
+    (see ``surveys.views._get_professional_dataset_options`` and
+    ``surveys.views._inject_dataset_options``).
+
+    Row-level scoping is enforced in ``DataSetViewSet.get_queryset``:
+    authenticated users see global datasets, their organisations' datasets,
+    and their own individual datasets. All access is read-only.
     """
 
     def has_permission(self, request, view):
-        """Check if user can access the dataset API at all."""
-        # List action requires authentication
-        if view.action == "list" and not request.user.is_authenticated:
+        if request.method not in permissions.SAFE_METHODS:
             return False
-
-        # Retrieve allows anonymous access for public datasets
-        if not request.user.is_authenticated:
-            return request.method in permissions.SAFE_METHODS
-
-        return True
-
-    def has_object_permission(self, request, view, obj):
-        """All remaining actions are safe (read-only)."""
-        return True
+        return bool(request.user and request.user.is_authenticated)
 
 
 class SurveyViewSet(viewsets.ReadOnlyModelViewSet):
@@ -329,7 +325,8 @@ else:
 
 class DataSetViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    Read-only ViewSet for DataSet objects.
+    Read-only ViewSet for DataSet objects. All endpoints require
+    authentication (session or API key); there is no anonymous access.
 
     GET /api/datasets/ - List accessible datasets
     GET /api/datasets/{key}/ - Retrieve a specific dataset
@@ -337,7 +334,7 @@ class DataSetViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     serializer_class = DataSetSerializer
-    permission_classes = [IsOrgAdminOrCreator]
+    permission_classes = [DataSetAccess]
     lookup_field = "key"
 
     def get_queryset(self):
@@ -359,7 +356,9 @@ class DataSetViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         queryset = DataSet.objects.filter(is_active=True)
 
-        # Anonymous users see only global datasets
+        # Defence in depth: DataSetAccess already rejects anonymous callers,
+        # but scope to global datasets here as well in case a future action
+        # loosens the viewset-level permission.
         if not user.is_authenticated:
             queryset = queryset.filter(is_global=True)
         else:
@@ -398,12 +397,13 @@ class DataSetViewSet(viewsets.ReadOnlyModelViewSet):
     @action(
         detail=False,
         methods=["get"],
-        permission_classes=[permissions.AllowAny],
         url_path="available-tags",
     )
     def available_tags(self, request):
         """
         Get all unique tags from accessible datasets.
+
+        Uses the viewset-level DataSetAccess permission (authenticated only).
 
         GET /api/datasets/available-tags/
 

@@ -72,8 +72,8 @@ The API is read-only. All write operations (survey creation, publication, member
 | Survey list | Sees own surveys | Sees all org surveys | Sees own surveys | Empty list / 401 |
 | Survey retrieve | ✅ | ✅ | ✅ if member | 401 |
 | Survey metrics | ✅ | ✅ | ✅ if member | 401 |
-| Dataset list | ✅ (global + org) | ✅ (global + org) | ✅ (global + org) | Global only |
-| Dataset retrieve | ✅ | ✅ | ✅ | ✅ (public datasets) |
+| Dataset list | ✅ (global + org) | ✅ (global + org) | ✅ (global + org) | 401 |
+| Dataset retrieve | ✅ | ✅ | ✅ | 401 |
 | QG templates list | ✅ (global + own org) | ✅ (global + own org) | ✅ (global + own org) | 401 |
 | QG templates retrieve | ✅ | ✅ | ✅ | 401 |
 | Health check | ✅ | ✅ | ✅ | ✅ |
@@ -82,7 +82,7 @@ The API is read-only. All write operations (survey creation, publication, member
 
 The datasets API (`/api/datasets/`) provides read-only access to shared dropdown option lists. See the [Dataset API Reference](api-datasets.md) for details.
 
-- **Anonymous / no key**: global datasets only (`is_global=True`)
+- **Anonymous / no key**: no access (401). All dataset endpoints require authentication. Anonymous survey respondents never call this API — dataset options are rendered server-side into the survey page.
 - **Authenticated key holders**: global datasets + their organisation's datasets
 - **NHS Data Dictionary datasets** (`category=nhs_dd`): read-only for all; cannot be modified via the API
 

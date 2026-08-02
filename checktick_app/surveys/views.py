@@ -470,6 +470,44 @@ def _get_professional_group_and_fields(
     return group, fields, ods_clean
 
 
+def _get_professional_dataset_options() -> dict[str, list[dict[str, str]]]:
+    """Materialise dataset options for professional fields, keyed by field key.
+
+    Professional-field dropdowns (employing trust, health board, etc.) are
+    rendered server-side so that anonymous survey respondents never need to
+    call the datasets REST API (which requires authentication). Returns
+    ``{field_key: [{"value": code, "label": name}, ...], ...}`` for every
+    field in :data:`PROFESSIONAL_FIELD_TO_DATASET` whose dataset exists and
+    is active. Fields whose dataset is missing are omitted so the template
+    can fall back to a text input.
+    """
+    keys = set(PROFESSIONAL_FIELD_TO_DATASET.values())
+    datasets = {
+        ds.key: ds for ds in DataSet.objects.filter(key__in=keys, is_active=True)
+    }
+    options_by_field: dict[str, list[dict[str, str]]] = {}
+    for field_key, dataset_key in PROFESSIONAL_FIELD_TO_DATASET.items():
+        dataset = datasets.get(dataset_key)
+        if dataset is None:
+            continue
+        raw = dataset.options
+        if isinstance(raw, dict) and raw:
+            options_by_field[field_key] = [
+                {"value": code, "label": name} for code, name in raw.items()
+            ]
+        elif isinstance(raw, list) and raw:
+            normalised: list[dict[str, str]] = []
+            for opt in raw:
+                if isinstance(opt, dict):
+                    value = str(opt.get("value", opt.get("label", "")))
+                    label = str(opt.get("label", value))
+                else:
+                    value = label = str(opt)
+                normalised.append({"value": value, "label": label})
+            options_by_field[field_key] = normalised
+    return options_by_field
+
+
 def _survey_collects_patient_data(survey: Survey) -> bool:
     grp, fields = _get_patient_group_and_fields(survey)
     return bool(grp and fields)
@@ -1202,6 +1240,11 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "professional_defs": PROFESSIONAL_FIELD_DEFS,
         "professional_ods": professional_ods,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
+        "professional_dataset_options": (
+            _get_professional_dataset_options()
+            if (show_professional_details or has_professional_template)
+            else {}
+        ),
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
@@ -1267,6 +1310,10 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
     )
     show_patient_details = patient_group is not None
     show_professional_details = prof_group is not None
+    has_professional_template = any(
+        getattr(q, "type", None) == SurveyQuestion.Types.TEMPLATE_PROFESSIONAL
+        for q in qs
+    )
     style = survey.style or {}
     brand_overrides = {
         "title": style.get("title"),
@@ -1296,6 +1343,11 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "professional_defs": PROFESSIONAL_FIELD_DEFS,
         "professional_ods": professional_ods,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
+        "professional_dataset_options": (
+            _get_professional_dataset_options()
+            if (show_professional_details or has_professional_template)
+            else {}
+        ),
         "is_preview": True,  # Flag to indicate this is preview mode
     }
     if any(
@@ -4379,6 +4431,10 @@ def _handle_participant_submission(
     )
     show_patient_details = patient_group is not None
     show_professional_details = prof_group is not None
+    has_professional_template = any(
+        getattr(q, "type", None) == SurveyQuestion.Types.TEMPLATE_PROFESSIONAL
+        for q in qs
+    )
     # Sanitise survey.style CSS in-memory before rendering so that a malicious
     # theme_css_light/dark cannot break out of the <style> block via |safe.
     from checktick_app.core.theme_utils import sanitize_css_block as _sanitize_css
@@ -4406,6 +4462,11 @@ def _handle_participant_submission(
         "professional_defs": PROFESSIONAL_FIELD_DEFS,
         "professional_ods": professional_ods,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
+        "professional_dataset_options": (
+            _get_professional_dataset_options()
+            if (show_professional_details or has_professional_template)
+            else {}
+        ),
         "is_preview": False,  # Flag to indicate this is public submission
         # Progress tracking
         "show_progress": True,
