@@ -14,7 +14,7 @@ This guide defines how CheckTick versions are managed and when container images 
 
 ## Container Registry
 
-- Registry: `ghcr.io/eatyourpeas/checktick`
+- Registry: `ghcr.io/eatyourpeas-ltd/checktick`
 - Primary tags:
   - `latest`
   - `X.Y.Z` (full semantic version)
@@ -42,7 +42,8 @@ If none of these conditions are met, publish is skipped.
 1. Bump version in `pyproject.toml` (semver).
 2. Merge PR to `main`.
 3. Publish workflow applies versioned tags to GHCR.
-4. Northflank restarts and pulls latest published image.
+4. Publish workflow calls the Northflank deployment webhook with the versioned tag.
+5. The Northflank `checktick-deployment` workflow runs the pre-deploy migration job, then deploys the versioned image with zero downtime.
 
 ## Accidental No-Bump Merges
 

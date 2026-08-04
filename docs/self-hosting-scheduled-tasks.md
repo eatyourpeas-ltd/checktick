@@ -275,7 +275,7 @@ Northflank provides native cron job support, making this the simplest option.
 2. Click **"Add Service"** → **"Cron Job"**
 3. Configure the job:
    - **Name**: `checktick-data-governance`
-   - **Docker Image**: Use the same image as your web service (e.g., `ghcr.io/eatyourpeas/checktick:latest`)
+   - **Docker Image**: Use the same image as your web service (e.g., `ghcr.io/eatyourpeas-ltd/checktick:latest`)
    - **Schedule**: `0 2 * * *` (runs at 2 AM UTC daily)
    - **Command**: `python manage.py process_data_governance`
 
@@ -591,7 +591,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: data-governance
-              image: ghcr.io/eatyourpeas/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
               command:
                 - python
                 - manage.py
@@ -648,7 +648,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: snomed-update
-              image: ghcr.io/eatyourpeas/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
               command:
                 - python
                 - manage.py

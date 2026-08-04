@@ -8,7 +8,7 @@
 
 <p align="center">
  <a href="https://github.com/eatyourpeas/checktick/releases">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.8.10-5fcfdd?style=flat-square">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.8.11-5fcfdd?style=flat-square">
  </a>
  <a href="https://github.com/eatyourpeas/checktick/blob/main/LICENSE">
   <img alt="GitHub License" src="https://img.shields.io/github/license/eatyourpeas/checktick?style=flat-square&color=5fcfdd">
@@ -68,7 +68,7 @@ cp .env.selfhost .env
 docker compose -f docker-compose.registry.yml up -d
 ```
 
-**Docker Images:** [ghcr.io/eatyourpeas/checktick](https://github.com/eatyourpeas/checktick/pkgs/container/checktick)
+**Docker Images:** [ghcr.io/eatyourpeas-ltd/checktick](https://github.com/eatyourpeas-ltd/checktick/pkgs/container/checktick)
 
 **Full Documentation:** See [Self-Hosting Guides](https://checktick.uk/docs/self-hosting-quickstart/)
 
