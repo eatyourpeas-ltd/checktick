@@ -289,7 +289,7 @@ class Command(BaseCommand):
             if dry_run:
                 self.stdout.write(
                     f"   [DRY RUN] would run:\n"
-                    f"     sct trud download --edition {edition} --output-dir {data_dir}\n"
+                    f"     sct trud download --edition {edition} --output-dir {data_dir} --data-dir {data_dir}\n"
                     f"     sct ndjson --rf2 <zip> --output <tmp>.ndjson\n"
                     f"     sct sqlite --ndjson <tmp>.ndjson --output <tmp>.db\n"
                     f"     os.replace(<tmp>.db, {snomed_db})"
@@ -305,6 +305,8 @@ class Command(BaseCommand):
                     "--edition",
                     edition,
                     "--output-dir",
+                    str(data_dir),
+                    "--data-dir",
                     str(data_dir),
                 ],
                 text=True,
