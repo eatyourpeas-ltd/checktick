@@ -68,7 +68,7 @@ cp .env.selfhost .env
 docker compose -f docker-compose.registry.yml up -d
 ```
 
-**Docker Images:** [ghcr.io/eatyourpeas/checktick](https://github.com/eatyourpeas/checktick/pkgs/container/checktick)
+**Docker Images:** [ghcr.io/eatyourpeas-ltd/checktick](https://github.com/eatyourpeas-ltd/checktick/pkgs/container/checktick)
 
 **Full Documentation:** See [Self-Hosting Guides](https://checktick.uk/docs/self-hosting-quickstart/)
 

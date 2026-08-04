@@ -14,7 +14,7 @@ This guide defines how CheckTick versions are managed and when container images 
 
 ## Container Registry
 
-- Registry: `ghcr.io/eatyourpeas/checktick`
+- Registry: `ghcr.io/eatyourpeas-ltd/checktick`
 - Primary tags:
   - `latest`
   - `X.Y.Z` (full semantic version)

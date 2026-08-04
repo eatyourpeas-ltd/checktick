@@ -13,7 +13,7 @@ version: "3.8"
 
 services:
   web:
-    image: ghcr.io/eatyourpeas/checktick:latest
+    image: ghcr.io/eatyourpeas-ltd/checktick:latest
     ports:
       - "${HOST_PORT:-8000}:8000"
     volumes:
