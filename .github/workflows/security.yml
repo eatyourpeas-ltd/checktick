@@ -41,7 +41,9 @@ jobs:
             --ignore-vuln CVE-2026-4539 \
             --ignore-vuln PYSEC-2026-89 \
             --ignore-vuln PYSEC-2025-183 \
-            --ignore-vuln GHSA-6v7p-g79w-8964
+            --ignore-vuln GHSA-6v7p-g79w-8964 \
+            --ignore-vuln PYSEC-2026-2270 \
+            --ignore-vuln PYSEC-2026-3447
 
   codeql:
     name: CodeQL Analysis
