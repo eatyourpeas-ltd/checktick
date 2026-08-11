@@ -24,10 +24,10 @@
       "key": "axe_core",
       "name": "axe-core",
       "npm_package": "axe-core",
-      "version": "4.12.1",
+      "version": "4.13.0",
       "static_file": "js/axe-core.min.js",
       "source_path": "axe.min.js",
-      "sri": "sha384-JQegRXq6EhTiWoGPFDmqbJNsDow5BoSsGhnaeDzGp+qyOFCuMZZ24qY2fz3FxZF5",
+      "sri": "sha384-jzJDdyy7z7+/I7TeoAg0Gc8k9hD8b1xRN0W18hMptWJ0cdoiebywhPpCyP9eBOgn",
       "purpose": "WCAG accessibility testing"
     },
     {
