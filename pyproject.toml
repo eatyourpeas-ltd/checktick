@@ -11,6 +11,9 @@ packages = [
  [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
 django = "~5.2.15"
+# Pinned to address pip-audit vulnerabilities (PYSEC-2026-3696/3697/3698/3699 ReDoS/DoS/code-injection).
+# Transitive dep of Django (django.db.backends SQL formatting); constrained here so the lockfile cannot drift back to 0.5.x.
+sqlparse = ">=0.6.0"
 django-environ = "^0.11.2"
 psycopg2-binary = "^2.9.9"
 jinja2 = "^3.1.4"
