@@ -37,7 +37,8 @@ locked in `poetry.lock` for reproducible builds.
 | Asset Name | Category | Version Constraint | Purpose |
 | :--- | :--- | :--- | :--- |
 | **Python** | Runtime | >=3.10, <3.13 | Application runtime |
-| **Django** | Web Framework | ~5.2.12 | Core application framework |
+| **Django** | Web Framework | ~5.2.15 | Core application framework |
+| **sqlparse** | Database | >=0.6.0 | SQL parsing/formatting (transitive dep of Django `db.backends`; pinned to address PYSEC-2026-3696/3697/3698/3699) |
 | **django-environ** | Configuration | ^0.11.2 | Environment variable management |
 | **psycopg2-binary** | Database Driver | ^2.9.9 | PostgreSQL connectivity |
 | **Jinja2** | Templating | ^3.1.4 | Template rendering |
@@ -45,7 +46,7 @@ locked in `poetry.lock` for reproducible builds.
 | **whitenoise** | Static Files | ^6.7.0 | Static file serving |
 | **django-axes** | Security | ^8.1.0 | Brute-force protection / account lockout |
 | **django-ratelimit** | Security | ^4.1.0 | API rate limiting |
-| **cryptography** | Encryption | ^46.0.6 | AES-256-GCM field encryption |
+| **cryptography** | Encryption | ^50.0.0 | AES-256-GCM field encryption |
 | **itsdangerous** | Security | ^2.2.0 | Signed token generation |
 | **PyYAML** | Serialisation | ^6.0.2 | Configuration parsing |
 | **nhs-number** | NHS | ^1.3.6 | NHS number validation |
@@ -53,25 +54,28 @@ locked in `poetry.lock` for reproducible builds.
 | **django-csp** | Security | ^4.0 | Content Security Policy headers |
 | **gunicorn** | WSGI Server | ^22.0.0 | Production application server |
 | **djangorestframework-simplejwt** | Authentication | ^5.3.1 | JWT token management |
-| **markdown** | Content | ^3.6 | Markdown rendering |
+| **markdown** | Content | >=3.10.1 | Markdown rendering |
 | **pymdown-extensions** | Content | >=11.0.1 | Extended Markdown support |
-| **pygments** | Syntax | ^2.18.0 | Code highlighting (1 active CVE — local only, monitored) |
+| **pygments** | Syntax | ^2.20.0 | Code highlighting |
 | **inflection** | Utilities | ^0.5.1 | String inflection |
 | **uritemplate** | API | ^4.1.1 | URI template handling |
 | **mozilla-django-oidc** | Authentication | ^4.0.1 | OIDC/SSO integration |
 | **beautifulsoup4** | Parsing | ^4.12.0 | HTML parsing |
 | **requests** | HTTP | ^2.33.0 | HTTP client |
 | **hvac** | Vault | ^2.4.0 | HashiCorp Vault client |
-| **pillow** | Imaging | ^12.1.1 | Image processing |
+| **pillow** | Imaging | ^12.3.0 | Image processing |
 | **qrcode** | 2FA | ^8.0 | QR code generation for TOTP |
 | **django-otp** | Authentication | ^1.6.3 | TOTP/MFA support |
 | **marshmallow** | Serialisation | ^3.26.2 | Data validation and serialisation |
+| **click** | Utilities | >=8.3.3 | CLI helper (transitive via `black`; pinned to address PYSEC-2026-2132) |
+| **pip** | Tooling | >=26.1.2,<27 | Package installer (pinned for PYSEC-2026-1703/196/2875/2876) |
+| **urllib3** | HTTP | >=2.7.0 | HTTP library (transitive; pinned for CVE-2026-44431/44432) |
+| **idna** | DNS | >=3.15 | Internationalised domain names (transitive; pinned for CVE-2026-45409) |
+| **pyjwt** | Authentication | >=2.13.0 | JWT library (pinned for PYSEC-2026-175/177/178/179) |
 
 ### Active Vulnerability Exceptions
 
-| Dependency | CVE | Justification | Review Date |
-| :--- | :--- | :--- | :--- |
-| `pygments` | CVE-2026-4539 | Local-access-only ReDoS in `AdlLexer`. Not network-exploitable. No upstream fix available. Monitoring PyPI for patch. | 27/04/2026 |
+See `vulnerability-patch-log.md` §1 for the canonical, maintained list of active exceptions. The exceptions there are all dev-only transitive dependencies of isolated pre-commit tooling (`ggshield`/`pip-audit`); none ship to production.
 
 ---
 
@@ -82,11 +86,11 @@ container images.
 
 | Asset Name | Category | Version Constraint | Purpose |
 | :--- | :--- | :--- | :--- |
-| **pytest** | Testing | ^8.3.2 | Test runner |
+| **pytest** | Testing | ^9.0.3 | Test runner |
 | **pytest-django** | Testing | ^4.8.0 | Django test integration |
 | **pytest-xdist** | Testing | ^3.5.0 | Parallel test execution |
 | **pytest-env** | Testing | ^1.1.5 | Environment variable injection for tests |
-| **pytest-playwright** | Testing | ^0.6.2 | End-to-end browser testing |
+| **pytest-playwright** | Testing | ^0.7.0 | End-to-end browser testing |
 | **axe-playwright-python** | Accessibility | ^0.1.5 | Automated accessibility testing |
 | **ruff** | Code Quality | ^0.15.6 | Linting |
 | **black** | Code Quality | ^26.3.1 | Code formatting |
