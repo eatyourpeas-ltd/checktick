@@ -48,8 +48,9 @@ idna = ">=3.15"
 # Pinned to address pip-audit vulnerabilities (PYSEC-2026-2132 command injection in click.edit())
 click = ">=8.3.3"
 # Pinned so the lockfile is the single source of truth for the pip installer version
-# (CVE-2026-1703, PYSEC-2026-196, PYSEC-2026-2875, PYSEC-2026-2876). Bump via `poetry add pip@latest`.
-pip = ">=26.1.2,<27"
+# (CVE-2026-1703, PYSEC-2026-196, PYSEC-2026-2875, PYSEC-2026-2876, PYSEC-2026-3721).
+# Bump via `poetry add pip@latest`.
+pip = ">=26.2,<27"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.3"
