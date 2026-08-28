@@ -343,3 +343,56 @@ def test_publish_page_heading(auth_client, owner):
     assert b"Publish Question Group" not in resp.content, (
         "The old 'Publish Question Group' heading should no longer appear."
     )
+
+
+# ---------------------------------------------------------------------------
+# Commit 5 — Rewrite the Groups page empty state
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_groups_empty_state_leads_with_add_question(auth_client, owner):
+    """A survey with no groups shows 'Add your first question' as the primary CTA."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Empty State Survey",
+        slug="empty-state-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    # No groups — simulates a legacy survey or one created before commit 2
+    assert survey.question_groups.count() == 0
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    assert b"Add your first question" in resp.content, (
+        "The empty state should lead with 'Add your first question' as the primary CTA."
+    )
+    # The old "Create from scratch" primary action should no longer appear
+    assert b"Create from scratch" not in resp.content, (
+        "The old 'Create from scratch' primary action should be replaced."
+    )
+
+
+@pytest.mark.django_db
+def test_groups_empty_state_keeps_question_bank_link(auth_client, owner):
+    """The empty state still shows the 'Browse the Question Bank' link."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Bank Link Survey",
+        slug="bank-link-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    bank_url = reverse("surveys:published_templates_list")
+    assert bank_url.encode() in resp.content, (
+        "The 'Browse the Question Bank' link should still be present in the empty state."
+    )
+    assert b"Browse the Question Bank" in resp.content, (
+        "The 'Browse the Question Bank' label should be present."
+    )

@@ -109,12 +109,33 @@
     {% endif %}
   </div>
 
-  {# === Empty state: two action cards (no groups yet) === #}
+  {# === Empty state: no groups yet (legacy surveys; new surveys get a default group automatically on creation via create_default_section) === #}
   {% if not groups %}
   <div class="not-prose mt-6 max-w-2xl">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-      {# Browse the Question Bank #}
+      {# Primary: Add your first question — creates a default section and takes the user straight to the builder so they can add a question. #}
+      {% if can_edit %}
+      <a href="{% url 'surveys:groups' slug=survey.slug %}"
+         class="card bg-base-100 border-2 border-primary hover:shadow-md transition-all sm:col-span-2">
+        <div class="card-body gap-2 p-5 items-center text-center">
+          <div class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            <h3 class="font-semibold text-lg text-base-content">{% trans "Add your first question" %}</h3>
+          </div>
+          <p class="text-sm text-base-content/70">{% trans "Start building your survey. A default section will be created for you — you can rename it later." %}</p>
+          <form method="post" action="/surveys/{{ survey.slug }}/groups/create" class="mt-2 w-full max-w-sm">
+            {% csrf_token %}
+            <input type="hidden" name="name" value="Section 1" />
+            <button type="submit" class="btn btn-primary btn-sm w-full">{% trans "Add your first question" %}</button>
+          </form>
+        </div>
+      </a>
+      {% endif %}
+
+      {# Secondary: Browse the Question Bank #}
       <a href="{% url 'surveys:published_templates_list' %}?survey={{ survey.slug }}" class="card bg-base-100 border border-base-300 hover:border-secondary hover:shadow-md transition-all">
         <div class="card-body gap-2 p-5">
           <div class="flex items-center gap-2">
@@ -123,31 +144,9 @@
             </svg>
             <h3 class="font-semibold text-base">{% trans "Browse the Question Bank" %}</h3>
           </div>
-          <p class="text-sm text-base-content/70">{% trans "Import ready-made groups — from validated clinical tools like PHQ-9 to question sets shared by your organisation." %}</p>
+          <p class="text-sm text-base-content/70">{% trans "Import ready-made sections — from validated clinical tools like PHQ-9 to question sets shared by your organisation." %}</p>
         </div>
       </a>
-
-      {# Create from scratch #}
-      {% if can_edit %}
-      <div class="card bg-base-100 border border-base-300">
-        <div class="card-body gap-2 p-5">
-          <div class="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-            <h3 class="font-semibold text-base">{% trans "Create from scratch" %}</h3>
-          </div>
-          <p class="text-sm text-base-content/70">{% trans "Give your group a name, then add questions one by one in the visual builder." %}</p>
-          <form method="post" action="/surveys/{{ survey.slug }}/groups/create" class="mt-2">
-            {% csrf_token %}
-            <div class="join w-full">
-              <input id="create-group-name" class="input input-bordered join-item flex-1 input-sm" name="name" placeholder="{% trans 'Group name' %}" required />
-              <button id="create-group-submit" class="btn join-item btn-primary btn-sm" type="submit" disabled>{% trans 'Create' %}</button>
-            </div>
-          </form>
-        </div>
-      </div>
-      {% endif %}
 
     </div>
   </div>
