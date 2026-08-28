@@ -9,17 +9,17 @@ can add their first question without naming a group.
 
 from __future__ import annotations
 
-import pytest
 from django.urls import reverse
+import pytest
 
 from checktick_app.surveys.models import QuestionGroup, Survey, SurveyQuestion
 from checktick_app.surveys.views import DEFAULT_SECTION_NAME, create_default_section
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 PASSWORD = "securepass123"
+
 
 @pytest.fixture(autouse=True)
 def disable_rate_limiting(settings):
@@ -117,14 +117,14 @@ def test_survey_create_encrypted_path_creates_default_group(auth_client, owner):
             "recovery_phrase": "abandon ability able about above absent absorb abstract absurd abuse access accident",
         },
     )
-    assert resp.status_code == 302, (
-        f"Expected redirect after encrypted survey creation, got {resp.status_code}"
-    )
+    assert (
+        resp.status_code == 302
+    ), f"Expected redirect after encrypted survey creation, got {resp.status_code}"
 
     survey = Survey.objects.get(slug="encrypted-workflow-survey")
-    assert survey.question_groups.count() == 1, (
-        "An encrypted survey must also get the auto-created default group."
-    )
+    assert (
+        survey.question_groups.count() == 1
+    ), "An encrypted survey must also get the auto-created default group."
     assert survey.question_groups.first().name == DEFAULT_SECTION_NAME
 
 
@@ -208,9 +208,9 @@ def test_dashboard_cta_points_at_group_builder(auth_client, owner):
         f"but the URL was not found in the response."
     )
     # The old label "Question Builder" should no longer appear
-    assert b"Question Builder" not in resp.content, (
-        "The old 'Question Builder' card label should be replaced with 'Add questions'."
-    )
+    assert (
+        b"Question Builder" not in resp.content
+    ), "The old 'Question Builder' card label should be replaced with 'Add questions'."
 
 
 @pytest.mark.django_db
@@ -265,12 +265,12 @@ def test_groups_page_heading_says_sections(auth_client, owner):
 
     resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
-    assert b"Sections for" in resp.content, (
-        "Groups page heading should say 'Sections for {survey}', not 'Question Groups for'."
-    )
-    assert b"Question Groups for" not in resp.content, (
-        "The old 'Question Groups for' heading should no longer appear."
-    )
+    assert (
+        b"Sections for" in resp.content
+    ), "Groups page heading should say 'Sections for {survey}', not 'Question Groups for'."
+    assert (
+        b"Question Groups for" not in resp.content
+    ), "The old 'Question Groups for' heading should no longer appear."
 
 
 @pytest.mark.django_db
@@ -289,12 +289,12 @@ def test_group_builder_breadcrumb_says_sections(auth_client, owner):
         reverse("surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id})
     )
     assert resp.status_code == 200
-    assert b"Section" in resp.content, (
-        "group_builder page should use 'Section' as the label, not 'Question Group'."
-    )
-    assert b"Question Group" not in resp.content, (
-        "The old 'Question Group' label should no longer appear in group_builder."
-    )
+    assert (
+        b"Section" in resp.content
+    ), "group_builder page should use 'Section' as the label, not 'Question Group'."
+    assert (
+        b"Question Group" not in resp.content
+    ), "The old 'Question Group' label should no longer appear in group_builder."
 
 
 @pytest.mark.django_db
@@ -302,13 +302,13 @@ def test_question_bank_page_title(auth_client, owner):
     """The template library page <h1> says 'Question Bank' (aligned with navbar)."""
     resp = auth_client.get(reverse("surveys:published_templates_list"))
     assert resp.status_code == 200
-    assert b"Question Bank" in resp.content, (
-        "The template library page heading should say 'Question Bank'."
-    )
+    assert (
+        b"Question Bank" in resp.content
+    ), "The template library page heading should say 'Question Bank'."
     # The old explainer heading "What are Question Groups?" should be gone
-    assert b"What are Question Groups?" not in resp.content, (
-        "The old 'What are Question Groups?' explainer should be reframed."
-    )
+    assert (
+        b"What are Question Groups?" not in resp.content
+    ), "The old 'What are Question Groups?' explainer should be reframed."
 
 
 @pytest.mark.django_db
@@ -337,12 +337,12 @@ def test_publish_page_heading(auth_client, owner):
         )
     )
     assert resp.status_code == 200
-    assert b"Share section as template" in resp.content, (
-        "Publish page heading should say 'Share section as template'."
-    )
-    assert b"Publish Question Group" not in resp.content, (
-        "The old 'Publish Question Group' heading should no longer appear."
-    )
+    assert (
+        b"Share section as template" in resp.content
+    ), "Publish page heading should say 'Share section as template'."
+    assert (
+        b"Publish Question Group" not in resp.content
+    ), "The old 'Publish Question Group' heading should no longer appear."
 
 
 # ---------------------------------------------------------------------------
@@ -366,13 +366,13 @@ def test_groups_empty_state_leads_with_add_question(auth_client, owner):
     resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
 
-    assert b"Add your first question" in resp.content, (
-        "The empty state should lead with 'Add your first question' as the primary CTA."
-    )
+    assert (
+        b"Add your first question" in resp.content
+    ), "The empty state should lead with 'Add your first question' as the primary CTA."
     # The old "Create from scratch" primary action should no longer appear
-    assert b"Create from scratch" not in resp.content, (
-        "The old 'Create from scratch' primary action should be replaced."
-    )
+    assert (
+        b"Create from scratch" not in resp.content
+    ), "The old 'Create from scratch' primary action should be replaced."
 
 
 @pytest.mark.django_db
@@ -390,12 +390,12 @@ def test_groups_empty_state_keeps_question_bank_link(auth_client, owner):
     assert resp.status_code == 200
 
     bank_url = reverse("surveys:published_templates_list")
-    assert bank_url.encode() in resp.content, (
-        "The 'Browse the Question Bank' link should still be present in the empty state."
-    )
-    assert b"Browse the Question Bank" in resp.content, (
-        "The 'Browse the Question Bank' label should be present."
-    )
+    assert (
+        bank_url.encode() in resp.content
+    ), "The 'Browse the Question Bank' link should still be present in the empty state."
+    assert (
+        b"Browse the Question Bank" in resp.content
+    ), "The 'Browse the Question Bank' label should be present."
 
 
 @pytest.mark.django_db
@@ -413,12 +413,12 @@ def test_groups_page_has_rename_button(auth_client, owner):
     resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
 
-    assert b"rename-section-btn" in resp.content, (
-        "Each section row should have a rename button with class 'rename-section-btn'."
-    )
-    assert b"Rename section" in resp.content, (
-        "The rename button tooltip should say 'Rename section'."
-    )
+    assert (
+        b"rename-section-btn" in resp.content
+    ), "Each section row should have a rename button with class 'rename-section-btn'."
+    assert (
+        b"Rename section" in resp.content
+    ), "The rename button tooltip should say 'Rename section'."
 
 
 @pytest.mark.django_db
@@ -435,7 +435,9 @@ def test_rename_section_via_post(auth_client, owner):
     assert group.name == DEFAULT_SECTION_NAME
 
     resp = auth_client.post(
-        reverse("surveys:survey_group_edit", kwargs={"slug": survey.slug, "gid": group.id}),
+        reverse(
+            "surveys:survey_group_edit", kwargs={"slug": survey.slug, "gid": group.id}
+        ),
         data={"name": "Demographics", "description": "Patient demographics"},
     )
     assert resp.status_code == 302
@@ -474,9 +476,9 @@ def test_builder_shows_why_hint_with_questions(auth_client, owner):
         reverse("surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id})
     )
     assert resp.status_code == 200
-    assert b"Sections group related questions" in resp.content, (
-        "The 'why sections exist' hint should appear when the group has questions."
-    )
+    assert (
+        b"Sections group related questions" in resp.content
+    ), "The 'why sections exist' hint should appear when the group has questions."
 
 
 @pytest.mark.django_db
@@ -496,9 +498,9 @@ def test_builder_hides_why_hint_when_empty(auth_client, owner):
         reverse("surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id})
     )
     assert resp.status_code == 200
-    assert b"Sections group related questions" not in resp.content, (
-        "The 'why sections exist' hint should NOT appear when the group has no questions."
-    )
+    assert (
+        b"Sections group related questions" not in resp.content
+    ), "The 'why sections exist' hint should NOT appear when the group has no questions."
 
 
 # ---------------------------------------------------------------------------
@@ -522,12 +524,12 @@ def test_group_builder_breadcrumb_says_questions(auth_client, owner):
         reverse("surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id})
     )
     assert resp.status_code == 200
-    assert b"Questions" in resp.content, (
-        "The group_builder page should use 'Questions' as the breadcrumb and h1 label."
-    )
-    assert b"Manage Question" not in resp.content, (
-        "The old 'Manage Question' label should no longer appear."
-    )
+    assert (
+        b"Questions" in resp.content
+    ), "The group_builder page should use 'Questions' as the breadcrumb and h1 label."
+    assert (
+        b"Manage Question" not in resp.content
+    ), "The old 'Manage Question' label should no longer appear."
 
 
 # ---------------------------------------------------------------------------
@@ -562,9 +564,9 @@ def test_participant_view_single_section_no_header(auth_client, owner):
     assert resp.status_code == 200
 
     # The fieldset should still be present (a11y structure preserved)
-    assert b"<fieldset" in resp.content, (
-        "The <fieldset> structure should be preserved for assistive tech."
-    )
+    assert (
+        b"<fieldset" in resp.content
+    ), "The <fieldset> structure should be preserved for assistive tech."
     # The section name should NOT appear as a visible header
     assert group.name.encode() not in resp.content, (
         f"The section name '{group.name}' should not be rendered as a visible "
@@ -602,9 +604,9 @@ def test_participant_view_multi_section_shows_headers(auth_client, owner):
     assert resp.status_code == 200
 
     # Both section names should appear as visible headers
-    assert b"Demographics" in resp.content, (
-        "The section name 'Demographics' should be rendered for a multi-section survey."
-    )
-    assert b"Medical History" in resp.content, (
-        "The section name 'Medical History' should be rendered for a multi-section survey."
-    )
+    assert (
+        b"Demographics" in resp.content
+    ), "The section name 'Demographics' should be rendered for a multi-section survey."
+    assert (
+        b"Medical History" in resp.content
+    ), "The section name 'Medical History' should be rendered for a multi-section survey."
