@@ -5991,8 +5991,8 @@ def survey_group_edit(request: HttpRequest, slug: str, gid: int) -> HttpResponse
     raw_desc = request.POST.get("description", group.description)
     group.description = strip_tags(raw_desc).strip() if raw_desc else group.description
     group.save(update_fields=["name", "description"])
-    messages.success(request, "Group updated.")
-    return redirect("surveys:dashboard", slug=slug)
+    messages.success(request, "Section updated.")
+    return redirect("surveys:groups", slug=slug)
 
 
 @login_required

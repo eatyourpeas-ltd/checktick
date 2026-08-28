@@ -396,3 +396,52 @@ def test_groups_empty_state_keeps_question_bank_link(auth_client, owner):
     assert b"Browse the Question Bank" in resp.content, (
         "The 'Browse the Question Bank' label should be present."
     )
+
+
+@pytest.mark.django_db
+def test_groups_page_has_rename_button(auth_client, owner):
+    """Each section row in the groups page has a 'Rename' button."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rename Button Survey",
+        slug="rename-button-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    assert b"rename-section-btn" in resp.content, (
+        "Each section row should have a rename button with class 'rename-section-btn'."
+    )
+    assert b"Rename section" in resp.content, (
+        "The rename button tooltip should say 'Rename section'."
+    )
+
+
+@pytest.mark.django_db
+def test_rename_section_via_post(auth_client, owner):
+    """POSTing to survey_group_edit renames the section and redirects to groups page."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rename POST Survey",
+        slug="rename-post-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    assert group.name == DEFAULT_SECTION_NAME
+
+    resp = auth_client.post(
+        reverse("surveys:survey_group_edit", kwargs={"slug": survey.slug, "gid": group.id}),
+        data={"name": "Demographics", "description": "Patient demographics"},
+    )
+    assert resp.status_code == 302
+    # Should redirect back to the groups page, not the dashboard
+    assert reverse("surveys:groups", kwargs={"slug": survey.slug}) in resp["Location"]
+
+    group.refresh_from_db()
+    assert group.name == "Demographics"
+    assert group.description == "Patient demographics"

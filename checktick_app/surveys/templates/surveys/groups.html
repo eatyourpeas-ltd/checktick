@@ -167,7 +167,7 @@
         </div>
       </div>
       {% endif %}
-      <ul id="groups-draggable" class="orderable-list w-full flex flex-col gap-3" aria-label="Reorder groups" data-reorder-url="/surveys/{{ survey.slug }}/groups/reorder" data-can-edit="{{ can_edit|yesno:'true,false' }}">
+      <ul id="groups-draggable" class="orderable-list w-full flex flex-col gap-3" aria-label="Reorder groups" data-reorder-url="/surveys/{{ survey.slug }}/groups/reorder" data-can-edit="{{ can_edit|yesno:'true,false' }}" data-survey-slug="{{ survey.slug }}">
         {% for g in groups %}
           {% with info=repeat_info|get_item:g.id %}
             <li class="w-full" data-gid="{{ g.id }}" data-repeat="{{ info.is_repeated|default_if_none:False|yesno:'1,0' }}" title="{{ info.tooltip }}">
@@ -223,6 +223,16 @@
                 {% if can_edit %}
                   <div class="-mx-1 overflow-x-auto mt-3">
                     <div class="px-1 min-w-max flex items-center gap-2">
+                      <button type="button" class="btn btn-xs btn-ghost rename-section-btn"
+                              data-gid="{{ g.id }}"
+                              data-name="{{ g.name }}"
+                              data-description="{{ g.description }}"
+                              title="{% trans 'Rename section' %}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span class="hidden sm:inline">{% trans 'Rename' %}</span>
+                      </button>
                       {% if not g.imported_from %}
                         <a href="{% url 'surveys:question_group_publish' slug=survey.slug gid=g.id %}" class="btn btn-xs btn-outline" title="{% trans 'Publish as template' %}">
                           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -374,6 +384,29 @@
           </div>
           <div class="modal-action">
             <button class="btn" type="button" id="edit-repeat-cancel-btn">{% trans 'Cancel' %}</button>
+            <button class="btn btn-primary" type="submit">{% trans 'Save' %}</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <!-- Rename Section Modal -->
+    <dialog id="rename-section-modal" class="modal">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg">{% trans 'Rename section' %}</h3>
+        <form method="post" id="rename-section-form">
+          {% csrf_token %}
+          <input type="hidden" name="gid" id="rename-section-gid" />
+          <div class="mt-2">
+            <label class="label">{% trans 'Section name' %}</label>
+            <input class="input input-bordered w-full" name="name" id="rename-section-name" required maxlength="255" />
+          </div>
+          <div class="mt-2">
+            <label class="label">{% trans 'Description (optional)' %}</label>
+            <textarea class="textarea textarea-bordered w-full" name="description" id="rename-section-description" rows="2"></textarea>
+          </div>
+          <div class="modal-action">
+            <button class="btn" type="button" id="rename-section-cancel-btn">{% trans 'Cancel' %}</button>
             <button class="btn btn-primary" type="submit">{% trans 'Save' %}</button>
           </div>
         </form>
