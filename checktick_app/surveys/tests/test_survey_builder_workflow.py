@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from django.urls import reverse
 
-from checktick_app.surveys.models import QuestionGroup, Survey
+from checktick_app.surveys.models import QuestionGroup, Survey, SurveyQuestion
 from checktick_app.surveys.views import DEFAULT_SECTION_NAME, create_default_section
 
 
@@ -239,4 +239,107 @@ def test_dashboard_cta_fallback_for_legacy_survey(auth_client, owner):
     assert groups_url.encode() in resp.content, (
         f"Legacy survey with no groups should fall back to {groups_url}, "
         f"but the URL was not found in the response."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Commit 4 — Reframe user-facing templates to "Sections"
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_groups_page_heading_says_sections(auth_client, owner):
+    """The Groups page heading uses 'Sections', not 'Question Groups'."""
+    from checktick_app.surveys.models import Organization
+
+    org = Organization.objects.create(name="Sections Test Org", owner=owner)
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="Sections Heading Survey",
+        slug="sections-heading-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert b"Sections for" in resp.content, (
+        "Groups page heading should say 'Sections for {survey}', not 'Question Groups for'."
+    )
+    assert b"Question Groups for" not in resp.content, (
+        "The old 'Question Groups for' heading should no longer appear."
+    )
+
+
+@pytest.mark.django_db
+def test_group_builder_breadcrumb_says_sections(auth_client, owner):
+    """The group_builder breadcrumb uses 'Sections', not 'Question Groups'."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Breadcrumb Test Survey",
+        slug="breadcrumb-test-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id})
+    )
+    assert resp.status_code == 200
+    assert b"Section" in resp.content, (
+        "group_builder page should use 'Section' as the label, not 'Question Group'."
+    )
+    assert b"Question Group" not in resp.content, (
+        "The old 'Question Group' label should no longer appear in group_builder."
+    )
+
+
+@pytest.mark.django_db
+def test_question_bank_page_title(auth_client, owner):
+    """The template library page <h1> says 'Question Bank' (aligned with navbar)."""
+    resp = auth_client.get(reverse("surveys:published_templates_list"))
+    assert resp.status_code == 200
+    assert b"Question Bank" in resp.content, (
+        "The template library page heading should say 'Question Bank'."
+    )
+    # The old explainer heading "What are Question Groups?" should be gone
+    assert b"What are Question Groups?" not in resp.content, (
+        "The old 'What are Question Groups?' explainer should be reframed."
+    )
+
+
+@pytest.mark.django_db
+def test_publish_page_heading(auth_client, owner):
+    """The publish page heading says 'Share section as template'."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Publish Heading Survey",
+        slug="publish-heading-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    # The publish view requires at least one question in the group
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse(
+            "surveys:question_group_publish",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        )
+    )
+    assert resp.status_code == 200
+    assert b"Share section as template" in resp.content, (
+        "Publish page heading should say 'Share section as template'."
+    )
+    assert b"Publish Question Group" not in resp.content, (
+        "The old 'Publish Question Group' heading should no longer appear."
     )
