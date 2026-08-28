@@ -528,3 +528,83 @@ def test_group_builder_breadcrumb_says_questions(auth_client, owner):
     assert b"Manage Question" not in resp.content, (
         "The old 'Manage Question' label should no longer appear."
     )
+
+
+# ---------------------------------------------------------------------------
+# Commit 7 — Suppress redundant single-section header in participant view
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_participant_view_single_section_no_header(auth_client, owner):
+    """A single-section survey renders no section header for the participant.
+
+    Uses the preview route since the owner is redirected from the live detail view.
+    The <fieldset> structure is preserved for assistive tech, but the visible
+    card-title with the group name is suppressed.
+    """
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Single Section Participant Survey",
+        slug="single-section-participant-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(reverse("surveys:preview", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    # The fieldset should still be present (a11y structure preserved)
+    assert b"<fieldset" in resp.content, (
+        "The <fieldset> structure should be preserved for assistive tech."
+    )
+    # The section name should NOT appear as a visible header
+    assert group.name.encode() not in resp.content, (
+        f"The section name '{group.name}' should not be rendered as a visible "
+        f"header for a single-section survey."
+    )
+
+
+@pytest.mark.django_db
+def test_participant_view_multi_section_shows_headers(auth_client, owner):
+    """A multi-section survey still renders section headers for the participant."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Multi Section Participant Survey",
+        slug="multi-section-participant-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
+    survey.question_groups.add(group1, group2)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group1,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group2,
+        text="Do you have any allergies?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(reverse("surveys:preview", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    # Both section names should appear as visible headers
+    assert b"Demographics" in resp.content, (
+        "The section name 'Demographics' should be rendered for a multi-section survey."
+    )
+    assert b"Medical History" in resp.content, (
+        "The section name 'Medical History' should be rendered for a multi-section survey."
+    )

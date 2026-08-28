@@ -279,6 +279,7 @@
     {# Open a group card when this is the first item of the group #}
     {% if q.group_start %}
       <fieldset class="card bg-base-100 shadow-sm mt-8">
+        {% if not single_section %}
         <div class="card-body py-3">
           <div class="card-title text-base inline-flex items-center gap-2">
             {% include "components/icons/documents.html" with classes="w-5 h-5" aria_hidden="true" %}
@@ -288,6 +289,7 @@
             <p class="text-sm opacity-70 mt-1">{{ q.group.description }}</p>
           {% endif %}
         </div>
+        {% endif %}
         <div class="card-body pt-0">
     {% endif %}
 

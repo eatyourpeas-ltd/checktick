@@ -1260,6 +1260,10 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
     )
     show_patient_details = patient_group is not None and not has_patient_template
     show_professional_details = prof_group is not None and not has_professional_template
+    # Suppress the section header for single-section surveys so participants
+    # see "just questions" (matches the builder's invisible-until-needed model).
+    distinct_group_ids = {q.group_id for q in qs if q.group_id}
+    single_section = len(distinct_group_ids) <= 1
     # Style overrides
     style = survey.style or {}
     brand_overrides = _sanitise_brand_overrides(
@@ -1281,6 +1285,7 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "survey": survey,
         "questions": qs,
         "branching_config": json.dumps(branching_config),
+        "single_section": single_section,
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
         "demographic_defs": DEMOGRAPHIC_FIELD_DEFS,
@@ -1298,6 +1303,8 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
             else {}
         ),
     }
+
+    # Import language constants for flags
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
     ) or brand_overrides.get("primary_hex"):
@@ -1370,6 +1377,10 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         getattr(q, "type", None) == SurveyQuestion.Types.TEMPLATE_PROFESSIONAL
         for q in qs
     )
+    # Suppress the section header for single-section surveys so participants
+    # see "just questions" (matches the builder's invisible-until-needed model).
+    distinct_group_ids = {q.group_id for q in qs if q.group_id}
+    single_section = len(distinct_group_ids) <= 1
     style = survey.style or {}
     brand_overrides = _sanitise_brand_overrides(
         {
@@ -1390,6 +1401,7 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "survey": survey,
         "questions": qs,
         "branching_config": json.dumps(branching_config),
+        "single_section": single_section,
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
         "demographic_defs": DEMOGRAPHIC_FIELD_DEFS,
@@ -4483,6 +4495,10 @@ def _handle_participant_submission(
         getattr(q, "type", None) == SurveyQuestion.Types.TEMPLATE_PROFESSIONAL
         for q in qs
     )
+    # Suppress the section header for single-section surveys so participants
+    # see "just questions" (matches the builder's invisible-until-needed model).
+    distinct_group_ids = {q.group_id for q in qs if q.group_id}
+    single_section = len(distinct_group_ids) <= 1
     # Sanitise survey.style CSS in-memory before rendering so that a malicious
     # theme_css_light/dark cannot break out of the <style> block via |safe.
     from checktick_app.core.theme_utils import sanitize_css_block as _sanitize_css
@@ -4499,6 +4515,7 @@ def _handle_participant_submission(
         "survey": survey,
         "questions": qs,
         "branching_config": json.dumps(branching_config),
+        "single_section": single_section,
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
         "demographic_defs": DEMOGRAPHIC_FIELD_DEFS,
