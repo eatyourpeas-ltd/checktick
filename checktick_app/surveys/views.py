@@ -85,6 +85,29 @@ from .utils import parse_datetime_aware, verify_key
 logger = logging.getLogger(__name__)
 
 
+# Default name for the auto-created QuestionGroup on survey creation.
+# User-facing label is "Section" (see docs/survey-builder-workflow-design.md);
+# the model field stays "QuestionGroup". "Section 1" is intentionally ordinal
+# so it reads correctly if a second section is added later, and is rarely seen
+# because single-section surveys hide the section chrome (Tier 2.2).
+DEFAULT_SECTION_NAME = "Section 1"
+
+
+def create_default_section(survey: Survey, owner) -> QuestionGroup:
+    """Create the auto-default QuestionGroup for a newly-created survey.
+
+    Every question must belong to a QuestionGroup (the data model requires it),
+    so creating the group up-front removes the "name a group first" gate from
+    the survey-builder workflow. The group is trivially renameable and
+    deletable like any other group.
+
+    Returns the created QuestionGroup.
+    """
+    group = QuestionGroup.objects.create(name=DEFAULT_SECTION_NAME, owner=owner)
+    survey.question_groups.add(group)
+    return group
+
+
 def _sanitise_brand_overrides(overrides: dict) -> dict:
     """Return a copy of `overrides` with unsafe icon_url / font_css_url dropped.
 
@@ -1004,6 +1027,10 @@ def survey_create(request: HttpRequest) -> HttpResponse:
                                 )
                                 # Don't fail the entire survey creation if org encryption fails
 
+                        # Auto-create the default section so the user can start
+                        # adding questions immediately without naming a group.
+                        create_default_section(survey, request.user)
+
                         # Determine success message based on encryption methods
                         if hasattr(request.user, "oidc"):
                             provider_name = request.user.oidc.provider.title()
@@ -1030,6 +1057,9 @@ def survey_create(request: HttpRequest) -> HttpResponse:
 
             # No encryption or other options
             survey.save()
+            # Auto-create the default section so the user can start
+            # adding questions immediately without naming a group.
+            create_default_section(survey, request.user)
             return redirect("surveys:dashboard", slug=survey.slug)
     else:
         form = SurveyCreateForm()
