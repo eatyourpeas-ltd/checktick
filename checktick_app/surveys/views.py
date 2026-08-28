@@ -85,6 +85,29 @@ from .utils import parse_datetime_aware, verify_key
 logger = logging.getLogger(__name__)
 
 
+# Default name for the auto-created QuestionGroup on survey creation.
+# User-facing label is "Section" (see docs/survey-builder-workflow-design.md);
+# the model field stays "QuestionGroup". "Section 1" is intentionally ordinal
+# so it reads correctly if a second section is added later, and is rarely seen
+# because single-section surveys hide the section chrome (Tier 2.2).
+DEFAULT_SECTION_NAME = "Section 1"
+
+
+def create_default_section(survey: Survey, owner) -> QuestionGroup:
+    """Create the auto-default QuestionGroup for a newly-created survey.
+
+    Every question must belong to a QuestionGroup (the data model requires it),
+    so creating the group up-front removes the "name a group first" gate from
+    the survey-builder workflow. The group is trivially renameable and
+    deletable like any other group.
+
+    Returns the created QuestionGroup.
+    """
+    group = QuestionGroup.objects.create(name=DEFAULT_SECTION_NAME, owner=owner)
+    survey.question_groups.add(group)
+    return group
+
+
 def _sanitise_brand_overrides(overrides: dict) -> dict:
     """Return a copy of `overrides` with unsafe icon_url / font_css_url dropped.
 
@@ -1004,6 +1027,10 @@ def survey_create(request: HttpRequest) -> HttpResponse:
                                 )
                                 # Don't fail the entire survey creation if org encryption fails
 
+                        # Auto-create the default section so the user can start
+                        # adding questions immediately without naming a group.
+                        create_default_section(survey, request.user)
+
                         # Determine success message based on encryption methods
                         if hasattr(request.user, "oidc"):
                             provider_name = request.user.oidc.provider.title()
@@ -1030,6 +1057,9 @@ def survey_create(request: HttpRequest) -> HttpResponse:
 
             # No encryption or other options
             survey.save()
+            # Auto-create the default section so the user can start
+            # adding questions immediately without naming a group.
+            create_default_section(survey, request.user)
             return redirect("surveys:dashboard", slug=survey.slug)
     else:
         form = SurveyCreateForm()
@@ -1230,6 +1260,10 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
     )
     show_patient_details = patient_group is not None and not has_patient_template
     show_professional_details = prof_group is not None and not has_professional_template
+    # Suppress the section header for single-section surveys so participants
+    # see "just questions" (matches the builder's invisible-until-needed model).
+    distinct_group_ids = {q.group_id for q in qs if q.group_id}
+    single_section = len(distinct_group_ids) <= 1
     # Style overrides
     style = survey.style or {}
     brand_overrides = _sanitise_brand_overrides(
@@ -1251,6 +1285,7 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "survey": survey,
         "questions": qs,
         "branching_config": json.dumps(branching_config),
+        "single_section": single_section,
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
         "demographic_defs": DEMOGRAPHIC_FIELD_DEFS,
@@ -1268,6 +1303,8 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
             else {}
         ),
     }
+
+    # Import language constants for flags
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
     ) or brand_overrides.get("primary_hex"):
@@ -1340,6 +1377,10 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         getattr(q, "type", None) == SurveyQuestion.Types.TEMPLATE_PROFESSIONAL
         for q in qs
     )
+    # Suppress the section header for single-section surveys so participants
+    # see "just questions" (matches the builder's invisible-until-needed model).
+    distinct_group_ids = {q.group_id for q in qs if q.group_id}
+    single_section = len(distinct_group_ids) <= 1
     style = survey.style or {}
     brand_overrides = _sanitise_brand_overrides(
         {
@@ -1360,6 +1401,7 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "survey": survey,
         "questions": qs,
         "branching_config": json.dumps(branching_config),
+        "single_section": single_section,
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
         "demographic_defs": DEMOGRAPHIC_FIELD_DEFS,
@@ -4453,6 +4495,10 @@ def _handle_participant_submission(
         getattr(q, "type", None) == SurveyQuestion.Types.TEMPLATE_PROFESSIONAL
         for q in qs
     )
+    # Suppress the section header for single-section surveys so participants
+    # see "just questions" (matches the builder's invisible-until-needed model).
+    distinct_group_ids = {q.group_id for q in qs if q.group_id}
+    single_section = len(distinct_group_ids) <= 1
     # Sanitise survey.style CSS in-memory before rendering so that a malicious
     # theme_css_light/dark cannot break out of the <style> block via |safe.
     from checktick_app.core.theme_utils import sanitize_css_block as _sanitize_css
@@ -4469,6 +4515,7 @@ def _handle_participant_submission(
         "survey": survey,
         "questions": qs,
         "branching_config": json.dumps(branching_config),
+        "single_section": single_section,
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
         "demographic_defs": DEMOGRAPHIC_FIELD_DEFS,
@@ -5961,8 +6008,8 @@ def survey_group_edit(request: HttpRequest, slug: str, gid: int) -> HttpResponse
     raw_desc = request.POST.get("description", group.description)
     group.description = strip_tags(raw_desc).strip() if raw_desc else group.description
     group.save(update_fields=["name", "description"])
-    messages.success(request, "Group updated.")
-    return redirect("surveys:dashboard", slug=slug)
+    messages.success(request, "Section updated.")
+    return redirect("surveys:groups", slug=slug)
 
 
 @login_required

@@ -1,20 +1,20 @@
 {% extends 'base.html' %}
 {% load i18n %}
-{% block title %}{% trans "Publish Question Group" %} - CheckTick{% endblock %}
+{% block title %}{% trans "Share as template" %} - CheckTick{% endblock %}
 {% block content %}
 <div class="max-w-3xl mx-auto">
-  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Question Groups' crumb2_href='/surveys/groups/' crumb3_label=question_group.name crumb4_label='Publish' %}
+  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Sections' crumb2_href='/surveys/groups/' crumb3_label=question_group.name crumb4_label='Publish' %}
 
   <div class="card bg-base-100 shadow">
     <div class="card-body">
-      <h1 class="card-title text-2xl">{% trans "Publish Question Group as Template" %}</h1>
+      <h1 class="card-title text-2xl">{% trans "Share section as template" %}</h1>
 
       <div role="alert" class="alert alert-info">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current h-6 w-6 shrink-0">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
         </svg>
         <div class="text-sm">
-          <p class="font-semibold">{% trans "Publishing this question group will:" %}</p>
+          <p class="font-semibold">{% trans "Publishing this section will:" %}</p>
           <ul class="list-disc list-inside mt-2">
             <li>{% trans "Make it available for other users to import" %}</li>
             <li>{% trans "Export questions as markdown format" %}</li>
@@ -116,7 +116,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
           <div class="text-sm">
-            <p>{% trans "If this question group includes copyrighted content (e.g., PHQ-9, GAD-7), please provide attribution information. This ensures proper credit and compliance with licensing requirements." %}</p>
+            <p>{% trans "If this section includes copyrighted content (e.g., PHQ-9, GAD-7), please provide attribution information. This ensures proper credit and compliance with licensing requirements." %}</p>
           </div>
         </div>
 

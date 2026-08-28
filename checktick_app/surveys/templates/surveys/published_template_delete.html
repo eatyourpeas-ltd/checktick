@@ -21,7 +21,7 @@
         </svg>
         <div>
           <h3 class="font-bold">{% trans "Warning: This action cannot be undone" %}</h3>
-          <div class="text-sm">{% trans "Deleting this template will remove it from the template library. Existing question groups imported from this template will not be affected." %}</div>
+          <div class="text-sm">{% trans "Deleting this template will remove it from the Question Bank. Existing sections imported from this template will not be affected." %}</div>
         </div>
       </div>
 
@@ -80,7 +80,7 @@
           </svg>
           <div class="text-sm">
             <p class="font-semibold">{% trans "This template has been imported" %} {{ template.import_count }} {% trans "time(s)" %}</p>
-            <p class="mt-1">{% trans "Users who imported this template will still have access to their question groups, but they won't be able to see this template in the library anymore." %}</p>
+            <p class="mt-1">{% trans "Users who imported this template will still have access to their sections, but they won't be able to see this template in the Question Bank anymore." %}</p>
           </div>
         </div>
       {% endif %}

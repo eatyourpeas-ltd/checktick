@@ -1,21 +1,24 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load i18n %}
-{% block title %}{% trans "Manage Questions" %} - {{ survey.name }} · {{ group.name }}{% endblock %}
+{% block title %}{% trans "Questions" %} - {{ survey.name }} · {{ group.name }}{% endblock %}
 {% block content %}
 <div class="flex flex-col gap-6">
   <div class="prose">
   {% trans "Surveys" as crumb1_text %}
   {% trans "Survey Dashboard" as crumb2_text %}
-  {% trans "Question Groups" as crumb3_text %}
-  {% trans "Manage Question" as crumb4_text %}
+  {% trans "Sections" as crumb3_text %}
+  {% trans "Questions" as crumb4_text %}
   {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href="/surveys/" crumb2_label=crumb2_text crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" crumb3_label=crumb3_text crumb3_href="/surveys/"|add:survey.slug|add:"/groups/" crumb4_label=crumb4_text %}
     <h1 class="inline-flex items-center gap-2 text-base-content">
       {% include "components/icons/checktick_question.html" with classes="w-6 h-6 text-base-content" %}
-      <span>{% trans "Manage Question" %}</span>
+      <span>{% trans "Questions" %}</span>
     </h1>
-    <h2 class="mt-0 text-base-content/80">{% trans "Question Group" %}: {{ group.name }}</h2>
+    <h2 class="mt-0 text-base-content/80">{% trans "Section" %}: {{ group.name }}</h2>
     {% if group.description %}<p class="mt-0">{{ group.description }}</p>{% endif %}
+    {% if questions %}
+    <p class="text-xs text-base-content/60 mt-2">{% trans "Sections group related questions — that's what lets you skip ahead or repeat a block." %}</p>
+    {% endif %}
   </div>
 
   <div class="grid md:grid-cols-3 gap-6">
@@ -238,7 +241,7 @@ Option B" data-options-textarea></textarea>
                   <h3 class="text-lg font-semibold mb-4">Special Templates</h3>
                   <div class="space-y-4">
                     <p class="text-sm opacity-60 leading-snug">
-                      Templates are predefined sets of questions for common use cases. They can form part of question groups or be used on their own.
+                      Templates are predefined sets of questions for common use cases. They can form part of sections or be used on their own.
                     </p>
                     <fieldset>
                       <legend class="label">Template type</legend>
@@ -295,7 +298,7 @@ Option B" data-options-textarea></textarea>
                         <div class="text-sm">
                           If you need a specialized question format not listed here (like the Patient/Professional templates),
                           <a href="https://github.com/eatyourpeas/checktick/issues/new?template=custom_template_request.yml" target="_blank" class="link underline">request a custom template on GitHub</a>.
-                          Note: Custom templates are different from Question Group Templates (reusable questionnaires like PHQ-9).
+                          Note: Custom templates are different from Question Bank templates (reusable questionnaires like PHQ-9).
                         </div>
                       </div>
                     </div>

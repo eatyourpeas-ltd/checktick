@@ -182,6 +182,41 @@
         editModal.close();
       });
 
+    // Rename section modal handling
+    var renameModal = $("#rename-section-modal");
+    var renameForm = $("#rename-section-form");
+    var renameGid = $("#rename-section-gid");
+    var renameName = $("#rename-section-name");
+    var renameDesc = $("#rename-section-description");
+    var renameCancelBtn = $("#rename-section-cancel-btn");
+
+    document.addEventListener("click", function (e) {
+      var renameBtn = e.target.closest(".rename-section-btn");
+      if (!renameBtn) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Populate the modal with current values
+      if (renameGid) renameGid.value = renameBtn.dataset.gid;
+      if (renameName) renameName.value = renameBtn.dataset.name || "";
+      if (renameDesc) renameDesc.value = renameBtn.dataset.description || "";
+
+      // Set the form action dynamically based on the section's gid
+      if (renameForm) {
+        var surveySlug = root ? root.dataset.surveySlug : "";
+        renameForm.action =
+          "/surveys/" + surveySlug + "/groups/" + renameBtn.dataset.gid + "/edit";
+      }
+
+      if (renameModal && renameModal.showModal) renameModal.showModal();
+    });
+
+    if (renameCancelBtn && renameModal)
+      renameCancelBtn.addEventListener("click", function () {
+        renameModal.close();
+      });
+
     // Initialize from any pre-checked boxes
     $all("li[data-gid]", root).forEach(function (li) {
       var cb = li.querySelector(".select-checkbox");

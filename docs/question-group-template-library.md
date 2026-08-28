@@ -5,7 +5,7 @@ category: None
 
 The template library lets you discover, browse, and import validated questionnaires and question collections into your surveys.
 
-> **Note:** For an overview of question groups, see [Question Groups](/docs/groups-view/). To publish your own templates, see [Publishing Question Groups](/docs/publish-question-groups/).
+> **Note:** For an overview of sections, see [Sections](/docs/groups-view/). To publish your own templates, see [Publishing Question Groups](/docs/publish-question-groups/).
 
 ## Who can access
 
@@ -21,12 +21,12 @@ Users can only import into surveys they own.
 
 Access the library from:
 
-- Survey dashboard: "Browse Question Group Template Library" button
+- Survey dashboard: "Browse the Question Bank" button
 - Direct URL: `/surveys/templates/`
 
 The library shows:
 
-- **Template name**: Title of the question group
+- **Template name**: Title of the section
 - **Description**: Brief overview of what the template measures
 - **Questions**: Number of questions in the template
 - **Language**: Primary language of the template
@@ -64,21 +64,21 @@ The library shows:
 
 When you import a template:
 
-- **All questions** from the template are imported as a complete question group
+- **All questions** from the template are imported as a complete section
 - Questions maintain their original:
   - Question text and help text
   - Question type and options
   - Required/optional status
   - Order within the group
-- The question group is added to your survey
+- The section is added to your survey
 - You can edit or delete individual questions after import
 
 ### Important notes
 
-- **Complete groups**: Templates import as complete question groups. Validated instruments (like PHQ-9, GAD-7) should be used in their entirety for clinical validity.
+- **Complete groups**: Templates import as complete sections. Validated instruments (like PHQ-9, GAD-7) should be used in their entirety for clinical validity.
 - **Editable after import**: You can modify questions after import, but be aware this may affect the validity of standardised instruments.
-- **Attribution preserved**: If the template has attribution (authors, citations, licenses), this information is preserved with the imported question group.
-- **No republishing**: You cannot republish question groups that were imported from templates. This protects copyright and prevents circular attribution issues.
+- **Attribution preserved**: If the template has attribution (authors, citations, licenses), this information is preserved with the imported section.
+- **No republishing**: You cannot republish sections that were imported from templates. This protects copyright and prevents circular attribution issues.
 
 ## Template details page
 
@@ -115,16 +115,16 @@ When you import an attributed template:
 
 ## Publishing your own templates
 
-Organisation admins can publish question groups from their surveys as templates. Published templates can be:
+Organisation admins can publish sections from their surveys as templates. Published templates can be:
 
 - **Organisation-level**: Visible only to your organisation members
 - **Global**: Visible to all CheckTick users
 
 For detailed instructions on publishing templates, including attribution requirements and copyright protection, see [Publishing Question Groups](/docs/publish-question-groups/).
 
-## Specialist templates vs. question group templates
+## Specialist templates vs. section templates
 
-The template library contains **question group templates** - complete questionnaires with multiple questions. This is different from **specialist templates** (Patient Details, Professional Details) which are:
+The template library contains **section templates** - complete questionnaires with multiple questions. This is different from **specialist templates** (Patient Details, Professional Details) which are:
 
 - Single composite questions with multiple fields
 - Added individually through the "Special Templates" tab in the question builder
@@ -153,12 +153,12 @@ The template library contains **question group templates** - complete questionna
 ### Questions appear in wrong order
 
 - Questions are imported in the order defined in the template
-- You can reorder questions after import using the question group builder
-- Use the Groups View to reorder entire question groups
+- You can reorder questions after import using the builder
+- Use the Sections page to reorder entire sections
 
 ## Related documentation
 
-- [Question Groups](/docs/groups-view/) - Overview and managing question groups
+- [Sections](/docs/groups-view/) - Overview and managing sections
 - [Publishing Question Groups](/docs/publish-question-groups/) - How to publish templates
 - [Global Templates Index](/docs/question-group-templates-index/) - List of available global templates
 - [Surveys](/docs/surveys/) - Creating and managing surveys

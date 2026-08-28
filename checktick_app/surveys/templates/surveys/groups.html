@@ -12,11 +12,11 @@
   <div class="prose max-w-none">
     {% trans 'Surveys' as crumb1_text %}
     {% trans 'Survey Dashboard' as crumb2_text %}
-    {% trans 'Question Groups' as crumb3_text %}
+    {% trans 'Sections' as crumb3_text %}
     {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href='/surveys/' crumb2_label=crumb2_text crumb2_href='/surveys/'|add:survey.slug|add:'/dashboard/' crumb3_label=crumb3_text %}
     <h1 class="inline-flex items-center gap-2 w-full text-base-content">
       {% include "components/icons/checktick_question_group.html" with classes="w-7 h-7" %}
-      <span>{% blocktrans %}Question Groups for {{ survey }}{% endblocktrans %}</span>
+      <span>{% blocktrans %}Sections for {{ survey }}{% endblocktrans %}</span>
     </h1>
   </div>
 
@@ -42,7 +42,7 @@
         <div class="flex-1 bg-secondary/20 border-2 border-secondary/50 p-4">
           <div class="flex items-center gap-2 mb-1">
             <span class="badge badge-secondary badge-sm">2</span>
-            <span class="font-semibold text-sm text-base-content">{% trans "Question Groups" %}</span>
+            <span class="font-semibold text-sm text-base-content">{% trans "Sections" %}</span>
             <span class="badge badge-outline badge-xs text-base-content/50 ml-auto whitespace-nowrap">{% trans "you are here" %}</span>
           </div>
           <p class="text-xs text-base-content/70">{% trans "Sections that organise your survey. Create them from scratch or import from the Question Bank." %}</p>
@@ -66,7 +66,7 @@
       <details class="group">
         <summary class="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-3 cursor-pointer list-none flex items-center gap-1 select-none">
           <svg class="w-3 h-3 transition-transform group-open:rotate-90 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          {% trans "Survey → Question Groups → Questions" %}
+          {% trans "Survey → Sections → Questions" %}
         </summary>
         <div class="mt-3 flex flex-col sm:flex-row items-stretch gap-0">
 
@@ -86,7 +86,7 @@
           <div class="flex-1 bg-secondary/10 border border-secondary/30 p-4">
             <div class="flex items-center gap-2 mb-1">
               <span class="badge badge-secondary badge-sm">2</span>
-              <span class="font-semibold text-sm text-base-content">{% trans "Question Groups" %}</span>
+              <span class="font-semibold text-sm text-base-content">{% trans "Sections" %}</span>
             </div>
             <p class="text-xs text-base-content/70">{% trans "Sections that organise your survey. Each group holds related questions and can be reordered or repeated." %}</p>
           </div>
@@ -109,12 +109,33 @@
     {% endif %}
   </div>
 
-  {# === Empty state: two action cards (no groups yet) === #}
+  {# === Empty state: no groups yet (legacy surveys; new surveys get a default group automatically on creation via create_default_section) === #}
   {% if not groups %}
   <div class="not-prose mt-6 max-w-2xl">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-      {# Browse the Question Bank #}
+      {# Primary: Add your first question — creates a default section and takes the user straight to the builder so they can add a question. #}
+      {% if can_edit %}
+      <a href="{% url 'surveys:groups' slug=survey.slug %}"
+         class="card bg-base-100 border-2 border-primary hover:shadow-md transition-all sm:col-span-2">
+        <div class="card-body gap-2 p-5 items-center text-center">
+          <div class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            <h3 class="font-semibold text-lg text-base-content">{% trans "Add your first question" %}</h3>
+          </div>
+          <p class="text-sm text-base-content/70">{% trans "Start building your survey. A default section will be created for you — you can rename it later." %}</p>
+          <form method="post" action="/surveys/{{ survey.slug }}/groups/create" class="mt-2 w-full max-w-sm">
+            {% csrf_token %}
+            <input type="hidden" name="name" value="Section 1" />
+            <button type="submit" class="btn btn-primary btn-sm w-full">{% trans "Add your first question" %}</button>
+          </form>
+        </div>
+      </a>
+      {% endif %}
+
+      {# Secondary: Browse the Question Bank #}
       <a href="{% url 'surveys:published_templates_list' %}?survey={{ survey.slug }}" class="card bg-base-100 border border-base-300 hover:border-secondary hover:shadow-md transition-all">
         <div class="card-body gap-2 p-5">
           <div class="flex items-center gap-2">
@@ -123,31 +144,9 @@
             </svg>
             <h3 class="font-semibold text-base">{% trans "Browse the Question Bank" %}</h3>
           </div>
-          <p class="text-sm text-base-content/70">{% trans "Import ready-made groups — from validated clinical tools like PHQ-9 to question sets shared by your organisation." %}</p>
+          <p class="text-sm text-base-content/70">{% trans "Import ready-made sections — from validated clinical tools like PHQ-9 to question sets shared by your organisation." %}</p>
         </div>
       </a>
-
-      {# Create from scratch #}
-      {% if can_edit %}
-      <div class="card bg-base-100 border border-base-300">
-        <div class="card-body gap-2 p-5">
-          <div class="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-            <h3 class="font-semibold text-base">{% trans "Create from scratch" %}</h3>
-          </div>
-          <p class="text-sm text-base-content/70">{% trans "Give your group a name, then add questions one by one in the visual builder." %}</p>
-          <form method="post" action="/surveys/{{ survey.slug }}/groups/create" class="mt-2">
-            {% csrf_token %}
-            <div class="join w-full">
-              <input id="create-group-name" class="input input-bordered join-item flex-1 input-sm" name="name" placeholder="{% trans 'Group name' %}" required />
-              <button id="create-group-submit" class="btn join-item btn-primary btn-sm" type="submit" disabled>{% trans 'Create' %}</button>
-            </div>
-          </form>
-        </div>
-      </div>
-      {% endif %}
 
     </div>
   </div>
@@ -156,6 +155,14 @@
   <div class="mt-4">
     <div class="space-y-3">
       {% if groups %}
+      <div class="alert shadow-sm bg-info/10 border-l-4 border-info">
+        <div>
+          {% include 'components/icons/checktick_question.html' with classes='w-5 h-5 text-info' %}
+        </div>
+        <div class="text-sm text-base-content">
+          {% trans 'Sections group related questions — that\'s what lets you skip ahead or repeat a block.' %}
+        </div>
+      </div>
       <p class="text-sm text-base-content/70">
         {% blocktrans %}Drag to reorder groups — this controls the order participants see each section. Need to ask the same questions multiple times? Select groups and click "Create repeat" to let participants add entries (e.g., details for each family member or each hospital visit).{% endblocktrans %}
       </p>
@@ -168,7 +175,7 @@
         </div>
       </div>
       {% endif %}
-      <ul id="groups-draggable" class="orderable-list w-full flex flex-col gap-3" aria-label="Reorder groups" data-reorder-url="/surveys/{{ survey.slug }}/groups/reorder" data-can-edit="{{ can_edit|yesno:'true,false' }}">
+      <ul id="groups-draggable" class="orderable-list w-full flex flex-col gap-3" aria-label="Reorder groups" data-reorder-url="/surveys/{{ survey.slug }}/groups/reorder" data-can-edit="{{ can_edit|yesno:'true,false' }}" data-survey-slug="{{ survey.slug }}">
         {% for g in groups %}
           {% with info=repeat_info|get_item:g.id %}
             <li class="w-full" data-gid="{{ g.id }}" data-repeat="{{ info.is_repeated|default_if_none:False|yesno:'1,0' }}" title="{{ info.tooltip }}">
@@ -224,6 +231,16 @@
                 {% if can_edit %}
                   <div class="-mx-1 overflow-x-auto mt-3">
                     <div class="px-1 min-w-max flex items-center gap-2">
+                      <button type="button" class="btn btn-xs btn-ghost rename-section-btn"
+                              data-gid="{{ g.id }}"
+                              data-name="{{ g.name }}"
+                              data-description="{{ g.description }}"
+                              title="{% trans 'Rename section' %}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span class="hidden sm:inline">{% trans 'Rename' %}</span>
+                      </button>
                       {% if not g.imported_from %}
                         <a href="{% url 'surveys:question_group_publish' slug=survey.slug gid=g.id %}" class="btn btn-xs btn-outline" title="{% trans 'Publish as template' %}">
                           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -275,14 +292,14 @@
         </a>
       </div>
 
-      <!-- Add new question group form (only when groups already exist; empty state has its own form) -->
+      <!-- Add new section form (only when groups already exist; empty state has its own form) -->
       {% if can_edit and groups %}
         <div class="mt-4">
           <form method="post" action="/surveys/{{ survey.slug }}/groups/create" class="inline-flex">
             {% csrf_token %}
             <div class="join">
               <input id="create-group-name" class="input input-bordered join-item" name="name" placeholder="{% trans 'New group name' %}" required />
-              <button id="create-group-submit" class="btn join-item btn-primary" type="submit" disabled>{% trans 'Create new question group' %}</button>
+              <button id="create-group-submit" class="btn join-item btn-primary" type="submit" disabled>{% trans 'Create new section' %}</button>
             </div>
           </form>
         </div>
@@ -375,6 +392,29 @@
           </div>
           <div class="modal-action">
             <button class="btn" type="button" id="edit-repeat-cancel-btn">{% trans 'Cancel' %}</button>
+            <button class="btn btn-primary" type="submit">{% trans 'Save' %}</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <!-- Rename Section Modal -->
+    <dialog id="rename-section-modal" class="modal">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg">{% trans 'Rename section' %}</h3>
+        <form method="post" id="rename-section-form">
+          {% csrf_token %}
+          <input type="hidden" name="gid" id="rename-section-gid" />
+          <div class="mt-2">
+            <label class="label">{% trans 'Section name' %}</label>
+            <input class="input input-bordered w-full" name="name" id="rename-section-name" required maxlength="255" />
+          </div>
+          <div class="mt-2">
+            <label class="label">{% trans 'Description (optional)' %}</label>
+            <textarea class="textarea textarea-bordered w-full" name="description" id="rename-section-description" rows="2"></textarea>
+          </div>
+          <div class="modal-action">
+            <button class="btn" type="button" id="rename-section-cancel-btn">{% trans 'Cancel' %}</button>
             <button class="btn btn-primary" type="submit">{% trans 'Save' %}</button>
           </div>
         </form>

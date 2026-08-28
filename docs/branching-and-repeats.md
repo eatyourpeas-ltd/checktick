@@ -4,14 +4,14 @@ category: features
 priority: 5
 ---
 
-Guide to creating intelligent surveys with conditional logic and repeating question groups.
+Guide to creating intelligent surveys with conditional logic and repeating sections.
 
 ## Overview
 
 CheckTick allows you to create dynamic surveys that adapt based on user responses through two powerful features:
 
 1. **Branching Logic** - Show, skip, or jump to questions based on previous answers
-2. **Repeating Questions** - Allow users to answer the same group of questions multiple times
+2. **Repeating Questions** - Allow users to answer the same section of questions multiple times
 
 These features work together to create sophisticated survey workflows while keeping the user experience simple and intuitive.
 
@@ -94,7 +94,7 @@ The Survey Map uses a git-graph style to display your survey with square connect
 - **Hover** over questions to see the full question text
 - **Hover** over branch lines to see the full condition details
 
-Questions are organised into their groups, making it easy to see which questions belong together and how they flow.
+Questions are organised into their sections, making it easy to see which questions belong together and how they flow.
 
 ## Repeating Questions
 
@@ -107,9 +107,9 @@ Repeating questions allow users to answer the same set of questions multiple tim
 
 ### How It Works
 
-Questions are organised into **groups**. Any group can be marked as repeating, allowing users to add as many instances as they need (or up to a maximum limit you set).
+Questions are organised into **sections**. Any section can be marked as repeating, allowing users to add as many instances as they need (or up to a maximum limit you set).
 
-For example, a "Medications" group might contain:
+For example, a "Medications" section might contain:
 - Medication name
 - Dosage
 - Frequency
@@ -119,10 +119,10 @@ Users can add this information once for each medication they take.
 
 ### Setting Up Repeats
 
-#### Using the Groups View
+#### Using the Sections page
 
-1. Go to the **Groups** view in your survey
-2. Find the group you want to make repeatable
+1. Go to the **Sections** page in your survey
+2. Find the section you want to make repeatable
 3. Click "Set Repeat"
 4. Choose:
    - **Unlimited repeats** - Users can add as many as needed

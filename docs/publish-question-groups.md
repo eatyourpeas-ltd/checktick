@@ -3,9 +3,9 @@ title: Publishing Question Groups
 category: None
 ---
 
-This guide explains how to publish your question groups as reusable templates that can be shared with your organisation or the global CheckTick community.
+This guide explains how to publish your sections as reusable templates that can be shared with your organisation or the global CheckTick community.
 
-> **Note:** For an overview of question groups and their features, see [Question Groups](/docs/groups-view/). To browse and import templates, see [Question Group Template Library](/docs/question-group-template-library/).
+> **Note:** For an overview of sections and their features, see [Sections](/docs/groups-view/). To browse and import templates, see [Question Group Template Library](/docs/question-group-template-library/).
 
 ## Publication Levels
 
@@ -27,10 +27,10 @@ Publish templates visible to all Checktick users:
 
 **Note:** Organisation VIEWER role cannot publish templates (view-only access).
 
-## Publishing a Question Group
+## Publishing a section
 
-1. Go to your survey's question groups page
-2. Click **Publish** next to any question group
+1. Go to your survey's Sections page
+2. Click **Publish** next to any section
 3. Choose publication level (Organisation or Global)
 4. Add attribution information:
    - Author names and ORCID IDs (optional)
@@ -47,7 +47,7 @@ Publish templates visible to all Checktick users:
 
 Access the template library from:
 
-- Survey question groups page: **Browse & Import Templates** button
+- Survey Sections page: **Browse & Import Templates** button
 - Outline page: Link in the information banner
 
 Filter templates by:
@@ -63,12 +63,12 @@ Filter templates by:
 3. Review the markdown and attribution
 4. Click **Import into Survey**
 5. Select which survey to import into
-6. The question group is added to your survey
-7. Customize as needed in the question builder
+6. The section is added to your survey
+7. Customize as needed in the builder
 
 **Rate limit:** 50 imports per hour per user
 
-**Note:** Imported question groups are independent copies. Changes to your copy don't affect the original template or other imports.
+**Note:** Imported sections are independent copies. Changes to your copy don't affect the original template or other imports.
 
 ## Managing Your Published Templates
 
@@ -76,7 +76,7 @@ View your published templates in the template library filtered by your organisat
 
 To update a template:
 
-- Make changes to your original question group
+- Make changes to your original section
 - Publish again with the same slug (existing template is updated)
 
 To delete a template:
@@ -85,7 +85,7 @@ To delete a template:
 - Click **Delete Template**
 - Confirm deletion
 
-**Note:** Deleting a template doesn't affect question groups that were imported from it.
+**Note:** Deleting a template doesn't affect sections that were imported from it.
 
 ## Attribution and Copyright
 
@@ -186,6 +186,6 @@ This should run on deployment to ensure all instances have the latest templates.
 ## Related Documentation
 
 - [Outline](/docs/import/) - Text format syntax for questions
-- [Groups View](/docs/groups-view/) - Managing question groups
+- [Sections](/docs/groups-view/) - Managing sections
 - [Global Templates Appendix](/docs/question-group-templates-index/) - Available templates
-- [Collections](/docs/collections/) - Repeatable question groups
+- [Collections](/docs/collections/) - Repeatable sections

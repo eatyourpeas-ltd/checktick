@@ -22,7 +22,7 @@ You can create translations in two ways:
 4. Select the target language
 5. The system uses AI (LLM) to translate all content:
    - Survey name and description
-   - Question group names and descriptions
+   - Section names and descriptions
    - Question text
    - Multiple choice options
    - Follow-up text prompts
@@ -104,7 +104,7 @@ Throughout the interface, you'll see language flags indicating:
 ## What Gets Translated
 
 - Survey name and description
-- Question group names and descriptions
+- Section names and descriptions
 - Question text
 - Multiple choice options
 - Dropdown options

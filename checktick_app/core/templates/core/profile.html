@@ -135,7 +135,7 @@
           </div>
         {% endif %}
         {% if stats.groups_owned %}
-          <div class="tooltip" data-tip="{% blocktrans count groups=stats.groups_owned %}You have authored {{ groups }} question group{% plural %}You have authored {{ groups }} question groups{% endblocktrans %}">
+          <div class="tooltip" data-tip="{% blocktrans count groups=stats.groups_owned %}You have authored {{ groups }} section{% plural %}You have authored {{ groups }} sections{% endblocktrans %}">
             <div class="indicator">
               <span class="indicator-item badge badge-outline badge-success text-xs">{{ stats.groups_owned }}</span>
               <div class="bg-success text-success-content rounded-full w-12 h-12 flex items-center justify-center">

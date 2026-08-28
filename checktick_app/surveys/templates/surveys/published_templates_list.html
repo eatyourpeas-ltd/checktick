@@ -10,7 +10,7 @@
   <div class="not-prose mb-2">
     <a href="{% url 'surveys:groups' request.GET.survey %}" class="btn btn-sm btn-ghost gap-1">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
-      {% trans "Back to Question Groups" %}
+      {% trans "Back to Sections" %}
     </a>
   </div>
   {% endif %}
@@ -25,9 +25,9 @@
     <div class="alert alert-info">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
       <div>
-        <h3 class="font-bold">{% trans "What are Question Groups?" %}</h3>
+        <h3 class="font-bold">{% trans "What are sections?" %}</h3>
         <p class="text-sm">
-          {% trans "Question Groups are reusable collections of related questions that you can import into any survey. Unlike individual questions, groups bundle multiple questions together - for example, a 'Patient Demographics' group might include name, date of birth, and contact details." %}
+          {% trans "Sections are reusable collections of related questions that you can import into any survey. Unlike individual questions, sections bundle multiple questions together - for example, a 'Patient Demographics' section might include name, date of birth, and contact details." %}
         </p>
         <div class="mt-2">
           <details class="collapse collapse-arrow bg-base-200/50">
@@ -37,7 +37,7 @@
                 <li><strong>{% trans "Global" %}</strong> - {% trans "Published for everyone to use. Great for standardised questionnaires and validated instruments." %}</li>
                 <li><strong>{% trans "Organisation" %}</strong> - {% trans "Private to your organisation. Ideal for internal standards and team-specific question sets." %} <span class="badge badge-sm badge-primary">{% trans "Organisation tier" %}</span></li>
               </ul>
-              <p class="mt-2">{% trans "To share your own question groups, create them in the survey builder, then use 'Publish to Library' from the group menu." %}</p>
+              <p class="mt-2">{% trans "To share your own sections, create them in the survey builder, then use 'Publish to Library' from the section menu." %}</p>
             </div>
           </details>
         </div>
@@ -45,7 +45,7 @@
     </div>
   </div>
 
-  <p class="lead">{% trans "Browse and import reusable question groups published by other users and organisations." %}</p>
+  <p class="lead">{% trans "Browse and import reusable sections published by other users and organisations." %}</p>
 
   <!-- Search and Filters -->
   <div class="not-prose mb-6">

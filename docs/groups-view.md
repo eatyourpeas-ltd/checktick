@@ -1,35 +1,38 @@
 ---
-title: Question Groups
+title: Sections
 category: features
 priority: 6
 ---
 
-Question groups are containers that organise related questions together in your surveys. They help structure your questionnaires logically (e.g., "Demographics", "Medical History", "PHQ-9 Depression Screening") and enable powerful features like repeating sections and template sharing.
+Sections are containers that organise related questions together in your surveys. They help structure your questionnaires logically (e.g., "Demographics", "Medical History", "PHQ-9 Depression Screening") and enable powerful features like repeating sections and template sharing.
 
-## What are Question Groups?
+> **Technical note:** In the code, API, and data model, sections are called `QuestionGroup`. The user-facing label is "Sections". This page covers the user-facing workflow; technical references throughout the docs retain `QuestionGroup`.
 
-A question group is a named collection of questions that:
+## What are sections?
 
-- **organises questions logically** - Group related questions together for easier management
+A section is a named collection of questions that:
+
+- **Organises questions logically** - Group related questions together for easier management
 - **Enables repeating sections** - Create "collections" that participants can fill out multiple times (e.g., "Add another medication", "Add family member")
 - **Can be published and shared** - Publish validated questionnaires as reusable templates for your organisation or the entire CheckTick community
-- **Maintains question order** - Questions within a group stay together and maintain their sequence
+- **Maintains question order** - Questions within a section stay together and maintain their sequence
 - **Supports attribution** - When importing validated instruments, attribution information is preserved
 
 ## Key Features
 
-### 1. Question Group Management
+### 1. Section Management
 
-The Groups View page lets you:
+The Sections page lets you:
 
-- **Reorder groups** - Drag and drop to arrange groups in your survey
-- **Create repeats (collections)** - Turn groups into repeatable sections
+- **Reorder sections** - Drag and drop to arrange sections in your survey
+- **Rename sections** - Click the "Rename" button on any section to edit its name and description
+- **Create repeats (collections)** - Turn sections into repeatable sections
 - **Nest repeats** - Create one level of nesting (e.g., "People" containing "Visits")
-- **Remove from repeats** - Unlink groups from collections
+- **Remove from repeats** - Unlink sections from collections
 
 ### 2. Publishing Templates
 
-Share your question groups with others:
+Share your sections with others:
 
 - **Organisation templates** - Share validated questionnaires within your team
 - **Global templates** - Contribute to the community library of validated instruments
@@ -38,9 +41,9 @@ Share your question groups with others:
 
 See [Publishing Question Groups](/docs/publish-question-groups/) for detailed publishing instructions.
 
-### 3. Template Library
+### 3. Question Bank
 
-Browse and import pre-built question groups:
+Browse and import pre-built sections:
 
 - **Search and filter** - Find templates by name, tags, or language
 - **View details** - Preview questions and attribution before importing
@@ -49,7 +52,7 @@ Browse and import pre-built question groups:
 
 See [Question Group Template Library](/docs/question-group-template-library/) for browsing and importing templates.
 
-## Managing Groups in the Groups View
+## Managing sections in the Sections view
 
 ### Who can access
 
@@ -58,12 +61,18 @@ See [Question Group Template Library](/docs/question-group-template-library/) fo
 
 Viewers, participants, or outsiders cannot access or modify this page.
 
-## Reordering groups
+## Reordering sections
 
-- Use the drag handle on each row to rearrange groups.
+- Use the drag handle on each row to rearrange sections.
 - Click "Save order" to persist. The order is stored on the survey and used for rendering.
 
-## Selecting groups
+## Renaming a section
+
+- Click the "Rename" button on any section row.
+- In the modal, edit the section name and optional description.
+- Click "Save" to persist. The change takes effect immediately.
+
+## Selecting sections
 
 - Click anywhere on a row (or tick the checkbox) to select/deselect.
 - A sticky toolbar appears at the top showing the count and a Clear button.
@@ -71,23 +80,23 @@ Viewers, participants, or outsiders cannot access or modify this page.
 
 ## Creating a repeat from selection
 
-- After selecting one or more groups, click "Create repeat from selection".
+- After selecting one or more sections, click "Create repeat from selection".
 - In the modal:
   - Name the repeat (e.g. "People", "Visits").
   - Optionally set min/max items; max=1 means a single item, blank = unlimited.
   - Optionally nest under an existing repeat (one-level nesting is supported).
-- Submit to create the repeat. The selected groups are added to that repeat in the order selected.
+- Submit to create the repeat. The selected sections are added to that repeat in the order selected.
 
-## Removing a group from a repeat
+## Removing a section from a repeat
 
 - Rows that are part of a repeat show a "Repeats" badge and a small remove (✕) control.
-- Removing a group from a repeat will also clean up empty repeats automatically.
+- Removing a section from a repeat will also clean up empty repeats automatically.
 
 ## Outline syntax (optional)
 
 You can also create repeats using the Outline:
 
-- Use `REPEAT-5` above the groups you want to repeat. `-5` means maximum five items; omit to allow unlimited.
+- Use `REPEAT-5` above the sections you want to repeat. `-5` means maximum five items; omit to allow unlimited.
 - For one level of nesting, indent the nested repeat line with `>`.
 
 Example:
@@ -113,8 +122,8 @@ Vitals
 
 ## Related Documentation
 
-- [Publishing Question Groups](/docs/publish-question-groups/) - Share your question groups as templates
-- [Question Group Template Library](/docs/question-group-template-library/) - Browse and import templates
+- [Publishing Question Groups](/docs/publish-question-groups/) - Share your sections as templates
+- [Question Group Template Library](/docs/question-group-template-library/) - Browse and import templates (the Question Bank)
 - [Global Templates Index](/docs/question-group-templates-index/) - List of curated global templates
 - [Outline](/docs/import/) - Text format syntax for importing questions
 - [Collections](/docs/collections/) - Advanced repeat and nesting features

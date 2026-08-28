@@ -733,7 +733,7 @@ def test_builder_group_create_strips_html_from_name(auth_client, survey):
 # ===========================================================================
 # 11. survey.style CSS field — </style> breakout via |safe in survey pages (S12)
 #
-# builder.html, dashboard.html, and detail.html all render:
+# dashboard.html and detail.html render:
 #   {{ survey.style.theme_css_light|safe }}
 #   {{ survey.style.theme_css_dark|safe }}
 # directly from the survey.style JSONField without sanitization in the view.
@@ -741,6 +741,12 @@ def test_builder_group_create_strips_html_from_name(auth_client, survey):
 # it can close the <style> block and inject arbitrary HTML/script.
 # The fix: apply sanitize_css_block() to these fields at read-time in the view
 # before the template context is rendered.
+#
+# Note: group_builder.html does NOT render survey.style CSS (no
+# head_theme_overrides block). The test below is a defence-in-depth check that
+# the payload does not leak to a page that does not intentionally render it.
+# The builder.html template that originally rendered this CSS has been removed
+# (it was dead code — no route, no view, no test exercised it).
 # ===========================================================================
 
 
@@ -764,7 +770,9 @@ def test_survey_style_css_injection_not_in_dashboard(auth_client, survey):
 @pytest.mark.django_db
 def test_survey_style_css_injection_not_in_builder(auth_client, survey, owner):
     """
-    S12: Same as above but for the group_builder page (builder.html template).
+    S12: Defence-in-depth check for the group_builder page (group_builder.html).
+    group_builder.html does not render survey.style CSS, so this verifies the
+    payload does not leak to a page that does not intentionally render it.
     """
     from checktick_app.surveys.models import QuestionGroup
 
