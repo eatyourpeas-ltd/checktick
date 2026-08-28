@@ -155,6 +155,14 @@
   <div class="mt-4">
     <div class="space-y-3">
       {% if groups %}
+      <div class="alert shadow-sm bg-info/10 border-l-4 border-info">
+        <div>
+          {% include 'components/icons/checktick_question.html' with classes='w-5 h-5 text-info' %}
+        </div>
+        <div class="text-sm text-base-content">
+          {% trans 'Sections group related questions — that\'s what lets you skip ahead or repeat a block.' %}
+        </div>
+      </div>
       <p class="text-sm text-base-content/70">
         {% blocktrans %}Drag to reorder groups — this controls the order participants see each section. Need to ask the same questions multiple times? Select groups and click "Create repeat" to let participants add entries (e.g., details for each family member or each hospital visit).{% endblocktrans %}
       </p>

@@ -445,3 +445,57 @@ def test_rename_section_via_post(auth_client, owner):
     group.refresh_from_db()
     assert group.name == "Demographics"
     assert group.description == "Patient demographics"
+
+
+# ---------------------------------------------------------------------------
+# Commit 6 — One-line "why" hint at first use
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_builder_shows_why_hint_with_questions(auth_client, owner):
+    """The group_builder shows the 'why sections exist' hint when there are questions."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Hint With Questions Survey",
+        slug="hint-with-questions-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id})
+    )
+    assert resp.status_code == 200
+    assert b"Sections group related questions" in resp.content, (
+        "The 'why sections exist' hint should appear when the group has questions."
+    )
+
+
+@pytest.mark.django_db
+def test_builder_hides_why_hint_when_empty(auth_client, owner):
+    """The group_builder does NOT show the hint when the group has no questions."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Hint Empty Survey",
+        slug="hint-empty-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    # No questions in this group
+
+    resp = auth_client.get(
+        reverse("surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id})
+    )
+    assert resp.status_code == 200
+    assert b"Sections group related questions" not in resp.content, (
+        "The 'why sections exist' hint should NOT appear when the group has no questions."
+    )

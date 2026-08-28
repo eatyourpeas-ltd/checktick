@@ -16,6 +16,9 @@
     </h1>
     <h2 class="mt-0 text-base-content/80">{% trans "Section" %}: {{ group.name }}</h2>
     {% if group.description %}<p class="mt-0">{{ group.description }}</p>{% endif %}
+    {% if questions %}
+    <p class="text-xs text-base-content/60 mt-2">{% trans "Sections group related questions — that's what lets you skip ahead or repeat a block." %}</p>
+    {% endif %}
   </div>
 
   <div class="grid md:grid-cols-3 gap-6">
