@@ -373,15 +373,26 @@
   <h3 class="text-sm font-semibold text-base-content/70 uppercase tracking-wide mb-3">{% trans "Add or edit questions" %}</h3>
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
 
-    {# Card 1: Visual Builder #}
-    <a href="{% url 'surveys:groups' slug=survey.slug %}"
-       class="card bg-base-100 border border-base-300 hover:border-primary hover:shadow-md transition-all">
-      <div class="card-body p-4 items-center text-center gap-2">
-        {% include "components/icons/hammer_wrench.html" with classes="w-8 h-8 text-primary" %}
-        <h4 class="font-semibold text-base-content">{% trans "Question Builder" %}</h4>
-        <p class="text-xs text-base-content/70">{% trans "Add and arrange questions visually using the drag-and-drop builder." %}</p>
-      </div>
-    </a>
+    {# Card 1: Add questions — points at the per-group builder for the default group so the user can add a question immediately. Falls back to the Groups page for legacy surveys with no groups (no 404). #}
+    {% if groups.first %}
+      <a href="{% url 'surveys:group_builder' slug=survey.slug gid=groups.first.id %}"
+         class="card bg-base-100 border border-base-300 hover:border-primary hover:shadow-md transition-all">
+        <div class="card-body p-4 items-center text-center gap-2">
+          {% include "components/icons/hammer_wrench.html" with classes="w-8 h-8 text-primary" %}
+          <h4 class="font-semibold text-base-content">{% trans "Add questions" %}</h4>
+          <p class="text-xs text-base-content/70">{% trans "Add and arrange questions visually using the drag-and-drop builder." %}</p>
+        </div>
+      </a>
+    {% else %}
+      <a href="{% url 'surveys:groups' slug=survey.slug %}"
+         class="card bg-base-100 border border-base-300 hover:border-primary hover:shadow-md transition-all">
+        <div class="card-body p-4 items-center text-center gap-2">
+          {% include "components/icons/hammer_wrench.html" with classes="w-8 h-8 text-primary" %}
+          <h4 class="font-semibold text-base-content">{% trans "Add questions" %}</h4>
+          <p class="text-xs text-base-content/70">{% trans "Add and arrange questions visually using the drag-and-drop builder." %}</p>
+        </div>
+      </a>
+    {% endif %}
 
     {# Card 2: Text / Markdown entry #}
     <a href="{% url 'surveys:bulk_upload' slug=survey.slug %}?tab=manual"

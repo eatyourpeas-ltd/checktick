@@ -176,3 +176,67 @@ def test_default_group_is_renameable_and_deletable(owner):
     group.delete()
     assert not QuestionGroup.objects.filter(id=group_id).exists()
     assert survey.question_groups.count() == 0
+
+
+# ---------------------------------------------------------------------------
+# Commit 3 — Dashboard CTA points at per-group builder
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_dashboard_cta_points_at_group_builder(auth_client, owner):
+    """The "Add questions" card links to group_builder for the default group."""
+    # Create a survey with the default group (as survey_create now does)
+    survey = Survey.objects.create(
+        owner=owner,
+        name="CTA Test Survey",
+        slug="cta-test-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    # The CTA should link to group_builder for the default group, not to /groups/
+    expected_url = reverse(
+        "surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id}
+    )
+    assert expected_url.encode() in resp.content, (
+        f"Dashboard 'Add questions' CTA should point at {expected_url}, "
+        f"but the URL was not found in the response."
+    )
+    # The old label "Question Builder" should no longer appear
+    assert b"Question Builder" not in resp.content, (
+        "The old 'Question Builder' card label should be replaced with 'Add questions'."
+    )
+
+
+@pytest.mark.django_db
+def test_dashboard_cta_fallback_for_legacy_survey(auth_client, owner):
+    """A survey with no groups (legacy edge case) falls back to the Groups page.
+
+    This must not 404 — it sends the user to the Groups page where they can
+    create one. New surveys always have a default group (commit 2), so this
+    only affects surveys created before that change.
+    """
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Legacy CTA Survey",
+        slug="legacy-cta-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    # No group created — simulates a pre-commit-2 survey
+    assert survey.question_groups.count() == 0
+
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    # Should fall back to the groups page URL, not a broken group_builder link
+    groups_url = reverse("surveys:groups", kwargs={"slug": survey.slug})
+    assert groups_url.encode() in resp.content, (
+        f"Legacy survey with no groups should fall back to {groups_url}, "
+        f"but the URL was not found in the response."
+    )
