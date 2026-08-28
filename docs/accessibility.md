@@ -32,7 +32,7 @@ Our accessibility focus prioritises **survey respondents** - the patients, profe
 
 ### Semantic Structure
 
-- **Fieldsets and Legends**: Question groups use `<fieldset>` and `<legend>` elements, allowing screen readers to announce the group context
+- **Fieldsets and Legends**: Sections use `<fieldset>` and `<legend>` elements, allowing screen readers to announce the section context
 - **Form Labelling**: The entire survey form is associated with the survey title via `aria-labelledby`
 - **Skip Link**: A "Skip to survey questions" link appears on focus, allowing keyboard users to bypass navigation
 
@@ -148,7 +148,7 @@ Screen readers will announce:
 
 - Question text and type
 - Required status
-- Group context (when in a question group)
+- Section context (when in a section)
 - Validation errors
 - Save status changes
 - Progress percentage

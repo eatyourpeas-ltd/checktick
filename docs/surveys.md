@@ -4,7 +4,7 @@ category: features
 priority: 1
 ---
 
-This guide explains how to create an organisation, create a survey, and how content is structured into question groups and questions.
+This guide explains how to create an organisation, create a survey, and how content is structured into sections and questions.
 
 ## Organisations
 
@@ -51,7 +51,7 @@ You can create a copy of any survey you own or have Creator access to. This is u
 
 **What gets copied:**
 
-- All question groups and questions
+- All sections and questions
 - Question types, options, and logic
 - Follow-up text configurations
 - Conditional branching rules
@@ -76,13 +76,15 @@ You can update the survey title after creation:
 
 **Note:** Only users with Creator or Admin permissions can edit survey titles.
 
-## Question groups vs questions
+## Sections vs questions
 
-Question Groups are the building blocks for structuring a survey. They act like chapters: each group has a title, optional description, and an ordered list of questions. Groups keep longer surveys manageable, let you show section-specific instructions, and provide obvious breakpoints when branching to different parts of a journey. Questions can be reordered within a group, and groups themselves can be reordered from the builder sidebar.
+Sections are the building blocks for structuring a survey. They act like chapters: each section has a title, optional description, and an ordered list of questions. Sections keep longer surveys manageable, let you show section-specific instructions, and provide obvious breakpoints when branching to different parts of a journey. Questions can be reordered within a section, and sections themselves can be reordered from the builder sidebar.
 
-Questions live inside a single group. When you add a question, the builder automatically associates it with the group you have open. Moving a question to another group updates that association immediately—there is no detached “question bank.” If you delete a group, its questions are also deleted. This ensures that every question always has a clear place in the survey hierarchy.
+Questions live inside a single section. When you add a question, the builder automatically associates it with the section you have open. Moving a question to another section updates that association immediately—there is no detached "question bank." If you delete a section, its questions are also deleted. This ensures that every question always has a clear place in the survey hierarchy.
 
-You can use the Outline when you already have content drafted. The Outline lets you specify groups and questions in a single text document: top-level headings become groups, and nested headings/items become questions. After import you can continue refining groups and questions in the Question Builder.
+You can use the Outline when you already have content drafted. The Outline lets you specify sections and questions in a single text document: top-level headings become sections, and nested headings/items become questions. After import you can continue refining sections and questions in the builder.
+
+> **Technical note:** In the code, API, and data model, sections are called `QuestionGroup`. The user-facing label is "Sections".
 
 ## Question types
 
@@ -137,12 +139,12 @@ Questions with follow-up inputs configured will show a badge in the question car
 Individual questions can define conditional logic that determines what a respondent sees next. Branching is configured per question from the “Logic” tab in the builder:
 
 - **Show/Hide conditions** — Display a question only when previous answers match the criteria you set (e.g., show follow-up questions when someone answers "Yes").
-- **Skip logic** — Jump the respondent to another question group once they pick a certain answer. This is useful for ending a survey early or routing different audiences to tailored sections.
+- **Skip logic** — Jump the respondent to another section once they pick a certain answer. This is useful for ending a survey early or routing different audiences to tailored sections.
 - **Option-level rules** — For multiple-choice questions you can create separate rules for each option. For free-text or numeric answers, use comparators (equals, greater than, contains, etc.) to match values.
 
-The logic engine evaluates conditions in order, so place the most specific rule first. A question without any conditions simply follows the survey’s default ordering. When branching sends a respondent to a later group, intervening groups are skipped automatically.
+The logic engine evaluates conditions in order, so place the most specific rule first. A question without any conditions simply follows the survey’s default ordering. When branching sends a respondent to a later section, intervening sections are skipped automatically.
 
-**Tip:** Keep at least one unconditional path through every group so respondents cannot get trapped. In testing environments the builder logs a warning when conditional tables are missing—run the latest migrations before enabling branching in production.
+**Tip:** Keep at least one unconditional path through every section so respondents cannot get trapped. In testing environments the builder logs a warning when conditional tables are missing—run the latest migrations before enabling branching in production.
 
 ## Managing access to surveys
 
@@ -181,16 +183,16 @@ For security and technical implementation details, see [AI Security & Safety](/d
 
 Repeats allow you to model repeatable structures in surveys, such as collecting data for multiple patients, visits, or treatments. Key features:
 
-- Create collections from question groups (e.g., "Patient" collection)
+- Create collections from sections (e.g., "Patient" collection)
 - Support one level of nesting (e.g., Patient → Visits)
 - Set minimum and maximum instances
 - Respondents can add/remove instances as needed
 - Answers stored as nested JSON structures
 
-Repeats are managed from the Groups page using the "Create repeat from selection" button. For complete details on data models, response structure, and implementation, see [Repeats (Nested, Repeatable Sections)](/docs/collections/).
+Repeats are managed from the Sections page using the "Create repeat from selection" button. For complete details on data models, response structure, and implementation, see [Repeats (Nested, Repeatable Sections)](/docs/collections/).
 
 ## Next steps
 
-- See [Question Groups](/docs/groups-view/) to learn about organizing and sharing questions
+- See [Sections](/docs/groups-view/) to learn about organizing and sharing questions
 - See [Branding and Theme Settings](/docs/branding-and-theme-settings/) to customize appearance
 - See [Getting Started with the API](/docs/getting-started-api/) to seed questions programmatically

@@ -524,7 +524,7 @@ We ship a reusable DaisyUI-style breadcrumbs component with icons.
 - Purpose: Provide consistent navigation crumbs across survey pages
 - Icons:
   - Survey: clipboard icon
-  - Question group: multiple documents icon
+  - Section: multiple documents icon
   - Question (current): single document icon
 
 ### How to use
@@ -539,9 +539,9 @@ Pass labeled crumbs in order. For any crumb you pass, you can optionally include
 {% include 'components/breadcrumbs.html' with
   crumb1_label="Survey Dashboard"
   crumb1_href="/surveys/"|add:survey.slug|add:"/dashboard/"
-  crumb2_label="Question Group Builder"
-  crumb2_href="/surveys/"|add:survey.slug|add:"/builder/"
-  crumb3_label="Question Builder"
+  crumb2_label="Sections"
+  crumb2_href="/surveys/"|add:survey.slug|add:"/groups/"
+  crumb3_label="Questions"
 %}
 ```
 
@@ -552,8 +552,8 @@ If you already have a list, pass `items` as an iterable of `(label, href)` tuple
 ```django
 {% include 'components/breadcrumbs.html' with
   items=(("Survey Dashboard", "/surveys/"|add:survey.slug|add:"/dashboard/"),
-         ("Question Group Builder", "/surveys/"|add:survey.slug|add:"/builder/"),
-         ("Question Builder", None))
+         ("Sections", "/surveys/"|add:survey.slug|add:"/groups/"),
+         ("Questions", None))
 %}
 ```
 
@@ -586,10 +586,10 @@ Any updates here require a CSS rebuild.
 ### Page conventions
 
 - Survey dashboard pages begin with a clipboard icon crumb (Survey)
-- Survey-level builder links (groups) show multiple documents
-- Group-level question builder shows a single document for the active page
+- Survey-level builder links (sections) show multiple documents
+- Section-level question builder shows a single document for the active page
 
-Keep breadcrumb labels terse and consistent (e.g., “Survey Dashboard”, “Question Group Builder”, “Question Builder”).
+Keep breadcrumb labels terse and consistent (e.g., “Survey Dashboard”, “Sections”, “Questions”).
 
 ## Internationalisation (i18n)
 
@@ -606,13 +606,13 @@ This project ships with Django i18n enabled. Themes and UI copy should use Djang
 - Translate short strings:
 
 ```django
-{% trans "Manage groups" %}
+{% trans "Manage sections" %}
 ```
 
 - Translate sentences with variables using blocktrans:
 
 ```django
-{% blocktrans %}Groups for {{ survey.name }}{% endblocktrans %}
+{% blocktrans %}Sections for {{ survey.name }}{% endblocktrans %}
 ```
 
 - Prefer assigning translated values to variables when you need them inside attributes (e.g., placeholders) or component includes (breadcrumbs):

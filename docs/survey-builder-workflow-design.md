@@ -6,10 +6,10 @@ priority: 5
 
 # Survey Builder Workflow Design
 
-- **Status**: Proposed — design stage, not yet implemented
+- **Status**: Tier 1 implemented — see [Implementation Plan](/docs/survey-builder-workflow-implementation-plan/)
 - **Date**: August 2026
 - **Scope**: The survey creation → building workflow, and how question groups (referred to as **sections** in the UI) are introduced to users
-- **Related**: [Surveys](/docs/surveys/) · [Question Groups](/docs/groups-view/) · [Branching Logic & Repeating Questions](/docs/branching-and-repeats/) · [Repeats](/docs/collections/) · [Outline / Import](/docs/import/)
+- **Related**: [Surveys](/docs/surveys/) · [Sections](/docs/groups-view/) · [Branching Logic & Repeating Questions](/docs/branching-and-repeats/) · [Repeats](/docs/collections/) · [Outline / Import](/docs/import/)
 
 ---
 
@@ -179,7 +179,7 @@ Work is split into three tiers so value can be shipped incrementally. **Tier 1 i
 | Dashboard "Add or edit questions" cards | `checktick_app/surveys/templates/surveys/dashboard.html` | CTA label + destination (Tier 1.2) |
 | Groups page (orientation strip, empty state, list, "add group" form) | `checktick_app/surveys/templates/surveys/groups.html` | Reframe to "Sections", new empty state (Tier 1.3–1.5) |
 | Per-group question builder | `checktick_app/surveys/templates/surveys/group_builder.html` | Reframe; later becomes the main pane of the unified builder (Tier 2) |
-| Unused flat builder | `checktick_app/surveys/templates/surveys/builder.html` | Starting point for the unified builder (Tier 2.1) |
+| Unused flat builder | ~~`checktick_app/surveys/templates/surveys/builder.html`~~ | **Removed** in Tier 1 commit 1 (was dead code — no route, no view, no test exercised it). Tier 2 starts fresh. |
 | Routes | `checktick_app/surveys/urls.py` | Wire the unified builder route (Tier 2) |
 | Repeat creation | `checktick_app/surveys/views.py` (`survey_groups_repeat_create`), `groups.html` | Relocate/reframe into builder (Tier 3.1) |
 | Navbar "Question Bank" entry | `checktick_app/templates/base.html` (desktop + mobile menus) | Label already correct; no change required, but verify it stays "Question Bank" after the Section rename (Tier 1.3) |
@@ -283,21 +283,21 @@ Option 1 is recommended — publishing a single-section survey (e.g., a standalo
 
 ## Open questions
 
-1. **Left rail vs. inline dividers** for the multi-section builder. A left rail matches the master-detail pattern and scales to many sections; inline dividers are simpler and closer to the current per-group page. Which do we prefer, or do we ship dividers first and rail later?
-2. **Default section name.** `General` vs. `Section 1` vs. the survey name. `General` reads best for clinical surveys; confirm.
-3. **Should the dashboard "Add questions" CTA open the unified builder directly, or the current per-group builder** until Tier 2 lands? (Tier 1 can point at the existing per-group builder for the default group to avoid a hard dependency on Tier 2.)
-4. **Participant single-section header suppression** — in scope for this effort or a separate polish ticket?
-5. **Do we keep the standalone Groups page at all** after Tier 2, or does it become a thin redirect to the unified builder? Keeping it preserves a place for bulk reorder + repeat management; folding it in reduces surface area.
-6. **Publishing from a single-section survey.** When the section layer is hidden (Tier 2.2), should "Share as template" be a top-level builder action (recommended, so a standalone PHQ-9 can be published without adding a dummy second section), or only surface once a second section exists?
-7. **Question Bank page title.** Confirm we rename the library page `<h1>` from "Question Group Template Library" to "Question Bank" to match the navbar. The route, URL, and `published_templates_list` view name stay.
+1. **Left rail vs. inline dividers** for the multi-section builder. A left rail matches the master-detail pattern and scales to many sections; inline dividers are simpler and closer to the current per-group page. Which do we prefer, or do we ship dividers first and rail later? *(Tier 2 — not yet resolved)*
+2. ~~**Default section name.**~~ **Resolved:** `Section 1` — ordinal, neutral, rarely seen because single-section surveys hide the section chrome.
+3. ~~**Should the dashboard "Add questions" CTA open the unified builder directly, or the current per-group builder**~~ **Resolved:** Points at the per-group builder for the default group in Tier 1; will migrate to the unified builder in Tier 2.
+4. ~~**Participant single-section header suppression**~~ **Resolved:** Implemented in Tier 1 (commit 7). The `<fieldset>` structure is preserved for assistive tech; only the visible header is suppressed.
+5. **Do we keep the standalone Groups page at all** after Tier 2, or does it become a thin redirect to the unified builder? Keeping it preserves a place for bulk reorder + repeat management; folding it in reduces surface area. *(Tier 2 — not yet resolved)*
+6. **Publishing from a single-section survey.** When the section layer is hidden (Tier 2.2), should "Share as template" be a top-level builder action (recommended, so a standalone PHQ-9 can be published without adding a dummy second section), or only surface once a second section exists? *(Tier 2 — not yet resolved)*
+7. ~~**Question Bank page title.**~~ **Resolved:** The library page `<h1>` already says "Question Bank" (aligned with navbar). Done in Tier 1.
 
 ---
 
 ## Related documentation
 
 - [Surveys](/docs/surveys/) — creating and managing surveys
-- [Question Groups](/docs/groups-view/) — managing groups, repeats, publishing
-- [Publishing Question Groups](/docs/publish-question-groups/) — publish a question group as a reusable template (the "Share as template" workflow)
+- [Sections](/docs/groups-view/) — managing sections, repeats, publishing
+- [Publishing Question Groups](/docs/publish-question-groups/) — publish a section as a reusable template (the "Share as template" workflow)
 - [Question Group Template Library](/docs/question-group-template-library/) — the Question Bank: browse and import validated templates
 - [Global Question Group Templates](/docs/question-group-templates-index/) — curated global template index
 - [Branching Logic & Repeating Questions](/docs/branching-and-repeats/) — conditional logic and repeats
