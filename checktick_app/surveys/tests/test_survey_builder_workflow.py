@@ -499,3 +499,32 @@ def test_builder_hides_why_hint_when_empty(auth_client, owner):
     assert b"Sections group related questions" not in resp.content, (
         "The 'why sections exist' hint should NOT appear when the group has no questions."
     )
+
+
+# ---------------------------------------------------------------------------
+# Breadcrumb label: "Manage Question" → "Questions"
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_group_builder_breadcrumb_says_questions(auth_client, owner):
+    """The group_builder breadcrumb and h1 use 'Questions', not 'Manage Question'."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Breadcrumb Label Survey",
+        slug="breadcrumb-label-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id})
+    )
+    assert resp.status_code == 200
+    assert b"Questions" in resp.content, (
+        "The group_builder page should use 'Questions' as the breadcrumb and h1 label."
+    )
+    assert b"Manage Question" not in resp.content, (
+        "The old 'Manage Question' label should no longer appear."
+    )
