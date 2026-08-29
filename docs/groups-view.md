@@ -1,22 +1,20 @@
 ---
-title: Sections
+title: Organise
 category: features
 priority: 6
 ---
 
 Sections are containers that organise related questions together in your surveys. They help structure your questionnaires logically (e.g., "Demographics", "Medical History", "PHQ-9 Depression Screening") and enable powerful features like repeating sections and template sharing.
 
-> **Technical note:** In the code, API, and data model, sections are called `QuestionGroup`. The user-facing label is "Sections". This page covers the user-facing workflow; technical references throughout the docs retain `QuestionGroup`.
-
 ## The Builder
 
 The primary place to build and edit questions is the **Builder** (`/surveys/<slug>/builder/`). It shows a master-detail layout:
 
-- **Desktop (md+):** A left rail lists your sections in order. Click a section to see its questions in the main area. Use "Add section" at the bottom of the rail to create a new section.
+- **Desktop (md+):** A left rail lists your sections in order. Click a section to see its questions in the main area. Use "Add section" at the bottom of the rail to create a new section. Each rail item also has rename and delete buttons (delete is hidden for the first section — a survey must always have at least one).
 - **Mobile (<md):** A dropdown at the top of the page lets you switch sections.
-- **Single-section surveys:** The rail is hidden — you just see a flat list of questions. The section layer appears automatically when you add a second section.
+- **Single-section surveys:** The rail still renders (with one section and an "Add section" button) so users can see that sections exist and add more.
 
-The Builder is where you add, edit, reorder, and delete questions. For bulk section operations (reordering, repeats, publishing), use the Sections page described below.
+The Builder is where you add, edit, reorder, and delete questions. For bulk section operations (reordering, repeats, publishing), use the Organise page described below.
 
 ## What are sections?
 
@@ -28,41 +26,17 @@ A section is a named collection of questions that:
 - **Maintains question order** - Questions within a section stay together and maintain their sequence
 - **Supports attribution** - When importing validated instruments, attribution information is preserved
 
-## Key Features
+## The Organise page
 
-### 1. Section Management
-
-The Sections page lets you:
+The **Organise** page (`/surveys/<slug>/groups/`) is for bulk section operations that are better done outside the Builder:
 
 - **Reorder sections** - Drag and drop to arrange sections in your survey
 - **Rename sections** - Click the "Rename" button on any section to edit its name and description
 - **Create repeats (collections)** - Turn sections into repeatable sections
 - **Nest repeats** - Create one level of nesting (e.g., "People" containing "Visits")
 - **Remove from repeats** - Unlink sections from collections
-
-### 2. Publishing Templates
-
-Share your sections with others:
-
-- **Organisation templates** - Share validated questionnaires within your team
-- **Global templates** - Contribute to the community library of validated instruments
-- **Attribution support** - Include proper citations for published instruments (PHQ-9, GAD-7, etc.)
-- **Copyright protection** - Prevent republishing of imported templates
-
-See [Publishing Question Groups](/docs/publish-question-groups/) for detailed publishing instructions.
-
-### 3. Question Bank
-
-Browse and import pre-built sections:
-
-- **Search and filter** - Find templates by name, tags, or language
-- **View details** - Preview questions and attribution before importing
-- **One-click import** - Add complete questionnaires to your surveys
-- **Global repository** - Access curated validated instruments maintained by CheckTick
-
-See [Question Group Template Library](/docs/question-group-template-library/) for browsing and importing templates.
-
-## Managing sections in the Sections view
+- **Visualise the survey** - View the survey as a flow diagram
+- **Publish sections as templates** - Share validated questionnaires
 
 ### Who can access
 
@@ -78,9 +52,16 @@ Viewers, participants, or outsiders cannot access or modify this page.
 
 ## Renaming a section
 
-- Click the "Rename" button on any section row.
+- On the Organise page: Click the "Rename" button on any section row.
+- In the Builder: Click the pencil icon next to the section name in the rail.
 - In the modal, edit the section name and optional description.
 - Click "Save" to persist. The change takes effect immediately.
+
+## Deleting a section
+
+- In the Builder: Click the trash icon next to the section name in the rail (only available for the second and subsequent sections).
+- A confirmation modal appears. Deleting a section also deletes all questions within it.
+- The first (or only) section cannot be deleted — a survey must always have at least one section.
 
 ## Selecting sections
 
@@ -118,11 +99,6 @@ REPEAT-5 People
 > REPEAT-3 Visits
 Vitals
 ```
-
-## Security and CSP
-
-- The page uses external JS for selection logic to comply with the Content Security Policy (no inline scripts).
-- Drag-and-drop uses SortableJS via a CDN allowed by CSP.
 
 ## Troubleshooting
 

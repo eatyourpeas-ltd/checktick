@@ -385,7 +385,7 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 ---
 
-### Commit 3.5 — Docs update for Tier 3
+### Commit 3.5 — Docs update for Tier 3 ✅
 
 **Scope**: Update docs to reflect Tier 3 changes.
 

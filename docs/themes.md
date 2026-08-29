@@ -589,7 +589,7 @@ Any updates here require a CSS rebuild.
 - Survey-level builder links (sections) show multiple documents
 - Section-level question builder shows a single document for the active page
 
-Keep breadcrumb labels terse and consistent (e.g., “Survey Dashboard”, “Sections”, “Questions”).
+Keep breadcrumb labels terse and consistent (e.g., “Survey Dashboard”, “Organise”, “Builder”, “Questions”).
 
 ## Internationalisation (i18n)
 
@@ -606,13 +606,13 @@ This project ships with Django i18n enabled. Themes and UI copy should use Djang
 - Translate short strings:
 
 ```django
-{% trans "Manage sections" %}
+{% trans "Organise" %}
 ```
 
 - Translate sentences with variables using blocktrans:
 
 ```django
-{% blocktrans %}Sections for {{ survey.name }}{% endblocktrans %}
+{% blocktrans %}Organise {{ survey.name }}{% endblocktrans %}
 ```
 
 - Prefer assigning translated values to variables when you need them inside attributes (e.g., placeholders) or component includes (breadcrumbs):
