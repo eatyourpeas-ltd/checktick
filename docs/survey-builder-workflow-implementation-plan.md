@@ -447,6 +447,11 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 - **First-run nudge** — open builder with "Add question" form focused (originally Tier 3.3 in the old plan).
 - **Move "Share as template" to per-section action** in the builder (originally Tier 3.4 in the old plan). Includes the single-section publishing case (OQ6).
 
+### Completed follow-up items
+
+- **Drag-reorder sections in the builder rail** ✅ — reuses the Organise page's SortableJS + `survey_groups_reorder` endpoint. The OOB swap uses the shared rail partial; the Sortable instance is destroyed/re-created on each HTMX settle.
+- **Remove rename/delete from the Organise page** ✅ — rename and delete are now builder-only (the rail has both). The Organise page keeps Publish, bulk reorder, and repeat management. A signpost links to the Builder for rename/delete.
+
 ---
 
 ## Commit ordering summary

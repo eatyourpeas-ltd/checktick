@@ -400,8 +400,8 @@ def test_groups_empty_state_keeps_question_bank_link(auth_client, owner):
 
 
 @pytest.mark.django_db
-def test_groups_page_has_rename_button(auth_client, owner):
-    """Each section row in the groups page has a 'Rename' button."""
+def test_groups_page_no_rename_button(auth_client, owner):
+    """The Organise page no longer has a rename button — rename is builder-only."""
     survey = Survey.objects.create(
         owner=owner,
         name="Rename Button Survey",
@@ -415,11 +415,61 @@ def test_groups_page_has_rename_button(auth_client, owner):
     assert resp.status_code == 200
 
     assert (
-        b"rename-section-btn" in resp.content
-    ), "Each section row should have a rename button with class 'rename-section-btn'."
+        b"rename-section-btn" not in resp.content
+    ), "The Organise page should not have a rename button (it's builder-only now)."
     assert (
-        b"Rename section" in resp.content
-    ), "The rename button tooltip should say 'Rename section'."
+        b"rename-section-modal" not in resp.content
+    ), "The Organise page should not have a rename modal (it's builder-only now)."
+
+
+@pytest.mark.django_db
+def test_groups_page_no_delete_button(auth_client, owner):
+    """The Organise page no longer has a per-row delete button — delete is builder-only."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Delete Button Survey",
+        slug="delete-button-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Section 1", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Section 2", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The delete form action should not appear in the Organise page.
+    delete_url = f"/surveys/{survey.slug}/groups/{group2.id}/delete"
+    assert (
+        delete_url.encode() not in resp.content
+    ), "The Organise page should not have a per-row delete form (it's builder-only now)."
+    # But the publish button should still be there.
+    assert (
+        b"Publish" in resp.content
+    ), "The Organise page should still have a Publish button."
+
+
+@pytest.mark.django_db
+def test_groups_page_points_to_builder_for_rename_delete(auth_client, owner):
+    """The Organise page signposts the Builder for rename/delete."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Signpost Survey",
+        slug="signpost-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    assert (
+        builder_url.encode() in resp.content
+    ), "The Organise page should link to the Builder for rename/delete."
+    assert (
+        b"Builder" in resp.content
+    ), "The Organise page should mention the Builder by name."
 
 
 @pytest.mark.django_db
