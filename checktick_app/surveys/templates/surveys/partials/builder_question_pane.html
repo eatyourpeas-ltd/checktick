@@ -24,7 +24,12 @@
                 {% for q in questions %}
                   {% include 'surveys/partials/question_row.html' %}
                 {% empty %}
-                  <li class="p-4 opacity-70 bg-base-200 rounded-lg border border-dashed border-base-300 text-center">{% trans "No questions in this group yet." %}</li>
+                  <li class="p-4">
+                    <p class="opacity-70 text-center mb-4">{% trans "No questions yet. Add your first question above, or browse the Question Bank for ready-made sections." %}</p>
+                    <div class="mt-2">
+                      {% include 'surveys/partials/how_to_build.html' %}
+                    </div>
+                  </li>
                 {% endfor %}
               </ul>
             </div>

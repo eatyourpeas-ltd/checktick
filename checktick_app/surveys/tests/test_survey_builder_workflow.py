@@ -1011,3 +1011,50 @@ def test_mobile_dropdown_triggers_htmx_swap(auth_client, owner):
     assert b'hx-target="#builder-main"' in resp.content, (
         "The mobile dropdown should target #builder-main for the swap."
     )
+
+
+# ---------------------------------------------------------------------------
+# Commit 2.6 — Reimagine orientation strip as "How to build" explainer
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_how_to_build_explainer_present_on_survey_list(auth_client, owner):
+    """The survey list page shows the 'How to build' explainer for new users."""
+    resp = auth_client.get(reverse("surveys:list"))
+    assert resp.status_code == 200
+    assert b"How it works" in resp.content, (
+        "The 'How it works' heading should be present on the survey list page."
+    )
+    assert b"Add questions" in resp.content, (
+        "The explainer should mention 'Add questions' as step 2."
+    )
+    assert b"Organise" in resp.content, (
+        "The explainer should mention 'Organise (optional)' as step 3."
+    )
+    # The old 3-step hierarchy (Survey → Sections → Questions) should not appear
+    assert b"top-level container" not in resp.content, (
+        "The old 'top-level container' description should be gone."
+    )
+
+
+@pytest.mark.django_db
+def test_how_to_build_explainer_present_in_builder_empty_state(auth_client, owner):
+    """The builder shows the 'How to build' explainer when a group has no questions."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Empty Builder Explainer Survey",
+        slug="empty-builder-explainer-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert b"How it works" in resp.content, (
+        "The 'How to build' explainer should appear in the builder empty state."
+    )
+    assert b"No questions yet" in resp.content, (
+        "The empty state should say 'No questions yet' instead of 'No questions in this group yet'."
+    )
