@@ -1058,3 +1058,63 @@ def test_how_to_build_explainer_present_in_builder_empty_state(auth_client, owne
     assert b"No questions yet" in resp.content, (
         "The empty state should say 'No questions yet' instead of 'No questions in this group yet'."
     )
+
+
+# ---------------------------------------------------------------------------
+# Commit 2.7 — De-emphasise building cards when survey has questions
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_dashboard_building_cards_prominent_when_no_questions(auth_client, owner):
+    """When a survey has no questions, the 3 building cards are prominent (not collapsed)."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="No Questions Dashboard Survey",
+        slug="no-questions-dashboard-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    # The heading should be a visible <h3>, not inside a <details> summary
+    assert b"<h3" in resp.content, (
+        "The 'Add or edit questions' heading should be a visible h3 when no questions exist."
+    )
+    assert b"<details" not in resp.content or b"survey-style-collapse" in resp.content, (
+        "The building cards should NOT be wrapped in a <details> element when no questions exist."
+    )
+
+
+@pytest.mark.django_db
+def test_dashboard_building_cards_collapsed_when_has_questions(auth_client, owner):
+    """When a survey has questions, the 3 building cards are collapsed behind a caret."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Has Questions Dashboard Survey",
+        slug="has-questions-dashboard-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    # The building cards should be wrapped in a <details> element
+    assert b"<details" in resp.content, (
+        "The building cards should be collapsed in a <details> element when questions exist."
+    )
+    # The summary should be present (i18n-safe: check for the <summary> tag, not the translated text)
+    assert b"<summary" in resp.content, (
+        "A <summary> element should be present as the caret for the collapsed cards."
+    )
