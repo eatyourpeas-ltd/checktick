@@ -238,8 +238,10 @@ Tier 3 depends on Tier 2 landing clean. Outline only:
 | 2.5 | Docs update for Tier 2 | 2.1–2.4 | — | 5 files |
 | 2.6 | Reimagine orientation strip as "How to build" explainer | — | 2 | — |
 | 2.7 | De-emphasise building cards when survey has questions | — | 2 | — |
+| 2.8 | Builder toolbar (links to Sections, Preview, Dashboard) | — | 2 | — |
+| 2.9 | Quick link back to builder from Sections page | — | 1 | — |
 
-**Total Tier 2**: 7 commits, ~20 tests, 5 doc files updated.
+**Total Tier 2**: 9 commits, ~23 tests, 5 doc files updated.
 
 ### Tier 3 (outlined)
 

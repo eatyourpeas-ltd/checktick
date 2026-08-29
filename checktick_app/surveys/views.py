@@ -6923,6 +6923,7 @@ def survey_builder(request: HttpRequest, slug: str) -> HttpResponse:
     # shows a flat question list. A visually-hidden heading preserves the
     # section context for assistive tech (per the design doc's a11y rule).
     ctx["single_section"] = len(groups) <= 1
+    ctx["has_questions"] = survey.questions.exists()
 
     # HTMX section-switch requests return just the main-area partial.
     # The mobile dropdown and desktop rail both hit this URL with ?gid=<id>.

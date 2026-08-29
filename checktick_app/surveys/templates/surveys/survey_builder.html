@@ -16,6 +16,28 @@
     <h2 class="mt-0 text-base-content/80">{{ survey.name }}</h2>
   </div>
 
+  {# === Builder toolbar — links to related survey workflows === #}
+  {% if has_questions %}
+  <div class="flex flex-wrap gap-2 items-center">
+    <a class="btn btn-sm btn-outline" href="/surveys/{{ survey.slug }}/groups/">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+      </svg>
+      {% trans "Organise sections" %}
+    </a>
+    <a class="btn btn-sm btn-ghost" href="/surveys/{{ survey.slug }}/preview/" target="_blank" rel="noopener noreferrer">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+      </svg>
+      {% trans "Preview" %}
+    </a>
+    <a class="btn btn-sm btn-ghost" href="/surveys/{{ survey.slug }}/dashboard/">
+      {% trans "Back to dashboard" %}
+    </a>
+  </div>
+  {% endif %}
+
   {# === Mobile section dropdown (hidden on md+) === #}
   {% if groups|length > 1 %}
   <div class="md:hidden">

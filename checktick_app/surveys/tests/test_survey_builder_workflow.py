@@ -1118,3 +1118,95 @@ def test_dashboard_building_cards_collapsed_when_has_questions(auth_client, owne
     assert b"<summary" in resp.content, (
         "A <summary> element should be present as the caret for the collapsed cards."
     )
+
+
+# ---------------------------------------------------------------------------
+# Commit 2.8 — Builder toolbar (links to Sections page, Preview, Dashboard)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_builder_toolbar_present_when_has_questions(auth_client, owner):
+    """The builder shows a toolbar with links to Organise sections, Preview, and Dashboard."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Toolbar Survey",
+        slug="toolbar-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    # The "Organise sections" link should point at the Groups page
+    groups_url = reverse("surveys:groups", kwargs={"slug": survey.slug})
+    assert groups_url.encode() in resp.content, (
+        "The builder toolbar should link to the Sections (Groups) page."
+    )
+    # The Preview link should be present
+    assert b"/preview/" in resp.content, (
+        "The builder toolbar should link to the preview page."
+    )
+    # The Back to dashboard link should be present
+    assert b"/dashboard/" in resp.content, (
+        "The builder toolbar should link back to the dashboard."
+    )
+
+
+@pytest.mark.django_db
+def test_builder_toolbar_absent_when_no_questions(auth_client, owner):
+    """The builder does NOT show the toolbar when the survey has no questions."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="No Toolbar Survey",
+        slug="no-toolbar-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    # The Groups page link should NOT be in the toolbar (no questions = no need to organise)
+    groups_url = reverse("surveys:groups", kwargs={"slug": survey.slug})
+    # The groups URL might appear in the rail's "Add section" form action, so we
+    # check that it's not in a btn-outline toolbar link by checking for the toolbar
+    # pattern specifically.
+    assert b"Organise sections" not in resp.content, (
+        "The 'Organise sections' toolbar button should not appear when there are no questions."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Commit 2.9 — Quick links back to builder from Sections page and Preview
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_groups_page_has_back_to_builder_link(auth_client, owner):
+    """The Sections page has a 'Back to builder' link."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Groups Back Link Survey",
+        slug="groups-back-link-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    assert builder_url.encode() in resp.content, (
+        "The Sections page should have a 'Back to builder' link."
+    )
