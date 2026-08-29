@@ -638,12 +638,12 @@ def test_group_builder_still_works_after_extraction(auth_client, owner):
         reverse("surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id})
     )
     assert resp.status_code == 200
-    assert b"Questions in this group" in resp.content, (
-        "group_builder should still render the question list after partial extraction."
-    )
-    assert b"create-question-form" in resp.content, (
-        "group_builder should still render the question-create form after partial extraction."
-    )
+    assert (
+        b"Questions in this group" in resp.content
+    ), "group_builder should still render the question list after partial extraction."
+    assert (
+        b"create-question-form" in resp.content
+    ), "group_builder should still render the question-create form after partial extraction."
 
 
 @pytest.mark.django_db
@@ -658,11 +658,13 @@ def test_survey_builder_view_renders(auth_client, owner):
     )
     create_default_section(survey, owner)
 
-    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
-    assert resp.status_code == 200
-    assert b"create-question-form" in resp.content, (
-        "The unified builder should render the question-create form."
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
     )
+    assert resp.status_code == 200
+    assert (
+        b"create-question-form" in resp.content
+    ), "The unified builder should render the question-create form."
 
 
 @pytest.mark.django_db
@@ -683,16 +685,18 @@ def test_survey_builder_defaults_to_first_group(auth_client, owner):
         type=SurveyQuestion.Types.TEXT,
     )
 
-    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
     assert resp.status_code == 200
     # The survey name is always rendered in the h2
-    assert b"Default Group Survey" in resp.content, (
-        "The survey name should appear in the builder page."
-    )
+    assert (
+        b"Default Group Survey" in resp.content
+    ), "The survey name should appear in the builder page."
     # The active group's question should be rendered in the question pane
-    assert b"What is your name?" in resp.content, (
-        "The first group's questions should be rendered by default."
-    )
+    assert (
+        b"What is your name?" in resp.content
+    ), "The first group's questions should be rendered by default."
 
 
 @pytest.mark.django_db
@@ -716,13 +720,14 @@ def test_survey_builder_selects_group_by_gid(auth_client, owner):
     )
 
     resp = auth_client.get(
-        reverse("surveys:survey_builder", kwargs={"slug": survey.slug}) + f"?gid={group2.id}"
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+        + f"?gid={group2.id}"
     )
     assert resp.status_code == 200
     # group2's question should be visible, and group2 should be the active section
-    assert b"Allergies?" in resp.content, (
-        "The selected group's questions should be rendered."
-    )
+    assert (
+        b"Allergies?" in resp.content
+    ), "The selected group's questions should be rendered."
 
 
 @pytest.mark.django_db
@@ -739,14 +744,16 @@ def test_survey_builder_mobile_dropdown_present(auth_client, owner):
     group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
     survey.question_groups.add(group1, group2)
 
-    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
     assert resp.status_code == 200
-    assert b'<select' in resp.content, (
-        "A <select> dropdown should be present for mobile section switching."
-    )
-    assert b'md:hidden' in resp.content, (
-        "The mobile dropdown should be hidden on desktop via md:hidden."
-    )
+    assert (
+        b"<select" in resp.content
+    ), "A <select> dropdown should be present for mobile section switching."
+    assert (
+        b"md:hidden" in resp.content
+    ), "The mobile dropdown should be hidden on desktop via md:hidden."
 
 
 @pytest.mark.django_db
@@ -763,15 +770,17 @@ def test_survey_builder_desktop_rail_present(auth_client, owner):
     group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
     survey.question_groups.add(group1, group2)
 
-    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
     assert resp.status_code == 200
     # The desktop rail should be present (hidden md:block)
-    assert b'hidden md:block' in resp.content, (
-        "The desktop rail should be present and visible on md+ via hidden md:block."
-    )
-    assert b'Add section' in resp.content, (
-        "The 'Add section' button should be present in the rail."
-    )
+    assert (
+        b"hidden md:block" in resp.content
+    ), "The desktop rail should be present and visible on md+ via hidden md:block."
+    assert (
+        b"Add section" in resp.content
+    ), "The 'Add section' button should be present in the rail."
 
 
 @pytest.mark.django_db
@@ -803,9 +812,9 @@ def test_survey_builder_requires_edit_permission(auth_client, owner, django_user
     client.force_login(viewer)
 
     resp = client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
-    assert resp.status_code == 403, (
-        "A viewer without edit access should get 403 on the builder."
-    )
+    assert (
+        resp.status_code == 403
+    ), "A viewer without edit access should get 403 on the builder."
 
 
 # ---------------------------------------------------------------------------
@@ -825,17 +834,19 @@ def test_survey_builder_single_section_hides_rail(auth_client, owner):
     )
     create_default_section(survey, owner)
 
-    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
     assert resp.status_code == 200
 
     # The mobile dropdown should NOT be present
-    assert b'md:hidden' not in resp.content, (
-        "The mobile dropdown should not be present for a single-section survey."
-    )
+    assert (
+        b"md:hidden" not in resp.content
+    ), "The mobile dropdown should not be present for a single-section survey."
     # The desktop rail should NOT be present
-    assert b'hidden md:block' not in resp.content, (
-        "The desktop rail should not be present for a single-section survey."
-    )
+    assert (
+        b"hidden md:block" not in resp.content
+    ), "The desktop rail should not be present for a single-section survey."
 
 
 @pytest.mark.django_db
@@ -850,16 +861,18 @@ def test_survey_builder_single_section_has_visually_hidden_heading(auth_client, 
     )
     group = create_default_section(survey, owner)
 
-    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
     assert resp.status_code == 200
 
     # The section name should be present in a visually-hidden heading
-    assert b'sr-only' in resp.content, (
-        "A visually-hidden (sr-only) heading should be present for a11y."
-    )
-    assert group.name.encode() in resp.content, (
-        f"The section name '{group.name}' should be present in the visually-hidden heading."
-    )
+    assert (
+        b"sr-only" in resp.content
+    ), "A visually-hidden (sr-only) heading should be present for a11y."
+    assert (
+        group.name.encode() in resp.content
+    ), f"The section name '{group.name}' should be present in the visually-hidden heading."
 
 
 @pytest.mark.django_db
@@ -877,17 +890,19 @@ def test_survey_builder_multi_section_shows_rail(auth_client, owner):
     group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
     survey.question_groups.add(group1, group2)
 
-    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
     assert resp.status_code == 200
 
     # The desktop rail should be present
-    assert b'hidden md:block' in resp.content, (
-        "The desktop rail should be present for a multi-section survey."
-    )
+    assert (
+        b"hidden md:block" in resp.content
+    ), "The desktop rail should be present for a multi-section survey."
     # The visually-hidden single-section heading should NOT be present
-    assert b'sr-only' not in resp.content, (
-        "The visually-hidden heading should only appear for single-section surveys."
-    )
+    assert (
+        b"sr-only" not in resp.content
+    ), "The visually-hidden heading should only appear for single-section surveys."
 
 
 # ---------------------------------------------------------------------------
@@ -916,21 +931,22 @@ def test_section_switch_via_htmx_returns_partial(auth_client, owner):
     )
 
     resp = auth_client.get(
-        reverse("surveys:survey_builder", kwargs={"slug": survey.slug}) + f"?gid={group2.id}",
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+        + f"?gid={group2.id}",
         HTTP_HX_REQUEST="true",
     )
     assert resp.status_code == 200
     # The partial should contain the question pane but NOT the full page chrome
-    assert b"create-question-form" in resp.content, (
-        "The HTMX partial should contain the question-create form."
-    )
-    assert b"Allergies?" in resp.content, (
-        "The selected group's questions should be in the partial."
-    )
+    assert (
+        b"create-question-form" in resp.content
+    ), "The HTMX partial should contain the question-create form."
+    assert (
+        b"Allergies?" in resp.content
+    ), "The selected group's questions should be in the partial."
     # The full-page breadcrumbs should NOT be in the partial
-    assert b"breadcrumbs" not in resp.content.lower(), (
-        "The HTMX partial should not include the full page chrome (breadcrumbs)."
-    )
+    assert (
+        b"breadcrumbs" not in resp.content.lower()
+    ), "The HTMX partial should not include the full page chrome (breadcrumbs)."
 
 
 @pytest.mark.django_db
@@ -948,13 +964,14 @@ def test_section_switch_non_htmx_returns_full_page(auth_client, owner):
     survey.question_groups.add(group1, group2)
 
     resp = auth_client.get(
-        reverse("surveys:survey_builder", kwargs={"slug": survey.slug}) + f"?gid={group2.id}"
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+        + f"?gid={group2.id}"
     )
     assert resp.status_code == 200
     # The full page should contain breadcrumbs
-    assert b"breadcrumbs" in resp.content.lower() or b"crumb" in resp.content.lower(), (
-        "The non-HTMX response should include the full page chrome."
-    )
+    assert (
+        b"breadcrumbs" in resp.content.lower() or b"crumb" in resp.content.lower()
+    ), "The non-HTMX response should include the full page chrome."
 
 
 @pytest.mark.django_db
@@ -978,12 +995,12 @@ def test_add_section_via_htmx_redirects_to_builder(auth_client, owner):
     )
     assert resp.status_code == 302
     # Should redirect to the builder with the new group's gid
-    assert f"/surveys/{survey.slug}/builder/" in resp["Location"], (
-        "The redirect should point at the builder, not the Groups page."
-    )
-    assert "gid=" in resp["Location"], (
-        "The redirect should include the new group's gid."
-    )
+    assert (
+        f"/surveys/{survey.slug}/builder/" in resp["Location"]
+    ), "The redirect should point at the builder, not the Groups page."
+    assert (
+        "gid=" in resp["Location"]
+    ), "The redirect should include the new group's gid."
     # Verify the new group was created
     assert survey.question_groups.count() == 2
 
@@ -1002,15 +1019,17 @@ def test_mobile_dropdown_triggers_htmx_swap(auth_client, owner):
     group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
     survey.question_groups.add(group1, group2)
 
-    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
     assert resp.status_code == 200
     # The dropdown should have hx-trigger="change"
-    assert b'hx-trigger="change"' in resp.content, (
-        "The mobile dropdown should have hx-trigger=change for HTMX swapping."
-    )
-    assert b'hx-target="#builder-main"' in resp.content, (
-        "The mobile dropdown should target #builder-main for the swap."
-    )
+    assert (
+        b'hx-trigger="change"' in resp.content
+    ), "The mobile dropdown should have hx-trigger=change for HTMX swapping."
+    assert (
+        b'hx-target="#builder-main"' in resp.content
+    ), "The mobile dropdown should target #builder-main for the swap."
 
 
 # ---------------------------------------------------------------------------
@@ -1023,19 +1042,19 @@ def test_how_to_build_explainer_present_on_survey_list(auth_client, owner):
     """The survey list page shows the 'How to build' explainer for new users."""
     resp = auth_client.get(reverse("surveys:list"))
     assert resp.status_code == 200
-    assert b"How it works" in resp.content, (
-        "The 'How it works' heading should be present on the survey list page."
-    )
-    assert b"Add questions" in resp.content, (
-        "The explainer should mention 'Add questions' as step 2."
-    )
-    assert b"Organise" in resp.content, (
-        "The explainer should mention 'Organise (optional)' as step 3."
-    )
+    assert (
+        b"How it works" in resp.content
+    ), "The 'How it works' heading should be present on the survey list page."
+    assert (
+        b"Add questions" in resp.content
+    ), "The explainer should mention 'Add questions' as step 2."
+    assert (
+        b"Organise" in resp.content
+    ), "The explainer should mention 'Organise (optional)' as step 3."
     # The old 3-step hierarchy (Survey → Sections → Questions) should not appear
-    assert b"top-level container" not in resp.content, (
-        "The old 'top-level container' description should be gone."
-    )
+    assert (
+        b"top-level container" not in resp.content
+    ), "The old 'top-level container' description should be gone."
 
 
 @pytest.mark.django_db
@@ -1050,14 +1069,16 @@ def test_how_to_build_explainer_present_in_builder_empty_state(auth_client, owne
     )
     create_default_section(survey, owner)
 
-    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
     assert resp.status_code == 200
-    assert b"How it works" in resp.content, (
-        "The 'How to build' explainer should appear in the builder empty state."
-    )
-    assert b"No questions yet" in resp.content, (
-        "The empty state should say 'No questions yet' instead of 'No questions in this group yet'."
-    )
+    assert (
+        b"How it works" in resp.content
+    ), "The 'How to build' explainer should appear in the builder empty state."
+    assert (
+        b"No questions yet" in resp.content
+    ), "The empty state should say 'No questions yet' instead of 'No questions in this group yet'."
 
 
 # ---------------------------------------------------------------------------
@@ -1081,12 +1102,12 @@ def test_dashboard_building_cards_prominent_when_no_questions(auth_client, owner
     assert resp.status_code == 200
 
     # The heading should be a visible <h3>, not inside a <details> summary
-    assert b"<h3" in resp.content, (
-        "The 'Add or edit questions' heading should be a visible h3 when no questions exist."
-    )
-    assert b"<details" not in resp.content or b"survey-style-collapse" in resp.content, (
-        "The building cards should NOT be wrapped in a <details> element when no questions exist."
-    )
+    assert (
+        b"<h3" in resp.content
+    ), "The 'Add or edit questions' heading should be a visible h3 when no questions exist."
+    assert (
+        b"<details" not in resp.content or b"survey-style-collapse" in resp.content
+    ), "The building cards should NOT be wrapped in a <details> element when no questions exist."
 
 
 @pytest.mark.django_db
@@ -1111,13 +1132,13 @@ def test_dashboard_building_cards_collapsed_when_has_questions(auth_client, owne
     assert resp.status_code == 200
 
     # The building cards should be wrapped in a <details> element
-    assert b"<details" in resp.content, (
-        "The building cards should be collapsed in a <details> element when questions exist."
-    )
+    assert (
+        b"<details" in resp.content
+    ), "The building cards should be collapsed in a <details> element when questions exist."
     # The summary should be present (i18n-safe: check for the <summary> tag, not the translated text)
-    assert b"<summary" in resp.content, (
-        "A <summary> element should be present as the caret for the collapsed cards."
-    )
+    assert (
+        b"<summary" in resp.content
+    ), "A <summary> element should be present as the caret for the collapsed cards."
 
 
 # ---------------------------------------------------------------------------
@@ -1143,22 +1164,24 @@ def test_builder_toolbar_present_when_has_questions(auth_client, owner):
         type=SurveyQuestion.Types.TEXT,
     )
 
-    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
     assert resp.status_code == 200
 
     # The "Organise sections" link should point at the Groups page
     groups_url = reverse("surveys:groups", kwargs={"slug": survey.slug})
-    assert groups_url.encode() in resp.content, (
-        "The builder toolbar should link to the Sections (Groups) page."
-    )
+    assert (
+        groups_url.encode() in resp.content
+    ), "The builder toolbar should link to the Sections (Groups) page."
     # The Preview link should be present
-    assert b"/preview/" in resp.content, (
-        "The builder toolbar should link to the preview page."
-    )
+    assert (
+        b"/preview/" in resp.content
+    ), "The builder toolbar should link to the preview page."
     # The Back to dashboard link should be present
-    assert b"/dashboard/" in resp.content, (
-        "The builder toolbar should link back to the dashboard."
-    )
+    assert (
+        b"/dashboard/" in resp.content
+    ), "The builder toolbar should link back to the dashboard."
 
 
 @pytest.mark.django_db
@@ -1173,17 +1196,19 @@ def test_builder_toolbar_absent_when_no_questions(auth_client, owner):
     )
     create_default_section(survey, owner)
 
-    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
     assert resp.status_code == 200
 
     # The Groups page link should NOT be in the toolbar (no questions = no need to organise)
-    groups_url = reverse("surveys:groups", kwargs={"slug": survey.slug})
+    _ = reverse("surveys:groups", kwargs={"slug": survey.slug})
     # The groups URL might appear in the rail's "Add section" form action, so we
     # check that it's not in a btn-outline toolbar link by checking for the toolbar
     # pattern specifically.
-    assert b"Organise sections" not in resp.content, (
-        "The 'Organise sections' toolbar button should not appear when there are no questions."
-    )
+    assert (
+        b"Organise sections" not in resp.content
+    ), "The 'Organise sections' toolbar button should not appear when there are no questions."
 
 
 # ---------------------------------------------------------------------------
@@ -1207,6 +1232,6 @@ def test_groups_page_has_back_to_builder_link(auth_client, owner):
     assert resp.status_code == 200
 
     builder_url = f"/surveys/{survey.slug}/builder/"
-    assert builder_url.encode() in resp.content, (
-        "The Sections page should have a 'Back to builder' link."
-    )
+    assert (
+        builder_url.encode() in resp.content
+    ), "The Sections page should have a 'Back to builder' link."
