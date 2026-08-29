@@ -569,6 +569,42 @@
     });
   }
 
+  // First-run nudge: focus the Add Question text input when the active
+  // section has no questions, so a new user can start typing immediately.
+  //
+  // Two signals trigger focus:
+  //   1. The input carries `data-autofocus` — set server-side via
+  //      `{% if not questions %}` in builder_question_pane.html, so it is
+  //      present on the initial page render and on HTMX section switches
+  //      (which re-render the whole #builder-main including the form).
+  //   2. A `#questions-list` swap (create/delete/copy) leaves the list with
+  //      no `[data-qid]` rows — covers the case where a group started with
+  //      questions and the user deleted the last one. The form is not
+  //      re-rendered on these swaps, so `data-autofocus` may be absent;
+  //      the empty-list check catches it instead.
+  //
+  // `force` is used by callers that have already confirmed the list is empty.
+  function focusFirstQuestionInput(force) {
+    const form = document.getElementById("create-question-form");
+    if (!form) return;
+    const input = form.querySelector('input[name="text"]');
+    if (!input) return;
+    if (force || input.dataset.autofocus !== undefined) {
+      // Defer to the next frame so the swap has settled and the input is
+      // focusable in all browsers.
+      requestAnimationFrame(function () {
+        input.focus();
+        if (input.value) input.select();
+      });
+    }
+  }
+
+  function listIsEmpty() {
+    const list = document.getElementById("questions-draggable");
+    if (!list) return false;
+    return list.querySelector("[data-qid]") === null;
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initSortable(document);
     scheduleDismissals(document);
@@ -577,6 +613,7 @@
     bindEditButtons();
     bindCancelButton(document.getElementById("create-question-form"));
     initConditionForms(document);
+    focusFirstQuestionInput(false);
   });
 
   // Add CSRF header to all HTMX requests and coerce edit submissions to the correct endpoint
@@ -651,6 +688,17 @@
       ) {
         exitEditMode(form, { reset: true, focus: true });
       }
+      // First-run nudge: if a delete/copy swap emptied the list, focus the
+      // Add Question input so the user can immediately add another question.
+      // Skipped after a create submission (handled by exitEditMode above) and
+      // after a reorder (the list is never emptied by reordering).
+      const isCreateSubmission =
+        src &&
+        form &&
+        (src === form || (src.closest && src.closest("#create-question-form")));
+      if (!isCreateSubmission && listIsEmpty()) {
+        focusFirstQuestionInput(true);
+      }
     }
     // Re-bind toggles for the create form if present
     if (document.getElementById("create-question-form")) {
@@ -659,6 +707,11 @@
     }
     bindEditButtons();
     initConditionForms(target);
+    // Section switch (HTMX swap of #builder-main) re-renders the form, so
+    // re-evaluate the first-run nudge based on the new data-autofocus signal.
+    if (target.id === "builder-main") {
+      focusFirstQuestionInput(false);
+    }
   });
 
   // Also reset form after the request completes successfully, even if no swap occurred

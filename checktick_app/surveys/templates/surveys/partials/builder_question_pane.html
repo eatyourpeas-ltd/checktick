@@ -65,7 +65,7 @@
                   </fieldset>
 
                   <label class="label mt-2">Question text</label>
-                  <input name="text" class="input input-bordered w-full" required />
+                  <input name="text" class="input input-bordered w-full" required{% if not questions %} data-autofocus{% endif %} />
 
                   <div data-section="text-options" class="mt-3">
                     <fieldset>

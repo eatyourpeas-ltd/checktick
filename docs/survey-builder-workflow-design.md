@@ -183,8 +183,10 @@ Work is split into three tiers so value can be shipped incrementally. **Tier 1 i
 
 *TODO — future PR:*
 - [ ] Frame branching targets as sections by friendly name (originally 3.2)
-- [ ] First-run nudge — focus the Add Question form on first load (originally 3.3). The empty-state *nudge card* is now consistent across all swap paths (shared `builder_questions_empty.html` partial); this remaining item is the auto-focus enhancement.
 - [ ] Move "Share as template" to per-section action (originally 3.4)
+
+*Completed:*
+- ✅ First-run nudge — focus the Add Question form (originally 3.3). The empty-state nudge card is consistent across all swap paths (shared `builder_questions_empty.html` partial), and the Add Question text input is auto-focused when the active section has no questions (`data-autofocus` signal + `focusFirstQuestionInput()` in `builder.js`).
 
 *Stays in Organise by design:*
 - Publish as template (can apply to multiple sections)
