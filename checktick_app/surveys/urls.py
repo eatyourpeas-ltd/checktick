@@ -295,6 +295,11 @@ urlpatterns = [
     ),
     # Group question management (per-group)
     path(
+        "<slug:slug>/builder/",
+        views.survey_builder,
+        name="survey_builder",
+    ),
+    path(
         "<slug:slug>/builder/groups/<int:gid>/",
         views.group_builder,
         name="group_builder",

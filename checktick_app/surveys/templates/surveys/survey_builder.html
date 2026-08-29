@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% block title %}{% trans "Builder" %} - {{ survey.name }}{% endblock %}
+{% block content %}
+<div class="flex flex-col gap-6">
+  <div class="prose">
+  {% trans "Surveys" as crumb1_text %}
+  {% trans "Survey Dashboard" as crumb2_text %}
+  {% trans "Builder" as crumb3_text %}
+  {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href="/surveys/" crumb2_label=crumb2_text crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" crumb3_label=crumb3_text %}
+    <h1 class="inline-flex items-center gap-2 text-base-content">
+      {% include "components/icons/checktick_question.html" with classes="w-6 h-6 text-base-content" %}
+      <span>{% trans "Builder" %}</span>
+    </h1>
+    <h2 class="mt-0 text-base-content/80">{{ survey.name }}</h2>
+  </div>
+
+  {# === Mobile section dropdown (hidden on md+) === #}
+  {% if groups|length > 1 %}
+  <div class="md:hidden">
+    <label class="label text-xs">{% trans "Section" %}</label>
+    <select class="select select-bordered w-full" onchange="window.location.href='?gid='+this.value">
+      {% for g in groups %}
+        <option value="{{ g.id }}" {% if g.id == active_group.id %}selected{% endif %}>{{ g.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+
+  <div class="grid md:grid-cols-4 gap-6">
+    {# === Desktop section rail (hidden on mobile) === #}
+    {% if groups|length > 1 %}
+    <div class="hidden md:block md:col-span-1">
+      <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-3">
+          <h2 class="card-title text-sm font-semibold text-base-content/70 uppercase tracking-wide mb-2">{% trans "Sections" %}</h2>
+          <ul class="space-y-1">
+            {% for g in groups %}
+            <li>
+              <a href="?gid={{ g.id }}" class="block px-3 py-2 rounded-lg text-sm transition-colors {% if g.id == active_group.id %}bg-primary text-primary-content font-medium{% else %}hover:bg-base-200 text-base-content{% endif %}">
+                {{ g.name }}
+                <span class="text-xs opacity-60 ml-1">({{ g.q_count }})</span>
+              </a>
+            </li>
+            {% endfor %}
+          </ul>
+          {% if can_edit %}
+          <form method="post" action="/surveys/{{ survey.slug }}/groups/create" class="mt-3">
+            {% csrf_token %}
+            <input type="hidden" name="name" value="Section {{ groups|length|add:1 }}" />
+            <button type="submit" class="btn btn-xs btn-outline btn-primary w-full">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+              {% trans "Add section" %}
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# === Main question pane === #}
+    <div id="builder-main" class="{% if groups|length > 1 %}md:col-span-3{% else %}md:col-span-4{% endif %}">
+      {# Visually-hidden section heading for assistive tech when the rail is hidden. #}
+      {% if single_section %}
+      <h2 class="sr-only">{% trans "Section" %}: {{ active_group.name }}</h2>
+      {% endif %}
+      {% include 'surveys/partials/builder_question_pane.html' %}
+    </div>
+  </div>
+</div>
+
+<script src="{% static cdn_assets.sortablejs.static_file %}"
+  nonce="{{ request.csp_nonce }}"
+  integrity="{{ cdn_assets.sortablejs.sri }}"
+  crossorigin="anonymous"></script>
+<script src="{% static 'js/builder.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}"></script>
+{% endblock %}

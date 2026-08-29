@@ -6777,10 +6777,15 @@ def survey_export_csv(
 
 
 @login_required
-def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
-    survey = get_object_or_404(Survey, slug=slug)
-    require_can_edit(request.user, survey)
-    group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)
+def _build_question_pane_context(
+    request: HttpRequest, survey: Survey, group: QuestionGroup
+) -> dict:
+    """Build the shared context for the question pane (used by both
+    group_builder and survey_builder).
+
+    This avoids duplicating the ~60 lines of patient/professional template
+    detection, SNOMED availability, dataset picker, and branding setup.
+    """
     questions_qs = survey.questions.select_related("group").filter(group=group)
     questions = _prepare_question_rendering(survey, questions_qs)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
@@ -6812,18 +6817,16 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
     )
     can_edit = can_edit_survey(request.user, survey)
 
-    # Check if user can collect patient data (FREE tier cannot)
     from checktick_app.core.tier_limits import check_patient_data_permission
 
     can_collect_patient_data, _ = check_patient_data_permission(request.user)
 
-    # SNOMED availability and metadata for the builder dataset picker.
     snomed_available = True
     snomed_datasets_meta: dict[str, dict] = {}
     try:
         from .snomed_resolver import _get_db_path
 
-        _get_db_path()  # raises SnomedUnavailableError if snomed.db is absent
+        _get_db_path()
     except Exception:
         snomed_available = False
 
@@ -6864,9 +6867,6 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
         "snomed_datasets_meta": snomed_datasets_meta,
     }
     if any(brand_overrides.values()):
-        # Management pages always use platform fonts (heading/body/font CSS).
-        # Only non-font branding (title, icon, theme, primary colour) may be
-        # overridden per-survey; survey fonts apply on respondent-facing pages.
         base_brand = platform_branding(request)["brand"]
         ctx["brand"] = {
             **base_brand,
@@ -6875,6 +6875,58 @@ def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
             "theme_name": brand_overrides.get("theme_name") or base_brand["theme_name"],
             "primary": brand_overrides.get("primary"),
         }
+    return ctx
+
+
+@login_required
+def survey_builder(request: HttpRequest, slug: str) -> HttpResponse:
+    """Unified survey builder — master-detail with a section rail.
+
+    Left rail (desktop) / dropdown (mobile): lists sections in order.
+    Main area: the shared question pane (same as group_builder).
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+
+    # Get ordered groups for the rail
+    order_ids = _resolved_group_order_ids(survey)
+    groups_qs = survey.question_groups.annotate(
+        q_count=models.Count(
+            "surveyquestion", filter=models.Q(surveyquestion__survey=survey)
+        )
+    )
+    groups_map = {g.id: g for g in groups_qs}
+    groups = [groups_map[gid] for gid in order_ids if gid in groups_map]
+
+    # Determine the active group
+    gid_param = request.GET.get("gid")
+    if gid_param:
+        try:
+            active_group = groups_map.get(int(gid_param)) or groups[0]
+        except (ValueError, IndexError):
+            active_group = groups[0] if groups else None
+    else:
+        active_group = groups[0] if groups else None
+
+    if not active_group:
+        # No groups — redirect to the Groups page (legacy edge case)
+        return redirect("surveys:groups", slug=slug)
+
+    ctx = _build_question_pane_context(request, survey, active_group)
+    ctx["groups"] = groups
+    ctx["active_group"] = active_group
+    # Suppress the section rail for single-section surveys so the builder
+    # shows a flat question list. A visually-hidden heading preserves the
+    # section context for assistive tech (per the design doc's a11y rule).
+    ctx["single_section"] = len(groups) <= 1
+    return render(request, "surveys/survey_builder.html", ctx)
+
+
+def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)
+    ctx = _build_question_pane_context(request, survey, group)
     return render(
         request,
         "surveys/group_builder.html",
