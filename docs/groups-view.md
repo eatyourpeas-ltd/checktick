@@ -8,6 +8,16 @@ Sections are containers that organise related questions together in your surveys
 
 > **Technical note:** In the code, API, and data model, sections are called `QuestionGroup`. The user-facing label is "Sections". This page covers the user-facing workflow; technical references throughout the docs retain `QuestionGroup`.
 
+## The Builder
+
+The primary place to build and edit questions is the **Builder** (`/surveys/<slug>/builder/`). It shows a master-detail layout:
+
+- **Desktop (md+):** A left rail lists your sections in order. Click a section to see its questions in the main area. Use "Add section" at the bottom of the rail to create a new section.
+- **Mobile (<md):** A dropdown at the top of the page lets you switch sections.
+- **Single-section surveys:** The rail is hidden — you just see a flat list of questions. The section layer appears automatically when you add a second section.
+
+The Builder is where you add, edit, reorder, and delete questions. For bulk section operations (reordering, repeats, publishing), use the Sections page described below.
+
 ## What are sections?
 
 A section is a named collection of questions that:

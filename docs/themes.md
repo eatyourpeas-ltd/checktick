@@ -539,8 +539,8 @@ Pass labeled crumbs in order. For any crumb you pass, you can optionally include
 {% include 'components/breadcrumbs.html' with
   crumb1_label="Survey Dashboard"
   crumb1_href="/surveys/"|add:survey.slug|add:"/dashboard/"
-  crumb2_label="Sections"
-  crumb2_href="/surveys/"|add:survey.slug|add:"/groups/"
+  crumb2_label="Builder"
+  crumb2_href="/surveys/"|add:survey.slug|add:"/builder/"
   crumb3_label="Questions"
 %}
 ```
@@ -551,8 +551,8 @@ If you already have a list, pass `items` as an iterable of `(label, href)` tuple
 
 ```django
 {% include 'components/breadcrumbs.html' with
-  items=(("Survey Dashboard", "/surveys/"|add:survey.slug|add:"/dashboard/"),
-         ("Sections", "/surveys/"|add:survey.slug|add:"/groups/"),
+  items=("Survey Dashboard", "/surveys/"|add:survey.slug|add:"/dashboard/"),
+         ("Builder", "/surveys/"|add:survey.slug|add:"/builder/"),
          ("Questions", None))
 %}
 ```

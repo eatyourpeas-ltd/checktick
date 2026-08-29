@@ -1,0 +1,56 @@
+{% load i18n %}
+{% comment %}
+    Reusable "How to build" explainer — included by list.html (survey list page)
+   and survey_builder.html (builder empty state).
+
+   Teaches the new mental model:
+   1. Create a survey
+   2. Add questions (3 ways: Builder, Outline, AI Assistant)
+   3. Organise (optional) — sections for branching/repeats/sharing
+
+   Context: none required (all strings are static).
+{% endcomment %}
+<div class="not-prose">
+  <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-3">{% trans "How it works" %}</p>
+  <div class="flex flex-col sm:flex-row items-stretch gap-0">
+
+    <div class="flex-1 rounded-t-box sm:rounded-l-box sm:rounded-tr-none bg-primary/10 border border-primary/30 p-4">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="badge badge-primary badge-sm">1</span>
+        <span class="font-semibold text-sm text-base-content">{% trans "Create a survey" %}</span>
+      </div>
+      <p class="text-xs text-base-content/70">{% trans "Give it a name, description, and visibility settings. A default section is created for you automatically." %}</p>
+    </div>
+
+    <div class="flex sm:flex-col items-center justify-center px-1 py-2 text-base-content/30 select-none">
+      <span class="hidden sm:block text-lg leading-none">›</span>
+      <span class="sm:hidden text-lg leading-none rotate-90">›</span>
+    </div>
+
+    <div class="flex-1 bg-secondary/10 border border-secondary/30 p-4">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="badge badge-secondary badge-sm">2</span>
+        <span class="font-semibold text-sm text-base-content">{% trans "Add questions" %}</span>
+      </div>
+      <p class="text-xs text-base-content/70">{% trans "Three ways to build: the visual Builder, the Outline (text format), or the AI Assistant. Use whichever suits you." %}</p>
+    </div>
+
+    <div class="flex sm:flex-col items-center justify-center px-1 py-2 text-base-content/30 select-none">
+      <span class="hidden sm:block text-lg leading-none">›</span>
+      <span class="sm:hidden text-lg leading-none rotate-90">›</span>
+    </div>
+
+    <div class="flex-1 rounded-b-box sm:rounded-r-box sm:rounded-bl-none bg-accent/10 border border-accent/30 p-4">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="badge badge-accent badge-sm">3</span>
+        <span class="font-semibold text-sm text-base-content">{% trans "Organise (optional)" %}</span>
+      </div>
+      <p class="text-xs text-base-content/70">{% trans "Group questions into sections for branching, repeats, or sharing as templates. Sections appear automatically when you need them." %}</p>
+    </div>
+
+  </div>
+  <p class="text-xs text-base-content/60 mt-3">
+    {% trans "Learn more in the" %}
+    <a href="/docs/groups-view/" class="link underline" target="_blank" rel="noopener noreferrer">{% trans "Sections guide" %}</a>.
+  </p>
+</div>

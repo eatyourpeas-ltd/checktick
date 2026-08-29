@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% block title %}{% trans "Builder" %} - {{ survey.name }}{% endblock %}
+{% block content %}
+<div class="flex flex-col gap-6">
+  <div class="prose">
+  {% trans "Surveys" as crumb1_text %}
+  {% trans "Survey Dashboard" as crumb2_text %}
+  {% trans "Builder" as crumb3_text %}
+  {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href="/surveys/" crumb2_label=crumb2_text crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" crumb3_label=crumb3_text %}
+    <h1 class="inline-flex items-center gap-2 text-base-content">
+      {% include "components/icons/checktick_question.html" with classes="w-6 h-6 text-base-content" %}
+      <span>{% trans "Builder" %}</span>
+    </h1>
+    <h2 class="mt-0 text-base-content/80">{{ survey.name }}</h2>
+  </div>
+
+  {# === Builder toolbar — links to related survey workflows === #}
+  {% if has_questions %}
+  <div class="flex flex-wrap gap-2 items-center">
+    <a class="btn btn-sm btn-outline" href="/surveys/{{ survey.slug }}/groups/">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+      </svg>
+      {% trans "Organise sections" %}
+    </a>
+    <a class="btn btn-sm btn-ghost" href="/surveys/{{ survey.slug }}/preview/" target="_blank" rel="noopener noreferrer">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+      </svg>
+      {% trans "Preview" %}
+    </a>
+    <a class="btn btn-sm btn-ghost" href="/surveys/{{ survey.slug }}/dashboard/">
+      {% trans "Back to dashboard" %}
+    </a>
+  </div>
+  {% endif %}
+
+  {# === Mobile section dropdown (hidden on md+) === #}
+  {% if groups|length > 1 %}
+  <div class="md:hidden">
+    <label class="label text-xs">{% trans "Section" %}</label>
+    <select class="select select-bordered w-full"
+            hx-get="/surveys/{{ survey.slug }}/builder/"
+            hx-target="#builder-main"
+            hx-swap="outerHTML"
+            hx-trigger="change"
+            name="gid"
+            hx-include="this">
+      {% for g in groups %}
+        <option value="{{ g.id }}" {% if g.id == active_group.id %}selected{% endif %}>{{ g.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+
+  <div class="grid md:grid-cols-4 gap-6">
+    {# === Desktop section rail (hidden on mobile) === #}
+    {% if groups|length > 1 %}
+    {% include 'surveys/partials/builder_section_rail.html' %}
+    {% endif %}
+
+    {# === Main question pane === #}
+    <div id="builder-main" class="{% if groups|length > 1 %}md:col-span-3{% else %}md:col-span-4{% endif %}">
+      {# Visually-hidden section heading for assistive tech when the rail is hidden. #}
+      {% if single_section %}
+      <h2 class="sr-only">{% trans "Section" %}: {{ active_group.name }}</h2>
+      {% endif %}
+      {% include 'surveys/partials/builder_question_pane.html' %}
+    </div>
+  </div>
+</div>
+
+<script src="{% static cdn_assets.sortablejs.static_file %}"
+  nonce="{{ request.csp_nonce }}"
+  integrity="{{ cdn_assets.sortablejs.sri }}"
+  crossorigin="anonymous"></script>
+<script src="{% static 'js/builder.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}"></script>
+{% endblock %}

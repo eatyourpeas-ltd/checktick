@@ -91,7 +91,7 @@
 <div class="flex items-center gap-3 mt-2">
   {% include "components/icons/checktick_your_surveys.html" with classes="w-6 h-6" %}
   <h2 class="text-2xl font-bold">
-    <a class="link text-base-content underline hover:text-primary" href="/surveys/{{ survey.slug }}/groups/" id="survey-title-display">{{ survey.name }}</a>
+    <a class="link text-base-content underline hover:text-primary" href="/surveys/{{ survey.slug }}/builder/" id="survey-title-display">{{ survey.name }}</a>
   </h2>
   <button class="btn btn-ghost btn-sm btn-circle" id="edit-title-btn" title="{% trans 'Edit survey title' %}">
     {% include "components/icons/pencil.html" with classes="w-4 h-4" %}
@@ -368,14 +368,26 @@
 </div>
 {% endif %}
 
-{# === Survey building options - 3-card grid, always visible === #}
+{% comment %} === Survey building options - 3-card grid ===
+     Prominent when the survey has no questions (first-run guidance).
+     Collapsed behind a caret when questions already exist.
+{% endcomment %}
 <div class="mt-6">
+  {% if has_questions %}
+  <details class="group">
+    <summary class="text-sm font-semibold text-base-content/70 uppercase tracking-wide mb-3 cursor-pointer list-none flex items-center gap-1 select-none">
+      <svg class="w-3 h-3 transition-transform group-open:rotate-90 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      {% trans "New to Checktick? How to add or edit questions" %}
+    </summary>
+    <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+  {% else %}
   <h3 class="text-sm font-semibold text-base-content/70 uppercase tracking-wide mb-3">{% trans "Add or edit questions" %}</h3>
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+  {% endif %}
 
-    {# Card 1: Add questions — points at the per-group builder for the default group so the user can add a question immediately. Falls back to the Groups page for legacy surveys with no groups (no 404). #}
+    {# Card 1: Add questions — points at the unified builder so the user can add a question immediately. Falls back to the Groups page for legacy surveys with no groups (no 404). #}
     {% if groups.first %}
-      <a href="{% url 'surveys:group_builder' slug=survey.slug gid=groups.first.id %}"
+      <a href="{% url 'surveys:survey_builder' slug=survey.slug %}"
          class="card bg-base-100 border border-base-300 hover:border-primary hover:shadow-md transition-all">
         <div class="card-body p-4 items-center text-center gap-2">
           {% include "components/icons/hammer_wrench.html" with classes="w-8 h-8 text-primary" %}
@@ -415,6 +427,9 @@
     </a>
 
   </div>
+  {% if has_questions %}
+  </details>
+  {% endif %}
 </div>
 
 <div class="mt-6">

@@ -113,7 +113,7 @@ def test_survey_create_encrypted_path_creates_default_group(auth_client, owner):
             "slug": "encrypted-workflow-survey",
             "description": "",
             "encryption_option": "option2",
-            "password": "securepass123",
+            "password": PASSWORD,
             "recovery_phrase": "abandon ability able about above absent absorb abstract absurd abuse access accident",
         },
     )
@@ -184,8 +184,8 @@ def test_default_group_is_renameable_and_deletable(owner):
 
 
 @pytest.mark.django_db
-def test_dashboard_cta_points_at_group_builder(auth_client, owner):
-    """The "Add questions" card links to group_builder for the default group."""
+def test_dashboard_cta_points_at_unified_builder(auth_client, owner):
+    """The "Add questions" card links to the unified builder (survey_builder)."""
     # Create a survey with the default group (as survey_create now does)
     survey = Survey.objects.create(
         owner=owner,
@@ -194,15 +194,13 @@ def test_dashboard_cta_points_at_group_builder(auth_client, owner):
         status=Survey.Status.DRAFT,
         visibility=Survey.Visibility.AUTHENTICATED,
     )
-    group = create_default_section(survey, owner)
+    create_default_section(survey, owner)
 
     resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
 
-    # The CTA should link to group_builder for the default group, not to /groups/
-    expected_url = reverse(
-        "surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id}
-    )
+    # The CTA should link to survey_builder (unified builder), not group_builder
+    expected_url = reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
     assert expected_url.encode() in resp.content, (
         f"Dashboard 'Add questions' CTA should point at {expected_url}, "
         f"but the URL was not found in the response."
@@ -610,3 +608,630 @@ def test_participant_view_multi_section_shows_headers(auth_client, owner):
     assert (
         b"Medical History" in resp.content
     ), "The section name 'Medical History' should be rendered for a multi-section survey."
+
+
+# ---------------------------------------------------------------------------
+# Commit 2.1 — Unified builder view + route (extract shared partial)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_group_builder_still_works_after_extraction(auth_client, owner):
+    """The existing group_builder route still renders the question pane after
+    the extraction into builder_question_pane.html."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Extraction Test Survey",
+        slug="extraction-test-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"Questions in this group" in resp.content
+    ), "group_builder should still render the question list after partial extraction."
+    assert (
+        b"create-question-form" in resp.content
+    ), "group_builder should still render the question-create form after partial extraction."
+
+
+@pytest.mark.django_db
+def test_survey_builder_view_renders(auth_client, owner):
+    """The unified builder route renders with the section rail and question pane."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Unified Builder Survey",
+        slug="unified-builder-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"create-question-form" in resp.content
+    ), "The unified builder should render the question-create form."
+
+
+@pytest.mark.django_db
+def test_survey_builder_defaults_to_first_group(auth_client, owner):
+    """No gid param → the first group is active and its questions render."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Default Group Survey",
+        slug="default-group-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    # The survey name is always rendered in the h2
+    assert (
+        b"Default Group Survey" in resp.content
+    ), "The survey name should appear in the builder page."
+    # The active group's question should be rendered in the question pane
+    assert (
+        b"What is your name?" in resp.content
+    ), "The first group's questions should be rendered by default."
+
+
+@pytest.mark.django_db
+def test_survey_builder_selects_group_by_gid(auth_client, owner):
+    """Passing ?gid=<gid> selects that group as active."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="GID Select Survey",
+        slug="gid-select-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
+    survey.question_groups.add(group1, group2)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group2,
+        text="Allergies?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+        + f"?gid={group2.id}"
+    )
+    assert resp.status_code == 200
+    # group2's question should be visible, and group2 should be the active section
+    assert (
+        b"Allergies?" in resp.content
+    ), "The selected group's questions should be rendered."
+
+
+@pytest.mark.django_db
+def test_survey_builder_mobile_dropdown_present(auth_client, owner):
+    """A multi-section survey renders a <select> dropdown for mobile section switching."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Mobile Dropdown Survey",
+        slug="mobile-dropdown-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"<select" in resp.content
+    ), "A <select> dropdown should be present for mobile section switching."
+    assert (
+        b"md:hidden" in resp.content
+    ), "The mobile dropdown should be hidden on desktop via md:hidden."
+
+
+@pytest.mark.django_db
+def test_survey_builder_desktop_rail_present(auth_client, owner):
+    """A multi-section survey renders the vertical section rail for desktop."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Desktop Rail Survey",
+        slug="desktop-rail-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    # The desktop rail should be present (hidden md:block)
+    assert (
+        b"hidden md:block" in resp.content
+    ), "The desktop rail should be present and visible on md+ via hidden md:block."
+    assert (
+        b"Add section" in resp.content
+    ), "The 'Add section' button should be present in the rail."
+
+
+@pytest.mark.django_db
+def test_survey_builder_requires_edit_permission(auth_client, owner, django_user_model):
+    """A viewer (not an editor) gets 403 on the unified builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Permission Test Survey",
+        slug="permission-test-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    # Create a viewer who is not the owner and has no edit access
+    viewer = django_user_model.objects.create_user(
+        username="viewer@example.com",
+        email="viewer@example.com",
+        password=PASSWORD,
+    )
+    from checktick_app.core.models import UserProfile
+
+    UserProfile.objects.filter(user=viewer).update(
+        account_tier=UserProfile.AccountTier.PRO,
+        email_confirmed=True,
+    )
+
+    client = type(auth_client)()
+    client.force_login(viewer)
+
+    resp = client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    assert (
+        resp.status_code == 403
+    ), "A viewer without edit access should get 403 on the builder."
+
+
+# ---------------------------------------------------------------------------
+# Commit 2.2 — Hide section rail for single-section surveys
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_survey_builder_single_section_hides_rail(auth_client, owner):
+    """A single-section survey renders no section rail or dropdown."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Single Section Builder Survey",
+        slug="single-section-builder-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+
+    # The mobile dropdown should NOT be present
+    assert (
+        b"md:hidden" not in resp.content
+    ), "The mobile dropdown should not be present for a single-section survey."
+    # The desktop rail should NOT be present
+    assert (
+        b"hidden md:block" not in resp.content
+    ), "The desktop rail should not be present for a single-section survey."
+
+
+@pytest.mark.django_db
+def test_survey_builder_single_section_has_visually_hidden_heading(auth_client, owner):
+    """A single-section survey has a visually-hidden h2 with the section name for screen readers."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Hidden Heading Survey",
+        slug="hidden-heading-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+
+    # The section name should be present in a visually-hidden heading
+    assert (
+        b"sr-only" in resp.content
+    ), "A visually-hidden (sr-only) heading should be present for a11y."
+    assert (
+        group.name.encode() in resp.content
+    ), f"The section name '{group.name}' should be present in the visually-hidden heading."
+
+
+@pytest.mark.django_db
+def test_survey_builder_multi_section_shows_rail(auth_client, owner):
+    """A multi-section survey renders the section rail (already tested in 2.1,
+    but this confirms the rail is NOT hidden when single_section is false)."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Multi Section Rail Survey",
+        slug="multi-section-rail-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+
+    # The desktop rail should be present
+    assert (
+        b"hidden md:block" in resp.content
+    ), "The desktop rail should be present for a multi-section survey."
+    # The visually-hidden single-section heading should NOT be present
+    assert (
+        b"sr-only" not in resp.content
+    ), "The visually-hidden heading should only appear for single-section surveys."
+
+
+# ---------------------------------------------------------------------------
+# Commit 2.3 — HTMX section switching + inline "Add section"
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_section_switch_via_htmx_returns_partial(auth_client, owner):
+    """HTMX GET to the builder with ?gid= returns just the question pane partial."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="HTMX Switch Survey",
+        slug="htmx-switch-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
+    survey.question_groups.add(group1, group2)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group2,
+        text="Allergies?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+        + f"?gid={group2.id}",
+        HTTP_HX_REQUEST="true",
+    )
+    assert resp.status_code == 200
+    # The partial should contain the question pane but NOT the full page chrome
+    assert (
+        b"create-question-form" in resp.content
+    ), "The HTMX partial should contain the question-create form."
+    assert (
+        b"Allergies?" in resp.content
+    ), "The selected group's questions should be in the partial."
+    # The full-page breadcrumbs should NOT be in the partial
+    assert (
+        b"breadcrumbs" not in resp.content.lower()
+    ), "The HTMX partial should not include the full page chrome (breadcrumbs)."
+
+
+@pytest.mark.django_db
+def test_section_switch_non_htmx_returns_full_page(auth_client, owner):
+    """A non-HTMX GET to the builder with ?gid= returns the full page."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Non-HTMX Survey",
+        slug="non-htmx-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+        + f"?gid={group2.id}"
+    )
+    assert resp.status_code == 200
+    # The full page should contain breadcrumbs
+    assert (
+        b"breadcrumbs" in resp.content.lower() or b"crumb" in resp.content.lower()
+    ), "The non-HTMX response should include the full page chrome."
+
+
+@pytest.mark.django_db
+def test_add_section_via_htmx_redirects_to_builder(auth_client, owner):
+    """Posting to survey_group_create with a next= param redirects to the builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Add Section Survey",
+        slug="add-section-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.post(
+        reverse("surveys:survey_group_create", kwargs={"slug": survey.slug}),
+        data={
+            "name": "New Section",
+            "next": f"/surveys/{survey.slug}/builder/",
+        },
+    )
+    assert resp.status_code == 302
+    # Should redirect to the builder with the new group's gid
+    assert (
+        f"/surveys/{survey.slug}/builder/" in resp["Location"]
+    ), "The redirect should point at the builder, not the Groups page."
+    assert (
+        "gid=" in resp["Location"]
+    ), "The redirect should include the new group's gid."
+    # Verify the new group was created
+    assert survey.question_groups.count() == 2
+
+
+@pytest.mark.django_db
+def test_mobile_dropdown_triggers_htmx_swap(auth_client, owner):
+    """The mobile <select> has hx-get and hx-trigger=change for HTMX swapping."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Mobile HTMX Survey",
+        slug="mobile-htmx-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    # The dropdown should have hx-trigger="change"
+    assert (
+        b'hx-trigger="change"' in resp.content
+    ), "The mobile dropdown should have hx-trigger=change for HTMX swapping."
+    assert (
+        b'hx-target="#builder-main"' in resp.content
+    ), "The mobile dropdown should target #builder-main for the swap."
+
+
+# ---------------------------------------------------------------------------
+# Commit 2.6 — Reimagine orientation strip as "How to build" explainer
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_how_to_build_explainer_present_on_survey_list(auth_client, owner):
+    """The survey list page shows the 'How to build' explainer for new users."""
+    resp = auth_client.get(reverse("surveys:list"))
+    assert resp.status_code == 200
+    assert (
+        b"How it works" in resp.content
+    ), "The 'How it works' heading should be present on the survey list page."
+    assert (
+        b"Add questions" in resp.content
+    ), "The explainer should mention 'Add questions' as step 2."
+    assert (
+        b"Organise" in resp.content
+    ), "The explainer should mention 'Organise (optional)' as step 3."
+    # The old 3-step hierarchy (Survey → Sections → Questions) should not appear
+    assert (
+        b"top-level container" not in resp.content
+    ), "The old 'top-level container' description should be gone."
+
+
+@pytest.mark.django_db
+def test_how_to_build_explainer_present_in_builder_empty_state(auth_client, owner):
+    """The builder shows the 'How to build' explainer when a group has no questions."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Empty Builder Explainer Survey",
+        slug="empty-builder-explainer-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"How it works" in resp.content
+    ), "The 'How to build' explainer should appear in the builder empty state."
+    assert (
+        b"No questions yet" in resp.content
+    ), "The empty state should say 'No questions yet' instead of 'No questions in this group yet'."
+
+
+# ---------------------------------------------------------------------------
+# Commit 2.7 — De-emphasise building cards when survey has questions
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_dashboard_building_cards_prominent_when_no_questions(auth_client, owner):
+    """When a survey has no questions, the 3 building cards are prominent (not collapsed)."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="No Questions Dashboard Survey",
+        slug="no-questions-dashboard-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    # The heading should be a visible <h3>, not inside a <details> summary
+    assert (
+        b"<h3" in resp.content
+    ), "The 'Add or edit questions' heading should be a visible h3 when no questions exist."
+    assert (
+        b"<details" not in resp.content or b"survey-style-collapse" in resp.content
+    ), "The building cards should NOT be wrapped in a <details> element when no questions exist."
+
+
+@pytest.mark.django_db
+def test_dashboard_building_cards_collapsed_when_has_questions(auth_client, owner):
+    """When a survey has questions, the 3 building cards are collapsed behind a caret."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Has Questions Dashboard Survey",
+        slug="has-questions-dashboard-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    # The building cards should be wrapped in a <details> element
+    assert (
+        b"<details" in resp.content
+    ), "The building cards should be collapsed in a <details> element when questions exist."
+    # The summary should be present (i18n-safe: check for the <summary> tag, not the translated text)
+    assert (
+        b"<summary" in resp.content
+    ), "A <summary> element should be present as the caret for the collapsed cards."
+
+
+# ---------------------------------------------------------------------------
+# Commit 2.8 — Builder toolbar (links to Sections page, Preview, Dashboard)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_builder_toolbar_present_when_has_questions(auth_client, owner):
+    """The builder shows a toolbar with links to Organise sections, Preview, and Dashboard."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Toolbar Survey",
+        slug="toolbar-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+
+    # The "Organise sections" link should point at the Groups page
+    groups_url = reverse("surveys:groups", kwargs={"slug": survey.slug})
+    assert (
+        groups_url.encode() in resp.content
+    ), "The builder toolbar should link to the Sections (Groups) page."
+    # The Preview link should be present
+    assert (
+        b"/preview/" in resp.content
+    ), "The builder toolbar should link to the preview page."
+    # The Back to dashboard link should be present
+    assert (
+        b"/dashboard/" in resp.content
+    ), "The builder toolbar should link back to the dashboard."
+
+
+@pytest.mark.django_db
+def test_builder_toolbar_absent_when_no_questions(auth_client, owner):
+    """The builder does NOT show the toolbar when the survey has no questions."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="No Toolbar Survey",
+        slug="no-toolbar-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+
+    # The Groups page link should NOT be in the toolbar (no questions = no need to organise)
+    _ = reverse("surveys:groups", kwargs={"slug": survey.slug})
+    # The groups URL might appear in the rail's "Add section" form action, so we
+    # check that it's not in a btn-outline toolbar link by checking for the toolbar
+    # pattern specifically.
+    assert (
+        b"Organise sections" not in resp.content
+    ), "The 'Organise sections' toolbar button should not appear when there are no questions."
+
+
+# ---------------------------------------------------------------------------
+# Commit 2.9 — Quick links back to builder from Sections page and Preview
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_groups_page_has_back_to_builder_link(auth_client, owner):
+    """The Sections page has a 'Back to builder' link."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Groups Back Link Survey",
+        slug="groups-back-link-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    assert (
+        builder_url.encode() in resp.content
+    ), "The Sections page should have a 'Back to builder' link."

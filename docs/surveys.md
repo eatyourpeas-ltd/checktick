@@ -78,11 +78,13 @@ You can update the survey title after creation:
 
 ## Sections vs questions
 
-Sections are the building blocks for structuring a survey. They act like chapters: each section has a title, optional description, and an ordered list of questions. Sections keep longer surveys manageable, let you show section-specific instructions, and provide obvious breakpoints when branching to different parts of a journey. Questions can be reordered within a section, and sections themselves can be reordered from the builder sidebar.
+Sections are the building blocks for structuring a survey. They act like chapters: each section has a title, optional description, and an ordered list of questions. Sections keep longer surveys manageable, let you show section-specific instructions, and provide obvious breakpoints when branching to different parts of a journey. Questions can be reordered within a section, and sections themselves can be reordered from the Builder's section rail or the Sections page.
+
+The **Builder** (`/surveys/<slug>/builder/`) is the primary interface for adding and editing questions. It shows a master-detail layout: a section rail on the left (desktop) or dropdown (mobile), and the question list for the selected section in the main area. For single-section surveys, the rail is hidden and you see a flat list of questions — the section layer appears automatically when you add a second section.
 
 Questions live inside a single section. When you add a question, the builder automatically associates it with the section you have open. Moving a question to another section updates that association immediately—there is no detached "question bank." If you delete a section, its questions are also deleted. This ensures that every question always has a clear place in the survey hierarchy.
 
-You can use the Outline when you already have content drafted. The Outline lets you specify sections and questions in a single text document: top-level headings become sections, and nested headings/items become questions. After import you can continue refining sections and questions in the builder.
+You can use the Outline when you already have content drafted. The Outline lets you specify sections and questions in a single text document: top-level headings become sections, and nested headings/items become questions. After import you can continue refining sections and questions in the Builder.
 
 > **Technical note:** In the code, API, and data model, sections are called `QuestionGroup`. The user-facing label is "Sections".
 

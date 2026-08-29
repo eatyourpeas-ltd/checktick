@@ -6,7 +6,7 @@ priority: 5
 
 # Survey Builder Workflow Design
 
-- **Status**: Tier 1 implemented — see [Implementation Plan](/docs/survey-builder-workflow-implementation-plan/)
+- **Status**: Tier 1 & 2 implemented — see [Implementation Plan](/docs/survey-builder-workflow-implementation-plan/)
 - **Date**: August 2026
 - **Scope**: The survey creation → building workflow, and how question groups (referred to as **sections** in the UI) are introduced to users
 - **Related**: [Surveys](/docs/surveys/) · [Sections](/docs/groups-view/) · [Branching Logic & Repeating Questions](/docs/branching-and-repeats/) · [Repeats](/docs/collections/) · [Outline / Import](/docs/import/)
@@ -178,9 +178,10 @@ Work is split into three tiers so value can be shipped incrementally. **Tier 1 i
 | Survey creation redirect | `checktick_app/surveys/views.py` (`survey_create`) | Create default group (Tier 1.1) |
 | Dashboard "Add or edit questions" cards | `checktick_app/surveys/templates/surveys/dashboard.html` | CTA label + destination (Tier 1.2) |
 | Groups page (orientation strip, empty state, list, "add group" form) | `checktick_app/surveys/templates/surveys/groups.html` | Reframe to "Sections", new empty state (Tier 1.3–1.5) |
-| Per-group question builder | `checktick_app/surveys/templates/surveys/group_builder.html` | Reframe; later becomes the main pane of the unified builder (Tier 2) |
-| Unused flat builder | ~~`checktick_app/surveys/templates/surveys/builder.html`~~ | **Removed** in Tier 1 commit 1 (was dead code — no route, no view, no test exercised it). Tier 2 starts fresh. |
-| Routes | `checktick_app/surveys/urls.py` | Wire the unified builder route (Tier 2) |
+| Per-group question builder | `checktick_app/surveys/templates/surveys/group_builder.html` | Reframed (Tier 1); question pane extracted into shared partial `builder_question_pane.html` (Tier 2.1). Still serves as a fallback route for deep links from the Groups page. |
+| Unused flat builder | ~~`checktick_app/surveys/templates/surveys/builder.html`~~ | **Removed** in Tier 1 commit 1 (was dead code — no route, no view, no test exercised it). |
+| Unified builder | `checktick_app/surveys/templates/surveys/survey_builder.html` (new), `partials/builder_question_pane.html`, `partials/builder_section_rail.html`, `partials/builder_section_swap.html` | **New** in Tier 2. Master-detail layout with responsive rail/dropdown, HTMX section switching, single-section rail hiding. |
+| Routes | `checktick_app/surveys/urls.py` | Added `survey_builder` route at `/<slug>/builder/` (Tier 2.1). Existing `group_builder` route preserved. |
 | Repeat creation | `checktick_app/surveys/views.py` (`survey_groups_repeat_create`), `groups.html` | Relocate/reframe into builder (Tier 3.1) |
 | Navbar "Question Bank" entry | `checktick_app/templates/base.html` (desktop + mobile menus) | Label already correct; no change required, but verify it stays "Question Bank" after the Section rename (Tier 1.3) |
 | Question Bank / template library page | `checktick_app/surveys/templates/surveys/published_templates_list.html`, `published_template_detail.html` | Align page `<h1>` to "Question Bank"; copy polish only (Tier 1.3). Route `published_templates_list` and URL `/surveys/templates/` unchanged |
@@ -283,12 +284,12 @@ Option 1 is recommended — publishing a single-section survey (e.g., a standalo
 
 ## Open questions
 
-1. **Left rail vs. inline dividers** for the multi-section builder. A left rail matches the master-detail pattern and scales to many sections; inline dividers are simpler and closer to the current per-group page. Which do we prefer, or do we ship dividers first and rail later? *(Tier 2 — not yet resolved)*
+1. ~~**Left rail vs. inline dividers**~~ **Resolved:** Left rail (desktop) + dropdown (mobile). Implemented in Tier 2. The rail scales to many sections; the dropdown is compact on mobile. Single-section surveys hide both.
 2. ~~**Default section name.**~~ **Resolved:** `Section 1` — ordinal, neutral, rarely seen because single-section surveys hide the section chrome.
-3. ~~**Should the dashboard "Add questions" CTA open the unified builder directly, or the current per-group builder**~~ **Resolved:** Points at the per-group builder for the default group in Tier 1; will migrate to the unified builder in Tier 2.
+3. ~~**Should the dashboard "Add questions" CTA open the unified builder directly, or the current per-group builder**~~ **Resolved:** Tier 1 pointed at the per-group builder; Tier 2 migrated the dashboard CTA to the unified builder (`survey_builder`).
 4. ~~**Participant single-section header suppression**~~ **Resolved:** Implemented in Tier 1 (commit 7). The `<fieldset>` structure is preserved for assistive tech; only the visible header is suppressed.
-5. **Do we keep the standalone Groups page at all** after Tier 2, or does it become a thin redirect to the unified builder? Keeping it preserves a place for bulk reorder + repeat management; folding it in reduces surface area. *(Tier 2 — not yet resolved)*
-6. **Publishing from a single-section survey.** When the section layer is hidden (Tier 2.2), should "Share as template" be a top-level builder action (recommended, so a standalone PHQ-9 can be published without adding a dummy second section), or only surface once a second section exists? *(Tier 2 — not yet resolved)*
+5. ~~**Do we keep the standalone Groups page at all**~~ **Resolved:** Keep it. The Groups page remains the home for bulk reorder, repeats, and publishing. The unified builder links to it for those operations.
+6. **Publishing from a single-section survey.** When the section layer is hidden (Tier 2.2), should "Share as template" be a top-level builder action (recommended, so a standalone PHQ-9 can be published without adding a dummy second section), or only surface once a second section exists? *(Tier 3 — not yet resolved)*
 7. ~~**Question Bank page title.**~~ **Resolved:** The library page `<h1>` already says "Question Bank" (aligned with navbar). Done in Tier 1.
 
 ---
