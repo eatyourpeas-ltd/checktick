@@ -1,10 +1,8 @@
-"""Tests for the Survey Builder Workflow redesign (Tier 1).
+"""Tests for the Survey Builder Workflow redesign.
 
-See docs/survey-builder-workflow-design.md and
-docs/survey-builder-workflow-implementation-plan.md.
-
-Tier 1.1 — Auto-create a default QuestionGroup on survey creation so the user
-can add their first question without naming a group.
+Covers the auto-created default section, the unified builder, the section
+rail, the Organise page, the Survey Map route, the first-run nudge, and
+the builder empty state.
 """
 
 from __future__ import annotations
@@ -2339,8 +2337,6 @@ def test_group_builder_route_still_works(auth_client, owner):
 
 # ---------------------------------------------------------------------------
 # Survey Map — standalone route for the branching visualiser
-# (deferred item: "Extract the Survey Map visualiser to its own route")
-# See docs/survey-builder-workflow-implementation-plan.md.
 # ---------------------------------------------------------------------------
 
 

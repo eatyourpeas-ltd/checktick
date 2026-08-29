@@ -8,7 +8,7 @@ priority: 5
 
 - **Status**: Proposed (not yet implemented)
 - **Date**: August 2026
-- **Origin**: Deferred from the Survey Builder Workflow redesign (originally Tier 3.2). See `docs/survey-builder-workflow-design.md` and `docs/survey-builder-workflow-implementation-plan.md`.
+- **Origin**: Deferred from the Survey Builder Workflow redesign (originally Tier 3.2). The workflow design and implementation-plan docs have been retired; their reference content is now captured in the canonical docs (`docs/surveys.md`, `docs/groups-view.md`, `docs/branching-technical.md`).
 - **Related**: [Branching Logic & Repeating Questions](/docs/branching-and-repeats/) · [Branching Logic - Technical Guide](/docs/branching-technical/) · [Sections](/docs/groups-view/)
 
 ---
@@ -127,11 +127,10 @@ This keeps the evaluation engine unchanged and avoids a new participant-facing c
 
 ## Future enhancement: group the question picker by section
 
-A smaller, presentation-only change (originally the literal Tier 3.2 item) is to render the existing flat question `<select>` as `<optgroup>` blocks grouped by section name, without adding a section target type. This is independent of the section-target feature and could be done first as a quick win. See the "Option A" discussion in the Survey Builder Workflow design doc.
+A smaller, presentation-only change (originally the literal Tier 3.2 item) is to render the existing flat question `<select>` as `<optgroup>` blocks grouped by section name, without adding a section target type. This is independent of the section-target feature and could be done first as a quick win.
 
 ## Related documentation
 
 - [Branching Logic & Repeating Questions](/docs/branching-and-repeats/) — user-facing branching guide
-- [Branching Logic - Technical Guide](/docs/branching-technical/) — evaluation engine, models, config build
+- [Branching Logic - Technical Guide](/docs/branching-technical/) — evaluation engine, models, config build, builder route security, future enhancements
 - [Sections](/docs/groups-view/) — the Organise page and Builder rail
-- `docs/survey-builder-workflow-design.md` — origin of this feature (Tier 3.2)
