@@ -25,6 +25,18 @@ It signposts common workflows and links to the full docs instead of duplicating 
 - If the Docker web container is not running, the script will start it automatically.
 - `s/test --no-a11y --host-fallback` runs via Poetry on the host, but **requires a local PostgreSQL instance on port 5432**. The Docker DB is not exposed to the host, so this will fail unless you have a separate local DB. The script will check and exit clearly if none is found.
 
+### 2a. Docker access for agents
+
+- The test suite, lint, and dev server all run inside the `web` Docker container (see `docker-compose.yml`). The sandboxed terminal cannot reach the Docker daemon or `docker compose`, so agents must run Docker-backed commands with `unsandboxed: true`.
+- The web container is the default execution environment. Prefix commands with `docker compose exec -T web` (use `-T` when not attached to a TTY). Example:
+  ```
+  docker compose exec -T web python -m pytest checktick_app/surveys/tests/test_groups_repeats.py -x -q
+  ```
+- If the container is not running, `s/test` will start it automatically; agents can also run `docker compose up -d` directly (requires `unsandboxed: true`).
+- The DB and Vault services (`db`, `vault`) must also be up for the web container to be healthy. `docker compose up -d` starts all of them.
+- `docker compose ps --services` confirms which services are running.
+- Avoid `--host-fallback` for agent work unless explicitly instructed — it requires a separate local PostgreSQL on port 5432 that is not normally available.
+
 ### 3. Lint before commit
 
 - Any feature or bug fix must be completed by running `s/lint` before committing.

@@ -272,7 +272,7 @@
 
 {# Template dropdown moved below with HR and label per UX #}
 
-<form id="survey-form" method="post" class="space-y-4 mt-6" aria-labelledby="survey-title" data-survey-form data-survey-slug="{{ survey.slug }}" data-branching-config="{{ branching_config }}">
+<form id="survey-form" method="post" class="space-y-4 mt-6" aria-labelledby="survey-title" data-survey-form data-survey-slug="{{ survey.slug }}" data-branching-config="{{ branching_config }}" data-repeat-config="{{ repeat_config_json }}" data-repeatable-questions="{{ repeatable_qids_json }}">
   {% csrf_token %}
 
   {% for q in questions %}
@@ -292,12 +292,23 @@
         {% endif %}
         <div class="card-body pt-0">
     {% endif %}
+    {# Open a repeat container for repeatable groups #}
+    {% if q.group_start %}{% with rc=repeat_config|get_item:q.group_id %}{% if rc %}
+      <div class="repeat-container mt-2" data-repeat-container data-repeat-group="{{ q.group_id }}" data-repeat-min="{{ rc.min }}" data-repeat-max="{{ rc.max|default:'' }}" data-repeat-name="{{ rc.name }}">
+        <div class="repeat-instance" data-repeat-instance data-repeat-index="0">
+          <div class="flex justify-end">
+            <button type="button" class="repeat-remove-btn btn btn-ghost btn-xs text-error" data-repeat-remove aria-label="{% trans 'Remove this entry' %}">
+              {% include "components/icons/trash.html" with classes="w-4 h-4" aria_hidden="true" %}
+              <span class="ml-1">{% trans "Remove" %}</span>
+            </button>
+          </div>
+    {% endif %}{% endwith %}{% endif %}
 
     {# Render question inside the group card - wrapped for branching #}
     <div class="mb-4" data-question-id="{{ q.id }}"{% if q.has_show_condition %} style="display: none;"{% endif %} role="group" aria-labelledby="q_label_{{ q.id }}">
       <h2 class="font-semibold inline-flex items-center gap-2" id="q_label_{{ q.id }}">
         {% include "components/icons/document.html" with classes="w-4 h-4 opacity-70" aria_hidden="true" %}
-        <span><span class="text-sm opacity-70 mr-2 select-none" aria-hidden="true">{{ q.idx }}.</span> {{ q.text }} {% if q.required %}<span class="text-error" aria-hidden="true">*</span><span class="sr-only">{% trans "(required)" %}</span>{% endif %}</span>
+        <span><span class="text-sm opacity-70 mr-2 select-none" aria-hidden="true">{{ q.idx }}.</span> {{ q.text }}{% if q.required %} <span class="text-error" aria-hidden="true">*</span><span class="sr-only">{% trans "(required)" %}</span>{% endif %}</span>
       </h2>
         {% if q.type == 'text' %}
           {% with q.options|options_meta as meta %}
@@ -542,6 +553,17 @@
     </div>
     {# Close the group card if this is the last question of the group #}
     {% if q.group_end %}
+      {# Close repeat container for repeatable groups and render the add button #}
+      {% with rc=repeat_config|get_item:q.group_id %}{% if rc %}
+        </div>{# /repeat-instance #}
+        <div class="mt-2">
+          <button type="button" class="repeat-add-btn btn btn-outline btn-sm btn-primary" data-repeat-add aria-label="{% trans 'Add another' %}">
+            {% include "components/icons/plus.html" with classes="w-4 h-4" aria_hidden="true" %}
+            <span class="ml-1">{% trans "Add another" %}</span>
+          </button>
+        </div>
+      </div>{# /repeat-container #}
+      {% endif %}{% endwith %}
       </div></fieldset>
     {% endif %}
   {% endfor %}
@@ -658,6 +680,8 @@
 <script src="{% static 'js/followup-fields.js' %}" nonce="{{ request.csp_nonce }}"></script>
 {# Load branching logic script #}
 <script src="{% static 'js/branching.js' %}" nonce="{{ request.csp_nonce }}"></script>
+{# Load repeating sections script #}
+<script src="{% static 'js/repeats.js' %}" nonce="{{ request.csp_nonce }}"></script>
 
 <script nonce="{{ request.csp_nonce }}">
   // Update displayed value for Likert scale range sliders
@@ -679,8 +703,52 @@
     {{ saved_answers|json_script:"saved-answers-data" }}
     // Restore saved answers
     const savedAnswers = JSON.parse(document.getElementById('saved-answers-data').textContent);
+    const repeatableSet = new Set(JSON.parse(form.dataset.repeatableQuestions || "[]"));
+
+    function fillInstanceInputs(questionId, value, nameSuffix) {
+      // nameSuffix is "" for instance 0, "__r{i}" for additional instances
+      const inputs = document.querySelectorAll(`[name="q_${questionId}${nameSuffix}"]`);
+      if (inputs.length === 0) return;
+      const firstInput = inputs[0];
+
+      if (firstInput.type === 'checkbox') {
+        // Multiple choice (multiple selections)
+        if (Array.isArray(value)) {
+          value.forEach(v => {
+            const checkbox = document.querySelector(`[name="q_${questionId}${nameSuffix}"][value="${v}"]`);
+            if (checkbox) checkbox.checked = true;
+          });
+        }
+      } else if (firstInput.type === 'radio') {
+        const radio = document.querySelector(`[name="q_${questionId}${nameSuffix}"][value="${value}"]`);
+        if (radio) radio.checked = true;
+      } else if (firstInput.tagName === 'SELECT') {
+        firstInput.value = value;
+      } else if (firstInput.type === 'range') {
+        firstInput.value = value;
+        const valueDisplay = document.getElementById('range_value_q_' + questionId + nameSuffix);
+        if (valueDisplay) valueDisplay.textContent = value;
+      } else {
+        firstInput.value = value;
+      }
+    }
+
     Object.entries(savedAnswers).forEach(([questionId, value]) => {
       if (!value) return; // Skip empty values
+
+      // Repeatable questions are stored as a list of per-instance values.
+      if (Array.isArray(value) && repeatableSet.has(questionId) && window.SurveyRepeats) {
+        const container = window.SurveyRepeats.findContainerForQuestion(questionId);
+        if (!container) return;
+        // First instance already exists (instance 0)
+        if (value.length > 0) fillInstanceInputs(questionId, value[0], "");
+        // Add further instances and fill them
+        for (let i = 1; i < value.length; i++) {
+          const clone = window.SurveyRepeats.addInstance(container);
+          if (clone) fillInstanceInputs(questionId, value[i], "__r" + i);
+        }
+        return;
+      }
 
       const inputs = document.querySelectorAll(`[name="q_${questionId}"]`);
       if (inputs.length === 0) return;

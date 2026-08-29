@@ -41,16 +41,42 @@
     function refresh() {
       // Enable create repeat only if at least one selected group is NOT already repeated
       var nonRepeatedSelected = getSelectedNonRepeatedGroups();
+      var isMulti = nonRepeatedSelected.length > 1;
       if (createBtn) {
         createBtn.disabled = nonRepeatedSelected.length === 0;
         // Update button title to explain why it might be disabled
         if (selected.size > 0 && nonRepeatedSelected.length === 0) {
           createBtn.title =
             "All selected groups are already in repeats. Use 'Remove from repeat' first.";
+        } else if (isMulti) {
+          createBtn.title =
+            "Repeat these sections together as a block";
         } else {
-          createBtn.title = "";
+          createBtn.title = "Repeat this section's questions";
+        }
+        // Toggle icon on the create button: multi-section (stacked layers)
+        // when >1 selected, single-section (return arrow) otherwise.
+        var iconSingle = createBtn.querySelector(".repeat-icon-single");
+        var iconMulti = createBtn.querySelector(".repeat-icon-multi");
+        if (iconSingle) iconSingle.classList.toggle("hidden", isMulti);
+        if (iconMulti) iconMulti.classList.toggle("hidden", !isMulti);
+        var label = $("#create-repeat-label");
+        if (label) {
+          label.textContent = isMulti
+            ? "Create multi-section repeat"
+            : "Create repeat from selection";
         }
       }
+
+      // Toggle the per-section selection icons the same way: when more than
+      // one section is selected, every selected row shows the multi-section
+      // icon; when only one is selected it shows the single-section icon.
+      $all(".sel-repeat-icon", root).forEach(function (span) {
+        var s = span.querySelector(".sel-repeat-icon-single");
+        var m = span.querySelector(".sel-repeat-icon-multi");
+        if (s) s.classList.toggle("hidden", isMulti);
+        if (m) m.classList.toggle("hidden", !isMulti);
+      });
 
       // Enable remove repeat button only if selected groups include repeated ones
       var repeatedSelected = getSelectedRepeatedGroups();

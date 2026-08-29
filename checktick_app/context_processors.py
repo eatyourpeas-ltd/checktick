@@ -383,6 +383,30 @@ def branding(request):
         "css_hash": css_hash or "dev",
     }
 
+    # In development (DEBUG), include a static-file mtime hash so browser
+    # cache-busters change when JS files are edited without a git commit.
+    if getattr(settings, "DEBUG", False):
+        try:
+            import hashlib
+
+            static_dir = Path(settings.STATICFILES_DIRS[0]) / "js"
+            mtimes = []
+            if static_dir.is_dir():
+                for f in static_dir.glob("*.js"):
+                    mtimes.append(str(f.stat().st_mtime))
+            if mtimes:
+                static_hash = hashlib.sha256(
+                    "|".join(sorted(mtimes)).encode()
+                ).hexdigest()[:7]
+                # Append to commit so it changes when files change.
+                build["commit"] = (
+                    (build["commit"] or "dev") + "-" + static_hash
+                    if build["commit"]
+                    else static_hash
+                )
+        except Exception:
+            pass
+
     return {
         "brand": brand,
         "can_manage_any_users": can_manage_any_users,

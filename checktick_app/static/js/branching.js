@@ -174,10 +174,10 @@
 
     // Apply visibility changes
     config.questions.forEach((questionId, idx) => {
-      const questionElement = form.querySelector(
+      const questionElements = form.querySelectorAll(
         `[data-question-id="${questionId}"]`
       );
-      if (!questionElement) return;
+      if (questionElements.length === 0) return;
 
       // Hide if survey ended and this is after the question that ended it
       const currentQuestionAnswer = answers[questionId];
@@ -188,6 +188,7 @@
           evaluateCondition(c, currentQuestionAnswer)
       );
 
+      let endedBefore = false;
       if (surveyEnded && !thisQuestionEnded) {
         // Find which question triggered the end
         for (let i = 0; i < idx; i++) {
@@ -198,36 +199,38 @@
             (c) => c.action === "end_survey" && evaluateCondition(c, prevAnswer)
           );
           if (prevEnded) {
-            questionElement.style.display = "none";
-            return;
-          }
-        }
-      }
-
-      // Hide if this question should be skipped
-      if (skipQuestions.has(questionId)) {
-        questionElement.style.display = "none";
-        return;
-      }
-
-      // Handle SHOW conditions
-      const showConditions = config.show_conditions[questionId] || [];
-      if (showConditions.length > 0) {
-        // This question has SHOW conditions - only show if one is met
-        let shouldShow = false;
-        for (const condition of showConditions) {
-          const sourceAnswer = answers[condition.source_question];
-          if (evaluateCondition(condition, sourceAnswer)) {
-            shouldShow = true;
+            endedBefore = true;
             break;
           }
         }
-        questionElement.style.display = shouldShow ? "" : "none";
-        return;
       }
 
-      // Default: show the question
-      questionElement.style.display = "";
+      let display = "";
+      if (endedBefore) {
+        display = "none";
+      } else if (skipQuestions.has(questionId)) {
+        // Hide if this question should be skipped
+        display = "none";
+      } else {
+        // Handle SHOW conditions
+        const showConditions = config.show_conditions[questionId] || [];
+        if (showConditions.length > 0) {
+          // This question has SHOW conditions - only show if one is met
+          let shouldShow = false;
+          for (const condition of showConditions) {
+            const sourceAnswer = answers[condition.source_question];
+            if (evaluateCondition(condition, sourceAnswer)) {
+              shouldShow = true;
+              break;
+            }
+          }
+          display = shouldShow ? "" : "none";
+        }
+      }
+
+      questionElements.forEach((el) => {
+        el.style.display = display;
+      });
     });
   }
 

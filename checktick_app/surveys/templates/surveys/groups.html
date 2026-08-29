@@ -35,11 +35,17 @@
     <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/dashboard/">{% trans 'Back to dashboard' %}</a>
   </div>
 
-  <p class="text-sm text-base-content/60 mb-4">
+  <p class="text-sm text-base-content/60 mb-2">
     {% trans 'Bulk reorder, repeats, branching, and publishing. For adding and editing questions, use the' %}
     <a href="/surveys/{{ survey.slug }}/builder/" class="link underline font-semibold">{% trans 'Builder' %}</a>.
     {% trans 'Visualise the flow on the' %}
     <a href="/surveys/{{ survey.slug }}/survey-map/" class="link underline font-semibold">{% trans 'Survey Map' %}</a>.
+  </p>
+  <p class="text-xs text-base-content/50 mb-4">
+    {% include 'components/icons/repeat.html' with classes='w-3 h-3 inline-block opacity-60' %}
+    {% trans 'Select one section to repeat its questions individually.' %}
+    {% include 'components/icons/repeat_multi.html' with classes='w-3 h-3 inline-block opacity-60' %}
+    {% trans 'Select multiple sections to repeat them together as a block.' %}
   </p>
 
   {# === Empty state: no groups yet (legacy surveys; new surveys get a default group automatically on creation via create_default_section) === #}
@@ -109,7 +115,10 @@
                       <div class="text-sm text-base-content/70 truncate hidden sm:block">{{ g.description }}</div>
                     {% endif %}
                   </div>
-                  <span class="sel-repeat-icon hidden tooltip" data-tip="{% trans 'Selected for repeat' %}">{% include 'components/icons/repeat.html' with classes='w-4 h-4 opacity-70' %}</span>
+                  <span class="sel-repeat-icon hidden tooltip" data-tip="{% trans 'Selected for repeat' %}">
+                    <span class="sel-repeat-icon-single">{% include 'components/icons/repeat.html' with classes='w-4 h-4 opacity-70' %}</span>
+                    <span class="sel-repeat-icon-multi hidden">{% include 'components/icons/repeat_multi.html' with classes='w-4 h-4 opacity-70' %}</span>
+                  </span>
 
                   <!-- Badges: always visible -->
                   {% if info.is_repeated %}
@@ -120,14 +129,22 @@
                                 data-collection-name="{{ info.collection_name }}"
                                 data-min-count="{{ info.min_count }}"
                                 data-max-count="{{ info.max_count|default:'' }}"
-                                title="{% trans 'Click to edit repeat settings' %}">
-                          {% include 'components/icons/repeat.html' with classes='w-4 h-4' %}
-                          <span class="hidden sm:inline">{% trans 'Repeats' %}</span>
+                                title="{% if info.is_multi_section %}{% trans 'Multi-section repeat — click to edit' %}{% else %}{% trans 'Click to edit repeat settings' %}{% endif %}">
+                          {% if info.is_multi_section %}
+                            {% include 'components/icons/repeat_multi.html' with classes='w-4 h-4' %}
+                          {% else %}
+                            {% include 'components/icons/repeat.html' with classes='w-4 h-4' %}
+                          {% endif %}
+                          <span class="hidden sm:inline">{% if info.is_multi_section %}{% trans 'Multi-section' %}{% else %}{% trans 'Repeats' %}{% endif %}</span>
                         </button>
                       {% else %}
                         <div class="badge badge-info shrink-0 self-center inline-flex items-center gap-1">
-                          {% include 'components/icons/repeat.html' with classes='w-4 h-4' %}
-                          <span class="hidden sm:inline">{% trans 'Repeats' %}</span>
+                          {% if info.is_multi_section %}
+                            {% include 'components/icons/repeat_multi.html' with classes='w-4 h-4' %}
+                          {% else %}
+                            {% include 'components/icons/repeat.html' with classes='w-4 h-4' %}
+                          {% endif %}
+                          <span class="hidden sm:inline">{% if info.is_multi_section %}{% trans 'Multi-section' %}{% else %}{% trans 'Repeats' %}{% endif %}</span>
                         </div>
                       {% endif %}
                     </div>
@@ -165,8 +182,9 @@
       <div class="flex flex-wrap gap-2 items-center sticky top-0 z-40 bg-base-200/95 backdrop-blur supports-[backdrop-filter]:bg-base-200/70 py-2">
         {% if can_edit %}
           <button id="create-repeat-btn" class="btn btn-secondary btn-sm inline-flex items-center gap-2" type="button" disabled>
-            {% include 'components/icons/repeat.html' with classes='w-4 h-4' %}
-            <span>{% trans 'Create repeat from selection' %}</span>
+            <span class="repeat-icon-single">{% include 'components/icons/repeat.html' with classes='w-4 h-4' %}</span>
+            <span class="repeat-icon-multi hidden">{% include 'components/icons/repeat_multi.html' with classes='w-4 h-4' %}</span>
+            <span id="create-repeat-label">{% trans 'Create repeat from selection' %}</span>
           </button>
           <form id="remove-repeat-form" method="post" action="/surveys/{{ survey.slug }}/groups/repeat/remove" class="inline" data-confirm-submit="{% trans 'Remove selected groups from their repeats?' %}">
             {% csrf_token %}
