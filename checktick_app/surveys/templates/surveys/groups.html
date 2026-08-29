@@ -191,7 +191,8 @@
             {% csrf_token %}
             <input type="hidden" name="group_ids" id="remove-repeat-group-ids" />
             <button id="remove-repeat-btn" class="btn btn-ghost btn-sm inline-flex items-center gap-2" type="submit" disabled>
-              {% include 'components/icons/repeat.html' with classes='w-4 h-4' %}
+              <span class="repeat-icon-single">{% include 'components/icons/repeat.html' with classes='w-4 h-4' %}</span>
+              <span class="repeat-icon-multi hidden">{% include 'components/icons/repeat_multi.html' with classes='w-4 h-4' %}</span>
               <span>{% trans 'Remove from repeat' %}</span>
             </button>
           </form>
