@@ -373,9 +373,9 @@
   <h3 class="text-sm font-semibold text-base-content/70 uppercase tracking-wide mb-3">{% trans "Add or edit questions" %}</h3>
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
 
-    {# Card 1: Add questions — points at the per-group builder for the default group so the user can add a question immediately. Falls back to the Groups page for legacy surveys with no groups (no 404). #}
+    {# Card 1: Add questions — points at the unified builder so the user can add a question immediately. Falls back to the Groups page for legacy surveys with no groups (no 404). #}
     {% if groups.first %}
-      <a href="{% url 'surveys:group_builder' slug=survey.slug gid=groups.first.id %}"
+      <a href="{% url 'surveys:survey_builder' slug=survey.slug %}"
          class="card bg-base-100 border border-base-300 hover:border-primary hover:shadow-md transition-all">
         <div class="card-body p-4 items-center text-center gap-2">
           {% include "components/icons/hammer_wrench.html" with classes="w-8 h-8 text-primary" %}

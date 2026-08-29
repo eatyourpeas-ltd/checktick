@@ -184,8 +184,8 @@ def test_default_group_is_renameable_and_deletable(owner):
 
 
 @pytest.mark.django_db
-def test_dashboard_cta_points_at_group_builder(auth_client, owner):
-    """The "Add questions" card links to group_builder for the default group."""
+def test_dashboard_cta_points_at_unified_builder(auth_client, owner):
+    """The "Add questions" card links to the unified builder (survey_builder)."""
     # Create a survey with the default group (as survey_create now does)
     survey = Survey.objects.create(
         owner=owner,
@@ -194,15 +194,13 @@ def test_dashboard_cta_points_at_group_builder(auth_client, owner):
         status=Survey.Status.DRAFT,
         visibility=Survey.Visibility.AUTHENTICATED,
     )
-    group = create_default_section(survey, owner)
+    create_default_section(survey, owner)
 
     resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
 
-    # The CTA should link to group_builder for the default group, not to /groups/
-    expected_url = reverse(
-        "surveys:group_builder", kwargs={"slug": survey.slug, "gid": group.id}
-    )
+    # The CTA should link to survey_builder (unified builder), not group_builder
+    expected_url = reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
     assert expected_url.encode() in resp.content, (
         f"Dashboard 'Add questions' CTA should point at {expected_url}, "
         f"but the URL was not found in the response."
