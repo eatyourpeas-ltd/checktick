@@ -442,7 +442,7 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 ## Deferred to a follow-up PR (post-Tier 3)
 
-- **Move "Create repeat" into the section's context menu in the builder** (originally Tier 3.1 in the old plan).
+- **Move "Create repeat" into the section's context menu in the builder** ✅ (originally Tier 3.1 in the old plan). Single-section repeat create/edit/remove is now available from the builder rail. Multi-section repeat (selecting several groups) remains on the Organise page.
 - **Frame branching "jump to…" targets as sections by friendly name** (originally Tier 3.2 in the old plan).
 - **First-run nudge** — open builder with "Add question" form focused (originally Tier 3.3 in the old plan).
 - **Move "Share as template" to per-section action** in the builder (originally Tier 3.4 in the old plan). Includes the single-section publishing case (OQ6).

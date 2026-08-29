@@ -1,10 +1,10 @@
-{% load i18n %}
+{% load i18n survey_extras %}
 {% comment %}
     Section rail — included by survey_builder.html (initial render) and by
    builder_section_swap.html (OOB swap when the user clicks a section). When
-   used as an OOB swap, pass rail_oob=1 so hx-swap-oob is emitted.
-   Context: survey, groups, active_group, can_edit, rail_oob (optional)
-   {% endcomment %}
+    used as an OOB swap, pass rail_oob=1 so hx-swap-oob is emitted.
+    Context: survey, groups, active_group, can_edit, repeat_info, rail_oob (optional)
+{% endcomment %}
 <div id="builder-rail" class="md:col-span-1" data-survey-slug="{{ survey.slug }}"{% if rail_oob %} hx-swap-oob="outerHTML"{% endif %}>
   <div class="hidden md:block">
     <div class="card bg-base-100 shadow-sm border-l-4 border-secondary">
@@ -12,6 +12,7 @@
       <h2 class="card-title text-sm font-semibold text-base-content/70 uppercase tracking-wide mb-2">{% trans "Sections" %}</h2>
       <ul id="builder-rail-list" class="space-y-1" data-reorder-url="/surveys/{{ survey.slug }}/groups/reorder" data-can-edit="{{ can_edit|yesno:'true,false' }}">
         {% for g in groups %}
+        {% with info=repeat_info|get_item:g.id %}
         <li class="group/rail-item" data-gid="{{ g.id }}">
           <div class="flex items-center gap-1 rounded-lg {% if g.id == active_group.id %}bg-primary/10{% endif %}">
             {% if can_edit %}
@@ -30,6 +31,27 @@
               <span class="text-xs opacity-60 ml-1">({{ g.q_count }})</span>
             </a>
             {% if can_edit %}
+            {# Repeat button — creates a repeat for this section, or edits an existing one. #}
+            {% if info.is_repeated %}
+            <button type="button" class="btn btn-xs btn-ghost px-1 edit-repeat-btn"
+                    data-collection-id="{{ info.collection_id }}"
+                    data-collection-name="{{ info.collection_name }}"
+                    data-min-count="{{ info.min_count }}"
+                    data-max-count="{{ info.max_count|default:'' }}"
+                    data-gid="{{ g.id }}"
+                    title="{% trans 'Edit repeat settings' %}"
+                    aria-label="{% trans 'Edit repeat settings' %} {{ g.name }}">
+              {% include 'components/icons/repeat.html' with classes='w-3.5 h-3.5 text-info' %}
+            </button>
+            {% else %}
+            <button type="button" class="btn btn-xs btn-ghost px-1 create-repeat-btn"
+                    data-gid="{{ g.id }}"
+                    data-gname="{{ g.name }}"
+                    title="{% trans 'Make this section repeatable' %}"
+                    aria-label="{% trans 'Make this section repeatable' %} {{ g.name }}">
+              {% include 'components/icons/repeat.html' with classes='w-3.5 h-3.5 text-base-content/40' %}
+            </button>
+            {% endif %}
             {# Rename button — always shown. Opens the rename modal. #}
             <button type="button" class="btn btn-xs btn-ghost px-1 rename-section-btn"
                     data-gid="{{ g.id }}"
@@ -57,6 +79,7 @@
             {% endif %}
           </div>
         </li>
+        {% endwith %}
         {% endfor %}
       </ul>
       {% if can_edit %}

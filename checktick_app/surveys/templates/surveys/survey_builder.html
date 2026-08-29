@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
-{% load i18n %}
+{% load i18n survey_extras %}
 {% block title %}{% trans "Builder" %} - {{ survey.name }}{% endblock %}
 {% block content %}
 <div class="flex flex-col gap-6">
@@ -113,6 +113,95 @@
       <div class="modal-action">
         <button class="btn" type="button" id="delete-section-cancel-btn">{% trans 'Cancel' %}</button>
         <button class="btn btn-error" type="submit">{% trans 'Delete' %}</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+{# Repeat create modal — opened from the rail's "Make repeatable" button. #}
+<dialog id="repeat-create-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">{% trans 'Make section repeatable' %}</h3>
+    <p class="text-sm text-base-content/70 py-2" id="repeat-create-section-name"></p>
+    <form method="post" id="repeat-create-form">
+      {% csrf_token %}
+      <input type="hidden" name="group_ids" id="repeat-create-gid" />
+      <input type="hidden" name="next" value="/surveys/{{ survey.slug }}/builder/" />
+      <div class="mt-2">
+        <label class="label">{% trans 'Repeat name' %}</label>
+        <input class="input input-bordered w-full" name="name" id="repeat-create-name" required />
+      </div>
+      <div class="mt-2 grid grid-cols-2 gap-3">
+        <div>
+          <label class="label">{% trans 'Minimum items' %}</label>
+          <input class="input input-bordered w-full" name="min_count" type="number" min="0" value="0" />
+        </div>
+        <div>
+          <label class="label">{% trans 'Maximum items' %}</label>
+          <select class="select select-bordered w-full" name="max_count">
+            <option value="">{% trans 'Unlimited' %}</option>
+            {% int_range 1 10 as nums %}
+            {% for n in nums %}
+            <option value="{{ n }}">{{ n }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-action">
+        <button class="btn" type="button" id="repeat-create-cancel-btn">{% trans 'Cancel' %}</button>
+        <button class="btn btn-primary" type="submit">{% trans 'Create' %}</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+{# Repeat edit modal — opened from the rail's repeat badge on a repeated section. #}
+<dialog id="repeat-edit-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">{% trans 'Edit repeat' %}</h3>
+    <form method="post" id="repeat-edit-form">
+      {% csrf_token %}
+      <input type="hidden" name="collection_id" id="repeat-edit-collection-id" />
+      <input type="hidden" name="next" value="/surveys/{{ survey.slug }}/builder/" />
+      <div class="mt-2">
+        <label class="label">{% trans 'Repeat name' %}</label>
+        <input class="input input-bordered w-full" name="name" id="repeat-edit-name" required />
+      </div>
+      <div class="mt-2 grid grid-cols-2 gap-3">
+        <div>
+          <label class="label">{% trans 'Minimum items' %}</label>
+          <input class="input input-bordered w-full" name="min_count" id="repeat-edit-min" type="number" min="0" value="0" />
+        </div>
+        <div>
+          <label class="label">{% trans 'Maximum items' %}</label>
+          <select class="select select-bordered w-full" name="max_count" id="repeat-edit-max">
+            <option value="">{% trans 'Unlimited' %}</option>
+            {% int_range 1 10 as nums %}
+            {% for n in nums %}
+            <option value="{{ n }}">{{ n }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-action">
+        <button class="btn" type="button" id="repeat-edit-cancel-btn">{% trans 'Cancel' %}</button>
+        <button class="btn btn-primary" type="submit">{% trans 'Save' %}</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+{# Remove from repeat — confirmation modal. #}
+<dialog id="repeat-remove-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">{% trans 'Remove from repeat' %}</h3>
+    <p class="py-4">{% trans 'This section will no longer repeat. The repeat itself is kept if other sections still use it.' %}</p>
+    <form method="post" id="repeat-remove-form">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="/surveys/{{ survey.slug }}/builder/" />
+      <div class="modal-action">
+        <button class="btn" type="button" id="repeat-remove-cancel-btn">{% trans 'Cancel' %}</button>
+        <button class="btn btn-warning" type="submit">{% trans 'Remove' %}</button>
       </div>
     </form>
   </div>

@@ -152,6 +152,106 @@
       });
     }
 
+    // --- Repeat create modal ---
+    var repeatCreateModal = $("#repeat-create-modal");
+    var repeatCreateForm = $("#repeat-create-form");
+    var repeatCreateGid = $("#repeat-create-gid");
+    var repeatCreateName = $("#repeat-create-name");
+    var repeatCreateSectionName = $("#repeat-create-section-name");
+    var repeatCreateCancelBtn = $("#repeat-create-cancel-btn");
+
+    document.addEventListener("click", function (e) {
+      var createBtn = e.target.closest(".create-repeat-btn");
+      if (!createBtn) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (repeatCreateGid) repeatCreateGid.value = createBtn.dataset.gid;
+      // Default the repeat name to the section name.
+      var gname = createBtn.dataset.gname || "";
+      if (repeatCreateName) repeatCreateName.value = gname;
+      if (repeatCreateSectionName)
+        repeatCreateSectionName.textContent = gname;
+      if (repeatCreateForm)
+        repeatCreateForm.action =
+          "/surveys/" + surveySlug + "/groups/repeat/create";
+
+      if (repeatCreateModal && repeatCreateModal.showModal)
+        repeatCreateModal.showModal();
+    });
+
+    if (repeatCreateCancelBtn && repeatCreateModal) {
+      repeatCreateCancelBtn.addEventListener("click", function () {
+        repeatCreateModal.close();
+      });
+    }
+
+    // --- Repeat edit modal ---
+    var repeatEditModal = $("#repeat-edit-modal");
+    var repeatEditForm = $("#repeat-edit-form");
+    var repeatEditCollectionId = $("#repeat-edit-collection-id");
+    var repeatEditName = $("#repeat-edit-name");
+    var repeatEditMin = $("#repeat-edit-min");
+    var repeatEditMax = $("#repeat-edit-max");
+    var repeatEditCancelBtn = $("#repeat-edit-cancel-btn");
+
+    document.addEventListener("click", function (e) {
+      var editBtn = e.target.closest(".edit-repeat-btn");
+      if (!editBtn) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (repeatEditCollectionId)
+        repeatEditCollectionId.value = editBtn.dataset.collectionId;
+      if (repeatEditName) repeatEditName.value = editBtn.dataset.collectionName || "";
+      if (repeatEditMin) repeatEditMin.value = editBtn.dataset.minCount || "0";
+      if (repeatEditMax) repeatEditMax.value = editBtn.dataset.maxCount || "";
+      if (repeatEditForm)
+        repeatEditForm.action =
+          "/surveys/" + surveySlug + "/groups/repeat/edit";
+
+      if (repeatEditModal && repeatEditModal.showModal)
+        repeatEditModal.showModal();
+    });
+
+    if (repeatEditCancelBtn && repeatEditModal) {
+      repeatEditCancelBtn.addEventListener("click", function () {
+        repeatEditModal.close();
+      });
+    }
+
+    // --- Repeat remove modal ---
+    var repeatRemoveModal = $("#repeat-remove-modal");
+    var repeatRemoveForm = $("#repeat-remove-form");
+    var repeatRemoveCancelBtn = $("#repeat-remove-cancel-btn");
+
+    // The edit-repeat-btn also has data-gid; we add a separate remove button
+    // inside the edit modal instead. For now, removing is done via the edit
+    // modal's "Remove" action — but to keep it simple, we expose a remove
+    // button on the edit modal.
+    // (The remove form action is set dynamically when the edit modal opens.)
+    if (repeatRemoveCancelBtn && repeatRemoveModal) {
+      repeatRemoveCancelBtn.addEventListener("click", function () {
+        repeatRemoveModal.close();
+      });
+    }
+
+    // Wire the edit-repeat-btn to also set the remove form action.
+    document.addEventListener("click", function (e) {
+      var editBtn = e.target.closest(".edit-repeat-btn");
+      if (!editBtn) return;
+      if (repeatRemoveForm) {
+        repeatRemoveForm.action =
+          "/surveys/" +
+          surveySlug +
+          "/groups/" +
+          editBtn.dataset.gid +
+          "/repeat/remove";
+      }
+    });
+
     // Re-init after HTMX swaps. The rail is OOB-swapped when the user clicks
     // a section (the primary swap target is #builder-main, not #builder-rail),
     // so we can't rely on target matching. Instead, after any HTMX settle, if
@@ -170,6 +270,22 @@
         deleteForm = $("#delete-section-form");
         deleteNameDisplay = $("#delete-section-name-display");
         deleteCancelBtn = $("#delete-section-cancel-btn");
+        repeatCreateModal = $("#repeat-create-modal");
+        repeatCreateForm = $("#repeat-create-form");
+        repeatCreateGid = $("#repeat-create-gid");
+        repeatCreateName = $("#repeat-create-name");
+        repeatCreateSectionName = $("#repeat-create-section-name");
+        repeatCreateCancelBtn = $("#repeat-create-cancel-btn");
+        repeatEditModal = $("#repeat-edit-modal");
+        repeatEditForm = $("#repeat-edit-form");
+        repeatEditCollectionId = $("#repeat-edit-collection-id");
+        repeatEditName = $("#repeat-edit-name");
+        repeatEditMin = $("#repeat-edit-min");
+        repeatEditMax = $("#repeat-edit-max");
+        repeatEditCancelBtn = $("#repeat-edit-cancel-btn");
+        repeatRemoveModal = $("#repeat-remove-modal");
+        repeatRemoveForm = $("#repeat-remove-form");
+        repeatRemoveCancelBtn = $("#repeat-remove-cancel-btn");
         initRailSortable();
       }
     });

@@ -969,6 +969,180 @@ def test_builder_rail_oob_swap_preserves_drag_handles(auth_client, owner):
 
 
 # ---------------------------------------------------------------------------
+# Repeat controls in the builder rail
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_builder_rail_has_create_repeat_button(auth_client, owner):
+    """Non-repeated sections show a 'Make repeatable' button in the rail."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Repeat Create Survey",
+        slug="rail-repeat-create-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="History", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"create-repeat-btn" in resp.content
+    ), "Rail should have a create-repeat button."
+    assert b"Make this section repeatable" in resp.content
+    # The repeat create modal should be present.
+    assert b"repeat-create-modal" in resp.content
+    assert b"repeat-create-form" in resp.content
+
+
+@pytest.mark.django_db
+def test_builder_rail_has_edit_repeat_button_when_repeated(auth_client, owner):
+    """Repeated sections show an edit-repeat button instead of create-repeat."""
+    from checktick_app.surveys.models import CollectionDefinition, CollectionItem
+
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Repeat Edit Survey",
+        slug="rail-repeat-edit-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Visits", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Other", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    # Make group1 a repeat.
+    cd = CollectionDefinition.objects.create(
+        survey=survey, key="visits", name="Visits", max_count=5
+    )
+    CollectionItem.objects.create(
+        collection=cd, item_type=CollectionItem.ItemType.GROUP, group=group1, order=0
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    # group1 should have an edit-repeat button, not a create-repeat button.
+    assert (
+        b"edit-repeat-btn" in resp.content
+    ), "Repeated section should have edit-repeat button."
+    # group2 (non-repeated) should still have create-repeat.
+    assert b"create-repeat-btn" in resp.content
+    # The repeat edit modal should be present.
+    assert b"repeat-edit-modal" in resp.content
+
+
+@pytest.mark.django_db
+def test_create_repeat_from_builder_redirects_to_builder(auth_client, owner):
+    """POSTing to survey_groups_repeat_create with next=/builder/ redirects back to the builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Repeat From Builder Survey",
+        slug="repeat-from-builder-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Visits", owner=owner)
+    survey.question_groups.add(group1)
+
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    resp = auth_client.post(
+        reverse("surveys:survey_groups_repeat_create", kwargs={"slug": survey.slug}),
+        data={
+            "name": "Visits",
+            "min_count": "0",
+            "max_count": "5",
+            "group_ids": str(group1.id),
+            "next": builder_url,
+        },
+    )
+    assert resp.status_code == 302
+    assert resp.url == builder_url, "Should redirect back to the builder."
+
+
+@pytest.mark.django_db
+def test_remove_repeat_from_builder_redirects_to_builder(auth_client, owner):
+    """POSTing to survey_group_repeat_remove with next=/builder/ redirects back to the builder."""
+    from checktick_app.surveys.models import CollectionDefinition, CollectionItem
+
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Remove Repeat Builder Survey",
+        slug="remove-repeat-builder-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Visits", owner=owner)
+    survey.question_groups.add(group1)
+    cd = CollectionDefinition.objects.create(
+        survey=survey, key="visits", name="Visits", max_count=5
+    )
+    CollectionItem.objects.create(
+        collection=cd, item_type=CollectionItem.ItemType.GROUP, group=group1, order=0
+    )
+
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    resp = auth_client.post(
+        reverse(
+            "surveys:survey_group_repeat_remove",
+            kwargs={"slug": survey.slug, "gid": group1.id},
+        ),
+        data={"next": builder_url},
+    )
+    assert resp.status_code == 302
+    assert resp.url == builder_url, "Should redirect back to the builder."
+    # The group should no longer be in a repeat.
+    assert not CollectionItem.objects.filter(
+        collection__survey=survey, group=group1
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_edit_repeat_from_builder_redirects_to_builder(auth_client, owner):
+    """POSTing to survey_groups_repeat_edit with next=/builder/ redirects back to the builder."""
+    from checktick_app.surveys.models import CollectionDefinition, CollectionItem
+
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Edit Repeat Builder Survey",
+        slug="edit-repeat-builder-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Visits", owner=owner)
+    survey.question_groups.add(group1)
+    cd = CollectionDefinition.objects.create(
+        survey=survey, key="visits", name="Visits", max_count=5
+    )
+    CollectionItem.objects.create(
+        collection=cd, item_type=CollectionItem.ItemType.GROUP, group=group1, order=0
+    )
+
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    resp = auth_client.post(
+        reverse("surveys:survey_groups_repeat_edit", kwargs={"slug": survey.slug}),
+        data={
+            "collection_id": str(cd.id),
+            "name": "Updated Visits",
+            "min_count": "1",
+            "max_count": "3",
+            "next": builder_url,
+        },
+    )
+    assert resp.status_code == 302
+    assert resp.url == builder_url, "Should redirect back to the builder."
+    cd.refresh_from_db()
+    assert cd.name == "Updated Visits"
+    assert cd.max_count == 3
+
+
+# ---------------------------------------------------------------------------
 # Commit 2.2 — Hide section rail for single-section surveys
 # ---------------------------------------------------------------------------
 
