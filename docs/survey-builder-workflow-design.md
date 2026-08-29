@@ -6,7 +6,7 @@ priority: 5
 
 # Survey Builder Workflow Design
 
-- **Status**: Tier 1 & 2 implemented; Tier 3 in progress; Tier 4 (Survey Map route) implemented — see [Implementation Plan](/docs/survey-builder-workflow-implementation-plan/)
+- **Status**: Tier 1 & 2 implemented; Tier 3 implemented; Tier 4 (Survey Map route, builder rail reorder/repeat, Organise tidy) implemented — see [Implementation Plan](/docs/survey-builder-workflow-implementation-plan/)
 - **Date**: August 2026
 - **Scope**: The survey creation → building workflow, and how question groups (referred to as **sections** in the UI) are introduced to users
 - **Related**: [Surveys](/docs/surveys/) · [Sections](/docs/groups-view/) · [Branching Logic & Repeating Questions](/docs/branching-and-repeats/) · [Repeats](/docs/collections/) · [Outline / Import](/docs/import/)
@@ -173,10 +173,23 @@ Work is split into three tiers so value can be shipped incrementally. **Tier 1 i
 | 3.5 | **Docs update for Tier 3** | Multiple docs files | Reflect Organise rename, group_builder deprecation, builder styling |
 
 **Deferred to a follow-up PR:**
-- Move "Create repeat" into the builder (originally 3.1 in old plan)
-- Frame branching targets as sections by friendly name (originally 3.2)
-- First-run nudge (originally 3.3)
-- Move "Share as template" to per-section action (originally 3.4)
+
+*Completed in the visualise branch:*
+- ✅ Extract the Survey Map visualiser to its own route (`/<slug>/survey-map/`)
+- ✅ Drag-reorder sections in the builder rail
+- ✅ Remove rename/delete from the Organise page (now builder-only)
+- ✅ Move single-section "Create repeat" into the builder rail (originally 3.1 in old plan)
+- ✅ Reframe Organise as a small advanced page (removed explainer card and info alerts)
+
+*TODO — future PR:*
+- [ ] Frame branching targets as sections by friendly name (originally 3.2)
+- [ ] First-run nudge (originally 3.3)
+- [ ] Move "Share as template" to per-section action (originally 3.4)
+
+*Stays in Organise by design:*
+- Publish as template (can apply to multiple sections)
+- Branching (between sections, not within them)
+- Multi-section repeat (bulk select)
 
 ---
 

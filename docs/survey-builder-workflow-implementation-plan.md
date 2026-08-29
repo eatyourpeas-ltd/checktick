@@ -442,16 +442,12 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 ## Deferred to a follow-up PR (post-Tier 3)
 
-- **Move "Create repeat" into the section's context menu in the builder** ✅ (originally Tier 3.1 in the old plan). Single-section repeat create/edit/remove is now available from the builder rail. Multi-section repeat (selecting several groups) remains on the Organise page.
-- **Frame branching "jump to…" targets as sections by friendly name** (originally Tier 3.2 in the old plan).
-- **First-run nudge** — open builder with "Add question" form focused (originally Tier 3.3 in the old plan).
-- **Move "Share as template" to per-section action** in the builder (originally Tier 3.4 in the old plan). Includes the single-section publishing case (OQ6).
+### Completed in this PR (visualise branch)
 
-### Completed follow-up items
-
+- **Extract the Survey Map visualiser to its own route** ✅ — `/<slug>/survey-map/` with its own view, template, and tests. Linked from the builder toolbar, dashboard (editors only), and Organise page. The embedded visualiser was removed from the Organise page.
 - **Drag-reorder sections in the builder rail** ✅ — reuses the Organise page's SortableJS + `survey_groups_reorder` endpoint. The OOB swap uses the shared rail partial; the Sortable instance is destroyed/re-created on each HTMX settle.
 - **Remove rename/delete from the Organise page** ✅ — rename and delete are now builder-only (the rail has both). The Organise page keeps Publish, bulk reorder, and repeat management. A signpost links to the Builder for rename/delete.
-- **Move single-section "Create repeat" into the builder rail** ✅ — single-section repeat create/edit/remove is now available from the builder rail. Multi-section repeat (selecting several groups) remains on the Organise page.
+- **Move single-section "Create repeat" into the builder rail** ✅ (originally Tier 3.1 in the old plan). Single-section repeat create/edit/remove is now available from the builder rail. Multi-section repeat (selecting several groups) remains on the Organise page.
 - **Reframe Organise as a small advanced page** ✅ — removed the explainer card, three info alerts, and the orientation paragraph. Replaced with a one-line subtitle under the h1. The page is now self-evident: toolbar + subtitle + section list + repeat/publish controls.
 
 ### Remaining in Organise (by design)
@@ -459,6 +455,12 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 - **Publish as template** — can apply to multiple sections, so it belongs here.
 - **Branching** — branching is between sections, so it belongs here.
 - **Multi-section repeat** — selecting several groups to repeat together is a bulk operation.
+
+### TODO — future PR
+
+- [ ] **Frame branching "jump to…" targets as sections by friendly name** (originally Tier 3.2 in the old plan). The branching condition picker currently shows group IDs; it should show friendly section names instead.
+- [ ] **First-run nudge** — open builder with "Add question" form focused (originally Tier 3.3 in the old plan). Helps new users get started without reading instructions.
+- [ ] **Move "Share as template" to per-section action** in the builder (originally Tier 3.4 in the old plan). Includes the single-section publishing case (OQ6). Currently Publish stays on the Organise page because it can apply to multiple sections; a per-section publish button in the builder rail would complement (not replace) the Organise page's bulk publish.
 
 ---
 
