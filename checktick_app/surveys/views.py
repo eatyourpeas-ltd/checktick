@@ -6967,6 +6967,33 @@ def survey_builder(request: HttpRequest, slug: str) -> HttpResponse:
     return render(request, "surveys/survey_builder.html", ctx)
 
 
+@login_required
+@require_http_methods(["GET"])
+def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
+    """Survey Map — a standalone route for the branching visualiser.
+
+    The visualiser was previously embedded at the bottom of the Organise page.
+    Extracting it to its own route (``/<slug>/survey-map/``) gives it dedicated
+    space and lets the Organise page focus on bulk reorder, repeats, and
+    publishing. The visualiser itself is unchanged: it reuses the
+    ``branching_visualizer.html`` partial and fetches its data from the existing
+    read-only ``branching_data_api``.
+
+    Security: ``@login_required`` + ``require_can_edit`` (the Survey Map is a
+    builder tool; viewers don't need it) + GET-only (no write path here — the
+    data API is read-only and the visualiser posts nothing). See the deferred
+    item in ``docs/survey-builder-workflow-implementation-plan.md``.
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+
+    ctx = {
+        "survey": survey,
+        "has_questions": survey.questions.exists(),
+    }
+    return render(request, "surveys/survey_map.html", ctx)
+
+
 def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
     """Deprecated: use `survey_builder` instead.
 

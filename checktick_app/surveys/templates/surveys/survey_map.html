@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% block title %}{% trans "Survey Map" %} - {{ survey.name }}{% endblock %}
+{% block content %}
+<div class="flex flex-col gap-6">
+  <div class="prose">
+  {% trans "Surveys" as crumb1_text %}
+  {% trans "Survey Dashboard" as crumb2_text %}
+  {% trans "Survey Map" as crumb3_text %}
+  {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href="/surveys/" crumb2_label=crumb2_text crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" crumb3_label=crumb3_text %}
+    <h1 class="inline-flex items-center gap-2 text-base-content">
+      {% include "components/icons/survey-map.html" with classes="w-6 h-6 text-base-content" %}
+      <span>{% trans "Survey Map" %}</span>
+    </h1>
+    <h2 class="mt-0 text-base-content/80">{{ survey.name }}</h2>
+  </div>
+
+  {# === Survey Map toolbar — links back to the building surfaces === #}
+  <div class="flex flex-wrap gap-2 items-center">
+    <a class="btn btn-sm btn-outline" href="/surveys/{{ survey.slug }}/builder/">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+      </svg>
+      {% trans "Back to builder" %}
+    </a>
+    <a class="btn btn-sm btn-ghost" href="/surveys/{{ survey.slug }}/groups/">{% trans "Organise" %}</a>
+    <a class="btn btn-sm btn-ghost" href="/surveys/{{ survey.slug }}/dashboard/">{% trans "Back to dashboard" %}</a>
+  </div>
+
+  {# === What the Survey Map shows === #}
+  <div class="not-prose max-w-2xl">
+    <div class="card bg-base-100 shadow-sm border-l-4 border-secondary">
+      <div class="card-body p-4">
+        <p class="text-sm text-base-content/80">
+          {% blocktrans %}The Survey Map is a read-only diagram of your survey's sections, questions, and branching logic — jumps, skips, and end-survey rules. Use it to sanity-check the flow before publishing.{% endblocktrans %}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  {# === Visualiser (reused from the Organise page; now in its own space) === #}
+  {% if has_questions %}
+  <div>
+    {% include 'surveys/partials/branching_visualizer.html' with survey=survey %}
+  </div>
+  {% else %}
+  <div class="not-prose max-w-2xl">
+    <div class="alert shadow-sm bg-base-100 border-l-4 border-primary">
+      <div>
+        {% include 'components/icons/survey-map.html' with classes='w-5 h-5 text-primary' %}
+      </div>
+      <div class="text-sm text-base-content">
+        {% blocktrans %}This survey has no questions yet. Add some in the {% endblocktrans %}<a href="/surveys/{{ survey.slug }}/builder/" class="link underline font-semibold">{% trans "Builder" %}</a>{% blocktrans %} to see the flow diagram here.{% endblocktrans %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1796,3 +1796,160 @@ def test_group_builder_route_still_works(auth_client, owner):
         )
     )
     assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Survey Map — standalone route for the branching visualiser
+# (deferred item: "Extract the Survey Map visualiser to its own route")
+# See docs/survey-builder-workflow-implementation-plan.md.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_survey_map_view_renders(auth_client, owner):
+    """The /<slug>/survey-map/ route renders the standalone visualiser page."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Renders Survey",
+        slug="survey-map-renders-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="First question?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert b"Survey Map" in resp.content, "The page should be titled 'Survey Map'."
+    # The visualiser partial is included when there are questions.
+    assert (
+        b"branching-visualizer" in resp.content
+    ), "The branching visualiser partial should be rendered."
+    assert b"flow-canvas" in resp.content, "The visualiser canvas should be present."
+
+
+@pytest.mark.django_db
+def test_survey_map_empty_state_without_questions(auth_client, owner):
+    """A survey with no questions shows the empty-state signpost, not the canvas."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Empty Survey",
+        slug="survey-map-empty-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert (
+        b"flow-canvas" not in resp.content
+    ), "An empty survey should not render the visualiser canvas."
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    assert (
+        builder_url.encode() in resp.content
+    ), "The empty state should signpost the Builder."
+
+
+@pytest.mark.django_db
+def test_survey_map_links_back_to_builder_and_organise(auth_client, owner):
+    """The Survey Map toolbar links back to the Builder, Organise, and dashboard."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Links Survey",
+        slug="survey-map-links-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Link question?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert f"/surveys/{survey.slug}/builder/".encode() in resp.content
+    assert f"/surveys/{survey.slug}/groups/".encode() in resp.content
+    assert f"/surveys/{survey.slug}/dashboard/".encode() in resp.content
+
+
+@pytest.mark.django_db
+def test_survey_map_requires_edit_permission(auth_client, owner, django_user_model):
+    """A viewer (not an editor) gets 403 on the Survey Map — it is a builder tool."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Permission Survey",
+        slug="survey-map-permission-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    viewer = django_user_model.objects.create_user(
+        username="survey-map-viewer@example.com",
+        email="survey-map-viewer@example.com",
+        password=PASSWORD,
+    )
+    from checktick_app.core.models import UserProfile
+
+    UserProfile.objects.filter(user=viewer).update(
+        account_tier=UserProfile.AccountTier.PRO,
+        email_confirmed=True,
+    )
+
+    client = type(auth_client)()
+    client.force_login(viewer)
+
+    resp = client.get(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    assert (
+        resp.status_code == 403
+    ), "A viewer without edit access should get 403 on the Survey Map."
+
+
+@pytest.mark.django_db
+def test_survey_map_get_only(auth_client, owner):
+    """POST to the Survey Map returns 405 — the route is GET-only."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Method Survey",
+        slug="survey-map-method-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.post(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 405, "The Survey Map route should be GET-only."
+
+
+@pytest.mark.django_db
+def test_survey_map_requires_login(client, django_user_model):
+    """An anonymous request to the Survey Map redirects to login (not 200)."""
+    owner = django_user_model.objects.create_user(
+        username="survey-map-anon-owner@example.com",
+        email="survey-map-anon-owner@example.com",
+        password=PASSWORD,
+    )
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Anon Survey",
+        slug="survey-map-anon-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = client.get(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    # @login_required redirects anonymous users to the login page (302).
+    assert resp.status_code in (
+        302,
+        403,
+    ), "Anonymous access to the Survey Map should redirect to login or deny."
