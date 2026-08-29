@@ -449,6 +449,7 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 - **Remove rename/delete from the Organise page** ✅ — rename and delete are now builder-only (the rail has both). The Organise page keeps Publish, bulk reorder, and repeat management. A signpost links to the Builder for rename/delete.
 - **Move single-section "Create repeat" into the builder rail** ✅ (originally Tier 3.1 in the old plan). Single-section repeat create/edit/remove is now available from the builder rail. Multi-section repeat (selecting several groups) remains on the Organise page.
 - **Reframe Organise as a small advanced page** ✅ — removed the explainer card, three info alerts, and the orientation paragraph. Replaced with a one-line subtitle under the h1. The page is now self-evident: toolbar + subtitle + section list + repeat/publish controls.
+- **First-run nudge card reappears after delete** ✅ — the builder empty-state nudge card (`builder_empty_state.html`) was only rendered on the initial page load via `builder_question_pane.html`. After any HTMX swap that emptied the list (create/delete/copy via `questions_list.html` / `questions_list_group.html`), the `{% empty %}` block rendered a bare "No questions yet." string and the nudge card vanished. The empty-state `<li>` is now extracted into a shared `builder_questions_empty.html` partial included by all three list templates, so the nudge card reappears consistently whenever a section has no questions — including after the user deletes the last one. Regression test: `test_builder_empty_state_reappears_after_last_question_deleted`.
 
 ### Remaining in Organise (by design)
 
@@ -459,7 +460,7 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 ### TODO — future PR
 
 - [ ] **Frame branching "jump to…" targets as sections by friendly name** (originally Tier 3.2 in the old plan). The branching condition picker currently shows group IDs; it should show friendly section names instead.
-- [ ] **First-run nudge** — open builder with "Add question" form focused (originally Tier 3.3 in the old plan). Helps new users get started without reading instructions.
+- [ ] **First-run nudge — focus the Add Question form** (originally Tier 3.3 in the old plan). When the builder loads and the survey has no questions, the "Add Question" form should be expanded and keyboard-focus placed on the first input, so new users can start typing immediately without reading instructions. (The empty-state *nudge card* itself is now consistent across all swap paths — see the completed item above; this TODO is the additional auto-focus enhancement.)
 - [ ] **Move "Share as template" to per-section action** in the builder (originally Tier 3.4 in the old plan). Includes the single-section publishing case (OQ6). Currently Publish stays on the Organise page because it can apply to multiple sections; a per-section publish button in the builder rail would complement (not replace) the Organise page's bulk publish.
 
 ---
@@ -521,10 +522,11 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 | # | Commit | Tests | Docs |
 |---|---|---|---|
-| — | Move "Create repeat" to builder context menu | TBD | TBD |
 | — | Branching targets as sections by friendly name | TBD | TBD |
 | — | First-run nudge (focus Add Question form) | TBD | TBD |
 | — | "Share as template" per-section in builder | TBD | TBD |
+
+> **Completed:** "Move 'Create repeat' to builder context menu" was delivered in the visualise branch (single-section repeat create/edit/remove from the builder rail; multi-section repeat remains on Organise). See "Completed in this PR (visualise branch)" above.
 
 ---
 

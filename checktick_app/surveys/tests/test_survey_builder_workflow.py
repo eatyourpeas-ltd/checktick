@@ -1520,6 +1520,62 @@ def test_builder_empty_state_signposts_sections(auth_client, owner):
     ), "The empty state should mention the Sections guide by name."
 
 
+@pytest.mark.django_db
+def test_builder_empty_state_reappears_after_last_question_deleted(auth_client, owner):
+    """The first-run nudge card reappears when the last question is deleted.
+
+    Regression: the HTMX swap partials (`questions_list.html` /
+    `questions_list_group.html`) used to render a bare "No questions yet."
+    message in their `{% empty %}` block, so deleting the last question in a
+    section swapped out the rich nudge card that the initial page render had
+    shown. All three list templates now share `builder_questions_empty.html`,
+    so the nudge card (intro line + `builder_empty_state.html` signposting)
+    must reappear after the delete swap empties the list.
+    """
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Delete Last Question Survey",
+        slug="delete-last-question-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    # Create one question in the group via the builder endpoint.
+    create_url = reverse(
+        "surveys:builder_group_question_create",
+        kwargs={"slug": survey.slug, "gid": group.id},
+    )
+    resp = auth_client.post(
+        create_url,
+        {"text": "Temporary question", "type": "text", "text_format": "free"},
+        HTTP_HX_REQUEST="true",
+    )
+    assert resp.status_code == 200
+    question = SurveyQuestion.objects.get(survey=survey, group=group)
+
+    # Delete it via the builder endpoint (the HTMX path the Delete button uses).
+    delete_url = reverse(
+        "surveys:builder_group_question_delete",
+        kwargs={"slug": survey.slug, "gid": group.id, "qid": question.id},
+    )
+    resp = auth_client.post(delete_url, HTTP_HX_REQUEST="true")
+    assert resp.status_code == 200
+    assert SurveyQuestion.objects.filter(survey=survey, group=group).count() == 0
+
+    # The swapped-in empty state must contain the nudge card, not just a bare
+    # "No questions" string. Assert the same signposting the initial render shows.
+    assert (
+        b"Add your first question using the form." in resp.content
+    ), "The nudge card intro line should reappear after the last question is deleted."
+    assert (
+        b"Browse the Question Bank" in resp.content
+    ), "The Question Bank signpost should reappear after the last question is deleted."
+    assert (
+        b"Likert scale" in resp.content
+    ), "The question-type signposting should reappear after the last question is deleted."
+
+
 # ---------------------------------------------------------------------------
 # Commit 2.7 — De-emphasise building cards when survey has questions
 # ---------------------------------------------------------------------------

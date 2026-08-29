@@ -6,7 +6,7 @@
     {% for q in questions %}
       {% include 'surveys/partials/question_row.html' %}
     {% empty %}
-      <li class="p-4 opacity-70">No questions yet.</li>
+      {% include 'surveys/partials/builder_questions_empty.html' %}
     {% endfor %}
   </ul>
 </div>

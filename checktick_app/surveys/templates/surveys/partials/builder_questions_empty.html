@@ -1,0 +1,30 @@
+{% load i18n %}
+{% comment %}
+    Shared empty-state row for the builder questions list.
+
+    Rendered inside `<ul id="questions-draggable">` whenever a group/section
+    has no questions — both on the initial page render (via
+    `builder_question_pane.html`) and after any HTMX swap that empties the
+    list (create/delete/copy via `questions_list.html` /
+    `questions_list_group.html`).
+
+    Keeping this in one place ensures the first-run nudge card reappears
+    consistently after a user deletes the last question in a section, not
+    just on the first page load.
+
+    Uses `<div>`-based content (not `<ul>/<li>`) for the inner signposting
+    because this row renders inside `<ul id="questions-draggable">`, which
+    SortableJS manages — nested `<li>` elements would be picked up as
+    draggable items and break the drag handler. The outer `<li>` here is
+    intentional and carries `data-drag-ignore` semantics via the Sortable
+    `filter` on `[data-drag-ignore]` (it has no draggable handle so it is
+    not movable).
+
+    Context: none required.
+{% endcomment %}
+<li class="p-4">
+  <p class="opacity-70 mb-4">{% trans "No questions yet. Add your first question using the form, or browse the" %} <a href="{% url 'surveys:published_templates_list' %}" class="link underline font-semibold">{% trans "Question Bank" %}</a> {% trans "for ready-made sections." %}</p>
+  <div class="mt-2">
+    {% include 'surveys/partials/builder_empty_state.html' %}
+  </div>
+</li>

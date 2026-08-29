@@ -183,7 +183,7 @@ Work is split into three tiers so value can be shipped incrementally. **Tier 1 i
 
 *TODO — future PR:*
 - [ ] Frame branching targets as sections by friendly name (originally 3.2)
-- [ ] First-run nudge (originally 3.3)
+- [ ] First-run nudge — focus the Add Question form on first load (originally 3.3). The empty-state *nudge card* is now consistent across all swap paths (shared `builder_questions_empty.html` partial); this remaining item is the auto-focus enhancement.
 - [ ] Move "Share as template" to per-section action (originally 3.4)
 
 *Stays in Organise by design:*

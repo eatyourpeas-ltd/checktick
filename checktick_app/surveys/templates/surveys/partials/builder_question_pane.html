@@ -24,12 +24,7 @@
                 {% for q in questions %}
                   {% include 'surveys/partials/question_row.html' %}
                 {% empty %}
-                  <li class="p-4">
-                    <p class="opacity-70 mb-4">{% trans "No questions yet. Add your first question using the form, or browse the" %} <a href="{% url 'surveys:published_templates_list' %}" class="link underline font-semibold">{% trans "Question Bank" %}</a> {% trans "for ready-made sections." %}</p>
-                    <div class="mt-2">
-                      {% include 'surveys/partials/builder_empty_state.html' %}
-                    </div>
-                  </li>
+                  {% include 'surveys/partials/builder_questions_empty.html' %}
                 {% endfor %}
               </ul>
             </div>
