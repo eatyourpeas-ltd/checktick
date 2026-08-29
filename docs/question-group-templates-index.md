@@ -1,9 +1,9 @@
 ---
-title: Global Question Group Templates
+title: Global Question Bank Templates
 category: None
 ---
 
-# Global Question Group Templates
+# Global Question Bank Templates
 
 This appendix lists validated questionnaires and instruments available as global templates in CheckTick.
 
@@ -65,7 +65,7 @@ This command:
 
 ### Contributing Templates
 
-See [Publishing Question Groups](/docs/publish-question-groups/#contributing-global-templates) for contribution guidelines.
+See [Publishing Sections as Templates](/docs/publish-question-groups/#contributing-global-templates) for contribution guidelines.
 
 ## Maintenance
 

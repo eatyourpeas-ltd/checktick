@@ -1,11 +1,11 @@
 ---
-title: Question Group Template Library
+title: Question Bank Template Library
 category: None
 ---
 
 The template library lets you discover, browse, and import validated questionnaires and question collections into your surveys.
 
-> **Note:** For an overview of sections, see [Sections](/docs/groups-view/). To publish your own templates, see [Publishing Question Groups](/docs/publish-question-groups/).
+> **Note:** For an overview of sections, see [Sections](/docs/groups-view/). To publish your own templates, see [Publishing Question Bank Templates](/docs/publish-question-groups/).
 
 ## Who can access
 
@@ -120,7 +120,7 @@ Organisation admins can publish sections from their surveys as templates. Publis
 - **Organisation-level**: Visible only to your organisation members
 - **Global**: Visible to all CheckTick users
 
-For detailed instructions on publishing templates, including attribution requirements and copyright protection, see [Publishing Question Groups](/docs/publish-question-groups/).
+For detailed instructions on publishing templates, including attribution requirements and copyright protection, see [Publishing Question Bank Templates](/docs/publish-question-groups/).
 
 ## Specialist templates vs. section templates
 
@@ -159,7 +159,7 @@ The template library contains **section templates** - complete questionnaires wi
 ## Related documentation
 
 - [Sections](/docs/groups-view/) - Overview and managing sections
-- [Publishing Question Groups](/docs/publish-question-groups/) - How to publish templates
+- [Publishing Bank Templates](/docs/publish-question-groups/) - How to publish templates
 - [Global Templates Index](/docs/question-group-templates-index/) - List of available global templates
 - [Surveys](/docs/surveys/) - Creating and managing surveys
 - [Collections](/docs/collections/) - Using repeats for multiple entries

@@ -1,11 +1,11 @@
 ---
-title: Publishing Question Groups
+title: Publishing Question Bank Templates
 category: None
 ---
 
 This guide explains how to publish your sections as reusable templates that can be shared with your organisation or the global CheckTick community.
 
-> **Note:** For an overview of sections and their features, see [Sections](/docs/groups-view/). To browse and import templates, see [Question Group Template Library](/docs/question-group-template-library/).
+> **Note:** For an overview of sections and their features, see [Sections](/docs/groups-view/). To browse and import templates, see [Question Bank Template Library](/docs/question-group-template-library/).
 
 ## Publication Levels
 
@@ -154,7 +154,7 @@ All contributions must meet quality standards for validated instruments. See the
 Templates are stored as text using the Outline format:
 
 ```markdown
-# Question Group Name {group-id}
+# Section Name {group-id}
 
 ## Question text {question-id}
 (question type)
