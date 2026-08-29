@@ -1,0 +1,47 @@
+{% load i18n %}
+{% comment %}
+    Builder empty state — shown in the question pane when a section has no
+    questions yet. Signposts the things that are relevant *inside* the builder:
+    the available question types, the Special Templates tab, the Question Bank,
+    and the Sections guide. Replaces the generic `how_to_build.html` explainer
+    (which describes the Outline and AI Assistant — surfaces the user has
+    already left by being in the builder).
+
+    Direction note: the "Add Question" form sits to the right of the question
+    list on desktop and below it on mobile, so copy avoids "above"/"below" in
+    favour of direction-agnostic phrasing.
+
+    Implementation note: uses `<div>`-based lists (not `<ul>/<li>`) because
+    this partial renders inside `<ul id="questions-draggable">`, which
+    SortableJS manages — nested `<li>` elements would be picked up as
+    draggable items and break the drag handler.
+
+    Context: none required (all strings are static, links are hardcoded).
+{% endcomment %}
+<div class="text-sm text-base-content/80 space-y-3">
+  <p class="font-semibold">{% trans "Add your first question using the form." %}</p>
+
+  <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wide">{% trans "Question types" %}</p>
+  <div class="space-y-0.5 text-xs text-base-content/70 pl-4">
+    <p>• {% trans "Text/Number — short free-text or numeric answers." %}</p>
+    <p>• {% trans "Multiple choice — pick one or more options." %}</p>
+    <p>• {% trans "Dropdown — pick one option from a collapsible list." %}</p>
+    <p>• {% trans "Likert scale — agreement or frequency scales." %}</p>
+    <p>• {% trans "Yes/No — binary toggle." %}</p>
+    <p>• {% trans "Image choice — pick from images." %}</p>
+  </div>
+
+  <p class="text-xs">
+    {% trans "Need patient demographics or professional details? See the" %}
+    <span class="font-medium">{% trans "Special Templates" %}</span>
+    {% trans "tab in the Add Question form." %}
+  </p>
+  <p class="text-xs">
+    {% trans "Looking for ready-made validated questionnaires?" %}
+    <a href="{% url 'surveys:published_templates_list' %}" class="link underline font-semibold">{% trans "Browse the Question Bank" %}</a>.
+  </p>
+  <p class="text-xs">
+    {% trans "Questions can be grouped into sections for branching, repeats, or sharing — see the" %}
+    <a href="/docs/groups-view/" class="link underline font-semibold" target="_blank" rel="noopener noreferrer">{% trans "Sections guide" %}</a>.
+  </p>
+</div>

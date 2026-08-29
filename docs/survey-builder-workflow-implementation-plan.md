@@ -8,7 +8,7 @@ priority: 5
 
 **Status**: Living document — this plan will change as we learn.
 **Date**: August 2026
-**Scope**: Tier 1 ✅ merged. Tier 2 ✅ implemented. Tier 3 outlined.
+**Scope**: Tier 1 ✅ merged. Tier 2 ✅ implemented. Tier 3 in progress (3.1 ✅).
 **Parent design**: [Survey Builder Workflow Design](/docs/survey-builder-workflow-design/)
 
 This is a commit plan, not a design doc. The design doc describes *what* and *why*; this describes *how*, *in what order*, and *what "done" means per commit*. Each commit is atomic: it builds, it tests green, it leaves the docs consistent.
@@ -217,22 +217,32 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 ---
 
-### Commit 3.1 — Replace builder empty state with question-type signposting
+### Commit 3.1 — Replace builder empty state with question-type signposting ✅
 
-**Scope**: The builder empty state currently shows the `how_to_build.html` explainer, which tells the user about the Outline and AI Assistant — but they're already in the builder. Replace it with signposting that's relevant to the builder context.
+**Scope**: The builder empty state currently shows the `how_to_build.html` explainer, which tells the user about the Outline and AI Assistant — but they're already in the builder. Replace it with signposting that's relevant to the builder context. Also fix two pre-existing layout bugs uncovered during implementation: the `tabs-lifted` class name (renamed to `tabs-lift` in daisyUI v5) and the three-column squish that left the Add Question form too narrow for tabs to render side-by-side.
 
 **Files**:
 - `checktick_app/surveys/templates/surveys/partials/builder_empty_state.html` — **new partial**:
-  - Short intro: "Add your first question above."
-  - Bullet list of available question types (text, multiple choice, dropdown, likert, yes/no, image) — brief, one line each
-  - Signpost the "Special Templates" tab: "Need patient demographics or professional details? See the Special Templates tab above."
-  - Signpost the Question Bank: "Looking for ready-made validated questionnaires? Browse the Question Bank." with link to `published_templates_list`
-  - Signpost sections: "Questions can be grouped into sections for branching, repeats, or sharing — see the Sections guide." with link to `/docs/groups-view/`
+  - Short intro: "Add your first question using the form." (direction-agnostic — the form is to the right on desktop, below on mobile).
+  - `<div>`-based bullet list (not `<ul>/<li>`) of available question types (text, multiple choice, dropdown, likert, yes/no, image) — brief, one line each. Uses `<div>/<p>` with `•` bullets because the partial renders inside `<ul id="questions-draggable">` which SortableJS manages; nested `<li>` elements would be picked up as draggable items and break the drag handler.
+  - Signpost the "Special Templates" tab: "Need patient demographics or professional details? See the Special Templates tab in the Add Question form." — "Special Templates" wrapped in `<span class="font-medium">` (not a link, so it doesn't look clickable, but visually distinct).
+  - Signpost the Question Bank: "Looking for ready-made validated questionnaires? Browse the Question Bank." with link to `published_templates_list`.
+  - Signpost sections: "Questions can be grouped into sections for branching, repeats, or sharing — see the Sections guide." with link to `/docs/groups-view/`.
+  - All links use consistent `link underline font-semibold` styling.
   - All strings `{% trans %}`-wrapped. Short and punchy — links, not paragraphs.
-- `checktick_app/surveys/templates/surveys/partials/builder_question_pane.html` — replace the `how_to_build.html` include in the empty state with `builder_empty_state.html`.
+- `checktick_app/surveys/templates/surveys/partials/builder_question_pane.html`:
+  - Replace the `how_to_build.html` include in the empty state with `builder_empty_state.html`.
+  - Update the empty-state intro line: left-align (remove `text-center`), link "Question Bank" to `published_templates_list`, and use direction-agnostic copy ("using the form" instead of "above").
+  - Fix `tabs-lifted` → `tabs-lift` (daisyUI v5.6 renamed the class; `tabs-lifted` doesn't exist in the compiled CSS and caused the tab inputs to render as plain stacked radio buttons with no tab styling).
+  - Change the question pane layout from `grid md:grid-cols-3` (which squeezed the Add Question form into ~25% of the viewport, too narrow for tabs) to `flex flex-col` — the questions list and Add Question form now stack vertically, each taking the full width of the main area. This matches the existing mobile layout and is the pattern Google Forms uses.
+  - Add a `border-l-4 border-primary` accent to the Add Question form card (via `.builder-editor-card` CSS) so it's visually distinct from the questions list card. Both cards use `bg-base-100` (lighter than the `bg-base-200` page background); the coloured left border provides distinction without affecting text contrast.
+- `checktick_app/surveys/templates/surveys/partials/builder_section_rail.html` — add `border-l-4 border-secondary` to the rail card so all three builder surfaces (rail, questions, form) have distinct visual identities.
+- `checktick_app/static/css/daisyui_themes.css` — in `.builder-editor-card`, add `border-left: 4px solid var(--color-primary)` (kept in CSS rather than the template because the `.builder-editor-card` class already sets a `border` shorthand that would conflict with Tailwind's `border-l-4`).
+- `checktick_app/surveys/tests/test_survey_builder_workflow.py` — update `test_how_to_build_explainer_present_in_builder_empty_state` to assert the explainer is *no longer* present (inverted), and add the 4 new signposting tests.
 
 **Tests**:
-- `test_builder_empty_state_signposts_question_types` — the empty state mentions question types.
+- `test_how_to_build_explainer_present_in_builder_empty_state` (updated) — asserts "How it works" is *not* in the builder empty state (the generic explainer has been replaced).
+- `test_builder_empty_state_signposts_question_types` — the empty state mentions question types (Likert, Multiple choice, Dropdown).
 - `test_builder_empty_state_signposts_special_templates` — the empty state mentions "Special Templates".
 - `test_builder_empty_state_signposts_question_bank` — the empty state links to the Question Bank.
 - `test_builder_empty_state_signposts_sections` — the empty state links to the Sections guide.
@@ -240,6 +250,9 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 **Exit criteria**:
 - Builder empty state shows question-type signposting, not the generic "how to build" explainer.
 - All links resolve.
+- Tab headers render side-by-side (not stacked) in the Add Question form.
+- The Add Question form has enough horizontal space for the tabs (full width of the main area).
+- The three builder surfaces (section rail, questions list, Add Question form) are visually distinct via coloured left borders.
 - `s/test --no-a11y` passes.
 
 **Docs**: None yet. Docs sweep is commit 3.5.
@@ -248,30 +261,37 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 ### Commit 3.2 — Always render the section rail + add rename to rail items
 
-**Scope**: The rail is currently hidden for single-section surveys. But the rail with one section and an "Add section" button is useful even with one section — it teaches the user that sections exist and lets them add more. Also add a rename button to each rail item so users can rename sections without leaving the builder.
+**Scope**: The rail is currently hidden for single-section surveys. But the rail with one section and an "Add section" button is useful even with one section — it teaches the user that sections exist and lets them add more. Also add a rename button to each rail item so users can rename sections without leaving the builder. Finally, add a delete button to each rail item so users can remove sections they no longer need — but only for the second and subsequent sections (the first/only section cannot be deleted from the rail; a survey must always have at least one section).
 
 **Files**:
-- `checktick_app/surveys/views.py` — in `survey_builder`, change `single_section` to always be `False` (the rail always renders when there are groups). Keep the visually-hidden heading for a11y when there's only one section.
+- `checktick_app/surveys/views.py` — in `survey_builder`, change `single_section` to always be `False` (the rail always renders when there are groups). Keep the visually-hidden heading for a11y when there's only one section. In `survey_group_delete`, add `next` param handling (redirect to `next` if provided, else fall back to `surveys:groups`) and reject deletion of the last remaining section.
 - `checktick_app/surveys/templates/surveys/survey_builder.html` — remove the `{% if groups|length > 1 %}` condition around the rail. Always render the rail when `groups` is non-empty.
-- `checktick_app/surveys/templates/surveys/partials/builder_section_rail.html` — add a small pencil/rename icon next to each section name. Clicking it opens a modal (reuse the rename modal pattern from `groups.html`) or an inline edit form. Posts to `survey_group_edit` with `next` pointing back to the builder.
-- `checktick_app/surveys/templates/surveys/partials/builder_section_swap.html` — update the OOB rail swap to include the rename buttons.
-- `checktick_app/static/js/builder-rail.js` — **new external JS file** to wire the rename button to the modal (CSP-compliant, nonce'd). Follows the same pattern as `groups-page.js`.
+- `checktick_app/surveys/templates/surveys/partials/builder_section_rail.html` — add a small pencil/rename icon next to each section name. Clicking it opens a modal (reuse the rename modal pattern from `groups.html`) or an inline edit form. Posts to `survey_group_edit` with `next` pointing back to the builder. Also add a trash/delete icon next to each section name, **hidden for the first section** (the survey must always retain at least one section). The delete button posts to `survey_group_delete` (existing route) with a confirmation step (modal or `confirm()`-style prompt) and `next` pointing back to the builder. If the deleted section was the active section, the builder redirects to the first remaining section.
+- `checktick_app/surveys/templates/surveys/partials/builder_section_swap.html` — update the OOB rail swap to include the rename and delete buttons.
+- `checktick_app/static/js/builder-rail.js` — **new external JS file** to wire the rename button to the modal and the delete button to its confirmation (CSP-compliant, nonce'd). Follows the same pattern as `groups-page.js`.
 
 **Security**:
 - `survey_group_edit` already has `@login_required`, `@require_http_methods(["POST"])`, `require_can_edit`, and `strip_tags()` on the name. No new endpoint — reusing the existing one with a `next` param.
-- The rename modal form includes `{% csrf_token %}`.
+- `survey_group_delete` already has `@login_required`, `@require_http_methods(["POST"])`, `require_can_edit`, and CSRF protection. No new endpoint — reusing the existing one, but the view needs a small change: accept a `next` param (falling back to `surveys:groups` for backward compatibility with the Groups page) and reject deletion of the last remaining section (return 400 or redirect with an error message).
+- The rename and delete modal forms include `{% csrf_token %}`.
 - No inline JS — the modal wiring is in an external JS file with `nonce`.
 
 **Tests**:
 - `test_rail_always_renders_for_single_section` — a single-section survey now shows the rail.
 - `test_rail_has_rename_button` — each rail item has a rename button.
+- `test_rail_has_delete_button_for_second_section` — a multi-section survey shows a delete button on the second and subsequent rail items.
+- `test_rail_first_section_has_no_delete_button` — the first (or only) section's rail item does not show a delete button.
 - `test_rename_from_builder_redirects_to_builder` — POSTing to `survey_group_edit` with `next=/surveys/<slug>/builder/` redirects back to the builder.
 - `test_rename_from_builder_strips_xss` — a group name with `<script>` tags is sanitised.
+- `test_delete_section_from_builder_redirects_to_builder` — POSTing to `survey_group_delete` with `next=/surveys/<slug>/builder/` deletes the section and redirects back to the builder.
+- `test_delete_last_section_rejected` — attempting to delete the only remaining section is rejected (400 or redirect with error).
 
 **Exit criteria**:
 - The rail always renders when the survey has at least one group.
 - Each rail item has a rename button that opens a modal.
-- Renaming from the builder stays on the builder.
+- The second and subsequent rail items have a delete button (with confirmation); the first/only section does not.
+- Renaming or deleting from the builder stays on the builder.
+- The last remaining section cannot be deleted.
 - `s/test --no-a11y` passes.
 
 **Docs**: None yet.

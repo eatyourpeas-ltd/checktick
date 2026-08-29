@@ -1,7 +1,7 @@
 {% load i18n %}
 {# Section rail — included by survey_builder.html and returned as an OOB swap target by the HTMX section-switch partial so the active highlight updates when the user clicks a section. Context: survey, groups, active_group, can_edit #}
 <div id="builder-rail" class="hidden md:block md:col-span-1">
-  <div class="card bg-base-100 shadow-sm">
+  <div class="card bg-base-100 shadow-sm border-l-4 border-secondary">
     <div class="card-body p-3">
       <h2 class="card-title text-sm font-semibold text-base-content/70 uppercase tracking-wide mb-2">{% trans "Sections" %}</h2>
       <ul class="space-y-1">

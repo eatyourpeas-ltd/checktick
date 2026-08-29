@@ -1059,7 +1059,13 @@ def test_how_to_build_explainer_present_on_survey_list(auth_client, owner):
 
 @pytest.mark.django_db
 def test_how_to_build_explainer_present_in_builder_empty_state(auth_client, owner):
-    """The builder shows the 'How to build' explainer when a group has no questions."""
+    """The builder empty state no longer shows the generic 'How to build' explainer.
+
+    Commit 3.1 replaced the `how_to_build.html` include in the builder empty
+    state with a builder-specific `builder_empty_state.html` partial. The
+    survey list page still uses `how_to_build.html`, so we only assert the
+    builder no longer surfaces it here.
+    """
     survey = Survey.objects.create(
         owner=owner,
         name="Empty Builder Explainer Survey",
@@ -1074,11 +1080,114 @@ def test_how_to_build_explainer_present_in_builder_empty_state(auth_client, owne
     )
     assert resp.status_code == 200
     assert (
-        b"How it works" in resp.content
-    ), "The 'How to build' explainer should appear in the builder empty state."
+        b"How it works" not in resp.content
+    ), "The generic 'How to build' explainer should no longer appear in the builder empty state."
     assert (
         b"No questions yet" in resp.content
-    ), "The empty state should say 'No questions yet' instead of 'No questions in this group yet'."
+    ), "The empty state should still say 'No questions yet'."
+
+
+# ---------------------------------------------------------------------------
+# Commit 3.1 — Replace builder empty state with question-type signposting
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_builder_empty_state_signposts_question_types(auth_client, owner):
+    """The builder empty state signposts the available question types."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Empty State Question Types Survey",
+        slug="empty-state-question-types-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    # The empty state should mention at least a few of the question types.
+    assert (
+        b"Likert scale" in resp.content
+    ), "The empty state should signpost the Likert scale question type."
+    assert (
+        b"Multiple choice" in resp.content
+    ), "The empty state should signpost the multiple choice question type."
+    assert (
+        b"Dropdown" in resp.content
+    ), "The empty state should signpost the dropdown question type."
+
+
+@pytest.mark.django_db
+def test_builder_empty_state_signposts_special_templates(auth_client, owner):
+    """The builder empty state signposts the Special Templates tab."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Empty State Special Templates Survey",
+        slug="empty-state-special-templates-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"Special Templates" in resp.content
+    ), "The empty state should signpost the Special Templates tab."
+
+
+@pytest.mark.django_db
+def test_builder_empty_state_signposts_question_bank(auth_client, owner):
+    """The builder empty state links to the Question Bank."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Empty State Question Bank Survey",
+        slug="empty-state-question-bank-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    bank_url = reverse("surveys:published_templates_list")
+    assert (
+        bank_url.encode() in resp.content
+    ), "The empty state should link to the Question Bank."
+    assert (
+        b"Browse the Question Bank" in resp.content
+    ), "The empty state should mention the Question Bank by name."
+
+
+@pytest.mark.django_db
+def test_builder_empty_state_signposts_sections(auth_client, owner):
+    """The builder empty state links to the Sections guide."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Empty State Sections Survey",
+        slug="empty-state-sections-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"/docs/groups-view/" in resp.content
+    ), "The empty state should link to the Sections guide."
+    assert (
+        b"Sections guide" in resp.content
+    ), "The empty state should mention the Sections guide by name."
 
 
 # ---------------------------------------------------------------------------
