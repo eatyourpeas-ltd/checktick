@@ -182,7 +182,17 @@ class ExportService:
             - Question IDs are used as keys in the answers dict
         """
         logger.debug(f"Generating CSV for survey {survey.slug}")
+        # Identify repeatable questions so per-instance answer lists are
+        # rendered as one cell per repeat entry rather than a raw list repr.
+        from checktick_app.surveys.views import (
+            _build_repeat_config,
+            _repeatable_question_ids,
+        )
+
         from ..models import SurveyQuestion, SurveyResponse
+
+        repeat_config = _build_repeat_config(survey)
+        repeatable_qids = _repeatable_question_ids(survey, repeat_config)
 
         output = StringIO()
 
@@ -255,7 +265,17 @@ class ExportService:
                     or answers_dict.get(question.id)
                     or ""
                 )
-                row.append(str(answer) if answer else "")
+                if question.id in repeatable_qids and isinstance(answer, list):
+                    # Repeatable: list of per-instance values → one cell, joined.
+                    parts = []
+                    for instance in answer:
+                        if isinstance(instance, list):
+                            parts.append("; ".join(str(i) for i in instance))
+                        elif instance not in (None, ""):
+                            parts.append(str(instance))
+                    row.append(" | ".join(parts))
+                else:
+                    row.append(str(answer) if answer else "")
 
             writer.writerow(row)
 

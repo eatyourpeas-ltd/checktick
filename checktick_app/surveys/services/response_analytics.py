@@ -65,7 +65,11 @@ def compute_response_analytics(
         return ResponseAnalytics(total_responses=0, distributions=[])
 
     # Get chartable questions, ordered by group position (from survey.style) then by question order
-    from checktick_app.surveys.views import _order_questions_by_group
+    from checktick_app.surveys.views import (
+        _build_repeat_config,
+        _order_questions_by_group,
+        _repeatable_question_ids,
+    )
 
     all_chartable = list(
         survey.questions.filter(type__in=CHARTABLE_TYPES).select_related("group")
@@ -73,10 +77,16 @@ def compute_response_analytics(
     ordered_questions = _order_questions_by_group(survey, all_chartable)
     questions = ordered_questions[:limit_questions]
 
+    # Identify repeatable questions so per-instance values are counted correctly.
+    repeat_config = _build_repeat_config(survey)
+    repeatable_qids = _repeatable_question_ids(survey, repeat_config)
+
     distributions = []
 
     for question in questions:
-        dist = _compute_question_distribution(question, responses)
+        dist = _compute_question_distribution(
+            question, responses, is_repeatable=question.id in repeatable_qids
+        )
         if dist:
             distributions.append(dist)
 
@@ -84,9 +94,14 @@ def compute_response_analytics(
 
 
 def _compute_question_distribution(
-    question, responses: QuerySet
+    question, responses: QuerySet, is_repeatable: bool = False
 ) -> AnswerDistribution | None:
-    """Compute answer distribution for a single question."""
+    """Compute answer distribution for a single question.
+
+    For repeatable questions the stored answer is a list of per-instance
+    values; each instance is counted independently so the distribution
+    reflects every repeat entry across all responses.
+    """
     q_id = str(question.id)
     counter: Counter = Counter()
     answered_count = 0
@@ -98,25 +113,20 @@ def _compute_question_distribution(
         if answer is None or answer == "":
             continue
 
-        answered_count += 1
+        # Repeatable answers are a list of per-instance values. Each instance
+        # may be a scalar or (for mc_multi/orderable) a list.
+        if is_repeatable:
+            if not isinstance(answer, list):
+                answer = [answer]
+            for instance in answer:
+                if instance is None or instance == "":
+                    continue
+                answered_count += 1
+                _tally_answer(counter, question, instance)
+            continue
 
-        if question.type == "mc_multi":
-            # Multi-select: answer is a list
-            if isinstance(answer, list):
-                for item in answer:
-                    counter[str(item)] += 1
-            else:
-                counter[str(answer)] += 1
-        elif question.type == "yesno":
-            # Normalize yes/no
-            val = str(answer).lower()
-            if val in ("yes", "true", "1"):
-                counter["Yes"] += 1
-            else:
-                counter["No"] += 1
-        else:
-            # Single value
-            counter[str(answer)] += 1
+        answered_count += 1
+        _tally_answer(counter, question, answer)
 
     if answered_count == 0:
         return None
@@ -144,6 +154,27 @@ def _compute_question_distribution(
         total_responses=answered_count,
         options=options,
     )
+
+
+def _tally_answer(counter: Counter, question, answer) -> None:
+    """Tally a single (possibly list-valued) answer into the counter."""
+    if question.type == "mc_multi":
+        # Multi-select: answer is a list
+        if isinstance(answer, list):
+            for item in answer:
+                counter[str(item)] += 1
+        else:
+            counter[str(answer)] += 1
+    elif question.type == "yesno":
+        # Normalize yes/no
+        val = str(answer).lower()
+        if val in ("yes", "true", "1"):
+            counter["Yes"] += 1
+        else:
+            counter["No"] += 1
+    else:
+        # Single value
+        counter[str(answer)] += 1
 
 
 def _truncate_label(text: str, max_len: int) -> str:

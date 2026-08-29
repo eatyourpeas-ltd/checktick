@@ -41,16 +41,56 @@
     function refresh() {
       // Enable create repeat only if at least one selected group is NOT already repeated
       var nonRepeatedSelected = getSelectedNonRepeatedGroups();
+      // The icon/label should reflect the total selection count, not just
+      // non-repeated groups, so users see the multi-section icon whenever
+      // they have 2+ sections selected regardless of repeat status.
+      var isMultiSelection = selected.size > 1;
+      var isMultiCreate = nonRepeatedSelected.length > 1;
       if (createBtn) {
         createBtn.disabled = nonRepeatedSelected.length === 0;
         // Update button title to explain why it might be disabled
         if (selected.size > 0 && nonRepeatedSelected.length === 0) {
           createBtn.title =
             "All selected groups are already in repeats. Use 'Remove from repeat' first.";
+        } else if (isMultiCreate) {
+          createBtn.title =
+            "Repeat these sections together as a block";
         } else {
-          createBtn.title = "";
+          createBtn.title = "Repeat this section's questions";
+        }
+        // Toggle icon on the create button: multi-section (stacked layers)
+        // when >1 selected, single-section (return arrow) otherwise.
+        var iconSingle = createBtn.querySelector(".repeat-icon-single");
+        var iconMulti = createBtn.querySelector(".repeat-icon-multi");
+        if (iconSingle) iconSingle.classList.toggle("hidden", isMultiSelection);
+        if (iconMulti) iconMulti.classList.toggle("hidden", !isMultiSelection);
+        var label = $("#create-repeat-label");
+        if (label) {
+          label.textContent = isMultiSelection
+            ? "Create multi-section repeat"
+            : "Create repeat from selection";
         }
       }
+
+      // Toggle icons on the remove button the same way.
+      if (removeRepeatBtn) {
+        var rmSingle = removeRepeatBtn.querySelector(".repeat-icon-single");
+        var rmMulti = removeRepeatBtn.querySelector(".repeat-icon-multi");
+        if (rmSingle) rmSingle.classList.toggle("hidden", isMultiSelection);
+        if (rmMulti) rmMulti.classList.toggle("hidden", !isMultiSelection);
+      }
+
+      // Toggle the per-section selection icons: when more than one section is
+      // selected, every selected row shows the multi-section icon; when only
+      // one is selected it shows the single-section icon.
+      $all("li[data-gid]", root).forEach(function (li) {
+        var span = li.querySelector(".sel-repeat-icon");
+        if (!span) return;
+        var s = span.querySelector(".sel-repeat-icon-single");
+        var m = span.querySelector(".sel-repeat-icon-multi");
+        if (s) s.classList.toggle("hidden", isMultiSelection);
+        if (m) m.classList.toggle("hidden", !isMultiSelection);
+      });
 
       // Enable remove repeat button only if selected groups include repeated ones
       var repeatedSelected = getSelectedRepeatedGroups();

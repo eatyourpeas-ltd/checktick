@@ -39,9 +39,13 @@
                     data-min-count="{{ info.min_count }}"
                     data-max-count="{{ info.max_count|default:'' }}"
                     data-gid="{{ g.id }}"
-                    title="{% trans 'Edit repeat settings' %}"
-                    aria-label="{% trans 'Edit repeat settings' %} {{ g.name }}">
-              {% include 'components/icons/repeat.html' with classes='w-3.5 h-3.5 text-info' %}
+                    title="{% if info.is_multi_section %}{% trans 'Multi-section repeat — edit in Organiser' %}{% else %}{% trans 'Edit repeat settings' %}{% endif %}"
+                    aria-label="{% if info.is_multi_section %}{% trans 'Multi-section repeat — edit in Organiser' %}{% else %}{% trans 'Edit repeat settings' %}{% endif %} {{ g.name }}">
+              {% if info.is_multi_section %}
+                {% include 'components/icons/repeat_multi.html' with classes='w-3.5 h-3.5 text-info' %}
+              {% else %}
+                {% include 'components/icons/repeat.html' with classes='w-3.5 h-3.5 text-info' %}
+              {% endif %}
             </button>
             {% else %}
             <button type="button" class="btn btn-xs btn-ghost px-1 create-repeat-btn"
@@ -92,6 +96,9 @@
           {% trans "Add section" %}
         </button>
       </form>
+      <p class="text-xs text-base-content/50 mt-2">
+        {% blocktrans with slug=survey.slug %}To repeat multiple sections together as a block, use the <a href="/surveys/{{ slug }}/groups/" class="link underline">Organiser</a>.{% endblocktrans %}
+      </p>
       {% endif %}
     </div>
     </div>

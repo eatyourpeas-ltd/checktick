@@ -1140,6 +1140,8 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         answers = {}
         template_patient_payload: dict[str, str] = {}
         template_professional_payload: dict[str, str] = {}
+        repeat_config = _build_repeat_config(survey)
+        repeatable_qids = _repeatable_question_ids(survey, repeat_config)
         for q in survey.questions.all():
             key = f"q_{q.id}"
             if q.type == SurveyQuestion.Types.TEMPLATE_PATIENT:
@@ -1210,12 +1212,15 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
                     "fields": list(block.keys()),
                 }
                 continue
-            value = (
-                request.POST.getlist(key)
-                if q.type in {"mc_multi", "orderable"}
-                else request.POST.get(key)
-            )
+            value = _collect_question_answer(q, request.POST, repeatable_qids)
             answers[str(q.id)] = value
+
+        # Validate repeat min_count on submission.
+        min_errors = _validate_repeat_min_counts(survey, answers, repeat_config)
+        if min_errors:
+            for msg in min_errors:
+                messages.error(request, msg)
+            return redirect("surveys:detail", slug=slug)
 
         # Collect professional details (non-encrypted)
         professional_payload = {**template_professional_payload}
@@ -1299,6 +1304,8 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
 
     # Build branching configuration for client-side logic
     branching_config = _build_branching_config(qs)
+    repeat_config = _build_repeat_config(survey)
+    repeatable_qids = _repeatable_question_ids(survey, repeat_config)
 
     ctx = {
         "survey": survey,
@@ -1321,6 +1328,9 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
             if (show_professional_details or has_professional_template)
             else {}
         ),
+        "repeat_config": repeat_config,
+        "repeat_config_json": json.dumps(repeat_config),
+        "repeatable_qids_json": json.dumps(sorted(str(x) for x in repeatable_qids)),
     }
 
     # Import language constants for flags
@@ -1415,11 +1425,16 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
 
     # Build branching configuration for client-side logic
     branching_config = _build_branching_config(qs)
+    repeat_config = _build_repeat_config(survey)
+    repeatable_qids = _repeatable_question_ids(survey, repeat_config)
 
     ctx = {
         "survey": survey,
         "questions": qs,
         "branching_config": json.dumps(branching_config),
+        "repeat_config": repeat_config,
+        "repeat_config_json": json.dumps(repeat_config),
+        "repeatable_qids_json": json.dumps(sorted(str(x) for x in repeatable_qids)),
         "single_section": single_section,
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
@@ -1561,6 +1576,142 @@ def _build_branching_config(questions: list[SurveyQuestion]) -> dict[str, Any]:
             pass
 
     return config
+
+
+def _build_repeat_config(survey: Survey) -> dict[int, dict]:
+    """Return ``{group_id: {key, name, min, max}}`` for repeatable groups.
+
+    A group is considered repeatable when it belongs to a
+    :class:`CollectionDefinition` that permits more than one instance
+    (``max_count`` is ``None`` for unlimited, or greater than 1).
+    Groups linked to a single-instance collection (``cardinality == one`` or
+    ``max_count == 1``) are not given a repeat UI.
+    """
+    config: dict[int, dict] = {}
+    try:
+        items = list(
+            CollectionItem.objects.select_related("collection").filter(
+                collection__survey=survey, group__isnull=False
+            )
+        )
+    except Exception:
+        return config
+    for item in items:
+        col = item.collection
+        max_c = col.max_count
+        if max_c is not None and int(max_c) <= 1:
+            continue
+        if item.group_id in config:
+            continue
+        config[item.group_id] = {
+            "key": col.key,
+            "name": col.name,
+            "min": col.min_count or 0,
+            "max": max_c,  # None => unlimited
+        }
+    return config
+
+
+def _repeatable_question_ids(
+    survey: Survey, repeat_config: dict[int, dict]
+) -> set[int]:
+    """Return the set of question ids whose group is repeatable.
+
+    Template patient/professional questions are excluded because they use
+    field-level sub-inputs (``q_{qid}_{field}``) that are not compatible with
+    the per-instance repeat field naming.
+    """
+    if not repeat_config:
+        return set()
+    try:
+        return set(
+            survey.questions.filter(group_id__in=repeat_config.keys())
+            .exclude(
+                type__in=[
+                    SurveyQuestion.Types.TEMPLATE_PATIENT,
+                    SurveyQuestion.Types.TEMPLATE_PROFESSIONAL,
+                ]
+            )
+            .values_list("id", flat=True)
+        )
+    except Exception:
+        return set()
+
+
+def _collect_question_answer(
+    q: SurveyQuestion, post: QueryDict, repeatable_qids: set[int]
+):
+    """Collect a single (non-template) question's answer from POST data.
+
+    For repeatable questions, returns an ordered list of per-instance values
+    (one entry per non-empty instance). For non-repeatable questions, returns
+    a scalar (text/select/radio) or a list (``mc_multi``/``orderable``),
+    preserving the legacy answer shape.
+    """
+    is_multi = q.type in {"mc_multi", "orderable"}
+    if q.id in repeatable_qids:
+        instances: dict[int, Any] = {}
+        pattern = re.compile(rf"^q_{q.id}(?:__r(\d+))?$")
+        for key in post.keys():
+            m = pattern.match(key)
+            if not m:
+                continue
+            idx = int(m.group(1)) if m.group(1) else 0
+            instances[idx] = post.getlist(key) if is_multi else post.get(key)
+        ordered: list[Any] = []
+        for idx in sorted(instances):
+            v = instances[idx]
+            if is_multi:
+                if v:
+                    ordered.append(v)
+            else:
+                if v not in (None, "", []):
+                    ordered.append(v)
+        return ordered
+    return post.getlist(f"q_{q.id}") if is_multi else post.get(f"q_{q.id}")
+
+
+def _validate_repeat_min_counts(
+    survey: Survey, answers: dict, repeat_config: dict[int, dict]
+) -> list[str]:
+    """Return a list of validation error messages for repeat min_count.
+
+    For each repeatable group with ``min_count > 0``, checks that at least
+    that many non-empty instances were submitted across the group's questions.
+    A group is considered to have N instances if at least one question in the
+    group has N or more non-empty instance values.
+    """
+    if not repeat_config:
+        return []
+    errors: list[str] = []
+    for group_id, info in repeat_config.items():
+        min_count = info.get("min") or 0
+        if min_count <= 0:
+            continue
+        # Find the maximum instance count across all questions in this group.
+        max_instances = 0
+        question_ids = list(
+            survey.questions.filter(group_id=group_id)
+            .exclude(
+                type__in=[
+                    SurveyQuestion.Types.TEMPLATE_PATIENT,
+                    SurveyQuestion.Types.TEMPLATE_PROFESSIONAL,
+                ]
+            )
+            .values_list("id", flat=True)
+        )
+        for qid in question_ids:
+            stored = answers.get(str(qid))
+            if isinstance(stored, list):
+                max_instances = max(max_instances, len(stored))
+        if max_instances < min_count:
+            name = info.get("name") or "this section"
+            errors.append(
+                f"{name}: please add at least {min_count} "
+                f"{'entry' if min_count == 1 else 'entries'} "
+                f"(you provided {max_instances})."
+            )
+    return errors
 
 
 def _resolved_group_order_ids(survey: Survey) -> list[int]:
@@ -4407,13 +4558,10 @@ def _handle_participant_submission(
             return redirect(f"/surveys/{survey.slug}/closed/?reason=token_used")
 
         answers = {}
+        repeat_config = _build_repeat_config(survey)
+        repeatable_qids = _repeatable_question_ids(survey, repeat_config)
         for q in survey.questions.all():
-            key = f"q_{q.id}"
-            value = (
-                request.POST.getlist(key)
-                if q.type in {"mc_multi", "orderable"}
-                else request.POST.get(key)
-            )
+            value = _collect_question_answer(q, request.POST, repeatable_qids)
             # Only save non-empty answers for draft
             if value or not is_draft:
                 answers[str(q.id)] = value
@@ -4431,6 +4579,17 @@ def _handle_participant_submission(
                     },
                 }
             )
+
+        # Validate repeat min_count on final submission (not drafts).
+        min_errors = _validate_repeat_min_counts(survey, answers, repeat_config)
+        if min_errors:
+            for msg in min_errors:
+                messages.error(request, msg)
+            # Redirect back to the same participant-facing URL. request.path
+            # is the server-resolved path (not user-supplied query data), so
+            # this is safe from open-redirect.
+            safe_path = request.path_info or request.path
+            return redirect(safe_path)
 
         # Professional details (non-encrypted)
         _, professional_fields, professional_ods = _get_professional_group_and_fields(
@@ -4532,11 +4691,16 @@ def _handle_participant_submission(
         survey.style = style
     # Build branching configuration for client-side logic
     branching_config = _build_branching_config(qs)
+    repeat_config = _build_repeat_config(survey)
+    repeatable_qids = _repeatable_question_ids(survey, repeat_config)
 
     ctx = {
         "survey": survey,
         "questions": qs,
         "branching_config": json.dumps(branching_config),
+        "repeat_config": repeat_config,
+        "repeat_config_json": json.dumps(repeat_config),
+        "repeatable_qids_json": json.dumps(sorted(str(x) for x in repeatable_qids)),
         "single_section": single_section,
         "show_patient_details": show_patient_details,
         "demographics_fields": demographics_fields,
@@ -4808,39 +4972,8 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             "font_css_url": style.get("font_css_url"),
         }
     )
-    # Map groups to any repeats (collections) they participate in
-    group_repeat_map: dict[int, list[CollectionDefinition]] = {}
-    for item in CollectionItem.objects.select_related("collection", "group").filter(
-        collection__survey=survey, group__isnull=False
-    ):
-        group_repeat_map.setdefault(item.group_id, []).append(item.collection)
-
-    # Prepare display info for repeats
-    repeat_info: dict[int, dict] = {}
-    for g in groups:
-        cols = group_repeat_map.get(g.id, [])
-        if cols:
-            info_list = []
-            # Use the first collection for editing (groups should only be in one repeat)
-            first_col = cols[0]
-            for c in cols:
-                cap = (
-                    "Unlimited"
-                    if (c.max_count is None or int(c.max_count) <= 0)
-                    else str(c.max_count)
-                )
-                parent_note = f" (child of {c.parent.name})" if c.parent_id else ""
-                info_list.append(f"{c.name} — max {cap}{parent_note}")
-            repeat_info[g.id] = {
-                "is_repeated": True,
-                "tooltip": "; ".join(info_list),
-                "collection_id": first_col.id,
-                "collection_name": first_col.name,
-                "min_count": first_col.min_count or 0,
-                "max_count": first_col.max_count,
-            }
-        else:
-            repeat_info[g.id] = {"is_repeated": False, "tooltip": ""}
+    # Repeat info — shared helper used by both the builder rail and organiser.
+    repeat_info = _build_repeat_info(survey, groups)
 
     existing_repeats = list(
         CollectionDefinition.objects.filter(survey=survey).order_by("name")
@@ -6645,19 +6778,34 @@ def _sanitize_csv_value(value: str) -> str:
     return value
 
 
-def _format_answer_for_export(answer: Any, question_type: str) -> str:
+def _format_answer_for_export(
+    answer: Any, question_type: str, is_repeatable: bool = False
+) -> str:
     """
     Format an answer value for CSV export based on question type.
 
     Args:
         answer: The raw answer value (string, list, dict, etc.)
         question_type: The question type (text, mc_single, mc_multi, etc.)
+        is_repeatable: When True, the answer is a list of per-instance values
+            for a repeatable question; each instance is joined into the cell.
 
     Returns:
         Formatted string suitable for CSV export
     """
     if answer is None or answer == "":
         return ""
+
+    # Repeatable questions store a list of per-instance values. Each instance
+    # may itself be a scalar (text/single-select) or a list (mc_multi/orderable).
+    # Render one instance per line so analysts can see each repeat entry.
+    if is_repeatable:
+        if not isinstance(answer, list):
+            answer = [answer]
+        parts = []
+        for instance in answer:
+            parts.append(_format_answer_for_export(instance, question_type, False))
+        return " | ".join(p for p in parts if p)
 
     # Handle template questions (patient/professional details)
     if question_type in ("template_patient", "template_professional"):
@@ -6720,6 +6868,10 @@ def survey_export_csv(
     # Get all questions ordered by group position (from survey.style) then by question order
     all_questions = list(survey.questions.select_related("group", "dataset").all())
     questions = _order_questions_by_group(survey, all_questions)
+
+    # Identify repeatable questions so the exporter can render per-instance values.
+    repeat_config = _build_repeat_config(survey)
+    repeatable_qids = _repeatable_question_ids(survey, repeat_config)
 
     # Pre-build per-question SCTID → preferred term lookup for SNOMED dropdown questions.
     # This avoids repeated snomed.db queries inside the streaming generator.
@@ -6825,7 +6977,9 @@ def survey_export_csv(
                 if q.type == "dropdown" and q.id in snomed_term_lookup and answer:
                     if isinstance(answer, str) and answer.isdigit():
                         answer = snomed_term_lookup[q.id].get(answer, answer)
-                formatted = _format_answer_for_export(answer, q.type)
+                formatted = _format_answer_for_export(
+                    answer, q.type, is_repeatable=q.id in repeatable_qids
+                )
                 row.append(formatted)
 
             writer.writerow(row)
@@ -6943,6 +7097,57 @@ def _build_question_pane_context(
     return ctx
 
 
+def _build_repeat_info(survey: Survey, groups: list[QuestionGroup]) -> dict[int, dict]:
+    """Build per-group repeat display info for the builder rail and organiser.
+
+    Returns ``{group_id: {is_repeated, is_multi_section, tooltip, ...}}``.
+    ``is_multi_section`` is True when the group's collection contains more
+    than one group item (i.e. multiple sections repeat together as a block).
+    """
+    group_repeat_map: dict[int, list[CollectionDefinition]] = {}
+    # Track how many group items each collection has, to distinguish
+    # single-section repeats from multi-section repeats.
+    collection_group_counts: dict[int, int] = {}
+    for item in CollectionItem.objects.select_related("collection", "group").filter(
+        collection__survey=survey, group__isnull=False
+    ):
+        group_repeat_map.setdefault(item.group_id, []).append(item.collection)
+        collection_group_counts[item.collection_id] = (
+            collection_group_counts.get(item.collection_id, 0) + 1
+        )
+
+    repeat_info: dict[int, dict] = {}
+    for g in groups:
+        cols = group_repeat_map.get(g.id, [])
+        if cols:
+            first_col = cols[0]
+            info_list = []
+            for c in cols:
+                cap = (
+                    "Unlimited"
+                    if (c.max_count is None or int(c.max_count) <= 0)
+                    else str(c.max_count)
+                )
+                parent_note = f" (child of {c.parent.name})" if c.parent_id else ""
+                info_list.append(f"{c.name} — max {cap}{parent_note}")
+            repeat_info[g.id] = {
+                "is_repeated": True,
+                "is_multi_section": collection_group_counts.get(first_col.id, 1) > 1,
+                "tooltip": "; ".join(info_list),
+                "collection_id": first_col.id,
+                "collection_name": first_col.name,
+                "min_count": first_col.min_count or 0,
+                "max_count": first_col.max_count,
+            }
+        else:
+            repeat_info[g.id] = {
+                "is_repeated": False,
+                "is_multi_section": False,
+                "tooltip": "",
+            }
+    return repeat_info
+
+
 @login_required
 def survey_builder(request: HttpRequest, slug: str) -> HttpResponse:
     """Unified survey builder — master-detail with a section rail.
@@ -6989,35 +7194,7 @@ def survey_builder(request: HttpRequest, slug: str) -> HttpResponse:
     # Repeat info for the rail — same computation as survey_groups.
     # Lets the rail show a "Repeats" badge on repeated sections and a
     # "Make repeatable" button on non-repeated ones.
-    group_repeat_map: dict[int, list[CollectionDefinition]] = {}
-    for item in CollectionItem.objects.select_related("collection", "group").filter(
-        collection__survey=survey, group__isnull=False
-    ):
-        group_repeat_map.setdefault(item.group_id, []).append(item.collection)
-    repeat_info: dict[int, dict] = {}
-    for g in groups:
-        cols = group_repeat_map.get(g.id, [])
-        if cols:
-            first_col = cols[0]
-            info_list = []
-            for c in cols:
-                cap = (
-                    "Unlimited"
-                    if (c.max_count is None or int(c.max_count) <= 0)
-                    else str(c.max_count)
-                )
-                parent_note = f" (child of {c.parent.name})" if c.parent_id else ""
-                info_list.append(f"{c.name} — max {cap}{parent_note}")
-            repeat_info[g.id] = {
-                "is_repeated": True,
-                "tooltip": "; ".join(info_list),
-                "collection_id": first_col.id,
-                "collection_name": first_col.name,
-                "min_count": first_col.min_count or 0,
-                "max_count": first_col.max_count,
-            }
-        else:
-            repeat_info[g.id] = {"is_repeated": False, "tooltip": ""}
+    repeat_info = _build_repeat_info(survey, groups)
     ctx["repeat_info"] = repeat_info
     ctx["existing_repeats"] = list(
         CollectionDefinition.objects.filter(survey=survey).order_by("name")
