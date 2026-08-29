@@ -247,7 +247,7 @@ def test_dashboard_cta_fallback_for_legacy_survey(auth_client, owner):
 
 @pytest.mark.django_db
 def test_groups_page_heading_says_sections(auth_client, owner):
-    """The Groups page heading uses 'Sections', not 'Question Groups'."""
+    """The Groups page heading now says 'Organise' (commit 3.3 renamed it from 'Sections for')."""
     from checktick_app.surveys.models import Organization
 
     org = Organization.objects.create(name="Sections Test Org", owner=owner)
@@ -264,8 +264,11 @@ def test_groups_page_heading_says_sections(auth_client, owner):
     resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
     assert (
-        b"Sections for" in resp.content
-    ), "Groups page heading should say 'Sections for {survey}', not 'Question Groups for'."
+        b"Organise" in resp.content
+    ), "Groups page heading should say 'Organise {survey}' (commit 3.3 rename)."
+    assert (
+        b"Sections for" not in resp.content
+    ), "The old 'Sections for' heading should no longer appear."
     assert (
         b"Question Groups for" not in resp.content
     ), "The old 'Question Groups for' heading should no longer appear."
@@ -1737,7 +1740,7 @@ def test_builder_toolbar_says_organise(auth_client, owner):
         reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
     )
     assert resp.status_code == 200
-    assert b">Organise<" in resp.content, "The toolbar button should say 'Organise'."
+    assert b"Organise" in resp.content, "The toolbar button should say 'Organise'."
     assert (
         b"Organise sections" not in resp.content
     ), "The old 'Organise sections' label should be gone."
