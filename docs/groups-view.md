@@ -35,7 +35,7 @@ The **Organise** page (`/surveys/<slug>/groups/`) is for bulk section operations
 - **Create repeats (collections)** - Turn sections into repeatable sections
 - **Nest repeats** - Create one level of nesting (e.g., "People" containing "Visits")
 - **Remove from repeats** - Unlink sections from collections
-- **Visualise the survey** - View the survey as a flow diagram
+- **Visualise the survey** - View the survey as a flow diagram on the **Survey Map** page (`/surveys/<slug>/survey-map/`). The Survey Map is a standalone route (Tier 4) — it used to be embedded at the bottom of this page but now has its own space. Reach it from the Builder toolbar, the survey dashboard (editors only), or the quick-nav on this page.
 - **Publish sections as templates** - Share validated questionnaires
 
 ### Who can access

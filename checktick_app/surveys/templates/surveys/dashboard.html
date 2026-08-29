@@ -138,6 +138,14 @@
   {% endif %}
   <a class="btn btn-primary btn-sm flex-shrink-0{% if survey.questions.count == 0 %} btn-disabled{% endif %}" href="{% if survey.questions.count > 0 %}/surveys/{{ survey.slug }}/preview/{% else %}#{% endif %}"{% if survey.questions.count == 0 %} aria-disabled="true" title="{% trans 'Add questions before previewing' %}"{% endif %}>{% trans "Survey Preview (read-only)" %}</a>
 
+  {# Survey Map — visualise branching/flow. Builder tool (require_can_edit on the route). #}
+  {% if can_edit %}
+  <a class="btn btn-outline btn-sm flex-shrink-0" href="/surveys/{{ survey.slug }}/survey-map/" title="{% trans 'Visualise sections, questions, and branching logic' %}">
+    {% include "components/icons/survey-map.html" with classes="w-4 h-4 mr-1" %}
+    {% trans "Survey Map" %}
+  </a>
+  {% endif %}
+
   {# Create Copy button - only show for original surveys #}
   {% if survey.is_original %}
   <a class="btn btn-outline btn-sm flex-shrink-0" href="{% url 'surveys:clone' slug=survey.slug %}" title="{% trans 'Create a copy of this survey' %}">

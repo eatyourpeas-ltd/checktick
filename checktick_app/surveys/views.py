@@ -2478,6 +2478,9 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         "survey_not_started": survey_not_started,
         "can_manage_users": can_manage_survey_users(request.user, survey),
         "can_change_style": can_change_survey_style(request.user, survey),
+        # Survey Map is a builder tool (require_can_edit on the route); only
+        # surface the dashboard link to users who can actually edit the survey.
+        "can_edit": can_edit_survey(request.user, survey),
         # Data governance
         "can_export": (
             survey.is_closed and can_export_survey_data(request.user, survey)

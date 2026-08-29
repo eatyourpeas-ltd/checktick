@@ -28,6 +28,10 @@
       </svg>
       {% trans 'Back to builder' %}
     </a>
+    <a class="btn btn-sm btn-ghost" href="/surveys/{{ survey.slug }}/survey-map/">
+      {% include "components/icons/survey-map.html" with classes="w-4 h-4" %}
+      {% trans 'Survey Map' %}
+    </a>
     <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/dashboard/">{% trans 'Back to dashboard' %}</a>
   </div>
 
@@ -231,10 +235,11 @@
     </div>
   </div>
 
-  <!-- Survey Map Visualizer -->
-  <div class="mt-6">
-    {% include 'surveys/partials/branching_visualizer.html' with survey=survey %}
-  </div>
+  {% comment %}
+  The Survey Map visualiser now lives on its own route (/survey-map/);
+  it is linked from the quick-nav toolbar above. See the deferred item
+  in docs/survey-builder-workflow-implementation-plan.md.
+  {% endcomment %}
 
   {% if can_edit %}
     <dialog id="repeat-modal" class="modal">

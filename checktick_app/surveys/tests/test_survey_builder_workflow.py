@@ -1953,3 +1953,169 @@ def test_survey_map_requires_login(client, django_user_model):
         302,
         403,
     ), "Anonymous access to the Survey Map should redirect to login or deny."
+
+
+# ---------------------------------------------------------------------------
+# Survey Map wiring — surface the route from the builder toolbar, dashboard,
+# and Organise page; remove the embedded visualiser from the Organise page.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_survey_map_breadcrumb_uses_map_icon(auth_client, owner):
+    """The Survey Map breadcrumb crumb uses the survey-map icon, not the default group icon."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Breadcrumb Survey",
+        slug="survey-map-breadcrumb-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The survey-map icon renders a distinctive <circle cx="18" cy="6" r="3" />.
+    # The h1 already uses the survey-map icon, so with the breadcrumb also using
+    # it, this marker should appear at least twice (breadcrumb + h1).
+    marker = b'<circle cx="18" cy="6" r="3"'
+    assert (
+        resp.content.count(marker) >= 2
+    ), "The Survey Map breadcrumb and h1 should both use the survey-map icon."
+
+
+@pytest.mark.django_db
+def test_organise_page_no_embedded_survey_map(auth_client, owner):
+    """The Organise page no longer embeds the visualiser canvas (it has its own route)."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Organise No Map Survey",
+        slug="organise-no-map-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="A question?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert (
+        b"flow-canvas" not in resp.content
+    ), "The Organise page should not embed the visualiser canvas anymore."
+    assert (
+        b"branching-visualizer" not in resp.content
+    ), "The Organise page should not embed the visualiser anymore."
+
+
+@pytest.mark.django_db
+def test_organise_page_links_to_survey_map(auth_client, owner):
+    """The Organise page quick-nav links to the Survey Map route."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Organise Map Link Survey",
+        slug="organise-map-link-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    map_url = f"/surveys/{survey.slug}/survey-map/"
+    assert (
+        map_url.encode() in resp.content
+    ), "The Organise page should link to the Survey Map route."
+    assert b"Survey Map" in resp.content
+
+
+@pytest.mark.django_db
+def test_builder_toolbar_links_to_survey_map(auth_client, owner):
+    """The builder toolbar links to the Survey Map route."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Builder Map Link Survey",
+        slug="builder-map-link-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Toolbar question?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    map_url = f"/surveys/{survey.slug}/survey-map/"
+    assert (
+        map_url.encode() in resp.content
+    ), "The builder toolbar should link to the Survey Map route."
+
+
+@pytest.mark.django_db
+def test_dashboard_links_to_survey_map_when_can_edit(auth_client, owner):
+    """The dashboard shows a Survey Map link for editors (the route requires edit)."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Dashboard Map Link Survey",
+        slug="dashboard-map-link-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    map_url = f"/surveys/{survey.slug}/survey-map/"
+    assert (
+        map_url.encode() in resp.content
+    ), "The dashboard should link to the Survey Map route for editors."
+
+
+@pytest.mark.django_db
+def test_dashboard_no_survey_map_link_for_viewer(auth_client, owner, django_user_model):
+    """A view-only member sees the dashboard but not the Survey Map link (route requires edit)."""
+    from checktick_app.core.models import UserProfile
+    from checktick_app.surveys.models import SurveyMembership
+
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Dashboard Map Viewer Survey",
+        slug="dashboard-map-viewer-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    viewer = django_user_model.objects.create_user(
+        username="dash-map-viewer@example.com",
+        email="dash-map-viewer@example.com",
+        password=PASSWORD,
+    )
+    UserProfile.objects.filter(user=viewer).update(
+        account_tier=UserProfile.AccountTier.PRO,
+        email_confirmed=True,
+    )
+    # Grant view-only access: can_view_survey is True, can_edit_survey is False.
+    SurveyMembership.objects.create(
+        survey=survey, user=viewer, role=SurveyMembership.Role.VIEWER
+    )
+
+    client = type(auth_client)()
+    client.force_login(viewer)
+
+    resp = client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200, "A view-only member should reach the dashboard."
+    map_url = f"/surveys/{survey.slug}/survey-map/"
+    assert (
+        map_url.encode() not in resp.content
+    ), "A view-only member should not see the Survey Map link (the route requires edit)."

@@ -8,7 +8,7 @@
   {% trans "Surveys" as crumb1_text %}
   {% trans "Survey Dashboard" as crumb2_text %}
   {% trans "Survey Map" as crumb3_text %}
-  {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href="/surveys/" crumb2_label=crumb2_text crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" crumb3_label=crumb3_text %}
+  {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href="/surveys/" crumb2_label=crumb2_text crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" crumb3_label=crumb3_text crumb3_icon="components/icons/survey-map.html" %}
     <h1 class="inline-flex items-center gap-2 text-base-content">
       {% include "components/icons/survey-map.html" with classes="w-6 h-6 text-base-content" %}
       <span>{% trans "Survey Map" %}</span>

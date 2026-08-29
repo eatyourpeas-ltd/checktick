@@ -6,7 +6,7 @@ priority: 5
 
 # Survey Builder Workflow Design
 
-- **Status**: Tier 1 & 2 implemented — see [Implementation Plan](/docs/survey-builder-workflow-implementation-plan/)
+- **Status**: Tier 1 & 2 implemented; Tier 3 in progress; Tier 4 (Survey Map route) implemented — see [Implementation Plan](/docs/survey-builder-workflow-implementation-plan/)
 - **Date**: August 2026
 - **Scope**: The survey creation → building workflow, and how question groups (referred to as **sections** in the UI) are introduced to users
 - **Related**: [Surveys](/docs/surveys/) · [Sections](/docs/groups-view/) · [Branching Logic & Repeating Questions](/docs/branching-and-repeats/) · [Repeats](/docs/collections/) · [Outline / Import](/docs/import/)

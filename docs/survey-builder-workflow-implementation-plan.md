@@ -8,7 +8,7 @@ priority: 5
 
 **Status**: Living document — this plan will change as we learn.
 **Date**: August 2026
-**Scope**: Tier 1 ✅ merged. Tier 2 ✅ implemented. Tier 3 in progress (3.1 ✅).
+**Scope**: Tier 1 ✅ merged. Tier 2 ✅ implemented. Tier 3 in progress (3.1 ✅). Tier 4 (Survey Map route) ✅ implemented.
 **Parent design**: [Survey Builder Workflow Design](/docs/survey-builder-workflow-design/)
 
 This is a commit plan, not a design doc. The design doc describes *what* and *why*; this describes *how*, *in what order*, and *what "done" means per commit*. Each commit is atomic: it builds, it tests green, it leaves the docs consistent.
@@ -405,9 +405,43 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 ---
 
+## Tier 4 — Survey Map visualiser route ✅
+
+**Goal**: Give the branching visualiser its own route (`/<slug>/survey-map/`) instead of embedding it at the bottom of the Organise page. The Organise page focuses on bulk reorder, repeats, and publishing; the Survey Map gets dedicated space and is linked from the builder toolbar, the dashboard, and the Organise page. Named "Survey Map" (matching the existing code's terminology). Security: `@login_required`, `require_can_edit`, `@require_http_methods(["GET"])`.
+
+### Commit 4.1 — Survey Map route + standalone template ✅
+
+**Scope**: Add the `survey_map` view, route, and template. The visualiser is still embedded on the Organise page at this point; the follow-up commit wires the new route in and removes the embedded copy.
+
+**Files**:
+- `checktick_app/surveys/views.py` — add `survey_map(request, slug)`: `@login_required` + `@require_http_methods(["GET"])` + `require_can_edit`. Renders `surveys/survey_map.html` with `survey` and `has_questions`.
+- `checktick_app/surveys/urls.py` — add `path("<slug:slug>/survey-map/", views.survey_map, name="survey_map")`.
+- `checktick_app/surveys/templates/surveys/survey_map.html` — **new template**: extends `base.html`, breadcrumbs (Surveys › Survey Dashboard › Survey Map), toolbar linking back to Builder / Organise / dashboard, a one-line explainer, and `{% include 'surveys/partials/branching_visualizer.html' %}`. Shows an empty-state signpost when the survey has no questions.
+- `checktick_app/surveys/tests/test_survey_builder_workflow.py` — 6 tests: renders, empty state, toolbar links back, 403 for viewers, 405 for POST, login redirect for anonymous.
+
+**Exit criteria**: `/<slug>/survey-map/` renders the visualiser on its own page; viewers get 403; POST gets 405; anonymous gets a login redirect.
+
+---
+
+### Commit 4.2 — Wire Survey Map into builder/dashboard/organise; remove embedded visualiser ✅
+
+**Scope**: Surface the new route from the three building surfaces and stop embedding the visualiser on the Organise page.
+
+**Files**:
+- `checktick_app/surveys/templates/surveys/survey_builder.html` — add a "Survey Map" button to the builder toolbar.
+- `checktick_app/surveys/templates/surveys/dashboard.html` — add a "Survey Map" button in the action row, gated on `can_edit` (the route requires edit; the dashboard is view-gated, so the link must not appear for view-only members).
+- `checktick_app/surveys/views.py` — add `can_edit` to the `survey_dashboard` context.
+- `checktick_app/surveys/templates/surveys/groups.html` — remove the embedded `branching_visualizer.html` include; add a "Survey Map" button to the quick-nav toolbar.
+- `checktick_app/surveys/templates/surveys/partials/organise_explainer.html` — link the "Visualise the survey as a flow diagram" bullet to the Survey Map route.
+- `checktick_app/surveys/tests/test_survey_builder_workflow.py` — 5 tests: organise page no longer embeds the canvas; organise page links to the route; builder toolbar links to the route; dashboard links to the route for editors; dashboard hides the link for view-only members.
+- Docs: `docs/survey-builder-workflow-implementation-plan.md`, `docs/survey-builder-workflow-design.md`, `docs/groups-view.md`, `docs/testing-webapp.md`.
+
+**Exit criteria**: The Survey Map is reachable from the builder toolbar, the dashboard (editors only), and the Organise page. The Organise page no longer embeds the visualiser. `s/test --no-a11y` passes.
+
+---
+
 ## Deferred to a follow-up PR (post-Tier 3)
 
-- **Extract the Survey Map visualiser to its own route** (`/<slug>/survey-map/`). The visualiser is currently embedded in the Organise page. Moving it to its own route would make the Organise page less busy and give the visualiser its own space. Accessible from the builder toolbar, the dashboard, and the Organise page. Named "Survey Map" (matching the existing code's terminology). Security: `@login_required`, `require_can_edit`, `@require_http_methods(["GET"])`.
 - **Move "Create repeat" into the section's context menu in the builder** (originally Tier 3.1 in the old plan).
 - **Frame branching "jump to…" targets as sections by friendly name** (originally Tier 3.2 in the old plan).
 - **First-run nudge** — open builder with "Add question" form focused (originally Tier 3.3 in the old plan).
@@ -459,11 +493,19 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 **Total Tier 3**: 5 commits, ~13 tests, 5 doc files updated.
 
+### Tier 4 (current)
+
+| # | Commit | Depends on | Tests added | Docs updated |
+|---|---|---|---|---|
+| 4.1 | Survey Map route + standalone template | — | 6 | — |
+| 4.2 | Wire Survey Map into builder/dashboard/organise; remove embedded visualiser | 4.1 | 5 | 4 files |
+
+**Total Tier 4**: 2 commits, 11 tests, 4 doc files updated.
+
 ### Deferred (post-Tier 3 PR)
 
 | # | Commit | Tests | Docs |
 |---|---|---|---|
-| — | Extract Survey Map visualiser to own route | TBD | TBD |
 | — | Move "Create repeat" to builder context menu | TBD | TBD |
 | — | Branching targets as sections by friendly name | TBD | TBD |
 | — | First-run nudge (focus Add Question form) | TBD | TBD |
