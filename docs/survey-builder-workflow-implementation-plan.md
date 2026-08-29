@@ -8,7 +8,7 @@ priority: 5
 
 **Status**: Living document — this plan will change as we learn.
 **Date**: August 2026
-**Scope**: Tier 1 ✅ merged. Tier 2 is the current focus. Tier 3 outlined.
+**Scope**: Tier 1 ✅ merged. Tier 2 ✅ implemented. Tier 3 outlined.
 **Parent design**: [Survey Builder Workflow Design](/docs/survey-builder-workflow-design/)
 
 This is a commit plan, not a design doc. The design doc describes *what* and *why*; this describes *how*, *in what order*, and *what "done" means per commit*. Each commit is atomic: it builds, it tests green, it leaves the docs consistent.
