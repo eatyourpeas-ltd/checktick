@@ -30,7 +30,10 @@
       {% include "components/icons/survey-map.html" with classes="w-4 h-4" %}
       {% trans 'Survey Map' %}
     </a>
-    <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/dashboard/">{% trans 'Back to dashboard' %}</a>
+    <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/dashboard/">
+      {% include "components/icons/checktick_your_surveys.html" with classes="w-4 h-4" %}
+      {% trans 'Back to dashboard' %}
+    </a>
   </div>
 
   <p class="text-sm text-base-content/60 mb-2">
