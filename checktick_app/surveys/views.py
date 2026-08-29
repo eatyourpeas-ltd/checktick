@@ -5991,6 +5991,10 @@ def survey_group_create(request: HttpRequest, slug: str) -> HttpResponse:
     g = QuestionGroup.objects.create(name=name, owner=request.user)
     survey.question_groups.add(g)
     messages.success(request, "Group created.")
+    # Respect a ?next= param so the builder's "Add section" can stay on the builder
+    next_url = request.POST.get("next") or request.GET.get("next")
+    if next_url:
+        return redirect(next_url + f"?gid={g.id}")
     # After creating, return to Groups view so the new group appears immediately
     return redirect("surveys:groups", slug=slug)
 
@@ -6919,6 +6923,12 @@ def survey_builder(request: HttpRequest, slug: str) -> HttpResponse:
     # shows a flat question list. A visually-hidden heading preserves the
     # section context for assistive tech (per the design doc's a11y rule).
     ctx["single_section"] = len(groups) <= 1
+
+    # HTMX section-switch requests return just the main-area partial.
+    # The mobile dropdown and desktop rail both hit this URL with ?gid=<id>.
+    if request.headers.get("HX-Request") and gid_param:
+        return render(request, "surveys/partials/builder_section_swap.html", ctx)
+
     return render(request, "surveys/survey_builder.html", ctx)
 
 

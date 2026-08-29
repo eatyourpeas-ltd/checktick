@@ -890,3 +890,126 @@ def test_survey_builder_multi_section_shows_rail(auth_client, owner):
     assert b'sr-only' not in resp.content, (
         "The visually-hidden heading should only appear for single-section surveys."
     )
+
+
+# ---------------------------------------------------------------------------
+# Commit 2.3 — HTMX section switching + inline "Add section"
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_section_switch_via_htmx_returns_partial(auth_client, owner):
+    """HTMX GET to the builder with ?gid= returns just the question pane partial."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="HTMX Switch Survey",
+        slug="htmx-switch-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
+    survey.question_groups.add(group1, group2)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group2,
+        text="Allergies?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug}) + f"?gid={group2.id}",
+        HTTP_HX_REQUEST="true",
+    )
+    assert resp.status_code == 200
+    # The partial should contain the question pane but NOT the full page chrome
+    assert b"create-question-form" in resp.content, (
+        "The HTMX partial should contain the question-create form."
+    )
+    assert b"Allergies?" in resp.content, (
+        "The selected group's questions should be in the partial."
+    )
+    # The full-page breadcrumbs should NOT be in the partial
+    assert b"breadcrumbs" not in resp.content.lower(), (
+        "The HTMX partial should not include the full page chrome (breadcrumbs)."
+    )
+
+
+@pytest.mark.django_db
+def test_section_switch_non_htmx_returns_full_page(auth_client, owner):
+    """A non-HTMX GET to the builder with ?gid= returns the full page."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Non-HTMX Survey",
+        slug="non-htmx-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug}) + f"?gid={group2.id}"
+    )
+    assert resp.status_code == 200
+    # The full page should contain breadcrumbs
+    assert b"breadcrumbs" in resp.content.lower() or b"crumb" in resp.content.lower(), (
+        "The non-HTMX response should include the full page chrome."
+    )
+
+
+@pytest.mark.django_db
+def test_add_section_via_htmx_redirects_to_builder(auth_client, owner):
+    """Posting to survey_group_create with a next= param redirects to the builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Add Section Survey",
+        slug="add-section-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.post(
+        reverse("surveys:survey_group_create", kwargs={"slug": survey.slug}),
+        data={
+            "name": "New Section",
+            "next": f"/surveys/{survey.slug}/builder/",
+        },
+    )
+    assert resp.status_code == 302
+    # Should redirect to the builder with the new group's gid
+    assert f"/surveys/{survey.slug}/builder/" in resp["Location"], (
+        "The redirect should point at the builder, not the Groups page."
+    )
+    assert "gid=" in resp["Location"], (
+        "The redirect should include the new group's gid."
+    )
+    # Verify the new group was created
+    assert survey.question_groups.count() == 2
+
+
+@pytest.mark.django_db
+def test_mobile_dropdown_triggers_htmx_swap(auth_client, owner):
+    """The mobile <select> has hx-get and hx-trigger=change for HTMX swapping."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Mobile HTMX Survey",
+        slug="mobile-htmx-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Medical History", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The dropdown should have hx-trigger="change"
+    assert b'hx-trigger="change"' in resp.content, (
+        "The mobile dropdown should have hx-trigger=change for HTMX swapping."
+    )
+    assert b'hx-target="#builder-main"' in resp.content, (
+        "The mobile dropdown should target #builder-main for the swap."
+    )
