@@ -1551,3 +1551,68 @@ def test_delete_last_section_rejected(auth_client, owner):
     assert QuestionGroup.objects.filter(id=group.id).exists()
     # The redirect should go back to the builder (via next)
     assert resp.url == f"/surveys/{survey.slug}/builder/"
+
+
+# ---------------------------------------------------------------------------
+# Commit 3.2a — Match builder card styling in Outline and AI Assistant views
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_outline_card_has_primary_border(auth_client, owner):
+    """The Outline (format reference) card has the border-primary accent."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Outline Styling Survey",
+        slug="outline-styling-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:bulk_upload", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The format reference card should have the primary border accent
+    assert (
+        b"border-l-4 border-primary" in resp.content
+    ), "The Outline format reference card should have a border-primary left accent."
+
+
+@pytest.mark.django_db
+def test_ai_assistant_card_has_primary_border(auth_client, owner):
+    """The AI Assistant conversation card has the border-primary accent."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="AI Styling Survey",
+        slug="ai-styling-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:bulk_upload", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The AI conversation card should have the primary border accent
+    assert (
+        b"border-l-4 border-primary" in resp.content
+    ), "The AI Assistant card should have a border-primary left accent."
+
+
+@pytest.mark.django_db
+def test_outline_secondary_panel_has_secondary_border(auth_client, owner):
+    """Secondary panels (session history, live preview) have the border-secondary accent."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Secondary Panel Styling Survey",
+        slug="secondary-panel-styling-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:bulk_upload", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The session history card and live preview should have the secondary border accent
+    assert (
+        b"border-l-4 border-secondary" in resp.content
+    ), "Secondary panels should have a border-secondary left accent."

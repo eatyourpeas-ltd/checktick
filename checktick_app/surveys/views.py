@@ -6011,7 +6011,9 @@ def survey_group_create(request: HttpRequest, slug: str) -> HttpResponse:
     survey.question_groups.add(g)
     messages.success(request, "Group created.")
     # Respect a ?next= param so the builder's "Add section" can stay on the builder
-    next_url = _safe_next_url(request, request.POST.get("next") or request.GET.get("next"))
+    next_url = _safe_next_url(
+        request, request.POST.get("next") or request.GET.get("next")
+    )
     if next_url:
         return redirect(next_url + f"?gid={g.id}")
     # After creating, return to Groups view so the new group appears immediately

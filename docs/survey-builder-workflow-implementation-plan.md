@@ -298,7 +298,7 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 ---
 
-### Commit 3.2a — Match builder card styling in Outline and AI Assistant views
+### Commit 3.2a — Match builder card styling in Outline and AI Assistant views ✅
 
 **Scope**: The builder's question pane and Add Question form now use a consistent card styling pattern: `bg-base-100` cards with coloured left-border accents (`border-l-4 border-primary` for the Add Question form, `border-l-4 border-secondary` for the section rail). The Outline and AI Assistant views should adopt the same pattern so all three building surfaces feel like parts of one tool.
 
