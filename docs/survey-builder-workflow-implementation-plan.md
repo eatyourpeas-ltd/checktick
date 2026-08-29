@@ -331,7 +331,7 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 ---
 
-### Commit 3.3 — Rename "Sections" page to "Organise" + replace orientation strip
+### Commit 3.3 — Rename "Sections" page to "Organise" + replace orientation strip ✅
 
 **Scope**: The Sections page needs a name ("Organise") and a page-specific explainer that describes what the page is for, not the old 3-step workflow.
 

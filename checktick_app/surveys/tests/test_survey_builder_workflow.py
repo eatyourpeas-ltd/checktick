@@ -1616,3 +1616,128 @@ def test_outline_secondary_panel_has_secondary_border(auth_client, owner):
     assert (
         b"border-l-4 border-secondary" in resp.content
     ), "Secondary panels should have a border-secondary left accent."
+
+
+# ---------------------------------------------------------------------------
+# Commit 3.3 — Rename "Sections" page to "Organise" + replace orientation strip
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_organise_page_heading(auth_client, owner):
+    """The heading says 'Organise', not 'Sections for'."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Organise Heading Survey",
+        slug="organise-heading-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert b"Organise" in resp.content, "The heading should say 'Organise'."
+    assert (
+        b"Sections for" not in resp.content
+    ), "The old 'Sections for' heading should be gone."
+
+
+@pytest.mark.django_db
+def test_organise_page_explainer(auth_client, owner):
+    """The explainer mentions reordering, repeats, branching, visualising, and publishing."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Organise Explainer Survey",
+        slug="organise-explainer-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert (
+        b"reorder" in resp.content.lower() or b"Reorder" in resp.content
+    ), "The explainer should mention reordering."
+    assert b"repeat" in resp.content.lower(), "The explainer should mention repeats."
+    assert b"branch" in resp.content.lower(), "The explainer should mention branching."
+    assert (
+        b"visualis" in resp.content.lower() or b"visualiz" in resp.content.lower()
+    ), "The explainer should mention visualising."
+    assert (
+        b"publish" in resp.content.lower()
+    ), "The explainer should mention publishing."
+
+
+@pytest.mark.django_db
+def test_organise_page_links_to_builder(auth_client, owner):
+    """The explainer links back to the builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Organise Link Survey",
+        slug="organise-link-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    assert (
+        builder_url.encode() in resp.content
+    ), "The explainer should link back to the builder."
+    assert (
+        b"Builder" in resp.content
+    ), "The explainer should mention the Builder by name."
+
+
+@pytest.mark.django_db
+def test_organise_page_no_orientation_strip(auth_client, owner):
+    """The old 3-step orientation strip should be gone."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="No Orientation Strip Survey",
+        slug="no-orientation-strip-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert (
+        b"Where you are" not in resp.content
+    ), "The old 'Where you are' orientation strip should be gone."
+    assert (
+        b"you are here" not in resp.content
+    ), "The old 'you are here' badge should be gone."
+
+
+@pytest.mark.django_db
+def test_builder_toolbar_says_organise(auth_client, owner):
+    """The builder toolbar button says 'Organise', not 'Organise sections'."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Toolbar Organise Survey",
+        slug="toolbar-organise-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Test question?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert b">Organise<" in resp.content, "The toolbar button should say 'Organise'."
+    assert (
+        b"Organise sections" not in resp.content
+    ), "The old 'Organise sections' label should be gone."

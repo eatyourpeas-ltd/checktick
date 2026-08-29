@@ -1,0 +1,27 @@
+{% load i18n %}
+{% comment %}
+    Organise page explainer — replaces the old 3-step orientation strip
+    (Survey → Sections → Questions) on the Groups/Organise page.
+
+    Describes what the page is for, not the old workflow.
+
+    Context: survey (for the builder link).
+{% endcomment %}
+<div class="not-prose mt-6 max-w-2xl">
+  <div class="card bg-base-100 shadow-sm border-l-4 border-secondary">
+    <div class="card-body p-4">
+      <p class="text-sm font-semibold text-base-content mb-2">{% trans "This is the Organise page. Use it to:" %}</p>
+      <ul class="list-disc pl-5 space-y-1 text-sm text-base-content/80">
+        <li>{% trans "Reorder sections by drag and drop" %}</li>
+        <li>{% trans "Create and manage repeats" %}</li>
+        <li>{% trans "Set up branching between sections" %}</li>
+        <li>{% trans "Visualise the survey as a flow diagram" %}</li>
+        <li>{% trans "Publish sections as reusable templates" %}</li>
+      </ul>
+      <p class="text-sm text-base-content/70 mt-3">
+        {% trans "For adding and editing questions, use the" %}
+        <a href="/surveys/{{ survey.slug }}/builder/" class="link underline font-semibold">{% trans "Builder" %}</a>.
+      </p>
+    </div>
+  </div>
+</div>
