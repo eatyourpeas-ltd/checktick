@@ -182,14 +182,16 @@ Work is split into three tiers so value can be shipped incrementally. **Tier 1 i
 - ✅ Reframe Organise as a small advanced page (removed explainer card and info alerts)
 
 *TODO — future PR:*
-- [ ] Frame branching targets as sections by friendly name (originally 3.2)
-- [ ] Move "Share as template" to per-section action (originally 3.4)
+- [ ] **Branching targets by section** (originally 3.2) — see [`docs/branching-targets-by-section.md`](/docs/branching-targets-by-section/) for the full feature spec. Adds a "jump to section" target type alongside the existing "jump to question", resolving the section to its first question at config-build time. Uses the dormant `target_group` FK on `SurveyQuestionCondition`.
+
+*Decided — will not do:*
+- ✅ **"Share as template" stays on the Organise page** (originally 3.4). Publishing is a distribution action, not an authoring action. The Organise page is the canonical "section-level operations" surface; duplicating publish in the Builder would dilute the Builder's focus without adding capability. The Builder already signposts the Question Bank (for import) in its empty state; export/publish is naturally discovered via the Organise toolbar, which is one click from the Builder. The single-section publishing case (OQ6) is also handled from Organise.
 
 *Completed:*
 - ✅ First-run nudge — focus the Add Question form (originally 3.3). The empty-state nudge card is consistent across all swap paths (shared `builder_questions_empty.html` partial), and the Add Question text input is auto-focused when the active section has no questions (`data-autofocus` signal + `focusFirstQuestionInput()` in `builder.js`).
 
 *Stays in Organise by design:*
-- Publish as template (can apply to multiple sections)
+- Publish as template (can apply to multiple sections) — and will remain here; see the "Decided — will not do" note above.
 - Branching (between sections, not within them)
 - Multi-section repeat (bulk select)
 

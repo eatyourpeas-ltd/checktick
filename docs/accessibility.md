@@ -99,6 +99,23 @@ Our accessibility focus prioritises **survey respondents** - the patients, profe
 
 - SVG icons use `aria-hidden="true"` to prevent screen reader clutter
 
+## Builder Accessibility
+
+The survey **Builder** (where authors add and edit questions) must stay WCAG 2.2 AA alongside the respondent-facing survey form.
+
+### Builder WCAG 2.2 AA contract
+
+- The section rail needs clear heading hierarchy and keyboard-operable "Add section" and reorder controls.
+- The "invisible until needed" pattern must use visually-hidden headings, not remove semantic structure. Removing the heading would break the heading hierarchy for screen readers; hiding it visually preserves the outline for assistive tech.
+
+### Single-section visually-hidden heading
+
+When a survey has only one section, the Builder renders a visually-hidden `<h2>` announcing the section name for assistive tech. The rail still renders (with one section and an "Add section" button), but the hidden heading preserves context for screen readers so the single-section state is not a blank, structureless page.
+
+### Single-section respondent header suppression
+
+On the respondent-facing survey, when there is only one section, the visible section header is removed but the `<fieldset>`/`<legend>` structure is preserved for assistive tech. The grouping semantics remain; only the redundant visible heading is suppressed.
+
 ## Colour Contrast
 
 CheckTick uses [DaisyUI](https://daisyui.com/) themes which are designed to meet WCAG AA contrast requirements. The default themes (`checktick-light` and `checktick-dark`) are tested against WCAG 2.2 AA rules and provide:

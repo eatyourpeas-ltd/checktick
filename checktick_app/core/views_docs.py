@@ -210,6 +210,11 @@ DOC_PAGE_OVERRIDES = {
         "category": "development",
         "title": "Branching Logic - Technical Guide",
     },
+    "branching-targets-by-section": {
+        "file": "branching-targets-by-section.md",
+        "category": "development",
+        "title": "Branching Targets by Section",
+    },
     "documentation-system": {
         "file": "documentation-system.md",
         "category": "getting-involved",

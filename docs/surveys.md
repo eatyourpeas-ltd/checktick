@@ -86,7 +86,11 @@ Questions live inside a single section. When you add a question, the builder aut
 
 You can use the Outline when you already have content drafted. The Outline lets you specify sections and questions in a single text document: top-level headings become sections, and nested headings/items become questions. After import you can continue refining sections and questions in the Builder.
 
-> **Technical note:** In the code, API, and data model, sections are called `QuestionGroup`. The user-facing label is "Sections".
+**Design rationale:** The Builder exists to remove the "name a group first" gate. Users start with questions (their mental model); sections emerge as an optional organising tool that is invisible until needed. The goal is to match the simplicity of Google Forms / Typeform / SurveyMonkey for simple surveys while preserving the full power of sections (branching, repeats, publishing) for complex ones.
+
+**Non-goals:** The redesign was a presentation/workflow change only — no data-model migration. Every question still belongs to exactly one `QuestionGroup`. Existing surveys render under the new model with no migration (N groups = N sections).
+
+> **Naming rules:** In the code, API, data model, and docs, sections are called `QuestionGroup`. The user-facing UI says "Section" / "Sections". The template library is "Question Bank" in the UI (navbar + page title) but `PublishedQuestionGroup` / `published_templates_list` / `/surveys/templates/` in code. Publishing action labels: "Share as template" / "Publish to Question Bank" (UI) vs `question_group_publish` view (code).
 
 ## Question types
 

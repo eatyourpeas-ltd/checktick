@@ -460,8 +460,11 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 ### TODO — future PR
 
-- [ ] **Frame branching "jump to…" targets as sections by friendly name** (originally Tier 3.2 in the old plan). The branching condition picker currently shows group IDs; it should show friendly section names instead.
-- [ ] **Move "Share as template" to per-section action** in the builder (originally Tier 3.4 in the old plan). Includes the single-section publishing case (OQ6). Currently Publish stays on the Organise page because it can apply to multiple sections; a per-section publish button in the builder rail would complement (not replace) the Organise page's bulk publish.
+- [ ] **Branching targets by section** (originally Tier 3.2 in the old plan). Adds a "jump to section" target type alongside the existing "jump to question", resolving the section to its first question at config-build time. Uses the dormant `target_group` FK on `SurveyQuestionCondition`. Full spec: [`docs/branching-targets-by-section.md`](/docs/branching-targets-by-section/).
+
+### Decided — will not do
+
+- **"Share as template" stays on the Organise page** (originally Tier 3.4 in the old plan). Publishing is a distribution action, not an authoring action. The Organise page is the canonical "section-level operations" surface; duplicating publish in the Builder would dilute the Builder's focus without adding capability. The Builder already signposts the Question Bank (for import) in its empty state; export/publish is naturally discovered via the Organise toolbar, which is one click from the Builder. The single-section publishing case (OQ6) is also handled from Organise.
 
 ---
 
@@ -520,13 +523,12 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 ### Deferred (post-Tier 3 PR)
 
-| # | Commit | Tests | Docs |
+| # | Item | Status | Docs |
 |---|---|---|---|
-| — | Branching targets as sections by friendly name | TBD | TBD |
-| — | First-run nudge (focus Add Question form) | TBD | TBD |
-| — | "Share as template" per-section in builder | TBD | TBD |
-
-> **Completed:** "Move 'Create repeat' to builder context menu" was delivered in the visualise branch (single-section repeat create/edit/remove from the builder rail; multi-section repeat remains on Organise). See "Completed in this PR (visualise branch)" above.
+| — | Move "Create repeat" to builder context menu | ✅ Completed (visualise branch) | — |
+| — | First-run nudge (focus Add Question form) | ✅ Completed | — |
+| — | Branching targets by section | 📋 Spec'd — see [`docs/branching-targets-by-section.md`](/docs/branching-targets-by-section/) | TBD |
+| — | "Share as template" per-section in builder | ❌ Decided not to do — stays on Organise | — |
 
 ---
 

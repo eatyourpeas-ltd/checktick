@@ -30,7 +30,7 @@ Publish templates visible to all Checktick users:
 ## Publishing a section
 
 1. Go to your survey's Sections page
-2. Click **Publish** next to any section
+2. Click **Share as template** (labelled **Publish to Question Bank** in some views) next to any section
 3. Choose publication level (Organisation or Global)
 4. Add attribution information:
    - Author names and ORCID IDs (optional)
@@ -40,6 +40,8 @@ Publish templates visible to all Checktick users:
 5. Add tags for discoverability
 6. Preview the markdown representation
 7. Confirm publication
+
+The action still creates a `PublishedQuestionGroup` and uses the `question_group_publish` view — only the user-facing label has changed from "Publish" to "Share as template" / "Publish to Question Bank".
 
 **Rate limit:** 10 publications per day per user
 
