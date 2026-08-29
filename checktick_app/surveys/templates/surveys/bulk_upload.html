@@ -11,7 +11,7 @@
 </div>
 
 <h1 class="inline-flex items-center gap-2 text-3xl font-bold mb-6">
-  {% include "components/icons/document.html" with classes="w-6 h-6" %}
+  {% include "components/icons/checktick_question.html" with classes="w-6 h-6" %}
   <span>{% trans "Add questions" %}: {{ survey.name }}</span>
 </h1>
 
@@ -284,7 +284,7 @@ dataset: medical_specialties</code></pre>
     <!-- Import Questions Button -->
     <div>
       <button class="btn btn-primary" type="button" id="bulk-import-open-modal-top">
-        {% include "components/icons/document.html" with classes="w-5 h-5" %}
+        {% include "components/icons/checktick_question.html" with classes="w-5 h-5" %}
         <span>
           {% if has_questions %}
             {% trans "Reimport questions" %}
