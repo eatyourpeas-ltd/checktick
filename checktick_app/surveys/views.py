@@ -31,6 +31,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
@@ -91,6 +92,24 @@ logger = logging.getLogger(__name__)
 # so it reads correctly if a second section is added later, and is rarely seen
 # because single-section surveys hide the section chrome (Tier 2.2).
 DEFAULT_SECTION_NAME = "Section 1"
+
+
+def _safe_next_url(request, next_url):
+    """Validate a user-supplied ``next`` redirect URL.
+
+    Returns the URL if it is safe (same-host or relative), otherwise ``None``.
+    Uses Django's ``url_has_allowed_host_and_scheme`` — the same pattern used
+    in the signup/OIDC flows (see security review F1).
+    """
+    if not next_url:
+        return None
+    if url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return next_url
+    return None
 
 
 def create_default_section(survey: Survey, owner) -> QuestionGroup:
@@ -5992,7 +6011,7 @@ def survey_group_create(request: HttpRequest, slug: str) -> HttpResponse:
     survey.question_groups.add(g)
     messages.success(request, "Group created.")
     # Respect a ?next= param so the builder's "Add section" can stay on the builder
-    next_url = request.POST.get("next") or request.GET.get("next")
+    next_url = _safe_next_url(request, request.POST.get("next") or request.GET.get("next"))
     if next_url:
         return redirect(next_url + f"?gid={g.id}")
     # After creating, return to Groups view so the new group appears immediately
@@ -6013,6 +6032,9 @@ def survey_group_edit(request: HttpRequest, slug: str, gid: int) -> HttpResponse
     group.description = strip_tags(raw_desc).strip() if raw_desc else group.description
     group.save(update_fields=["name", "description"])
     messages.success(request, "Section updated.")
+    next_url = _safe_next_url(request, request.POST.get("next"))
+    if next_url:
+        return redirect(next_url)
     return redirect("surveys:groups", slug=slug)
 
 
@@ -6022,6 +6044,14 @@ def survey_group_delete(request: HttpRequest, slug: str, gid: int) -> HttpRespon
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
     group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)
+    # Reject deletion of the last remaining section — a survey must always
+    # have at least one group so the builder has somewhere to put questions.
+    if survey.question_groups.count() <= 1:
+        messages.error(request, "Cannot delete the last remaining section.")
+        next_url = _safe_next_url(request, request.POST.get("next"))
+        if next_url:
+            return redirect(next_url)
+        return redirect("surveys:groups", slug=slug)
     # Delete the SurveyQuestion records belonging to this group on this survey
     survey.questions.filter(group=group).delete()
     # Detach from this survey; optionally delete the group if not used elsewhere
@@ -6029,7 +6059,9 @@ def survey_group_delete(request: HttpRequest, slug: str, gid: int) -> HttpRespon
     if not group.surveys.exists():
         group.delete()
     messages.success(request, "Group deleted.")
-    # After deletion, return to Groups view so the list refreshes in place
+    next_url = _safe_next_url(request, request.POST.get("next"))
+    if next_url:
+        return redirect(next_url)
     return redirect("surveys:groups", slug=slug)
 
 
@@ -6919,9 +6951,9 @@ def survey_builder(request: HttpRequest, slug: str) -> HttpResponse:
     ctx = _build_question_pane_context(request, survey, active_group)
     ctx["groups"] = groups
     ctx["active_group"] = active_group
-    # Suppress the section rail for single-section surveys so the builder
-    # shows a flat question list. A visually-hidden heading preserves the
-    # section context for assistive tech (per the design doc's a11y rule).
+    # The rail always renders when the survey has at least one group.
+    # A visually-hidden heading preserves the section context for assistive
+    # tech when there is only one section (per the design doc's a11y rule).
     ctx["single_section"] = len(groups) <= 1
     ctx["has_questions"] = survey.questions.exists()
 

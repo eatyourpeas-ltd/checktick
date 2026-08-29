@@ -41,7 +41,10 @@
     <a href="{% url 'surveys:published_templates_list' %}" class="link underline font-semibold">{% trans "Browse the Question Bank" %}</a>.
   </p>
   <p class="text-xs">
-    {% trans "Questions can be grouped into sections for branching, repeats, or sharing — see the" %}
-    <a href="/docs/groups-view/" class="link underline font-semibold" target="_blank" rel="noopener noreferrer">{% trans "Sections guide" %}</a>.
+    {% trans "Questions can be grouped into sections for branching, repeats, or sharing on the " %}
+    <a href="{% url 'surveys:groups' slug=survey.slug %}" class="link underline font-semibold">{% trans "Organise page." %}</a>
+    {% trans " See the " %}
+    <a href="/docs/groups-view/" class="link underline font-semibold" target="_blank" rel="noopener noreferrer">{% trans "Sections guide" %}</a>
+    {% trans "for more information." %}
   </p>
 </div>

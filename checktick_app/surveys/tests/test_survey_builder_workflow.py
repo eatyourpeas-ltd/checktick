@@ -824,7 +824,12 @@ def test_survey_builder_requires_edit_permission(auth_client, owner, django_user
 
 @pytest.mark.django_db
 def test_survey_builder_single_section_hides_rail(auth_client, owner):
-    """A single-section survey renders no section rail or dropdown."""
+    """A single-section survey now renders the rail (commit 3.2 changed this).
+
+    Previously the rail was hidden for single-section surveys. Commit 3.2
+    always renders the rail so users can see that sections exist and add more.
+    The mobile dropdown is still hidden for single-section surveys.
+    """
     survey = Survey.objects.create(
         owner=owner,
         name="Single Section Builder Survey",
@@ -839,14 +844,14 @@ def test_survey_builder_single_section_hides_rail(auth_client, owner):
     )
     assert resp.status_code == 200
 
-    # The mobile dropdown should NOT be present
+    # The mobile dropdown should NOT be present (single section)
     assert (
         b"md:hidden" not in resp.content
     ), "The mobile dropdown should not be present for a single-section survey."
-    # The desktop rail should NOT be present
+    # The desktop rail SHOULD now be present (commit 3.2 — always render)
     assert (
-        b"hidden md:block" not in resp.content
-    ), "The desktop rail should not be present for a single-section survey."
+        b'id="builder-rail"' in resp.content
+    ), "The desktop rail should now be present for a single-section survey."
 
 
 @pytest.mark.django_db
@@ -1344,3 +1349,205 @@ def test_groups_page_has_back_to_builder_link(auth_client, owner):
     assert (
         builder_url.encode() in resp.content
     ), "The Sections page should have a 'Back to builder' link."
+
+
+# ---------------------------------------------------------------------------
+# Commit 3.2 — Always render the section rail + add rename/delete to rail items
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_rail_always_renders_for_single_section(auth_client, owner):
+    """A single-section survey now shows the rail (previously hidden)."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Single Section Rail Survey",
+        slug="single-section-rail-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b'id="builder-rail"' in resp.content
+    ), "The section rail should always render when the survey has at least one group."
+
+
+@pytest.mark.django_db
+def test_rail_has_rename_button(auth_client, owner):
+    """Each rail item has a rename button."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Rename Survey",
+        slug="rail-rename-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"rename-section-btn" in resp.content
+    ), "Each rail item should have a rename button."
+
+
+@pytest.mark.django_db
+def test_rail_has_delete_button_for_second_section(auth_client, owner):
+    """A multi-section survey shows a delete button on the second and subsequent rail items."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Delete Multi Survey",
+        slug="rail-delete-multi-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+    # Add a second section
+    group2 = QuestionGroup.objects.create(name="Second Section", owner=owner)
+    survey.question_groups.add(group2)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"delete-section-btn" in resp.content
+    ), "The second and subsequent rail items should have a delete button."
+
+
+@pytest.mark.django_db
+def test_rail_first_section_has_no_delete_button(auth_client, owner):
+    """The first (or only) section's rail item does not show a delete button."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Delete Single Survey",
+        slug="rail-delete-single-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"delete-section-btn" not in resp.content
+    ), "The first/only section should not have a delete button."
+
+
+@pytest.mark.django_db
+def test_rename_from_builder_redirects_to_builder(auth_client, owner):
+    """POSTing to survey_group_edit with next=/surveys/<slug>/builder/ redirects back to the builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rename Redirect Survey",
+        slug="rename-redirect-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    resp = auth_client.post(
+        reverse(
+            "surveys:survey_group_edit",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        ),
+        data={
+            "name": "Renamed Section",
+            "description": "",
+            "next": f"/surveys/{survey.slug}/builder/",
+        },
+    )
+    assert resp.status_code == 302
+    assert resp.url == f"/surveys/{survey.slug}/builder/"
+    group.refresh_from_db()
+    assert group.name == "Renamed Section"
+
+
+@pytest.mark.django_db
+def test_rename_from_builder_strips_xss(auth_client, owner):
+    """A group name with <script> tags is sanitised."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rename XSS Survey",
+        slug="rename-xss-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    auth_client.post(
+        reverse(
+            "surveys:survey_group_edit",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        ),
+        data={
+            "name": "<script>alert('xss')</script>Evil",
+            "description": "",
+            "next": f"/surveys/{survey.slug}/builder/",
+        },
+    )
+    group.refresh_from_db()
+    assert "<script>" not in group.name
+    assert "</script>" not in group.name
+    assert group.name == "alert('xss')Evil"
+
+
+@pytest.mark.django_db
+def test_delete_section_from_builder_redirects_to_builder(auth_client, owner):
+    """POSTing to survey_group_delete with next=/surveys/<slug>/builder/ deletes the section and redirects back to the builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Delete Redirect Survey",
+        slug="delete-redirect-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    _ = create_default_section(survey, owner)
+    group2 = QuestionGroup.objects.create(name="Second Section", owner=owner)
+    survey.question_groups.add(group2)
+
+    resp = auth_client.post(
+        reverse(
+            "surveys:survey_group_delete",
+            kwargs={"slug": survey.slug, "gid": group2.id},
+        ),
+        data={"next": f"/surveys/{survey.slug}/builder/"},
+    )
+    assert resp.status_code == 302
+    assert resp.url == f"/surveys/{survey.slug}/builder/"
+    assert not QuestionGroup.objects.filter(id=group2.id).exists()
+
+
+@pytest.mark.django_db
+def test_delete_last_section_rejected(auth_client, owner):
+    """Attempting to delete the only remaining section is rejected."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Delete Last Section Survey",
+        slug="delete-last-section-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    resp = auth_client.post(
+        reverse(
+            "surveys:survey_group_delete",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        ),
+        data={"next": f"/surveys/{survey.slug}/builder/"},
+    )
+    assert resp.status_code == 302
+    # The section should still exist
+    assert QuestionGroup.objects.filter(id=group.id).exists()
+    # The redirect should go back to the builder (via next)
+    assert resp.url == f"/surveys/{survey.slug}/builder/"

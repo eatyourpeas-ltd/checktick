@@ -57,14 +57,12 @@
   {% endif %}
 
   <div class="grid md:grid-cols-4 gap-6">
-    {# === Desktop section rail (hidden on mobile) === #}
-    {% if groups|length > 1 %}
+    {# === Desktop section rail (hidden on mobile) — always rendered when groups exist === #}
     {% include 'surveys/partials/builder_section_rail.html' %}
-    {% endif %}
 
     {# === Main question pane === #}
     <div id="builder-main" class="{% if groups|length > 1 %}md:col-span-3{% else %}md:col-span-4{% endif %}">
-      {# Visually-hidden section heading for assistive tech when the rail is hidden. #}
+      {# Visually-hidden section heading for assistive tech when there is only one section. #}
       {% if single_section %}
       <h2 class="sr-only">{% trans "Section" %}: {{ active_group.name }}</h2>
       {% endif %}
@@ -78,4 +76,5 @@
   integrity="{{ cdn_assets.sortablejs.sri }}"
   crossorigin="anonymous"></script>
 <script src="{% static 'js/builder.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}"></script>
+<script src="{% static 'js/builder-rail.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}"></script>
 {% endblock %}

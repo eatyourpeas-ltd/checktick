@@ -298,6 +298,39 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 ---
 
+### Commit 3.2a — Match builder card styling in Outline and AI Assistant views
+
+**Scope**: The builder's question pane and Add Question form now use a consistent card styling pattern: `bg-base-100` cards with coloured left-border accents (`border-l-4 border-primary` for the Add Question form, `border-l-4 border-secondary` for the section rail). The Outline and AI Assistant views should adopt the same pattern so all three building surfaces feel like parts of one tool.
+
+**Background**: During commit 3.1/3.2 we discovered that the builder's three-column layout (`grid md:grid-cols-3`) was too cramped for the Add Question form's tabs. We switched to a vertical stack (`flex flex-col`) with full-width cards. The Outline and AI Assistant views already use a similar stacked layout but their cards don't have the coloured left-border accents or the `shadow-sm` treatment. This commit brings them in line.
+
+**Files**:
+- `checktick_app/surveys/templates/surveys/outline.html` (or equivalent) — apply `card bg-base-100 shadow-sm border-l-4 border-primary` to the main editing card, matching the builder's Add Question form. If the Outline view has a secondary card (e.g. a preview or help panel), give it `border-l-4 border-secondary` to match the section rail.
+- `checktick_app/surveys/templates/surveys/ai_assistant.html` (or equivalent) — same treatment: `card bg-base-100 shadow-sm border-l-4 border-primary` for the main interaction card, `border-l-4 border-secondary` for any secondary panel.
+- `checktick_app/static/css/daisyui_themes.css` — if the Outline or AI Assistant views use the `.builder-editor-card` class (or a similar custom class), ensure the `border-left` accent is applied consistently. If they don't use a custom class, add one (e.g. `.outline-editor-card`, `.ai-editor-card`) following the same pattern as `.builder-editor-card`.
+
+**Styling rules** (established in commit 3.1/3.2, to be applied consistently):
+- All building-surface cards use `bg-base-100` (lighter than the `bg-base-200` page background, so they stand out).
+- The primary editing/interaction card in each view gets a 4px `border-primary` left border (via CSS, not Tailwind, if a custom class is involved — see `.builder-editor-card` in `daisyui_themes.css`).
+- Secondary panels (rail, help, preview) get a 4px `border-secondary` left border.
+- All cards use `shadow-sm` (not `shadow` or `shadow-lg`) for a subtle elevation.
+- Tab content panels inside cards use `bg-base-100` (lighter inserts within the tinted card — but since the cards are now `bg-base-100` too, the tab panels blend seamlessly).
+- Text remains `text-base-content` on `bg-base-100` — the same WCAG AA-compliant pair used throughout the app. The coloured borders are decorative and don't affect text contrast.
+
+**Tests**:
+- `test_outline_card_has_primary_border` — the Outline view's main card has the `border-primary` accent.
+- `test_ai_assistant_card_has_primary_border` — the AI Assistant view's main card has the `border-primary` accent.
+- (If secondary panels exist) `test_outline_secondary_panel_has_secondary_border` / `test_ai_assistant_secondary_panel_has_secondary_border`.
+
+**Exit criteria**:
+- All three building surfaces (Builder, Outline, AI Assistant) use the same card styling pattern.
+- The coloured left-border accents provide visual distinction without affecting text contrast.
+- `s/test --no-a11y` passes.
+
+**Docs**: None yet. Docs sweep is commit 3.5.
+
+---
+
 ### Commit 3.3 — Rename "Sections" page to "Organise" + replace orientation strip
 
 **Scope**: The Sections page needs a name ("Organise") and a page-specific explainer that describes what the page is for, not the old 3-step workflow.
