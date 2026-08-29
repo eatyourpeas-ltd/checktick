@@ -400,8 +400,8 @@ def test_groups_empty_state_keeps_question_bank_link(auth_client, owner):
 
 
 @pytest.mark.django_db
-def test_groups_page_has_rename_button(auth_client, owner):
-    """Each section row in the groups page has a 'Rename' button."""
+def test_groups_page_no_rename_button(auth_client, owner):
+    """The Organise page no longer has a rename button — rename is builder-only."""
     survey = Survey.objects.create(
         owner=owner,
         name="Rename Button Survey",
@@ -415,11 +415,61 @@ def test_groups_page_has_rename_button(auth_client, owner):
     assert resp.status_code == 200
 
     assert (
-        b"rename-section-btn" in resp.content
-    ), "Each section row should have a rename button with class 'rename-section-btn'."
+        b"rename-section-btn" not in resp.content
+    ), "The Organise page should not have a rename button (it's builder-only now)."
     assert (
-        b"Rename section" in resp.content
-    ), "The rename button tooltip should say 'Rename section'."
+        b"rename-section-modal" not in resp.content
+    ), "The Organise page should not have a rename modal (it's builder-only now)."
+
+
+@pytest.mark.django_db
+def test_groups_page_no_delete_button(auth_client, owner):
+    """The Organise page no longer has a per-row delete button — delete is builder-only."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Delete Button Survey",
+        slug="delete-button-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Section 1", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Section 2", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The delete form action should not appear in the Organise page.
+    delete_url = f"/surveys/{survey.slug}/groups/{group2.id}/delete"
+    assert (
+        delete_url.encode() not in resp.content
+    ), "The Organise page should not have a per-row delete form (it's builder-only now)."
+    # But the publish button should still be there.
+    assert (
+        b"Publish" in resp.content
+    ), "The Organise page should still have a Publish button."
+
+
+@pytest.mark.django_db
+def test_groups_page_points_to_builder_for_rename_delete(auth_client, owner):
+    """The Organise page signposts the Builder for rename/delete."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Signpost Survey",
+        slug="signpost-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    assert (
+        builder_url.encode() in resp.content
+    ), "The Organise page should link to the Builder for rename/delete."
+    assert (
+        b"Builder" in resp.content
+    ), "The Organise page should mention the Builder by name."
 
 
 @pytest.mark.django_db
@@ -818,6 +868,278 @@ def test_survey_builder_requires_edit_permission(auth_client, owner, django_user
     assert (
         resp.status_code == 403
     ), "A viewer without edit access should get 403 on the builder."
+
+
+# ---------------------------------------------------------------------------
+# Section rail drag-reorder (reuses the Organise page's survey_groups_reorder)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_builder_rail_has_drag_handles_for_editors(auth_client, owner):
+    """The builder rail renders a drag handle on each section for editors."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Drag Handle Survey",
+        slug="rail-drag-handle-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="History", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"drag-handle" in resp.content
+    ), "The rail should render a drag handle for editors."
+    # The rail list should carry the reorder URL and can-edit flag for the JS.
+    assert (
+        b'data-reorder-url="/surveys/rail-drag-handle-survey/groups/reorder"'
+        in resp.content
+    )
+    assert b'data-can-edit="true"' in resp.content
+    # Each rail item should expose its group id for the reorder JS to collect.
+    assert f'data-gid="{group1.id}"'.encode() in resp.content
+    assert f'data-gid="{group2.id}"'.encode() in resp.content
+
+
+@pytest.mark.django_db
+def test_builder_rail_reorder_persists_via_existing_endpoint(auth_client, owner):
+    """Reordering from the builder rail POSTs to the shared survey_groups_reorder
+    endpoint and persists the new order on survey.style.group_order."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Reorder Survey",
+        slug="rail-reorder-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="History", owner=owner)
+    group3 = QuestionGroup.objects.create(name="Follow-up", owner=owner)
+    survey.question_groups.add(group1, group2, group3)
+
+    # The rail JS POSTs order=ids.join(",") — same shape as the Organise page.
+    new_order = [group3.id, group1.id, group2.id]
+    resp = auth_client.post(
+        reverse("surveys:survey_groups_reorder", kwargs={"slug": survey.slug}),
+        data={"order": ",".join(str(i) for i in new_order)},
+    )
+    assert resp.status_code in (302, 200)
+    survey.refresh_from_db()
+    assert (survey.style or {}).get("group_order") == new_order
+
+
+@pytest.mark.django_db
+def test_builder_rail_oob_swap_preserves_drag_handles(auth_client, owner):
+    """After an HTMX section-switch (which OOB-swaps the rail), the rail still
+    has drag handles and data attributes — i.e. the OOB swap uses the same
+    partial as the initial render, not stale markup."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail OOB Survey",
+        slug="rail-oob-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="History", owner=owner)
+    survey.question_groups.add(group1, group2)
+    SurveyQuestion.objects.create(
+        survey=survey, group=group1, text="Q1?", type=SurveyQuestion.Types.TEXT
+    )
+
+    # Simulate clicking section 2 via HTMX (the same request the rail <a> fires).
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug}),
+        {"gid": str(group2.id)},
+        HTTP_HX_REQUEST="true",
+    )
+    assert resp.status_code == 200
+    # The OOB-swapped rail should still have drag handles and the rail list id.
+    assert b"drag-handle" in resp.content, "OOB rail should still have drag handles."
+    assert (
+        b"builder-rail-list" in resp.content
+    ), "OOB rail should still have the list id."
+    assert f'data-gid="{group2.id}"'.encode() in resp.content
+
+
+# ---------------------------------------------------------------------------
+# Repeat controls in the builder rail
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_builder_rail_has_create_repeat_button(auth_client, owner):
+    """Non-repeated sections show a 'Make repeatable' button in the rail."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Repeat Create Survey",
+        slug="rail-repeat-create-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="History", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"create-repeat-btn" in resp.content
+    ), "Rail should have a create-repeat button."
+    assert b"Make this section repeatable" in resp.content
+    # The repeat create modal should be present.
+    assert b"repeat-create-modal" in resp.content
+    assert b"repeat-create-form" in resp.content
+
+
+@pytest.mark.django_db
+def test_builder_rail_has_edit_repeat_button_when_repeated(auth_client, owner):
+    """Repeated sections show an edit-repeat button instead of create-repeat."""
+    from checktick_app.surveys.models import CollectionDefinition, CollectionItem
+
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Repeat Edit Survey",
+        slug="rail-repeat-edit-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Visits", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Other", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    # Make group1 a repeat.
+    cd = CollectionDefinition.objects.create(
+        survey=survey, key="visits", name="Visits", max_count=5
+    )
+    CollectionItem.objects.create(
+        collection=cd, item_type=CollectionItem.ItemType.GROUP, group=group1, order=0
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    # group1 should have an edit-repeat button, not a create-repeat button.
+    assert (
+        b"edit-repeat-btn" in resp.content
+    ), "Repeated section should have edit-repeat button."
+    # group2 (non-repeated) should still have create-repeat.
+    assert b"create-repeat-btn" in resp.content
+    # The repeat edit modal should be present.
+    assert b"repeat-edit-modal" in resp.content
+
+
+@pytest.mark.django_db
+def test_create_repeat_from_builder_redirects_to_builder(auth_client, owner):
+    """POSTing to survey_groups_repeat_create with next=/builder/ redirects back to the builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Repeat From Builder Survey",
+        slug="repeat-from-builder-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Visits", owner=owner)
+    survey.question_groups.add(group1)
+
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    resp = auth_client.post(
+        reverse("surveys:survey_groups_repeat_create", kwargs={"slug": survey.slug}),
+        data={
+            "name": "Visits",
+            "min_count": "0",
+            "max_count": "5",
+            "group_ids": str(group1.id),
+            "next": builder_url,
+        },
+    )
+    assert resp.status_code == 302
+    assert resp.url == builder_url, "Should redirect back to the builder."
+
+
+@pytest.mark.django_db
+def test_remove_repeat_from_builder_redirects_to_builder(auth_client, owner):
+    """POSTing to survey_group_repeat_remove with next=/builder/ redirects back to the builder."""
+    from checktick_app.surveys.models import CollectionDefinition, CollectionItem
+
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Remove Repeat Builder Survey",
+        slug="remove-repeat-builder-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Visits", owner=owner)
+    survey.question_groups.add(group1)
+    cd = CollectionDefinition.objects.create(
+        survey=survey, key="visits", name="Visits", max_count=5
+    )
+    CollectionItem.objects.create(
+        collection=cd, item_type=CollectionItem.ItemType.GROUP, group=group1, order=0
+    )
+
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    resp = auth_client.post(
+        reverse(
+            "surveys:survey_group_repeat_remove",
+            kwargs={"slug": survey.slug, "gid": group1.id},
+        ),
+        data={"next": builder_url},
+    )
+    assert resp.status_code == 302
+    assert resp.url == builder_url, "Should redirect back to the builder."
+    # The group should no longer be in a repeat.
+    assert not CollectionItem.objects.filter(
+        collection__survey=survey, group=group1
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_edit_repeat_from_builder_redirects_to_builder(auth_client, owner):
+    """POSTing to survey_groups_repeat_edit with next=/builder/ redirects back to the builder."""
+    from checktick_app.surveys.models import CollectionDefinition, CollectionItem
+
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Edit Repeat Builder Survey",
+        slug="edit-repeat-builder-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Visits", owner=owner)
+    survey.question_groups.add(group1)
+    cd = CollectionDefinition.objects.create(
+        survey=survey, key="visits", name="Visits", max_count=5
+    )
+    CollectionItem.objects.create(
+        collection=cd, item_type=CollectionItem.ItemType.GROUP, group=group1, order=0
+    )
+
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    resp = auth_client.post(
+        reverse("surveys:survey_groups_repeat_edit", kwargs={"slug": survey.slug}),
+        data={
+            "collection_id": str(cd.id),
+            "name": "Updated Visits",
+            "min_count": "1",
+            "max_count": "3",
+            "next": builder_url,
+        },
+    )
+    assert resp.status_code == 302
+    assert resp.url == builder_url, "Should redirect back to the builder."
+    cd.refresh_from_db()
+    assert cd.name == "Updated Visits"
+    assert cd.max_count == 3
 
 
 # ---------------------------------------------------------------------------
@@ -1648,7 +1970,7 @@ def test_organise_page_heading(auth_client, owner):
 
 @pytest.mark.django_db
 def test_organise_page_explainer(auth_client, owner):
-    """The explainer mentions reordering, repeats, branching, visualising, and publishing."""
+    """The Organise page subtitle mentions reordering, repeats, branching, visualising, and publishing."""
     survey = Survey.objects.create(
         owner=owner,
         name="Organise Explainer Survey",
@@ -1694,6 +2016,37 @@ def test_organise_page_links_to_builder(auth_client, owner):
     assert (
         b"Builder" in resp.content
     ), "The explainer should mention the Builder by name."
+
+
+@pytest.mark.django_db
+def test_organise_page_no_explainer_card(auth_client, owner):
+    """The old explainer card and info alerts are gone — replaced by a one-line subtitle."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="No Explainer Card Survey",
+        slug="no-explainer-card-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The old explainer card partial should not be included.
+    assert (
+        b"This is the Organise page. Use it to:" not in resp.content
+    ), "The old explainer card should be gone."
+    # The old info alerts should be gone.
+    assert (
+        b"Sections group related questions" not in resp.content
+    ), "The old 'sections group related questions' alert should be gone."
+    assert (
+        b"Select groups by clicking their row" not in resp.content
+    ), "The old repeat tip alert should be gone."
+    # The new one-line subtitle should be present.
+    assert (
+        b"Bulk reorder" in resp.content
+    ), "The new subtitle should mention bulk reorder."
 
 
 @pytest.mark.django_db
@@ -1796,3 +2149,326 @@ def test_group_builder_route_still_works(auth_client, owner):
         )
     )
     assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Survey Map — standalone route for the branching visualiser
+# (deferred item: "Extract the Survey Map visualiser to its own route")
+# See docs/survey-builder-workflow-implementation-plan.md.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_survey_map_view_renders(auth_client, owner):
+    """The /<slug>/survey-map/ route renders the standalone visualiser page."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Renders Survey",
+        slug="survey-map-renders-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="First question?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert b"Survey Map" in resp.content, "The page should be titled 'Survey Map'."
+    # The visualiser partial is included when there are questions.
+    assert (
+        b"branching-visualizer" in resp.content
+    ), "The branching visualiser partial should be rendered."
+    assert b"flow-canvas" in resp.content, "The visualiser canvas should be present."
+
+
+@pytest.mark.django_db
+def test_survey_map_empty_state_without_questions(auth_client, owner):
+    """A survey with no questions shows the empty-state signpost, not the canvas."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Empty Survey",
+        slug="survey-map-empty-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert (
+        b"flow-canvas" not in resp.content
+    ), "An empty survey should not render the visualiser canvas."
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    assert (
+        builder_url.encode() in resp.content
+    ), "The empty state should signpost the Builder."
+
+
+@pytest.mark.django_db
+def test_survey_map_links_back_to_builder_and_organise(auth_client, owner):
+    """The Survey Map toolbar links back to the Builder, Organise, and dashboard."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Links Survey",
+        slug="survey-map-links-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Link question?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert f"/surveys/{survey.slug}/builder/".encode() in resp.content
+    assert f"/surveys/{survey.slug}/groups/".encode() in resp.content
+    assert f"/surveys/{survey.slug}/dashboard/".encode() in resp.content
+
+
+@pytest.mark.django_db
+def test_survey_map_requires_edit_permission(auth_client, owner, django_user_model):
+    """A viewer (not an editor) gets 403 on the Survey Map — it is a builder tool."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Permission Survey",
+        slug="survey-map-permission-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    viewer = django_user_model.objects.create_user(
+        username="survey-map-viewer@example.com",
+        email="survey-map-viewer@example.com",
+        password=PASSWORD,
+    )
+    from checktick_app.core.models import UserProfile
+
+    UserProfile.objects.filter(user=viewer).update(
+        account_tier=UserProfile.AccountTier.PRO,
+        email_confirmed=True,
+    )
+
+    client = type(auth_client)()
+    client.force_login(viewer)
+
+    resp = client.get(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    assert (
+        resp.status_code == 403
+    ), "A viewer without edit access should get 403 on the Survey Map."
+
+
+@pytest.mark.django_db
+def test_survey_map_get_only(auth_client, owner):
+    """POST to the Survey Map returns 405 — the route is GET-only."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Method Survey",
+        slug="survey-map-method-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.post(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 405, "The Survey Map route should be GET-only."
+
+
+@pytest.mark.django_db
+def test_survey_map_requires_login(client, django_user_model):
+    """An anonymous request to the Survey Map redirects to login (not 200)."""
+    owner = django_user_model.objects.create_user(
+        username="survey-map-anon-owner@example.com",
+        email="survey-map-anon-owner@example.com",
+        password=PASSWORD,
+    )
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Anon Survey",
+        slug="survey-map-anon-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = client.get(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    # @login_required redirects anonymous users to the login page (302).
+    assert resp.status_code in (
+        302,
+        403,
+    ), "Anonymous access to the Survey Map should redirect to login or deny."
+
+
+# ---------------------------------------------------------------------------
+# Survey Map wiring — surface the route from the builder toolbar, dashboard,
+# and Organise page; remove the embedded visualiser from the Organise page.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_survey_map_breadcrumb_uses_map_icon(auth_client, owner):
+    """The Survey Map breadcrumb crumb uses the survey-map icon, not the default group icon."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Survey Map Breadcrumb Survey",
+        slug="survey-map-breadcrumb-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:survey_map", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The survey-map icon renders a distinctive <circle cx="18" cy="6" r="3" />.
+    # The h1 already uses the survey-map icon, so with the breadcrumb also using
+    # it, this marker should appear at least twice (breadcrumb + h1).
+    marker = b'<circle cx="18" cy="6" r="3"'
+    assert (
+        resp.content.count(marker) >= 2
+    ), "The Survey Map breadcrumb and h1 should both use the survey-map icon."
+
+
+@pytest.mark.django_db
+def test_organise_page_no_embedded_survey_map(auth_client, owner):
+    """The Organise page no longer embeds the visualiser canvas (it has its own route)."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Organise No Map Survey",
+        slug="organise-no-map-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="A question?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert (
+        b"flow-canvas" not in resp.content
+    ), "The Organise page should not embed the visualiser canvas anymore."
+    assert (
+        b"branching-visualizer" not in resp.content
+    ), "The Organise page should not embed the visualiser anymore."
+
+
+@pytest.mark.django_db
+def test_organise_page_links_to_survey_map(auth_client, owner):
+    """The Organise page quick-nav links to the Survey Map route."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Organise Map Link Survey",
+        slug="organise-map-link-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    map_url = f"/surveys/{survey.slug}/survey-map/"
+    assert (
+        map_url.encode() in resp.content
+    ), "The Organise page should link to the Survey Map route."
+    assert b"Survey Map" in resp.content
+
+
+@pytest.mark.django_db
+def test_builder_toolbar_links_to_survey_map(auth_client, owner):
+    """The builder toolbar links to the Survey Map route."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Builder Map Link Survey",
+        slug="builder-map-link-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Toolbar question?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    map_url = f"/surveys/{survey.slug}/survey-map/"
+    assert (
+        map_url.encode() in resp.content
+    ), "The builder toolbar should link to the Survey Map route."
+
+
+@pytest.mark.django_db
+def test_dashboard_links_to_survey_map_when_can_edit(auth_client, owner):
+    """The dashboard shows a Survey Map link for editors (the route requires edit)."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Dashboard Map Link Survey",
+        slug="dashboard-map-link-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    map_url = f"/surveys/{survey.slug}/survey-map/"
+    assert (
+        map_url.encode() in resp.content
+    ), "The dashboard should link to the Survey Map route for editors."
+
+
+@pytest.mark.django_db
+def test_dashboard_no_survey_map_link_for_viewer(auth_client, owner, django_user_model):
+    """A view-only member sees the dashboard but not the Survey Map link (route requires edit)."""
+    from checktick_app.core.models import UserProfile
+    from checktick_app.surveys.models import SurveyMembership
+
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Dashboard Map Viewer Survey",
+        slug="dashboard-map-viewer-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    viewer = django_user_model.objects.create_user(
+        username="dash-map-viewer@example.com",
+        email="dash-map-viewer@example.com",
+        password=PASSWORD,
+    )
+    UserProfile.objects.filter(user=viewer).update(
+        account_tier=UserProfile.AccountTier.PRO,
+        email_confirmed=True,
+    )
+    # Grant view-only access: can_view_survey is True, can_edit_survey is False.
+    SurveyMembership.objects.create(
+        survey=survey, user=viewer, role=SurveyMembership.Role.VIEWER
+    )
+
+    client = type(auth_client)()
+    client.force_login(viewer)
+
+    resp = client.get(reverse("surveys:dashboard", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200, "A view-only member should reach the dashboard."
+    map_url = f"/surveys/{survey.slug}/survey-map/"
+    assert (
+        map_url.encode() not in resp.content
+    ), "A view-only member should not see the Survey Map link (the route requires edit)."

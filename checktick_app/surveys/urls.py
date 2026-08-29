@@ -299,6 +299,13 @@ urlpatterns = [
         views.survey_builder,
         name="survey_builder",
     ),
+    # Survey Map — standalone route for the branching visualiser
+    # (extracted from the Organise page; see docs/survey-builder-workflow-design.md).
+    path(
+        "<slug:slug>/survey-map/",
+        views.survey_map,
+        name="survey_map",
+    ),
     path(
         "<slug:slug>/builder/groups/<int:gid>/",
         views.group_builder,

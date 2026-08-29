@@ -30,13 +30,14 @@ A section is a named collection of questions that:
 
 The **Organise** page (`/surveys/<slug>/groups/`) is for bulk section operations that are better done outside the Builder:
 
-- **Reorder sections** - Drag and drop to arrange sections in your survey
-- **Rename sections** - Click the "Rename" button on any section to edit its name and description
-- **Create repeats (collections)** - Turn sections into repeatable sections
+- **Reorder sections** - Drag and drop to arrange sections in your survey (also available in the Builder rail)
+- **Create repeats (collections)** - Select multiple sections and make them repeatable together (single-section repeats can be done from the Builder rail)
 - **Nest repeats** - Create one level of nesting (e.g., "People" containing "Visits")
 - **Remove from repeats** - Unlink sections from collections
-- **Visualise the survey** - View the survey as a flow diagram
+- **Visualise the survey** - View the survey as a flow diagram on the **Survey Map** page (`/surveys/<slug>/survey-map/`), linked from the quick-nav toolbar.
 - **Publish sections as templates** - Share validated questionnaires
+
+Renaming, deleting, and single-section repeats are done in the **Builder** rail. The Organise page focuses on bulk operations that affect multiple sections at once.
 
 ### Who can access
 
@@ -47,21 +48,25 @@ Viewers, participants, or outsiders cannot access or modify this page.
 
 ## Reordering sections
 
-- Use the drag handle on each row to rearrange sections.
-- Click "Save order" to persist. The order is stored on the survey and used for rendering.
+- In the Builder: Drag sections using the drag handle in the rail.
+- On the Organise page: Use the drag handle on each row to rearrange sections.
+- The order is saved automatically on drop and is used for rendering.
 
 ## Renaming a section
 
-- On the Organise page: Click the "Rename" button on any section row.
 - In the Builder: Click the pencil icon next to the section name in the rail.
 - In the modal, edit the section name and optional description.
 - Click "Save" to persist. The change takes effect immediately.
+
+Renaming is no longer available on the Organise page — use the Builder rail.
 
 ## Deleting a section
 
 - In the Builder: Click the trash icon next to the section name in the rail (only available for the second and subsequent sections).
 - A confirmation modal appears. Deleting a section also deletes all questions within it.
 - The first (or only) section cannot be deleted — a survey must always have at least one section.
+
+Deleting is no longer available on the Organise page — use the Builder rail.
 
 ## Selecting sections
 

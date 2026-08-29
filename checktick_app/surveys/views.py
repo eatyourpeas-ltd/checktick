@@ -2478,6 +2478,9 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         "survey_not_started": survey_not_started,
         "can_manage_users": can_manage_survey_users(request.user, survey),
         "can_change_style": can_change_survey_style(request.user, survey),
+        # Survey Map is a builder tool (require_can_edit on the route); only
+        # surface the dashboard link to users who can actually edit the survey.
+        "can_edit": can_edit_survey(request.user, survey),
         # Data governance
         "can_export": (
             survey.is_closed and can_export_survey_data(request.user, survey)
@@ -4893,9 +4896,18 @@ def survey_groups_repeat_create(request: HttpRequest, slug: str) -> HttpResponse
     require_can_edit(request.user, survey)
 
     name = (request.POST.get("name") or "").strip()
+    next_url = request.POST.get("next") or ""
+    redirect_url = (
+        next_url
+        if next_url
+        and url_has_allowed_host_and_scheme(
+            next_url, allowed_hosts={request.get_host()}
+        )
+        else reverse("surveys:groups", kwargs={"slug": slug})
+    )
     if not name:
         messages.error(request, "Please provide a name for the repeat.")
-        return redirect("surveys:groups", slug=slug)
+        return redirect(redirect_url)
     min_count = request.POST.get("min_count") or "0"
     max_count_raw = (request.POST.get("max_count") or "").strip().lower()
     max_count: int | None
@@ -4925,7 +4937,7 @@ def survey_groups_repeat_create(request: HttpRequest, slug: str) -> HttpResponse
     gid_list = [g for g in gid_list if g in valid_ids]
     if not gid_list:
         messages.error(request, "Select at least one group to include in the repeat.")
-        return redirect("surveys:groups", slug=slug)
+        return redirect(redirect_url)
 
     # Ensure unique key per survey
     def _unique_key(base: str) -> str:
@@ -4959,7 +4971,7 @@ def survey_groups_repeat_create(request: HttpRequest, slug: str) -> HttpResponse
         cd.full_clean()
     except Exception as e:
         messages.error(request, f"Invalid repeat configuration: {e}")
-        return redirect("surveys:groups", slug=slug)
+        return redirect(redirect_url)
     cd.save()
 
     # Create items in the order provided
@@ -4994,6 +5006,11 @@ def survey_groups_repeat_create(request: HttpRequest, slug: str) -> HttpResponse
         )
 
     messages.success(request, "Repeat created and groups added.")
+    next_url = request.POST.get("next") or ""
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}
+    ):
+        return redirect(next_url)
     return redirect("surveys:groups", slug=slug)
 
 
@@ -5042,6 +5059,11 @@ def survey_group_repeat_remove(
         messages.success(request, "Group removed from repeat.")
     else:
         messages.info(request, "This group was not part of a repeat.")
+    next_url = request.POST.get("next") or ""
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}
+    ):
+        return redirect(next_url)
     return redirect("surveys:groups", slug=slug)
 
 
@@ -5155,6 +5177,11 @@ def survey_groups_repeat_edit(request: HttpRequest, slug: str) -> HttpResponse:
 
     collection.save(update_fields=["name", "min_count", "max_count"])
     messages.success(request, f"Repeat '{collection.name}' updated.")
+    next_url = request.POST.get("next") or ""
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}
+    ):
+        return redirect(next_url)
     return redirect("surveys:groups", slug=slug)
 
 
@@ -6959,12 +6986,76 @@ def survey_builder(request: HttpRequest, slug: str) -> HttpResponse:
     ctx["single_section"] = len(groups) <= 1
     ctx["has_questions"] = survey.questions.exists()
 
+    # Repeat info for the rail — same computation as survey_groups.
+    # Lets the rail show a "Repeats" badge on repeated sections and a
+    # "Make repeatable" button on non-repeated ones.
+    group_repeat_map: dict[int, list[CollectionDefinition]] = {}
+    for item in CollectionItem.objects.select_related("collection", "group").filter(
+        collection__survey=survey, group__isnull=False
+    ):
+        group_repeat_map.setdefault(item.group_id, []).append(item.collection)
+    repeat_info: dict[int, dict] = {}
+    for g in groups:
+        cols = group_repeat_map.get(g.id, [])
+        if cols:
+            first_col = cols[0]
+            info_list = []
+            for c in cols:
+                cap = (
+                    "Unlimited"
+                    if (c.max_count is None or int(c.max_count) <= 0)
+                    else str(c.max_count)
+                )
+                parent_note = f" (child of {c.parent.name})" if c.parent_id else ""
+                info_list.append(f"{c.name} — max {cap}{parent_note}")
+            repeat_info[g.id] = {
+                "is_repeated": True,
+                "tooltip": "; ".join(info_list),
+                "collection_id": first_col.id,
+                "collection_name": first_col.name,
+                "min_count": first_col.min_count or 0,
+                "max_count": first_col.max_count,
+            }
+        else:
+            repeat_info[g.id] = {"is_repeated": False, "tooltip": ""}
+    ctx["repeat_info"] = repeat_info
+    ctx["existing_repeats"] = list(
+        CollectionDefinition.objects.filter(survey=survey).order_by("name")
+    )
+
     # HTMX section-switch requests return just the main-area partial.
     # The mobile dropdown and desktop rail both hit this URL with ?gid=<id>.
     if request.headers.get("HX-Request") and gid_param:
         return render(request, "surveys/partials/builder_section_swap.html", ctx)
 
     return render(request, "surveys/survey_builder.html", ctx)
+
+
+@login_required
+@require_http_methods(["GET"])
+def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
+    """Survey Map — a standalone route for the branching visualiser.
+
+    The visualiser was previously embedded at the bottom of the Organise page.
+    Extracting it to its own route (``/<slug>/survey-map/``) gives it dedicated
+    space and lets the Organise page focus on bulk reorder, repeats, and
+    publishing. The visualiser itself is unchanged: it reuses the
+    ``branching_visualizer.html`` partial and fetches its data from the existing
+    read-only ``branching_data_api``.
+
+    Security: ``@login_required`` + ``require_can_edit`` (the Survey Map is a
+    builder tool; viewers don't need it) + GET-only (no write path here — the
+    data API is read-only and the visualiser posts nothing). See the deferred
+    item in ``docs/survey-builder-workflow-implementation-plan.md``.
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+
+    ctx = {
+        "survey": survey,
+        "has_questions": survey.questions.exists(),
+    }
+    return render(request, "surveys/survey_map.html", ctx)
 
 
 def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:

@@ -15,7 +15,10 @@
         <li>{% trans "Reorder sections by drag and drop" %}</li>
         <li>{% trans "Create and manage repeats" %}</li>
         <li>{% trans "Set up branching between sections" %}</li>
-        <li>{% trans "Visualise the survey as a flow diagram" %}</li>
+        <li>
+          {% trans "Visualise the survey as a flow diagram on the" %}
+          <a href="/surveys/{{ survey.slug }}/survey-map/" class="link underline font-semibold">{% trans "Survey Map" %}</a>
+        </li>
         <li>{% trans "Publish sections as reusable templates" %}</li>
       </ul>
       <p class="text-sm text-base-content/70 mt-3">
