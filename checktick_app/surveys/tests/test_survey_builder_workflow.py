@@ -247,7 +247,7 @@ def test_dashboard_cta_fallback_for_legacy_survey(auth_client, owner):
 
 @pytest.mark.django_db
 def test_groups_page_heading_says_sections(auth_client, owner):
-    """The Groups page heading uses 'Sections', not 'Question Groups'."""
+    """The Groups page heading now says 'Organise' (commit 3.3 renamed it from 'Sections for')."""
     from checktick_app.surveys.models import Organization
 
     org = Organization.objects.create(name="Sections Test Org", owner=owner)
@@ -264,8 +264,11 @@ def test_groups_page_heading_says_sections(auth_client, owner):
     resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
     assert (
-        b"Sections for" in resp.content
-    ), "Groups page heading should say 'Sections for {survey}', not 'Question Groups for'."
+        b"Organise" in resp.content
+    ), "Groups page heading should say 'Organise {survey}' (commit 3.3 rename)."
+    assert (
+        b"Sections for" not in resp.content
+    ), "The old 'Sections for' heading should no longer appear."
     assert (
         b"Question Groups for" not in resp.content
     ), "The old 'Question Groups for' heading should no longer appear."
@@ -824,7 +827,12 @@ def test_survey_builder_requires_edit_permission(auth_client, owner, django_user
 
 @pytest.mark.django_db
 def test_survey_builder_single_section_hides_rail(auth_client, owner):
-    """A single-section survey renders no section rail or dropdown."""
+    """A single-section survey now renders the rail (commit 3.2 changed this).
+
+    Previously the rail was hidden for single-section surveys. Commit 3.2
+    always renders the rail so users can see that sections exist and add more.
+    The mobile dropdown is still hidden for single-section surveys.
+    """
     survey = Survey.objects.create(
         owner=owner,
         name="Single Section Builder Survey",
@@ -839,14 +847,14 @@ def test_survey_builder_single_section_hides_rail(auth_client, owner):
     )
     assert resp.status_code == 200
 
-    # The mobile dropdown should NOT be present
+    # The mobile dropdown should NOT be present (single section)
     assert (
         b"md:hidden" not in resp.content
     ), "The mobile dropdown should not be present for a single-section survey."
-    # The desktop rail should NOT be present
+    # The desktop rail SHOULD now be present (commit 3.2 — always render)
     assert (
-        b"hidden md:block" not in resp.content
-    ), "The desktop rail should not be present for a single-section survey."
+        b'id="builder-rail"' in resp.content
+    ), "The desktop rail should now be present for a single-section survey."
 
 
 @pytest.mark.django_db
@@ -1059,7 +1067,13 @@ def test_how_to_build_explainer_present_on_survey_list(auth_client, owner):
 
 @pytest.mark.django_db
 def test_how_to_build_explainer_present_in_builder_empty_state(auth_client, owner):
-    """The builder shows the 'How to build' explainer when a group has no questions."""
+    """The builder empty state no longer shows the generic 'How to build' explainer.
+
+    Commit 3.1 replaced the `how_to_build.html` include in the builder empty
+    state with a builder-specific `builder_empty_state.html` partial. The
+    survey list page still uses `how_to_build.html`, so we only assert the
+    builder no longer surfaces it here.
+    """
     survey = Survey.objects.create(
         owner=owner,
         name="Empty Builder Explainer Survey",
@@ -1074,11 +1088,114 @@ def test_how_to_build_explainer_present_in_builder_empty_state(auth_client, owne
     )
     assert resp.status_code == 200
     assert (
-        b"How it works" in resp.content
-    ), "The 'How to build' explainer should appear in the builder empty state."
+        b"How it works" not in resp.content
+    ), "The generic 'How to build' explainer should no longer appear in the builder empty state."
     assert (
         b"No questions yet" in resp.content
-    ), "The empty state should say 'No questions yet' instead of 'No questions in this group yet'."
+    ), "The empty state should still say 'No questions yet'."
+
+
+# ---------------------------------------------------------------------------
+# Commit 3.1 — Replace builder empty state with question-type signposting
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_builder_empty_state_signposts_question_types(auth_client, owner):
+    """The builder empty state signposts the available question types."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Empty State Question Types Survey",
+        slug="empty-state-question-types-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    # The empty state should mention at least a few of the question types.
+    assert (
+        b"Likert scale" in resp.content
+    ), "The empty state should signpost the Likert scale question type."
+    assert (
+        b"Multiple choice" in resp.content
+    ), "The empty state should signpost the multiple choice question type."
+    assert (
+        b"Dropdown" in resp.content
+    ), "The empty state should signpost the dropdown question type."
+
+
+@pytest.mark.django_db
+def test_builder_empty_state_signposts_special_templates(auth_client, owner):
+    """The builder empty state signposts the Special Templates tab."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Empty State Special Templates Survey",
+        slug="empty-state-special-templates-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"Special Templates" in resp.content
+    ), "The empty state should signpost the Special Templates tab."
+
+
+@pytest.mark.django_db
+def test_builder_empty_state_signposts_question_bank(auth_client, owner):
+    """The builder empty state links to the Question Bank."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Empty State Question Bank Survey",
+        slug="empty-state-question-bank-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    bank_url = reverse("surveys:published_templates_list")
+    assert (
+        bank_url.encode() in resp.content
+    ), "The empty state should link to the Question Bank."
+    assert (
+        b"Browse the Question Bank" in resp.content
+    ), "The empty state should mention the Question Bank by name."
+
+
+@pytest.mark.django_db
+def test_builder_empty_state_signposts_sections(auth_client, owner):
+    """The builder empty state links to the Sections guide."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Empty State Sections Survey",
+        slug="empty-state-sections-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"/docs/groups-view/" in resp.content
+    ), "The empty state should link to the Sections guide."
+    assert (
+        b"Sections guide" in resp.content
+    ), "The empty state should mention the Sections guide by name."
 
 
 # ---------------------------------------------------------------------------
@@ -1235,3 +1352,447 @@ def test_groups_page_has_back_to_builder_link(auth_client, owner):
     assert (
         builder_url.encode() in resp.content
     ), "The Sections page should have a 'Back to builder' link."
+
+
+# ---------------------------------------------------------------------------
+# Commit 3.2 — Always render the section rail + add rename/delete to rail items
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_rail_always_renders_for_single_section(auth_client, owner):
+    """A single-section survey now shows the rail (previously hidden)."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Single Section Rail Survey",
+        slug="single-section-rail-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b'id="builder-rail"' in resp.content
+    ), "The section rail should always render when the survey has at least one group."
+
+
+@pytest.mark.django_db
+def test_rail_has_rename_button(auth_client, owner):
+    """Each rail item has a rename button."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Rename Survey",
+        slug="rail-rename-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"rename-section-btn" in resp.content
+    ), "Each rail item should have a rename button."
+
+
+@pytest.mark.django_db
+def test_rail_has_delete_button_for_second_section(auth_client, owner):
+    """A multi-section survey shows a delete button on the second and subsequent rail items."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Delete Multi Survey",
+        slug="rail-delete-multi-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+    # Add a second section
+    group2 = QuestionGroup.objects.create(name="Second Section", owner=owner)
+    survey.question_groups.add(group2)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"delete-section-btn" in resp.content
+    ), "The second and subsequent rail items should have a delete button."
+
+
+@pytest.mark.django_db
+def test_rail_first_section_has_no_delete_button(auth_client, owner):
+    """The first (or only) section's rail item does not show a delete button."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Delete Single Survey",
+        slug="rail-delete-single-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"delete-section-btn" not in resp.content
+    ), "The first/only section should not have a delete button."
+
+
+@pytest.mark.django_db
+def test_rename_from_builder_redirects_to_builder(auth_client, owner):
+    """POSTing to survey_group_edit with next=/surveys/<slug>/builder/ redirects back to the builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rename Redirect Survey",
+        slug="rename-redirect-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    resp = auth_client.post(
+        reverse(
+            "surveys:survey_group_edit",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        ),
+        data={
+            "name": "Renamed Section",
+            "description": "",
+            "next": f"/surveys/{survey.slug}/builder/",
+        },
+    )
+    assert resp.status_code == 302
+    assert resp.url == f"/surveys/{survey.slug}/builder/"
+    group.refresh_from_db()
+    assert group.name == "Renamed Section"
+
+
+@pytest.mark.django_db
+def test_rename_from_builder_strips_xss(auth_client, owner):
+    """A group name with <script> tags is sanitised."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rename XSS Survey",
+        slug="rename-xss-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    auth_client.post(
+        reverse(
+            "surveys:survey_group_edit",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        ),
+        data={
+            "name": "<script>alert('xss')</script>Evil",
+            "description": "",
+            "next": f"/surveys/{survey.slug}/builder/",
+        },
+    )
+    group.refresh_from_db()
+    assert "<script>" not in group.name
+    assert "</script>" not in group.name
+    assert group.name == "alert('xss')Evil"
+
+
+@pytest.mark.django_db
+def test_delete_section_from_builder_redirects_to_builder(auth_client, owner):
+    """POSTing to survey_group_delete with next=/surveys/<slug>/builder/ deletes the section and redirects back to the builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Delete Redirect Survey",
+        slug="delete-redirect-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    _ = create_default_section(survey, owner)
+    group2 = QuestionGroup.objects.create(name="Second Section", owner=owner)
+    survey.question_groups.add(group2)
+
+    resp = auth_client.post(
+        reverse(
+            "surveys:survey_group_delete",
+            kwargs={"slug": survey.slug, "gid": group2.id},
+        ),
+        data={"next": f"/surveys/{survey.slug}/builder/"},
+    )
+    assert resp.status_code == 302
+    assert resp.url == f"/surveys/{survey.slug}/builder/"
+    assert not QuestionGroup.objects.filter(id=group2.id).exists()
+
+
+@pytest.mark.django_db
+def test_delete_last_section_rejected(auth_client, owner):
+    """Attempting to delete the only remaining section is rejected."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Delete Last Section Survey",
+        slug="delete-last-section-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    resp = auth_client.post(
+        reverse(
+            "surveys:survey_group_delete",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        ),
+        data={"next": f"/surveys/{survey.slug}/builder/"},
+    )
+    assert resp.status_code == 302
+    # The section should still exist
+    assert QuestionGroup.objects.filter(id=group.id).exists()
+    # The redirect should go back to the builder (via next)
+    assert resp.url == f"/surveys/{survey.slug}/builder/"
+
+
+# ---------------------------------------------------------------------------
+# Commit 3.2a — Match builder card styling in Outline and AI Assistant views
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_outline_card_has_primary_border(auth_client, owner):
+    """The Outline (format reference) card has the border-primary accent."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Outline Styling Survey",
+        slug="outline-styling-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:bulk_upload", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The format reference card should have the primary border accent
+    assert (
+        b"border-l-4 border-primary" in resp.content
+    ), "The Outline format reference card should have a border-primary left accent."
+
+
+@pytest.mark.django_db
+def test_ai_assistant_card_has_primary_border(auth_client, owner):
+    """The AI Assistant conversation card has the border-primary accent."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="AI Styling Survey",
+        slug="ai-styling-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:bulk_upload", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The AI conversation card should have the primary border accent
+    assert (
+        b"border-l-4 border-primary" in resp.content
+    ), "The AI Assistant card should have a border-primary left accent."
+
+
+@pytest.mark.django_db
+def test_outline_secondary_panel_has_secondary_border(auth_client, owner):
+    """Secondary panels (session history, live preview) have the border-secondary accent."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Secondary Panel Styling Survey",
+        slug="secondary-panel-styling-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:bulk_upload", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The session history card and live preview should have the secondary border accent
+    assert (
+        b"border-l-4 border-secondary" in resp.content
+    ), "Secondary panels should have a border-secondary left accent."
+
+
+# ---------------------------------------------------------------------------
+# Commit 3.3 — Rename "Sections" page to "Organise" + replace orientation strip
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_organise_page_heading(auth_client, owner):
+    """The heading says 'Organise', not 'Sections for'."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Organise Heading Survey",
+        slug="organise-heading-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert b"Organise" in resp.content, "The heading should say 'Organise'."
+    assert (
+        b"Sections for" not in resp.content
+    ), "The old 'Sections for' heading should be gone."
+
+
+@pytest.mark.django_db
+def test_organise_page_explainer(auth_client, owner):
+    """The explainer mentions reordering, repeats, branching, visualising, and publishing."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Organise Explainer Survey",
+        slug="organise-explainer-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert (
+        b"reorder" in resp.content.lower() or b"Reorder" in resp.content
+    ), "The explainer should mention reordering."
+    assert b"repeat" in resp.content.lower(), "The explainer should mention repeats."
+    assert b"branch" in resp.content.lower(), "The explainer should mention branching."
+    assert (
+        b"visualis" in resp.content.lower() or b"visualiz" in resp.content.lower()
+    ), "The explainer should mention visualising."
+    assert (
+        b"publish" in resp.content.lower()
+    ), "The explainer should mention publishing."
+
+
+@pytest.mark.django_db
+def test_organise_page_links_to_builder(auth_client, owner):
+    """The explainer links back to the builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Organise Link Survey",
+        slug="organise-link-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    builder_url = f"/surveys/{survey.slug}/builder/"
+    assert (
+        builder_url.encode() in resp.content
+    ), "The explainer should link back to the builder."
+    assert (
+        b"Builder" in resp.content
+    ), "The explainer should mention the Builder by name."
+
+
+@pytest.mark.django_db
+def test_organise_page_no_orientation_strip(auth_client, owner):
+    """The old 3-step orientation strip should be gone."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="No Orientation Strip Survey",
+        slug="no-orientation-strip-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    assert (
+        b"Where you are" not in resp.content
+    ), "The old 'Where you are' orientation strip should be gone."
+    assert (
+        b"you are here" not in resp.content
+    ), "The old 'you are here' badge should be gone."
+
+
+@pytest.mark.django_db
+def test_builder_toolbar_says_organise(auth_client, owner):
+    """The builder toolbar button says 'Organise', not 'Organise sections'."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Toolbar Organise Survey",
+        slug="toolbar-organise-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Test question?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert b"Organise" in resp.content, "The toolbar button should say 'Organise'."
+    assert (
+        b"Organise sections" not in resp.content
+    ), "The old 'Organise sections' label should be gone."
+
+
+# ---------------------------------------------------------------------------
+# Commit 3.4 — Deprecate group_builder route
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_groups_page_section_links_to_unified_builder(auth_client, owner):
+    """The Organise page section rows link to survey_builder?gid=<gid>, not group_builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Deprecate Group Builder Survey",
+        slug="deprecate-group-builder-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The section row link should point at the unified builder with ?gid=
+    unified_url = f"/surveys/{survey.slug}/builder/?gid={group.id}"
+    assert (
+        unified_url.encode() in resp.content
+    ), "Section rows should link to survey_builder?gid=<gid>, not group_builder."
+    # The old group_builder URL should NOT appear in section row links
+    old_url = f"/surveys/{survey.slug}/builder/groups/{group.id}/"
+    assert (
+        old_url.encode() not in resp.content
+    ), "Section rows should not link to the deprecated group_builder route."
+
+
+@pytest.mark.django_db
+def test_group_builder_route_still_works(auth_client, owner):
+    """The old group_builder route still returns 200 (for bookmarked URLs)."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Bookmark Route Survey",
+        slug="bookmark-route-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse(
+            "surveys:group_builder",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        )
+    )
+    assert resp.status_code == 200

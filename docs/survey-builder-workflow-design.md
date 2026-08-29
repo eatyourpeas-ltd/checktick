@@ -161,13 +161,22 @@ Work is split into three tiers so value can be shipped incrementally. **Tier 1 i
 | 2.1 | **Build a master-detail builder**: left rail = sections (in order, with "Add section"), main area = questions in the selected section with "Add question" | New/updated builder view + template | Kills the "create group → navigate in → add question" dance. An unused `builder.html` template (flat "All Questions" list + a "Groups" sidebar) is close to this target and is a useful starting point — it is currently not wired to any route |
 | 2.2 | **Hide the section layer for single-section surveys** in the builder | Builder template | Implements the "invisible until needed" mechanic |
 
-### Tier 3 — Progressive disclosure of advanced features
+### Tier 3 — Progressive disclosure of advanced features ✅ (implemented)
 
 | # | Change | Where | Notes |
 |---|---|---|---|
-| 3.1 | **Move "Create repeat"** off the standalone Groups page into the section's context in the builder, framed as *"Let respondents fill this section out multiple times (e.g., one per family member)"* | Builder + `survey_groups_repeat_create` | Same capability, friendlier framing and location |
-| 3.2 | **Frame branching "jump to…" targets as sections** by friendly name | Branching/conditions UI | Reinforces sections as the unit of flow |
-| 3.3 | **First-run nudge**: when a new survey has zero questions, open the builder with the "Add question" form already focused | Builder | Shortens the path to the first question |
+| 3.1 | **Replace builder empty state with question-type signposting** | `builder_empty_state.html` (new) | Replaces generic `how_to_build.html` explainer with relevant signposting |
+| 3.2 | **Always render the section rail + add rename/delete to rail items** | `builder_section_rail.html`, `builder-rail.js`, `views.py` | Rail always renders; rename via modal; delete for 2nd+ sections only |
+| 3.2a | **Match builder card styling in Outline and AI Assistant views** | `bulk_upload.html` | Consistent `border-l-4 border-primary/secondary` accents across all building surfaces |
+| 3.3 | **Rename "Sections" page to "Organise" + replace orientation strip** | `groups.html`, `organise_explainer.html` (new) | Page-specific explainer replaces 3-step orientation strip |
+| 3.4 | **Deprecate `group_builder` route** | `groups.html`, `views.py`, `group_builder.html` | Links now point to unified builder; old route kept for bookmarks |
+| 3.5 | **Docs update for Tier 3** | Multiple docs files | Reflect Organise rename, group_builder deprecation, builder styling |
+
+**Deferred to a follow-up PR:**
+- Move "Create repeat" into the builder (originally 3.1 in old plan)
+- Frame branching targets as sections by friendly name (originally 3.2)
+- First-run nudge (originally 3.3)
+- Move "Share as template" to per-section action (originally 3.4)
 
 ---
 
@@ -177,11 +186,11 @@ Work is split into three tiers so value can be shipped incrementally. **Tier 1 i
 |---|---|---|
 | Survey creation redirect | `checktick_app/surveys/views.py` (`survey_create`) | Create default group (Tier 1.1) |
 | Dashboard "Add or edit questions" cards | `checktick_app/surveys/templates/surveys/dashboard.html` | CTA label + destination (Tier 1.2) |
-| Groups page (orientation strip, empty state, list, "add group" form) | `checktick_app/surveys/templates/surveys/groups.html` | Reframe to "Sections", new empty state (Tier 1.3–1.5) |
-| Per-group question builder | `checktick_app/surveys/templates/surveys/group_builder.html` | Reframed (Tier 1); question pane extracted into shared partial `builder_question_pane.html` (Tier 2.1). Still serves as a fallback route for deep links from the Groups page. |
+| Groups page (orientation strip, empty state, list, "add group" form) | `checktick_app/surveys/templates/surveys/groups.html` | Reframed to "Sections" (Tier 1), then renamed to "Organise" (Tier 3.3). Orientation strip replaced with `organise_explainer.html` partial. Section row links now point to unified builder. |
+| Per-group question builder | `checktick_app/surveys/templates/surveys/group_builder.html` | Reframed (Tier 1); question pane extracted into shared partial `builder_question_pane.html` (Tier 2.1). **Deprecated** in Tier 3.4 — route kept for bookmarked URLs but no longer linked from any template. |
 | Unused flat builder | ~~`checktick_app/surveys/templates/surveys/builder.html`~~ | **Removed** in Tier 1 commit 1 (was dead code — no route, no view, no test exercised it). |
-| Unified builder | `checktick_app/surveys/templates/surveys/survey_builder.html` (new), `partials/builder_question_pane.html`, `partials/builder_section_rail.html`, `partials/builder_section_swap.html` | **New** in Tier 2. Master-detail layout with responsive rail/dropdown, HTMX section switching, single-section rail hiding. |
-| Routes | `checktick_app/surveys/urls.py` | Added `survey_builder` route at `/<slug>/builder/` (Tier 2.1). Existing `group_builder` route preserved. |
+| Unified builder | `checktick_app/surveys/templates/surveys/survey_builder.html` (new), `partials/builder_question_pane.html`, `partials/builder_section_rail.html`, `partials/builder_section_swap.html`, `partials/builder_empty_state.html` (new), `static/js/builder-rail.js` (new) | **New** in Tier 2. Master-detail layout with responsive rail/dropdown, HTMX section switching. Tier 3: rail always renders, rename/delete buttons added, empty state replaced with question-type signposting, card styling applied (border-l-4 accents). |
+| Routes | `checktick_app/surveys/urls.py` | Added `survey_builder` route at `/<slug>/builder/` (Tier 2.1). `group_builder` route deprecated (Tier 3.4) — kept for bookmarked URLs. |
 | Repeat creation | `checktick_app/surveys/views.py` (`survey_groups_repeat_create`), `groups.html` | Relocate/reframe into builder (Tier 3.1) |
 | Navbar "Question Bank" entry | `checktick_app/templates/base.html` (desktop + mobile menus) | Label already correct; no change required, but verify it stays "Question Bank" after the Section rename (Tier 1.3) |
 | Question Bank / template library page | `checktick_app/surveys/templates/surveys/published_templates_list.html`, `published_template_detail.html` | Align page `<h1>` to "Question Bank"; copy polish only (Tier 1.3). Route `published_templates_list` and URL `/surveys/templates/` unchanged |
@@ -289,7 +298,7 @@ Option 1 is recommended — publishing a single-section survey (e.g., a standalo
 3. ~~**Should the dashboard "Add questions" CTA open the unified builder directly, or the current per-group builder**~~ **Resolved:** Tier 1 pointed at the per-group builder; Tier 2 migrated the dashboard CTA to the unified builder (`survey_builder`).
 4. ~~**Participant single-section header suppression**~~ **Resolved:** Implemented in Tier 1 (commit 7). The `<fieldset>` structure is preserved for assistive tech; only the visible header is suppressed.
 5. ~~**Do we keep the standalone Groups page at all**~~ **Resolved:** Keep it. The Groups page remains the home for bulk reorder, repeats, and publishing. The unified builder links to it for those operations.
-6. **Publishing from a single-section survey.** When the section layer is hidden (Tier 2.2), should "Share as template" be a top-level builder action (recommended, so a standalone PHQ-9 can be published without adding a dummy second section), or only surface once a second section exists? *(Tier 3 — not yet resolved)*
+6. **Publishing from a single-section survey.** ~~When the section layer is hidden (Tier 2.2), should "Share as template" be a top-level builder action (recommended, so a standalone PHQ-9 can be published without adding a dummy second section), or only surface once a second section exists?~~ **Resolved (Tier 3):** The section rail now always renders (commit 3.2), so the question of hiding the publish action for single-section surveys no longer applies. Publishing from single-section surveys is deferred to a follow-up PR (per-section "Share as template" action in the builder).
 7. ~~**Question Bank page title.**~~ **Resolved:** The library page `<h1>` already says "Question Bank" (aligned with navbar). Done in Tier 1.
 
 ---

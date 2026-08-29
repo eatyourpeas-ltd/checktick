@@ -8,7 +8,7 @@ priority: 5
 
 **Status**: Living document — this plan will change as we learn.
 **Date**: August 2026
-**Scope**: Tier 1 ✅ merged. Tier 2 ✅ implemented. Tier 3 outlined.
+**Scope**: Tier 1 ✅ merged. Tier 2 ✅ implemented. Tier 3 in progress (3.1 ✅).
 **Parent design**: [Survey Builder Workflow Design](/docs/survey-builder-workflow-design/)
 
 This is a commit plan, not a design doc. The design doc describes *what* and *why*; this describes *how*, *in what order*, and *what "done" means per commit*. Each commit is atomic: it builds, it tests green, it leaves the docs consistent.
@@ -199,15 +199,219 @@ Tier 1 is complete and merged to `main`. The commits below are preserved for ref
 - The Groups page is documented as the home for bulk operations.
 - No broken internal links.
 
-## Tier 3 outline (not committed yet)
+## Tier 3 commits — Progressive disclosure and deprecation
 
-Tier 3 depends on Tier 2 landing clean. Outline only:
+Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
-- **Commit 3.1**: move "Create repeat" into the section's context menu in the unified builder.
-- **Commit 3.2**: frame branching "jump to…" targets as sections by friendly name.
-- **Commit 3.3**: first-run nudge — open builder with "Add question" form focused.
-- **Commit 3.4**: move "Share as template" to per-section action (relocate from Groups page). Includes the single-section publishing case (OQ6 — top-level builder action when rail is hidden).
-- **Commit 3.5**: docs update for Tier 3.
+**Goal**: Polish the builder UX, rename the Sections page to "Organise", add rename to the rail, deprecate the old `group_builder` route, and update docs.
+
+**Security requirements for all new/modified routes**:
+- `@login_required` decorator on every view
+- `require_can_edit(request.user, survey)` permission check — raises `PermissionDenied` (403) for non-editors
+- `@require_http_methods(["GET"])` or `@require_http_methods(["POST"])` to limit HTTP verbs
+- `{% csrf_token %}` on all POST forms
+- No inline JS — all `hx-*` attributes are CSP-safe data attributes; script tags use `nonce`
+- XSS: group names and descriptions are sanitised via `strip_tags()` in the view (existing pattern)
+- Rate limiting: `@ratelimit` on any write endpoint (existing pattern from `question_group_publish`)
+- Tests: every new/modified endpoint gets a permission test (403 for non-editors), an XSS test (script tags in group names are stripped), and a method test (wrong HTTP verb returns 405)
+
+---
+
+### Commit 3.1 — Replace builder empty state with question-type signposting ✅
+
+**Scope**: The builder empty state currently shows the `how_to_build.html` explainer, which tells the user about the Outline and AI Assistant — but they're already in the builder. Replace it with signposting that's relevant to the builder context. Also fix two pre-existing layout bugs uncovered during implementation: the `tabs-lifted` class name (renamed to `tabs-lift` in daisyUI v5) and the three-column squish that left the Add Question form too narrow for tabs to render side-by-side.
+
+**Files**:
+- `checktick_app/surveys/templates/surveys/partials/builder_empty_state.html` — **new partial**:
+  - Short intro: "Add your first question using the form." (direction-agnostic — the form is to the right on desktop, below on mobile).
+  - `<div>`-based bullet list (not `<ul>/<li>`) of available question types (text, multiple choice, dropdown, likert, yes/no, image) — brief, one line each. Uses `<div>/<p>` with `•` bullets because the partial renders inside `<ul id="questions-draggable">` which SortableJS manages; nested `<li>` elements would be picked up as draggable items and break the drag handler.
+  - Signpost the "Special Templates" tab: "Need patient demographics or professional details? See the Special Templates tab in the Add Question form." — "Special Templates" wrapped in `<span class="font-medium">` (not a link, so it doesn't look clickable, but visually distinct).
+  - Signpost the Question Bank: "Looking for ready-made validated questionnaires? Browse the Question Bank." with link to `published_templates_list`.
+  - Signpost sections: "Questions can be grouped into sections for branching, repeats, or sharing — see the Sections guide." with link to `/docs/groups-view/`.
+  - All links use consistent `link underline font-semibold` styling.
+  - All strings `{% trans %}`-wrapped. Short and punchy — links, not paragraphs.
+- `checktick_app/surveys/templates/surveys/partials/builder_question_pane.html`:
+  - Replace the `how_to_build.html` include in the empty state with `builder_empty_state.html`.
+  - Update the empty-state intro line: left-align (remove `text-center`), link "Question Bank" to `published_templates_list`, and use direction-agnostic copy ("using the form" instead of "above").
+  - Fix `tabs-lifted` → `tabs-lift` (daisyUI v5.6 renamed the class; `tabs-lifted` doesn't exist in the compiled CSS and caused the tab inputs to render as plain stacked radio buttons with no tab styling).
+  - Change the question pane layout from `grid md:grid-cols-3` (which squeezed the Add Question form into ~25% of the viewport, too narrow for tabs) to `flex flex-col` — the questions list and Add Question form now stack vertically, each taking the full width of the main area. This matches the existing mobile layout and is the pattern Google Forms uses.
+  - Add a `border-l-4 border-primary` accent to the Add Question form card (via `.builder-editor-card` CSS) so it's visually distinct from the questions list card. Both cards use `bg-base-100` (lighter than the `bg-base-200` page background); the coloured left border provides distinction without affecting text contrast.
+- `checktick_app/surveys/templates/surveys/partials/builder_section_rail.html` — add `border-l-4 border-secondary` to the rail card so all three builder surfaces (rail, questions, form) have distinct visual identities.
+- `checktick_app/static/css/daisyui_themes.css` — in `.builder-editor-card`, add `border-left: 4px solid var(--color-primary)` (kept in CSS rather than the template because the `.builder-editor-card` class already sets a `border` shorthand that would conflict with Tailwind's `border-l-4`).
+- `checktick_app/surveys/tests/test_survey_builder_workflow.py` — update `test_how_to_build_explainer_present_in_builder_empty_state` to assert the explainer is *no longer* present (inverted), and add the 4 new signposting tests.
+
+**Tests**:
+- `test_how_to_build_explainer_present_in_builder_empty_state` (updated) — asserts "How it works" is *not* in the builder empty state (the generic explainer has been replaced).
+- `test_builder_empty_state_signposts_question_types` — the empty state mentions question types (Likert, Multiple choice, Dropdown).
+- `test_builder_empty_state_signposts_special_templates` — the empty state mentions "Special Templates".
+- `test_builder_empty_state_signposts_question_bank` — the empty state links to the Question Bank.
+- `test_builder_empty_state_signposts_sections` — the empty state links to the Sections guide.
+
+**Exit criteria**:
+- Builder empty state shows question-type signposting, not the generic "how to build" explainer.
+- All links resolve.
+- Tab headers render side-by-side (not stacked) in the Add Question form.
+- The Add Question form has enough horizontal space for the tabs (full width of the main area).
+- The three builder surfaces (section rail, questions list, Add Question form) are visually distinct via coloured left borders.
+- `s/test --no-a11y` passes.
+
+**Docs**: None yet. Docs sweep is commit 3.5.
+
+---
+
+### Commit 3.2 — Always render the section rail + add rename to rail items
+
+**Scope**: The rail is currently hidden for single-section surveys. But the rail with one section and an "Add section" button is useful even with one section — it teaches the user that sections exist and lets them add more. Also add a rename button to each rail item so users can rename sections without leaving the builder. Finally, add a delete button to each rail item so users can remove sections they no longer need — but only for the second and subsequent sections (the first/only section cannot be deleted from the rail; a survey must always have at least one section).
+
+**Files**:
+- `checktick_app/surveys/views.py` — in `survey_builder`, change `single_section` to always be `False` (the rail always renders when there are groups). Keep the visually-hidden heading for a11y when there's only one section. In `survey_group_delete`, add `next` param handling (redirect to `next` if provided, else fall back to `surveys:groups`) and reject deletion of the last remaining section.
+- `checktick_app/surveys/templates/surveys/survey_builder.html` — remove the `{% if groups|length > 1 %}` condition around the rail. Always render the rail when `groups` is non-empty.
+- `checktick_app/surveys/templates/surveys/partials/builder_section_rail.html` — add a small pencil/rename icon next to each section name. Clicking it opens a modal (reuse the rename modal pattern from `groups.html`) or an inline edit form. Posts to `survey_group_edit` with `next` pointing back to the builder. Also add a trash/delete icon next to each section name, **hidden for the first section** (the survey must always retain at least one section). The delete button posts to `survey_group_delete` (existing route) with a confirmation step (modal or `confirm()`-style prompt) and `next` pointing back to the builder. If the deleted section was the active section, the builder redirects to the first remaining section.
+- `checktick_app/surveys/templates/surveys/partials/builder_section_swap.html` — update the OOB rail swap to include the rename and delete buttons.
+- `checktick_app/static/js/builder-rail.js` — **new external JS file** to wire the rename button to the modal and the delete button to its confirmation (CSP-compliant, nonce'd). Follows the same pattern as `groups-page.js`.
+
+**Security**:
+- `survey_group_edit` already has `@login_required`, `@require_http_methods(["POST"])`, `require_can_edit`, and `strip_tags()` on the name. No new endpoint — reusing the existing one with a `next` param.
+- `survey_group_delete` already has `@login_required`, `@require_http_methods(["POST"])`, `require_can_edit`, and CSRF protection. No new endpoint — reusing the existing one, but the view needs a small change: accept a `next` param (falling back to `surveys:groups` for backward compatibility with the Groups page) and reject deletion of the last remaining section (return 400 or redirect with an error message).
+- The rename and delete modal forms include `{% csrf_token %}`.
+- No inline JS — the modal wiring is in an external JS file with `nonce`.
+
+**Tests**:
+- `test_rail_always_renders_for_single_section` — a single-section survey now shows the rail.
+- `test_rail_has_rename_button` — each rail item has a rename button.
+- `test_rail_has_delete_button_for_second_section` — a multi-section survey shows a delete button on the second and subsequent rail items.
+- `test_rail_first_section_has_no_delete_button` — the first (or only) section's rail item does not show a delete button.
+- `test_rename_from_builder_redirects_to_builder` — POSTing to `survey_group_edit` with `next=/surveys/<slug>/builder/` redirects back to the builder.
+- `test_rename_from_builder_strips_xss` — a group name with `<script>` tags is sanitised.
+- `test_delete_section_from_builder_redirects_to_builder` — POSTing to `survey_group_delete` with `next=/surveys/<slug>/builder/` deletes the section and redirects back to the builder.
+- `test_delete_last_section_rejected` — attempting to delete the only remaining section is rejected (400 or redirect with error).
+
+**Exit criteria**:
+- The rail always renders when the survey has at least one group.
+- Each rail item has a rename button that opens a modal.
+- The second and subsequent rail items have a delete button (with confirmation); the first/only section does not.
+- Renaming or deleting from the builder stays on the builder.
+- The last remaining section cannot be deleted.
+- `s/test --no-a11y` passes.
+
+**Docs**: None yet.
+
+---
+
+### Commit 3.2a — Match builder card styling in Outline and AI Assistant views ✅
+
+**Scope**: The builder's question pane and Add Question form now use a consistent card styling pattern: `bg-base-100` cards with coloured left-border accents (`border-l-4 border-primary` for the Add Question form, `border-l-4 border-secondary` for the section rail). The Outline and AI Assistant views should adopt the same pattern so all three building surfaces feel like parts of one tool.
+
+**Background**: During commit 3.1/3.2 we discovered that the builder's three-column layout (`grid md:grid-cols-3`) was too cramped for the Add Question form's tabs. We switched to a vertical stack (`flex flex-col`) with full-width cards. The Outline and AI Assistant views already use a similar stacked layout but their cards don't have the coloured left-border accents or the `shadow-sm` treatment. This commit brings them in line.
+
+**Files**:
+- `checktick_app/surveys/templates/surveys/outline.html` (or equivalent) — apply `card bg-base-100 shadow-sm border-l-4 border-primary` to the main editing card, matching the builder's Add Question form. If the Outline view has a secondary card (e.g. a preview or help panel), give it `border-l-4 border-secondary` to match the section rail.
+- `checktick_app/surveys/templates/surveys/ai_assistant.html` (or equivalent) — same treatment: `card bg-base-100 shadow-sm border-l-4 border-primary` for the main interaction card, `border-l-4 border-secondary` for any secondary panel.
+- `checktick_app/static/css/daisyui_themes.css` — if the Outline or AI Assistant views use the `.builder-editor-card` class (or a similar custom class), ensure the `border-left` accent is applied consistently. If they don't use a custom class, add one (e.g. `.outline-editor-card`, `.ai-editor-card`) following the same pattern as `.builder-editor-card`.
+
+**Styling rules** (established in commit 3.1/3.2, to be applied consistently):
+- All building-surface cards use `bg-base-100` (lighter than the `bg-base-200` page background, so they stand out).
+- The primary editing/interaction card in each view gets a 4px `border-primary` left border (via CSS, not Tailwind, if a custom class is involved — see `.builder-editor-card` in `daisyui_themes.css`).
+- Secondary panels (rail, help, preview) get a 4px `border-secondary` left border.
+- All cards use `shadow-sm` (not `shadow` or `shadow-lg`) for a subtle elevation.
+- Tab content panels inside cards use `bg-base-100` (lighter inserts within the tinted card — but since the cards are now `bg-base-100` too, the tab panels blend seamlessly).
+- Text remains `text-base-content` on `bg-base-100` — the same WCAG AA-compliant pair used throughout the app. The coloured borders are decorative and don't affect text contrast.
+
+**Tests**:
+- `test_outline_card_has_primary_border` — the Outline view's main card has the `border-primary` accent.
+- `test_ai_assistant_card_has_primary_border` — the AI Assistant view's main card has the `border-primary` accent.
+- (If secondary panels exist) `test_outline_secondary_panel_has_secondary_border` / `test_ai_assistant_secondary_panel_has_secondary_border`.
+
+**Exit criteria**:
+- All three building surfaces (Builder, Outline, AI Assistant) use the same card styling pattern.
+- The coloured left-border accents provide visual distinction without affecting text contrast.
+- `s/test --no-a11y` passes.
+
+**Docs**: None yet. Docs sweep is commit 3.5.
+
+---
+
+### Commit 3.3 — Rename "Sections" page to "Organise" + replace orientation strip ✅
+
+**Scope**: The Sections page needs a name ("Organise") and a page-specific explainer that describes what the page is for, not the old 3-step workflow.
+
+**Files**:
+- `checktick_app/surveys/templates/surveys/groups.html` — change the heading from "Sections for {survey}" to "Organise {survey}". Change the breadcrumb from "Sections" to "Organise". Replace the `how_to_build.html` include (if present) with a new `organise_explainer.html` partial.
+- `checktick_app/surveys/templates/surveys/partials/organise_explainer.html` — **new partial**:
+  - Short intro: "This is the Organise page. Use it to:"
+  - Bullet list: reorder sections (drag and drop), create and manage repeats, set up branching, visualise the survey as a flow diagram, publish sections as reusable templates
+  - Link back to the builder: "For adding and editing questions, use the Builder."
+  - All strings `{% trans %}`-wrapped.
+- `checktick_app/surveys/templates/surveys/survey_builder.html` — update the toolbar button label from "Organise sections" to "Organise" (shorter).
+- `checktick_app/surveys/templates/surveys/dashboard.html` — if any links say "Sections", update to "Organise".
+
+**Tests**:
+- `test_organise_page_heading` — the heading says "Organise", not "Sections for".
+- `test_organise_page_explainer` — the explainer mentions reordering, repeats, branching, visualising, and publishing.
+- `test_organise_page_links_to_builder` — the explainer links back to the builder.
+
+**Exit criteria**:
+- The page is called "Organise" in the heading, breadcrumb, and toolbar button.
+- The orientation strip is replaced with a page-specific explainer.
+- `s/test --no-a11y` passes.
+
+**Docs**: None yet.
+
+---
+
+### Commit 3.4 — Deprecate `group_builder` route ✅
+
+**Scope**: The unified builder is now the primary surface. The `group_builder` route is no longer linked from any template. Update the Groups page section rows to link to `survey_builder?gid=<gid>` instead of `group_builder`. Keep the `group_builder` route working for bookmarked URLs but add a deprecation comment.
+
+**Files**:
+- `checktick_app/surveys/templates/surveys/groups.html` — change the section row link from `/surveys/<slug>/builder/groups/<gid>/` to `/surveys/<slug>/builder/?gid=<gid>`.
+- `checktick_app/surveys/views.py` — add a deprecation comment to `group_builder` view: "Deprecated: use `survey_builder` instead. This route is kept for bookmarked URLs."
+- `checktick_app/surveys/templates/surveys/group_builder.html` — add a deprecation comment at the top of the template.
+
+**Security**:
+- No new routes. The `survey_builder` route already has `@login_required` and `require_can_edit`.
+- The `group_builder` route keeps its existing security (no change).
+
+**Tests**:
+- `test_groups_page_section_links_to_unified_builder` — the section row links point to `survey_builder?gid=<gid>`, not `group_builder`.
+- `test_group_builder_route_still_works` — the old route still returns 200 (for bookmarked URLs).
+
+**Exit criteria**:
+- No template links to `group_builder`.
+- The `group_builder` route still works (for bookmarks).
+- `s/test --no-a11y` passes.
+
+**Docs**: None yet.
+
+---
+
+### Commit 3.5 — Docs update for Tier 3 ✅
+
+**Scope**: Update docs to reflect Tier 3 changes.
+
+**Files**:
+- `docs/groups-view.md` — rename page title to "Organise". Update the explainer. Reference the builder as the primary surface.
+- `docs/surveys.md` — update references to "Sections page" → "Organise page".
+- `docs/survey-builder-workflow-design.md` — mark Tier 3 as implemented. Update the affected surfaces table. Resolve OQ6.
+- `docs/themes.md` — update breadcrumb examples to use "Organise".
+- `docs/testing-webapp.md` — update test descriptions.
+
+**Tests**: None (docs only).
+
+**Exit criteria**:
+- Docs reflect the "Organise" rename.
+- Docs reflect the `group_builder` deprecation.
+- No broken internal links.
+
+---
+
+## Deferred to a follow-up PR (post-Tier 3)
+
+- **Extract the Survey Map visualiser to its own route** (`/<slug>/survey-map/`). The visualiser is currently embedded in the Organise page. Moving it to its own route would make the Organise page less busy and give the visualiser its own space. Accessible from the builder toolbar, the dashboard, and the Organise page. Named "Survey Map" (matching the existing code's terminology). Security: `@login_required`, `require_can_edit`, `@require_http_methods(["GET"])`.
+- **Move "Create repeat" into the section's context menu in the builder** (originally Tier 3.1 in the old plan).
+- **Frame branching "jump to…" targets as sections by friendly name** (originally Tier 3.2 in the old plan).
+- **First-run nudge** — open builder with "Add question" form focused (originally Tier 3.3 in the old plan).
+- **Move "Share as template" to per-section action** in the builder (originally Tier 3.4 in the old plan). Includes the single-section publishing case (OQ6).
 
 ---
 
@@ -243,15 +447,27 @@ Tier 3 depends on Tier 2 landing clean. Outline only:
 
 **Total Tier 2**: 9 commits, ~23 tests, 5 doc files updated.
 
-### Tier 3 (outlined)
+### Tier 3 (current)
+
+| # | Commit | Depends on | Tests added | Docs updated |
+|---|---|---|---|---|
+| 3.1 | Replace builder empty state with question-type signposting | — | 4 | — |
+| 3.2 | Always render rail + add rename to rail items | 2.1 | 4 | — |
+| 3.3 | Rename "Sections" page to "Organise" + replace orientation strip | — | 3 | — |
+| 3.4 | Deprecate `group_builder` route | 2.1 | 2 | — |
+| 3.5 | Docs update for Tier 3 | 3.1–3.4 | — | 5 files |
+
+**Total Tier 3**: 5 commits, ~13 tests, 5 doc files updated.
+
+### Deferred (post-Tier 3 PR)
 
 | # | Commit | Tests | Docs |
 |---|---|---|---|
-| 3.1 | Move "Create repeat" to builder | TBD | TBD |
-| 3.2 | Branching targets as sections | TBD | TBD |
-| 3.3 | First-run nudge | TBD | TBD |
-| 3.4 | "Share as template" per-section | TBD | TBD |
-| 3.5 | Docs update for Tier 3 | — | TBD |
+| — | Extract Survey Map visualiser to own route | TBD | TBD |
+| — | Move "Create repeat" to builder context menu | TBD | TBD |
+| — | Branching targets as sections by friendly name | TBD | TBD |
+| — | First-run nudge (focus Add Question form) | TBD | TBD |
+| — | "Share as template" per-section in builder | TBD | TBD |
 
 ---
 
@@ -261,6 +477,7 @@ Tier 3 depends on Tier 2 landing clean. Outline only:
 - **Run `s/test --no-a11y` after every code commit.** Commit 2.2 additionally needs `s/test --a11y-only --serial`.
 - **Atomic commits mean each commit builds and tests green on its own.** If commit 2.2 needs commit 2.1 to make sense (it does — the rail-hiding applies to the unified builder), that's fine; the dependency is in the ordering.
 - **The i18n deferral is still in effect.** New `{% trans %}` strings will fall back to English in non-English locales until a separate i18n refresh ticket updates `.po` files and `docs/languages/*.md`.
-- **The existing `group_builder` route stays.** It's not deleted in Tier 2 — it remains as a fallback and for deep links from the Groups page. The unified builder is additive.
-- **The Groups page stays.** Per OQ5, the Groups page remains the home for bulk reorder, repeats, and publishing. The unified builder links to it for those operations.
+- **The existing `group_builder` route is deprecated in Tier 3.** The route stays for bookmarked URLs but no template links to it. The Groups page section rows link to `survey_builder?gid=<gid>` instead.
+- **The Groups page is renamed to "Organise" in Tier 3.** The route name (`surveys:groups`) and URL path (`/<slug>/groups/`) stay unchanged — only the user-facing label changes.
+- **Security is a first-class concern for all new routes.** Every new view gets `@login_required`, `require_can_edit`, HTTP method restrictions, CSRF tokens on POST forms, no inline JS (CSP-safe), XSS sanitisation (`strip_tags`), and tests for permission (403), XSS, and method (405).
 - **HTMX is the interaction layer.** Section switching and "Add section" use HTMX partial swaps. Non-HTMX requests gracefully degrade to full page loads. No inline JS — all script tags are external and CSP-compliant, matching the existing `groups-page.js` pattern.

@@ -1,18 +1,18 @@
 {% load i18n static %}
 {# Shared question pane — included by both group_builder.html and survey_builder.html. Context required: survey, group, questions, can_edit, can_collect_patient_data, available_datasets, snomed_available, snomed_datasets_meta, show_patient_details, demographics_fields, demographic_defs, demographics_fields_with_labels, include_imd, show_professional_details, professional_fields, professional_defs, professional_ods, professional_ods_pairs, professional_field_datasets. #}
-<div class="grid md:grid-cols-3 gap-6">
+<div class="flex flex-col gap-6">
     {% if group.schema.template == 'patient_details_encrypted' %}
-      <div class="md:col-span-2">
+      <div>
         {% include 'surveys/partials/demographics_builder.html' %}
       </div>
       <!-- No Add Question sidebar for demographics group -->
     {% elif group.schema.template == 'professional_details' %}
-      <div class="md:col-span-2">
+      <div>
         {% include 'surveys/partials/professional_builder.html' %}
       </div>
       <!-- No Add Question sidebar for professional details group -->
     {% else %}
-      <div class="md:col-span-2">
+      <div>
         <div class="card bg-base-100 shadow">
           <div class="card-body">
             <h2 class="card-title inline-flex items-center gap-2 text-base-content">
@@ -25,9 +25,9 @@
                   {% include 'surveys/partials/question_row.html' %}
                 {% empty %}
                   <li class="p-4">
-                    <p class="opacity-70 text-center mb-4">{% trans "No questions yet. Add your first question above, or browse the Question Bank for ready-made sections." %}</p>
+                    <p class="opacity-70 mb-4">{% trans "No questions yet. Add your first question using the form, or browse the" %} <a href="{% url 'surveys:published_templates_list' %}" class="link underline font-semibold">{% trans "Question Bank" %}</a> {% trans "for ready-made sections." %}</p>
                     <div class="mt-2">
-                      {% include 'surveys/partials/how_to_build.html' %}
+                      {% include 'surveys/partials/builder_empty_state.html' %}
                     </div>
                   </li>
                 {% endfor %}
@@ -40,7 +40,7 @@
 
 
       <div>
-        <div class="card bg-base-100 shadow builder-editor-card" data-builder-editor-card>
+        <div class="card bg-base-100 shadow-sm builder-editor-card" data-builder-editor-card>
           <div class="card-body">
             <h2 class="card-title inline-flex items-center gap-2 text-base-content">
               {% include "components/icons/checktick_question.html" with classes="w-5 h-5 text-base-content" %}
@@ -51,7 +51,7 @@
             <form id="create-question-form" hx-post="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/create" hx-target="#questions-list" hx-swap="outerHTML" data-create-url="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/create" data-create-target="#questions-list" data-create-swap="outerHTML" data-edit-url-base="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/" data-template-url="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/templates/add">
               {% csrf_token %}
 
-              <div role="tablist" class="tabs tabs-lifted">
+              <div role="tablist" class="tabs tabs-lift">
                 <input type="radio" name="add_question_tabs" role="tab" class="tab" aria-label="Build question" checked/>
                 <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
                   <h3 class="text-lg font-semibold mb-4">Build a Question</h3>

@@ -18,7 +18,7 @@ Webapp tests are organised by app:
   - `test_builder_question_creation.py` - Question creation via builder (23 tests)
   - `test_builder_editing.py` - Question editing functionality
   - `test_permissions.py` - Access control and permissions
-  - `test_survey_builder_workflow.py` - Survey builder workflow (Tier 1 + Tier 2: sections, unified builder, empty state, rename, participant header suppression, HTMX section switching)
+  - `test_survey_builder_workflow.py` - Survey builder workflow (Tier 1–3: sections, unified builder, empty state, rename/delete from rail, Organise page rename, group_builder deprecation, HTMX section switching)
   - `test_groups_reorder.py` - Question group reordering
   - `test_anonymous_access.py` - Anonymous user behavior
   - `/test_followup_import.py` - Bulk markdown import with follow-ups and required fields (10 tests)

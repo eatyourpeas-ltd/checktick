@@ -576,15 +576,21 @@
   const historyContent = document.getElementById("history-tab-content");
   const sessionHistoryList = document.getElementById("session-history-list");
 
-  // Manual Input sub-tabs
-  const tabMarkdownInput = document.getElementById("tab-markdown-input");
-  const tabFormatReference = document.getElementById("tab-format-reference");
-  const markdownInputContent = document.getElementById(
-    "markdown-input-content",
-  );
+  // Format guide toggle (replaces old sub-tabs)
+  const toggleFormatGuide = document.getElementById("toggle-format-guide");
+  const formatGuideChevron = document.getElementById("format-guide-chevron");
   const formatReferenceContent = document.getElementById(
     "format-reference-content",
   );
+
+  if (toggleFormatGuide && formatReferenceContent) {
+    toggleFormatGuide.addEventListener("click", () => {
+      formatReferenceContent.classList.toggle("hidden");
+      if (formatGuideChevron) {
+        formatGuideChevron.classList.toggle("rotate-90");
+      }
+    });
+  }
 
   // Store current survey markdown
   let currentSurveyMarkdown = "";
@@ -616,26 +622,6 @@
         loadSessionHistory();
       }
     });
-  }
-
-  // Sub-tab switching for Manual Input
-  const switchManualSubTab = () => {
-    if (!tabMarkdownInput || !tabFormatReference) return;
-
-    if (tabMarkdownInput.checked) {
-      markdownInputContent.classList.remove("hidden");
-      formatReferenceContent.classList.add("hidden");
-    } else if (tabFormatReference.checked) {
-      markdownInputContent.classList.add("hidden");
-      formatReferenceContent.classList.remove("hidden");
-    }
-  };
-
-  if (tabMarkdownInput) {
-    tabMarkdownInput.addEventListener("change", switchManualSubTab);
-  }
-  if (tabFormatReference) {
-    tabFormatReference.addEventListener("change", switchManualSubTab);
   }
 
   // Load session history

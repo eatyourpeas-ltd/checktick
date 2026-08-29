@@ -11,9 +11,22 @@
 </div>
 
 <h1 class="inline-flex items-center gap-2 text-3xl font-bold mb-6">
-  {% include "components/icons/document.html" with classes="w-6 h-6" %}
+  {% include "components/icons/checktick_question.html" with classes="w-6 h-6" %}
   <span>{% trans "Add questions" %}: {{ survey.name }}</span>
 </h1>
+
+<div class="mb-6">
+  <button class="btn btn-primary" type="button" id="bulk-import-open-modal-top">
+    {% include "components/icons/checktick_question.html" with classes="w-5 h-5" %}
+    <span>
+      {% if has_questions %}
+        {% trans "Reimport questions" %}
+      {% else %}
+        {% trans "Import questions" %}
+      {% endif %}
+    </span>
+  </button>
+</div>
 
 {% if error %}
   <div class="alert alert-error my-3">{{ error }}</div>
@@ -22,102 +35,71 @@
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
   <!-- Left Column -->
   <div class="space-y-6">
-    <!-- Main Tabs Navigation -->
-    <div role="tablist" class="tabs tabs-bordered">
+    <!-- Main Tabs: single-level tabs-lift with proper tab-content panels -->
+    <div role="tablist" class="tabs tabs-lift">
       <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'Outline' %}" id="tab-manual" checked />
-      <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'AI Assistant' %}" id="tab-ai" />
-      <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'Session History' %}" id="tab-history" />
-    </div>
-
-    <!-- Outline Tab Content -->
-    <div id="manual-tab-content" class="space-y-6">
-      <!-- Outline Sub-tabs -->
-      <div role="tablist" class="tabs tabs-bordered">
-        <input type="radio" name="manual_subtabs" role="tab" class="tab" aria-label="{% trans 'Editor' %}" id="tab-markdown-input" checked />
-        <input type="radio" name="manual_subtabs" role="tab" class="tab" aria-label="{% trans 'Format guide' %}" id="tab-format-reference" />
-      </div>
-
-      <!-- Markdown Input Sub-tab -->
-      <div id="markdown-input-content">
-        <div class="alert alert-info mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current h-6 w-6 shrink-0">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          <div class="text-sm">
-            <p>{% trans "Looking for pre-made sections?" %} <a href="{% url 'surveys:published_templates_list' %}" class="link underline font-semibold">{% trans "Browse the Question Bank" %}</a> {% trans "to import markdown from published templates." %}</p>
-          </div>
-        </div>
-        <form method="post" id="bulk-import-form">
-          {% csrf_token %}
+      <div role="tabpanel" class="tab-content bg-base-100 border-base-300 border-l-4 border-primary rounded-box p-6 space-y-4" id="manual-tab-content">
+        <!-- Inline toggle for format guide (replaces nested sub-tabs) -->
+        <div class="flex items-center justify-between">
           <label class="label">{% trans "Text format" %}</label>
-          <textarea class="textarea textarea-bordered w-full min-h-[500px]" name="markdown" id="markdown-input" required>{{ markdown|default:example }}</textarea>
-          <div class="mt-3">
-            <button class="btn btn-primary" type="button" id="bulk-import-open-modal">
-              {% if has_questions %}
-                {% trans "Reimport questions" %}
-              {% else %}
-                {% trans "Import questions" %}
-              {% endif %}
-            </button>
-          </div>
-        </form>
-      </div>
+          <button type="button" id="toggle-format-guide" class="btn btn-xs btn-ghost text-xs">
+            {% trans "Format guide" %}
+            <svg class="w-3 h-3 transition-transform" id="format-guide-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
 
-      <!-- Format Reference Sub-tab -->
-      <div id="format-reference-content" class="hidden">
-        <div class="card bg-base-100 border border-base-300">
-          <div class="card-body space-y-4">
-            <div>
-              <h2 class="card-title">{% trans "Format reference" %}</h2>
-              <p class="text-base-content/80">{% trans "Use text format with the following structure:" %}</p>
-            </div>
-            <ul class="list-disc pl-5 space-y-1 text-sm">
-              <li>{% trans "<code># Group Title</code>, followed by a line for the group description" %}</li>
-              <li>{% trans "<code>## Question Title</code>, followed by a line for the question description" %}</li>
-              <li>{% trans "Add <code class=\"text-error\">*</code> after the question title to mark it as required" %}</li>
-              <li>{% trans "<code>(type)</code> on the next line in parentheses" %}</li>
-              <li>{% trans "If the type requires options, list each on a line starting with <code>-</code>" %}</li>
-              <li>{% trans "For options that should have follow-up text input, add an indented line starting with <code>+</code>" %}</li>
-              <li>{% trans "For Likert number scales, add key-value lines: <code>min:</code>, <code>max:</code>, optional <code>left:</code>, <code>right:</code>" %}</li>
-            </ul>
-
-            <div>
-              <h3 class="font-semibold">{% trans "Supported types" %}</h3>
+        <!-- Format guide (collapsible, hidden by default) -->
+        <div id="format-reference-content" class="hidden">
+          <div class="card bg-base-200/50 border border-base-300">
+            <div class="card-body space-y-4">
+              <div>
+                <h2 class="card-title">{% trans "Format reference" %}</h2>
+                <p class="text-base-content/80">{% trans "Use text format with the following structure:" %}</p>
+              </div>
               <ul class="list-disc pl-5 space-y-1 text-sm">
-                <li><code>text</code> — {% trans "free text" %}</li>
-                <li><code>text number</code> — {% trans "numeric input" %}</li>
-                <li><code>mc_single</code> — {% trans "multiple choice (single)" %}</li>
-                <li><code>mc_multi</code> — {% trans "multiple choice (multi)" %}</li>
-                <li><code>dropdown</code> — {% trans "select menu; add a <code>dataset:</code> line to pre-populate from a <a href='/surveys/datasets/' class='link'>Dataset</a>" %}</li>
-                <li><code>orderable</code> — {% trans "orderable list" %}</li>
-                <li><code>yesno</code> — {% trans "yes/no" %}</li>
-                <li><code>image</code> — {% trans "image choice" %}</li>
-                <li><code>likert categories</code> — {% trans "categories listed with <code>-</code>" %}</li>
-                <li><code>likert number</code> — {% trans "provide <code>min</code>/<code>max</code> and optional labels" %}</li>
+                <li>{% trans "<code># Group Title</code>, followed by a line for the group description" %}</li>
+                <li>{% trans "<code>## Question Title</code>, followed by a line for the question description" %}</li>
+                <li>{% trans "Add <code class=\"text-error\">*</code> after the question title to mark it as required" %}</li>
+                <li>{% trans "<code>(type)</code> on the next line in parentheses" %}</li>
+                <li>{% trans "If the type requires options, list each on a line starting with <code>-</code>" %}</li>
+                <li>{% trans "For options that should have follow-up text input, add an indented line starting with <code>+</code>" %}</li>
+                <li>{% trans "For Likert number scales, add key-value lines: <code>min:</code>, <code>max:</code>, optional <code>left:</code>, <code>right:</code>" %}</li>
               </ul>
-            </div>
-
-            <div>
-              <h3 class="font-semibold">{% trans "Datasets for dropdowns" %}</h3>
-              <p class="text-sm text-base-content/80">{% trans "Use a <code>dataset:</code> line after <code>(dropdown)</code> to pre-populate the options from a saved Dataset. Use the dataset's key (shown on the Datasets page)." %}</p>
-              <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>## Which hospital are you referring from?
+              <div>
+                <h3 class="font-semibold">{% trans "Supported types" %}</h3>
+                <ul class="list-disc pl-5 space-y-1 text-sm">
+                  <li><code>text</code> — {% trans "free text" %}</li>
+                  <li><code>text number</code> — {% trans "numeric input" %}</li>
+                  <li><code>mc_single</code> — {% trans "multiple choice (single)" %}</li>
+                  <li><code>mc_multi</code> — {% trans "multiple choice (multi)" %}</li>
+                  <li><code>dropdown</code> — {% trans "select menu; add a <code>dataset:</code> line to pre-populate from a <a href='/surveys/datasets/' class='link'>Dataset</a>" %}</li>
+                  <li><code>orderable</code> — {% trans "orderable list" %}</li>
+                  <li><code>yesno</code> — {% trans "yes/no" %}</li>
+                  <li><code>image</code> — {% trans "image choice" %}</li>
+                  <li><code>likert categories</code> — {% trans "categories listed with <code>-</code>" %}</li>
+                  <li><code>likert number</code> — {% trans "provide <code>min</code>/<code>max</code> and optional labels" %}</li>
+                </ul>
+              </div>
+              <div>
+                <h3 class="font-semibold">{% trans "Datasets for dropdowns" %}</h3>
+                <p class="text-sm text-base-content/80">{% trans "Use a <code>dataset:</code> line after <code>(dropdown)</code> to pre-populate the options from a saved Dataset. Use the dataset's key (shown on the Datasets page)." %}</p>
+                <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>## Which hospital are you referring from?
 (dropdown)
 dataset: nhs_trusts
 
 ## Your specialty
 (dropdown)
 dataset: medical_specialties</code></pre>
-              <ul class="list-disc pl-5 space-y-1 text-sm">
-                <li>{% trans "The dataset key is shown on the <a href='/surveys/datasets/' class='link'>Datasets</a> page" %}</li>
-                <li>{% trans "If the key is not found or you lack access, the question is saved with no options" %}</li>
-                <li>{% trans "You can still add manual <code>-</code> options alongside <code>dataset:</code> — the dataset link takes precedence for rendering" %}</li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 class="font-semibold">{% trans "Optional: Follow-up text inputs" %}</h3>
-              <p class="text-sm text-base-content/80">{% trans "Add a follow-up text input to any option by adding an indented line starting with <code>+</code> immediately after the option. This creates a text field that appears when the participant selects that option." %}</p>
-              <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>## Employment status
+                <ul class="list-disc pl-5 space-y-1 text-sm">
+                  <li>{% trans "The dataset key is shown on the <a href='/surveys/datasets/' class='link'>Datasets</a> page" %}</li>
+                  <li>{% trans "If the key is not found or you lack access, the question is saved with no options" %}</li>
+                  <li>{% trans "You can still add manual <code>-</code> options alongside <code>dataset:</code> — the dataset link takes precedence for rendering" %}</li>
+                </ul>
+              </div>
+              <div>
+                <h3 class="font-semibold">{% trans "Optional: Follow-up text inputs" %}</h3>
+                <p class="text-sm text-base-content/80">{% trans "Add a follow-up text input to any option by adding an indented line starting with <code>+</code> immediately after the option. This creates a text field that appears when the participant selects that option." %}</p>
+                <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>## Employment status
                 (mc_single)
                 - Employed full-time
                 - Employed part-time
@@ -128,55 +110,52 @@ dataset: medical_specialties</code></pre>
                   + Are you actively seeking employment?
                 - Student
                 - Retired</code></pre>
-              <ul class="list-disc pl-5 space-y-1 text-sm">
-                <li>{% trans "Follow-up lines must start with <code>+</code> and be indented (at least 2 spaces)" %}</li>
-                <li>{% trans "The text after <code>+</code> becomes the label for the follow-up input field" %}</li>
-                <li>{% trans "Works with <code>mc_single</code>, <code>mc_multi</code>, <code>dropdown</code>, <code>orderable</code>, and <code>yesno</code>" %}</li>
-                <li>{% trans "For <code>yesno</code>, provide exactly 2 options (Yes/No) with optional follow-ups" %}</li>
-                <li>{% trans "Not all options need follow-ups—only add them where needed" %}</li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 class="font-semibold">{% trans "Optional: Required questions" %}</h3>
-              <p class="text-sm text-base-content/80">{% trans "Mark a question as required by adding an asterisk <code class=\"text-error\">*</code> after the question title (before the ID in curly braces if present)." %}</p>
-              <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>## Age<span class="text-error">*</span> {patient-age}
+                <ul class="list-disc pl-5 space-y-1 text-sm">
+                  <li>{% trans "Follow-up lines must start with <code>+</code> and be indented (at least 2 spaces)" %}</li>
+                  <li>{% trans "The text after <code>+</code> becomes the label for the follow-up input field" %}</li>
+                  <li>{% trans "Works with <code>mc_single</code>, <code>mc_multi</code>, <code>dropdown</code>, <code>orderable</code>, and <code>yesno</code>" %}</li>
+                  <li>{% trans "For <code>yesno</code>, provide exactly 2 options (Yes/No) with optional follow-ups" %}</li>
+                  <li>{% trans "Not all options need follow-ups—only add them where needed" %}</li>
+                </ul>
+              </div>
+              <div>
+                <h3 class="font-semibold">{% trans "Optional: Required questions" %}</h3>
+                <p class="text-sm text-base-content/80">{% trans "Mark a question as required by adding an asterisk <code class=\"text-error\">*</code> after the question title (before the ID in curly braces if present)." %}</p>
+                <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>## Age<span class="text-error">*</span> {patient-age}
                         Age in years
                         (text number)
 
                         ## Email address<span class="text-error">*</span>
                         (text)</code></pre>
-              <ul class="list-disc pl-5 space-y-1 text-sm">
-                <li>{% trans "Required questions must be answered before the form can be submitted" %}</li>
-                <li>{% trans "The asterisk <code class=\"text-error\">*</code> appears in red in the preview" %}</li>
-                <li>{% trans "Place the asterisk immediately after the question title text" %}</li>
-                <li>{% trans "Works with all question types" %}</li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 class="font-semibold">{% trans "Optional: Collections with REPEAT" %}</h3>
-              <p class="text-sm text-base-content/80">{% trans "To mark a group as repeatable, add a line with <strong>REPEAT</strong> (or <strong>REPEAT-5</strong> to cap it) immediately above the group heading." %}</p>
-              <p class="text-sm text-base-content/80">{% trans "To define a child collection nested under a repeatable parent, indent with <code>&gt;</code> and add <strong>REPEAT</strong> above the child group:" %}</p>
-              <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>REPEAT-5
+                <ul class="list-disc pl-5 space-y-1 text-sm">
+                  <li>{% trans "Required questions must be answered before the form can be submitted" %}</li>
+                  <li>{% trans "The asterisk <code class=\"text-error\">*</code> appears in red in the preview" %}</li>
+                  <li>{% trans "Place the asterisk immediately after the question title text" %}</li>
+                  <li>{% trans "Works with all question types" %}</li>
+                </ul>
+              </div>
+              <div>
+                <h3 class="font-semibold">{% trans "Optional: Collections with REPEAT" %}</h3>
+                <p class="text-sm text-base-content/80">{% trans "To mark a group as repeatable, add a line with <strong>REPEAT</strong> (or <strong>REPEAT-5</strong> to cap it) immediately above the group heading." %}</p>
+                <p class="text-sm text-base-content/80">{% trans "To define a child collection nested under a repeatable parent, indent with <code>&gt;</code> and add <strong>REPEAT</strong> above the child group:" %}</p>
+                <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>REPEAT-5
                     # Patient
                     ... group content ...
 
                     &gt; REPEAT
                     &gt; # Visit
                     &gt; ... child group content ...</code></pre>
-              <ul class="list-disc pl-5 space-y-1 text-sm">
-                <li>{% trans "<strong>REPEAT</strong> = unlimited repeats. <strong>REPEAT-1</strong> means one allowed." %}</li>
-                <li>{% trans "Use <code>&gt;</code> before REPEAT and the group heading to indicate one level of nesting." %}</li>
-                <li>{% trans "Nesting is limited to one level (Parent → Child) by design." %}</li>
-                <li>{% trans "Groups without REPEAT are normal, non-collection groups." %}</li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 class="font-semibold">{% trans "Optional: Questions with conditional branching" %}</h3>
-              <p class="text-sm text-base-content/80">{% trans "Assign stable IDs by placing them in curly braces at the end of group or question headings. Then add branching rules below the question's <code>(type)</code> line using <code>? when &lt;operator&gt; &lt;value&gt; -&gt; {target-id}</code>." %}</p>
-              <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code># Intro {intro}
+                <ul class="list-disc pl-5 space-y-1 text-sm">
+                  <li>{% trans "<strong>REPEAT</strong> = unlimited repeats. <strong>REPEAT-1</strong> means one allowed." %}</li>
+                  <li>{% trans "Use <code>&gt;</code> before REPEAT and the group heading to indicate one level of nesting." %}</li>
+                  <li>{% trans "Nesting is limited to one level (Parent → Child) by design." %}</li>
+                  <li>{% trans "Groups without REPEAT are normal, non-collection groups." %}</li>
+                </ul>
+              </div>
+              <div>
+                <h3 class="font-semibold">{% trans "Optional: Questions with conditional branching" %}</h3>
+                <p class="text-sm text-base-content/80">{% trans "Assign stable IDs by placing them in curly braces at the end of group or question headings. Then add branching rules below the question's <code>(type)</code> line using <code>? when &lt;operator&gt; &lt;value&gt; -&gt; {target-id}</code>." %}</p>
+                <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code># Intro {intro}
                           ## Consent {intro-consent}
                           (text)
                           ? when equals "Yes" -> {follow-up}
@@ -189,114 +168,99 @@ dataset: medical_specialties</code></pre>
                           # Exit {intro-exit}
                           ## Thanks {intro-exit-thanks}
                           (text)</code></pre>
-              <ul class="list-disc pl-5 space-y-1 text-sm">
-                <li>{% trans "Branching rules must start with <code>? when</code> and reference a question or group ID in curly braces." %}</li>
-                <li>{% trans "Operators mirror the survey builder: <code>equals</code>, <code>not_equals</code>, <code>contains</code>, <code>greater_than</code>, and more." %}</li>
-                <li>{% trans "IDs are normalised to lowercase slugs; keep them unique within your document." %}</li>
-                <li>{% trans "Point to a group ID to jump to that group, or a question ID to jump directly to that question." %}</li>
-              </ul>
+                <ul class="list-disc pl-5 space-y-1 text-sm">
+                  <li>{% trans "Branching rules must start with <code>? when</code> and reference a question or group ID in curly braces." %}</li>
+                  <li>{% trans "Operators mirror the survey builder: <code>equals</code>, <code>not_equals</code>, <code>contains</code>, <code>greater_than</code>, and more." %}</li>
+                  <li>{% trans "IDs are normalised to lowercase slugs; keep them unique within your document." %}</li>
+                  <li>{% trans "Point to a group ID to jump to that group, or a question ID to jump directly to that question." %}</li>
+                </ul>
+              </div>
             </div>
           </div>
+        </div>
+
+        <!-- Markdown Input -->
+        <div id="markdown-input-content">
+          <div class="alert alert-info mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current h-6 w-6 shrink-0">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <div class="text-sm">
+              <p>{% trans "Looking for pre-made sections?" %} <a href="{% url 'surveys:published_templates_list' %}" class="link underline font-semibold">{% trans "Browse the Question Bank" %}</a> {% trans "to import markdown from published templates." %}</p>
+            </div>
+          </div>
+          <form method="post" id="bulk-import-form">
+            {% csrf_token %}
+            <textarea class="textarea textarea-bordered w-full min-h-[500px]" name="markdown" id="markdown-input" required>{{ markdown|default:example }}</textarea>
+            <div class="mt-3">
+              <button class="btn btn-primary" type="button" id="bulk-import-open-modal">
+                {% if has_questions %}
+                  {% trans "Reimport questions" %}
+                {% else %}
+                  {% trans "Import questions" %}
+                {% endif %}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
-    </div>
 
-    <!-- AI Assistant Tab Content -->
-    <div id="ai-tab-content" class="hidden">
-
-        <!-- Left Column: AI Conversation -->
-        <div class="card bg-base-100 border border-base-300">
-          <div class="card-body">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-semibold flex items-center gap-2">
-                {% include "components/icons/llm.html" with classes="w-5 h-5" %}
-                <span>{% trans "AI Conversation" %}</span>
-                <span id="llm-phase-badge" class="badge badge-outline badge-info ml-2" aria-live="polite">Planning</span>
-              </h3>
-              <button type="button" id="new-session-btn" class="btn btn-sm btn-outline">
-                {% trans "New Session" %}
-              </button>
-            </div>
-
-            <!-- Chat Messages Container -->
-            <div id="chat-messages" class="space-y-4 max-h-[500px] overflow-y-auto mb-4 p-4 bg-base-200/50 rounded-lg">
-              <div class="text-sm text-base-content/70 py-8">
-                {% trans "Describe what you want to measure, and the AI assistant will help you create your survey. You can also ask questions about the format if needed." %}
-              </div>
-            </div>
-
-            <!-- Loading Indicator -->
-            <div id="ai-loading" class="hidden">
-              <div class="flex items-center gap-2 text-sm text-base-content/70">
-                <span class="loading loading-spinner loading-sm"></span>
-                <span>{% trans "AI is thinking..." %}</span>
-              </div>
-            </div>
-
-            <!-- User Input Form -->
-            <div class="flex gap-2">
-              <input
-                type="text"
-                id="user-message-input"
-                class="input input-bordered flex-1"
-                placeholder="{% trans 'Describe your survey or ask a question...' %}"
-                autocomplete="off"
-              />
-              <button type="button" id="send-message-btn" class="btn btn-primary">
-                {% trans "Send" %}
-              </button>
-            </div>
-
-            <div class="mt-4 p-3 bg-info/10 border border-info/20 rounded-lg">
-              <p class="text-sm text-base-content/70">
-                <strong>{% trans "Tip:" %}</strong> {% trans "Generated markdown will appear in the Manual Input tab. The live preview on the right updates automatically." %}
-              </p>
-            </div>
-          </div>
-        </div>
-
-    </div>
-
-    <!-- Session History Tab Content -->
-    <div id="history-tab-content" class="space-y-6 hidden">
-      <div class="card bg-base-100 border border-base-300">
-        <div class="card-body">
-          <h3 class="font-semibold flex items-center gap-2 mb-4">
-            {% include "components/icons/documents.html" with classes="w-5 h-5" %}
-            <span>{% trans "Previous AI Sessions" %}</span>
+      <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'AI Assistant' %}" id="tab-ai" />
+      <div role="tabpanel" class="tab-content bg-base-100 border-base-300 border-l-4 border-primary rounded-box p-6 space-y-4" id="ai-tab-content">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold flex items-center gap-2">
+            {% include "components/icons/llm.html" with classes="w-5 h-5" %}
+            <span>{% trans "AI Conversation" %}</span>
+            <span id="llm-phase-badge" class="badge badge-outline badge-info ml-2" aria-live="polite">Planning</span>
           </h3>
+          <button type="button" id="new-session-btn" class="btn btn-sm btn-outline">
+            {% trans "New Session" %}
+          </button>
+        </div>
+        <div id="chat-messages" class="space-y-4 max-h-[500px] overflow-y-auto mb-4 p-4 bg-base-200/50 rounded-lg">
+          <div class="text-sm text-base-content/70 py-8">
+            {% trans "Describe what you want to measure, and the AI assistant will help you create your survey. You can also ask questions about the format if needed." %}
+          </div>
+        </div>
+        <div id="ai-loading" class="hidden">
+          <div class="flex items-center gap-2 text-sm text-base-content/70">
+            <span class="loading loading-spinner loading-sm"></span>
+            <span>{% trans "AI is thinking..." %}</span>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <input type="text" id="user-message-input" class="input input-bordered flex-1" placeholder="{% trans 'Describe your survey or ask a question...' %}" autocomplete="off" />
+          <button type="button" id="send-message-btn" class="btn btn-primary">{% trans "Send" %}</button>
+        </div>
+        <div class="mt-4 p-3 bg-info/10 border border-info/20 rounded-lg">
+          <p class="text-sm text-base-content/70">
+            <strong>{% trans "Tip:" %}</strong> {% trans "Generated markdown will appear in the Outline tab. The live preview on the right updates automatically." %}
+          </p>
+        </div>
+      </div>
 
-          <div id="session-history-list" class="space-y-3">
-            <!-- Populated by JavaScript -->
-            <div class="text-sm text-base-content/70 text-center py-8">
-              <span class="loading loading-spinner loading-md"></span>
-              <p class="mt-2">{% trans "Loading previous sessions..." %}</p>
-            </div>
+      <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'Session History' %}" id="tab-history" />
+      <div role="tabpanel" class="tab-content bg-base-100 border-base-300 border-l-4 border-secondary rounded-box p-6 space-y-4" id="history-tab-content">
+        <h3 class="font-semibold flex items-center gap-2">
+          {% include "components/icons/documents.html" with classes="w-5 h-5" %}
+          <span>{% trans "Previous AI Sessions" %}</span>
+        </h3>
+        <div id="session-history-list" class="space-y-3">
+          <div class="text-sm text-base-content/70 text-center py-8">
+            <span class="loading loading-spinner loading-md"></span>
+            <p class="mt-2">{% trans "Loading previous sessions..." %}</p>
           </div>
         </div>
       </div>
     </div>
+    <!-- End Main Tabs -->
   </div>
   <!-- End Left Column -->
 
   <!-- Right Column: Live Preview (shared across all tabs) -->
   <div class="space-y-6">
-    <!-- Import Questions Button -->
-    <div>
-      <button class="btn btn-primary" type="button" id="bulk-import-open-modal-top">
-        {% include "components/icons/document.html" with classes="w-5 h-5" %}
-        <span>
-          {% if has_questions %}
-            {% trans "Reimport questions" %}
-          {% else %}
-            {% trans "Import questions" %}
-          {% endif %}
-        </span>
-      </button>
-    </div>
-
     <!-- Live Preview -->
-    <section class="rounded-xl border border-base-300 bg-base-200/70 shadow-inner">
+    <section class="rounded-xl bg-base-100 shadow-sm border-l-4 border-secondary">
       <div class="p-4 sm:p-6 space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div>

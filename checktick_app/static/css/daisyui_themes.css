@@ -47,6 +47,7 @@
 
     .builder-editor-card {
         background-color: var(--color-base-100);
+        border-left: 4px solid var(--color-primary);
     }
 
     .builder-question-card:hover,
