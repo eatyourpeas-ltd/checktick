@@ -1,10 +1,8 @@
-"""Tests for the Survey Builder Workflow redesign (Tier 1).
+"""Tests for the Survey Builder Workflow redesign.
 
-See docs/survey-builder-workflow-design.md and
-docs/survey-builder-workflow-implementation-plan.md.
-
-Tier 1.1 — Auto-create a default QuestionGroup on survey creation so the user
-can add their first question without naming a group.
+Covers the auto-created default section, the unified builder, the section
+rail, the Organise page, the Survey Map route, the first-run nudge, and
+the builder empty state.
 """
 
 from __future__ import annotations
@@ -1520,6 +1518,192 @@ def test_builder_empty_state_signposts_sections(auth_client, owner):
     ), "The empty state should mention the Sections guide by name."
 
 
+@pytest.mark.django_db
+def test_builder_empty_state_reappears_after_last_question_deleted(auth_client, owner):
+    """The first-run nudge card reappears when the last question is deleted.
+
+    Regression: the HTMX swap partials (`questions_list.html` /
+    `questions_list_group.html`) used to render a bare "No questions yet."
+    message in their `{% empty %}` block, so deleting the last question in a
+    section swapped out the rich nudge card that the initial page render had
+    shown. All three list templates now share `builder_questions_empty.html`,
+    so the nudge card (intro line + `builder_empty_state.html` signposting)
+    must reappear after the delete swap empties the list.
+    """
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Delete Last Question Survey",
+        slug="delete-last-question-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    # Create one question in the group via the builder endpoint.
+    create_url = reverse(
+        "surveys:builder_group_question_create",
+        kwargs={"slug": survey.slug, "gid": group.id},
+    )
+    resp = auth_client.post(
+        create_url,
+        {"text": "Temporary question", "type": "text", "text_format": "free"},
+        HTTP_HX_REQUEST="true",
+    )
+    assert resp.status_code == 200
+    question = SurveyQuestion.objects.get(survey=survey, group=group)
+
+    # Delete it via the builder endpoint (the HTMX path the Delete button uses).
+    delete_url = reverse(
+        "surveys:builder_group_question_delete",
+        kwargs={"slug": survey.slug, "gid": group.id, "qid": question.id},
+    )
+    resp = auth_client.post(delete_url, HTTP_HX_REQUEST="true")
+    assert resp.status_code == 200
+    assert SurveyQuestion.objects.filter(survey=survey, group=group).count() == 0
+
+    # The swapped-in empty state must contain the nudge card, not just a bare
+    # "No questions" string. Assert the same signposting the initial render shows.
+    assert (
+        b"Add your first question using the form." in resp.content
+    ), "The nudge card intro line should reappear after the last question is deleted."
+    assert (
+        b"Browse the Question Bank" in resp.content
+    ), "The Question Bank signpost should reappear after the last question is deleted."
+    assert (
+        b"Likert scale" in resp.content
+    ), "The question-type signposting should reappear after the last question is deleted."
+
+
+# ---------------------------------------------------------------------------
+# First-run nudge — focus the Add Question form when the section is empty
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_builder_first_run_nudge_marks_input_autofocus_when_empty(auth_client, owner):
+    """The Add Question text input carries `data-autofocus` when the section has no questions.
+
+    The client-side first-run nudge (builder.js `focusFirstQuestionInput`)
+    focuses the input when it has `data-autofocus`, so a new user can start
+    typing their first question immediately. The attribute is set server-side
+    via `{% if not questions %}` in builder_question_pane.html, so it is
+    present on the initial page render and on HTMX section switches (which
+    re-render the whole #builder-main including the form).
+    """
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Autofocus Empty Survey",
+        slug="autofocus-empty-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    # The question text input should carry data-autofocus when the section is empty.
+    assert (
+        b'name="text"' in resp.content
+    ), "The Add Question form should render a question text input."
+    assert (
+        b"data-autofocus" in resp.content
+    ), "The question text input should carry data-autofocus when the section is empty."
+
+
+@pytest.mark.django_db
+def test_builder_first_run_nudge_no_autofocus_when_section_has_questions(
+    auth_client, owner
+):
+    """The Add Question text input does NOT carry `data-autofocus` when the section has questions.
+
+    Once the user has added at least one question, the form is no longer the
+    first thing they need to interact with, so the input should not steal focus.
+    """
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Autofocus Non-Empty Survey",
+        slug="autofocus-non-empty-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    # Add one question so the section is non-empty.
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Existing question",
+        type=SurveyQuestion.Types.TEXT,
+        order=1,
+        options=[{"type": "text", "format": "free"}],
+    )
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    # The question text input should NOT carry data-autofocus when the section has questions.
+    # Parse the input element to avoid matching data-autofocus elsewhere in the page.
+    content = resp.content.decode("utf-8")
+    import re
+
+    input_match = re.search(
+        r'<input\s+name="text"[^>]*>',
+        content,
+    )
+    assert (
+        input_match is not None
+    ), "The Add Question form should render a question text input."
+    input_html = input_match.group(0)
+    assert (
+        "data-autofocus" not in input_html
+    ), "The question text input should NOT carry data-autofocus when the section has questions."
+
+
+@pytest.mark.django_db
+def test_builder_first_run_nudge_autofocus_on_section_switch_to_empty(
+    auth_client, owner
+):
+    """Switching to an empty section via HTMX re-renders the form with `data-autofocus`.
+
+    The HTMX section-switch endpoint returns builder_section_swap.html, which
+    includes builder_question_pane.html. A section with no questions must
+    surface data-autofocus on the swapped-in form so the client-side nudge
+    fires after the swap settles.
+    """
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Autofocus Section Switch Survey",
+        slug="autofocus-section-switch-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    # Two sections: one with a question, one empty.
+    group_with_q = QuestionGroup.objects.create(name="Has question", owner=owner)
+    empty_group = QuestionGroup.objects.create(name="Empty", owner=owner)
+    survey.question_groups.add(group_with_q, empty_group)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group_with_q,
+        text="Existing question",
+        type=SurveyQuestion.Types.TEXT,
+        order=1,
+        options=[{"type": "text", "format": "free"}],
+    )
+
+    # HTMX section switch to the empty group.
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug}),
+        {"gid": str(empty_group.id)},
+        HTTP_HX_REQUEST="true",
+    )
+    assert resp.status_code == 200
+    assert (
+        b"data-autofocus" in resp.content
+    ), "The swapped-in form for an empty section should carry data-autofocus."
+
+
 # ---------------------------------------------------------------------------
 # Commit 2.7 — De-emphasise building cards when survey has questions
 # ---------------------------------------------------------------------------
@@ -2153,8 +2337,6 @@ def test_group_builder_route_still_works(auth_client, owner):
 
 # ---------------------------------------------------------------------------
 # Survey Map — standalone route for the branching visualiser
-# (deferred item: "Extract the Survey Map visualiser to its own route")
-# See docs/survey-builder-workflow-implementation-plan.md.
 # ---------------------------------------------------------------------------
 
 

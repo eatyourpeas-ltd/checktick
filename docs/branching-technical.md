@@ -174,6 +174,26 @@ Request body for create/update:
 }
 ```
 
+## Builder Route Security
+
+Every Builder view enforces the same security contract:
+
+- `@login_required` — unauthenticated users are redirected to login.
+- `require_can_edit` — returns HTTP 403 for non-editors (viewers, outsiders).
+- HTTP method restrictions — wrong methods return HTTP 405.
+- CSRF tokens on all POST forms.
+- No inline JS — all `<script>` tags are external and nonce'd, keeping the Builder CSP-safe.
+- XSS sanitisation via `strip_tags` on user-supplied section/question names.
+- Tests cover permission (403), XSS, and method (405) cases for each Builder view.
+
+## HTMX Interaction Layer
+
+Section switching and "Add section" use HTMX partial swaps:
+
+- HTMX requests swap the relevant region (rail + main area) without a full reload.
+- Non-HTMX requests gracefully degrade to full page loads — the same URL works with JavaScript disabled.
+- All JS is external and CSP-compliant (nonce'd), matching the existing `groups-page.js` / `builder-rail.js` pattern. No inline event handlers.
+
 ## Branching Visualizer
 
 ### Frontend Architecture
@@ -376,6 +396,7 @@ Potential improvements to the branching system:
 5. **Runtime Validation** - Detect unreachable questions
 6. **Performance Metrics** - Track which branches are used
 7. **Version History** - Track condition changes over time
+8. **Branching targets by section** - Add a "jump to section" target type alongside the existing "jump to question", resolving the section to its first question at config-build time. Uses the dormant `target_group` FK on `SurveyQuestionCondition`. Full spec: `docs/branching-targets-by-section.md`.
 
 ## Migration Notes
 

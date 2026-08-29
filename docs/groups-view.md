@@ -16,6 +16,13 @@ The primary place to build and edit questions is the **Builder** (`/surveys/<slu
 
 The Builder is where you add, edit, reorder, and delete questions. For bulk section operations (reordering, repeats, publishing), use the Organise page described below.
 
+### Routes and URLs
+
+- **Organise is a UI label only:** The route name (`surveys:groups`) and URL path (`/<slug>/groups/`) are unchanged. "Organise" is just the user-facing label for the page.
+- **Builder route:** The `survey_builder` route serves `/<slug>/builder/`. The `gid` query parameter is optional and defaults to the first section. Section switching uses HTMX partial swaps; non-HTMX requests gracefully degrade to full page loads.
+- **Default section name:** New surveys get a default section named "Section 1" (neutral, rarely seen because the rail always renders).
+- **Legacy `group_builder` route:** The legacy `group_builder` route is deprecated — kept for bookmarked URLs but no template links to it. Section rows link to `survey_builder?gid=<gid>` instead.
+
 ## What are sections?
 
 A section is a named collection of questions that:

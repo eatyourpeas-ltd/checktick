@@ -87,7 +87,7 @@ logger = logging.getLogger(__name__)
 
 
 # Default name for the auto-created QuestionGroup on survey creation.
-# User-facing label is "Section" (see docs/survey-builder-workflow-design.md);
+# User-facing label is "Section" (see docs/surveys.md for the naming split);
 # the model field stays "QuestionGroup". "Section 1" is intentionally ordinal
 # so it reads correctly if a second section is added later, and is rarely seen
 # because single-section surveys hide the section chrome (Tier 2.2).
@@ -7222,8 +7222,7 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
 
     Security: ``@login_required`` + ``require_can_edit`` (the Survey Map is a
     builder tool; viewers don't need it) + GET-only (no write path here — the
-    data API is read-only and the visualiser posts nothing). See the deferred
-    item in ``docs/survey-builder-workflow-implementation-plan.md``.
+    data API is read-only and the visualiser posts nothing).
     """
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)

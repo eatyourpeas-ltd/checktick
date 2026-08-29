@@ -300,7 +300,7 @@ urlpatterns = [
         name="survey_builder",
     ),
     # Survey Map — standalone route for the branching visualiser
-    # (extracted from the Organise page; see docs/survey-builder-workflow-design.md).
+    # (extracted from the Organise page).
     path(
         "<slug:slug>/survey-map/",
         views.survey_map,
