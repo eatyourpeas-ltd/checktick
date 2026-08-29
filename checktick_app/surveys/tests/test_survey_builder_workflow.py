@@ -821,6 +821,104 @@ def test_survey_builder_requires_edit_permission(auth_client, owner, django_user
 
 
 # ---------------------------------------------------------------------------
+# Section rail drag-reorder (reuses the Organise page's survey_groups_reorder)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_builder_rail_has_drag_handles_for_editors(auth_client, owner):
+    """The builder rail renders a drag handle on each section for editors."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Drag Handle Survey",
+        slug="rail-drag-handle-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="History", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug})
+    )
+    assert resp.status_code == 200
+    assert (
+        b"drag-handle" in resp.content
+    ), "The rail should render a drag handle for editors."
+    # The rail list should carry the reorder URL and can-edit flag for the JS.
+    assert (
+        b'data-reorder-url="/surveys/rail-drag-handle-survey/groups/reorder"'
+        in resp.content
+    )
+    assert b'data-can-edit="true"' in resp.content
+    # Each rail item should expose its group id for the reorder JS to collect.
+    assert f'data-gid="{group1.id}"'.encode() in resp.content
+    assert f'data-gid="{group2.id}"'.encode() in resp.content
+
+
+@pytest.mark.django_db
+def test_builder_rail_reorder_persists_via_existing_endpoint(auth_client, owner):
+    """Reordering from the builder rail POSTs to the shared survey_groups_reorder
+    endpoint and persists the new order on survey.style.group_order."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail Reorder Survey",
+        slug="rail-reorder-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="History", owner=owner)
+    group3 = QuestionGroup.objects.create(name="Follow-up", owner=owner)
+    survey.question_groups.add(group1, group2, group3)
+
+    # The rail JS POSTs order=ids.join(",") — same shape as the Organise page.
+    new_order = [group3.id, group1.id, group2.id]
+    resp = auth_client.post(
+        reverse("surveys:survey_groups_reorder", kwargs={"slug": survey.slug}),
+        data={"order": ",".join(str(i) for i in new_order)},
+    )
+    assert resp.status_code in (302, 200)
+    survey.refresh_from_db()
+    assert (survey.style or {}).get("group_order") == new_order
+
+
+@pytest.mark.django_db
+def test_builder_rail_oob_swap_preserves_drag_handles(auth_client, owner):
+    """After an HTMX section-switch (which OOB-swaps the rail), the rail still
+    has drag handles and data attributes — i.e. the OOB swap uses the same
+    partial as the initial render, not stale markup."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Rail OOB Survey",
+        slug="rail-oob-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Demographics", owner=owner)
+    group2 = QuestionGroup.objects.create(name="History", owner=owner)
+    survey.question_groups.add(group1, group2)
+    SurveyQuestion.objects.create(
+        survey=survey, group=group1, text="Q1?", type=SurveyQuestion.Types.TEXT
+    )
+
+    # Simulate clicking section 2 via HTMX (the same request the rail <a> fires).
+    resp = auth_client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": survey.slug}),
+        {"gid": str(group2.id)},
+        HTTP_HX_REQUEST="true",
+    )
+    assert resp.status_code == 200
+    # The OOB-swapped rail should still have drag handles and the rail list id.
+    assert b"drag-handle" in resp.content, "OOB rail should still have drag handles."
+    assert (
+        b"builder-rail-list" in resp.content
+    ), "OOB rail should still have the list id."
+    assert f'data-gid="{group2.id}"'.encode() in resp.content
+
+
+# ---------------------------------------------------------------------------
 # Commit 2.2 — Hide section rail for single-section surveys
 # ---------------------------------------------------------------------------
 
