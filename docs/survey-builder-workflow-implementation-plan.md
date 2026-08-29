@@ -451,6 +451,14 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 - **Drag-reorder sections in the builder rail** ✅ — reuses the Organise page's SortableJS + `survey_groups_reorder` endpoint. The OOB swap uses the shared rail partial; the Sortable instance is destroyed/re-created on each HTMX settle.
 - **Remove rename/delete from the Organise page** ✅ — rename and delete are now builder-only (the rail has both). The Organise page keeps Publish, bulk reorder, and repeat management. A signpost links to the Builder for rename/delete.
+- **Move single-section "Create repeat" into the builder rail** ✅ — single-section repeat create/edit/remove is now available from the builder rail. Multi-section repeat (selecting several groups) remains on the Organise page.
+- **Reframe Organise as a small advanced page** ✅ — removed the explainer card, three info alerts, and the orientation paragraph. Replaced with a one-line subtitle under the h1. The page is now self-evident: toolbar + subtitle + section list + repeat/publish controls.
+
+### Remaining in Organise (by design)
+
+- **Publish as template** — can apply to multiple sections, so it belongs here.
+- **Branching** — branching is between sections, so it belongs here.
+- **Multi-section repeat** — selecting several groups to repeat together is a bulk operation.
 
 ---
 

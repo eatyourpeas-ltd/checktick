@@ -1970,7 +1970,7 @@ def test_organise_page_heading(auth_client, owner):
 
 @pytest.mark.django_db
 def test_organise_page_explainer(auth_client, owner):
-    """The explainer mentions reordering, repeats, branching, visualising, and publishing."""
+    """The Organise page subtitle mentions reordering, repeats, branching, visualising, and publishing."""
     survey = Survey.objects.create(
         owner=owner,
         name="Organise Explainer Survey",
@@ -2016,6 +2016,37 @@ def test_organise_page_links_to_builder(auth_client, owner):
     assert (
         b"Builder" in resp.content
     ), "The explainer should mention the Builder by name."
+
+
+@pytest.mark.django_db
+def test_organise_page_no_explainer_card(auth_client, owner):
+    """The old explainer card and info alerts are gone — replaced by a one-line subtitle."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="No Explainer Card Survey",
+        slug="no-explainer-card-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The old explainer card partial should not be included.
+    assert (
+        b"This is the Organise page. Use it to:" not in resp.content
+    ), "The old explainer card should be gone."
+    # The old info alerts should be gone.
+    assert (
+        b"Sections group related questions" not in resp.content
+    ), "The old 'sections group related questions' alert should be gone."
+    assert (
+        b"Select groups by clicking their row" not in resp.content
+    ), "The old repeat tip alert should be gone."
+    # The new one-line subtitle should be present.
+    assert (
+        b"Bulk reorder" in resp.content
+    ), "The new subtitle should mention bulk reorder."
 
 
 @pytest.mark.django_db

@@ -31,13 +31,13 @@ A section is a named collection of questions that:
 The **Organise** page (`/surveys/<slug>/groups/`) is for bulk section operations that are better done outside the Builder:
 
 - **Reorder sections** - Drag and drop to arrange sections in your survey (also available in the Builder rail)
-- **Create repeats (collections)** - Turn sections into repeatable sections
+- **Create repeats (collections)** - Select multiple sections and make them repeatable together (single-section repeats can be done from the Builder rail)
 - **Nest repeats** - Create one level of nesting (e.g., "People" containing "Visits")
 - **Remove from repeats** - Unlink sections from collections
-- **Visualise the survey** - View the survey as a flow diagram on the **Survey Map** page (`/surveys/<slug>/survey-map/`). The Survey Map is a standalone route (Tier 4) — it used to be embedded at the bottom of this page but now has its own space. Reach it from the Builder toolbar, the survey dashboard (editors only), or the quick-nav on this page.
+- **Visualise the survey** - View the survey as a flow diagram on the **Survey Map** page (`/surveys/<slug>/survey-map/`), linked from the quick-nav toolbar.
 - **Publish sections as templates** - Share validated questionnaires
 
-Renaming and deleting sections is done in the **Builder** rail, not on this page. The Organise page focuses on bulk operations that affect multiple sections at once.
+Renaming, deleting, and single-section repeats are done in the **Builder** rail. The Organise page focuses on bulk operations that affect multiple sections at once.
 
 ### Who can access
 

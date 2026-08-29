@@ -35,8 +35,12 @@
     <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/dashboard/">{% trans 'Back to dashboard' %}</a>
   </div>
 
-  {# === Page explainer (replaces the old 3-step orientation strip) === #}
-  {% include 'surveys/partials/organise_explainer.html' %}
+  <p class="text-sm text-base-content/60 mb-4">
+    {% trans 'Bulk reorder, repeats, branching, and publishing. For adding and editing questions, use the' %}
+    <a href="/surveys/{{ survey.slug }}/builder/" class="link underline font-semibold">{% trans 'Builder' %}</a>.
+    {% trans 'Visualise the flow on the' %}
+    <a href="/surveys/{{ survey.slug }}/survey-map/" class="link underline font-semibold">{% trans 'Survey Map' %}</a>.
+  </p>
 
   {# === Empty state: no groups yet (legacy surveys; new surveys get a default group automatically on creation via create_default_section) === #}
   {% if not groups %}
@@ -83,27 +87,6 @@
 
   <div class="mt-4">
     <div class="space-y-3">
-      {% if groups %}
-      <div class="alert shadow-sm bg-info/10 border-l-4 border-info">
-        <div>
-          {% include 'components/icons/checktick_question.html' with classes='w-5 h-5 text-info' %}
-        </div>
-        <div class="text-sm text-base-content">
-          {% trans 'Sections group related questions — that\'s what lets you skip ahead or repeat a block.' %}
-        </div>
-      </div>
-      <p class="text-sm text-base-content/70">
-        {% blocktrans %}Drag to reorder groups — this controls the order participants see each section. Need to ask the same questions multiple times? Select groups and click "Create repeat" to let participants add entries (e.g., details for each family member or each hospital visit).{% endblocktrans %}
-      </p>
-      <div class="alert shadow-sm bg-base-100 border-l-4 border-primary">
-        <div>
-          {% include 'components/icons/repeat.html' with classes='w-5 h-5 text-primary' %}
-        </div>
-        <div class="text-sm text-base-content">
-          {% trans 'Tip: Select groups by clicking their row or checkbox, then click ‘Create repeat’ to set a name. Selected rows are highlighted and show a small repeat icon.' %}
-        </div>
-      </div>
-      {% endif %}
       <ul id="groups-draggable" class="orderable-list w-full flex flex-col gap-3" aria-label="Reorder groups" data-reorder-url="/surveys/{{ survey.slug }}/groups/reorder" data-can-edit="{{ can_edit|yesno:'true,false' }}" data-survey-slug="{{ survey.slug }}">
         {% for g in groups %}
           {% with info=repeat_info|get_item:g.id %}
