@@ -23,7 +23,7 @@ This is a commit plan, not a design doc. The design doc describes *what* and *wh
 | OQ3 — dashboard CTA target | **Per-group builder first** ✅ (Tier 1) → **Unified builder** (Tier 2) | Tier 1 points at `group_builder` for the default group. Tier 2 migrates to the unified builder. |
 | i18n | **Defer translation files and `COMPLETE_STRINGS_LIST.md` updates.** ✅ | Templates use `{% trans %}` / `{% blocktrans %}` for all new/changed strings. `.po` files and `docs/languages/*.md` are out of date; a separate i18n refresh ticket will catch up. New `{% trans %}` strings fall back to English until then. |
 | `builder.html` | **Removed** ✅ | Confirmed unused and deleted in Tier 1 commit 1. Tier 2 builds the unified builder fresh. |
-| OQ1 — left rail vs. dividers | **Left rail** (Tier 2) | A left rail matches the master-detail pattern, scales to many sections, and gives a permanent home for "Add section". Inline dividers are simpler but don't scale and don't provide a persistent section switcher. The rail will collapse to a dropdown on mobile. |
+| OQ1 — left rail vs. dividers | **Left rail (desktop) + dropdown (mobile)** (Tier 2) | A left rail matches the master-detail pattern and scales to many sections on desktop. On mobile, the rail collapses to a sticky `<select>` dropdown ("Section: Demographics ▾") — compact, native, and doesn't add a navigation layer. This is the pattern Google Forms uses. Horizontal tabs break down at 4+ sections; a slide-out drawer hides the list behind a tap. |
 | OQ5 — keep standalone Groups page? | **Keep for now** (Tier 2) | The Groups page is the only surface for bulk reorder + repeat management. Folding it into the builder is a Tier 4 idea, not Tier 2. The unified builder will link to it for bulk operations. |
 | OQ6 — publishing from single-section survey | **Top-level builder action** (Tier 3) | When the section layer is hidden, "Share as template" will be a top-level builder action that implicitly acts on the single section. Deferred to Tier 3. |
 
@@ -64,7 +64,7 @@ Tier 1 is complete and merged to `main`. The commits below are preserved for ref
 
 **Goal**: Replace the "create group → navigate in → add question" dance with a single master-detail builder page. Left rail = sections (in order, with "Add section"); main area = questions in the selected section with "Add question". For single-section surveys, the rail is hidden and the user sees a flat question list.
 
-**Architecture decision**: The unified builder is a **new route + new view + new template**, not a modification of `group_builder`. The existing `group_builder` route/view/template stays intact as a fallback and for deep links from the Groups page. The unified builder reuses the existing `question_row.html` partial and the question-create/edit HTMX endpoints — it does not duplicate them.
+**Architecture decision**: The unified builder **builds on `group_builder.html`**, not replaces it. The question list + question-create form (the "question pane") is extracted from `group_builder.html` into a shared partial (`surveys/partials/builder_question_pane.html`). Both `group_builder.html` and the new `survey_builder.html` include that partial. This avoids duplicating the ~250 lines of question-create form, dataset picker, template tabs, and conditions panel. The existing `group_builder` route stays intact for deep links from the Groups page; the unified builder adds the section rail around the shared pane.
 
 **Route**: `/<slug>/builder/` → `views.survey_builder` → `surveys/survey_builder.html`. The `gid` is optional (defaults to the first group); the rail handles section switching via HTMX partial swaps.
 
@@ -75,6 +75,8 @@ Tier 1 is complete and merged to `main`. The commits below are preserved for ref
 **Scope**: Create the new view, route, and a minimal template that renders the master-detail layout. No section-hiding or fancy interactions yet — just the structure.
 
 **Files**:
+- `checktick_app/surveys/templates/surveys/partials/builder_question_pane.html` — **new partial**: extract the question list (`#questions-list`) + question-create form (`#create-question-form`) from `group_builder.html` L36–327. This is the `md:col-span-2` main area + the sidebar form, verbatim.
+- `checktick_app/surveys/templates/surveys/group_builder.html` — replace the extracted block with `{% include 'surveys/partials/builder_question_pane.html' %}`. No visual or behavioural change.
 - `checktick_app/surveys/urls.py` — add route `path("<slug:slug>/builder/", views.survey_builder, name="survey_builder")`.
 - `checktick_app/surveys/views.py` — add `survey_builder(request, slug, gid=None)` view:
   - Loads the survey, all groups (ordered via `_resolved_group_order_ids`), and the selected group's questions.
@@ -84,14 +86,21 @@ Tier 1 is complete and merged to `main`. The commits below are preserved for ref
 - `checktick_app/surveys/templates/surveys/survey_builder.html` — new template:
   - Extends `base.html`.
   - Breadcrumbs: Surveys > Survey Dashboard > Builder.
-  - Layout: `grid md:grid-cols-4` — left rail (`md:col-span-1`) = section list + "Add section" button; main area (`md:col-span-3`) = includes the existing question list + question-create form from `group_builder.html` (extracted into a shared partial or included directly).
-  - The rail lists sections in order, with the active section highlighted. Clicking a section navigates to `/<slug>/builder/?gid=<gid>` (full page load for now; HTMX swap in commit 2.3).
+  - Layout: `grid md:grid-cols-4` — left rail (`md:col-span-1`, hidden on mobile) = section list + "Add section" button; main area (`md:col-span-3`, full width on mobile) = `{% include 'surveys/partials/builder_question_pane.html' %}`.
+  - **Responsive section switcher**:
+    - Desktop (`md+`): vertical rail listing sections in order, with the active section highlighted. Drag handles for reorder (SortableJS, same as Groups page). "Add section" button at the bottom of the rail.
+    - Mobile (`<md`): a sticky `<select>` dropdown at the top of the main area — *"Section: Demographics ▾"*. Tapping it shows all sections. Hidden on `md+` via `hidden md:hidden` / `md:block` utility classes. The dropdown's `onchange` triggers the same navigation as a rail click (full page load in 2.1; HTMX swap in 2.3).
+  - Both desktop and mobile are driven by the same `groups` context variable.
+  - Clicking a section (rail or dropdown) navigates to `/<slug>/builder/?gid=<gid>` (full page load for now; HTMX swap in commit 2.3).
   - "Add section" button posts to `survey_group_create` and returns to the builder.
 
 **Tests**:
+- `test_group_builder_still_works_after_extraction` — GET `surveys:group_builder` returns 200 and renders the question pane (confirms the extraction didn't break the existing route).
 - `test_survey_builder_view_renders` — GET `surveys:survey_builder` returns 200 with the section rail and question list.
 - `test_survey_builder_defaults_to_first_group` — no `gid` param → first group is active.
 - `test_survey_builder_selects_group_by_gid` — `?gid=<gid>` → that group is active and its questions are shown.
+- `test_survey_builder_mobile_dropdown_present` — the response contains a `<select>` for section switching (the mobile dropdown).
+- `test_survey_builder_desktop_rail_present` — the response contains the vertical section rail.
 - `test_survey_builder_requires_edit_permission` — a viewer gets 403.
 
 **Exit criteria**:
@@ -132,13 +141,14 @@ Tier 1 is complete and merged to `main`. The commits below are preserved for ref
 
 **Files**:
 - `checktick_app/surveys/views.py` — add a partial endpoint `survey_builder_section(request, slug, gid)` that returns just the main-area HTML (question list + create form) for HTMX swaps. The view detects HTMX requests via `HX-Request` header and returns a partial instead of the full page.
-- `checktick_app/surveys/templates/surveys/survey_builder.html` — section links use `hx-get="/surveys/<slug>/builder/sections/<gid>/"` with `hx-target="#builder-main"` and `hx-swap="innerHTML"`. The "Add section" form uses `hx-post` to `survey_group_create` and swaps the rail + main area.
+- `checktick_app/surveys/templates/surveys/survey_builder.html` — section links (both the desktop rail and the mobile dropdown) use `hx-get="/surveys/<slug>/builder/sections/<gid>/"` with `hx-target="#builder-main"` and `hx-swap="innerHTML"`. The mobile dropdown uses `hx-trigger="change"` so selecting an option triggers the swap. The "Add section" form uses `hx-post` to `survey_group_create` and swaps the rail + main area.
 - `checktick_app/surveys/urls.py` — add route for the partial: `path("<slug:slug>/builder/sections/<int:gid>/", views.survey_builder_section, name="survey_builder_section")`.
 
 **Tests**:
 - `test_section_switch_via_htmx_returns_partial` — HTMX GET to the section endpoint returns 200 with just the question list HTML (not the full page).
 - `test_section_switch_non_htmx_returns_full_page` — a non-HTMX GET to the section endpoint redirects to the full builder URL.
 - `test_add_section_via_htmx` — POSTing to `survey_group_create` with HTMX headers returns the updated rail.
+- `test_mobile_dropdown_triggers_htmx_swap` — the mobile `<select>` has `hx-trigger="change"` pointing at the section endpoint.
 
 **Exit criteria**:
 - Clicking a section in the rail swaps only the main area (no full page reload).
@@ -221,13 +231,13 @@ Tier 3 depends on Tier 2 landing clean. Outline only:
 
 | # | Commit | Depends on | Tests added | Docs updated |
 |---|---|---|---|---|
-| 2.1 | Unified builder view + route | — | 4 | — |
+| 2.1 | Unified builder view + route (extract shared partial) | — | 7 | — |
 | 2.2 | Hide section rail for single-section | 2.1 | 3 + a11y | — |
-| 2.3 | HTMX section switching + inline "Add section" | 2.1 | 3 | — |
+| 2.3 | HTMX section switching + inline "Add section" | 2.1 | 4 | — |
 | 2.4 | Migrate dashboard CTA to unified builder | 2.1 | 2 | — |
 | 2.5 | Docs update for Tier 2 | 2.1–2.4 | — | 5 files |
 
-**Total Tier 2**: 5 commits, ~12 tests, 5 doc files updated.
+**Total Tier 2**: 5 commits, ~16 tests, 5 doc files updated.
 
 ### Tier 3 (outlined)
 
