@@ -117,7 +117,7 @@
                   {% endif %}
                   <div class="q-number badge badge-primary badge-sm shrink-0">{{ forloop.counter }}</div>
                   <div class="flex-1 min-w-0">
-                    <a class="font-medium link underline hover:text-primary truncate block" href="/surveys/{{ survey.slug }}/builder/groups/{{ g.id }}/">{{ g.name }}</a>
+                    <a class="font-medium link underline hover:text-primary truncate block" href="/surveys/{{ survey.slug }}/builder/?gid={{ g.id }}">{{ g.name }}</a>
                     {% if g.description %}
                       <div class="text-sm text-base-content/70 truncate hidden sm:block">{{ g.description }}</div>
                     {% endif %}

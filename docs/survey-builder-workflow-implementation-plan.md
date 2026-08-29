@@ -359,7 +359,7 @@ Tier 3 depends on Tier 2 landing clean. Detailed plan below.
 
 ---
 
-### Commit 3.4 — Deprecate `group_builder` route
+### Commit 3.4 — Deprecate `group_builder` route ✅
 
 **Scope**: The unified builder is now the primary surface. The `group_builder` route is no longer linked from any template. Update the Groups page section rows to link to `survey_builder?gid=<gid>` instead of `group_builder`. Keep the `group_builder` route working for bookmarked URLs but add a deprecation comment.
 

@@ -61,7 +61,7 @@
     {% include 'surveys/partials/builder_section_rail.html' %}
 
     {# === Main question pane === #}
-    <div id="builder-main" class="{% if groups|length > 1 %}md:col-span-3{% else %}md:col-span-4{% endif %}">
+    <div id="builder-main" class="md:col-span-3">
       {# Visually-hidden section heading for assistive tech when there is only one section. #}
       {% if single_section %}
       <h2 class="sr-only">{% trans "Section" %}: {{ active_group.name }}</h2>
@@ -70,6 +70,50 @@
     </div>
   </div>
 </div>
+
+{% if can_edit %}
+{# Section rename/delete modals — outside the grid to avoid breaking layout. #}
+<dialog id="rename-section-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">{% trans 'Rename section' %}</h3>
+    <form method="post" id="rename-section-form">
+      {% csrf_token %}
+      <input type="hidden" name="gid" id="rename-section-gid" />
+      <input type="hidden" name="next" value="/surveys/{{ survey.slug }}/builder/" />
+      <div class="mt-2">
+        <label class="label">{% trans 'Section name' %}</label>
+        <input class="input input-bordered w-full" name="name" id="rename-section-name" required maxlength="255" />
+      </div>
+      <div class="mt-2">
+        <label class="label">{% trans 'Description (optional)' %}</label>
+        <textarea class="textarea textarea-bordered w-full" name="description" id="rename-section-description" rows="2"></textarea>
+      </div>
+      <div class="modal-action">
+        <button class="btn" type="button" id="rename-section-cancel-btn">{% trans 'Cancel' %}</button>
+        <button class="btn btn-primary" type="submit">{% trans 'Save' %}</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="delete-section-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">{% trans 'Delete section' %}</h3>
+    <p class="py-4">
+      {% trans "Are you sure you want to delete this section? All questions in it will also be deleted. This cannot be undone." %}
+    </p>
+    <p class="text-sm font-medium mb-4" id="delete-section-name-display"></p>
+    <form method="post" id="delete-section-form">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="/surveys/{{ survey.slug }}/builder/" />
+      <div class="modal-action">
+        <button class="btn" type="button" id="delete-section-cancel-btn">{% trans 'Cancel' %}</button>
+        <button class="btn btn-error" type="submit">{% trans 'Delete' %}</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+{% endif %}
 
 <script src="{% static cdn_assets.sortablejs.static_file %}"
   nonce="{{ request.csp_nonce }}"

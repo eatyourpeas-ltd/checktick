@@ -38,7 +38,7 @@
     <!-- Main Tabs: single-level tabs-lift with proper tab-content panels -->
     <div role="tablist" class="tabs tabs-lift">
       <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'Outline' %}" id="tab-manual" checked />
-      <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6 space-y-4" id="manual-tab-content">
+      <div role="tabpanel" class="tab-content bg-base-100 border-base-300 border-l-4 border-primary rounded-box p-6 space-y-4" id="manual-tab-content">
         <!-- Inline toggle for format guide (replaces nested sub-tabs) -->
         <div class="flex items-center justify-between">
           <label class="label">{% trans "Text format" %}</label>
@@ -206,7 +206,7 @@ dataset: medical_specialties</code></pre>
       </div>
 
       <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'AI Assistant' %}" id="tab-ai" />
-      <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6 space-y-4" id="ai-tab-content">
+      <div role="tabpanel" class="tab-content bg-base-100 border-base-300 border-l-4 border-primary rounded-box p-6 space-y-4" id="ai-tab-content">
         <div class="flex items-center justify-between">
           <h3 class="font-semibold flex items-center gap-2">
             {% include "components/icons/llm.html" with classes="w-5 h-5" %}
@@ -240,7 +240,7 @@ dataset: medical_specialties</code></pre>
       </div>
 
       <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'Session History' %}" id="tab-history" />
-      <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6 space-y-4" id="history-tab-content">
+      <div role="tabpanel" class="tab-content bg-base-100 border-base-300 border-l-4 border-secondary rounded-box p-6 space-y-4" id="history-tab-content">
         <h3 class="font-semibold flex items-center gap-2">
           {% include "components/icons/documents.html" with classes="w-5 h-5" %}
           <span>{% trans "Previous AI Sessions" %}</span>

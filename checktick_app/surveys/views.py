@@ -6968,6 +6968,12 @@ def survey_builder(request: HttpRequest, slug: str) -> HttpResponse:
 
 
 def group_builder(request: HttpRequest, slug: str, gid: int) -> HttpResponse:
+    """Deprecated: use `survey_builder` instead.
+
+    This route is kept for bookmarked URLs. It renders the same shared
+    question pane as the unified builder but without the section rail.
+    New links should point at `/<slug>/builder/?gid=<gid>`.
+    """
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
     group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)

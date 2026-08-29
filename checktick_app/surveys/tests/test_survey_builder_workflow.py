@@ -1744,3 +1744,55 @@ def test_builder_toolbar_says_organise(auth_client, owner):
     assert (
         b"Organise sections" not in resp.content
     ), "The old 'Organise sections' label should be gone."
+
+
+# ---------------------------------------------------------------------------
+# Commit 3.4 — Deprecate group_builder route
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_groups_page_section_links_to_unified_builder(auth_client, owner):
+    """The Organise page section rows link to survey_builder?gid=<gid>, not group_builder."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Deprecate Group Builder Survey",
+        slug="deprecate-group-builder-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    # The section row link should point at the unified builder with ?gid=
+    unified_url = f"/surveys/{survey.slug}/builder/?gid={group.id}"
+    assert (
+        unified_url.encode() in resp.content
+    ), "Section rows should link to survey_builder?gid=<gid>, not group_builder."
+    # The old group_builder URL should NOT appear in section row links
+    old_url = f"/surveys/{survey.slug}/builder/groups/{group.id}/"
+    assert (
+        old_url.encode() not in resp.content
+    ), "Section rows should not link to the deprecated group_builder route."
+
+
+@pytest.mark.django_db
+def test_group_builder_route_still_works(auth_client, owner):
+    """The old group_builder route still returns 200 (for bookmarked URLs)."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Bookmark Route Survey",
+        slug="bookmark-route-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+
+    resp = auth_client.get(
+        reverse(
+            "surveys:group_builder",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        )
+    )
+    assert resp.status_code == 200
