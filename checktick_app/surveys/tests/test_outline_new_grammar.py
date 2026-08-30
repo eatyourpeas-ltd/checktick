@@ -244,7 +244,13 @@ def test_reject_unknown_section_target():
     assert "unknown id" in str(exc.value).lower() or "not a section" in str(exc.value)
 
 
-def test_reject_question_target_that_resolves_to_group():
+def test_question_target_resolving_to_group_is_accepted():
+    """A {ref} that resolves to a group is a valid jump target.
+
+    The AI-output normalization wraps bare targets in braces without knowing
+    whether they're questions or sections, so {group-ref} must be accepted
+    and resolved to the group's first question at import time.
+    """
     md = textwrap.dedent("""
         # Intro {intro}
         ## Q {q1}
@@ -256,9 +262,10 @@ def test_reject_question_target_that_resolves_to_group():
         (text)
         """).strip()
 
-    with pytest.raises(Exception) as exc:
-        parse_bulk_markdown(md)
-    assert "not a question" in str(exc.value)
+    groups = parse_bulk_markdown(md)
+    branch = groups[0]["questions"][0]["branches"][0]
+    assert branch["target_type"] == "group"
+    assert branch["action"] == SurveyQuestionCondition.Action.JUMP_TO
 
 
 # --- Existing outlines parse unchanged ---

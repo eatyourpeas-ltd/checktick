@@ -519,16 +519,18 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                         f"Branch references unknown id '{target_ref}' in question '{q['title']}'"
                     )
 
-                # If the parser declared a section target, it must resolve to a group.
-                # If it declared a question target, it must resolve to a question.
+                # If the parser declared a section target (#ref), it must resolve
+                # to a group.
                 if target_kind == "section" and resolved_kind != "group":
                     raise BulkParseError(
                         f"Branch target '#{target_ref}' is not a section in question '{q['title']}'"
                     )
-                if target_kind == "question" and resolved_kind != "question":
-                    raise BulkParseError(
-                        f"Branch target '{{{target_ref}}}' is not a question in question '{q['title']}'"
-                    )
+                # A question target ({ref}) may resolve to either a question or
+                # a group. The AI-output normalization wraps bare targets in
+                # braces without knowing which kind they are, so {group-ref} is
+                # a valid jump target (resolved to the group's first question
+                # at import time). Only reject if the ref is genuinely unknown
+                # (already caught above).
 
                 branch["target_type"] = resolved_kind
                 branch["order"] = idx
