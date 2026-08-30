@@ -134,8 +134,8 @@ def get_visible_questions(
                         except StopIteration:
                             pass
                     break  # First matching condition wins
-                elif condition.action == SurveyQuestionCondition.Action.SKIP:
-                    # Skip the target question (don't show it)
+                elif condition.action == SurveyQuestionCondition.Action.HIDE:
+                    # Hide the target question (don't show it)
                     # This is handled by not adding the target to visible
                     break
                 elif condition.action == SurveyQuestionCondition.Action.SHOW:
@@ -150,9 +150,9 @@ def get_visible_questions(
         # Add this question to visible list
         visible.append(question)
 
-        # If SKIP was triggered, find and skip the target question
-        if triggered_action == SurveyQuestionCondition.Action.SKIP and triggered_target:
-            # Mark the target question to be skipped
+        # If HIDE was triggered, find and hide the target question
+        if triggered_action == SurveyQuestionCondition.Action.HIDE and triggered_target:
+            # Mark the target question to be hidden
             # We'll filter it out by not adding it when we reach it
             pass
 

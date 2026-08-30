@@ -146,7 +146,7 @@
             case "end_survey":
               surveyEnded = true;
               break;
-            case "skip":
+            case "hide":
               if (condition.target_question) {
                 skipQuestions.add(condition.target_question);
               }

@@ -50,7 +50,7 @@ The data migration backfills `hidden_by_default = True` for any question that cu
 
 "Jump to section S" is semantically "jump to the first question in section S". The engine resolves the section target to a question ID at config-build time (`_build_branching_config`, `branching_data_api`), so `branching.py` / `branching.js` see a normal `jump_to` with a `target_question`. No new action type, no new participant-facing code path.
 
-The dormant `target_group` FK on `SurveyQuestionCondition` (migration `0010`) is wired up.
+The `target_group` FK is re-added in this refactor (it was removed in migration `0031` after being unused). When set, the section resolves to its first question at config-build time (`_build_branching_config`, `branching_data_api`), so the evaluation engine sees a normal `jump_to` with a `target_question`. No new action type, no new participant code path.
 
 ### `JUMP_TO` is forward-only
 
@@ -128,14 +128,17 @@ Each commit includes the docs and tests for its section. `s/lint` before committ
   - Add `show` / `hide` / `end` action keywords; `jump_to` remains the default.
   - Add `-> #section-name` section targets, resolved to `target_group` at import time.
   - Reject `show`/`hide` on sections, `show` on non-HIDDEN, `hide` on HIDDEN, backward `jump_to`.
-  - Files: `surveys/markdown_import.py`.
-  - Tests: each keyword round-trips; section target resolves; all rejections; existing outlines parse unchanged.
+  - Update the live structure preview (`static/js/bulk-upload-preview.js`) to parse and render the new notation: `HIDDEN` badge on questions, action keyword in the branch row, `#section` target badge distinct from `{question}`.
+  - Update the format guide in `surveys/templates/surveys/bulk_upload.html` to document the new notation with examples (HIDDEN flag, `show`/`hide`/`end` keywords, `#section` targets, forward-only rule).
+  - Files: `surveys/markdown_import.py`, `static/js/bulk-upload-preview.js`, `surveys/templates/surveys/bulk_upload.html`.
+  - Tests: each keyword round-trips; section target resolves; all rejections; existing outlines parse unchanged; preview JS renders the new badges (unit-tested where feasible, otherwise covered by import tests).
 
 - [ ] **5. Section targets: config resolution + Builder picker + Survey Map edges**
+  - Re-add `target_group` FK to `SurveyQuestionCondition` (removed in migration `0031`).
   - Wire `target_group` → first question resolution in `_build_branching_config` and `branching_data_api`.
   - Builder condition panel: target-type picker (Section default / Question), section `<select>` excluding source section, `<optgroup>` question picker.
   - Survey Map: draw section-jump edges to the section header band; question-jump edges to the node as today.
-  - Files: `surveys/views.py`, `question_conditions_panel.html`, `static/js/branching-visualizer.js`, `static/js/builder.js`.
+  - Files: new migration, `surveys/models.py`, `surveys/views.py`, `question_conditions_panel.html`, `static/js/branching-visualizer.js`, `static/js/builder.js`.
   - Tests: config resolution; participant JS receives normal `jump_to`; section picker excludes source; visualiser edge endpoints; 403/405.
 
 - [ ] **6. Final docs polish + delete this planning doc**

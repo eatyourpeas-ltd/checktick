@@ -2299,6 +2299,13 @@ class SurveyQuestion(models.Model):
     options = models.JSONField(default=list, blank=True)
     required = models.BooleanField(default=False)
     order = models.PositiveIntegerField(default=0)
+    hidden_by_default = models.BooleanField(
+        default=False,
+        help_text=(
+            "When True, the question is hidden unless a SHOW condition reveals it. "
+            "When False (default), it is shown unless a HIDE condition hides it."
+        ),
+    )
     dataset = models.ForeignKey(
         "DataSet",
         on_delete=models.SET_NULL,
@@ -2377,7 +2384,7 @@ class SurveyQuestionCondition(models.Model):
     class Action(models.TextChoices):
         SHOW = "show", "Show when condition met (hidden by default)"
         JUMP_TO = "jump_to", "Skip ahead to question"
-        SKIP = "skip", "Hide when condition met"
+        HIDE = "hide", "Hide when condition met"
         END_SURVEY = "end_survey", "End survey"
 
     question = models.ForeignKey(
