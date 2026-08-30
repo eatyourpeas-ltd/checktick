@@ -134,7 +134,7 @@ Each commit includes the docs and tests for its section. `s/lint` before committ
   - Files: `surveys/markdown_import.py`, `static/js/bulk-upload-preview.js`, `surveys/templates/surveys/bulk_upload.html`.
   - Tests: each keyword round-trips; section target resolves; all rejections; existing outlines parse unchanged; preview JS renders the new badges (unit-tested where feasible, otherwise covered by import tests).
 
-- [ ] **5. Section targets: config resolution + Builder picker + Survey Map edges + export**
+- [x] **5. Section targets: config resolution + Builder picker + Survey Map edges + export** (commit `76e4679`)
   - Re-add `target_group` FK to `SurveyQuestionCondition` (removed in migration `0031`).
   - Wire `target_group` → first question resolution in `_build_branching_config` and `branching_data_api`.
   - Builder condition panel: target-type picker (Section default / Question), section `<select>` excluding source section, `<optgroup>` question picker.
