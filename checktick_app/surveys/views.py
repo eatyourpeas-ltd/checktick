@@ -8934,6 +8934,7 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                             type=q["final_type"],
                             options=q["final_options"],
                             required=q.get("required", False),
+                            hidden_by_default=q.get("hidden_by_default", False),
                             order=next_order,
                             dataset=dataset,
                         )
@@ -8952,11 +8953,41 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                     question = payload["question"]
                     branches = payload.get("branches") or []
                     for branch in branches:
+                        action = branch.get(
+                            "action", SurveyQuestionCondition.Action.JUMP_TO
+                        )
                         target_question = None
                         target_ref = branch.get("target_ref")
                         target_type = branch.get("target_type")
+
+                        # END_SURVEY has no target.
+                        if action == SurveyQuestionCondition.Action.END_SURVEY:
+                            SurveyQuestionCondition.objects.create(
+                                question=question,
+                                operator=branch.get("operator"),
+                                value=branch.get("value", ""),
+                                target_question=None,
+                                action=action,
+                                order=branch.get("order", 0),
+                                description=branch.get("description", ""),
+                            )
+                            continue
+
                         if target_type == "question":
                             target_question = question_ref_map.get(target_ref)
+                        elif target_type == "group":
+                            # Section target: resolve to the first question in the
+                            # group (by order, then id). Full target_group wiring
+                            # arrives in item 5; for now resolve at import time.
+                            target_group = group_ref_map.get(target_ref)
+                            if target_group is not None:
+                                target_question = (
+                                    SurveyQuestion.objects.filter(
+                                        survey=survey, group=target_group
+                                    )
+                                    .order_by("order", "id")
+                                    .first()
+                                )
 
                         if not target_question:
                             raise BulkParseError(
@@ -8968,7 +8999,7 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                             operator=branch.get("operator"),
                             value=branch.get("value", ""),
                             target_question=target_question,
-                            action=SurveyQuestionCondition.Action.JUMP_TO,
+                            action=action,
                             order=branch.get("order", 0),
                             description=branch.get("description", ""),
                         )
