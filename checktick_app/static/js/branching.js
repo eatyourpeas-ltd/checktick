@@ -209,13 +209,16 @@
       if (endedBefore) {
         display = "none";
       } else if (skipQuestions.has(questionId)) {
-        // Hide if this question should be skipped
+        // Hide if this question should be skipped (JUMP_TO range or HIDE condition)
         display = "none";
       } else {
-        // Handle SHOW conditions
-        const showConditions = config.show_conditions[questionId] || [];
-        if (showConditions.length > 0) {
-          // This question has SHOW conditions - only show if one is met
+        // Use the hidden_by_default toggle to determine visibility.
+        // Hidden by default: shown only if a SHOW condition matches.
+        // Shown by default: shown unless a HIDE condition added it to skipQuestions
+        // (already checked above).
+        const isHiddenByDefault = config.hidden_by_default[questionId];
+        if (isHiddenByDefault) {
+          const showConditions = config.show_conditions[questionId] || [];
           let shouldShow = false;
           for (const condition of showConditions) {
             const sourceAnswer = answers[condition.source_question];

@@ -1530,11 +1530,17 @@ def _build_branching_config(questions: list[SurveyQuestion]) -> dict[str, Any]:
         "show_conditions": {question_id: [incoming SHOW conditions]}
     }
     """
-    config: dict[str, Any] = {"questions": [], "conditions": {}, "show_conditions": {}}
+    config: dict[str, Any] = {
+        "questions": [],
+        "conditions": {},
+        "show_conditions": {},
+        "hidden_by_default": {},
+    }
 
     for q in questions:
         q_id = str(q.id)
         config["questions"].append(q_id)
+        config["hidden_by_default"][q_id] = bool(q.hidden_by_default)
 
         # Get outgoing conditions from this question
         try:

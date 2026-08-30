@@ -2446,6 +2446,48 @@ class SurveyQuestionCondition(models.Model):
                 }
             )
 
+        # SHOW/HIDE must match the target's hidden_by_default toggle.
+        # SHOW is only valid against hidden-by-default questions.
+        # HIDE is only valid against shown-by-default questions.
+        if (
+            self.action == self.Action.SHOW
+            and not self.target_question.hidden_by_default
+        ):
+            raise ValidationError(
+                {
+                    "action": "SHOW conditions can only target questions that are hidden by default. "
+                    "Mark the target question as 'hidden by default' first.",
+                }
+            )
+        if self.action == self.Action.HIDE and self.target_question.hidden_by_default:
+            raise ValidationError(
+                {
+                    "action": "HIDE conditions can only target questions that are shown by default. "
+                    "The target question is already hidden by default.",
+                }
+            )
+
+        # JUMP_TO must be forward-only (target must come after source in
+        # the resolved question order).
+        if self.action == self.Action.JUMP_TO:
+            from .branching import resolved_question_order
+
+            order = resolved_question_order(self.question.survey)
+            try:
+                source_idx = order.index(self.question_id)
+                target_idx = order.index(self.target_question_id)
+            except ValueError:
+                # Question not yet saved or not in the survey — skip the check
+                pass
+            else:
+                if target_idx <= source_idx:
+                    raise ValidationError(
+                        {
+                            "target_question": "Jump target must come after the triggering question in the survey order. "
+                            "Backward jumps are not supported.",
+                        }
+                    )
+
         operators_requiring_value = {
             self.Operator.EQUALS,
             self.Operator.NOT_EQUALS,
