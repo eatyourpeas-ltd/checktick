@@ -130,6 +130,7 @@ Each commit includes the docs and tests for its section. `s/lint` before committ
   - Reject `show`/`hide` on sections, `show` on non-HIDDEN, `hide` on HIDDEN, backward `jump_to`.
   - Update the live structure preview (`static/js/bulk-upload-preview.js`) to parse and render the new notation: `HIDDEN` badge on questions, action keyword in the branch row, `#section` target badge distinct from `{question}`.
   - Update the format guide in `surveys/templates/surveys/bulk_upload.html` to document the new notation with examples (HIDDEN flag, `show`/`hide`/`end` keywords, `#section` targets, forward-only rule).
+  - **Rename user-facing "group" → "section" wording** in the outline builder: the format guide in `bulk_upload.html` ("# Group Title" → "# Section Title", "group description" → "section description", "group ID" → "section ID", etc.) and the preview strings in `bulk-upload-preview.js` ("Untitled group" → "Untitled section", "Ungrouped" → "Unsectioned", "N groups" → "N sections", the empty-state hint, and the warning about a question appearing before any heading). Internal JS variable names (`groups`, `currentGroup`) stay as-is — only user-facing strings change.
   - Files: `surveys/markdown_import.py`, `static/js/bulk-upload-preview.js`, `surveys/templates/surveys/bulk_upload.html`.
   - Tests: each keyword round-trips; section target resolves; all rejections; existing outlines parse unchanged; preview JS renders the new badges (unit-tested where feasible, otherwise covered by import tests).
 
