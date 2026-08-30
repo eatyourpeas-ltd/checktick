@@ -2405,6 +2405,17 @@ class SurveyQuestionCondition(models.Model):
         on_delete=models.CASCADE,
         related_name="incoming_conditions",
     )
+    target_group = models.ForeignKey(
+        "QuestionGroup",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="incoming_conditions",
+        help_text=(
+            "Section target for jump_to. Resolved to the first question in the "
+            "section at config-build time. Only used when action is jump_to."
+        ),
+    )
     action = models.CharField(
         max_length=32, choices=Action.choices, default=Action.JUMP_TO
     )
@@ -2419,7 +2430,12 @@ class SurveyQuestionCondition(models.Model):
             models.CheckConstraint(
                 condition=(
                     Q(target_question__isnull=False)
-                    | Q(action="end_survey", target_question__isnull=True)
+                    | Q(target_group__isnull=False)
+                    | Q(
+                        action="end_survey",
+                        target_question__isnull=True,
+                        target_group__isnull=True,
+                    )
                 ),
                 name="surveyquestioncondition_single_target",
             )
@@ -2432,40 +2448,93 @@ class SurveyQuestionCondition(models.Model):
         if self.action == self.Action.END_SURVEY:
             return
 
-        if not self.target_question:
+        # A target is required: either a question or a group (section).
+        if not self.target_question and not self.target_group:
             raise ValidationError(
                 {
-                    "target_question": "Target question is required (unless action is END_SURVEY).",
+                    "target_question": "Target question or section is required (unless action is END_SURVEY).",
                 }
             )
 
-        if self.target_question.survey_id != self.question.survey_id:
+        # SHOW/HIDE only target questions, not sections.
+        if self.action in {self.Action.SHOW, self.Action.HIDE} and self.target_group:
+            action_label = (
+                self.Action(self.action).label
+                if self.action in self.Action.values
+                else self.action
+            )
             raise ValidationError(
                 {
-                    "target_question": "Target question must belong to the same survey as the triggering question.",
+                    "target_group": f"{action_label} conditions can only target questions, not sections.",
                 }
             )
 
-        # SHOW/HIDE must match the target's hidden_by_default toggle.
-        # SHOW is only valid against hidden-by-default questions.
-        # HIDE is only valid against shown-by-default questions.
-        if (
-            self.action == self.Action.SHOW
-            and not self.target_question.hidden_by_default
-        ):
+        # target_group is only valid for jump_to.
+        if self.target_group and self.action != self.Action.JUMP_TO:
             raise ValidationError(
                 {
-                    "action": "SHOW conditions can only target questions that are hidden by default. "
-                    "Mark the target question as 'hidden by default' first.",
+                    "target_group": "Section targets are only valid for jump_to conditions.",
                 }
             )
-        if self.action == self.Action.HIDE and self.target_question.hidden_by_default:
-            raise ValidationError(
-                {
-                    "action": "HIDE conditions can only target questions that are shown by default. "
-                    "The target question is already hidden by default.",
-                }
-            )
+
+        # Validate target_question (when set directly, not via section resolution).
+        if self.target_question:
+            if self.target_question.survey_id != self.question.survey_id:
+                raise ValidationError(
+                    {
+                        "target_question": "Target question must belong to the same survey as the triggering question.",
+                    }
+                )
+
+            # SHOW/HIDE must match the target's hidden_by_default toggle.
+            if (
+                self.action == self.Action.SHOW
+                and not self.target_question.hidden_by_default
+            ):
+                raise ValidationError(
+                    {
+                        "action": "SHOW conditions can only target questions that are hidden by default. "
+                        "Mark the target question as 'hidden by default' first.",
+                    }
+                )
+            if (
+                self.action == self.Action.HIDE
+                and self.target_question.hidden_by_default
+            ):
+                raise ValidationError(
+                    {
+                        "action": "HIDE conditions can only target questions that are shown by default. "
+                        "The target question is already hidden by default.",
+                    }
+                )
+
+        # Validate target_group.
+        if self.target_group:
+            # Must belong to the same survey.
+            if self.target_group not in list(
+                self.question.survey.question_groups.all()
+            ):
+                raise ValidationError(
+                    {
+                        "target_group": "Target section must belong to the same survey as the triggering question.",
+                    }
+                )
+            # Must not be the source question's group (no-op jump).
+            if self.target_group_id == self.question.group_id:
+                raise ValidationError(
+                    {
+                        "target_group": "Cannot jump to the section the triggering question belongs to.",
+                    }
+                )
+            # Must be non-empty.
+            if not SurveyQuestion.objects.filter(
+                survey=self.question.survey, group=self.target_group
+            ).exists():
+                raise ValidationError(
+                    {
+                        "target_group": "Cannot jump to an empty section.",
+                    }
+                )
 
         # JUMP_TO must be forward-only (target must come after source in
         # the resolved question order).
@@ -2475,7 +2544,22 @@ class SurveyQuestionCondition(models.Model):
             order = resolved_question_order(self.question.survey)
             try:
                 source_idx = order.index(self.question_id)
-                target_idx = order.index(self.target_question_id)
+                # Resolve the target question ID (direct or via section).
+                target_q_id = self.target_question_id
+                if target_q_id is None and self.target_group_id is not None:
+                    target_q = (
+                        SurveyQuestion.objects.filter(
+                            survey=self.question.survey, group=self.target_group
+                        )
+                        .order_by("order", "id")
+                        .first()
+                    )
+                    if target_q:
+                        target_q_id = target_q.id
+                if target_q_id is not None:
+                    target_idx = order.index(target_q_id)
+                else:
+                    target_idx = -1
             except ValueError:
                 # Question not yet saved or not in the survey — skip the check
                 pass

@@ -69,18 +69,40 @@
                 </div>
 
                 <div class="mt-3" data-target-fieldset>
-                  <label class="label text-xs">Target question</label>
-                  <select name="target_question" class="select select-bordered w-full" data-target-select="question" data-condition-target>
-                    {% if not opts.has_question_targets %}
-                      <option value="">No available questions</option>
-                    {% else %}
-                      {% for tq in opts.target_questions %}
-                        <option value="{{ tq.id }}" data-hidden-by-default="{{ tq.hidden_by_default|yesno:'1,0' }}"{% if tq.id == opts.default_question_id %} selected{% endif %}>{{ tq.label }}</option>
-                      {% endfor %}
-                    {% endif %}
+                  <label class="label text-xs">Target type</label>
+                  <select name="target_type" class="select select-bordered w-full" data-target-type-select>
+                    <option value="section">Section</option>
+                    <option value="question">Question</option>
                   </select>
+
+                  <div data-target-section-wrap class="mt-2">
+                    <label class="label text-xs">Target section</label>
+                    <select name="target_group" class="select select-bordered w-full" data-target-select="section">
+                      {% if not opts.has_section_targets %}
+                        <option value="">No available sections</option>
+                      {% else %}
+                        {% for ts in opts.target_sections %}
+                          <option value="{{ ts.id }}">{{ ts.label }}</option>
+                        {% endfor %}
+                      {% endif %}
+                    </select>
+                  </div>
+
+                  <div data-target-question-wrap class="mt-2 hidden">
+                    <label class="label text-xs">Target question</label>
+                    <select name="target_question" class="select select-bordered w-full" data-target-select="question" data-condition-target>
+                      {% if not opts.has_question_targets %}
+                        <option value="">No available questions</option>
+                      {% else %}
+                        {% for tq in opts.target_questions %}
+                          <option value="{{ tq.id }}" data-hidden-by-default="{{ tq.hidden_by_default|yesno:'1,0' }}"{% if tq.id == opts.default_question_id %} selected{% endif %}>{{ tq.label }}</option>
+                        {% endfor %}
+                      {% endif %}
+                    </select>
+                  </div>
+
                   <div class="text-xs text-gray-500 mt-1">
-                    Note: END_SURVEY action does not require a target question
+                    Note: END_SURVEY action does not require a target
                   </div>
                 </div>
 
@@ -164,18 +186,40 @@
                           </div>
 
                           <div class="mt-3" data-target-fieldset>
-                            <label class="label text-xs">Target question</label>
-                            <select name="target_question" class="select select-bordered w-full" data-target-select="question" data-condition-target>
-                              {% if not opts.has_question_targets %}
-                                <option value="">No available questions</option>
-                              {% else %}
-                                {% for tq in opts.target_questions %}
-                                  <option value="{{ tq.id }}" data-hidden-by-default="{{ tq.hidden_by_default|yesno:'1,0' }}"{% if cond.target_question_id == tq.id %} selected{% endif %}>{{ tq.label }}</option>
-                                {% endfor %}
-                              {% endif %}
+                            <label class="label text-xs">Target type</label>
+                            <select name="target_type" class="select select-bordered w-full" data-target-type-select>
+                              <option value="section"{% if cond.target.type == 'section' %} selected{% endif %}>Section</option>
+                              <option value="question"{% if cond.target.type == 'question' %} selected{% endif %}>Question</option>
                             </select>
+
+                            <div data-target-section-wrap class="mt-2"{% if cond.target.type != 'section' %} hidden{% endif %}>
+                              <label class="label text-xs">Target section</label>
+                              <select name="target_group" class="select select-bordered w-full" data-target-select="section">
+                                {% if not opts.has_section_targets %}
+                                  <option value="">No available sections</option>
+                                {% else %}
+                                  {% for ts in opts.target_sections %}
+                                    <option value="{{ ts.id }}"{% if cond.target.group_id == ts.id %} selected{% endif %}>{{ ts.label }}</option>
+                                  {% endfor %}
+                                {% endif %}
+                              </select>
+                            </div>
+
+                            <div data-target-question-wrap class="mt-2"{% if cond.target.type == 'section' %} hidden{% endif %}>
+                              <label class="label text-xs">Target question</label>
+                              <select name="target_question" class="select select-bordered w-full" data-target-select="question" data-condition-target>
+                                {% if not opts.has_question_targets %}
+                                  <option value="">No available questions</option>
+                                {% else %}
+                                  {% for tq in opts.target_questions %}
+                                    <option value="{{ tq.id }}" data-hidden-by-default="{{ tq.hidden_by_default|yesno:'1,0' }}"{% if cond.target_question_id == tq.id %} selected{% endif %}>{{ tq.label }}</option>
+                                  {% endfor %}
+                                {% endif %}
+                              </select>
+                            </div>
+
                             <div class="text-xs text-gray-500 mt-1">
-                              Note: END_SURVEY action does not require a target question
+                              Note: END_SURVEY action does not require a target
                             </div>
                           </div>
 
@@ -225,12 +269,21 @@ function setupConditionForm(form) {
   const actionSelect = form.querySelector('[data-condition-action]');
   const operatorSelect = form.querySelector('[data-condition-operator]');
   const valueInput = form.querySelector('[name="value"]');
-  const targetSelect = form.querySelector('[data-condition-target]');
   const helpContainer = form.querySelector('.action-help');
   const previewText = form.querySelector('.condition-preview-text');
-  const targetFieldset = form.querySelector('[data-target-fieldset]');
+  const targetTypeSelect = form.querySelector('[data-target-type-select]');
+  const sectionWrap = form.querySelector('[data-target-section-wrap]');
+  const questionWrap = form.querySelector('[data-target-question-wrap]');
+  const sectionSelect = form.querySelector('[data-target-select="section"]');
+  const questionSelect = form.querySelector('[data-target-select="question"]');
 
   if (!actionSelect || !helpContainer) return;
+
+  // The active target select depends on the target type.
+  function activeTargetSelect() {
+    if (!targetTypeSelect) return questionSelect;
+    return targetTypeSelect.value === 'section' ? sectionSelect : questionSelect;
+  }
 
   function updateHelp() {
     const selectedAction = actionSelect.value;
@@ -243,18 +296,32 @@ function setupConditionForm(form) {
     }
   }
 
-  // Constrain the action picker based on the selected target's hidden_by_default.
-  // SHOW is only valid against hidden-by-default questions.
-  // HIDE is only valid against shown-by-default questions.
-  // JUMP_TO and END_SURVEY are always available.
+  // Toggle which target picker is visible based on the target type.
+  function updateTargetVisibility() {
+    if (!targetTypeSelect) return;
+    const isSection = targetTypeSelect.value === 'section';
+    if (sectionWrap) sectionWrap.classList.toggle('hidden', !isSection);
+    if (questionWrap) questionWrap.classList.toggle('hidden', isSection);
+    constrainActions();
+    updatePreview();
+  }
+
+  // Constrain the action picker based on the selected target.
+  // For section targets: only jump_to and end_survey are valid.
+  // For question targets: SHOW only if hidden-by-default, HIDE only if shown-by-default.
   function constrainActions() {
-    if (!targetSelect) return;
-    const selected = targetSelect.selectedOptions[0];
+    const sel = activeTargetSelect();
+    if (!sel) return;
+    const selected = sel.selectedOptions[0];
     if (!selected) return;
+
+    const isSection = targetTypeSelect && targetTypeSelect.value === 'section';
     const targetHidden = selected.dataset.hiddenByDefault === '1';
 
     const allowed = new Set(['jump_to', 'end_survey']);
-    allowed.add(targetHidden ? 'show' : 'hide');
+    if (!isSection) {
+      allowed.add(targetHidden ? 'show' : 'hide');
+    }
 
     const current = actionSelect.value;
     let firstAllowed = null;
@@ -276,7 +343,8 @@ function setupConditionForm(form) {
     const operatorText = operatorSelect?.selectedOptions[0]?.text || '';
     const value = valueInput?.value || '';
     const action = actionSelect.value;
-    const targetText = targetSelect?.selectedOptions[0]?.text || '';
+    const sel = activeTargetSelect();
+    const targetText = sel?.selectedOptions[0]?.text || '';
 
     let preview = '';
     if (action === 'show') {
@@ -300,14 +368,24 @@ function setupConditionForm(form) {
   // Update preview on any field change
   if (operatorSelect) operatorSelect.addEventListener('change', updatePreview);
   if (valueInput) valueInput.addEventListener('input', updatePreview);
-  if (targetSelect) {
-    targetSelect.addEventListener('change', function() {
+  if (targetTypeSelect) {
+    targetTypeSelect.addEventListener('change', updateTargetVisibility);
+  }
+  if (sectionSelect) {
+    sectionSelect.addEventListener('change', function() {
+      constrainActions();
+      updatePreview();
+    });
+  }
+  if (questionSelect) {
+    questionSelect.addEventListener('change', function() {
       constrainActions();
       updatePreview();
     });
   }
 
   // Show initial state
+  updateTargetVisibility();
   constrainActions();
   updateHelp();
   updatePreview();
