@@ -449,7 +449,7 @@
         const hasJumpConditions = qConditions.some(
           (c) =>
             c.action === "jump_to" ||
-            c.action === "skip" ||
+            c.action === "hide" ||
             c.action === "end_survey",
         );
 
@@ -524,7 +524,7 @@
           .filter(
             (c) =>
               c.action === "jump_to" ||
-              c.action === "skip" ||
+              c.action === "hide" ||
               c.action === "end_survey",
           )
           .map((c) => {
@@ -689,7 +689,7 @@
         const hasJumpConditions = lastConditions.some(
           (c) =>
             c.action === "jump_to" ||
-            c.action === "skip" ||
+            c.action === "hide" ||
             c.action === "end_survey",
         );
 
@@ -883,7 +883,7 @@
       const actionColors = {
         show: colors.primary,
         jump_to: colors.success,
-        skip: colors.warning,
+        hide: colors.warning,
         end_survey: colors.error,
       };
 
@@ -1080,7 +1080,7 @@
             const actionVerbs = {
               show: "show",
               jump_to: "go to",
-              skip: "skip to",
+              hide: "hide",
               end_survey: "end the survey",
             };
             const actionVerb =

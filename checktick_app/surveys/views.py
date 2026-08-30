@@ -1919,7 +1919,7 @@ def _prepare_question_rendering(
     try:
         for item in (
             survey.questions.select_related("group")
-            .only("id", "text", "order", "group__name")
+            .only("id", "text", "order", "group__name", "hidden_by_default")
             .all()
         ):
             text = (item.text or "Untitled question").strip() or "Untitled question"
@@ -1936,6 +1936,7 @@ def _prepare_question_rendering(
                     "label": label,
                     "group_id": item.group_id,
                     "group_name": group_name,
+                    "hidden_by_default": bool(item.hidden_by_default),
                 }
             )
     except Exception:
@@ -2027,6 +2028,12 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
     if not qtype:
         qtype = SurveyQuestion.Types.TEXT
     required = (data.get("required") or "").lower() in {"on", "true", "1", "yes"}
+    hidden_by_default = (data.get("hidden_by_default") or "").lower() in {
+        "on",
+        "true",
+        "1",
+        "yes",
+    }
 
     options: Any = []
     if qtype in {
@@ -2113,6 +2120,7 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
         "text": text,
         "type": qtype,
         "required": required,
+        "hidden_by_default": hidden_by_default,
         "options": options,
         "dataset_key": dataset_key,
     }
@@ -2232,6 +2240,7 @@ def _serialize_question_for_builder(
         "text": question.text or "",
         "type": question.type,
         "required": bool(question.required),
+        "hidden_by_default": bool(question.hidden_by_default),
         "group_id": question.group_id,
         "survey_slug": question.survey.slug if hasattr(question, "survey") else None,
     }
@@ -2404,6 +2413,7 @@ def _serialize_question_for_builder(
                 "label": meta.get("label") or f"Question {meta.get('id')}",
                 "group_id": meta.get("group_id"),
                 "group_name": meta.get("group_name"),
+                "hidden_by_default": bool(meta.get("hidden_by_default")),
             }
             target_questions.append(entry)
             if default_question_id is None and entry.get("id") is not None:
@@ -7386,6 +7396,7 @@ def builder_question_create(request: HttpRequest, slug: str) -> HttpResponse:
         type=qtype,
         options=options,
         required=required,
+        hidden_by_default=form_data["hidden_by_default"],
         order=order,
         dataset=dataset,
     )
@@ -7571,6 +7582,7 @@ def builder_group_question_create(
         type=qtype,
         options=options,
         required=required,
+        hidden_by_default=form_data["hidden_by_default"],
         order=order,
         dataset=dataset,
     )
@@ -7925,6 +7937,7 @@ def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResp
     q.text = form_data["text"] or "Untitled"
     q.type = form_data["type"]
     q.required = form_data["required"]
+    q.hidden_by_default = form_data["hidden_by_default"]
     q.options = form_data["options"]
     dataset_key = form_data.get("dataset_key")
     group_id = request.POST.get("group_id")
@@ -7970,6 +7983,7 @@ def builder_group_question_edit(
     q.text = form_data["text"] or "Untitled"
     q.type = form_data["type"]
     q.required = form_data["required"]
+    q.hidden_by_default = form_data["hidden_by_default"]
     q.options = form_data["options"]
     dataset_key = form_data.get("dataset_key")
 

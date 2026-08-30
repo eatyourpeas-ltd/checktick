@@ -48,17 +48,18 @@
                 <!-- Dynamic help text that changes based on selected action -->
                 <div class="action-help alert alert-info text-xs mt-2 p-3">
                   <div data-action="show" class="hidden">
-                    <strong>▶ Show:</strong> The target question will be <strong>hidden by default</strong>
-                    and only appear when this condition is true.
+                    <strong>▶ Show:</strong> Reveal a question that is <strong>hidden by default</strong>.
+                    Only valid when the target is marked hidden by default.
                     <br><em class="text-gray-600">Use for: "Show follow-up question when..."</em>
                   </div>
                   <div data-action="jump_to" class="hidden">
-                    <strong>⏩ Skip ahead:</strong> When condition is true, skip all questions between
-                    this one and the target.
+                    <strong>⏩ Jump to:</strong> When condition is true, skip all questions between
+                    this one and the target (forward only).
                     <br><em class="text-gray-600">Use for: "If answered No, jump to end"</em>
                   </div>
-                  <div data-action="skip" class="hidden">
-                    <strong>✕ Hide:</strong> When condition is true, the target question will be hidden.
+                  <div data-action="hide" class="hidden">
+                    <strong>✕ Hide:</strong> Hide a question that is <strong>shown by default</strong>.
+                    Only valid when the target is not hidden by default.
                     <br><em class="text-gray-600">Use for: "Don't show Q5 if Q3 = Yes"</em>
                   </div>
                   <div data-action="end_survey" class="hidden">
@@ -74,7 +75,7 @@
                       <option value="">No available questions</option>
                     {% else %}
                       {% for tq in opts.target_questions %}
-                        <option value="{{ tq.id }}"{% if tq.id == opts.default_question_id %} selected{% endif %}>{{ tq.label }}</option>
+                        <option value="{{ tq.id }}" data-hidden-by-default="{{ tq.hidden_by_default|yesno:'1,0' }}"{% if tq.id == opts.default_question_id %} selected{% endif %}>{{ tq.label }}</option>
                       {% endfor %}
                     {% endif %}
                   </select>
@@ -142,17 +143,18 @@
                           <!-- Dynamic help text that changes based on selected action -->
                           <div class="action-help alert alert-info text-xs mt-2 p-3">
                             <div data-action="show" class="hidden">
-                              <strong>▶ Show:</strong> The target question will be <strong>hidden by default</strong>
-                              and only appear when this condition is true.
+                              <strong>▶ Show:</strong> Reveal a question that is <strong>hidden by default</strong>.
+                              Only valid when the target is marked hidden by default.
                               <br><em class="text-gray-600">Use for: "Show follow-up question when..."</em>
                             </div>
                             <div data-action="jump_to" class="hidden">
-                              <strong>⏩ Skip ahead:</strong> When condition is true, skip all questions between
-                              this one and the target.
+                              <strong>⏩ Jump to:</strong> When condition is true, skip all questions between
+                              this one and the target (forward only).
                               <br><em class="text-gray-600">Use for: "If answered No, jump to end"</em>
                             </div>
-                            <div data-action="skip" class="hidden">
-                              <strong>✕ Hide:</strong> When condition is true, the target question will be hidden.
+                            <div data-action="hide" class="hidden">
+                              <strong>✕ Hide:</strong> Hide a question that is <strong>shown by default</strong>.
+                              Only valid when the target is not hidden by default.
                               <br><em class="text-gray-600">Use for: "Don't show Q5 if Q3 = Yes"</em>
                             </div>
                             <div data-action="end_survey" class="hidden">
@@ -168,7 +170,7 @@
                                 <option value="">No available questions</option>
                               {% else %}
                                 {% for tq in opts.target_questions %}
-                                  <option value="{{ tq.id }}"{% if cond.target_question_id == tq.id %} selected{% endif %}>{{ tq.label }}</option>
+                                  <option value="{{ tq.id }}" data-hidden-by-default="{{ tq.hidden_by_default|yesno:'1,0' }}"{% if cond.target_question_id == tq.id %} selected{% endif %}>{{ tq.label }}</option>
                                 {% endfor %}
                               {% endif %}
                             </select>
@@ -226,6 +228,7 @@ function setupConditionForm(form) {
   const targetSelect = form.querySelector('[data-condition-target]');
   const helpContainer = form.querySelector('.action-help');
   const previewText = form.querySelector('.condition-preview-text');
+  const targetFieldset = form.querySelector('[data-target-fieldset]');
 
   if (!actionSelect || !helpContainer) return;
 
@@ -240,6 +243,33 @@ function setupConditionForm(form) {
     }
   }
 
+  // Constrain the action picker based on the selected target's hidden_by_default.
+  // SHOW is only valid against hidden-by-default questions.
+  // HIDE is only valid against shown-by-default questions.
+  // JUMP_TO and END_SURVEY are always available.
+  function constrainActions() {
+    if (!targetSelect) return;
+    const selected = targetSelect.selectedOptions[0];
+    if (!selected) return;
+    const targetHidden = selected.dataset.hiddenByDefault === '1';
+
+    const allowed = new Set(['jump_to', 'end_survey']);
+    allowed.add(targetHidden ? 'show' : 'hide');
+
+    const current = actionSelect.value;
+    let firstAllowed = null;
+    Array.from(actionSelect.options).forEach(opt => {
+      const ok = allowed.has(opt.value);
+      opt.disabled = !ok;
+      if (ok && !firstAllowed) firstAllowed = opt.value;
+    });
+    // If the current action is now disabled, switch to the first allowed one.
+    if (!allowed.has(current) && firstAllowed) {
+      actionSelect.value = firstAllowed;
+      updateHelp();
+    }
+  }
+
   function updatePreview() {
     if (!previewText) return;
 
@@ -250,10 +280,10 @@ function setupConditionForm(form) {
 
     let preview = '';
     if (action === 'show') {
-      preview = 'Hide "' + targetText + '" by default. Only show it when this question ' + operatorText.toLowerCase() + (value ? ' "' + value + '"' : '');
+      preview = 'Reveal "' + targetText + '" (hidden by default) when this question ' + operatorText.toLowerCase() + (value ? ' "' + value + '"' : '');
     } else if (action === 'jump_to') {
-      preview = 'When this question ' + operatorText.toLowerCase() + (value ? ' "' + value + '"' : '') + ', skip ahead to "' + targetText + '"';
-    } else if (action === 'skip') {
+      preview = 'When this question ' + operatorText.toLowerCase() + (value ? ' "' + value + '"' : '') + ', jump to "' + targetText + '"';
+    } else if (action === 'hide') {
       preview = 'When this question ' + operatorText.toLowerCase() + (value ? ' "' + value + '"' : '') + ', hide "' + targetText + '"';
     } else if (action === 'end_survey') {
       preview = 'When this question ' + operatorText.toLowerCase() + (value ? ' "' + value + '"' : '') + ', end the survey';
@@ -270,9 +300,15 @@ function setupConditionForm(form) {
   // Update preview on any field change
   if (operatorSelect) operatorSelect.addEventListener('change', updatePreview);
   if (valueInput) valueInput.addEventListener('input', updatePreview);
-  if (targetSelect) targetSelect.addEventListener('change', updatePreview);
+  if (targetSelect) {
+    targetSelect.addEventListener('change', function() {
+      constrainActions();
+      updatePreview();
+    });
+  }
 
   // Show initial state
+  constrainActions();
   updateHelp();
   updatePreview();
 }
