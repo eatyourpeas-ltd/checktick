@@ -18,17 +18,38 @@ class SurveyQuestionCondition(models.Model):
     operator = models.CharField(choices=["eq", "neq", "contains", "gt", ...])
     value = models.CharField(blank=True)
     target_question = models.ForeignKey(SurveyQuestion, null=True, blank=True)
-    action = models.CharField(choices=["show", "jump_to", "skip", "end_survey"])
+    target_group = models.ForeignKey(QuestionGroup, null=True, blank=True)  # section target
+    action = models.CharField(choices=["show", "hide", "jump_to", "end_survey"])
     order = models.PositiveIntegerField(default=0)
     description = models.CharField(blank=True)
 ```
 
 **Action Types:**
 
-- `show` - Display target question when condition matches (hidden by default)
-- `jump_to` - Skip forward to target question
-- `skip` - Hide target question when condition matches
+- `show` - Reveal a hidden-by-default target question when condition matches (only valid when `target_question.hidden_by_default = True`)
+- `hide` - Hide a shown-by-default target question when condition matches (only valid when `target_question.hidden_by_default = False`)
+- `jump_to` - Skip forward to target question (or to the first question of `target_group`); forward-only
 - `end_survey` - End survey flow
+
+### `hidden_by_default` on SurveyQuestion
+
+`SurveyQuestion.hidden_by_default` (bool, default `False`) declares a question's default visibility on the question itself. This replaces the old implicit model where "hidden by default" was a side-effect of having an incoming `SHOW` condition.
+
+- `SHOW` conditions are only valid against `hidden_by_default = True` targets.
+- `HIDE` conditions are only valid against `hidden_by_default = False` targets.
+- The data migration backfills `hidden_by_default = True` for any question with an incoming `SHOW` condition, preserving existing behaviour.
+
+### `target_group` (section targets)
+
+The `target_group` FK is re-added in migration `0053` (it was removed in `0031` after being unused). When set, the section resolves to its first question at config-build time (`_build_branching_config`, `branching_data_api`), so the evaluation engine sees a normal `jump_to` with a `target_question`. No new action type, no new participant code path.
+
+**Validation in `clean()`:**
+
+- `target_group` must belong to the same survey as the triggering question.
+- `target_group` must not be the source question's group (no-op jump).
+- `target_group` must be non-empty (cannot jump to an empty section).
+- `SHOW` and `HIDE` cannot target a section — only `jump_to` can.
+- `jump_to` target (question or resolved section) must be later in the resolved question order (forward-only).
 
 ### CollectionDefinition Model
 
@@ -139,6 +160,8 @@ Returns ordered branching structure for visualization:
         "value": "Yes",
         "action": "show",
         "target_question": "789",
+        "target_group": null,
+        "target_group_name": null,
         "description": "",
         "summary": "equals Yes"
       }
@@ -168,11 +191,14 @@ Request body for create/update:
   "operator": "eq",
   "value": "Yes",
   "action": "jump_to",
-  "target_question": 456,
+  "target_type": "section",
+  "target_group": 456,
   "order": 0,
   "description": ""
 }
 ```
+
+For question targets, use `"target_type": "question"` and `"target_question": 789`. For `end_survey`, omit the target fields.
 
 ## Builder Route Security
 
@@ -277,16 +303,28 @@ if (p) colors.primary = `hsl(${p})`;
 (mc_single)
 - Option A
 - Option B
-? when equals "Option A" -> {target-question}
-? when equals "Option B" -> {another-target}
+? show when equals "Option A" -> {hidden-question}    # reveal a HIDDEN question
+? hide when equals "Option B" -> {shown-question}      # hide a shown question
+? when equals "Option A" -> #Target-Section            # jump to a section (default action)
+? end  when equals "Option B"                            # end the survey
 ```
 
 **Syntax Rules:**
 
-- `? when` prefix for condition lines
-- Format: `? when <operator> <value> -> {target-id}`
+- `?` prefix for condition lines
+- Optional action keyword: `show`, `hide`, `end` (default is `jump_to` if omitted)
+- Format: `? [action] when <operator> <value> -> {target-id}` or `-> #section-name`
 - Common operators: `equals`, `not_equals`, `contains`, `greater_than`, `less_than`
-- Targets can be question IDs (or group IDs during import, resolved to the first question in that group)
+- Question targets: `{question-id}`
+- Section targets: `#section-name` (resolved to `target_group` at import time, then to the first question at config-build time)
+- `HIDDEN` keyword on a question marks it `hidden_by_default = True`
+
+**Validation at import time:**
+
+- `show` targeting a non-`HIDDEN` question → rejected
+- `hide` targeting a `HIDDEN` question → rejected
+- `show` / `hide` with a `#section` target → rejected (sections are not show/hide-able)
+- `jump_to` targeting an earlier question → rejected (forward-only)
 
 ### Repeat Syntax
 
@@ -318,10 +356,27 @@ Client-side branching uses `checktick_app/static/js/branching.js` with config pr
 
 Supported actions and behavior:
 
-- `show`: target question is hidden by default, shown when an incoming SHOW condition matches
-- `jump_to`: hides questions between current and target in configured question order
-- `skip`: hides the target question when condition matches
+- `show`: target question is hidden by default (`hidden_by_default = True`), shown when an incoming SHOW condition matches
+- `hide`: target question is shown by default (`hidden_by_default = False`), hidden when an incoming HIDE condition matches
+- `jump_to`: hides questions between current and target in configured question order (forward only)
 - `end_survey`: hides subsequent questions after trigger
+
+`should_show_question` (branching.py) is rewritten around the `hidden_by_default` toggle with symmetric override logic:
+
+```python
+if not question.hidden_by_default:
+    # Shown by default — check for HIDE overrides
+    for condition in incoming_hide_conditions(question):
+        if evaluate_condition(condition, answers):
+            return False
+    return True
+else:
+    # Hidden by default — check for SHOW overrides
+    for condition in incoming_show_conditions(question):
+        if evaluate_condition(condition, answers):
+            return True
+    return False
+```
 
 Condition evaluation follows question order from `branching_config.questions`, generated from the same runtime ordering pipeline used by Survey Map, preview, and live routes.
 
@@ -335,6 +390,12 @@ Important: participant page rendering order is currently driven by the shared qu
 
 ### Test Files
 
+- `test_branching_refactor_migration.py` - Migration backfill + skip→hide rename
+- `test_branching_engine.py` - Toggle visibility, forward-only validation, `should_show_question`
+- `test_builder_hidden_by_default.py` - Builder UI: toggle, constrained action picker, relabel
+- `test_builder_conditions_payload.py` - Condition payload serialization, target sections
+- `test_outline_new_grammar.py` - Outline HIDDEN flag, action keywords, section targets, rejections
+- `test_section_targets.py` - Section target resolution, config build, export round-trip, clean()
 - `test_bulk_upload_branching.py` - Markdown import with branching and repeats
 - `test_groups_reorder.py` - Group ordering persistence
 - `test_groups_repeats.py` - Repeat creation/edit/removal
@@ -374,7 +435,8 @@ questions = SurveyQuestion.objects.filter(
     survey=survey
 ).select_related('group').prefetch_related(
     'conditions',
-    'conditions__target_question'
+    'conditions__target_question',
+    'conditions__target_group'
 )
 ```
 
@@ -396,17 +458,18 @@ Potential improvements to the branching system:
 5. **Runtime Validation** - Detect unreachable questions
 6. **Performance Metrics** - Track which branches are used
 7. **Version History** - Track condition changes over time
-8. **Branching targets by section** - Add a "jump to section" target type alongside the existing "jump to question", resolving the section to its first question at config-build time. Uses the dormant `target_group` FK on `SurveyQuestionCondition`. Full spec: `docs/branching-targets-by-section.md`.
+8. **Branching targets by section** - Implemented. Section targets resolve to the first question at config-build time via the `target_group` FK. See `docs/branching-and-repeats.md` for the user-facing guide.
 
 ## Migration Notes
 
 When upgrading from earlier versions:
 
-1. Run migrations to add new fields
-2. Existing surveys work without changes
-3. Branching visualizer appears automatically
-4. No data migration needed for conditions
-5. Collections without max_count are unlimited
+1. Migration `0052` adds `hidden_by_default` and renames `skip` → `hide`.
+2. The migration backfills `hidden_by_default = True` for any question with an incoming `SHOW` condition, preserving existing behaviour.
+3. Existing `skip` conditions are renamed to `hide` in place (stored value change).
+4. Migration `0053` re-adds `target_group` (removed in `0031`) for section targets.
+5. Existing surveys work without changes — the visualizer and engine pick up the new fields automatically.
+6. Collections without max_count are unlimited.
 
 ## Related Documentation
 

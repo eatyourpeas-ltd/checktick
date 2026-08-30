@@ -106,7 +106,9 @@ def test_condition_options_default_to_group_when_no_other_questions(
     options = payload["condition_options"]
 
     assert options["has_question_targets"] is False
-    assert options["can_create"] is False
+    # Section targets are available (Secondary group), so creation is allowed.
+    assert options["has_section_targets"] is True
+    assert options["can_create"] is True
 
 
 @pytest.mark.django_db

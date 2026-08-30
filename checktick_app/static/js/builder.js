@@ -253,6 +253,11 @@
       requiredInput.checked = Boolean(payload.required);
     }
 
+    const hiddenByDefaultInput = form.querySelector('input[name="hidden_by_default"]');
+    if (hiddenByDefaultInput) {
+      hiddenByDefaultInput.checked = Boolean(payload.hidden_by_default);
+    }
+
     const optionsField = form.querySelector('textarea[name="options"]');
     if (optionsField) {
       if (Array.isArray(payload.options)) {

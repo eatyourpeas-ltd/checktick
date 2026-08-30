@@ -72,32 +72,140 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
         s_strip = s.lstrip()
         return s_strip.startswith("# ") or s_strip.startswith("## ")
 
+    # Action keywords map to SurveyQuestionCondition.Action values.
+    # The default (no keyword) is jump_to, preserving existing outlines.
+    action_map = {
+        "show": SurveyQuestionCondition.Action.SHOW,
+        "hide": SurveyQuestionCondition.Action.HIDE,
+        "end": SurveyQuestionCondition.Action.END_SURVEY,
+        "jump_to": SurveyQuestionCondition.Action.JUMP_TO,
+        "jump": SurveyQuestionCondition.Action.JUMP_TO,
+    }
+
     def _parse_branch_line(line: str, line_number: int) -> Dict[str, Any]:
-        if "{" not in line or "}" not in line:
-            raise BulkParseError(
-                f"Branch is missing a target id in curly braces near line {line_number}"
-            )
+        # Target may be {question-id} or #section-name. The 'end' action has no target.
+        section_match = re.search(r"#([A-Za-z0-9][\w\s-]*)\s*$", line)
         target_match = re.search(r"\{([^{}]+)\}\s*$", line)
-        if not target_match:
+
+        if not section_match and not target_match:
+            # No target at all — only valid for the 'end' action.
+            stripped = line.strip()
+            # Check for an 'end when ...' line with no target.
+            end_no_target = re.match(r"^end\s+when\s+.+$", stripped, re.IGNORECASE)
+            if end_no_target:
+                condition_part = re.sub(
+                    r"^end\s+when\s+", "", stripped, flags=re.IGNORECASE
+                )
+                condition_part, operator, value, operator_key = _parse_condition_clause(
+                    condition_part, line_number
+                )
+                description = f"end when {operator_key}"
+                if value:
+                    description = f"{description} {value}"
+                return {
+                    "operator": operator,
+                    "value": value,
+                    "description": description,
+                    "target_ref": None,
+                    "target_kind": None,
+                    "action": SurveyQuestionCondition.Action.END_SURVEY,
+                }
             raise BulkParseError(
-                f"Branch is missing a target id in curly braces near line {line_number}"
-            )
-        target_ref_raw = target_match.group(1).strip()
-        target_ref = _normalize_token(target_ref_raw)
-        if not target_ref:
-            raise BulkParseError(
-                f"Branch target id cannot be empty near line {line_number}"
+                f"Branch is missing a target (use {{question-id}} or #section-name) "
+                f"near line {line_number}, or use 'end when ...' to end the survey"
             )
 
-        condition_part = line[: target_match.start()].strip()
-        condition_part = re.sub(r"\s*->\s*$", "", condition_part)
-        if condition_part.lower().startswith("when "):
-            condition_part = condition_part[5:].strip()
+        if section_match and target_match:
+            raise BulkParseError(
+                f"Branch has both a #section and a {{question}} target near line {line_number}"
+            )
+
+        if section_match:
+            target_ref_raw = section_match.group(1).strip()
+            target_ref = _normalize_token(target_ref_raw)
+            if not target_ref:
+                raise BulkParseError(
+                    f"Branch section target cannot be empty near line {line_number}"
+                )
+            target_kind = "section"
+            condition_part = line[: section_match.start()].strip()
         else:
+            target_ref_raw = target_match.group(1).strip()  # type: ignore[union-attr]
+            target_ref = _normalize_token(target_ref_raw)
+            if not target_ref:
+                raise BulkParseError(
+                    f"Branch target id cannot be empty near line {line_number}"
+                )
+            target_kind = "question"
+            condition_part = line[: target_match.start()].strip()  # type: ignore[union-attr]
+
+        condition_part = re.sub(r"\s*->\s*$", "", condition_part)
+
+        # Optional action keyword before 'when': show/hide/end/jump_to/jump.
+        action = SurveyQuestionCondition.Action.JUMP_TO
+        action_keyword_used = None
+        kw_match = re.match(
+            r"^(show|hide|end|jump_to|jump)\s+when\s+",
+            condition_part,
+            re.IGNORECASE,
+        )
+        if kw_match:
+            action_keyword = kw_match.group(1).lower()
+            action = action_map[action_keyword]
+            action_keyword_used = action_keyword
+            condition_part = condition_part[kw_match.end() :].strip()
+        else:
+            if condition_part.lower().startswith("when "):
+                condition_part = condition_part[5:].strip()
+            else:
+                raise BulkParseError(
+                    f"Branch must start with 'when' (or '<action> when') "
+                    f"followed by an operator near line {line_number}"
+                )
+
+        condition_part, operator, value, operator_key = _parse_condition_clause(
+            condition_part, line_number
+        )
+
+        # 'end' action must not have a target.
+        if (
+            action == SurveyQuestionCondition.Action.END_SURVEY
+            and target_ref is not None
+        ):
             raise BulkParseError(
-                f"Branch must start with 'when' followed by an operator near line {line_number}"
+                f"'end' action must not have a target near line {line_number}"
+            )
+        # show/hide cannot target a section.
+        if (
+            action
+            in {
+                SurveyQuestionCondition.Action.SHOW,
+                SurveyQuestionCondition.Action.HIDE,
+            }
+            and target_kind == "section"
+        ):
+            raise BulkParseError(
+                f"'{action_keyword_used}' action cannot target a section near line {line_number}; "
+                f"only jump_to can target a section"
             )
 
+        description = f"{action_keyword_used or 'jump_to'} when {operator_key}"
+        if value:
+            description = f"{description} {value}"
+
+        return {
+            "operator": operator,
+            "value": value,
+            "description": description,
+            "target_ref": target_ref,
+            "target_kind": target_kind,
+            "action": action,
+        }
+
+    def _parse_condition_clause(
+        condition_part: str, line_number: int
+    ) -> tuple[str, Any, str, str]:
+        """Parse the operator + value clause. Returns (clause, operator, value, operator_key)."""
         if not condition_part:
             raise BulkParseError(
                 f"Branch is missing an operator near line {line_number}"
@@ -146,16 +254,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
         else:
             value = ""
 
-        description = f"when {operator_key}"
-        if value:
-            description = f"{description} {value}"
-
-        return {
-            "operator": operator,
-            "value": value,
-            "description": description,
-            "target_ref": target_ref,
-        }
+        return condition_part, operator, value, operator_key
 
     while i < len(lines):
         raw = lines[i]
@@ -236,6 +335,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                 "ref": qref,
                 "branches": [],
                 "required": is_required,
+                "hidden_by_default": False,
             }
             current_group["questions"].append(current_question)
         else:
@@ -243,6 +343,8 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                 if line.startswith("? ") or line.startswith("?"):
                     branch = _parse_branch_line(line[1:].strip(), i + 1)
                     current_question["branches"].append(branch)
+                elif line == "HIDDEN" or line.upper() == "HIDDEN":
+                    current_question["hidden_by_default"] = True
                 elif line.startswith("- "):
                     current_question["options"].append(line[2:].strip())
                 elif line.startswith("+ "):
@@ -397,14 +499,40 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
             validated_branches: List[Dict[str, Any]] = []
             for idx, branch in enumerate(q["branches"]):
                 target_ref = branch["target_ref"]
+                target_kind = branch.get("target_kind")
+                action = branch.get("action", SurveyQuestionCondition.Action.JUMP_TO)
+
+                # END_SURVEY has no target.
+                if action == SurveyQuestionCondition.Action.END_SURVEY:
+                    branch["target_type"] = None
+                    branch["order"] = idx
+                    validated_branches.append(branch)
+                    continue
+
+                # Resolve the target ref against groups and questions.
                 if target_ref in group_lookup:
-                    branch["target_type"] = "group"
+                    resolved_kind = "group"
                 elif target_ref in question_lookup:
-                    branch["target_type"] = "question"
+                    resolved_kind = "question"
                 else:
                     raise BulkParseError(
                         f"Branch references unknown id '{target_ref}' in question '{q['title']}'"
                     )
+
+                # If the parser declared a section target (#ref), it must resolve
+                # to a group.
+                if target_kind == "section" and resolved_kind != "group":
+                    raise BulkParseError(
+                        f"Branch target '#{target_ref}' is not a section in question '{q['title']}'"
+                    )
+                # A question target ({ref}) may resolve to either a question or
+                # a group. The AI-output normalization wraps bare targets in
+                # braces without knowing which kind they are, so {group-ref} is
+                # a valid jump target (resolved to the group's first question
+                # at import time). Only reject if the ref is genuinely unknown
+                # (already caught above).
+
+                branch["target_type"] = resolved_kind
                 branch["order"] = idx
                 validated_branches.append(branch)
             q["branches"] = validated_branches
@@ -459,8 +587,8 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
             parts = line.split("->", 1)
             left = parts[0]
             right = parts[1].strip()
-            # If right already contains a brace-delimited id, leave as-is
-            if not ("{" in right and "}" in right):
+            # If right already contains a brace-delimited id or a #section target, leave as-is
+            if not (("{" in right and "}" in right) or right.startswith("#")):
                 # Remove surrounding quotes if present
                 if (right.startswith('"') and right.endswith('"')) or (
                     right.startswith("'") and right.endswith("'")

@@ -57,7 +57,7 @@
                 <p class="text-base-content/80">{% trans "Use text format with the following structure:" %}</p>
               </div>
               <ul class="list-disc pl-5 space-y-1 text-sm">
-                <li>{% trans "<code># Group Title</code>, followed by a line for the group description" %}</li>
+                <li>{% trans "<code># Section Title</code>, followed by a line for the section description" %}</li>
                 <li>{% trans "<code>## Question Title</code>, followed by a line for the question description" %}</li>
                 <li>{% trans "Add <code class=\"text-error\">*</code> after the question title to mark it as required" %}</li>
                 <li>{% trans "<code>(type)</code> on the next line in parentheses" %}</li>
@@ -136,43 +136,49 @@ dataset: medical_specialties</code></pre>
               </div>
               <div>
                 <h3 class="font-semibold">{% trans "Optional: Collections with REPEAT" %}</h3>
-                <p class="text-sm text-base-content/80">{% trans "To mark a group as repeatable, add a line with <strong>REPEAT</strong> (or <strong>REPEAT-5</strong> to cap it) immediately above the group heading." %}</p>
-                <p class="text-sm text-base-content/80">{% trans "To define a child collection nested under a repeatable parent, indent with <code>&gt;</code> and add <strong>REPEAT</strong> above the child group:" %}</p>
+                <p class="text-sm text-base-content/80">{% trans "To mark a section as repeatable, add a line with <strong>REPEAT</strong> (or <strong>REPEAT-5</strong> to cap it) immediately above the section heading." %}</p>
+                <p class="text-sm text-base-content/80">{% trans "To define a child collection nested under a repeatable parent, indent with <code>&gt;</code> and add <strong>REPEAT</strong> above the child section:" %}</p>
                 <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>REPEAT-5
                     # Patient
-                    ... group content ...
+                    ... section content ...
 
                     &gt; REPEAT
                     &gt; # Visit
-                    &gt; ... child group content ...</code></pre>
+                    &gt; ... child section content ...</code></pre>
                 <ul class="list-disc pl-5 space-y-1 text-sm">
                   <li>{% trans "<strong>REPEAT</strong> = unlimited repeats. <strong>REPEAT-1</strong> means one allowed." %}</li>
-                  <li>{% trans "Use <code>&gt;</code> before REPEAT and the group heading to indicate one level of nesting." %}</li>
+                  <li>{% trans "Use <code>&gt;</code> before REPEAT and the section heading to indicate one level of nesting." %}</li>
                   <li>{% trans "Nesting is limited to one level (Parent → Child) by design." %}</li>
-                  <li>{% trans "Groups without REPEAT are normal, non-collection groups." %}</li>
+                  <li>{% trans "Sections without REPEAT are normal, non-collection sections." %}</li>
                 </ul>
               </div>
               <div>
                 <h3 class="font-semibold">{% trans "Optional: Questions with conditional branching" %}</h3>
-                <p class="text-sm text-base-content/80">{% trans "Assign stable IDs by placing them in curly braces at the end of group or question headings. Then add branching rules below the question's <code>(type)</code> line using <code>? when &lt;operator&gt; &lt;value&gt; -&gt; {target-id}</code>." %}</p>
+                <p class="text-sm text-base-content/80">{% trans "Assign stable IDs by placing them in curly braces at the end of section or question headings. Then add branching rules below the question's <code>(type)</code> line using <code>? [action] when &lt;operator&gt; &lt;value&gt; -&gt; {target-id}</code> or <code>-&gt; #section-name</code>." %}</p>
                 <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code># Intro {intro}
-                          ## Consent {intro-consent}
-                          (text)
-                          ? when equals "Yes" -> {follow-up}
-                          ? when equals "No" -> {intro-exit}
+## Consent {intro-consent}
+(text)
+? show when equals "Yes" -> {follow-up}
+? hide when equals "No"  -> {intro-exit}
+? when equals "No" -> #Exit
+? end  when equals "N/A"
 
-                          # Follow up {follow-up}
-                          ## Feedback {follow-up-feedback}
-                          (text)
+# Follow up {follow-up}
+## Feedback {follow-up-feedback}
+(text)
+HIDDEN
 
-                          # Exit {intro-exit}
-                          ## Thanks {intro-exit-thanks}
-                          (text)</code></pre>
+# Exit {intro-exit}
+## Thanks {intro-exit-thanks}
+(text)</code></pre>
                 <ul class="list-disc pl-5 space-y-1 text-sm">
-                  <li>{% trans "Branching rules must start with <code>? when</code> and reference a question or group ID in curly braces." %}</li>
+                  <li>{% trans "Branching rules start with <code>?</code> followed by an optional action keyword and <code>when</code>." %}</li>
+                  <li>{% trans "Action keywords: <code>show</code> (reveal a hidden-by-default question), <code>hide</code> (hide a shown-by-default question), <code>end</code> (end the survey, no target). Omit the keyword for <code>jump to</code> (the default)." %}</li>
+                  <li>{% trans "Targets: <code>{question-id}</code> for a specific question, or <code>#section-name</code> to jump to a whole section (resolved to its first question)." %}</li>
+                  <li>{% trans "Mark a question as hidden by default by adding a <code>HIDDEN</code> line after its <code>(type)</code> line. Only <code>show</code> conditions can target hidden-by-default questions; only <code>hide</code> conditions can target shown-by-default questions." %}</li>
                   <li>{% trans "Operators mirror the survey builder: <code>equals</code>, <code>not_equals</code>, <code>contains</code>, <code>greater_than</code>, and more." %}</li>
                   <li>{% trans "IDs are normalised to lowercase slugs; keep them unique within your document." %}</li>
-                  <li>{% trans "Point to a group ID to jump to that group, or a question ID to jump directly to that question." %}</li>
+                  <li>{% trans "<code>jump to</code> is forward-only — the target must come after the triggering question in the survey order." %}</li>
                 </ul>
               </div>
             </div>
@@ -265,7 +271,7 @@ dataset: medical_specialties</code></pre>
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 class="text-lg font-semibold text-base-content">{% trans "Live structure preview" %}</h2>
-            <p class="text-sm text-base-content/70">{% trans "Groups and questions are assigned unique IDs as you edit. Use these IDs to reason about branching later." %}</p>
+            <p class="text-sm text-base-content/70">{% trans "Sections and questions are assigned unique IDs as you edit. Use these IDs to reason about branching later." %}</p>
           </div>
           <span class="badge badge-outline hidden" id="bulk-structure-count" aria-live="polite"></span>
         </div>

@@ -254,6 +254,10 @@
 
       const nodePositions = {};
       const groupRegions = [];
+      // Map group ID -> { x, y, name } for the section header band (top of the
+      // group region). Used to draw section-jump edges to the section header
+      // rather than the first question node.
+      const groupHeaderPositions = {};
       let currentY = startY;
       let currentGroup = null;
       let currentGroupId = null;
@@ -276,6 +280,14 @@
           currentGroup = q.group_name;
           currentGroupId = q.group_id;
           groupStartY = currentY - groupPadding;
+          // Record the section header position (top of the band).
+          if (currentGroupId) {
+            groupHeaderPositions[currentGroupId] = {
+              x: startX,
+              y: groupStartY,
+              name: currentGroup,
+            };
+          }
         }
 
         nodePositions[q.id] = {
@@ -449,7 +461,7 @@
         const hasJumpConditions = qConditions.some(
           (c) =>
             c.action === "jump_to" ||
-            c.action === "skip" ||
+            c.action === "hide" ||
             c.action === "end_survey",
         );
 
@@ -484,11 +496,26 @@
 
         // Draw branching connections
         qConditions.forEach((cond, condIndex) => {
-          if (cond.target_question && nodePositions[cond.target_question]) {
-            const toPos = nodePositions[cond.target_question];
+          // Section target: draw to the section header band if available.
+          // Falls back to the resolved target_question node if the header
+          // position isn't found (e.g. empty section, though validation
+          // blocks that).
+          let toPos = null;
+          let targetLabel = "next question";
+          if (cond.target_group && groupHeaderPositions[cond.target_group]) {
+            const header = groupHeaderPositions[cond.target_group];
+            toPos = { x: header.x, y: header.y };
+            targetLabel = header.name ? `${header.name} section` : "target section";
+          } else if (cond.target_question && nodePositions[cond.target_question]) {
+            toPos = nodePositions[cond.target_question];
             const targetQ = questions.find(
               (tq) => tq.id === cond.target_question,
             );
+            targetLabel = targetQ
+              ? targetQ.full_text || targetQ.text
+              : "next question";
+          }
+          if (toPos) {
             // Pass index to stagger multiple branches from same question
             const branchLabelInfo = drawBranchingLine(
               currentPos,
@@ -498,7 +525,7 @@
               cond.summary || "",
               nodeRadius,
               q.full_text || q.text,
-              targetQ ? targetQ.full_text || targetQ.text : "next question",
+              targetLabel,
             );
             if (branchLabelInfo) {
               labelsToRender.push(branchLabelInfo);
@@ -524,7 +551,7 @@
           .filter(
             (c) =>
               c.action === "jump_to" ||
-              c.action === "skip" ||
+              c.action === "hide" ||
               c.action === "end_survey",
           )
           .map((c) => {
@@ -689,7 +716,7 @@
         const hasJumpConditions = lastConditions.some(
           (c) =>
             c.action === "jump_to" ||
-            c.action === "skip" ||
+            c.action === "hide" ||
             c.action === "end_survey",
         );
 
@@ -883,7 +910,7 @@
       const actionColors = {
         show: colors.primary,
         jump_to: colors.success,
-        skip: colors.warning,
+        hide: colors.warning,
         end_survey: colors.error,
       };
 
@@ -1080,7 +1107,7 @@
             const actionVerbs = {
               show: "show",
               jump_to: "go to",
-              skip: "skip to",
+              hide: "hide",
               end_survey: "end the survey",
             };
             const actionVerb =

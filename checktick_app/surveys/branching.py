@@ -5,6 +5,61 @@ from typing import Any
 from .models import SurveyQuestion, SurveyQuestionCondition
 
 
+def resolved_question_order(survey) -> list[int]:
+    """Return question IDs in the resolved runtime order.
+
+    Mirrors the ordering pipeline in ``views.py``
+    (``_resolved_group_order_ids`` + ``_order_questions_by_group``) so that
+    ``SurveyQuestionCondition.clean()`` can validate forward-only jumps without
+    importing from views (which would create a circular dependency).
+    """
+    groups = list(survey.question_groups.only("id", "name").all())
+    groups_map = {g.id: g for g in groups}
+
+    style = survey.style or {}
+    raw_order = style.get("group_order", [])
+    explicit_ids: list[int] = []
+    if isinstance(raw_order, list):
+        for gid in raw_order:
+            if str(gid).isdigit():
+                gid_int = int(gid)
+                if gid_int in groups_map and gid_int not in explicit_ids:
+                    explicit_ids.append(gid_int)
+
+    remaining = sorted(
+        (g for g in groups if g.id not in explicit_ids),
+        key=lambda g: ((g.name or "").lower(), g.id),
+    )
+    group_order = explicit_ids + [g.id for g in remaining]
+
+    questions = list(survey.questions.all())
+    grouped: dict[int | None, list[SurveyQuestion]] = {}
+    ungrouped: list[SurveyQuestion] = []
+    for q in questions:
+        if q.group_id:
+            grouped.setdefault(q.group_id, []).append(q)
+        else:
+            ungrouped.append(q)
+
+    for gid in grouped:
+        grouped[gid].sort(key=lambda q: (q.order, q.id))
+
+    ordered: list[SurveyQuestion] = []
+    for gid in group_order:
+        if gid in grouped:
+            ordered.extend(grouped[gid])
+            del grouped[gid]
+
+    # Orphaned group refs (group was deleted but questions still reference it)
+    for gid in sorted(grouped.keys()):
+        ordered.extend(grouped[gid])
+
+    ungrouped.sort(key=lambda q: (q.order, q.id))
+    ordered.extend(ungrouped)
+
+    return [q.id for q in ordered]
+
+
 def evaluate_condition(condition: SurveyQuestionCondition, answer: Any) -> bool:
     """
     Evaluate whether a condition is met based on the user's answer.
@@ -89,6 +144,7 @@ def get_visible_questions(
     visible = []
     survey_ended = False
     skip_until_idx = None  # Used for JUMP_TO logic
+    hidden_targets: set[int] = set()  # Question IDs hidden by HIDE conditions
 
     for idx, question in enumerate(all_questions):
         question_id = str(question.id)
@@ -100,6 +156,10 @@ def get_visible_questions(
             else:
                 skip_until_idx = None  # Reached target, resume normal flow
 
+        # Skip questions hidden by a HIDE condition triggered earlier
+        if question.id in hidden_targets:
+            continue
+
         # Check if this question has been answered
         answer = answers.get(question_id)
 
@@ -110,14 +170,8 @@ def get_visible_questions(
             conditions = []
 
         # Evaluate conditions
-        triggered_action = None
-        triggered_target = None
-
         for condition in conditions:
             if evaluate_condition(condition, answer):
-                triggered_action = condition.action
-                triggered_target = condition.target_question
-
                 if condition.action == SurveyQuestionCondition.Action.END_SURVEY:
                     survey_ended = True
                     break  # Stop processing this question's conditions
@@ -134,9 +188,10 @@ def get_visible_questions(
                         except StopIteration:
                             pass
                     break  # First matching condition wins
-                elif condition.action == SurveyQuestionCondition.Action.SKIP:
-                    # Skip the target question (don't show it)
-                    # This is handled by not adding the target to visible
+                elif condition.action == SurveyQuestionCondition.Action.HIDE:
+                    # Mark the target question to be hidden when we reach it
+                    if condition.target_question:
+                        hidden_targets.add(condition.target_question.id)
                     break
                 elif condition.action == SurveyQuestionCondition.Action.SHOW:
                     # Show the target question
@@ -147,14 +202,9 @@ def get_visible_questions(
         if survey_ended:
             break
 
-        # Add this question to visible list
+        # Add this question to visible list (unless hidden by default with no
+        # matching SHOW condition — handled by should_show_question at render time)
         visible.append(question)
-
-        # If SKIP was triggered, find and skip the target question
-        if triggered_action == SurveyQuestionCondition.Action.SKIP and triggered_target:
-            # Mark the target question to be skipped
-            # We'll filter it out by not adding it when we reach it
-            pass
 
     return visible, survey_ended
 
@@ -167,36 +217,46 @@ def should_show_question(
     """
     Determine if a specific question should be shown based on branching logic.
 
-    This handles SHOW conditions - a question with incoming SHOW conditions
-    should only be visible if at least one of those conditions is met.
+    Uses the question's ``hidden_by_default`` toggle as the starting point:
+
+    - **Shown by default** (``hidden_by_default = False``): visible unless an
+      incoming HIDE condition matches.
+    - **Hidden by default** (``hidden_by_default = True``): hidden unless an
+      incoming SHOW condition matches.
 
     Args:
         question: The question to check
-        all_questions: All questions in the survey
+        all_questions: All questions in the survey (unused, kept for API compat)
         answers: Current answers
 
     Returns:
         True if the question should be shown
     """
-    # Check if there are any incoming SHOW conditions
     try:
-        show_conditions = SurveyQuestionCondition.objects.filter(
-            target_question=question, action=SurveyQuestionCondition.Action.SHOW
-        )
-
-        if not show_conditions.exists():
-            # No SHOW conditions, question is always visible
+        if not question.hidden_by_default:
+            # Shown by default — check for incoming HIDE conditions
+            hide_conditions = SurveyQuestionCondition.objects.filter(
+                target_question=question,
+                action=SurveyQuestionCondition.Action.HIDE,
+            )
+            for condition in hide_conditions:
+                source_question_id = str(condition.question.id)
+                answer = answers.get(source_question_id)
+                if evaluate_condition(condition, answer):
+                    return False
             return True
-
-        # Check if any SHOW condition is met
-        for condition in show_conditions:
-            source_question_id = str(condition.question.id)
-            answer = answers.get(source_question_id)
-            if evaluate_condition(condition, answer):
-                return True
-
-        # No SHOW conditions were met
-        return False
+        else:
+            # Hidden by default — check for incoming SHOW conditions
+            show_conditions = SurveyQuestionCondition.objects.filter(
+                target_question=question,
+                action=SurveyQuestionCondition.Action.SHOW,
+            )
+            for condition in show_conditions:
+                source_question_id = str(condition.question.id)
+                answer = answers.get(source_question_id)
+                if evaluate_condition(condition, answer):
+                    return True
+            return False
     except Exception:
         # If there's an error, default to showing the question
         return True

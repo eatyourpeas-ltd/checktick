@@ -221,7 +221,7 @@
           break;
         }
         currentGroup = {
-          title: title || "Untitled group",
+          title: title || "Untitled section",
           id: groupId,
           description,
           questions: [],
@@ -242,15 +242,15 @@
           warnings.push(
             `Question “${
               rawTitle || "Untitled"
-            }” appears before any group heading. It will be imported into an auto-created group.`,
+            }” appears before any section heading. It will be imported into an auto-created section.`,
           );
           const { id: fallbackGroupId } = extractTitleAndId(
-            "Ungrouped",
+            "Unsectioned",
             `group-${groups.length + 1}`,
             groupIds,
           );
           currentGroup = {
-            title: "Ungrouped",
+            title: "Unsectioned",
             id: fallbackGroupId,
             description: "",
             questions: [],
@@ -275,6 +275,7 @@
           type: "",
           branches: [],
           isRequired: isRequired || false,
+          hiddenByDefault: false,
         };
 
         for (let j = i + 1; j < normalized.length; j += 1) {
@@ -293,17 +294,82 @@
             question.description = lookahead;
           } else if (!question.type && /^\(.*\)$/.test(lookahead)) {
             question.type = lookahead.slice(1, -1).trim();
+          } else if (/^HIDDEN$/i.test(lookahead)) {
+            question.hiddenByDefault = true;
           } else if (/^\?\s*/.test(lookahead)) {
-            const branchMatch = lookahead.match(
-              /^\?\s*when\s+(.+?)\s*->\s*\{([^{}]+)\}\s*$/i,
+            // Branch line: ? [action] when <op> <value> -> {question-id} | #section-name
+            // action is optional (default jump_to). 'end' has no target.
+            const branchText = lookahead.replace(/^\?\s*/, "").trim();
+
+            // 'end when ...' with no target
+            const endMatch = branchText.match(
+              /^end\s+when\s+(.+)$/i,
             );
-            if (branchMatch) {
-              const condition = branchMatch[1].trim();
-              const targetRaw = branchMatch[2].trim();
+            if (endMatch) {
               question.branches.push({
+                action: "end",
+                actionLabel: "end",
+                condition: endMatch[1].trim(),
+                target: null,
+                targetRaw: null,
+                targetKind: null,
+              });
+              continue;
+            }
+
+            // Target: {question-id} or #section-name
+            const sectionMatch = branchText.match(
+              /^(.+?)\s*->\s*#([A-Za-z0-9][\w\s-]*)\s*$/i,
+            );
+            const questionMatch = branchText.match(
+              /^(.+?)\s*->\s*\{([^{}]+)\}\s*$/i,
+            );
+
+            let conditionPart = null;
+            let targetRaw = null;
+            let target = null;
+            let targetKind = null;
+
+            if (sectionMatch) {
+              conditionPart = sectionMatch[1].trim();
+              targetRaw = sectionMatch[2].trim();
+              target = slugify(targetRaw);
+              targetKind = "section";
+            } else if (questionMatch) {
+              conditionPart = questionMatch[1].trim();
+              targetRaw = questionMatch[2].trim();
+              target = slugify(targetRaw);
+              targetKind = "question";
+            }
+
+            if (conditionPart) {
+              // Optional action keyword: show/hide/jump_to/jump (default jump_to)
+              let action = "jump_to";
+              let actionLabel = "jump to";
+              let condition = conditionPart;
+              const kwMatch = conditionPart.match(
+                /^(show|hide|jump_to|jump)\s+when\s+(.+)$/i,
+              );
+              if (kwMatch) {
+                action = kwMatch[1].toLowerCase();
+                actionLabel =
+                  action === "show"
+                    ? "show"
+                    : action === "hide"
+                      ? "hide"
+                      : "jump to";
+                condition = kwMatch[2].trim();
+              } else if (conditionPart.toLowerCase().startsWith("when ")) {
+                condition = conditionPart.slice(5).trim();
+              }
+
+              question.branches.push({
+                action,
+                actionLabel,
                 condition,
-                target: slugify(targetRaw),
+                target,
                 targetRaw,
+                targetKind,
               });
             }
           }
@@ -344,7 +410,7 @@
       const empty = document.createElement("div");
       empty.className = "text-sm text-base-content/70";
       empty.textContent =
-        "Add a # heading for a group and ## headings for questions to see the structure preview.";
+        "Add a # heading for a section and ## headings for questions to see the structure preview.";
       previewContainer.appendChild(empty);
       previewContainer.setAttribute("aria-busy", "false");
       if (countBadge) {
@@ -448,6 +514,14 @@
             rowMeta.appendChild(typePill);
           }
 
+          if (question.hiddenByDefault) {
+            const hiddenBadge = createMetaBadge("branch", "HIDDEN");
+            hiddenBadge.style.backgroundColor = "hsl(var(--w) / 0.18)";
+            hiddenBadge.style.borderColor = "hsl(var(--w) / 0.35)";
+            hiddenBadge.style.color = "hsl(var(--w))";
+            rowMeta.appendChild(hiddenBadge);
+          }
+
           if (rowMeta.childNodes.length) {
             rowHeader.appendChild(rowMeta);
           }
@@ -474,15 +548,28 @@
 
               const when = document.createElement("span");
               when.className = "font-medium";
-              when.textContent = `when ${branch.condition}`;
-
-              const targetBadge = createMetaBadge(
-                "branch",
-                `{${branch.targetRaw}}`,
-              );
+              const actionPrefix = branch.actionLabel
+                ? `${branch.actionLabel} when `
+                : "when ";
+              when.textContent = `${actionPrefix}${branch.condition}`;
 
               row.appendChild(when);
-              row.appendChild(targetBadge);
+
+              if (branch.targetRaw) {
+                const targetBadge = createMetaBadge(
+                  "branch",
+                  branch.targetKind === "section"
+                    ? `#${branch.targetRaw}`
+                    : `{${branch.targetRaw}}`,
+                );
+                if (branch.targetKind === "section") {
+                  targetBadge.style.backgroundColor = "hsl(var(--s) / 0.18)";
+                  targetBadge.style.borderColor = "hsl(var(--s) / 0.35)";
+                  targetBadge.style.color = "hsl(var(--s))";
+                }
+                row.appendChild(targetBadge);
+              }
+
               branchList.appendChild(row);
             });
 
@@ -500,7 +587,7 @@
 
     if (countBadge) {
       countBadge.classList.remove("hidden");
-      countBadge.textContent = `${groups.length} group${
+      countBadge.textContent = `${groups.length} section${
         groups.length === 1 ? "" : "s"
       }, ${totalQuestions} question${totalQuestions === 1 ? "" : "s"}`;
     }

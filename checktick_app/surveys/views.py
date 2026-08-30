@@ -1519,6 +1519,22 @@ def _load_conditions(question: SurveyQuestion) -> list[SurveyQuestionCondition]:
         return []
 
 
+def _resolve_section_target_question(
+    survey: Survey, group: QuestionGroup
+) -> SurveyQuestion | None:
+    """Resolve a section (group) target to its first question.
+
+    Used at config-build time so the participant JS and the Survey Map see a
+    normal jump_to with a target_question, even when the author targeted a
+    whole section via target_group.
+    """
+    return (
+        SurveyQuestion.objects.filter(survey=survey, group=group)
+        .order_by("order", "id")
+        .first()
+    )
+
+
 def _build_branching_config(questions: list[SurveyQuestion]) -> dict[str, Any]:
     """
     Build JavaScript-friendly configuration for client-side branching logic.
@@ -1530,11 +1546,17 @@ def _build_branching_config(questions: list[SurveyQuestion]) -> dict[str, Any]:
         "show_conditions": {question_id: [incoming SHOW conditions]}
     }
     """
-    config: dict[str, Any] = {"questions": [], "conditions": {}, "show_conditions": {}}
+    config: dict[str, Any] = {
+        "questions": [],
+        "conditions": {},
+        "show_conditions": {},
+        "hidden_by_default": {},
+    }
 
     for q in questions:
         q_id = str(q.id)
         config["questions"].append(q_id)
+        config["hidden_by_default"][q_id] = bool(q.hidden_by_default)
 
         # Get outgoing conditions from this question
         try:
@@ -1545,13 +1567,22 @@ def _build_branching_config(questions: list[SurveyQuestion]) -> dict[str, Any]:
         if conditions:
             config["conditions"][q_id] = []
             for cond in conditions:
+                # Resolve section targets (target_group) to the first question
+                # in the section at config-build time.
+                target_question_id = None
+                if cond.target_question_id is not None:
+                    target_question_id = str(cond.target_question_id)
+                elif cond.target_group_id is not None:
+                    resolved = _resolve_section_target_question(
+                        cond.question.survey, cond.target_group
+                    )
+                    if resolved is not None:
+                        target_question_id = str(resolved.id)
                 cond_data = {
                     "operator": cond.operator,
                     "value": cond.value or "",
                     "action": cond.action,
-                    "target_question": (
-                        str(cond.target_question.id) if cond.target_question else None
-                    ),
+                    "target_question": target_question_id,
                 }
                 config["conditions"][q_id].append(cond_data)
 
@@ -1913,7 +1944,7 @@ def _prepare_question_rendering(
     try:
         for item in (
             survey.questions.select_related("group")
-            .only("id", "text", "order", "group__name")
+            .only("id", "text", "order", "group__name", "hidden_by_default")
             .all()
         ):
             text = (item.text or "Untitled question").strip() or "Untitled question"
@@ -1930,6 +1961,7 @@ def _prepare_question_rendering(
                     "label": label,
                     "group_id": item.group_id,
                     "group_name": group_name,
+                    "hidden_by_default": bool(item.hidden_by_default),
                 }
             )
     except Exception:
@@ -2021,6 +2053,12 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
     if not qtype:
         qtype = SurveyQuestion.Types.TEXT
     required = (data.get("required") or "").lower() in {"on", "true", "1", "yes"}
+    hidden_by_default = (data.get("hidden_by_default") or "").lower() in {
+        "on",
+        "true",
+        "1",
+        "yes",
+    }
 
     options: Any = []
     if qtype in {
@@ -2107,6 +2145,7 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
         "text": text,
         "type": qtype,
         "required": required,
+        "hidden_by_default": hidden_by_default,
         "options": options,
         "dataset_key": dataset_key,
     }
@@ -2159,11 +2198,28 @@ def _build_condition_payload(
         order = next_order
 
     target_question: SurveyQuestion | None = None
+    target_group: QuestionGroup | None = None
     target_question_raw = data.get("target_question")
+    target_group_raw = data.get("target_group")
+    target_type = (data.get("target_type") or "").strip()
 
     # Allow END_SURVEY without target
     if action == "end_survey":
         target_question = None
+        target_group = None
+    elif target_type == "section" or (not target_question_raw and target_group_raw):
+        # Section target: resolve to a QuestionGroup.
+        if not target_group_raw:
+            raise ValidationError({"target_group": "Target section is required."})
+        target_group_id = _safe_int(target_group_raw)
+        if target_group_id is None:
+            raise ValidationError({"target_group": "Invalid target section."})
+        try:
+            target_group = QuestionGroup.objects.get(id=target_group_id, surveys=survey)
+        except QuestionGroup.DoesNotExist as exc:
+            raise ValidationError(
+                {"target_group": "Target section must belong to this survey."}
+            ) from exc
     elif target_question_raw:
         target_question_id = _safe_int(target_question_raw)
         if target_question_id is None:
@@ -2178,10 +2234,11 @@ def _build_condition_payload(
             ) from exc
     elif instance:
         target_question = instance.target_question
+        target_group = instance.target_group
     else:
         raise ValidationError(
             {
-                "target_question": "Target question is required (unless action is END_SURVEY).",
+                "target_question": "Target question or section is required (unless action is END_SURVEY).",
             }
         )
 
@@ -2192,6 +2249,7 @@ def _build_condition_payload(
         "value": value or "",
         "order": order,
         "target_question": target_question,
+        "target_group": target_group,
     }
 
 
@@ -2226,6 +2284,7 @@ def _serialize_question_for_builder(
         "text": question.text or "",
         "type": question.type,
         "required": bool(question.required),
+        "hidden_by_default": bool(question.hidden_by_default),
         "group_id": question.group_id,
         "survey_slug": question.survey.slug if hasattr(question, "survey") else None,
     }
@@ -2398,6 +2457,7 @@ def _serialize_question_for_builder(
                 "label": meta.get("label") or f"Question {meta.get('id')}",
                 "group_id": meta.get("group_id"),
                 "group_name": meta.get("group_name"),
+                "hidden_by_default": bool(meta.get("hidden_by_default")),
             }
             target_questions.append(entry)
             if default_question_id is None and entry.get("id") is not None:
@@ -2405,13 +2465,29 @@ def _serialize_question_for_builder(
 
     has_question_targets = bool(target_questions)
 
+    # Build the list of sections (groups) available as jump targets,
+    # excluding the triggering question's own section (no-op jump).
+    target_sections: list[dict[str, Any]] = []
+    if all_groups:
+        for grp in all_groups:
+            if grp.get("id") == question.group_id:
+                continue
+            target_sections.append(
+                {
+                    "id": grp.get("id"),
+                    "label": grp.get("label") or f"Section {grp.get('id')}",
+                }
+            )
+
     payload["condition_options"] = {
         "operators": operators_meta,
         "actions": actions_meta,
         "target_questions": target_questions,
+        "target_sections": target_sections,
         "has_question_targets": has_question_targets,
+        "has_section_targets": bool(target_sections),
         "default_question_id": default_question_id,
-        "can_create": has_question_targets,
+        "can_create": has_question_targets or bool(target_sections),
     }
 
     conditions_payload: list[dict[str, Any]] = []
@@ -2419,11 +2495,16 @@ def _serialize_question_for_builder(
         target_type = "question"
         target_label = ""
         target_id: int | None = None
+        target_group_id: int | None = None
         if cond.target_question is not None:
             target_id = cond.target_question.id
             target_label = (
                 cond.target_question.text or f"Question {target_id}"
             ).strip()
+        elif cond.target_group is not None:
+            target_type = "section"
+            target_group_id = cond.target_group.id
+            target_label = cond.target_group.name or f"Section {target_group_id}"
 
         if cond.operator in CONDITION_OPERATORS_REQUIRING_VALUE:
             comparison = cond.value or ""
@@ -2447,6 +2528,7 @@ def _serialize_question_for_builder(
                 "target": {
                     "type": target_type,
                     "id": target_id,
+                    "group_id": target_group_id,
                     "label": target_label,
                 },
                 "summary": summary,
@@ -7380,6 +7462,7 @@ def builder_question_create(request: HttpRequest, slug: str) -> HttpResponse:
         type=qtype,
         options=options,
         required=required,
+        hidden_by_default=form_data["hidden_by_default"],
         order=order,
         dataset=dataset,
     )
@@ -7565,6 +7648,7 @@ def builder_group_question_create(
         type=qtype,
         options=options,
         required=required,
+        hidden_by_default=form_data["hidden_by_default"],
         order=order,
         dataset=dataset,
     )
@@ -7919,6 +8003,7 @@ def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResp
     q.text = form_data["text"] or "Untitled"
     q.type = form_data["type"]
     q.required = form_data["required"]
+    q.hidden_by_default = form_data["hidden_by_default"]
     q.options = form_data["options"]
     dataset_key = form_data.get("dataset_key")
     group_id = request.POST.get("group_id")
@@ -7964,6 +8049,7 @@ def builder_group_question_edit(
     q.text = form_data["text"] or "Untitled"
     q.type = form_data["type"]
     q.required = form_data["required"]
+    q.hidden_by_default = form_data["hidden_by_default"]
     q.options = form_data["options"]
     dataset_key = form_data.get("dataset_key")
 
@@ -8914,6 +9000,7 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                             type=q["final_type"],
                             options=q["final_options"],
                             required=q.get("required", False),
+                            hidden_by_default=q.get("hidden_by_default", False),
                             order=next_order,
                             dataset=dataset,
                         )
@@ -8932,11 +9019,41 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                     question = payload["question"]
                     branches = payload.get("branches") or []
                     for branch in branches:
+                        action = branch.get(
+                            "action", SurveyQuestionCondition.Action.JUMP_TO
+                        )
                         target_question = None
                         target_ref = branch.get("target_ref")
                         target_type = branch.get("target_type")
+
+                        # END_SURVEY has no target.
+                        if action == SurveyQuestionCondition.Action.END_SURVEY:
+                            SurveyQuestionCondition.objects.create(
+                                question=question,
+                                operator=branch.get("operator"),
+                                value=branch.get("value", ""),
+                                target_question=None,
+                                action=action,
+                                order=branch.get("order", 0),
+                                description=branch.get("description", ""),
+                            )
+                            continue
+
                         if target_type == "question":
                             target_question = question_ref_map.get(target_ref)
+                        elif target_type == "group":
+                            # Section target: resolve to the first question in the
+                            # group (by order, then id). Full target_group wiring
+                            # arrives in item 5; for now resolve at import time.
+                            target_group = group_ref_map.get(target_ref)
+                            if target_group is not None:
+                                target_question = (
+                                    SurveyQuestion.objects.filter(
+                                        survey=survey, group=target_group
+                                    )
+                                    .order_by("order", "id")
+                                    .first()
+                                )
 
                         if not target_question:
                             raise BulkParseError(
@@ -8948,7 +9065,7 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                             operator=branch.get("operator"),
                             value=branch.get("value", ""),
                             target_question=target_question,
-                            action=SurveyQuestionCondition.Action.JUMP_TO,
+                            action=action,
                             order=branch.get("order", 0),
                             description=branch.get("description", ""),
                         )
@@ -9185,6 +9302,10 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             # Question type
             lines.append(f"{indent}({export_type})")
 
+            # HIDDEN flag
+            if question.hidden_by_default:
+                lines.append(f"{indent}HIDDEN")
+
             # Handle likert type (which can be categories or number)
             if question.type == "likert" and question.options:
                 # Check if it's categories or number type
@@ -9256,18 +9377,36 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                         lines.append(f"{indent}right: {right_label}")
 
             # Branching rules
-            conditions = SurveyQuestionCondition.objects.filter(question=question)
+            conditions = SurveyQuestionCondition.objects.filter(
+                question=question
+            ).select_related("target_question", "target_group")
             for condition in conditions:
                 operator = condition.operator
                 value = condition.value or ""
-                if condition.target_question:
+                action_keyword = ""
+                if condition.action == SurveyQuestionCondition.Action.SHOW:
+                    action_keyword = "show "
+                elif condition.action == SurveyQuestionCondition.Action.HIDE:
+                    action_keyword = "hide "
+                elif condition.action == SurveyQuestionCondition.Action.END_SURVEY:
+                    action_keyword = "end "
+
+                if condition.action == SurveyQuestionCondition.Action.END_SURVEY:
+                    lines.append(f"{indent}? {action_keyword}when {operator} {value}")
+                elif condition.target_group_id is not None:
+                    # Section target: emit #section-name
+                    group_ref = condition.target_group.name.lower().replace(" ", "-")
+                    lines.append(
+                        f"{indent}? {action_keyword}when {operator} {value} -> #{group_ref}"
+                    )
+                elif condition.target_question:
                     target_ref = (
                         condition.target_question.text.lower()[:30]
                         .replace(" ", "-")
                         .strip("-")
                     )
                     lines.append(
-                        f"{indent}? when {operator} {value} -> {{{target_ref}}}"
+                        f"{indent}? {action_keyword}when {operator} {value} -> {{{target_ref}}}"
                     )
 
             lines.append("")
@@ -10636,7 +10775,7 @@ def branching_data_api(request: HttpRequest, slug: str) -> JsonResponse:
 
     # Get all questions ordered properly
     questions_qs = survey.questions.select_related("group").prefetch_related(
-        "conditions", "conditions__target_question"
+        "conditions", "conditions__target_question", "conditions__target_group"
     )
     ordered_questions = _order_questions_by_group(survey, list(questions_qs))
 
@@ -10722,9 +10861,23 @@ def branching_data_api(request: HttpRequest, slug: str) -> JsonResponse:
                     "target_question": (
                         str(cond.target_question.id) if cond.target_question else None
                     ),
+                    "target_group": (
+                        str(cond.target_group.id) if cond.target_group else None
+                    ),
+                    "target_group_name": (
+                        cond.target_group.name if cond.target_group else None
+                    ),
                     "description": cond.description or "",
                     "summary": summary,  # Human-readable condition for branch label
                 }
+                # Resolve section target to its first question for the
+                # visualiser (same as _build_branching_config).
+                if cond.target_group_id is not None and not cond.target_question_id:
+                    resolved = _resolve_section_target_question(
+                        survey, cond.target_group
+                    )
+                    if resolved is not None:
+                        cond_data["target_question"] = str(resolved.id)
                 conditions_data[str(q.id)].append(cond_data)
 
     return JsonResponse(
