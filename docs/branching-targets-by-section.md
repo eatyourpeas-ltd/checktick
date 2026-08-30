@@ -134,13 +134,14 @@ Each commit includes the docs and tests for its section. `s/lint` before committ
   - Files: `surveys/markdown_import.py`, `static/js/bulk-upload-preview.js`, `surveys/templates/surveys/bulk_upload.html`.
   - Tests: each keyword round-trips; section target resolves; all rejections; existing outlines parse unchanged; preview JS renders the new badges (unit-tested where feasible, otherwise covered by import tests).
 
-- [ ] **5. Section targets: config resolution + Builder picker + Survey Map edges**
+- [ ] **5. Section targets: config resolution + Builder picker + Survey Map edges + export**
   - Re-add `target_group` FK to `SurveyQuestionCondition` (removed in migration `0031`).
   - Wire `target_group` → first question resolution in `_build_branching_config` and `branching_data_api`.
   - Builder condition panel: target-type picker (Section default / Question), section `<select>` excluding source section, `<optgroup>` question picker.
   - Survey Map: draw section-jump edges to the section header band; question-jump edges to the node as today.
+  - **Update `_export_survey_to_markdown`** to emit the new grammar: action keywords (`show`/`hide`/`end`), `HIDDEN` flags, and `#section` targets (from `target_group`). The current export only emits `? when ... -> {target_ref}` with no action keyword, which causes SHOW/HIDE/END conditions to silently become JUMP_TO on round-trip. Slugs are already regenerated from current names on export, so renaming a section in the Builder and opening the Outline tab shows the new slug — no stale-ID problem.
   - Files: new migration, `surveys/models.py`, `surveys/views.py`, `question_conditions_panel.html`, `static/js/branching-visualizer.js`, `static/js/builder.js`.
-  - Tests: config resolution; participant JS receives normal `jump_to`; section picker excludes source; visualiser edge endpoints; 403/405.
+  - Tests: config resolution; participant JS receives normal `jump_to`; section picker excludes source; visualiser edge endpoints; export round-trip preserves action/HIDDEN/section targets; 403/405.
 
 - [ ] **6. Final docs polish + delete this planning doc**
   - Ensure `branching-and-repeats.md` examples use the new notation throughout.
