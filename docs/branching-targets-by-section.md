@@ -115,7 +115,7 @@ Each commit includes the docs and tests for its section. `s/lint` before committ
   - Files: `surveys/branching.py`, `surveys/models.py`, `static/js/branching.js`.
   - Tests: toggle visibility both directions; backward jump rejected; `HIDE` on hidden-by-default rejected and vice versa.
 
-- [ ] **3. Builder UI: question toggle + constrained action picker + relabel**
+- [x] **3. Builder UI: question toggle + constrained action picker + relabel** (commit `f2d38b8`)
   - Add "Hidden by default" toggle to the question edit form, with help text.
   - Constrain the condition action picker based on the target's toggle (SHOW for hidden-by-default, HIDE for shown-by-default).
   - Relabel `SKIP` → `HIDE` across templates and preview strings.
