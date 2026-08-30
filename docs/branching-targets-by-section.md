@@ -6,131 +6,146 @@ priority: 5
 
 # Branching Targets by Section
 
-- **Status**: Proposed (not yet implemented)
+- **Status**: In progress (branch `branch-to-section`)
 - **Date**: August 2026
 - **Origin**: Deferred from the Survey Builder Workflow redesign (originally Tier 3.2). The workflow design and implementation-plan docs have been retired; their reference content is now captured in the canonical docs (`docs/surveys.md`, `docs/groups-view.md`, `docs/branching-technical.md`).
 - **Related**: [Branching Logic & Repeating Questions](/docs/branching-and-repeats/) · [Branching Logic - Technical Guide](/docs/branching-technical/) · [Sections](/docs/groups-view/)
 
 ---
 
+> This is the planning document for the branching refactor. It tracks the commit checklist below. **When every item is addressed, this file is deleted** and the canonical docs (`branching-and-repeats.md`, `branching-technical.md`) become the sole source of truth.
+
 ## Summary
 
-Today, when a user adds a branching "jump to…" condition in the Builder, the target picker lists every other question in the survey as a flat list. This feature adds a **"jump to section"** target type so the user can pick a section by name, and at runtime the engine resolves it to the first question in that section.
+This feature does four related things, all touching the same subsystem:
 
-This matches the user's mental model: they think "skip ahead to the Symptoms section," not "skip ahead to question 47."
+1. **Rename `SKIP` → `HIDE`** (stored value `"skip"` → `"hide"`). `SHOW`/`HIDE` become an obvious visibility-override pair; `JUMP_TO` is the only navigation verb.
+2. **Add a `hidden_by_default` toggle on `SurveyQuestion`.** A question's default visibility is declared on the question itself, not derived from incoming conditions. `SHOW` conditions are only valid against hidden-by-default questions; `HIDE` conditions only against shown-by-default questions. Contradictory conditions become impossible by construction.
+3. **Add section-level targets for `JUMP_TO`.** Authors pick "jump to the Symptoms section" rather than "jump to Q47"; the section resolves to its first question at config-build time. The evaluation engine is unchanged.
+4. **Add outline action keywords** (`show` / `hide` / `end`) and a `HIDDEN` question flag, so the outline can express everything the Builder can. Section targets use `-> #section-name` (heading-style, consistent with outline section syntax).
 
-## Problem
+## Final sanctioned verb set
 
-The current branching target picker (`question_conditions_panel.html`) is a flat `<select>` of all questions in the survey, each labelled `Q3 • What is your age? (Demographics)`. The section name is a parenthetical suffix, not the organising concept.
+| Verb | Stored value | Direction | Target | Gated by |
+|---|---|---|---|---|
+| `SHOW` | `"show"` | visibility override → visible | Question only | target's `hidden_by_default = True` |
+| `HIDE` | `"hide"` (was `"skip"`) | visibility override → hidden | Question only | target's `hidden_by_default = False` |
+| `JUMP_TO` | `"jump_to"` | navigation, **forward only** | Question or Section | target must be later in resolved order |
+| `END_SURVEY` | `"end_survey"` | termination | None | n/a |
 
-This is workable for small surveys but breaks down as surveys grow:
+`SHOW`/`HIDE` are visibility overrides on a single question. `JUMP_TO` is the only navigation verb and the only action that can target a section. Sections never have a visibility toggle — you navigate to them with `JUMP_TO`.
 
-- A 50-question survey with 6 sections produces a 49-option flat list with no grouping.
-- The user must know which question is "first in the Symptoms section" to jump there.
-- The section — which is the user's navigational concept — is not a first-class target.
+## The `hidden_by_default` model
 
-## Proposal
+Today a question is "hidden by default" only as a side-effect of another question having a `SHOW` condition targeting it. The default is implicit and scattered. This refactor makes it explicit:
 
-Add a **section-level target** alongside the existing question-level target. The user picks whether to target a question or a section; if section, they pick from a list of section names.
+- `SurveyQuestion.hidden_by_default` (bool, default `False`) declares the default visibility on the question.
+- `SHOW` conditions are only valid when the target is `hidden_by_default = True` (override hidden → visible).
+- `HIDE` conditions are only valid when the target is `hidden_by_default = False` (override shown → hidden).
+- A hidden-by-default question with no incoming `SHOW` condition is a dead question — the Builder warns on this.
 
-### User-facing behaviour
+The data migration backfills `hidden_by_default = True` for any question that currently has an incoming `SHOW` condition, preserving existing behaviour exactly.
 
-In the Builder's condition panel, the "Target" field becomes a two-step picker:
+## Section targets
 
-1. **Target type**: "Question" or "Section" (radio or select). Defaults to "Question" (preserves existing behaviour).
-2. **Target**:
-   - If "Question": the existing flat question picker (optionally grouped by section — see "Future enhancement" below).
-   - If "Section": a `<select>` of section names (`Demographics`, `Symptoms`, …), excluding the section the triggering question belongs to (jumping within the same section is equivalent to a question-level jump).
+"Jump to section S" is semantically "jump to the first question in section S". The engine resolves the section target to a question ID at config-build time (`_build_branching_config`, `branching_data_api`), so `branching.py` / `branching.js` see a normal `jump_to` with a `target_question`. No new action type, no new participant-facing code path.
 
-The live preview reads: *"If [answer] → jump to the Symptoms section"* rather than *"jump to Q47 • Pain score"*.
+The dormant `target_group` FK on `SurveyQuestionCondition` (migration `0010`) is wired up.
 
-### Runtime resolution
+### `JUMP_TO` is forward-only
 
-"Jump to section S" is semantically **"jump to the first question in section S"**. The engine resolves the section target to a question ID at config-build time, not at evaluation time, so the branching engine (`branching.py` / `branching.js`) needs no new action type — it still sees a `jump_to` with a `target_question`.
+A backward `JUMP_TO` is a silent no-op in the current engine (the forward-pass traversal can't revisit questions). This refactor enforces forward-only at validation time (`SurveyQuestionCondition.clean()`) and in the outline parser, turning the silent no-op into a clear authoring error. Backward navigation, if ever needed, is a separate feature with its own verb and loop-detection design.
 
-This keeps the evaluation engine unchanged and avoids a new participant-facing code path.
+## Outline grammar
 
-## Data model
+Question-level — new `HIDDEN` flag:
 
-`SurveyQuestionCondition` already has a `target_group` FK (migration `0010_surveyquestioncondition.py`), added speculatively but never wired up. This feature uses it.
+```markdown
+## Pain score {pain-score}
+(text_long)
+HIDDEN
+```
 
-| Field | Current state | After this feature |
-|---|---|---|
-| `target_question` | Used by `show`, `jump_to`, `skip` | Used when target type = "Question" |
-| `target_group` | Dormant (not read by any code path) | Used when target type = "Section"; resolved to `target_question` at config-build time |
-| `action` | `show`, `jump_to`, `skip`, `end_survey` | Unchanged — section targets use `jump_to` (and optionally `skip` to skip a whole section) |
+Condition-level — `show` / `hide` / `end` keywords, with `jump_to` as the implicit default (existing outlines parse unchanged):
 
-### Validation
+```markdown
+## Do you have symptoms? {has-symptoms}
+(yesno)
+? show when equals "Yes" -> {pain-score}   # valid: target is HIDDEN
+? hide when equals "No"  -> {follow-up}     # valid: target is NOT HIDDEN
+? when equals "No" -> #Symptoms             # jump_to section (default action)
+? end  when equals "N/A"                     # end survey (no target)
+```
 
-`SurveyQuestionCondition.clean()` (models.py L2422) currently requires `target_question` unless `action == END_SURVEY`. The new rule:
+Validation:
+- `show` targeting a non-`HIDDEN` question → rejected.
+- `hide` targeting a `HIDDEN` question → rejected.
+- `show` / `hide` with a `#section` target → rejected (sections are not show/hide-able).
+- `jump_to` targeting an earlier question → rejected (forward-only).
 
-- If `target_group` is set, `target_question` may be null at validation time (it's resolved later).
-- `target_group` must belong to the same survey as the triggering question.
-- `target_group` must not be the section the triggering question belongs to (no-op jump).
+## Resolved open questions
+
+1. **Should `skip`/`hide` also support section targets?** No. `HIDE` is question-level by nature. Ship `jump_to` section targets first; "hide a whole section" would need range logic that doesn't exist today and is deferred.
+2. **Empty target section?** Block at validation time with a clear error — "cannot jump to an empty section." Resolving to the next non-empty section would be surprising.
+3. **Exclude the source section from the section picker?** Yes — jumping within your own section is a no-op. Same as the question picker excludes the triggering question.
+4. **Outline grammar for section targets?** `-> #section-name` (heading-style), consistent with the existing outline section syntax and visually distinct from `{question-id}`.
+5. **Default target type for new `jump_to` conditions?** Section (leads with the section mental model). Existing conditions keep their resolved state.
+6. **Group the question picker by section?** Yes — render the flat question `<select>` as `<optgroup>` blocks grouped by section name. Cheap quick-win folded into this feature.
+7. **Survey Map edges for section jumps?** Draw to the section header band, not the first question node. Promoted from optional to in-scope so the two target types feel like one coherent feature.
 
 ## Implementation scope
 
-### Builder (authoring)
+### Commit checklist
 
-| File | Change |
-|---|---|
-| `checktick_app/surveys/templates/surveys/partials/question_conditions_panel.html` | Add target-type picker (Question / Section); conditionally render the section `<select>` when "Section" is chosen. Two places: create form and edit form. |
-| `checktick_app/surveys/views.py` — `_serialize_question_for_builder` | Add `target_sections` to `condition_options`: list of `{id, name}` for groups in the survey, excluding the triggering question's group. |
-| `checktick_app/surveys/views.py` — `_build_condition_payload` | Accept `target_group` from POST; validate it belongs to the survey and differs from the source group. |
-| `checktick_app/static/js/builder.js` — `setupConditionForm` / `initConditionForms` | Toggle the target picker (Question vs Section) on target-type change; update the live preview to say "jump to the X section". |
+Each commit includes the docs and tests for its section. `s/lint` before committing.
 
-### Config build (runtime resolution)
+- [ ] **1. Migration: `hidden_by_default` + rename `skip`→`hide`**
+  - Add `SurveyQuestion.hidden_by_default` (bool, default `False`).
+  - Rename `SurveyQuestionCondition.action` value `"skip"` → `"hide"` on all rows.
+  - Backfill `hidden_by_default = True` for questions with incoming `SHOW` conditions.
+  - Update `Action` enum: `SKIP` → `HIDE` (stored `"hide"`), keep `SHOW`/`JUMP_TO`/`END_SURVEY`.
+  - Files: new migration, `surveys/models.py`.
+  - Tests: migration backfill correctness; enum value round-trip.
 
-| File | Change |
-|---|---|
-| `checktick_app/surveys/views.py` — `_build_branching_config` | When serialising a condition for the participant JS, if `target_group` is set and `target_question` is null, resolve `target_question` to the first question in that group (by group order, then question order). Emit the resolved ID in `cond_data["target_question"]` so the participant JS sees a normal `jump_to`. |
-| `checktick_app/surveys/views.py` — `branching_data_api` | Same resolution for the Survey Map visualiser. |
+- [ ] **2. Engine: toggle-based visibility + forward-only validation**
+  - Rewrite `should_show_question` around `hidden_by_default` (symmetric SHOW/HIDE override logic).
+  - Update `branching.py` and `static/js/branching.js` for the `skip`→`hide` rename.
+  - Add forward-only `JUMP_TO` validation in `SurveyQuestionCondition.clean()`.
+  - Add `target_group` validation in `clean()` (same survey, not source group, non-empty).
+  - Files: `surveys/branching.py`, `surveys/models.py`, `static/js/branching.js`.
+  - Tests: toggle visibility both directions; backward jump rejected; `HIDE` on hidden-by-default rejected and vice versa.
 
-### Evaluation engine (no change)
+- [ ] **3. Builder UI: question toggle + constrained action picker + relabel**
+  - Add "Hidden by default" toggle to the question edit form, with help text.
+  - Constrain the condition action picker based on the target's toggle (SHOW for hidden-by-default, HIDE for shown-by-default).
+  - Relabel `SKIP` → `HIDE` across templates and preview strings.
+  - Warn on hidden-by-default questions with no incoming SHOW condition.
+  - Files: `surveys/views.py`, `surveys/templates/surveys/partials/question_conditions_panel.html`, question edit template, `static/js/builder.js`.
+  - Tests: toggle persists; action picker constrained; preview text; dead-question warning; XSS on section name; 403/405.
 
-| File | Change |
-|---|---|
-| `checktick_app/surveys/branching.py` — `get_visible_questions` | **No change.** It already handles `jump_to` with a `target_question`. The section target is resolved to a question ID before the engine sees it. |
-| `checktick_app/static/js/branching.js` — `updateVisibility` | **No change.** Same reason. |
-| `checktick_app/static/js/branching-visualizer.js` | **No change** (it consumes the resolved `target_question` from the API). Optionally: draw the edge to the section header node rather than the first question, but this is a visual polish item, not a functional requirement. |
+- [ ] **4. Outline: `HIDDEN` flag + action keywords + section targets**
+  - Add `HIDDEN` keyword on questions in `markdown_import.py`.
+  - Add `show` / `hide` / `end` action keywords; `jump_to` remains the default.
+  - Add `-> #section-name` section targets, resolved to `target_group` at import time.
+  - Reject `show`/`hide` on sections, `show` on non-HIDDEN, `hide` on HIDDEN, backward `jump_to`.
+  - Files: `surveys/markdown_import.py`.
+  - Tests: each keyword round-trips; section target resolves; all rejections; existing outlines parse unchanged.
 
-### Outline / markdown import
+- [ ] **5. Section targets: config resolution + Builder picker + Survey Map edges**
+  - Wire `target_group` → first question resolution in `_build_branching_config` and `branching_data_api`.
+  - Builder condition panel: target-type picker (Section default / Question), section `<select>` excluding source section, `<optgroup>` question picker.
+  - Survey Map: draw section-jump edges to the section header band; question-jump edges to the node as today.
+  - Files: `surveys/views.py`, `question_conditions_panel.html`, `static/js/branching-visualizer.js`, `static/js/builder.js`.
+  - Tests: config resolution; participant JS receives normal `jump_to`; section picker excludes source; visualiser edge endpoints; 403/405.
 
-| File | Change |
-|---|---|
-| `checktick_app/surveys/markdown_import.py` — `_parse_branch_line` | Extend the `? when <op> <value> -> {target-id}` grammar to accept a section reference (e.g. `-> #section-name` or `-> {group-id}`) in addition to a question reference. Resolve to `target_group` at import time. |
-
-### Tests
-
-| Area | Tests |
-|---|---|
-| Builder UI | Target-type picker renders; section `<select>` populated; preview text says "section"; XSS on section name. |
-| Payload / validation | `target_group` accepted; rejected if wrong survey; rejected if same as source group; `target_question` still works when target type = "Question". |
-| Config resolution | `_build_branching_config` resolves `target_group` → first question ID; participant JS receives a normal `jump_to`. |
-| Runtime | `get_visible_questions` jumps to the first question of the target section (via the resolved `target_question`). |
-| Permissions | 403 for non-editors; 405 for GET on POST-only endpoints. |
-| Outline import | `-> #section-name` resolves to `target_group`. |
-
-## Non-goals
-
-- **No new action type.** "Jump to section" is `jump_to` with a resolved `target_question`, not a new `Action` enum value. This keeps the evaluation engine and participant JS unchanged.
-- **No backward-incompatible change.** Existing conditions with `target_question` set and `target_group` null continue to work unchanged.
-- **No change to `skip` or `show` semantics.** These remain question-level. (A future enhancement could add "skip section" / "show section", but that's out of scope here.)
-- **No change to the Survey Map visualiser's data contract.** It receives resolved `target_question` IDs. Drawing edges to section headers is a possible visual polish item but not required.
-
-## Open questions
-
-1. **Should `skip` also support section targets?** "Skip the Symptoms section" is a plausible user request. The resolution is the same (skip all questions in that section), but `branching.py`'s `SKIP` path currently skips a single `target_question` — it would need to skip a range. Decide before implementing, or defer to a follow-up.
-2. **What happens if the target section is empty (no questions)?** The config builder cannot resolve `target_group` → a `target_question`. Options: (a) block at validation time ("cannot jump to an empty section"), (b) resolve to the next non-empty section, (c) treat as `end_survey` if it's the last section. Recommendation: (a) — block at validation time with a clear error.
-3. **Should the section picker exclude the source section?** Jumping to the section you're already in is a no-op (or equivalent to a question-level jump within the same section). Recommendation: exclude it to prevent confusion, same as the question picker excludes the triggering question itself.
-4. **Outline grammar for section targets.** `-> #section-name` (heading-style) vs `-> {group-id}` (ID-style) vs `-> section:Name`. Needs a decision consistent with the existing `{custom-id}` grammar.
-
-## Future enhancement: group the question picker by section
-
-A smaller, presentation-only change (originally the literal Tier 3.2 item) is to render the existing flat question `<select>` as `<optgroup>` blocks grouped by section name, without adding a section target type. This is independent of the section-target feature and could be done first as a quick win.
+- [ ] **6. Final docs polish + delete this planning doc**
+  - Ensure `branching-and-repeats.md` examples use the new notation throughout.
+  - Ensure `branching-technical.md` reflects the shipped code.
+  - Delete `docs/branching-targets-by-section.md`.
+  - Update `docs/README.md` / index if it references the planning doc.
 
 ## Related documentation
 
 - [Branching Logic & Repeating Questions](/docs/branching-and-repeats/) — user-facing branching guide
-- [Branching Logic - Technical Guide](/docs/branching-technical/) — evaluation engine, models, config build, builder route security, future enhancements
+- [Branching Logic - Technical Guide](/docs/branching-technical/) — evaluation engine, models, config build, builder route security
 - [Sections](/docs/groups-view/) — the Organise page and Builder rail

@@ -32,10 +32,23 @@ You can add conditions to any question to control when it appears. For example:
 
 When a condition is met, you can choose what happens:
 
-- **Show Question** - Display the next question in the sequence
-- **Jump to Question** - Skip ahead to a specific question
-- **Skip Question** - Hide the next question and continue
+- **Show** - Reveal a question that is hidden by default (only valid against hidden-by-default questions)
+- **Hide** - Hide a question that is shown by default (only valid against shown-by-default questions)
+- **Jump to** - Skip ahead to a specific question or section (forward only)
 - **End Survey** - Complete the survey immediately
+
+`Show` and `Hide` are visibility overrides on a single question. `Jump to` is the only navigation action, and it's the only one that can target a whole section. Sections themselves don't have a visibility toggle — you navigate to them with `Jump to`.
+
+### Hidden by default
+
+Every question has a **Hidden by default** toggle. This declares the question's default visibility on the question itself, rather than as a side-effect of conditions elsewhere:
+
+- **Off** (default) — the question is shown unless a `Hide` condition hides it.
+- **On** — the question is hidden unless a `Show` condition reveals it.
+
+This keeps conditions simple: a `Show` condition can only target a hidden-by-default question, and a `Hide` condition can only target a shown-by-default question. You can't accidentally add contradictory conditions — the Builder only offers the action that makes sense for the target's toggle.
+
+If you mark a question hidden by default but add no `Show` condition for it, the Builder warns you — the question would never appear.
 
 ### Creating Conditions
 
@@ -54,19 +67,34 @@ You can add multiple conditions to a single question - the survey will check the
 
 #### Using Outline
 
-You can also define branching logic using markdown syntax. Add conditions using the `->` arrow notation:
+You can also define branching logic using markdown syntax. Conditions use the `?` prefix with an optional action keyword and the `->` arrow:
 
 ```markdown
-## Would you like to provide feedback?
+## Would you like to provide feedback? {want-feedback}
 (yesno)
--> Yes : {Feedback details}
+? show when equals "Yes" -> {feedback-details}
+? when equals "No" -> #Closing            # jump to the Closing section
+? end  when equals "N/A"                  # end the survey
 
-## Feedback details
+## Feedback details {feedback-details}
 (text_long)
+HIDDEN                                   # hidden by default, shown by the Show condition above
 What would you like to tell us?
 ```
 
-In this example, the "Feedback details" question only appears if the user answers "Yes" to the first question.
+The action keyword is optional — if you omit it, the condition defaults to `Jump to`. So existing outlines that use `? when ... -> {target}` keep working unchanged.
+
+**Action keywords:**
+
+- `show` — reveal a hidden-by-default question (target must be marked `HIDDEN`)
+- `hide` — hide a shown-by-default question (target must not be marked `HIDDEN`)
+- `end` — end the survey (no target)
+- *(no keyword)* — `jump to` the target question or section
+
+**Targets:**
+
+- `{question-id}` — a specific question
+- `#section-name` — a whole section (resolved to its first question at build time)
 
 For complete syntax details, see the [Import Documentation](import.md).
 
@@ -87,8 +115,9 @@ The Survey Map uses a git-graph style to display your survey with square connect
 - **Vertical lines** show the default question flow
 - **Colored dashed lines** indicate conditional branches:
   - Green for "Jump to"
-  - Amber for "Skip"
+  - Amber for "Hide"
   - Red for "End Survey"
+- **Section jumps** draw to the section header band; **question jumps** draw to the question node — so you can see at a glance whether a branch targets a whole section or a single question
 - **Condition labels** appear on branch lines showing the trigger (e.g., "> 17")
 - **Shaded regions** group questions together
 - **Hover** over questions to see the full question text
