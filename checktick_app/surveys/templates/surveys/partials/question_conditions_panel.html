@@ -94,8 +94,13 @@
                       {% if not opts.has_question_targets %}
                         <option value="">No available questions</option>
                       {% else %}
-                        {% for tq in opts.target_questions %}
-                          <option value="{{ tq.id }}" data-hidden-by-default="{{ tq.hidden_by_default|yesno:'1,0' }}"{% if tq.id == opts.default_question_id %} selected{% endif %}>{{ tq.label }}</option>
+                        {% regroup opts.target_questions by group_name as question_groups %}
+                        {% for group in question_groups %}
+                          <optgroup label="{{ group.grouper|default:'Ungrouped' }}">
+                            {% for tq in group.list %}
+                              <option value="{{ tq.id }}" data-hidden-by-default="{{ tq.hidden_by_default|yesno:'1,0' }}"{% if tq.id == opts.default_question_id %} selected{% endif %}>{{ tq.label }}</option>
+                            {% endfor %}
+                          </optgroup>
                         {% endfor %}
                       {% endif %}
                     </select>
@@ -211,8 +216,13 @@
                                 {% if not opts.has_question_targets %}
                                   <option value="">No available questions</option>
                                 {% else %}
-                                  {% for tq in opts.target_questions %}
-                                    <option value="{{ tq.id }}" data-hidden-by-default="{{ tq.hidden_by_default|yesno:'1,0' }}"{% if cond.target_question_id == tq.id %} selected{% endif %}>{{ tq.label }}</option>
+                                  {% regroup opts.target_questions by group_name as question_groups %}
+                                  {% for group in question_groups %}
+                                    <optgroup label="{{ group.grouper|default:'Ungrouped' }}">
+                                      {% for tq in group.list %}
+                                        <option value="{{ tq.id }}" data-hidden-by-default="{{ tq.hidden_by_default|yesno:'1,0' }}"{% if cond.target_question_id == tq.id %} selected{% endif %}>{{ tq.label }}</option>
+                                      {% endfor %}
+                                    </optgroup>
                                   {% endfor %}
                                 {% endif %}
                               </select>
