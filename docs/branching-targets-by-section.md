@@ -107,7 +107,7 @@ Each commit includes the docs and tests for its section. `s/lint` before committ
   - Files: new migration, `surveys/models.py`.
   - Tests: migration backfill correctness; enum value round-trip.
 
-- [ ] **2. Engine: toggle-based visibility + forward-only validation**
+- [x] **2. Engine: toggle-based visibility + forward-only validation** (commit `6595152`)
   - Rewrite `should_show_question` around `hidden_by_default` (symmetric SHOW/HIDE override logic).
   - Update `branching.py` and `static/js/branching.js` for the `skip`→`hide` rename.
   - Add forward-only `JUMP_TO` validation in `SurveyQuestionCondition.clean()`.
