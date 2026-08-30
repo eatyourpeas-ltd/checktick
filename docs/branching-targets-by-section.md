@@ -99,7 +99,7 @@ Validation:
 
 Each commit includes the docs and tests for its section. `s/lint` before committing.
 
-- [ ] **1. Migration: `hidden_by_default` + rename `skip`→`hide`**
+- [x] **1. Migration: `hidden_by_default` + rename `skip`→`hide`** (commit `fc0eb8b`)
   - Add `SurveyQuestion.hidden_by_default` (bool, default `False`).
   - Rename `SurveyQuestionCondition.action` value `"skip"` → `"hide"` on all rows.
   - Backfill `hidden_by_default = True` for questions with incoming `SHOW` conditions.
