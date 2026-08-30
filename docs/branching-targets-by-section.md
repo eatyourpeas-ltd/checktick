@@ -123,7 +123,7 @@ Each commit includes the docs and tests for its section. `s/lint` before committ
   - Files: `surveys/views.py`, `surveys/templates/surveys/partials/question_conditions_panel.html`, question edit template, `static/js/builder.js`.
   - Tests: toggle persists; action picker constrained; preview text; dead-question warning; XSS on section name; 403/405.
 
-- [ ] **4. Outline: `HIDDEN` flag + action keywords + section targets**
+- [x] **4. Outline: `HIDDEN` flag + action keywords + section targets** (commit `da45c8a`)
   - Add `HIDDEN` keyword on questions in `markdown_import.py`.
   - Add `show` / `hide` / `end` action keywords; `jump_to` remains the default.
   - Add `-> #section-name` section targets, resolved to `target_group` at import time.
