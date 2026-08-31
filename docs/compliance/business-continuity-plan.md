@@ -5,7 +5,7 @@ category: dspt-7-continuity
 
 # Business Continuity & Disaster Recovery Plan
 
-**Last Reviewed:** January 2026
+**Last Reviewed:** August 2026
 **Version:** 1.0 (DSPT Compliant)
 **Owners:** CTO & SIRO
 
@@ -30,9 +30,18 @@ This plan ensures that {{ platform_name }} can continue to support clinical work
 
 #### Platform Key / Survey KEK Recovery
 
-If a user loses both their password and recovery phrase, their survey KEK
-must be recovered from Vault. This is a **split-knowledge** operation — no
-single administrator can perform it:
+Surveys that use whole-response encryption (per the encryption predicate —
+see [Encryption for Users](/docs/encryption-for-users/)) hold a per-survey
+X25519 keypair: responses are encrypted at submission time with the public
+key, and the private key is stored wrapped in the owner's key material
+(password / recovery phrase / OIDC / organisation key). This applies to **all
+encrypted surveys**, not only those collecting patient data.
+
+If a user loses both their password and recovery phrase, and there is no
+organisation or platform escrow, responses on keypair surveys are
+cryptographically unrecoverable — the server can encrypt but cannot decrypt
+without the owner's key material. Where platform key recovery is available,
+it is a **split-knowledge** operation — no single administrator can perform it:
 
 1. A recovery request is submitted and goes through **identity verification**
    (photo ID, video call, security questions).
@@ -48,6 +57,20 @@ The web Platform Recovery Console **does not execute recovery** — it only
 routes the request through approval + time delay, then hands off to the CLI.
 See [Key Management for Administrators](/docs/key-management-for-administrators/)
 and F6 in `docs/compliance/security-review-august-2026.md`.
+
+**Recoverability by survey type:**
+
+* **Encrypted (keypair) surveys** — recoverable only via owner unlock or the
+  split-knowledge platform recovery above; if the owner loses their password
+  and recovery phrase and there is no organisation or platform escrow, the
+  responses are unrecoverable.
+* **Surveys with a recorded encryption opt-out** (staff-audience,
+  password-user surveys where the creator declared an opt-out) — responses
+  are stored in plaintext and remain recoverable by a database administrator.
+* **Grandfathered legacy surveys** — pre-existing password-user, non-patient
+  surveys were migrated with a recorded legacy opt-out declaration
+  (audit-logged), so their existing plaintext responses stay readable without
+  owner keys.
 
 ### 3.2 Manual Workarounds (Essential Service Continuity)
 

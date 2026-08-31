@@ -326,6 +326,160 @@ def decrypt_sensitive(passphrase_key: bytes, blob: bytes) -> dict:
     return json.loads(pt.decode("utf-8"))
 
 
+# --- Submission keypair encryption (hybrid / asymmetric) ---
+#
+# Surveys with a submission keypair encrypt responses with the survey's
+# PUBLIC key at submission time. The server can always encrypt but can never
+# decrypt: the private key is wrapped with the owner's password / recovery
+# phrase / OIDC identity (reusing the encrypted_kek_* fields) and only ever
+# exists unwrapped in an unlocked owner session.
+#
+# Blob format (all multi-field blobs are concatenated):
+#   MAGIC (5) | eph_pub (32) | wrap_nonce (12) | wrapped_dek (48)
+#   | data_nonce (12) | ciphertext+tag
+#
+# - DEK: random 32-byte AES-256-GCM key per response
+# - wrapped_dek: DEK encrypted with AES-256-GCM under a key derived via
+#   HKDF-SHA256 from the X25519 ECDH shared secret (ephemeral private x
+#   recipient public)
+#
+# The 5-byte magic distinguishes these blobs from the legacy symmetric
+# format (salt 16 | nonce 12 | ciphertext), whose leading bytes are random.
+
+SUBMISSION_BLOB_MAGIC = b"CKEC2"
+_SUBMISSION_KDF_INFO = b"checktick-submission-dek-wrap"
+
+
+def is_submission_blob(blob) -> bool:
+    """Check if an enc_answers blob uses the submission (public-key) format."""
+    if not blob:
+        return False
+    raw = bytes(blob[: len(SUBMISSION_BLOB_MAGIC)])
+    return raw == SUBMISSION_BLOB_MAGIC
+
+
+def generate_submission_keypair() -> Tuple[bytes, bytes]:
+    """Generate an X25519 submission keypair for a survey.
+
+    Returns:
+        (private_key_bytes, public_key_bytes) — both raw 32-byte encodings.
+
+    The private key is stored wrapped (encrypted_kek_* fields) and never in
+    plaintext; the public key is stored on the survey and is not secret.
+    """
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+
+    private = X25519PrivateKey.generate()
+    private_bytes = private.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_bytes = private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    return private_bytes, public_bytes
+
+
+def encrypt_for_submission(public_key: bytes, payload: dict) -> bytes:
+    """Encrypt a response payload to a survey's public key (hybrid ECIES).
+
+    Args:
+        public_key: 32-byte raw X25519 public key (Survey.submission_public_key)
+        payload: JSON-serialisable response payload (answers + demographics)
+
+    Returns:
+        Encrypted blob in the SUBMISSION_BLOB_MAGIC format described above.
+
+    This can be performed by the server without any secret key material, so
+    participants never provide a key and anonymous submissions are encrypted.
+    """
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric.x25519 import (
+        X25519PrivateKey,
+        X25519PublicKey,
+    )
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+    recipient = X25519PublicKey.from_public_bytes(bytes(public_key))
+    ephemeral = X25519PrivateKey.generate()
+    eph_pub = ephemeral.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    shared = ephemeral.exchange(recipient)
+    wrap_key = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=_SUBMISSION_KDF_INFO,
+    ).derive(shared)
+
+    dek = os.urandom(32)
+    wrap_nonce = os.urandom(12)
+    wrapped_dek = AESGCM(wrap_key).encrypt(wrap_nonce, dek, None)
+    data_nonce = os.urandom(12)
+    ciphertext = AESGCM(dek).encrypt(
+        data_nonce, json.dumps(payload).encode("utf-8"), None
+    )
+    # Wipe the DEK from memory as best effort
+    del dek
+    return (
+        SUBMISSION_BLOB_MAGIC
+        + eph_pub
+        + wrap_nonce
+        + wrapped_dek
+        + data_nonce
+        + ciphertext
+    )
+
+
+def decrypt_submission(private_key: bytes, blob: bytes) -> dict:
+    """Decrypt a submission-format blob with the survey's private key.
+
+    Args:
+        private_key: 32-byte raw X25519 private key (unwrapped from the
+            survey's encrypted_kek_* fields after unlock)
+        blob: Encrypted blob from encrypt_for_submission
+
+    Returns:
+        The original payload dict.
+    """
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric.x25519 import (
+        X25519PrivateKey,
+        X25519PublicKey,
+    )
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+    magic = len(SUBMISSION_BLOB_MAGIC)
+    if not is_submission_blob(blob):
+        raise ValueError("Not a submission-format blob")
+    raw = bytes(blob)
+    eph_pub = raw[magic : magic + 32]
+    wrap_nonce = raw[magic + 32 : magic + 44]
+    wrapped_dek = raw[magic + 44 : magic + 92]
+    data_nonce = raw[magic + 92 : magic + 104]
+    ciphertext = raw[magic + 104 :]
+
+    recipient = X25519PrivateKey.from_private_bytes(bytes(private_key))
+    shared = recipient.exchange(X25519PublicKey.from_public_bytes(eph_pub))
+    wrap_key = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=_SUBMISSION_KDF_INFO,
+    ).derive(shared)
+    dek = AESGCM(wrap_key).decrypt(wrap_nonce, wrapped_dek, None)
+    try:
+        plaintext = AESGCM(dek).decrypt(data_nonce, ciphertext, None)
+    finally:
+        del dek
+    return json.loads(plaintext.decode("utf-8"))
+
+
 def make_key_hash(key: bytes) -> tuple[bytes, bytes]:
     salt = os.urandom(16)
     kdf = PBKDF2HMAC(

@@ -11,7 +11,14 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
-from .utils import decrypt_sensitive, encrypt_sensitive, make_key_hash
+from .utils import (
+    decrypt_sensitive,
+    decrypt_submission,
+    encrypt_for_submission,
+    encrypt_sensitive,
+    is_submission_blob,
+    make_key_hash,
+)
 
 User = get_user_model()
 
@@ -815,6 +822,19 @@ class Survey(models.Model):
         UNLISTED = "unlisted", "Unlisted (secret link)"
         TOKEN = "token", "By invite token"
 
+    class RespondentAudience(models.TextChoices):
+        """Who fills this survey in, as declared by the creator.
+
+        Drives the whole-response encryption decision (see
+        requires_whole_response_encryption): patient/public audience surveys
+        are always encrypted; staff-audience surveys owned by password users
+        may opt out via a logged declaration.
+        """
+
+        STAFF = "staff", "Staff / colleagues"
+        PATIENT = "patient", "Patients"
+        PUBLIC = "public", "Public / respondents"
+
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.DRAFT
     )
@@ -829,6 +849,42 @@ class Survey(models.Model):
         default=False,
         help_text="Publisher confirms no patient data is collected when using non-authenticated visibility",
     )
+    # Declared respondent audience (drives whole-response encryption).
+    # audience_confirmed is False until the creator explicitly picks an
+    # audience; the publish flow prompts when it is still unset so existing
+    # surveys are not silently defaulted to staff.
+    respondent_audience = models.CharField(
+        max_length=20,
+        choices=RespondentAudience.choices,
+        default=RespondentAudience.STAFF,
+        help_text="Declared audience for this survey (drives at-rest encryption of responses)",
+    )
+    audience_confirmed = models.BooleanField(
+        default=False,
+        help_text="True once the creator has explicitly confirmed the respondent audience",
+    )
+    # Creator opt-out declaration (§3.2 of the encryption planning doc):
+    # the only path to plaintext storage for published surveys. Password-user
+    # owners of staff-audience surveys without patient identifiers may opt out
+    # by making an explicit, audit-logged declaration.
+    encryption_opt_out_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the creator declared the encryption opt-out for this survey",
+    )
+    encryption_opt_out_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="encryption_opt_out_surveys",
+        help_text="User who made the encryption opt-out declaration",
+    )
+    encryption_opt_out_declaration_version = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Version of the opt-out declaration text acknowledged by the creator",
+    )
     allow_any_authenticated = models.BooleanField(
         default=False,
         help_text="Allow any authenticated user to access this survey (not just invited users)",
@@ -836,6 +892,31 @@ class Survey(models.Model):
     # One-time survey key: store only hash + salt for verification
     key_salt = models.BinaryField(blank=True, null=True, editable=False)
     key_hash = models.BinaryField(blank=True, null=True, editable=False)
+    # Submission keypair (public-key encryption at submission time).
+    # When set, responses are encrypted with this public key by the server;
+    # the matching private key is stored wrapped in the encrypted_kek_*
+    # fields (they hold the wrapped private key instead of a symmetric KEK
+    # for surveys with a keypair). The server can encrypt but never decrypt
+    # without the owner's unlock.
+    submission_public_key = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=False,
+        help_text="Raw X25519 public key used to encrypt responses at submission time",
+    )
+    # For surveys MIGRATED from the legacy symmetric-KEK scheme: the X25519
+    # private key encrypted with the survey's KEK (encrypt_sensitive format).
+    # The encrypted_kek_* fields still hold the wrapped KEK, so every
+    # existing unlock path (password / recovery / OIDC / org) keeps working:
+    # unlock unwraps the KEK, then the private key. New (non-migrated)
+    # surveys leave this null and hold the wrapped private key directly in
+    # encrypted_kek_*.
+    enc_submission_private_key = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=False,
+        help_text="Submission private key encrypted with the survey KEK (migrated surveys only)",
+    )
     # Option 2: Dual-path encryption for individual users
     encrypted_kek_password = models.BinaryField(
         blank=True,
@@ -1218,6 +1299,79 @@ class Survey(models.Model):
             or self.encrypted_kek_org
         )
 
+    def setup_submission_keypair(self) -> bytes:
+        """Generate and attach a submission keypair for this survey.
+
+        Returns:
+            The raw 32-byte X25519 private key. The caller must wrap it with
+            the owner's credentials (password / recovery phrase / OIDC / org
+            key) via the existing encrypted_kek_* setters — those helpers
+            wrap arbitrary 32-byte keys, so no other changes are needed.
+
+        The public key is stored on the survey and used to encrypt responses
+        at submission time; the server never needs the private key to
+        encrypt.
+        """
+        from .utils import generate_submission_keypair
+
+        private_key, public_key = generate_submission_keypair()
+        self.submission_public_key = public_key
+        if self.pk:
+            # Persist immediately: the set_*_encryption helpers save with
+            # narrow update_fields lists that would drop this column.
+            Survey.objects.filter(pk=self.pk).update(submission_public_key=public_key)
+        return private_key
+
+    def has_submission_keypair(self) -> bool:
+        """Check if this survey encrypts submissions with its public key.
+
+        When True, decryption material is available after unlock:
+        - New (setup-flow) surveys: encrypted_kek_* hold the wrapped private
+          key, so unlock returns it directly.
+        - Migrated surveys: encrypted_kek_* still hold the wrapped KEK and
+          enc_submission_private_key holds the private key encrypted under
+          the KEK; unlock returns the KEK, then get_submission_private_key()
+          unwraps the private key.
+        """
+        return bool(self.submission_public_key)
+
+    def get_submission_private_key(self, kek: bytes) -> bytes | None:
+        """Unwrap the submission private key using the survey's KEK.
+
+        Only applies to migrated surveys (enc_submission_private_key set).
+        Returns None when this survey stores the private key directly in
+        encrypted_kek_* (setup-flow surveys) or when decryption fails.
+        """
+        from .utils import decrypt_sensitive
+
+        if not self.enc_submission_private_key:
+            return None
+        try:
+            payload = decrypt_sensitive(kek, bytes(self.enc_submission_private_key))
+            return bytes.fromhex(payload["private_key"])
+        except Exception:
+            return None
+
+    def needs_encryption_migration(self) -> bool:
+        """Check if this survey still needs the interactive security upgrade.
+
+        True for surveys that require whole-response encryption (Option C
+        predicate), predate the submission-keypair scheme, and still hold
+        response data in the legacy format (plaintext answers and/or legacy
+        KEK-encrypted blobs).
+        """
+        if self.has_submission_keypair():
+            return False
+        if not self.requires_whole_response_encryption():
+            return False
+        return (
+            self.responses.filter(enc_answers__isnull=True, answers__isnull=False)
+            .exclude(answers={})
+            .exists()
+            or self.responses.filter(enc_answers__isnull=False).exists()
+            or self.responses.filter(enc_demographics__isnull=False).exists()
+        )
+
     def collects_patient_data(self) -> bool:
         """
         Check if this survey collects patient data.
@@ -1233,17 +1387,59 @@ class Survey(models.Model):
             schema__template="patient_details_encrypted"
         ).exists()
 
+    def owner_is_sso(self) -> bool:
+        """Check if the survey owner authenticates via SSO / OIDC."""
+        from checktick_app.core.models import UserOIDC
+
+        return UserOIDC.objects.filter(user_id=self.owner_id).exists()
+
+    def has_encryption_opt_out(self) -> bool:
+        """Check if a valid creator opt-out declaration has been recorded."""
+        return bool(
+            self.encryption_opt_out_at
+            and self.encryption_opt_out_declaration_version
+            and self.respondent_audience == self.RespondentAudience.STAFF
+        )
+
     def requires_whole_response_encryption(self) -> bool:
         """
-        Check if responses to this survey should be fully encrypted.
+        Check if responses to this survey should be fully encrypted (Option C).
 
         Returns:
-            True if all response data (not just demographics) should be encrypted
+            True if all response data (not just demographics) should be
+            encrypted with store_complete_response()
 
-        Surveys collecting patient data require the entire response to be
-        encrypted with store_complete_response(), not just demographics.
+        The predicate returns True if ANY of:
+        1. The survey collects patient data (schema check), OR
+        2. The declared respondent audience is patient or public, OR
+        3. The survey owner authenticates via SSO / OIDC (default-on).
+
+        It returns False only when ALL of:
+        - the owner is a password (non-SSO) user, AND
+        - the declared audience is staff, AND
+        - the survey collects no patient identifiers, AND
+        - the creator has recorded an explicit, audit-logged opt-out
+          declaration.
+
+        Draft surveys may still store plaintext answers regardless of this
+        predicate (enforced at the submission layer, not here).
         """
-        return self.collects_patient_data()
+        if self.collects_patient_data():
+            return True
+        if self.has_submission_keypair():
+            # A submission keypair means encryption is set up; a declaration
+            # cannot disable it.
+            return True
+        if self.respondent_audience in (
+            self.RespondentAudience.PATIENT,
+            self.RespondentAudience.PUBLIC,
+        ):
+            return True
+        if self.owner_is_sso():
+            return True
+        # Only remaining path to plaintext: password user, staff audience,
+        # no patient identifiers, with a recorded opt-out declaration.
+        return not self.has_encryption_opt_out()
 
     def sso_user_needs_passphrase(self) -> bool:
         """
@@ -2104,6 +2300,12 @@ Return the translation as JSON following the exact structure specified in the sy
         if self.encrypted_kek_org:
             self.encrypted_kek_org = secrets.token_bytes(64)
             keys_overwritten.append("org")
+        if self.enc_submission_private_key:
+            self.enc_submission_private_key = secrets.token_bytes(64)
+            keys_overwritten.append("submission_private_key")
+        if self.submission_public_key:
+            self.submission_public_key = secrets.token_bytes(64)
+            keys_overwritten.append("submission_public_key")
 
         if keys_overwritten:
             self.save(
@@ -2112,6 +2314,8 @@ Return the translation as JSON following the exact structure specified in the sy
                     "encrypted_kek_recovery",
                     "encrypted_kek_oidc",
                     "encrypted_kek_org",
+                    "enc_submission_private_key",
+                    "submission_public_key",
                 ]
             )
             logger.info(
@@ -2705,7 +2909,7 @@ class SurveyResponse(models.Model):
 
     def store_answers(self, survey_key: bytes, answers: dict):
         """
-        Encrypt and store survey answers (for patient data surveys).
+        Encrypt and store survey answers with a symmetric key (legacy path).
 
         Args:
             survey_key: Survey's KEK (32-byte key)
@@ -2713,17 +2917,48 @@ class SurveyResponse(models.Model):
 
         This encrypts the entire answers dictionary, providing complete
         protection for surveys collecting patient data.
+
+        Prefer store_submission() for surveys with a submission keypair:
+        that path encrypts with the survey's public key and requires no
+        secret key material on the server.
         """
         self.enc_answers = encrypt_sensitive(survey_key, answers)
         # Clear plaintext answers when encrypting
         self.answers = {}
+
+    def store_submission(
+        self, public_key: bytes, answers: dict, demographics: dict | None = None
+    ):
+        """
+        Encrypt and store a response using the survey's public key.
+
+        Args:
+            public_key: Survey's raw X25519 public key
+                (Survey.submission_public_key)
+            answers: Dictionary of question_id -> answer
+            demographics: Optional patient demographics
+
+        Uses hybrid encryption (random per-response DEK wrapped to the
+        survey's public key), so the server can encrypt without any secret
+        key material. Decryption requires the survey's private key, which is
+        only available after the owner unlocks the survey.
+        """
+        payload = {"answers": answers}
+        if demographics:
+            payload["demographics"] = demographics
+        self.enc_answers = encrypt_for_submission(public_key, payload)
+        # Clear plaintext fields
+        self.answers = {}
+        self.enc_demographics = None
 
     def load_answers(self, survey_key: bytes) -> dict:
         """
         Decrypt and return survey answers.
 
         Args:
-            survey_key: Survey's KEK (32-byte key)
+            survey_key: Survey's KEK (legacy symmetric surveys) or the
+                survey's private key (submission-keypair surveys), depending
+                on the blob format.
 
         Returns:
             Dictionary of question_id -> answer
@@ -2731,6 +2966,11 @@ class SurveyResponse(models.Model):
         If answers are not encrypted, returns the plaintext answers field.
         """
         if self.enc_answers:
+            if is_submission_blob(self.enc_answers):
+                payload = decrypt_submission(
+                    survey_key, self._to_bytes(self.enc_answers)
+                )
+                return payload.get("answers", payload)
             return decrypt_sensitive(survey_key, self._to_bytes(self.enc_answers))
         return self.answers
 
@@ -2763,7 +3003,9 @@ class SurveyResponse(models.Model):
         Load a complete decrypted response.
 
         Args:
-            survey_key: Survey's KEK (32-byte key)
+            survey_key: Survey's KEK (legacy symmetric surveys) or the
+                survey's private key (submission-keypair surveys), depending
+                on the blob format.
 
         Returns:
             Dictionary with 'answers' and optionally 'demographics' keys
@@ -2771,6 +3013,8 @@ class SurveyResponse(models.Model):
         Falls back to legacy format if enc_answers not present.
         """
         if self.enc_answers:
+            if is_submission_blob(self.enc_answers):
+                return decrypt_submission(survey_key, self._to_bytes(self.enc_answers))
             return decrypt_sensitive(survey_key, self._to_bytes(self.enc_answers))
 
         # Legacy format: separate fields
@@ -3474,6 +3718,19 @@ class AuditLog(models.Model):
         PROMOTION_ENDING_SOON = "promotion_ending_soon", "Promotion Ending Soon"
         PROMOTION_EXPIRED = "promotion_expired", "Promotion Expired"
         PROMOTION_RECONCILED = "promotion_reconciled", "Promotion Reconciled"
+        # Encryption posture actions
+        ENCRYPTION_OPT_OUT_DECLARED = (
+            "encryption_opt_out_declared",
+            "Encryption Opt-out Declared",
+        )
+        ENCRYPTION_OPT_OUT_REVOKED = (
+            "encryption_opt_out_revoked",
+            "Encryption Opt-out Revoked",
+        )
+        RESPONSES_ENCRYPTED_BACKFILL = (
+            "responses_encrypted_backfill",
+            "Responses Encrypted (Backfill Migration)",
+        )
 
     class Severity(models.TextChoices):
         INFO = "info", "Information"

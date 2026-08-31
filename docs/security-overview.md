@@ -87,9 +87,9 @@ Regression tests cover accepted and rejected destinations and the unconfirmed-em
 
 #### Data Encryption at Rest
 
-- **Survey data**: AES-256-GCM encryption for patient-identifiable fields
+- **Survey data**: responses on keypair surveys are encrypted at rest at submission time using public-key submission encryption (hybrid: random per-response 32-byte DEK, AES-256-GCM payload, DEK wrapped via ephemeral X25519 ECDH + HKDF-SHA256). This applies to all surveys covered by the encryption predicate (`Survey.requires_whole_response_encryption()`), including non-patient surveys; demographics collected from respondents are encrypted inside the same payload. The only exception is the narrow opt-out path: staff-audience, password-user surveys where the creator (Data Controller) has made an explicit, audit-logged opt-out declaration
 - **Key derivation**: Argon2id with memory-hard parameters
-- **Key hierarchy**: User KEK → Survey DEK → Field encryption
+- **Key hierarchy**: Per-survey X25519 keypair (public key encrypts at submission; private key wrapped under the owner's key material) → per-response DEK → payload encryption
 
 #### Encryption in Transit
 
@@ -188,7 +188,7 @@ Survey `icon_url` and platform `SiteBranding.icon_url` / `icon_url_dark` fields 
 
 ##### Survey Answer Storage
 
-Respondent answers are stored in a `JSONField` on `SurveyResponse`. They are rendered back to owners only via:
+Respondent answers are stored in a `JSONField` on `SurveyResponse`. On surveys covered by the encryption predicate, the payload (including respondent-submitted demographics) is encrypted at submission time with the survey's public key before storage — see [Data Encryption at Rest](#data-encryption-at-rest). They are rendered back to owners only via:
 
 - **CSV export** (`Content-Disposition: attachment`) — not an HTML surface.
 - **Response insights chart** — option labels are Django-auto-escaped in the template (`{{ option.label }}`); no `|safe` filter is applied.

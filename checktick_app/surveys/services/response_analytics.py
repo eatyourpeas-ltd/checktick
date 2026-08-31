@@ -2,7 +2,9 @@
 Response analytics service for survey dashboards.
 
 Computes aggregate statistics and answer distributions for visualization.
-All data returned is non-encrypted (question answers only).
+Answer content is read via load_answers(): encrypted responses require the
+survey key (unlocked session) and are excluded when it is unavailable, so
+dashboards for locked encrypted surveys show no distribution data.
 Demographics/IMD require separate unlock and are handled elsewhere.
 """
 
@@ -44,7 +46,10 @@ CHARTABLE_TYPES = {"mc_single", "mc_multi", "yesno", "likert", "dropdown"}
 
 
 def compute_response_analytics(
-    survey, responses: QuerySet | None = None, limit_questions: int = 10
+    survey,
+    responses: QuerySet | None = None,
+    limit_questions: int = 10,
+    survey_key: bytes | None = None,
 ) -> ResponseAnalytics:
     """
     Compute analytics for a survey's responses.
@@ -53,6 +58,10 @@ def compute_response_analytics(
         survey: Survey model instance
         responses: Optional queryset of responses (defaults to all)
         limit_questions: Max number of questions to analyze (for performance)
+        survey_key: Survey decryption key (private key for submission-keypair
+            surveys, KEK for legacy encrypted surveys). Required to read
+            encrypted responses; responses stored encrypted are skipped when
+            this is None or decryption fails.
 
     Returns:
         ResponseAnalytics with distributions for chartable questions
@@ -85,7 +94,10 @@ def compute_response_analytics(
 
     for question in questions:
         dist = _compute_question_distribution(
-            question, responses, is_repeatable=question.id in repeatable_qids
+            question,
+            responses,
+            is_repeatable=question.id in repeatable_qids,
+            survey_key=survey_key,
         )
         if dist:
             distributions.append(dist)
@@ -93,8 +105,28 @@ def compute_response_analytics(
     return ResponseAnalytics(total_responses=total, distributions=distributions)
 
 
+def _resolve_response_answers(response, survey_key: bytes | None) -> dict | None:
+    """Return a response's answers, decrypting when necessary.
+
+    Returns None when the response is encrypted but no key is available or
+    decryption fails — the response is then excluded from distributions
+    rather than silently counted as empty.
+    """
+    if response.enc_answers:
+        if not survey_key:
+            return None
+        try:
+            return response.load_answers(survey_key)
+        except Exception:
+            return None
+    return response.answers or {}
+
+
 def _compute_question_distribution(
-    question, responses: QuerySet, is_repeatable: bool = False
+    question,
+    responses: QuerySet,
+    is_repeatable: bool = False,
+    survey_key: bytes | None = None,
 ) -> AnswerDistribution | None:
     """Compute answer distribution for a single question.
 
@@ -107,7 +139,9 @@ def _compute_question_distribution(
     answered_count = 0
 
     for response in responses.iterator():
-        answers = response.answers or {}
+        answers = _resolve_response_answers(response, survey_key)
+        if answers is None:
+            continue
         answer = answers.get(q_id)
 
         if answer is None or answer == "":

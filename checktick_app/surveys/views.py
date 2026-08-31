@@ -997,9 +997,10 @@ def survey_create(request: HttpRequest) -> HttpResponse:
 
                 if password and recovery_phrase:
                     try:
-                        import os
-
-                        survey_kek = os.urandom(32)
+                        # Generate a submission keypair: responses are
+                        # encrypted with the public key; the private key is
+                        # wrapped with the owner's credentials below.
+                        survey_kek = survey.setup_submission_keypair()
 
                         # Store hash for legacy API compatibility
                         from .utils import make_key_hash
@@ -1254,8 +1255,17 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
                 demo[field] = val
         # Enrich with IMD data if enabled and postcode is present
         demo = _enrich_demographics_with_imd(demo, patient_group)
-        # Option 4: Re-derive KEK from stored credentials
-        if demo:
+        if survey.has_submission_keypair() and survey.status != Survey.Status.DRAFT:
+            # Public-key submission encryption: no key material needed from
+            # the participant; decryption requires the owner's unlock.
+            resp.store_submission(
+                bytes(survey.submission_public_key),
+                resp.answers,
+                demo or None,
+            )
+        elif demo:
+            # Legacy path: demographics-only encryption when the owner has
+            # unlocked this survey in the current session.
             survey_key = get_survey_key_from_session(request, slug)
             if survey_key:
                 resp.store_demographics(survey_key, demo)
@@ -2685,10 +2695,22 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         }
     )
 
-    # Compute response analytics for insights charts
+    # Compute response analytics for insights charts.
+    # Answer content is unlock-gated (planning doc §5.4): when the survey has
+    # encrypted responses and no key is available in this session, the charts
+    # render a placeholder instead. Counts/sparklines above use metadata only.
     from .services.response_analytics import compute_response_analytics
 
-    analytics = compute_response_analytics(survey)
+    survey_key = get_survey_key_from_session(request, slug)
+    has_encrypted_responses = survey.responses.filter(
+        enc_answers__isnull=False
+    ).exists()
+    insights_locked = has_encrypted_responses and not survey_key
+    analytics = (
+        None
+        if insights_locked
+        else compute_response_analytics(survey, survey_key=survey_key)
+    )
 
     ctx = {
         "survey": survey,
@@ -2735,6 +2757,12 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         "supported_languages": SUPPORTED_SURVEY_LANGUAGES,
         # Response insights
         "analytics": analytics,
+        "insights_locked": insights_locked,
+        # Security upgrade banner (planning doc §4.3 phase 3)
+        "needs_encryption_migration": (
+            survey.requires_whole_response_encryption()
+            and survey.needs_encryption_migration()
+        ),
     }
 
     # Import language constants for flags
@@ -3005,6 +3033,82 @@ def _parse_email_addresses(text: str) -> list[str]:
     return email_list
 
 
+DECLARATION_VERSION = "1.0"
+
+
+def _parse_audience_and_declaration(
+    survey: Survey, request: HttpRequest, collects_patient: bool
+) -> dict:
+    """Parse the respondent-audience selection and opt-out declaration from
+    a publish POST, applying the audience to the survey.
+
+    Returns a dict with:
+        audience: the effective audience (POST value or the survey's current)
+        audience_provided: whether the POST explicitly chose an audience
+        opt_out_eligible: True when this survey may store plaintext (password
+            user, staff audience, no patient identifiers, no keypair)
+        declared: True when a valid opt-out declaration was submitted
+    """
+    audience = request.POST.get("respondent_audience")
+    audience_provided = bool(audience)
+    if audience_provided and audience in Survey.RespondentAudience.values:
+        if audience != survey.respondent_audience or not survey.audience_confirmed:
+            survey.respondent_audience = audience
+            survey.audience_confirmed = True
+            # Persist immediately: the caller may return early (e.g. redirect
+            # to encryption setup) before its own survey.save()
+            survey.save(update_fields=["respondent_audience", "audience_confirmed"])
+    is_sso = hasattr(request.user, "oidc")
+    opt_out_eligible = (
+        not is_sso
+        and survey.respondent_audience == Survey.RespondentAudience.STAFF
+        and not collects_patient
+        and not survey.has_submission_keypair()
+    )
+    declared = opt_out_eligible and bool(request.POST.get("encryption_opt_out"))
+    return {
+        "audience": survey.respondent_audience,
+        "audience_provided": audience_provided,
+        "opt_out_eligible": opt_out_eligible,
+        "declared": declared,
+    }
+
+
+def _record_opt_out_declaration(survey: Survey, user) -> None:
+    """Record the creator's encryption opt-out declaration, audit-logged.
+
+    Idempotent: an existing unrevoked declaration is left untouched.
+    """
+    if survey.encryption_opt_out_at and not survey.has_encryption_opt_out():
+        pass  # stale/invalid declaration (e.g. audience changed) — overwrite
+    survey.encryption_opt_out_at = timezone.now()
+    survey.encryption_opt_out_by = user
+    survey.encryption_opt_out_declaration_version = DECLARATION_VERSION
+    survey.save(
+        update_fields=[
+            "encryption_opt_out_at",
+            "encryption_opt_out_by",
+            "encryption_opt_out_declaration_version",
+        ]
+    )
+    AuditLog.objects.create(
+        actor=user,
+        scope=AuditLog.Scope.SURVEY,
+        survey=survey,
+        action=AuditLog.Action.ENCRYPTION_OPT_OUT_DECLARED,
+        severity=AuditLog.Severity.INFO,
+        message=(
+            "Creator declared this survey is not patient-facing and does not "
+            "gather data that could identify respondents; response encryption "
+            "opted out."
+        ),
+        metadata={
+            "declaration_version": DECLARATION_VERSION,
+            "survey_id": survey.pk,
+        },
+    )
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
@@ -3091,6 +3195,27 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             # Publishing for the first time
             prev_status = survey.status
 
+            # Respondent audience + opt-out declaration (encryption planning
+            # doc §5.2): the creator must confirm who fills the survey in;
+            # the declaration is the only path to plaintext storage for
+            # eligible (password-user, staff-audience) surveys.
+            audience_info = _parse_audience_and_declaration(
+                survey, request, collects_patient
+            )
+            if prev_status != Survey.Status.PUBLISHED and not (
+                survey.audience_confirmed and audience_info["audience_provided"]
+            ):
+                messages.error(
+                    request,
+                    "Please confirm who will fill in this survey before "
+                    "publishing (Respondents section).",
+                )
+                return render(
+                    request, "surveys/publish_settings.html", {"survey": survey}
+                )
+            if audience_info["declared"]:
+                _record_opt_out_declaration(survey, request.user)
+
             # Require at least one recipient email for token/authenticated (invite-only) surveys.
             allow_any_authenticated = (
                 request.POST.get("allow_any_authenticated") == "on"
@@ -3112,11 +3237,13 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
                 )
 
             # Check if encryption setup is needed
-            # ALL surveys require encryption (not just patient data surveys)
+            # Encryption is required unless the creator made a valid opt-out
+            # declaration (password-user, staff-audience, no patient data).
             # Note: Survey count limits are already enforced at survey creation time
             needs_encryption_setup = (
                 prev_status != Survey.Status.PUBLISHED
                 and not survey.has_any_encryption()
+                and not audience_info["declared"]
             )
 
             if needs_encryption_setup:
@@ -3391,6 +3518,14 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
         "available_translations": available_translations,
         "has_draft_translations": has_draft_translations,
         "supported_languages": supported_languages,
+        "is_sso_user": hasattr(request.user, "oidc"),
+        "collects_patient_data": _survey_collects_patient_data(survey),
+        "opt_out_eligible": (
+            not hasattr(request.user, "oidc")
+            and survey.respondent_audience == Survey.RespondentAudience.STAFF
+            and not _survey_collects_patient_data(survey)
+            and not survey.has_submission_keypair()
+        ),
     }
 
     return render(request, "surveys/publish_settings.html", context)
@@ -3968,8 +4103,25 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
     # Check if encryption setup is needed
     prev_status = survey.status
 
+    # Respondent audience + opt-out declaration (encryption planning doc §5.2)
+    audience_info = _parse_audience_and_declaration(survey, request, collects_patient)
+    if (
+        prev_status != Survey.Status.PUBLISHED
+        and status == Survey.Status.PUBLISHED
+        and not survey.audience_confirmed
+    ):
+        messages.error(
+            request,
+            "Please confirm who will fill in this survey before publishing "
+            "(Respondents section).",
+        )
+        return redirect("surveys:publish_settings", slug=slug)
+    if audience_info["declared"]:
+        _record_opt_out_declaration(survey, request.user)
+
     # Determine if we need to redirect to encryption setup
-    # ALL surveys require encryption (not just patient data surveys)
+    # Encryption is required unless the creator made a valid opt-out
+    # declaration (password-user, staff-audience, no patient data).
     # Organization + SSO users: auto-encrypt without setup page
     # Organization + Password users: need setup if no encryption yet
     # Individual + SSO users: need to choose SSO-only vs SSO+recovery
@@ -3985,10 +4137,9 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
     # Auto-encrypt for organization SSO users (no setup page needed)
     # Applies to ALL surveys (not just patient data surveys)
     if is_org_member and is_sso_user and is_first_publish and not has_encryption:
-        import os
-
-        # Generate survey encryption key
-        kek = os.urandom(32)
+        # Generate a submission keypair (public key encrypts responses;
+        # the private key is wrapped with the owner's OIDC identity below)
+        kek = survey.setup_submission_keypair()
 
         # Set up OIDC encryption for automatic unlock
         try:
@@ -4021,8 +4172,9 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
         )
 
     # All other cases: check if encryption setup is needed
-    # Redirect to setup if survey has no encryption on first publish
-    elif is_first_publish and not has_encryption:
+    # Redirect to setup if survey has no encryption on first publish,
+    # unless the creator made a valid opt-out declaration
+    elif is_first_publish and not has_encryption and not audience_info["declared"]:
         # Store pending publish settings in session
         request.session["pending_publish"] = {
             "slug": slug,
@@ -4097,11 +4249,12 @@ def survey_encryption_setup(request: HttpRequest, slug: str) -> HttpResponse:
     is_org_member = survey.organization is not None
 
     if request.method == "POST":
-        import os
-
         from .utils import generate_bip39_phrase
 
-        kek = os.urandom(32)  # 256-bit survey encryption key
+        # Generate a submission keypair: responses are encrypted with the
+        # public key; the private key (kek) is wrapped with the owner's
+        # chosen credentials in each branch below.
+        kek = survey.setup_submission_keypair()
 
         # Handle SSO user choice (individual users only)
         if is_sso_user and not is_org_member:
@@ -4700,7 +4853,7 @@ def _handle_participant_submission(
             submitted_by=request.user if request.user.is_authenticated else None,
             access_token=token_obj if token_obj else None,
         )
-        # Demographics: only store if authenticated and key in session
+        # Demographics: collect if authenticated and key in session
         patient_group, demographics_fields = _get_patient_group_and_fields(survey)
         demo = {}
         for field in demographics_fields:
@@ -4709,8 +4862,17 @@ def _handle_participant_submission(
                 demo[field] = val
         # Enrich with IMD data if enabled and postcode is present
         demo = _enrich_demographics_with_imd(demo, patient_group)
-        # Option 4: Re-derive KEK from stored credentials
-        if demo:
+        if survey.has_submission_keypair() and survey.status != Survey.Status.DRAFT:
+            # Public-key submission encryption: no key material needed from
+            # the participant; decryption requires the owner's unlock.
+            resp.store_submission(
+                bytes(survey.submission_public_key),
+                resp.answers,
+                demo or None,
+            )
+        elif demo:
+            # Legacy path: demographics-only encryption when the owner has
+            # unlocked this survey in the current session.
             survey_key = get_survey_key_from_session(request, survey.slug)
             if survey_key:
                 resp.store_demographics(survey_key, demo)
@@ -6350,6 +6512,21 @@ def survey_group_create_from_template(request: HttpRequest, slug: str) -> HttpRe
     return redirect("surveys:groups", slug=slug)
 
 
+def _submission_key_for_survey(survey: Survey, key: bytes | None) -> bytes | None:
+    """Resolve the decryption key for a survey after an unlock.
+
+    Setup-flow keypair surveys store the wrapped private key directly in
+    encrypted_kek_*, so the unlocked key IS the private key. Migrated
+    surveys keep the wrapped KEK there and hold the private key encrypted
+    under the KEK (enc_submission_private_key), so one more unwrap step is
+    needed. Legacy non-keypair surveys return the KEK unchanged.
+    """
+    if key is None or not survey.has_submission_keypair():
+        return key
+    private_key = survey.get_submission_private_key(key)
+    return private_key if private_key is not None else key
+
+
 def get_survey_key_from_session(request: HttpRequest, survey_slug: str) -> bytes | None:
     """
     Option 4: Re-derive KEK from stored credentials on each request.
@@ -6407,21 +6584,25 @@ def get_survey_key_from_session(request: HttpRequest, survey_slug: str) -> bytes
         if unlock_method == "password":
             password = creds.get("password")
             if password:
-                return survey.unlock_with_password(password)
+                key = survey.unlock_with_password(password)
+                return _submission_key_for_survey(survey, key)
         elif unlock_method == "recovery":
             recovery_phrase = creds.get("recovery_phrase")
             if recovery_phrase:
-                return survey.unlock_with_recovery(recovery_phrase)
+                key = survey.unlock_with_recovery(recovery_phrase)
+                return _submission_key_for_survey(survey, key)
         elif unlock_method == "oidc":
             oidc_provider = creds.get("oidc_provider")
             oidc_subject = creds.get("oidc_subject")
             if oidc_provider and oidc_subject:
-                return survey.unlock_with_oidc(request.user)
+                key = survey.unlock_with_oidc(request.user)
+                return _submission_key_for_survey(survey, key)
         elif unlock_method == "organization_recovery":
             organization_id = creds.get("organization_id")
             if organization_id:
                 org = Organization.objects.get(id=organization_id)
-                return survey.unlock_with_org_key(org)
+                key = survey.unlock_with_org_key(org)
+                return _submission_key_for_survey(survey, key)
         elif unlock_method == "legacy":
             legacy_key_b64 = creds.get("legacy_key")
             if legacy_key_b64:
@@ -7040,12 +7221,27 @@ def survey_export_csv(
                 except Exception:
                     pass  # Continue without demographics if decryption fails
 
+            # Whole-response encryption (submission keypair or legacy KEK):
+            # decrypt the payload for answers and demographics. Fail safe by
+            # continuing with whatever is readable rather than raising.
+            answers_dict = r.answers or {}
+            if r.enc_answers and survey_key:
+                try:
+                    full_response = r.load_complete_response(survey_key)
+                    answers_dict = full_response.get("answers", {})
+                    demographics = full_response.get("demographics") or demographics
+                except Exception:
+                    logger.warning(
+                        f"Failed to decrypt response {r.id} during CSV export "
+                        f"of survey {survey.slug}; exporting without it"
+                    )
+                    answers_dict = {}
+
             # Add demographics fields
             for field in demo_fields_for_export:
                 row.append(demographics.get(field, ""))
 
             # Get professional details from answers
-            answers_dict = r.answers or {}
             professional_data = answers_dict.get("professional", {})
 
             # Add professional fields

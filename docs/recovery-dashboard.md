@@ -20,6 +20,8 @@ The Recovery Dashboard is an administrative interface for managing encryption ke
 - Recovery rate monitoring and alerting
 - SIEM integration status
 
+Recovery flows recover the survey's **private key** (the per-survey X25519 keypair whose public key encrypts every response at submission time). The private key is escrowed using the same Vault mechanisms and audit trails as before; recovering it grants the ability to decrypt all responses encrypted with the survey's public key. Participants never provide any key material, and the server itself cannot decrypt responses without a recovered private key.
+
 ## User Roles and Access
 
 | Role | Dashboard Access | Capabilities |
@@ -137,7 +139,7 @@ The Recovery Dashboard is an administrative interface for managing encryption ke
 │ │ Created:     10 Oct 2025                                            ││
 │ │ Last Access: 25 Nov 2025, 14:00                                     ││
 │ │ Records:     156 patient records                                    ││
-│ │ Encryption:  AES-256-GCM (v2)                                       ││
+│ │ Encryption:  Hybrid X25519 + AES-256-GCM (per-survey keypair)       ││
 │ └─────────────────────────────────────────────────────────────────────┘│
 │                                                                         │
 │ IDENTITY VERIFICATION                                                   │
@@ -652,6 +654,10 @@ class RecoveryAuditEntry(models.Model):
 ```
 
 ## Security Considerations
+
+### Recovered Key Scope
+
+A completed recovery grants the survey **private key**, which allows decryption of all responses encrypted with the survey's public key (including demographics, which are encrypted inside the same response payload). Legacy symmetric-KEK-encrypted responses remain readable via the same recovery flows. All recovery actions are recorded in the immutable audit trail.
 
 ### Document Storage
 

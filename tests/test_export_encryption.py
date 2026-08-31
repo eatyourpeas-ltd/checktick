@@ -120,6 +120,13 @@ def plain_survey_with_responses(db, user):
         owner=user,
         status=Survey.Status.PUBLISHED,
     )
+    # Staff-audience opt-out declaration so this survey legitimately stores
+    # plaintext answers under the Option C predicate.
+    survey.respondent_audience = Survey.RespondentAudience.STAFF
+    survey.encryption_opt_out_at = timezone.now()
+    survey.encryption_opt_out_by = user
+    survey.encryption_opt_out_declaration_version = "1.0"
+    survey.save()
 
     # Create plain responses (anonymous to avoid duplicate constraint)
     SurveyResponse.objects.create(

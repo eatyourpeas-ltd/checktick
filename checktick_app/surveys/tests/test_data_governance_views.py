@@ -20,6 +20,21 @@ User = get_user_model()
 TEST_PASSWORD = "x"
 
 
+def _declare_encryption_opt_out(survey, user):
+    """Record a staff-audience opt-out so the survey stores plaintext answers.
+
+    These tests exercise export/download machinery, not encryption; under the
+    Option C predicate a password-user staff survey needs a declared opt-out
+    to keep plaintext storage.
+    """
+    survey.respondent_audience = Survey.RespondentAudience.STAFF
+    survey.encryption_opt_out_at = timezone.now()
+    survey.encryption_opt_out_by = user
+    survey.encryption_opt_out_declaration_version = "1.0"
+    survey.save()
+    return survey
+
+
 @pytest.fixture
 def user(db):
     """Create a test user."""
@@ -39,6 +54,7 @@ def closed_survey(db, user):
         owner=user,
         status=Survey.Status.PUBLISHED,
     )
+    _declare_encryption_opt_out(survey, user)
     # Close the survey to enable data export
     survey.close_survey(user)
     return survey
@@ -47,11 +63,14 @@ def closed_survey(db, user):
 @pytest.fixture
 def open_survey(db, user):
     """Create an open (published) survey."""
-    return Survey.objects.create(
-        name="Open Survey",
-        slug="open-survey",
-        owner=user,
-        status=Survey.Status.PUBLISHED,
+    return _declare_encryption_opt_out(
+        Survey.objects.create(
+            name="Open Survey",
+            slug="open-survey",
+            owner=user,
+            status=Survey.Status.PUBLISHED,
+        ),
+        user,
     )
 
 
@@ -475,6 +494,7 @@ class TestSurveyExportFileSecurity:
             owner=user,
             status=Survey.Status.PUBLISHED,
         )
+        _declare_encryption_opt_out(survey, user)
         survey.close_survey(user)
 
         from checktick_app.surveys.models import SurveyResponse

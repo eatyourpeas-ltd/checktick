@@ -355,6 +355,7 @@ class TestUnlistedPublication:
             url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "unlisted",
             },
         )
@@ -531,6 +532,7 @@ class TestPublishUpdate:
             url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "public",
             },
         )
@@ -555,6 +557,7 @@ class TestPublishUpdate:
             url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
             },
         )
@@ -602,6 +605,7 @@ class TestPublishUpdate:
             url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
             },
         )
@@ -633,6 +637,7 @@ class TestPublishUpdate:
             url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 "start_at": tomorrow.isoformat(),
             },
@@ -770,6 +775,7 @@ class TestPublishPathway:
             reverse("surveys:publish_settings", kwargs={"slug": basic_survey.slug}),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 "allow_any_authenticated": "on",
                 "no_patient_data_ack": "on",
@@ -795,6 +801,7 @@ class TestPublishPathway:
             reverse("surveys:publish_settings", kwargs={"slug": basic_survey.slug}),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "public",
                 "no_patient_data_ack": "on",
             },
@@ -826,6 +833,7 @@ class TestPublishPathway:
             reverse("surveys:publish_settings", kwargs={"slug": survey.slug}),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 "allow_any_authenticated": "on",
                 "no_patient_data_ack": "on",
@@ -868,6 +876,7 @@ class TestPublishPathway:
             reverse("surveys:publish_settings", kwargs={"slug": survey.slug}),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 "invite_emails": "invited@example.com",
                 "no_patient_data_ack": "on",
@@ -901,6 +910,7 @@ class TestPublishPathway:
             reverse("surveys:publish_settings", kwargs={"slug": survey.slug}),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 "invite_emails": "someone@example.com\nanother@example.com",
                 "no_patient_data_ack": "on",
@@ -935,6 +945,7 @@ class TestPublishPathway:
             reverse("surveys:publish_settings", kwargs={"slug": basic_survey.slug}),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "token",
                 "invite_emails": "",  # No emails
                 "no_patient_data_ack": "on",
@@ -957,6 +968,7 @@ class TestPublishPathway:
             reverse("surveys:publish_settings", kwargs={"slug": basic_survey.slug}),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 "invite_emails": "",  # No emails
                 # allow_any_authenticated NOT checked → invite-only mode
@@ -979,6 +991,7 @@ class TestPublishPathway:
             reverse("surveys:publish_settings", kwargs={"slug": basic_survey.slug}),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 "allow_any_authenticated": "on",
                 "invite_emails": "",  # No emails required when allow_any is on
@@ -1116,6 +1129,7 @@ class TestPublishViaEncryptionSetup:
             ),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 "allow_any_authenticated": "on",
                 "no_patient_data_ack": "on",
@@ -1168,6 +1182,7 @@ class TestPublishViaEncryptionSetup:
             ),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "public",
                 "no_patient_data_ack": "on",
             },
@@ -1199,6 +1214,7 @@ class TestPublishViaEncryptionSetup:
             ),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 # invite-only mode — emails required by server-side guard
                 "invite_emails": "invited@example.com",
