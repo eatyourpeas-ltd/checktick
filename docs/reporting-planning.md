@@ -2,7 +2,7 @@
 title: Reporting and Summary Feature Planning
 category: features
 priority: 8
-status: planning
+status: implemented
 ---
 
 # Reporting and Summary Feature Planning
