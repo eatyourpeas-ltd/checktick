@@ -1,7 +1,8 @@
 """
 Theme analysis service for free-text survey responses.
 
-Per ``docs/reporting-planning.md`` §3.3 and §4.2, the LLM theme feature is:
+Per ``docs/reporting-and-exports.md`` (Summary Report → LLM Theme Analysis),
+the LLM theme feature is:
 
 - **Opt-in**: a "Summarise themes" button per text question, never automatic.
 - **Unlock-gated**: only decrypted content is ever sent to the LLM.

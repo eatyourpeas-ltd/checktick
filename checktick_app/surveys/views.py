@@ -2793,7 +2793,7 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
 def survey_summary(request: HttpRequest, slug: str) -> HttpResponse:
     """Summary report view — ``GET /surveys/{slug}/summary/``.
 
-    Per ``docs/reporting-planning.md`` §4.2:
+    Per ``docs/reporting-and-exports.md`` (Summary Report → Access Control):
       - Access: owner / organisation admin / view-permission members
         (same as dashboard).
       - Unlock-gated when any response has ``enc_answers`` set; available
@@ -2874,7 +2874,7 @@ def survey_summary(request: HttpRequest, slug: str) -> HttpResponse:
 def survey_summary_themes(request: HttpRequest, slug: str) -> JsonResponse:
     """LLM theme summarisation endpoint — ``POST /surveys/{slug}/summary/themes/``.
 
-    Per ``docs/reporting-planning.md`` §3.3 and §4.2:
+    Per ``docs/reporting-and-exports.md`` (Summary Report → LLM Theme Analysis):
       - Per-question LLM theme summarisation (one question at a time).
       - Same access + unlock gate as the summary view.
       - Separate rate limit (20 requests per hour per user) — LLM calls are

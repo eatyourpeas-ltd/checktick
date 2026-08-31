@@ -2,7 +2,8 @@
 View-layer tests for the survey summary report and LLM theme endpoint.
 
 Covers the access control matrix, unlock gate, date-range filter, and the
-LLM theme endpoint behaviour described in ``docs/reporting-planning.md`` §7:
+LLM theme endpoint behaviour described in ``docs/reporting-and-exports.md``
+(Summary Report):
 
 - Unlock gate: summary view requires unlock when any response has enc_answers;
   accessible without unlock for plaintext-only surveys.

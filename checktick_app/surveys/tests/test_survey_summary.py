@@ -3,7 +3,7 @@ Tests for the summary service layer — text collation, numeric summary,
 date-range filtering, and the LLM theme analyser.
 
 These tests cover the service-layer behaviour described in
-``docs/reporting-planning.md`` §4.1 and §7:
+``docs/reporting-and-exports.md`` (Summary Report):
 
 - Text collation: truncation at 500 chars; skipped count; word-frequency
   correctness (case-fold, stop words, min length).

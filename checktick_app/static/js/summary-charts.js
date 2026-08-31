@@ -1,7 +1,7 @@
 /**
  * Summary report client-side behaviour.
  *
- * Per docs/reporting-planning.md §4.3 and §4.4:
+ * Per docs/reporting-and-exports.md (Summary Report):
  *   - Copy-data buttons serialise a chart's underlying data to CSV/TSV (or
  *     JSON for the numeric card) via navigator.clipboard.writeText. No library.
  *   - Word cloud is rendered client-side from a JSON payload shipped in a
