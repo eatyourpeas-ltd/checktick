@@ -120,8 +120,7 @@ class TestSurveyPatientDataDetection:
 class TestOptionCPredicate:
     """Tests for the Option C whole-response encryption predicate.
 
-    See docs/security-upgrade-encrypt-all-responses-planning.md §3.3:
-    encryption applies if the survey collects patient data, OR the declared
+    Encryption applies if the survey collects patient data, OR the declared
     audience is patient/public, OR the owner authenticates via SSO. The only
     path to plaintext is a password-user, staff-audience survey without
     patient identifiers plus a recorded opt-out declaration.

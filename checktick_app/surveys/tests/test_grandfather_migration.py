@@ -1,7 +1,6 @@
 """Tests for migration 0055: grandfather existing surveys as unencrypted.
 
-See docs/security-upgrade-encrypt-all-responses-planning.md §4.1/§4.3:
-existing password-user, staff-audience, non-patient surveys are recorded as
+Existing password-user, staff-audience, non-patient surveys are recorded as
 having opted out of encryption (legacy declaration) so their plaintext
 responses remain readable without the owner's KEK. Going forward, new surveys
 get no declaration and the creator's explicit declaration is the determinant.

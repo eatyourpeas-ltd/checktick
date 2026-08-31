@@ -4,7 +4,6 @@ Surveys with a submission keypair encrypt responses with the survey's PUBLIC
 key at submission time. The server can encrypt but never decrypt: the private
 key is wrapped with the owner's credentials (encrypted_kek_* fields) and only
 exists unwrapped in an unlocked owner session. See
-docs/security-upgrade-encrypt-all-responses-planning.md and
 docs/encryption-technical-reference.md.
 """
 

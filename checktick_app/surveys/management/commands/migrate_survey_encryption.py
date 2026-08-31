@@ -1,7 +1,8 @@
 """Interactive migration of legacy encrypted surveys to submission keypairs.
 
-Implements phase 3 of the migration strategy in
-docs/security-upgrade-encrypt-all-responses-planning.md (§4.1, §4.3, §4.4).
+Implements the migration strategy described in
+ docs/encryption-technical-reference.md (grandfathering, keypair migration,
+ unlock-path preservation).
 
 Surveys that require whole-response encryption (Option C predicate) but
 predate the submission-keypair scheme are migrated:

@@ -18,8 +18,8 @@ It is intended to be consumed alongside:
   (which will be rewritten as part of this work; see §8).
 - `docs/llm-security.md` — the LLM security posture that governs the theme
   analysis feature.
-- `docs/security-upgrade-encrypt-all-responses-planning.md` — the separate,
-  prerequisite PR that extends at-rest encryption to all survey responses.
+- the encrypt-all-responses security upgrade (now implemented — see
+  `docs/encryption-technical-reference.md`).
 
 ## 1. Current state
 
@@ -66,8 +66,8 @@ calling `SurveyResponse.load_answers(survey_key)`, which already falls back
 to the plaintext `answers` field when `enc_answers` is not set.
 
 The summary view is **unlock-gated whenever any response in the survey has
-`enc_answers` set**. Under the prerequisite security-upgrade PR
-(`docs/security-upgrade-encrypt-all-responses-planning.md`), this means
+`enc_answers` set**. With the encrypt-all-responses upgrade implemented
+(see `docs/encryption-technical-reference.md`), this means
 unlock-gated for:
 
 - all patient-data surveys (existing behaviour, unchanged);
@@ -285,8 +285,8 @@ As part of this work:
     self-hosted Ollama dependency, cross-linking `docs/llm-security.md`.
 - **Do not** change the encryption wording in `docs/security-overview.md`
   or `docs/reporting-and-exports.md` as part of this PR. The
-  encryption-all-responses change is the separate prerequisite PR
-  (`docs/security-upgrade-encrypt-all-responses-planning.md`); the
+  encrypt-all-responses change is already implemented (see
+  `docs/encryption-technical-reference.md`); the
   reporting docs assume whatever posture is current at merge time and
   describe the unlock gate in terms of "when any response is encrypted".
 

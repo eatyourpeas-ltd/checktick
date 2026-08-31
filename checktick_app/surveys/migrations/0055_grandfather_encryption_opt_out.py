@@ -1,7 +1,7 @@
 """Grandfather existing password-user surveys as unencrypted (legacy opt-out).
 
 One-time data migration for the encrypt-all-responses security upgrade
-(docs/security-upgrade-encrypt-all-responses-planning.md §4.1 step 5, §4.3):
+(see docs/encryption-technical-reference.md):
 
 Every survey that exists at deploy time, owned by a password (non-SSO) user,
 without a patient_details_encrypted question group, and without a recorded
