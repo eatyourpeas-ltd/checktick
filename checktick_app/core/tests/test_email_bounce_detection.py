@@ -19,11 +19,11 @@ class TestEmailBounceDetection(TestCase):
     def setUp(self):
         self.client = Client()
 
-    @patch("checktick_app.core.email_confirmation.send_mail")
-    def test_signup_with_smtp_recipients_refused_deletes_account(self, mock_send_mail):
+    @patch("checktick_app.core.email_confirmation.send_branded_email")
+    def test_signup_with_smtp_recipients_refused_deletes_account(self, mock_send_email):
         """Test that SMTPRecipientsRefused errors result in account deletion."""
         # Mock an SMTP recipient refused error
-        mock_send_mail.side_effect = SMTPRecipientsRefused(
+        mock_send_email.side_effect = SMTPRecipientsRefused(
             {"invalid@example.com": (550, "Recipient address rejected: User unknown")}
         )
 
@@ -53,11 +53,11 @@ class TestEmailBounceDetection(TestCase):
             messages[0].message,
         )
 
-    @patch("checktick_app.core.email_confirmation.send_mail")
-    def test_signup_with_dns_error_deletes_account(self, mock_send_mail):
+    @patch("checktick_app.core.email_confirmation.send_branded_email")
+    def test_signup_with_dns_error_deletes_account(self, mock_send_email):
         """Test that DNS resolution errors result in account deletion."""
         # Mock a DNS resolution error
-        mock_send_mail.side_effect = gaierror("Name or service not known")
+        mock_send_email.side_effect = gaierror("Name or service not known")
 
         # Attempt signup with domain that doesn't exist
         response = self.client.post(
@@ -87,11 +87,11 @@ class TestEmailBounceDetection(TestCase):
             messages[0].message,
         )
 
-    @patch("checktick_app.core.email_confirmation.send_mail")
-    def test_signup_with_temporary_smtp_error_shows_warning(self, mock_send_mail):
+    @patch("checktick_app.core.email_confirmation.send_branded_email")
+    def test_signup_with_temporary_smtp_error_shows_warning(self, mock_send_email):
         """Test that temporary SMTP errors show warning but don't delete account."""
         # Mock a temporary SMTP error (not recipient refused)
-        mock_send_mail.side_effect = Exception("Temporary SMTP server issue")
+        mock_send_email.side_effect = Exception("Temporary SMTP server issue")
 
         # Attempt signup
         response = self.client.post(
@@ -117,11 +117,11 @@ class TestEmailBounceDetection(TestCase):
             "We had trouble sending a confirmation email", warning_message.message
         )
 
-    @patch("checktick_app.core.email_confirmation.send_mail")
-    def test_signup_with_valid_email_works_normally(self, mock_send_mail):
+    @patch("checktick_app.core.email_confirmation.send_branded_email")
+    def test_signup_with_valid_email_works_normally(self, mock_send_email):
         """Test that signup with valid email works normally."""
         # Mock successful email sending (default behavior)
-        mock_send_mail.return_value = None  # Successful send
+        mock_send_email.return_value = True  # Successful send
 
         # Attempt signup with valid email
         response = self.client.post(
@@ -141,10 +141,10 @@ class TestEmailBounceDetection(TestCase):
         self.assertTrue(User.objects.filter(email="valid@example.com").exists())
 
         # Check that confirmation email was "sent"
-        self.assertEqual(mock_send_mail.call_count, 1)
+        self.assertEqual(mock_send_email.call_count, 1)
 
-    @patch("checktick_app.core.email_confirmation.send_mail")
-    def test_send_confirmation_email_returns_correct_tuple(self, mock_send_mail):
+    @patch("checktick_app.core.email_confirmation.send_branded_email")
+    def test_send_confirmation_email_returns_correct_tuple(self, mock_send_email):
         """Test that send_confirmation_email returns the correct tuple format."""
         from checktick_app.core.email_confirmation import (
             EmailConfirmationManager,
@@ -156,7 +156,7 @@ class TestEmailBounceDetection(TestCase):
         )
 
         # Mock successful email sending
-        mock_send_mail.return_value = None
+        mock_send_email.return_value = True
 
         # Call the method
         result = EmailConfirmationManager.send_confirmation_email(user)
@@ -170,9 +170,9 @@ class TestEmailBounceDetection(TestCase):
         # Check that a token was created
         self.assertIsNotNone(user.profile.email_confirmation_token)
 
-    @patch("checktick_app.core.email_confirmation.send_mail")
+    @patch("checktick_app.core.email_confirmation.send_branded_email")
     def test_send_confirmation_email_with_error_returns_correct_tuple(
-        self, mock_send_mail
+        self, mock_send_email
     ):
         """Test that send_confirmation_email returns the correct tuple format on error."""
         from checktick_app.core.email_confirmation import EmailConfirmationManager
@@ -183,7 +183,7 @@ class TestEmailBounceDetection(TestCase):
         )
 
         # Mock an email sending error
-        mock_send_mail.side_effect = Exception("Test error")
+        mock_send_email.side_effect = Exception("Test error")
 
         # Call the method
         result = EmailConfirmationManager.send_confirmation_email(user)

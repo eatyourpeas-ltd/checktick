@@ -8,9 +8,11 @@ import logging
 from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
 from django.http import HttpRequest
+from django.template.loader import render_to_string
 from django.urls import reverse
+
+from checktick_app.core.email_utils import get_platform_branding, send_branded_email
 
 if TYPE_CHECKING:
     from checktick_app.surveys.models import Organization
@@ -81,8 +83,7 @@ def send_organisation_checkout_email(
     # Email content
     subject = f"Complete your {organisation.name} subscription"
 
-    # Build email context
-    _ = {
+    context = {
         "organisation_name": organisation.name,
         "checkout_url": checkout_url,
         "pricing_description": pricing_description,
@@ -95,105 +96,17 @@ def send_organisation_checkout_email(
         "expires_days": 30,  # Token expiry
     }
 
-    # Plain text email body
-    plain_body = f"""Hi,
+    markdown_content = render_to_string("emails/organisation_checkout.md", context)
 
-You've been invited to complete the subscription setup for {organisation.name}.
-
-Subscription Details:
-- {pricing_description}
-- Subtotal: £{monthly_cost_ex_vat:.2f}/month
-- VAT ({vat_percent}%): £{vat_amount:.2f}
-- Total: £{monthly_cost_inc_vat:.2f}/month
-
-To complete your subscription, please click the link below to set up your Direct Debit:
-
-{checkout_url}
-
-This link will expire in 30 days.
-
-If you have any questions, please reply to this email.
-
-Best regards,
-The {brand_title} Team
-"""
-
-    # HTML email body
-    html_body = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 8px 8px 0 0; text-align: center;">
-        <h1 style="color: white; margin: 0; font-size: 24px;">Complete Your Subscription</h1>
-    </div>
-
-    <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none;">
-        <p style="margin-top: 0;">Hi,</p>
-
-        <p>You've been invited to complete the subscription setup for <strong>{organisation.name}</strong>.</p>
-
-        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #374151;">Subscription Details</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                    <td style="padding: 8px 0; color: #6b7280;">{pricing_description}</td>
-                    <td style="padding: 8px 0; text-align: right;"></td>
-                </tr>
-                <tr style="border-top: 1px solid #e5e7eb;">
-                    <td style="padding: 8px 0;">Subtotal</td>
-                    <td style="padding: 8px 0; text-align: right; font-family: monospace;">£{monthly_cost_ex_vat:.2f}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; color: #6b7280;">VAT ({vat_percent}%)</td>
-                    <td style="padding: 8px 0; text-align: right; font-family: monospace; color: #6b7280;">£{vat_amount:.2f}</td>
-                </tr>
-                <tr style="border-top: 2px solid #e5e7eb; font-weight: bold;">
-                    <td style="padding: 12px 0;">Total per month</td>
-                    <td style="padding: 12px 0; text-align: right; font-family: monospace; color: #667eea; font-size: 18px;">£{monthly_cost_inc_vat:.2f}</td>
-                </tr>
-            </table>
-        </div>
-
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="{checkout_url}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-                Set Up Direct Debit
-            </a>
-        </div>
-
-        <p style="color: #6b7280; font-size: 14px;">
-            This link will expire in 30 days. Payments are protected by the Direct Debit Guarantee.
-        </p>
-
-        <p style="color: #6b7280; font-size: 14px;">
-            If you have any questions, please reply to this email.
-        </p>
-
-        <p style="margin-bottom: 0;">
-            Best regards,<br>
-            The {brand_title} Team
-        </p>
-    </div>
-
-    <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
-        {company_name}
-    </div>
-</body>
-</html>
-"""
-
-    # Send the email using Django's EmailMultiAlternatives
-    email = EmailMultiAlternatives(
+    sent = send_branded_email(
+        to_email=organisation.billing_contact_email,
         subject=subject,
-        body=plain_body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[organisation.billing_contact_email],
+        markdown_content=markdown_content,
+        branding=get_platform_branding(),
+        context=context,
     )
-    email.attach_alternative(html_body, "text/html")
-    email.send()
+    if not sent:
+        raise RuntimeError("Failed to send organisation checkout email")
 
     logger.info(
         f"Sent organisation checkout email for organisation_id={organisation.id}"

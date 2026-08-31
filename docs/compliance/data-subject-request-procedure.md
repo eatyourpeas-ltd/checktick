@@ -208,7 +208,7 @@ This flow applies when the respondent contacts CheckTick directly because they c
    - Description of the request
    - 30-day deadline
    - Link to tools for handling the request
-5. DSR status set to `NOTIFIED`
+5. DSR status set to `REFERRED` (awaiting controller response)
 
 ### 6.2 Day 7: First Reminder
 

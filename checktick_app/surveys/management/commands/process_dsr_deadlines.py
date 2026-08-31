@@ -14,7 +14,6 @@ Usage:
 """
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -81,7 +80,7 @@ class Command(BaseCommand):
             window_end = target_date + timezone.timedelta(hours=12)
 
             dsrs = DataSubjectRequest.objects.filter(
-                status=DataSubjectRequest.Status.NOTIFIED,
+                status=DataSubjectRequest.Status.REFERRED,
                 controller_notified_at__gte=window_start,
                 controller_notified_at__lt=window_end,
             ).select_related("response__survey", "response__survey__owner")
@@ -90,6 +89,10 @@ class Command(BaseCommand):
                 self.stdout.write(f"\n{days}-day reminders: {dsrs.count()} DSRs")
 
             for dsr in dsrs:
+                # DSRs may not have an associated response (manual records);
+                # skip those as there is no survey/owner to notify this way.
+                if dsr.response is None or dsr.response.survey is None:
+                    continue
                 survey = dsr.response.survey
                 owner = survey.owner
 
@@ -114,20 +117,24 @@ class Command(BaseCommand):
 
         now = timezone.now()
 
-        # Find DSRs that are past 30 days and still in NOTIFIED status
+        # Find DSRs that are past 30 days and still awaiting controller response
         overdue_dsrs = DataSubjectRequest.objects.filter(
-            status=DataSubjectRequest.Status.NOTIFIED,
-            deadline__lt=now,
+            status=DataSubjectRequest.Status.REFERRED,
+            controller_deadline__lt=now,
         ).select_related("response__survey", "response__survey__owner")
 
         if verbose:
             self.stdout.write(f"\nOverdue DSRs to freeze: {overdue_dsrs.count()}")
 
         for dsr in overdue_dsrs:
+            # DSRs may not have an associated response (manual records);
+            # nothing to freeze, so skip escalation for those.
+            if dsr.response is None or dsr.response.survey is None:
+                continue
             if verbose:
                 self.stdout.write(
                     f"  - DSR {dsr.id}: Response {dsr.response.id} "
-                    f"(Deadline was: {dsr.deadline})"
+                    f"(Deadline was: {dsr.controller_deadline})"
                 )
 
             if not dry_run:
@@ -159,14 +166,16 @@ class Command(BaseCommand):
 
         from checktick_app.surveys.models import Survey
 
-        # Find surveys with pending (notified but not resolved) DSRs
+        # Find surveys with pending (notified but not resolved) DSRs.
+        # REFERRED = awaiting controller response; ESCALATED/FROZEN = platform
+        # intervened. All three mean the survey has an outstanding DSR.
+        pending_statuses = [
+            DataSubjectRequest.Status.REFERRED,
+            DataSubjectRequest.Status.ESCALATED,
+            DataSubjectRequest.Status.FROZEN,
+        ]
         surveys_with_pending = (
-            DataSubjectRequest.objects.filter(
-                status__in=[
-                    DataSubjectRequest.Status.NOTIFIED,
-                    DataSubjectRequest.Status.ESCALATED,
-                ]
-            )
+            DataSubjectRequest.objects.filter(status__in=pending_statuses)
             .values_list("response__survey_id", flat=True)
             .distinct()
         )
@@ -174,14 +183,13 @@ class Command(BaseCommand):
         # Set warning on surveys with pending DSRs
         pending_count = 0
         for survey_id in surveys_with_pending:
+            if survey_id is None:
+                continue
             try:
                 survey = Survey.objects.get(id=survey_id)
                 pending_dsrs = DataSubjectRequest.objects.filter(
                     response__survey=survey,
-                    status__in=[
-                        DataSubjectRequest.Status.NOTIFIED,
-                        DataSubjectRequest.Status.ESCALATED,
-                    ],
+                    status__in=pending_statuses,
                 )
 
                 if not survey.has_pending_dsr:
@@ -218,6 +226,11 @@ class Command(BaseCommand):
 
     def _send_reminder_email(self, dsr: DataSubjectRequest, days: int) -> None:
         """Send a reminder email to the survey owner."""
+        from checktick_app.core.email_utils import (
+            get_platform_branding,
+            send_branded_email,
+        )
+
         survey = dsr.response.survey
         owner = survey.owner
         days_remaining = 30 - days
@@ -229,44 +242,28 @@ class Command(BaseCommand):
             "days_elapsed": days,
             "days_remaining": days_remaining,
             "request_type": dsr.get_request_type_display(),
-            "deadline": dsr.deadline,
+            "deadline": dsr.controller_deadline,
             "dsr_id": dsr.id,
+            "site_url": getattr(settings, "SITE_URL", ""),
         }
 
-        # Try to use a template, fall back to plain text
-        try:
-            html_message = render_to_string("emails/dsr_reminder.html", context)
-        except Exception:
-            html_message = None
+        markdown_content = render_to_string("emails/dsr_reminder.md", context)
 
-        plain_message = f"""
-Data Subject Request Reminder
-
-Survey: {survey.name}
-Request Type: {dsr.get_request_type_display()}
-Days Since Notification: {days}
-Days Remaining: {days_remaining}
-Deadline: {dsr.deadline}
-
-A survey respondent has submitted a data subject request that requires your attention.
-You have {days_remaining} days remaining to respond before the platform may take action.
-
-Under GDPR/UK GDPR, you must respond to data subject requests within one calendar month.
-
-Please log in to CheckTick to review and resolve this request.
-"""
-
-        send_mail(
+        send_branded_email(
+            to_email=owner.email,
             subject=subject,
-            message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[owner.email],
-            html_message=html_message,
-            fail_silently=True,
+            markdown_content=markdown_content,
+            branding=get_platform_branding(),
+            context=context,
         )
 
     def _send_escalation_email(self, dsr: DataSubjectRequest) -> None:
         """Send an escalation notice when the platform freezes a response."""
+        from checktick_app.core.email_utils import (
+            get_platform_branding,
+            send_branded_email,
+        )
+
         survey = dsr.response.survey
         owner = survey.owner
 
@@ -275,43 +272,17 @@ Please log in to CheckTick to review and resolve this request.
         context = {
             "survey_name": survey.name,
             "request_type": dsr.get_request_type_display(),
-            "deadline": dsr.deadline,
+            "deadline": dsr.controller_deadline,
             "dsr_id": dsr.id,
+            "site_url": getattr(settings, "SITE_URL", ""),
         }
 
-        try:
-            html_message = render_to_string("emails/dsr_escalation.html", context)
-        except Exception:
-            html_message = None
+        markdown_content = render_to_string("emails/dsr_escalation.md", context)
 
-        plain_message = f"""
-Data Subject Request - Deadline Exceeded
-
-Survey: {survey.name}
-Request Type: {dsr.get_request_type_display()}
-Deadline: {dsr.deadline}
-
-The statutory deadline for responding to this data subject request has passed.
-
-As required by our Terms of Service, the affected survey response has been frozen
-to protect the data subject's rights. The frozen response will be excluded from
-all exports and analysis.
-
-To resolve this matter:
-1. Contact the data subject to fulfill their request
-2. Document your resolution
-3. Contact CheckTick support to unfreeze the response
-
-Continued failure to respond to data subject requests may result in survey suspension.
-
-Please contact support@checktick.com if you have questions.
-"""
-
-        send_mail(
+        send_branded_email(
+            to_email=owner.email,
             subject=subject,
-            message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[owner.email],
-            html_message=html_message,
-            fail_silently=True,
+            markdown_content=markdown_content,
+            branding=get_platform_branding(),
+            context=context,
         )

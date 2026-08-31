@@ -33,46 +33,11 @@ from django.template.loader import render_to_string
 from django.utils.html import escape, strip_tags
 import markdown
 
-
-def _to_css_color(val: str) -> str:
-    """Normalise a raw DaisyUI CSS variable value to a usable CSS colour string.
-
-    Handles:
-    - Already-complete values: hex, rgb(...), hsl(...), oklch(...)
-    - Raw oklch triplet:  "0.6471 0.2222 256.9"  → oklch(0.6471 0.2222 256.9)
-    - Raw HSL triplet:    "221 83% 53%"           → hsl(221, 83%, 53%)
-    """
-    val = val.strip()
-    if not val:
-        return ""
-    if re.match(r"^(#[0-9a-fA-F]{3,8}|rgb|hsl|oklch|oklab)", val):
-        return val
-    # Raw oklch: three numbers, no % signs
-    m = re.match(r"^(\d+\.?\d*)\s+(\d+\.?\d*)\s+(\d+\.?\d*)$", val)
-    if m:
-        return f"oklch({m.group(1)} {m.group(2)} {m.group(3)})"
-    # Raw HSL: "H S% L%"
-    m = re.match(r"^(\d+\.?\d*)\s+(\d+\.?\d*)%\s+(\d+\.?\d*)%$", val)
-    if m:
-        return f"hsl({m.group(1)}, {m.group(2)}%, {m.group(3)}%)"
-    return val
-
-
-def _extract_theme_colors(theme_css: str) -> Dict[str, str]:
-    """Extract DaisyUI colour variables from normalised theme CSS.
-
-    Returns a dict mapping DaisyUI variable names (without --) to CSS colour
-    strings ready to use as inline style values.
-    E.g. {"p": "oklch(0.65 0.22 256)", "a": "oklch(0.77 0.17 165)", ...}
-    """
-    if not theme_css:
-        return {}
-    colors: Dict[str, str] = {}
-    for m in re.finditer(r"--([a-z][a-z0-9]*)\s*:\s*([^;]+);", theme_css):
-        val = _to_css_color(m.group(2).strip())
-        if val:
-            colors[m.group(1)] = val
-    return colors
+from checktick_app.core.email_theme import (
+    resolve_cascade_colors,
+    resolve_email_colors,
+)
+from checktick_app.core.theme_utils import sanitize_font_family
 
 
 def _get_din_font_face_css(site_url: str, font_heading: str) -> str:
@@ -82,8 +47,16 @@ def _get_din_font_face_css(site_url: str, font_heading: str) -> str:
     builds the declarations using SITE_URL so they work in Apple Mail / iOS.
     Returns an empty string if the font stack does not reference DIN Round Pro
     or if site_url is not configured.
+
+    The returned CSS is rendered inside the email <style> block via
+    ``{{ brand.font_face_css }}``. It is built entirely from trusted static
+    file paths (no user input), and is marked safe so Django does not
+    HTML-escape the quotes — browsers do not decode entities inside
+    <style>, so escaped quotes would invalidate every @font-face rule.
     """
-    if not site_url or "DIN Round Pro" not in font_heading:
+    from django.utils.safestring import mark_safe
+
+    if not site_url or "DIN Round Pro" not in str(font_heading):
         return ""
     static_url = getattr(settings, "STATIC_URL", "/static/")
     if not static_url.startswith(("http://", "https://")):
@@ -108,7 +81,7 @@ def _get_din_font_face_css(site_url: str, font_heading: str) -> str:
             f"  font-display: swap;\n"
             f"}}"
         )
-    return "\n".join(lines)
+    return mark_safe("\n".join(lines))
 
 
 def _make_absolute(url: str, site_url: str) -> str:
@@ -139,8 +112,6 @@ def get_platform_branding() -> Dict[str, Any]:
     from checktick_app.core.models import SiteBranding
 
     site_url = getattr(settings, "SITE_URL", "")
-    default_primary = getattr(settings, "BRAND_PRIMARY_COLOR", "#3b82f6")
-    default_accent = getattr(settings, "BRAND_ACCENT_COLOR", "#f59e0b")
     default_secondary = getattr(settings, "BRAND_SECONDARY_COLOR", "#8b5cf6")
 
     try:
@@ -152,7 +123,9 @@ def get_platform_branding() -> Dict[str, Any]:
                 or getattr(settings, "BRAND_THEME_CSS_LIGHT", "")
                 or ""
             )
-            theme_colors = _extract_theme_colors(theme_css)
+            preset_light = branding.theme_preset_light or getattr(
+                settings, "BRAND_THEME_PRESET_LIGHT", ""
+            )
             raw_icon = (
                 branding.icon_url
                 or (branding.icon_file.url if branding.icon_file else "")
@@ -161,6 +134,16 @@ def get_platform_branding() -> Dict[str, Any]:
             font_heading = branding.font_heading or getattr(
                 settings, "BRAND_FONT_HEADING", "'IBM Plex Sans', sans-serif"
             )
+            # Sanitise font stacks for output inside the <style> block.
+            # Raw values would be autoescaped by Django, producing &#x27;
+            # entities that browsers do not decode inside <style>, breaking
+            # every font-family declaration (see sanitize_font_family docs).
+            font_heading = sanitize_font_family(font_heading)
+            font_body = sanitize_font_family(
+                branding.font_body
+                or getattr(settings, "BRAND_FONT_BODY", "'IBM Plex Sans', sans-serif")
+            )
+            colors = resolve_email_colors(preset_light, theme_css)
             return {
                 "title": getattr(settings, "BRAND_TITLE", "CheckTick"),
                 "theme_name": branding.default_theme,
@@ -170,28 +153,26 @@ def get_platform_branding() -> Dict[str, Any]:
                     or getattr(settings, "BRAND_TITLE", "CheckTick")
                 ),
                 "font_heading": font_heading,
-                "font_body": branding.font_body
-                or getattr(settings, "BRAND_FONT_BODY", "'IBM Plex Sans', sans-serif"),
+                "font_body": font_body,
                 "font_css_url": branding.font_css_url
                 or getattr(settings, "BRAND_FONT_CSS_URL", ""),
                 "font_face_css": _get_din_font_face_css(site_url, font_heading),
-                "primary_color": theme_colors.get("p") or default_primary,
-                "primary_content_color": theme_colors.get("pc") or "#ffffff",
-                "accent_color": theme_colors.get("a") or default_accent,
-                "secondary_color": theme_colors.get("s") or default_secondary,
-                "background_color": theme_colors.get("b1") or "#ffffff",
-                "text_color": theme_colors.get("bc") or "#1a1a1a",
+                **colors,
+                "secondary_color": default_secondary,
             }
     except Exception:
         pass
 
     # Fall back to settings only
-    font_heading = getattr(
-        settings, "BRAND_FONT_HEADING", "'IBM Plex Sans', sans-serif"
+    font_heading = sanitize_font_family(
+        getattr(settings, "BRAND_FONT_HEADING", "'IBM Plex Sans', sans-serif")
     )
-    theme_colors = _extract_theme_colors(
-        getattr(settings, "BRAND_THEME_CSS_LIGHT", "") or ""
+    font_body = sanitize_font_family(
+        getattr(settings, "BRAND_FONT_BODY", "'IBM Plex Sans', sans-serif")
     )
+    preset_light = getattr(settings, "BRAND_THEME_PRESET_LIGHT", "")
+    theme_css = getattr(settings, "BRAND_THEME_CSS_LIGHT", "") or ""
+    colors = resolve_email_colors(preset_light, theme_css)
     return {
         "title": getattr(settings, "BRAND_TITLE", "CheckTick"),
         "theme_name": getattr(settings, "BRAND_THEME", "checktick-light"),
@@ -201,24 +182,20 @@ def get_platform_branding() -> Dict[str, Any]:
             or getattr(settings, "BRAND_TITLE", "CheckTick")
         ),
         "font_heading": font_heading,
-        "font_body": getattr(
-            settings, "BRAND_FONT_BODY", "'IBM Plex Sans', sans-serif"
-        ),
+        "font_body": font_body,
         "font_css_url": getattr(settings, "BRAND_FONT_CSS_URL", ""),
         "font_face_css": _get_din_font_face_css(site_url, font_heading),
-        "primary_color": theme_colors.get("p") or default_primary,
-        "primary_content_color": theme_colors.get("pc") or "#ffffff",
-        "accent_color": theme_colors.get("a") or default_accent,
-        "secondary_color": theme_colors.get("s") or default_secondary,
-        "background_color": theme_colors.get("b1") or "#ffffff",
-        "text_color": theme_colors.get("bc") or "#1a1a1a",
+        **colors,
+        "secondary_color": default_secondary,
     }
 
 
 def get_survey_branding(survey) -> Dict[str, Any]:
     """Get survey-level branding configuration.
 
-    Returns survey-specific theme overrides for survey-related emails.
+    Resolves the full 3-tier theme cascade (survey → organisation →
+    platform) so survey-related emails match the survey's web theming,
+    including daisyUI preset themes and organisation overrides.
     Falls back to platform branding if no survey overrides exist.
     """
     platform_brand = get_platform_branding()
@@ -227,16 +204,26 @@ def get_survey_branding(survey) -> Dict[str, Any]:
         return platform_brand
 
     style = survey.style or {}
+    organization = getattr(survey, "organization", None)
+    colors = resolve_cascade_colors(
+        survey_style=style,
+        organization=organization,
+        platform_preset=getattr(settings, "BRAND_THEME_PRESET_LIGHT", ""),
+        platform_theme_css=(getattr(settings, "BRAND_THEME_CSS_LIGHT", "") or ""),
+    )
 
     return {
         **platform_brand,
         "title": style.get("title") or survey.name or platform_brand["title"],
         "theme_name": style.get("theme_name") or platform_brand["theme_name"],
         "icon_url": style.get("icon_url") or platform_brand["icon_url"],
-        "font_heading": style.get("font_heading") or platform_brand["font_heading"],
-        "font_body": style.get("font_body") or platform_brand["font_body"],
-        "primary_color": style.get("primary_color") or platform_brand["primary_color"],
-        "accent_color": style.get("accent_color") or platform_brand["accent_color"],
+        "font_heading": sanitize_font_family(
+            style.get("font_heading") or platform_brand["font_heading"]
+        ),
+        "font_body": sanitize_font_family(
+            style.get("font_body") or platform_brand["font_body"]
+        ),
+        **colors,
         "survey_name": survey.name,
         "survey_slug": survey.slug,
     }
@@ -327,8 +314,19 @@ def send_branded_email(
         </html>
         """
 
-    # Generate plain text version
-    plain_message = strip_tags(html_content)
+    # Generate plain text version. Markdown links render as
+    # <a href="url">text</a>, so strip_tags alone would drop the URL and
+    # leave only the link text — bad for users who copy links manually and
+    # for plain-text clients. Convert markdown links to "text: url" first.
+    # The pattern is linear-time (no nested quantifiers), so it is safe on
+    # uncontrolled input (CodeQL: polynomial regex).
+    plain_message = re.sub(
+        r"\[([^\]\[]*)\]\((https?://[^)\s\[]+)\)",
+        r"\1: \2",
+        markdown_content,
+    )
+    plain_message = markdown_to_html(plain_message)
+    plain_message = strip_tags(plain_message)
 
     # Send email
     try:
@@ -390,6 +388,7 @@ def send_welcome_email(user) -> bool:
         {
             "user": user,
             "brand_title": branding["title"],
+            "site_url": getattr(settings, "SITE_URL", ""),
         },
     )
 

@@ -10,58 +10,73 @@
         body {
             margin: 0;
             padding: 0;
-            font-family: {{ brand.font_body|default:"'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }};
+            font-family: {{ brand.font_body|default:"Arial, Helvetica, sans-serif" }};
             background-color: #f0f2f5;
             color: {{ brand.text_color|default:"#1a1a1a" }};
             line-height: 1.6;
         }
         .email-wrapper {
-            padding: 24px 16px;
+            padding: 32px 16px;
         }
         .email-container {
             max-width: 600px;
             margin: 0 auto;
             background-color: {{ brand.background_color|default:"#ffffff" }};
-            border-radius: 10px;
+            border: 1px solid {{ brand.border_color|default:"#e9ecef" }};
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.10);
-        }
-        .email-accent-bar {
-            height: 4px;
-            background-color: {{ brand.accent_color|default:"#f59e0b" }};
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px -12px rgba(0,0,0,0.12);
         }
         .email-header {
-            background-color: {{ brand.primary_color|default:"#3b82f6" }};
-            color: {{ brand.primary_content_color|default:"#ffffff" }};
-            padding: 28px 32px 24px;
-            text-align: center;
+            padding: 32px 40px 0;
+        }
+        .email-brandline {
+            display: flex;
+            align-items: center;
         }
         .email-header img.logo {
-            max-height: 52px;
-            max-width: 220px;
-            margin: 0 auto 12px;
-            display: block;
+            max-height: 40px;
+            max-width: 180px;
+            margin-right: 12px;
+            display: inline-block;
+            vertical-align: middle;
         }
         .email-header h1 {
             margin: 0;
-            font-family: {{ brand.font_heading|default:"'Segoe UI', sans-serif" }};
-            font-size: 20px;
-            font-weight: 600;
+            font-family: {{ brand.font_heading|default:"Arial, Helvetica, sans-serif" }};
+            font-size: 17px;
+            font-weight: 700;
             letter-spacing: -0.01em;
-            color: {{ brand.primary_content_color|default:"#ffffff" }};
+            color: {{ brand.text_color|default:"#1a1a1a" }};
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .email-brand-rule {
+            width: 48px;
+            height: 3px;
+            background-color: {{ brand.primary_color|default:"#3b82f6" }};
+            border-radius: 2px;
+            margin-top: 14px;
         }
         .email-body {
-            padding: 32px;
+            padding: 28px 40px 36px;
+        }
+        .email-body h1 {
+            font-family: {{ brand.font_heading|default:"Arial, Helvetica, sans-serif" }};
+            color: {{ brand.text_color|default:"#1a1a1a" }};
+            font-size: 22px;
+            margin-top: 0;
+            margin-bottom: 12px;
         }
         .email-body h2 {
-            font-family: {{ brand.font_heading|default:"'Segoe UI', sans-serif" }};
+            font-family: {{ brand.font_heading|default:"Arial, Helvetica, sans-serif" }};
             color: {{ brand.primary_color|default:"#3b82f6" }};
             margin-top: 0;
             margin-bottom: 8px;
-            font-size: 20px;
+            font-size: 19px;
         }
         .email-body h3 {
-            font-family: {{ brand.font_heading|default:"'Segoe UI', sans-serif" }};
+            font-family: {{ brand.font_heading|default:"Arial, Helvetica, sans-serif" }};
             color: {{ brand.text_color|default:"#1a1a1a" }};
             font-size: 16px;
             margin-bottom: 6px;
@@ -79,39 +94,39 @@
         }
         .button {
             display: inline-block;
-            padding: 12px 28px;
-            margin: 16px 0;
+            padding: 13px 32px;
+            margin: 20px 0;
             background-color: {{ brand.primary_color|default:"#3b82f6" }};
             color: {{ brand.primary_content_color|default:"#ffffff" }} !important;
             text-decoration: none !important;
-            border-radius: 6px;
+            border-radius: 999px;
             font-weight: 600;
-            font-family: {{ brand.font_heading|default:"'Segoe UI', sans-serif" }};
+            font-family: {{ brand.font_heading|default:"Arial, Helvetica, sans-serif" }};
             font-size: 15px;
         }
         .email-footer {
-            padding: 20px 32px;
-            background-color: #f8f9fa;
-            border-top: 1px solid #e9ecef;
+            padding: 20px 40px;
+            background-color: {{ brand.footer_bg_color|default:"#f8f9fa" }};
+            border-top: 1px solid {{ brand.border_color|default:"#e9ecef" }};
             text-align: center;
             font-size: 13px;
-            color: #6c757d;
+            color: {{ brand.text_color|default:"#6c757d" }};
         }
         .email-footer a {
             color: {{ brand.primary_color|default:"#3b82f6" }};
             text-decoration: none;
         }
         code {
-            background-color: #f1f3f5;
+            background-color: {{ brand.footer_bg_color|default:"#f1f3f5" }};
             padding: 2px 6px;
             border-radius: 4px;
             font-family: 'Courier New', monospace;
             font-size: 13px;
         }
         pre {
-            background-color: #f1f3f5;
+            background-color: {{ brand.footer_bg_color|default:"#f1f3f5" }};
             padding: 14px 16px;
-            border-radius: 6px;
+            border-radius: 8px;
             overflow-x: auto;
             font-size: 13px;
         }
@@ -125,25 +140,33 @@
             border-left: 4px solid {{ brand.accent_color|default:"#f59e0b" }};
             padding: 8px 16px;
             margin: 16px 0;
-            background-color: #fafafa;
-            color: #555;
+            background-color: {{ brand.footer_bg_color|default:"#fafafa" }};
+            color: {{ brand.text_color|default:"#555" }};
             font-style: italic;
             border-radius: 0 4px 4px 0;
         }
         hr {
             border: none;
-            border-top: 1px solid #e9ecef;
+            border-top: 1px solid {{ brand.border_color|default:"#e9ecef" }};
             margin: 24px 0;
+        }
+        @media only screen and (max-width: 620px) {
+            .email-header, .email-body, .email-footer {
+                padding-left: 24px;
+                padding-right: 24px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="email-wrapper">
         <div class="email-container">
-            <div class="email-accent-bar"></div>
             <div class="email-header">
-                {% if brand.icon_url %}<img src="{{ brand.icon_url }}" alt="{{ brand.icon_alt|default:brand.title|default:'Logo' }}" class="logo">{% endif %}
-                <h1>{{ brand.title|default:"CheckTick" }}</h1>
+                <div class="email-brandline">
+                    {% if brand.icon_url %}<img src="{{ brand.icon_url }}" alt="{{ brand.icon_alt|default:brand.title|default:'Logo' }}" class="logo">{% endif %}
+                    <h1>{{ brand.title|default:"CheckTick" }}</h1>
+                </div>
+                <div class="email-brand-rule"></div>
             </div>
             <div class="email-body">
                 {{ content|safe }}
@@ -152,7 +175,7 @@
                 <p>
                     This email was sent by <strong>{{ brand.title|default:"CheckTick" }}</strong>.{% if site_url %} &middot; <a href="{{ site_url }}">Visit website</a>{% endif %}
                 </p>
-                <p style="font-size: 11px; margin-top: 8px; color: #adb5bd;">
+                <p style="font-size: 11px; margin-top: 8px; opacity: 0.7;">
                     If you have questions, please contact your system administrator.
                 </p>
             </div>

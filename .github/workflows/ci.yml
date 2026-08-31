@@ -127,3 +127,30 @@ jobs:
           path: |
             postgres.log
             web.log
+
+  mirror-codeberg:
+    # Mirror main to Codeberg after CI passes. Requires repository secrets:
+    #   CODEBERG_REPO: owner/repo, e.g. eatyourpeas-ltd/checktick (a full URL
+    #     is also accepted; create the repo on Codeberg first, do NOT
+    #     initialise it with a README — it must be empty)
+    #   CODEBERG_TOKEN: Codeberg access token with write repository scope
+    #     (Codeberg -> Settings -> Applications -> Manage Access Tokens)
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mirror main to Codeberg
+        env:
+          CODEBERG_REPO: ${{ secrets.CODEBERG_REPO }}
+          CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
+        run: |
+          if [ -z "$CODEBERG_REPO" ] || [ -z "$CODEBERG_TOKEN" ]; then
+            echo "CODEBERG_REPO and/or CODEBERG_TOKEN not configured, skipping mirror"
+            exit 0
+          fi
+          # Accept either owner/repo or a full Codeberg URL
+          CODEBERG_PATH=$(echo "$CODEBERG_REPO" | sed -E 's#^https?://codeberg\.org/##; s#\.git$##')
+          echo "Mirroring to codeberg.org/$CODEBERG_PATH"
+          git clone --bare "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" mirror.git
+          cd mirror.git
+          git push --mirror "https://x-access-token:${CODEBERG_TOKEN}@codeberg.org/${CODEBERG_PATH}.git"
