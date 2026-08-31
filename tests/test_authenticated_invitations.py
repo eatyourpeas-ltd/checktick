@@ -122,6 +122,7 @@ class TestAuthenticatedInvitationPublishing:
             ),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 "invite_emails": existing_user.email,
                 "no_patient_data_ack": "on",
@@ -182,6 +183,7 @@ class TestAuthenticatedInvitationPublishing:
             ),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 "invite_emails": new_email,
                 "no_patient_data_ack": "on",
@@ -243,6 +245,7 @@ class TestAuthenticatedInvitationPublishing:
             ),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 "invite_emails": invite_emails,
                 "no_patient_data_ack": "on",
@@ -295,6 +298,7 @@ class TestAuthenticatedInvitationPublishing:
                 ),
                 {
                     "action": "publish",
+                    "respondent_audience": "staff",
                     "visibility": "authenticated",
                     "invite_emails": "John Smith <john@example.com>",
                     "no_patient_data_ack": "on",
@@ -326,6 +330,7 @@ class TestAuthenticatedInvitationPublishing:
             ),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 "allow_any_authenticated": "on",
                 "no_patient_data_ack": "on",
@@ -352,6 +357,7 @@ class TestAuthenticatedInvitationPublishing:
             ),
             {
                 "action": "publish",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
                 # allow_any_authenticated not included — invite-only mode, so emails required
                 "invite_emails": "invited@example.com",

@@ -3015,6 +3015,82 @@ def _parse_email_addresses(text: str) -> list[str]:
     return email_list
 
 
+DECLARATION_VERSION = "1.0"
+
+
+def _parse_audience_and_declaration(
+    survey: Survey, request: HttpRequest, collects_patient: bool
+) -> dict:
+    """Parse the respondent-audience selection and opt-out declaration from
+    a publish POST, applying the audience to the survey.
+
+    Returns a dict with:
+        audience: the effective audience (POST value or the survey's current)
+        audience_provided: whether the POST explicitly chose an audience
+        opt_out_eligible: True when this survey may store plaintext (password
+            user, staff audience, no patient identifiers, no keypair)
+        declared: True when a valid opt-out declaration was submitted
+    """
+    audience = request.POST.get("respondent_audience")
+    audience_provided = bool(audience)
+    if audience_provided and audience in Survey.RespondentAudience.values:
+        if audience != survey.respondent_audience or not survey.audience_confirmed:
+            survey.respondent_audience = audience
+            survey.audience_confirmed = True
+            # Persist immediately: the caller may return early (e.g. redirect
+            # to encryption setup) before its own survey.save()
+            survey.save(update_fields=["respondent_audience", "audience_confirmed"])
+    is_sso = hasattr(request.user, "oidc")
+    opt_out_eligible = (
+        not is_sso
+        and survey.respondent_audience == Survey.RespondentAudience.STAFF
+        and not collects_patient
+        and not survey.has_submission_keypair()
+    )
+    declared = opt_out_eligible and bool(request.POST.get("encryption_opt_out"))
+    return {
+        "audience": survey.respondent_audience,
+        "audience_provided": audience_provided,
+        "opt_out_eligible": opt_out_eligible,
+        "declared": declared,
+    }
+
+
+def _record_opt_out_declaration(survey: Survey, user) -> None:
+    """Record the creator's encryption opt-out declaration, audit-logged.
+
+    Idempotent: an existing unrevoked declaration is left untouched.
+    """
+    if survey.encryption_opt_out_at and not survey.has_encryption_opt_out():
+        pass  # stale/invalid declaration (e.g. audience changed) — overwrite
+    survey.encryption_opt_out_at = timezone.now()
+    survey.encryption_opt_out_by = user
+    survey.encryption_opt_out_declaration_version = DECLARATION_VERSION
+    survey.save(
+        update_fields=[
+            "encryption_opt_out_at",
+            "encryption_opt_out_by",
+            "encryption_opt_out_declaration_version",
+        ]
+    )
+    AuditLog.objects.create(
+        actor=user,
+        scope=AuditLog.Scope.SURVEY,
+        survey=survey,
+        action=AuditLog.Action.ENCRYPTION_OPT_OUT_DECLARED,
+        severity=AuditLog.Severity.INFO,
+        message=(
+            "Creator declared this survey is not patient-facing and does not "
+            "gather data that could identify respondents; response encryption "
+            "opted out."
+        ),
+        metadata={
+            "declaration_version": DECLARATION_VERSION,
+            "survey_id": survey.pk,
+        },
+    )
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
@@ -3101,6 +3177,27 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             # Publishing for the first time
             prev_status = survey.status
 
+            # Respondent audience + opt-out declaration (encryption planning
+            # doc §5.2): the creator must confirm who fills the survey in;
+            # the declaration is the only path to plaintext storage for
+            # eligible (password-user, staff-audience) surveys.
+            audience_info = _parse_audience_and_declaration(
+                survey, request, collects_patient
+            )
+            if prev_status != Survey.Status.PUBLISHED and not (
+                survey.audience_confirmed and audience_info["audience_provided"]
+            ):
+                messages.error(
+                    request,
+                    "Please confirm who will fill in this survey before "
+                    "publishing (Respondents section).",
+                )
+                return render(
+                    request, "surveys/publish_settings.html", {"survey": survey}
+                )
+            if audience_info["declared"]:
+                _record_opt_out_declaration(survey, request.user)
+
             # Require at least one recipient email for token/authenticated (invite-only) surveys.
             allow_any_authenticated = (
                 request.POST.get("allow_any_authenticated") == "on"
@@ -3122,11 +3219,13 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
                 )
 
             # Check if encryption setup is needed
-            # ALL surveys require encryption (not just patient data surveys)
+            # Encryption is required unless the creator made a valid opt-out
+            # declaration (password-user, staff-audience, no patient data).
             # Note: Survey count limits are already enforced at survey creation time
             needs_encryption_setup = (
                 prev_status != Survey.Status.PUBLISHED
                 and not survey.has_any_encryption()
+                and not audience_info["declared"]
             )
 
             if needs_encryption_setup:
@@ -3401,6 +3500,14 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
         "available_translations": available_translations,
         "has_draft_translations": has_draft_translations,
         "supported_languages": supported_languages,
+        "is_sso_user": hasattr(request.user, "oidc"),
+        "collects_patient_data": _survey_collects_patient_data(survey),
+        "opt_out_eligible": (
+            not hasattr(request.user, "oidc")
+            and survey.respondent_audience == Survey.RespondentAudience.STAFF
+            and not _survey_collects_patient_data(survey)
+            and not survey.has_submission_keypair()
+        ),
     }
 
     return render(request, "surveys/publish_settings.html", context)
@@ -3978,8 +4085,25 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
     # Check if encryption setup is needed
     prev_status = survey.status
 
+    # Respondent audience + opt-out declaration (encryption planning doc §5.2)
+    audience_info = _parse_audience_and_declaration(survey, request, collects_patient)
+    if (
+        prev_status != Survey.Status.PUBLISHED
+        and status == Survey.Status.PUBLISHED
+        and not survey.audience_confirmed
+    ):
+        messages.error(
+            request,
+            "Please confirm who will fill in this survey before publishing "
+            "(Respondents section).",
+        )
+        return redirect("surveys:publish_settings", slug=slug)
+    if audience_info["declared"]:
+        _record_opt_out_declaration(survey, request.user)
+
     # Determine if we need to redirect to encryption setup
-    # ALL surveys require encryption (not just patient data surveys)
+    # Encryption is required unless the creator made a valid opt-out
+    # declaration (password-user, staff-audience, no patient data).
     # Organization + SSO users: auto-encrypt without setup page
     # Organization + Password users: need setup if no encryption yet
     # Individual + SSO users: need to choose SSO-only vs SSO+recovery
@@ -4030,8 +4154,9 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
         )
 
     # All other cases: check if encryption setup is needed
-    # Redirect to setup if survey has no encryption on first publish
-    elif is_first_publish and not has_encryption:
+    # Redirect to setup if survey has no encryption on first publish,
+    # unless the creator made a valid opt-out declaration
+    elif is_first_publish and not has_encryption and not audience_info["declared"]:
         # Store pending publish settings in session
         request.session["pending_publish"] = {
             "slug": slug,

@@ -113,6 +113,61 @@
 
         <div class="divider"></div>
 
+        <div class="mb-6">
+          <h3 class="font-semibold mb-2">{% trans "Respondents" %}</h3>
+          <p class="text-sm opacity-70 mb-3">
+            {% trans "Who will fill in this survey? This determines how responses are protected at rest." %}
+          </p>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <label class="label">
+                <span class="label-text font-semibold">{% trans "Audience" %}</span>
+              </label>
+              <select class="select select-bordered w-full" name="respondent_audience" id="respondent-audience">
+                <option value="staff" {% if survey.respondent_audience == 'staff' %}selected{% endif %}>{% trans "Staff / colleagues" %}</option>
+                <option value="patient" {% if survey.respondent_audience == 'patient' %}selected{% endif %}>{% trans "Patients" %}</option>
+                <option value="public" {% if survey.respondent_audience == 'public' %}selected{% endif %}>{% trans "Public / respondents" %}</option>
+              </select>
+            </div>
+            <div id="encryption-explainer" class="hidden">
+              <div class="alert alert-info h-fit">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p class="text-sm">
+                    {% trans "Responses to patient or public surveys are always encrypted at rest. You will need your encryption password (or SSO sign-in) to view answer distributions and to export data. If you lose your password and recovery phrase, responses become unrecoverable." %}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% if opt_out_eligible %}
+          <div id="opt-out-block" class="mt-4">
+            <label class="label cursor-pointer justify-start gap-3">
+              <input type="checkbox" name="encryption_opt_out" id="encryption-opt-out" class="checkbox checkbox-warning" />
+              <span class="label-text">
+                <strong>{% trans "Opt out of response encryption" %}</strong>
+              </span>
+            </label>
+            <p class="text-sm opacity-70 ml-9">
+              {% blocktrans %}By ticking this box I declare that this survey is not patient-facing and does not gather data that could identify respondents. I understand responses will be stored in readable form and that this declaration is recorded in the audit trail.{% endblocktrans %}
+            </p>
+          </div>
+          <div id="encrypt-note" class="mt-4 hidden">
+            <div class="alert alert-success">
+              <div>
+                <p class="text-sm">
+                  {% trans "Responses will be encrypted at rest. You'll set up (or use) your encryption password next; viewing answer distributions and exporting data requires unlocking the survey." %}
+                </p>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="divider"></div>
+
         <!-- Translation Management Section -->
         <div class="mb-6">
           <h3 class="font-semibold text-lg mb-3">{% trans "Survey Translations" %}</h3>
@@ -345,6 +400,31 @@
   const publishBtn = document.getElementById('publish-btn');
   const inviteEmailsTextarea = document.querySelector('textarea[name="invite_emails"]');
   const allowAnyAuthenticatedCheckbox = document.querySelector('input[name="allow_any_authenticated"]');
+  const audienceSelect = document.getElementById('respondent-audience');
+  const encryptionExplainer = document.getElementById('encryption-explainer');
+  const optOutBlock = document.getElementById('opt-out-block');
+  const encryptNote = document.getElementById('encrypt-note');
+  const optOutEligible = {% if opt_out_eligible %}true{% else %}false{% endif %};
+
+  function updateEncryptionUI() {
+    if (!audienceSelect) return;
+    const audience = audienceSelect.value;
+    if (encryptionExplainer) {
+      encryptionExplainer.classList.toggle('hidden', audience === 'staff');
+    }
+    if (optOutEligible) {
+      if (optOutBlock) {
+        optOutBlock.classList.toggle('hidden', audience !== 'staff');
+      }
+      if (encryptNote) {
+        encryptNote.classList.toggle('hidden', audience === 'staff');
+      }
+    }
+  }
+  if (audienceSelect) {
+    audienceSelect.addEventListener('change', updateEncryptionUI);
+    updateEncryptionUI();
+  }
 
   function updatePatientDataWarning() {
     const requiresAck = ['public', 'unlisted', 'token'].includes(visibilitySelect.value);

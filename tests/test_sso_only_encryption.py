@@ -111,6 +111,7 @@ class TestOrganizationSSORAutoEncryption(TestCase):
             url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
             },
         )
@@ -162,6 +163,7 @@ class TestOrganizationSSORAutoEncryption(TestCase):
             url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
             },
             follow=True,
@@ -222,6 +224,7 @@ class TestIndividualSSOEncryptionChoice(TestCase):
             url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
             },
         )
@@ -256,6 +259,7 @@ class TestIndividualSSOEncryptionChoice(TestCase):
             publish_url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
             },
         )
@@ -312,6 +316,7 @@ class TestIndividualSSOEncryptionChoice(TestCase):
             publish_url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
             },
         )
@@ -368,6 +373,7 @@ class TestIndividualSSOEncryptionChoice(TestCase):
             publish_url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
             },
         )
@@ -428,6 +434,7 @@ class TestPasswordUserEncryptionUnchanged(TestCase):
             publish_url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
             },
         )
@@ -469,6 +476,7 @@ class TestPasswordUserEncryptionUnchanged(TestCase):
             publish_url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
             },
         )
@@ -553,6 +561,7 @@ class TestOrganizationPasswordUserEncryption(TestCase):
             publish_url,
             {
                 "status": "published",
+                "respondent_audience": "staff",
                 "visibility": "authenticated",
             },
         )
