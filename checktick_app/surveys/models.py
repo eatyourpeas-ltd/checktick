@@ -11,7 +11,14 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
-from .utils import decrypt_sensitive, encrypt_sensitive, make_key_hash
+from .utils import (
+    decrypt_sensitive,
+    decrypt_submission,
+    encrypt_for_submission,
+    encrypt_sensitive,
+    is_submission_blob,
+    make_key_hash,
+)
 
 User = get_user_model()
 
@@ -885,6 +892,18 @@ class Survey(models.Model):
     # One-time survey key: store only hash + salt for verification
     key_salt = models.BinaryField(blank=True, null=True, editable=False)
     key_hash = models.BinaryField(blank=True, null=True, editable=False)
+    # Submission keypair (public-key encryption at submission time).
+    # When set, responses are encrypted with this public key by the server;
+    # the matching private key is stored wrapped in the encrypted_kek_*
+    # fields (they hold the wrapped private key instead of a symmetric KEK
+    # for surveys with a keypair). The server can encrypt but never decrypt
+    # without the owner's unlock.
+    submission_public_key = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=False,
+        help_text="Raw X25519 public key used to encrypt responses at submission time",
+    )
     # Option 2: Dual-path encryption for individual users
     encrypted_kek_password = models.BinaryField(
         blank=True,
@@ -1267,6 +1286,15 @@ class Survey(models.Model):
             or self.encrypted_kek_org
         )
 
+    def has_submission_keypair(self) -> bool:
+        """Check if this survey encrypts submissions with its public key.
+
+        When True, the encrypted_kek_* fields hold the wrapped X25519 private
+        key (not a symmetric KEK), and SurveyResponse blobs use the
+        submission format (see utils.SUBMISSION_BLOB_MAGIC).
+        """
+        return bool(self.submission_public_key)
+
     def collects_patient_data(self) -> bool:
         """
         Check if this survey collects patient data.
@@ -1320,6 +1348,10 @@ class Survey(models.Model):
         predicate (enforced at the submission layer, not here).
         """
         if self.collects_patient_data():
+            return True
+        if self.has_submission_keypair():
+            # A submission keypair means encryption is set up; a declaration
+            # cannot disable it.
             return True
         if self.respondent_audience in (
             self.RespondentAudience.PATIENT,
@@ -2792,7 +2824,7 @@ class SurveyResponse(models.Model):
 
     def store_answers(self, survey_key: bytes, answers: dict):
         """
-        Encrypt and store survey answers (for patient data surveys).
+        Encrypt and store survey answers with a symmetric key (legacy path).
 
         Args:
             survey_key: Survey's KEK (32-byte key)
@@ -2800,17 +2832,48 @@ class SurveyResponse(models.Model):
 
         This encrypts the entire answers dictionary, providing complete
         protection for surveys collecting patient data.
+
+        Prefer store_submission() for surveys with a submission keypair:
+        that path encrypts with the survey's public key and requires no
+        secret key material on the server.
         """
         self.enc_answers = encrypt_sensitive(survey_key, answers)
         # Clear plaintext answers when encrypting
         self.answers = {}
+
+    def store_submission(
+        self, public_key: bytes, answers: dict, demographics: dict | None = None
+    ):
+        """
+        Encrypt and store a response using the survey's public key.
+
+        Args:
+            public_key: Survey's raw X25519 public key
+                (Survey.submission_public_key)
+            answers: Dictionary of question_id -> answer
+            demographics: Optional patient demographics
+
+        Uses hybrid encryption (random per-response DEK wrapped to the
+        survey's public key), so the server can encrypt without any secret
+        key material. Decryption requires the survey's private key, which is
+        only available after the owner unlocks the survey.
+        """
+        payload = {"answers": answers}
+        if demographics:
+            payload["demographics"] = demographics
+        self.enc_answers = encrypt_for_submission(public_key, payload)
+        # Clear plaintext fields
+        self.answers = {}
+        self.enc_demographics = None
 
     def load_answers(self, survey_key: bytes) -> dict:
         """
         Decrypt and return survey answers.
 
         Args:
-            survey_key: Survey's KEK (32-byte key)
+            survey_key: Survey's KEK (legacy symmetric surveys) or the
+                survey's private key (submission-keypair surveys), depending
+                on the blob format.
 
         Returns:
             Dictionary of question_id -> answer
@@ -2818,6 +2881,11 @@ class SurveyResponse(models.Model):
         If answers are not encrypted, returns the plaintext answers field.
         """
         if self.enc_answers:
+            if is_submission_blob(self.enc_answers):
+                payload = decrypt_submission(
+                    survey_key, self._to_bytes(self.enc_answers)
+                )
+                return payload.get("answers", payload)
             return decrypt_sensitive(survey_key, self._to_bytes(self.enc_answers))
         return self.answers
 
@@ -2850,7 +2918,9 @@ class SurveyResponse(models.Model):
         Load a complete decrypted response.
 
         Args:
-            survey_key: Survey's KEK (32-byte key)
+            survey_key: Survey's KEK (legacy symmetric surveys) or the
+                survey's private key (submission-keypair surveys), depending
+                on the blob format.
 
         Returns:
             Dictionary with 'answers' and optionally 'demographics' keys
@@ -2858,6 +2928,8 @@ class SurveyResponse(models.Model):
         Falls back to legacy format if enc_answers not present.
         """
         if self.enc_answers:
+            if is_submission_blob(self.enc_answers):
+                return decrypt_submission(survey_key, self._to_bytes(self.enc_answers))
             return decrypt_sensitive(survey_key, self._to_bytes(self.enc_answers))
 
         # Legacy format: separate fields
