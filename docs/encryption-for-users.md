@@ -30,6 +30,7 @@ CheckTick implements **ethical key recovery**: if you lose both your password AN
 Every response collected by an encrypted survey is now sealed with **your survey's own encryption key the moment it is submitted** — before it touches the database:
 
 - **Respondents never provide a key.** Public links, email tokens, unlisted links, and logged-in participants all submit exactly as before — nothing changes for them.
+- **You set your password once — at survey creation, or at publication if you didn't set one earlier.** After that, you never need it for collecting responses; you only need it (or your SSO sign-in) to view answer distributions, summary reports, and to export data. Each unlock lasts 30 minutes.
 - **The platform cannot read your responses.** Responses are encrypted with your survey's *public* key; only the matching *private* key — which is wrapped with your password, recovery phrase, or SSO identity — can open them.
 - **Demographics are included.** Any demographics your survey collects are encrypted inside the same sealed response.
 - **Viewing requires unlock.** Dashboard distribution charts, summary reports, and CSV exports show answer content only after you unlock the survey. Response counts and timestamps remain visible without unlocking.
