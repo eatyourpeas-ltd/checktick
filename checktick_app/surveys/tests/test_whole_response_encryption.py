@@ -89,9 +89,139 @@ class TestSurveyPatientDataDetection:
         """Patient data surveys should require whole response encryption."""
         assert survey_with_patient_data.requires_whole_response_encryption() is True
 
-    def test_non_patient_survey_no_whole_encryption(self, survey_without_patient_data):
-        """Non-patient surveys should not require whole response encryption."""
+    def test_non_patient_survey_encrypted_without_declaration(
+        self, survey_without_patient_data
+    ):
+        """Non-patient staff surveys are encrypted unless the creator opts out.
+
+        Under the Option C predicate, plaintext storage requires a recorded,
+        audit-logged opt-out declaration — absence of a declaration means
+        encryption applies by default.
+        """
+        assert survey_without_patient_data.requires_whole_response_encryption() is True
+
+    def test_non_patient_survey_opt_out_via_declaration(
+        self, survey_without_patient_data, user
+    ):
+        """Password-user staff surveys can opt out via a logged declaration."""
+        from django.utils import timezone
+
+        survey_without_patient_data.respondent_audience = (
+            Survey.RespondentAudience.STAFF
+        )
+        survey_without_patient_data.encryption_opt_out_at = timezone.now()
+        survey_without_patient_data.encryption_opt_out_by = user
+        survey_without_patient_data.encryption_opt_out_declaration_version = "1.0"
+        survey_without_patient_data.save()
         assert survey_without_patient_data.requires_whole_response_encryption() is False
+
+
+@pytest.mark.django_db
+class TestOptionCPredicate:
+    """Tests for the Option C whole-response encryption predicate.
+
+    See docs/security-upgrade-encrypt-all-responses-planning.md §3.3:
+    encryption applies if the survey collects patient data, OR the declared
+    audience is patient/public, OR the owner authenticates via SSO. The only
+    path to plaintext is a password-user, staff-audience survey without
+    patient identifiers plus a recorded opt-out declaration.
+    """
+
+    @pytest.fixture
+    def sso_user(self, db):
+        from checktick_app.core.models import UserOIDC
+
+        u = User.objects.create_user(
+            username="ssouser", email="sso@example.com", password=TEST_PASSWORD
+        )
+        UserOIDC.objects.create(user=u, provider="google", subject="sub-123")
+        return u
+
+    def test_patient_audience_survey_requires_encryption(self, user, non_patient_group):
+        """Patient-audience surveys are encrypted even without patient fields."""
+        survey = Survey.objects.create(
+            owner=user,
+            name="Patient Feedback",
+            slug="patient-feedback",
+            respondent_audience=Survey.RespondentAudience.PATIENT,
+            audience_confirmed=True,
+        )
+        survey.question_groups.add(non_patient_group)
+        assert survey.requires_whole_response_encryption() is True
+
+    def test_public_audience_survey_requires_encryption(self, user, non_patient_group):
+        """Public-audience surveys are encrypted even without patient fields."""
+        survey = Survey.objects.create(
+            owner=user,
+            name="Public Feedback",
+            slug="public-feedback",
+            respondent_audience=Survey.RespondentAudience.PUBLIC,
+            audience_confirmed=True,
+        )
+        survey.question_groups.add(non_patient_group)
+        assert survey.requires_whole_response_encryption() is True
+
+    def test_sso_owned_survey_requires_encryption_regardless(
+        self, sso_user, non_patient_group
+    ):
+        """SSO-owned surveys are always encrypted (no opt-out exists)."""
+        survey = Survey.objects.create(
+            owner=sso_user,
+            name="Staff Coffee Survey",
+            slug="staff-coffee",
+            respondent_audience=Survey.RespondentAudience.STAFF,
+            audience_confirmed=True,
+        )
+        survey.question_groups.add(non_patient_group)
+        assert survey.requires_whole_response_encryption() is True
+
+    def test_sso_opt_out_declaration_is_ignored(self, sso_user, non_patient_group):
+        """An opt-out declaration must not disable encryption for SSO owners."""
+        from django.utils import timezone
+
+        survey = Survey.objects.create(
+            owner=sso_user,
+            name="Staff Survey SSO",
+            slug="staff-sso",
+            respondent_audience=Survey.RespondentAudience.STAFF,
+            audience_confirmed=True,
+            encryption_opt_out_at=timezone.now(),
+            encryption_opt_out_by=sso_user,
+            encryption_opt_out_declaration_version="1.0",
+        )
+        survey.question_groups.add(non_patient_group)
+        assert survey.requires_whole_response_encryption() is True
+
+    def test_patient_audience_opt_out_declaration_is_ignored(
+        self, user, non_patient_group
+    ):
+        """An opt-out declaration must not disable encryption for patient audience."""
+        from django.utils import timezone
+
+        survey = Survey.objects.create(
+            owner=user,
+            name="Patient Survey Decl",
+            slug="patient-decl",
+            respondent_audience=Survey.RespondentAudience.PATIENT,
+            audience_confirmed=True,
+            encryption_opt_out_at=timezone.now(),
+            encryption_opt_out_by=user,
+            encryption_opt_out_declaration_version="1.0",
+        )
+        survey.question_groups.add(non_patient_group)
+        assert survey.requires_whole_response_encryption() is True
+
+    def test_declaration_without_version_is_not_valid(
+        self, survey_without_patient_data, user
+    ):
+        """A declaration timestamp without a version is not a valid opt-out."""
+        from django.utils import timezone
+
+        survey_without_patient_data.encryption_opt_out_at = timezone.now()
+        survey_without_patient_data.encryption_opt_out_by = user
+        survey_without_patient_data.save()
+        assert survey_without_patient_data.has_encryption_opt_out() is False
+        assert survey_without_patient_data.requires_whole_response_encryption() is True
 
 
 @pytest.mark.django_db
@@ -265,16 +395,12 @@ class TestBackwardsCompatibility:
     ):
         """All surveys (including non-patient) now require encryption setup.
 
-        Non-patient surveys don't use whole-response encryption, but they
-        still need encryption to be configured before publishing.
+        Under the Option C predicate, non-patient staff-audience surveys owned
+        by password users are encrypted by default; plaintext storage requires
+        an explicit, audit-logged opt-out declaration.
         """
-        # Survey should not require whole-response encryption
-        assert survey_without_patient_data.requires_whole_response_encryption() is False
-
-        # But it should still require *some* form of encryption setup before publishing
-        # (This is enforced in the publish workflow, not in the response storage)
-        # Non-patient surveys can store answers in plaintext during testing/draft phase,
-        # but must have encryption configured (encrypted_kek_*) before going live
+        # Survey requires whole-response encryption until the creator opts out
+        assert survey_without_patient_data.requires_whole_response_encryption() is True
 
         response = SurveyResponse.objects.create(
             survey=survey_without_patient_data,

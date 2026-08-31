@@ -36,13 +36,31 @@ def org(db, user):
     return Organization.objects.create(name="Test Org", owner=user)
 
 
+def _declare_encryption_opt_out(survey, user):
+    """Record a staff-audience opt-out so the survey stores plaintext answers.
+
+    These tests exercise export/retention machinery, not encryption; under the
+    Option C predicate a password-user staff survey needs a declared opt-out
+    to keep plaintext storage.
+    """
+    survey.respondent_audience = Survey.RespondentAudience.STAFF
+    survey.encryption_opt_out_at = timezone.now()
+    survey.encryption_opt_out_by = user
+    survey.encryption_opt_out_declaration_version = "1.0"
+    survey.save()
+    return survey
+
+
 @pytest.fixture
 def survey(db, user, org):
-    return Survey.objects.create(
-        owner=user,
-        organization=org,
-        name="Test Survey",
-        slug="test-survey",
+    return _declare_encryption_opt_out(
+        Survey.objects.create(
+            owner=user,
+            organization=org,
+            name="Test Survey",
+            slug="test-survey",
+        ),
+        user,
     )
 
 
@@ -94,6 +112,7 @@ def closed_survey(db, user, org):
         name="Closed Survey",
         slug="closed-survey",
     )
+    _declare_encryption_opt_out(survey, user)
     survey.close_survey(user)
     return survey
 

@@ -815,6 +815,19 @@ class Survey(models.Model):
         UNLISTED = "unlisted", "Unlisted (secret link)"
         TOKEN = "token", "By invite token"
 
+    class RespondentAudience(models.TextChoices):
+        """Who fills this survey in, as declared by the creator.
+
+        Drives the whole-response encryption decision (see
+        requires_whole_response_encryption): patient/public audience surveys
+        are always encrypted; staff-audience surveys owned by password users
+        may opt out via a logged declaration.
+        """
+
+        STAFF = "staff", "Staff / colleagues"
+        PATIENT = "patient", "Patients"
+        PUBLIC = "public", "Public / respondents"
+
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.DRAFT
     )
@@ -828,6 +841,42 @@ class Survey(models.Model):
     no_patient_data_ack = models.BooleanField(
         default=False,
         help_text="Publisher confirms no patient data is collected when using non-authenticated visibility",
+    )
+    # Declared respondent audience (drives whole-response encryption).
+    # audience_confirmed is False until the creator explicitly picks an
+    # audience; the publish flow prompts when it is still unset so existing
+    # surveys are not silently defaulted to staff.
+    respondent_audience = models.CharField(
+        max_length=20,
+        choices=RespondentAudience.choices,
+        default=RespondentAudience.STAFF,
+        help_text="Declared audience for this survey (drives at-rest encryption of responses)",
+    )
+    audience_confirmed = models.BooleanField(
+        default=False,
+        help_text="True once the creator has explicitly confirmed the respondent audience",
+    )
+    # Creator opt-out declaration (§3.2 of the encryption planning doc):
+    # the only path to plaintext storage for published surveys. Password-user
+    # owners of staff-audience surveys without patient identifiers may opt out
+    # by making an explicit, audit-logged declaration.
+    encryption_opt_out_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the creator declared the encryption opt-out for this survey",
+    )
+    encryption_opt_out_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="encryption_opt_out_surveys",
+        help_text="User who made the encryption opt-out declaration",
+    )
+    encryption_opt_out_declaration_version = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Version of the opt-out declaration text acknowledged by the creator",
     )
     allow_any_authenticated = models.BooleanField(
         default=False,
@@ -1233,17 +1282,55 @@ class Survey(models.Model):
             schema__template="patient_details_encrypted"
         ).exists()
 
+    def owner_is_sso(self) -> bool:
+        """Check if the survey owner authenticates via SSO / OIDC."""
+        from checktick_app.core.models import UserOIDC
+
+        return UserOIDC.objects.filter(user_id=self.owner_id).exists()
+
+    def has_encryption_opt_out(self) -> bool:
+        """Check if a valid creator opt-out declaration has been recorded."""
+        return bool(
+            self.encryption_opt_out_at
+            and self.encryption_opt_out_declaration_version
+            and self.respondent_audience == self.RespondentAudience.STAFF
+        )
+
     def requires_whole_response_encryption(self) -> bool:
         """
-        Check if responses to this survey should be fully encrypted.
+        Check if responses to this survey should be fully encrypted (Option C).
 
         Returns:
-            True if all response data (not just demographics) should be encrypted
+            True if all response data (not just demographics) should be
+            encrypted with store_complete_response()
 
-        Surveys collecting patient data require the entire response to be
-        encrypted with store_complete_response(), not just demographics.
+        The predicate returns True if ANY of:
+        1. The survey collects patient data (schema check), OR
+        2. The declared respondent audience is patient or public, OR
+        3. The survey owner authenticates via SSO / OIDC (default-on).
+
+        It returns False only when ALL of:
+        - the owner is a password (non-SSO) user, AND
+        - the declared audience is staff, AND
+        - the survey collects no patient identifiers, AND
+        - the creator has recorded an explicit, audit-logged opt-out
+          declaration.
+
+        Draft surveys may still store plaintext answers regardless of this
+        predicate (enforced at the submission layer, not here).
         """
-        return self.collects_patient_data()
+        if self.collects_patient_data():
+            return True
+        if self.respondent_audience in (
+            self.RespondentAudience.PATIENT,
+            self.RespondentAudience.PUBLIC,
+        ):
+            return True
+        if self.owner_is_sso():
+            return True
+        # Only remaining path to plaintext: password user, staff audience,
+        # no patient identifiers, with a recorded opt-out declaration.
+        return not self.has_encryption_opt_out()
 
     def sso_user_needs_passphrase(self) -> bool:
         """
@@ -3474,6 +3561,19 @@ class AuditLog(models.Model):
         PROMOTION_ENDING_SOON = "promotion_ending_soon", "Promotion Ending Soon"
         PROMOTION_EXPIRED = "promotion_expired", "Promotion Expired"
         PROMOTION_RECONCILED = "promotion_reconciled", "Promotion Reconciled"
+        # Encryption posture actions
+        ENCRYPTION_OPT_OUT_DECLARED = (
+            "encryption_opt_out_declared",
+            "Encryption Opt-out Declared",
+        )
+        ENCRYPTION_OPT_OUT_REVOKED = (
+            "encryption_opt_out_revoked",
+            "Encryption Opt-out Revoked",
+        )
+        RESPONSES_ENCRYPTED_BACKFILL = (
+            "responses_encrypted_backfill",
+            "Responses Encrypted (Backfill Migration)",
+        )
 
     class Severity(models.TextChoices):
         INFO = "info", "Information"

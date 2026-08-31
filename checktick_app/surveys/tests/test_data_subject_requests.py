@@ -67,13 +67,21 @@ def respondent(db):
 @pytest.fixture
 def authenticated_survey(owner):
     """Create a survey with authenticated visibility."""
-    return Survey.objects.create(
+    survey = Survey.objects.create(
         owner=owner,
         name="Authenticated Survey",
         slug="authenticated-survey",
         status=Survey.Status.PUBLISHED,
         visibility=Survey.Visibility.AUTHENTICATED,
     )
+    # Staff-audience opt-out so export tests exercise freeze logic, not
+    # encryption key requirements (Option C predicate defaults to encrypted).
+    survey.respondent_audience = Survey.RespondentAudience.STAFF
+    survey.encryption_opt_out_at = timezone.now()
+    survey.encryption_opt_out_by = owner
+    survey.encryption_opt_out_declaration_version = "1.0"
+    survey.save()
+    return survey
 
 
 @pytest.fixture
