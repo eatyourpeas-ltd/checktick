@@ -904,6 +904,19 @@ class Survey(models.Model):
         editable=False,
         help_text="Raw X25519 public key used to encrypt responses at submission time",
     )
+    # For surveys MIGRATED from the legacy symmetric-KEK scheme: the X25519
+    # private key encrypted with the survey's KEK (encrypt_sensitive format).
+    # The encrypted_kek_* fields still hold the wrapped KEK, so every
+    # existing unlock path (password / recovery / OIDC / org) keeps working:
+    # unlock unwraps the KEK, then the private key. New (non-migrated)
+    # surveys leave this null and hold the wrapped private key directly in
+    # encrypted_kek_*.
+    enc_submission_private_key = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=False,
+        help_text="Submission private key encrypted with the survey KEK (migrated surveys only)",
+    )
     # Option 2: Dual-path encryption for individual users
     encrypted_kek_password = models.BinaryField(
         blank=True,
@@ -1312,11 +1325,52 @@ class Survey(models.Model):
     def has_submission_keypair(self) -> bool:
         """Check if this survey encrypts submissions with its public key.
 
-        When True, the encrypted_kek_* fields hold the wrapped X25519 private
-        key (not a symmetric KEK), and SurveyResponse blobs use the
-        submission format (see utils.SUBMISSION_BLOB_MAGIC).
+        When True, decryption material is available after unlock:
+        - New (setup-flow) surveys: encrypted_kek_* hold the wrapped private
+          key, so unlock returns it directly.
+        - Migrated surveys: encrypted_kek_* still hold the wrapped KEK and
+          enc_submission_private_key holds the private key encrypted under
+          the KEK; unlock returns the KEK, then get_submission_private_key()
+          unwraps the private key.
         """
         return bool(self.submission_public_key)
+
+    def get_submission_private_key(self, kek: bytes) -> bytes | None:
+        """Unwrap the submission private key using the survey's KEK.
+
+        Only applies to migrated surveys (enc_submission_private_key set).
+        Returns None when this survey stores the private key directly in
+        encrypted_kek_* (setup-flow surveys) or when decryption fails.
+        """
+        from .utils import decrypt_sensitive
+
+        if not self.enc_submission_private_key:
+            return None
+        try:
+            payload = decrypt_sensitive(kek, bytes(self.enc_submission_private_key))
+            return bytes.fromhex(payload["private_key"])
+        except Exception:
+            return None
+
+    def needs_encryption_migration(self) -> bool:
+        """Check if this survey still needs the interactive security upgrade.
+
+        True for surveys that require whole-response encryption (Option C
+        predicate), predate the submission-keypair scheme, and still hold
+        response data in the legacy format (plaintext answers and/or legacy
+        KEK-encrypted blobs).
+        """
+        if self.has_submission_keypair():
+            return False
+        if not self.requires_whole_response_encryption():
+            return False
+        return (
+            self.responses.filter(enc_answers__isnull=True, answers__isnull=False)
+            .exclude(answers={})
+            .exists()
+            or self.responses.filter(enc_answers__isnull=False).exists()
+            or self.responses.filter(enc_demographics__isnull=False).exists()
+        )
 
     def collects_patient_data(self) -> bool:
         """
@@ -2246,6 +2300,12 @@ Return the translation as JSON following the exact structure specified in the sy
         if self.encrypted_kek_org:
             self.encrypted_kek_org = secrets.token_bytes(64)
             keys_overwritten.append("org")
+        if self.enc_submission_private_key:
+            self.enc_submission_private_key = secrets.token_bytes(64)
+            keys_overwritten.append("submission_private_key")
+        if self.submission_public_key:
+            self.submission_public_key = secrets.token_bytes(64)
+            keys_overwritten.append("submission_public_key")
 
         if keys_overwritten:
             self.save(
@@ -2254,6 +2314,8 @@ Return the translation as JSON following the exact structure specified in the sy
                     "encrypted_kek_recovery",
                     "encrypted_kek_oidc",
                     "encrypted_kek_org",
+                    "enc_submission_private_key",
+                    "submission_public_key",
                 ]
             )
             logger.info(

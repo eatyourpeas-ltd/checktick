@@ -2758,6 +2758,11 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         # Response insights
         "analytics": analytics,
         "insights_locked": insights_locked,
+        # Security upgrade banner (planning doc §4.3 phase 3)
+        "needs_encryption_migration": (
+            survey.requires_whole_response_encryption()
+            and survey.needs_encryption_migration()
+        ),
     }
 
     # Import language constants for flags
@@ -6507,6 +6512,21 @@ def survey_group_create_from_template(request: HttpRequest, slug: str) -> HttpRe
     return redirect("surveys:groups", slug=slug)
 
 
+def _submission_key_for_survey(survey: Survey, key: bytes | None) -> bytes | None:
+    """Resolve the decryption key for a survey after an unlock.
+
+    Setup-flow keypair surveys store the wrapped private key directly in
+    encrypted_kek_*, so the unlocked key IS the private key. Migrated
+    surveys keep the wrapped KEK there and hold the private key encrypted
+    under the KEK (enc_submission_private_key), so one more unwrap step is
+    needed. Legacy non-keypair surveys return the KEK unchanged.
+    """
+    if key is None or not survey.has_submission_keypair():
+        return key
+    private_key = survey.get_submission_private_key(key)
+    return private_key if private_key is not None else key
+
+
 def get_survey_key_from_session(request: HttpRequest, survey_slug: str) -> bytes | None:
     """
     Option 4: Re-derive KEK from stored credentials on each request.
@@ -6564,21 +6584,25 @@ def get_survey_key_from_session(request: HttpRequest, survey_slug: str) -> bytes
         if unlock_method == "password":
             password = creds.get("password")
             if password:
-                return survey.unlock_with_password(password)
+                key = survey.unlock_with_password(password)
+                return _submission_key_for_survey(survey, key)
         elif unlock_method == "recovery":
             recovery_phrase = creds.get("recovery_phrase")
             if recovery_phrase:
-                return survey.unlock_with_recovery(recovery_phrase)
+                key = survey.unlock_with_recovery(recovery_phrase)
+                return _submission_key_for_survey(survey, key)
         elif unlock_method == "oidc":
             oidc_provider = creds.get("oidc_provider")
             oidc_subject = creds.get("oidc_subject")
             if oidc_provider and oidc_subject:
-                return survey.unlock_with_oidc(request.user)
+                key = survey.unlock_with_oidc(request.user)
+                return _submission_key_for_survey(survey, key)
         elif unlock_method == "organization_recovery":
             organization_id = creds.get("organization_id")
             if organization_id:
                 org = Organization.objects.get(id=organization_id)
-                return survey.unlock_with_org_key(org)
+                key = survey.unlock_with_org_key(org)
+                return _submission_key_for_survey(survey, key)
         elif unlock_method == "legacy":
             legacy_key_b64 = creds.get("legacy_key")
             if legacy_key_b64:
