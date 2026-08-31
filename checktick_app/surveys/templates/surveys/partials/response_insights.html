@@ -10,7 +10,26 @@ rendering changes
 {% endcomment %}
 
 {% load i18n %}
-{% if analytics.distributions %}
+{% if insights_locked %}
+<div class="mt-6">
+    <div class="bg-base-100 shadow-sm rounded-box">
+        <div class="p-6">
+            <h3 class="text-lg font-semibold mb-2">{% trans "Response Insights" %}</h3>
+            <div class="alert alert-warning">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <div>
+                    <p class="text-sm">
+                        {% blocktrans %}Responses to this survey are encrypted. Enter your encryption password to view answer distributions.{% endblocktrans %}
+                    </p>
+                    <a href="{% url 'surveys:unlock' slug=survey.slug %}" class="btn btn-sm btn-primary mt-2">{% trans "Unlock survey" %}</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% elif analytics.distributions %}
 <div class="mt-6">
     <details class="collapse collapse-arrow bg-base-100 shadow-sm" open>
         <summary class="collapse-title text-lg font-semibold cursor-pointer">

@@ -2695,10 +2695,22 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         }
     )
 
-    # Compute response analytics for insights charts
+    # Compute response analytics for insights charts.
+    # Answer content is unlock-gated (planning doc §5.4): when the survey has
+    # encrypted responses and no key is available in this session, the charts
+    # render a placeholder instead. Counts/sparklines above use metadata only.
     from .services.response_analytics import compute_response_analytics
 
-    analytics = compute_response_analytics(survey)
+    survey_key = get_survey_key_from_session(request, slug)
+    has_encrypted_responses = survey.responses.filter(
+        enc_answers__isnull=False
+    ).exists()
+    insights_locked = has_encrypted_responses and not survey_key
+    analytics = (
+        None
+        if insights_locked
+        else compute_response_analytics(survey, survey_key=survey_key)
+    )
 
     ctx = {
         "survey": survey,
@@ -2745,6 +2757,7 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         "supported_languages": SUPPORTED_SURVEY_LANGUAGES,
         # Response insights
         "analytics": analytics,
+        "insights_locked": insights_locked,
     }
 
     # Import language constants for flags

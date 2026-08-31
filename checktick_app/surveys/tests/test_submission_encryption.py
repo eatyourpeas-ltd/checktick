@@ -11,6 +11,7 @@ docs/encryption-technical-reference.md.
 import os
 
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 from django.utils import timezone
 import pytest
 
@@ -278,6 +279,60 @@ class TestSurveyResponseSubmissionStorage:
         assert csv_resp.status_code == 200
         body = b"".join(csv_resp.streaming_content).decode()
         assert "exportable answer" in body
+
+    def test_analytics_unlock_gated(self, client, keypair_survey):
+        """Dashboard distribution charts are unlock-gated for encrypted
+        surveys (planning doc §5.4): counts render without unlock, charts
+        require the key."""
+        from checktick_app.surveys.models import SurveyQuestion
+        from checktick_app.surveys.services.response_analytics import (
+            compute_response_analytics,
+        )
+
+        survey, private_key = keypair_survey
+        survey.status = Survey.Status.PUBLISHED
+        survey.visibility = Survey.Visibility.AUTHENTICATED
+        survey.allow_any_authenticated = True
+        survey.save()
+        question = SurveyQuestion.objects.create(
+            survey=survey,
+            text="Pick one",
+            type=SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE,
+            options={"choices": ["A", "B"]},
+            order=0,
+        )
+        for answer in ("A", "A", "B"):
+            response = SurveyResponse(survey=survey)
+            response.store_submission(
+                bytes(survey.submission_public_key), {str(question.id): answer}
+            )
+            response.save()
+
+        # Service-level: no key -> distributions empty; key -> computed
+        locked = compute_response_analytics(survey)
+        assert locked.total_responses == 3
+        assert locked.distributions == []
+        unlocked = compute_response_analytics(survey, survey_key=private_key)
+        dist = next(d for d in unlocked.distributions if d.question_id == question.id)
+        counts = {o["label"]: o["count"] for o in dist.options}
+        assert counts == {"A": 2, "B": 1}
+
+        # View-level: locked dashboard shows the placeholder, not charts
+        client.force_login(survey.owner)
+        resp = client.get(reverse("surveys:dashboard", args=[survey.slug]))
+        assert resp.context["insights_locked"] is True
+        content = resp.content.decode()
+        assert "Enter your encryption password" in content
+        assert "data-chart-data" not in content
+
+        # After unlock the charts render
+        client.post(
+            f"/surveys/{survey.slug}/unlock/",
+            {"unlock_method": "password", "password": "OwnerPassword123"},
+        )
+        resp = client.get(reverse("surveys:dashboard", args=[survey.slug]))
+        assert resp.context["insights_locked"] is False
+        assert "data-chart-data" in resp.content.decode()
 
 
 @pytest.mark.django_db
