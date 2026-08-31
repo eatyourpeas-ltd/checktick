@@ -108,7 +108,16 @@ def summarise_themes(
     joined = "\n".join(non_empty)
     token_estimate = max(1, len(joined) // 4)
 
-    if not getattr(settings, "LLM_ENABLED", False):
+    # Resolve the LLM client. When the caller injects one (the test path, or
+    # a future caller that wants a configured client), use it directly — the
+    # ``LLM_ENABLED`` flag is a production-deployment gate for constructing a
+    # real client from settings, not a hard kill switch that should override an
+    # explicit dependency injection. This keeps the mock-based tests honest in
+    # environments (e.g. CI) where ``LLM_ENABLED`` is False because no
+    # ``LLM_API_KEY``/``LLM_URL`` is configured.
+    if llm_client is not None:
+        client = llm_client
+    elif not getattr(settings, "LLM_ENABLED", False):
         return {
             "summary": "",
             "token_count": token_estimate,
@@ -117,19 +126,19 @@ def summarise_themes(
             "success": False,
             "error": "LLM features are disabled on this instance.",
         }
-
-    try:
-        client = llm_client if llm_client is not None else ConversationalSurveyLLM()
-    except Exception as exc:
-        logger.warning("LLM client unavailable for theme analysis: %s", exc)
-        return {
-            "summary": "",
-            "token_count": token_estimate,
-            "model_name": "",
-            "duration_ms": int((time.monotonic() - started) * 1000),
-            "success": False,
-            "error": "LLM client could not be initialised.",
-        }
+    else:
+        try:
+            client = ConversationalSurveyLLM()
+        except Exception as exc:
+            logger.warning("LLM client unavailable for theme analysis: %s", exc)
+            return {
+                "summary": "",
+                "token_count": token_estimate,
+                "model_name": "",
+                "duration_ms": int((time.monotonic() - started) * 1000),
+                "success": False,
+                "error": "LLM client could not be initialised.",
+            }
 
     user_prompt = (
         f"Question: {question_text}\n\n"
