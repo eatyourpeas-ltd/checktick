@@ -318,8 +318,10 @@ def send_branded_email(
     # <a href="url">text</a>, so strip_tags alone would drop the URL and
     # leave only the link text — bad for users who copy links manually and
     # for plain-text clients. Convert markdown links to "text: url" first.
+    # The pattern is linear-time (no nested quantifiers), so it is safe on
+    # uncontrolled input (CodeQL: polynomial regex).
     plain_message = re.sub(
-        r"\[([^\]]+)\]\((https?://[^)\s]+)\)",
+        r"\[([^\]\[]*)\]\((https?://[^)\s\[]+)\)",
         r"\1: \2",
         markdown_content,
     )
