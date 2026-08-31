@@ -37,9 +37,16 @@ def user(db):
     )
 
 
+RECOVERY_PHRASE = (
+    "abandon ability able about above absent absorb abstract absurd abuse "
+    "access accident"
+)  # noqa: S105
+
+
 @pytest.fixture
 def keypair_survey(db, user):
-    """Survey with a submission keypair; private key wrapped with password."""
+    """Survey with a submission keypair; private key wrapped with password
+    and recovery phrase (dual encryption, mirroring the real setup flow)."""
     private_key, public_key = generate_submission_keypair()
     survey = Survey.objects.create(
         owner=user,
@@ -48,6 +55,9 @@ def keypair_survey(db, user):
         submission_public_key=public_key,
         encrypted_kek_password=encrypt_kek_with_passphrase(
             private_key, "OwnerPassword123"
+        ),
+        encrypted_kek_recovery=encrypt_kek_with_passphrase(
+            private_key, RECOVERY_PHRASE
         ),
     )
     return survey, private_key
@@ -230,6 +240,44 @@ class TestSurveyResponseSubmissionStorage:
         response.refresh_from_db()
         assert response.enc_answers is None
         assert response.answers == {str(question.id): "test"}
+
+    def test_csv_export_decrypts_keypair_responses(self, client, keypair_survey):
+        """The streaming CSV export decrypts submission-keypair responses
+        after the owner unlocks the survey."""
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        survey, _ = keypair_survey
+        survey.status = Survey.Status.PUBLISHED
+        survey.visibility = Survey.Visibility.AUTHENTICATED
+        survey.allow_any_authenticated = True
+        survey.save()
+        question = SurveyQuestion.objects.create(
+            survey=survey,
+            text="Free text",
+            type=SurveyQuestion.Types.TEXT,
+            order=0,
+        )
+        participant = User.objects.create_user(
+            username="participant2", email="p2@example.com", password=TEST_PASSWORD
+        )
+        client.force_login(participant)
+        client.post(
+            f"/surveys/{survey.slug}/take/",
+            {f"q_{question.id}": "exportable answer"},
+        )
+        assert SurveyResponse.objects.filter(survey=survey).exists()
+
+        # Owner unlocks via the unlock view, then downloads the CSV
+        client.force_login(survey.owner)
+        unlock_resp = client.post(
+            f"/surveys/{survey.slug}/unlock/",
+            {"unlock_method": "password", "password": "OwnerPassword123"},
+        )
+        assert unlock_resp.status_code == 302
+        csv_resp = client.get(f"/surveys/{survey.slug}/export.csv")
+        assert csv_resp.status_code == 200
+        body = b"".join(csv_resp.streaming_content).decode()
+        assert "exportable answer" in body
 
 
 @pytest.mark.django_db

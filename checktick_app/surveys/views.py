@@ -7059,12 +7059,27 @@ def survey_export_csv(
                 except Exception:
                     pass  # Continue without demographics if decryption fails
 
+            # Whole-response encryption (submission keypair or legacy KEK):
+            # decrypt the payload for answers and demographics. Fail safe by
+            # continuing with whatever is readable rather than raising.
+            answers_dict = r.answers or {}
+            if r.enc_answers and survey_key:
+                try:
+                    full_response = r.load_complete_response(survey_key)
+                    answers_dict = full_response.get("answers", {})
+                    demographics = full_response.get("demographics") or demographics
+                except Exception:
+                    logger.warning(
+                        f"Failed to decrypt response {r.id} during CSV export "
+                        f"of survey {survey.slug}; exporting without it"
+                    )
+                    answers_dict = {}
+
             # Add demographics fields
             for field in demo_fields_for_export:
                 row.append(demographics.get(field, ""))
 
             # Get professional details from answers
-            answers_dict = r.answers or {}
             professional_data = answers_dict.get("professional", {})
 
             # Add professional fields
