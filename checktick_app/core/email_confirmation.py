@@ -3,11 +3,11 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
+from .email_utils import get_platform_branding, send_branded_email
 from .models import SiteBranding, UserProfile
 
 logger = logging.getLogger(__name__)
@@ -44,11 +44,16 @@ class EmailConfirmationManager:
             ]
         )
 
-        # Get branding info
-        branding = SiteBranding.objects.first()
-        if not branding:
-            # Create default branding if it doesn't exist
-            branding = SiteBranding.objects.create(pk=1)
+        # Get branding info (colours, fonts, logo) for the branded wrapper
+        try:
+            branding = get_platform_branding()
+        except Exception:
+            branding = None
+
+        # Ensure a SiteBranding row exists (legacy behaviour: some flows
+        # expect the singleton row to be present after signup).
+        if not SiteBranding.objects.filter(pk=1).exists():
+            SiteBranding.objects.create(pk=1)
 
         # Build confirmation URL
         if request:
@@ -67,18 +72,18 @@ class EmailConfirmationManager:
         }
 
         subject = f"Please confirm your email address - {settings.BRAND_TITLE}"
-        html_message = render_to_string("emails/confirm_email.html", context)
-        text_message = render_to_string("emails/confirm_email.txt", context)
 
         try:
-            send_mail(
+            markdown_content = render_to_string("emails/confirm_email.md", context)
+            sent = send_branded_email(
+                to_email=user.email,
                 subject=subject,
-                message=text_message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                html_message=html_message,
-                fail_silently=not settings.DEBUG,
+                markdown_content=markdown_content,
+                branding=branding,
+                context=context,
             )
+            if not sent:
+                raise RuntimeError("send_branded_email reported failure")
             return token, True, None
         except Exception as e:
             # Log the specific error for debugging

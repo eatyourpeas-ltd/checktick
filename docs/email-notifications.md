@@ -276,9 +276,45 @@ The {{ brand_title }} Team
 The base HTML template (`base_email.html`) applies:
 
 - **Responsive design** - Works on desktop and mobile
-- **Platform branding** - Uses colors and fonts from SiteBranding model
-- **Email client compatibility** - Inline CSS for broad support
-- **Professional styling** - Buttons, code blocks, lists, blockquotes
+- **Theme-aware branding** - Colours resolved from the daisyUI theme cascade (see below)
+- **Email client compatibility** - All colours are converted to sRGB hex because Gmail, Outlook and most webmail clients do not support `oklch()`
+- **Professional styling** - Pill buttons, code blocks, lists, blockquotes
+
+The visual design is a "letterhead" card: white body, brand logo + title with a short accent rule (primary colour), content, and a footer tinted with the theme's `base-200` colour. There is no full-bleed colour header block.
+
+### How Email Theme Colours Are Resolved
+
+`checktick_app/core/email_theme.py` resolves the colours used by `base_email.html`:
+
+1. **Custom theme CSS** (daisyUI variables such as `--color-primary`) if present
+2. **daisyUI preset colours** from `email_preset_colors.py` (generated from `node_modules/daisyui/theme/*.css`)
+3. **Fallback** to the next cascade level, then built-in defaults
+
+The cascade order matches the web cascade: survey style → organisation theme → platform theme (`SiteBranding.theme_preset_light` / `theme_light_css`, or `BRAND_THEME_PRESET_LIGHT` / `BRAND_THEME_CSS_LIGHT` env vars).
+
+Template keys produced: `primary_color`, `primary_content_color`, `accent_color`, `background_color`, `text_color`, `footer_bg_color`, `border_color`.
+
+**Regenerating the preset table:** if the daisyUI dependency is upgraded, regenerate `email_preset_colors.py` from the installed package:
+
+```bash
+python3 - <<'EOF'
+import re, glob, os
+keys = ["base-100","base-200","base-300","base-content","primary","primary-content","secondary","secondary-content","accent","accent-content","neutral","neutral-content","info","success","warning","error"]
+lines = []
+for f in sorted(glob.glob("node_modules/daisyui/theme/*.css")):
+    name = os.path.basename(f)[:-4]
+    css = open(f).read()
+    vars_ = dict(re.findall(r'--color-([\w-]+):\s*([^;]+);', css))
+    scheme = "dark" if 'color-scheme: dark' in css else "light"
+    lines.append(f'    "{name}": {{  # {scheme}')
+    for k in keys:
+        if k in vars_:
+            lines.append(f'        "{k}": "{vars_[k]}",')
+    lines.append("    },")
+header = open("checktick_app/core/email_preset_colors.py").read().split("PRESET_COLORS = {")[0]
+open("checktick_app/core/email_preset_colors.py","w").write(header + "PRESET_COLORS = {\n" + "\n".join(lines) + "\n}\n")
+EOF
+```
 
 ## Two-Level Theming
 
@@ -288,8 +324,8 @@ CheckTick supports theming at both platform and survey levels.
 
 Used for account-related emails (welcome, password change, survey deleted):
 
-- **Brand title** from `SiteBranding.title` or Django `settings.SITE_NAME`
-- **Primary color** from `SiteBranding.primary_color` or settings default
+- **Brand title** from `SiteBranding.title` or Django `settings.BRAND_TITLE`
+- **Colours** resolved from `SiteBranding.theme_light_css` (custom CSS) or `SiteBranding.theme_preset_light` (daisyUI preset), falling back to `BRAND_THEME_CSS_LIGHT` / `BRAND_THEME_PRESET_LIGHT` env vars
 - **Fonts** from `SiteBranding.font_heading` and `SiteBranding.font_body`
 - **Logo** from `SiteBranding.icon_url` (optional)
 
@@ -297,10 +333,10 @@ Configure via `/profile` (superusers only) under "Project theme and brand".
 
 ### Survey-Level Theming
 
-Used for survey-specific emails (survey created):
+Used for survey-specific emails (survey created, invites):
 
-- **Inherits platform defaults** as baseline
-- **Overrides** from `Survey.style` field if customized
+- **Full cascade resolved** — survey `style` overrides → organisation theme (`Organization.theme_preset_light` / `theme_light_css`) → platform theme
+- **Preset-aware** — `style["theme_light"]` (daisyUI preset name) and `style["custom_css"]` are both honoured
 - Allows per-survey branding for white-label use cases
 
 Example: A research organisation can create multiple surveys with different branding for different departments.
@@ -627,7 +663,9 @@ Make sure you're watching the correct terminal where `runserver` or `docker comp
 
 1. Check `SiteBranding` model exists: `python manage.py shell` → `from checktick_app.core.models import SiteBranding`
 2. Verify branding configured in profile (superuser only)
-3. Check `settings.SITE_NAME` and `settings.PRIMARY_COLOR` fallbacks
+3. Check `settings.BRAND_TITLE` and `settings.BRAND_THEME_PRESET_LIGHT` / `settings.BRAND_THEME_CSS_LIGHT` fallbacks
+4. If using a daisyUI preset (no custom CSS), verify the preset name is valid — see `checktick_app/core/email_preset_colors.py` for supported names
+5. Verify colours resolve: `python manage.py shell` → `from checktick_app.core.email_theme import resolve_email_colors; print(resolve_email_colors("corporate", ""))`
 
 ## Future Enhancements
 
