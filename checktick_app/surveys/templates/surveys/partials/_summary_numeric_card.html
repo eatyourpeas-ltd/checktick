@@ -1,0 +1,54 @@
+{% comment %}
+Numeric-question card for the summary report.
+
+Renders a compact summary-statistics table (count, min, max, mean, median,
+sum, stdev) for a number question. The stats are computed server-side in
+pure Python (planning doc §4.1) — no patient data leaves the DB layer.
+
+Expected context:
+  - num: a NumericSummary instance with .question_id, .question_text,
+    .count, .min, .max, .mean, .median, .sum, .stdev, and .summary_json
+    (the safe JSON payload for the copy-data button).
+{% endcomment %}
+{% load i18n %}
+<section class="card bg-base-100 shadow-sm mb-6 print:shadow-none print:break-inside-avoid" aria-labelledby="num-q-{{ num.question_id }}">
+  <div class="card-body">
+    <div class="flex items-center justify-between gap-3">
+      <h2 id="num-q-{{ num.question_id }}" class="card-title text-base font-semibold">
+        {{ num.question_text }}
+      </h2>
+      <span class="badge badge-ghost badge-sm">{{ num.count }} {% trans "responses" %}</span>
+    </div>
+
+    {% if num.count == 0 %}
+    <p class="text-sm text-base-content/70 mt-2">
+      {% trans "No numeric answers were submitted for this question." %}
+    </p>
+    {% else %}
+    <table class="table table-zebra mt-3 text-sm" aria-label="{% trans 'Summary statistics' %}">
+      <tbody>
+        <tr><th scope="row">{% trans "Count" %}</th><td>{{ num.count }}</td></tr>
+        <tr><th scope="row">{% trans "Min" %}</th><td>{{ num.min }}</td></tr>
+        <tr><th scope="row">{% trans "Max" %}</th><td>{{ num.max }}</td></tr>
+        <tr><th scope="row">{% trans "Mean" %}</th><td>{{ num.mean|floatformat:2 }}</td></tr>
+        <tr><th scope="row">{% trans "Median" %}</th><td>{{ num.median|floatformat:2 }}</td></tr>
+        <tr><th scope="row">{% trans "Sum" %}</th><td>{{ num.sum|floatformat:2 }}</td></tr>
+        <tr><th scope="row">{% trans "Std. dev." %}</th><td>{{ num.stdev|floatformat:2 }}</td></tr>
+      </tbody>
+    </table>
+    {% endif %}
+
+    <div class="card-actions justify-end mt-3 print:hidden">
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs copy-chart-data-btn"
+        data-chart-data="{{ num.summary_json }}"
+        data-question-id="{{ num.question_id }}"
+        data-copy-format="json"
+        title="{% trans 'Copy summary statistics as JSON to the clipboard' %}">
+        {% include "components/icons/copy.html" with classes="w-3 h-3 mr-1" %}
+        {% trans "Copy data" %}
+      </button>
+    </div>
+  </div>
+</section>

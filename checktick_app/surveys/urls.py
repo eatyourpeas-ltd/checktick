@@ -195,6 +195,17 @@ urlpatterns = [
     path("<slug:slug>/closed/", views.survey_closed, name="closed"),
     path("<slug:slug>/", views.survey_detail, name="detail"),
     path("<slug:slug>/dashboard/", views.survey_dashboard, name="dashboard"),
+    # Reporting — summary report view + LLM theme analysis endpoint
+    path(
+        "<slug:slug>/summary/",
+        views.survey_summary,
+        name="survey_summary",
+    ),
+    path(
+        "<slug:slug>/summary/themes/",
+        views.survey_summary_themes,
+        name="survey_summary_themes",
+    ),
     path("<slug:slug>/update-title/", views.update_survey_title, name="update_title"),
     path("<slug:slug>/delete/", views.survey_delete, name="delete"),
     path(

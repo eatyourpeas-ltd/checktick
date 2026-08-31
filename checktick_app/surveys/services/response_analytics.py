@@ -17,7 +17,6 @@ from typing import Any
 
 from django.db.models import QuerySet
 
-
 # Question types that get a bar-chart distribution.
 CHARTABLE_TYPES = {"mc_single", "mc_multi", "yesno", "likert", "dropdown"}
 # Question types whose answers are free text (collated + word cloud).
@@ -36,14 +35,75 @@ WORD_CLOUD_MIN_LENGTH = 3
 WORD_CLOUD_MAX_TERMS = 60
 _STOP_WORDS = frozenset(
     {
-        "the", "and", "for", "are", "but", "not", "you", "all", "any", "can",
-        "had", "her", "was", "one", "our", "out", "has", "have", "his", "how",
-        "its", "may", "own", "too", "who", "him", "she", "that", "this",
-        "with", "have", "from", "they", "will", "would", "there", "their",
-        "what", "when", "where", "which", "your", "were", "been", "than",
-        "then", "them", "these", "those", "about", "into", "some", "such",
-        "only", "also", "more", "most", "very", "just", "like", "make",
-        "made", "want", "well", "because", "should", "could", "does", "done",
+        "the",
+        "and",
+        "for",
+        "are",
+        "but",
+        "not",
+        "you",
+        "all",
+        "any",
+        "can",
+        "had",
+        "her",
+        "was",
+        "one",
+        "our",
+        "out",
+        "has",
+        "have",
+        "his",
+        "how",
+        "its",
+        "may",
+        "own",
+        "too",
+        "who",
+        "him",
+        "she",
+        "that",
+        "this",
+        "with",
+        "have",
+        "from",
+        "they",
+        "will",
+        "would",
+        "there",
+        "their",
+        "what",
+        "when",
+        "where",
+        "which",
+        "your",
+        "were",
+        "been",
+        "than",
+        "then",
+        "them",
+        "these",
+        "those",
+        "about",
+        "into",
+        "some",
+        "such",
+        "only",
+        "also",
+        "more",
+        "most",
+        "very",
+        "just",
+        "like",
+        "make",
+        "made",
+        "want",
+        "well",
+        "because",
+        "should",
+        "could",
+        "does",
+        "done",
     }
 )
 
@@ -409,6 +469,7 @@ def parse_date_range(
     suitable for ``__gte`` / ``__lte`` queries.
     """
     from datetime import datetime, time
+
     from django.utils import timezone
 
     start: Any | None = None
@@ -418,26 +479,20 @@ def parse_date_range(
         try:
             d = datetime.strptime(date_from.strip(), "%Y-%m-%d").date()
         except ValueError:
-            return None, None, (
-                "Invalid 'from' date format. Use YYYY-MM-DD."
-            )
+            return None, None, ("Invalid 'from' date format. Use YYYY-MM-DD.")
         start = timezone.make_aware(datetime.combine(d, time.min))
 
     if date_to:
         try:
             d = datetime.strptime(date_to.strip(), "%Y-%m-%d").date()
         except ValueError:
-            return None, None, (
-                "Invalid 'to' date format. Use YYYY-MM-DD."
-            )
+            return None, None, ("Invalid 'to' date format. Use YYYY-MM-DD.")
         # Inclusive end-of-day so a single-day range (from=to=2026-01-01)
         # captures the whole day's submissions.
         end = timezone.make_aware(datetime.combine(d, time.max))
 
     if start and end and start > end:
-        return None, None, (
-            "'from' date must be earlier than or equal to 'to' date."
-        )
+        return None, None, ("'from' date must be earlier than or equal to 'to' date.")
 
     return start, end, None
 
@@ -482,9 +537,7 @@ def _tokenise_for_word_cloud(text: str) -> list[str]:
     # are collapsed to keep the term shape simple.
     tokens = re.findall(r"[A-Za-z]+", text.lower())
     return [
-        t
-        for t in tokens
-        if len(t) >= WORD_CLOUD_MIN_LENGTH and t not in _STOP_WORDS
+        t for t in tokens if len(t) >= WORD_CLOUD_MIN_LENGTH and t not in _STOP_WORDS
     ]
 
 

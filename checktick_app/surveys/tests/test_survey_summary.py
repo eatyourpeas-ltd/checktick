@@ -19,7 +19,6 @@ These tests cover the service-layer behaviour described in
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -32,12 +31,6 @@ from checktick_app.surveys.models import (
     SurveyResponse,
 )
 from checktick_app.surveys.services.response_analytics import (
-    NUMERIC_TYPES,
-    TEXT_TYPES,
-    TextCollation,
-    NumericSummary,
-    SurveySummary,
-    WordCloudEntry,
     _coerce_numeric,
     _median,
     _tokenise_for_word_cloud,
@@ -45,7 +38,6 @@ from checktick_app.surveys.services.response_analytics import (
     compute_survey_summary,
     compute_text_collation,
     filter_responses_by_date,
-    parse_date_range,
 )
 from checktick_app.surveys.theme_analyzer import summarise_themes
 
@@ -65,7 +57,9 @@ def user(db):
 
 @pytest.fixture
 def survey(user, db):
-    s = Survey.objects.create(name="Summary Test Survey", slug="summary-test", owner=user)
+    s = Survey.objects.create(
+        name="Summary Test Survey", slug="summary-test", owner=user
+    )
     group = QuestionGroup.objects.create(name="Group 1", owner=user)
     s.question_groups.add(group)
     return s
@@ -111,9 +105,7 @@ class TestTextCollation:
         _add_response(survey, {str(q.id): "good"})
         _add_response(survey, {str(q.id): ""})  # skipped
         _add_response(survey, {})  # skipped (no key)
-        coll = compute_text_collation(
-            q, survey.responses.all(), total_responses=3
-        )
+        coll = compute_text_collation(q, survey.responses.all(), total_responses=3)
         assert coll.answered_count == 1
         assert coll.skipped_count == 2
 
@@ -305,8 +297,12 @@ class TestComputeSurveySummary:
         q_num = _add_question(survey, "number", "Age", order=0)
         q_text = _add_question(survey, "text", "Comments", order=1)
         q_yn = _add_question(survey, "yesno", "OK", order=2)
-        _add_response(survey, {str(q_num.id): 30, str(q_text.id): "fine", str(q_yn.id): "yes"})
-        _add_response(survey, {str(q_num.id): 40, str(q_text.id): "good", str(q_yn.id): "no"})
+        _add_response(
+            survey, {str(q_num.id): 30, str(q_text.id): "fine", str(q_yn.id): "yes"}
+        )
+        _add_response(
+            survey, {str(q_num.id): 40, str(q_text.id): "good", str(q_yn.id): "no"}
+        )
         summary = compute_survey_summary(survey)
         assert summary.total_responses == 2
         # question_order preserves document order across all three types.
@@ -346,7 +342,6 @@ class TestSummariseThemes:
 
     def test_mocked_llm_success_sanitised(self):
         """A successful LLM response is sanitised before being returned."""
-        from checktick_app.surveys.llm_client import ConversationalSurveyLLM
 
         class FakeClient:
             def chat_with_custom_system_prompt(self, prompt, convo, **kwargs):
@@ -369,7 +364,10 @@ class TestSummariseThemes:
 
         result = summarise_themes("Question?", ["a response"], llm_client=FakeClient())
         assert result["success"] is False
-        assert "failed" in result["error"].lower() or "unreachable" in result["error"].lower()
+        assert (
+            "failed" in result["error"].lower()
+            or "unreachable" in result["error"].lower()
+        )
 
     def test_mocked_llm_empty_response(self):
         class FakeClient:

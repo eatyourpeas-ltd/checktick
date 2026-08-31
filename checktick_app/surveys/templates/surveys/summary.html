@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+{% load survey_extras %}
+{% block title %}{% trans "Summary Report" %} - {{ survey.name }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6 max-w-5xl print:py-2 print:max-w-none print:px-0">
+  {# Breadcrumbs #}
+  <div class="prose mb-4 print:hidden">
+    {% trans "Surveys" as bc_surveys %}
+    {% trans "Summary Report" as bc_summary %}
+    {% include 'components/breadcrumbs.html' with crumb1_label=bc_surveys crumb1_href="/surveys/" crumb2_label=bc_summary crumb2_href="/surveys/"|add:survey.slug|add:"/summary/" %}
+  </div>
+
+  {# Header — survey name + total response count + print controls #}
+  <div class="flex items-center justify-between gap-3 mb-6 print:items-start">
+    <div>
+      <h1 class="text-2xl font-bold print:text-3xl">{{ survey.name }}</h1>
+      <p class="text-sm text-base-content/70 mt-1">
+        {% blocktrans with count=total_responses %}Summary report based on {{ count }} responses.{% endblocktrans %}
+        {% if date_from or date_to %}
+          {% blocktrans with from=date_from to=date_to %}Date range: {{ from }} → {{ to }}.{% endblocktrans %}
+        {% endif %}
+      </p>
+    </div>
+    <div class="flex gap-2 print:hidden">
+      <a href="{% url 'surveys:dashboard' slug=survey.slug %}" class="btn btn-ghost btn-sm">
+        {% trans "Back to dashboard" %}
+      </a>
+      <button onclick="window.print()" class="btn btn-primary btn-sm" type="button">
+        {% include "components/icons/download.html" with classes="w-4 h-4 mr-1" %}
+        {% trans "Print / Save as PDF" %}
+      </button>
+    </div>
+  </div>
+
+  {# Date-range filter (non-printing) #}
+  <form method="get" class="mb-6 bg-base-200 rounded-box p-4 print:hidden" aria-label="{% trans 'Filter summary by date range' %}">
+    <div class="flex flex-wrap items-end gap-3">
+      <div>
+        <label class="label" for="id_from">
+          <span class="label-text">{% trans "From" %}</span>
+        </label>
+        <input type="date" id="id_from" name="from" value="{{ date_from }}" class="input input-bordered input-sm" />
+      </div>
+      <div>
+        <label class="label" for="id_to">
+          <span class="label-text">{% trans "To" %}</span>
+        </label>
+        <input type="date" id="id_to" name="to" value="{{ date_to }}" class="input input-bordered input-sm" />
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">{% trans "Apply" %}</button>
+      {% if date_from or date_to %}
+      <a href="{% url 'surveys:survey_summary' slug=survey.slug %}" class="btn btn-ghost btn-sm">{% trans "Clear" %}</a>
+      {% endif %}
+    </div>
+    {% if date_error %}
+    <p class="alert alert-error mt-3 text-sm" role="alert">{{ date_error }}</p>
+    {% endif %}
+  </form>
+
+  {% if summary_locked %}
+  {# Unlock-gated state — encrypted responses, no key in session #}
+  <div class="alert alert-warning" role="status">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    </svg>
+    <div>
+      <h2 class="font-semibold">{% trans "Responses are encrypted" %}</h2>
+      <p class="text-sm">
+        {% blocktrans %}This survey's responses are encrypted. Unlock the survey to view the summary report.{% endblocktrans %}
+      </p>
+      <a href="{{ unlock_url }}" class="btn btn-primary btn-sm mt-2">{% trans "Unlock survey" %}</a>
+    </div>
+  </div>
+  {% elif total_responses == 0 %}
+  {# No responses #}
+  <div class="alert alert-info" role="status">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <span>{% trans "No responses to summarise yet. The summary report will appear here once responses are submitted." %}</span>
+  </div>
+  {% else %}
+  {# Main summary body — one question per section, in document order #}
+
+  {% for qid in summary.question_order %}
+    {% with entry=summary.question_index|get_item:qid %}
+      {% if entry.0 == "chartable" %}
+        {% with dist=summary.distributions|get_item_at:entry.1 %}
+          {% include "surveys/partials/_summary_chart_card.html" with dist=dist %}
+        {% endwith %}
+      {% elif entry.0 == "text" %}
+        {% with coll=summary.text_collations|get_item_at:entry.1 %}
+          {% include "surveys/partials/_summary_text_card.html" with coll=coll survey=survey %}
+        {% endwith %}
+      {% elif entry.0 == "numeric" %}
+        {% with num=summary.numeric_summaries|get_item_at:entry.1 %}
+          {% include "surveys/partials/_summary_numeric_card.html" with num=num %}
+        {% endwith %}
+      {% endif %}
+    {% endwith %}
+  {% endfor %}
+
+  {# LLM theme analysis warning — shown when there are text questions #}
+  {% if summary.text_collations %}
+  <div class="alert alert-warning mt-6 print:hidden" role="status">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+    <span class="text-sm">
+      {% blocktrans %}Responses may contain identifiable content — review the summary before sharing it. Theme analysis paraphrases responses; it does not redact names, postcodes, or clinician identifiers.{% endblocktrans %}
+    </span>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+
+{% block extra_js %}
+<script nonce="{{ request.csp_nonce }}" src="{% static 'js/summary-charts.js' %}?v={{ build.commit|default:build.timestamp }}"></script>
+{% endblock %}
+{% endblock %}

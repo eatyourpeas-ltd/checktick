@@ -35,6 +35,23 @@ def get_item(d, key):
         return None
 
 
+@register.filter(name="get_item_at")
+def get_item_at(lst, index):
+    """Index a list by an integer position (None-safe).
+
+    Used by ``surveys/summary.html`` to look up the per-type entry for a
+    question from ``SurveySummary.question_index[qid]`` which is a
+    ``(type_name, index)`` tuple. Falls back to ``None`` on any error so
+    the template renders an empty section rather than crashing.
+    """
+    try:
+        if lst is None or index is None:
+            return None
+        return lst[int(index)]
+    except (IndexError, TypeError, ValueError):
+        return None
+
+
 @register.simple_tag
 def int_range(start: int, end: int):
     """Return a Python range inclusive of both start and end for template loops.

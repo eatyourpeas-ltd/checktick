@@ -2788,6 +2788,206 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
 
 
 @login_required
+@email_confirmed_required
+@ratelimit(key="user", rate="100/h", block=True)
+def survey_summary(request: HttpRequest, slug: str) -> HttpResponse:
+    """Summary report view — ``GET /surveys/{slug}/summary/``.
+
+    Per ``docs/reporting-planning.md`` §4.2:
+      - Access: owner / organisation admin / view-permission members
+        (same as dashboard).
+      - Unlock-gated when any response has ``enc_answers`` set; available
+        without unlock for plaintext-only surveys.
+      - Date-range query params ``?from=&to=`` (ISO date, applied to
+        ``submitted_at``).
+      - Rate limit: 100 requests per hour per user.
+      - Audit-logged.
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_view(request.user, survey)
+
+    from .services.response_analytics import (
+        compute_survey_summary,
+        filter_responses_by_date,
+    )
+
+    # Date-range filtering applied upstream of all compute functions.
+    date_from = request.GET.get("from") or None
+    date_to = request.GET.get("to") or None
+    responses, date_error = filter_responses_by_date(survey, date_from, date_to)
+
+    # Unlock gate: when any response has enc_answers, the survey must be
+    # unlocked to read answer content. Plaintext-only surveys render the
+    # summary without unlock (planning doc §3.1).
+    survey_key = get_survey_key_from_session(request, slug)
+    has_encrypted_responses = survey.responses.filter(
+        enc_answers__isnull=False
+    ).exists()
+    summary_locked = has_encrypted_responses and not survey_key
+
+    summary = (
+        None
+        if summary_locked
+        else compute_survey_summary(survey, responses=responses, survey_key=survey_key)
+    )
+
+    # Audit the summary view (metadata only — never the responses or the
+    # computed summary, per AGENTS.md).
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.SURVEY,
+        survey=survey,
+        action=AuditLog.Action.UPDATE,
+        severity=AuditLog.Severity.INFO,
+        message="Viewed survey summary report",
+        metadata={
+            "survey_id": str(survey.id),
+            "survey_slug": survey.slug,
+            "total_responses": responses.count(),
+            "date_from": date_from or "",
+            "date_to": date_to or "",
+            "encrypted_responses": has_encrypted_responses,
+            "unlocked": bool(survey_key),
+        },
+    )
+
+    ctx = {
+        "survey": survey,
+        "summary": summary,
+        "summary_locked": summary_locked,
+        "date_from": date_from or "",
+        "date_to": date_to or "",
+        "date_error": date_error or "",
+        "total_responses": responses.count() if summary else 0,
+        # Unlock link for the locked-state UI.
+        "unlock_url": reverse("surveys:unlock", kwargs={"slug": slug}),
+        # Demographics are never surfaced in the summary (planning doc §4.4
+        # out-of-scope; they stay in the CSV export).
+    }
+    return render(request, "surveys/summary.html", ctx)
+
+
+@login_required
+@email_confirmed_required
+@require_http_methods(["POST"])
+@ratelimit(key="user", rate="20/h", block=True)
+def survey_summary_themes(request: HttpRequest, slug: str) -> JsonResponse:
+    """LLM theme summarisation endpoint — ``POST /surveys/{slug}/summary/themes/``.
+
+    Per ``docs/reporting-planning.md`` §3.3 and §4.2:
+      - Per-question LLM theme summarisation (one question at a time).
+      - Same access + unlock gate as the summary view.
+      - Separate rate limit (20 requests per hour per user) — LLM calls are
+        expensive.
+      - Audit-logged with metadata only: question id, response count, token
+        count, model name, success/failure, duration. Never the free-text
+        input or the LLM output verbatim, per AGENTS.md.
+      - Returns sanitised markdown.
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_view(request.user, survey)
+
+    # Unlock gate — same predicate as the summary view. Without unlock there
+    # is no decrypted free text to send to the LLM, so we fail closed.
+    survey_key = get_survey_key_from_session(request, slug)
+    has_encrypted_responses = survey.responses.filter(
+        enc_answers__isnull=False
+    ).exists()
+    if has_encrypted_responses and not survey_key:
+        return JsonResponse(
+            {"error": "Unlock the survey first to summarise themes."},
+            status=403,
+        )
+
+    # Resolve the target question. Only text/textarea questions are eligible;
+    # numeric / chartable questions are out of scope for theme analysis.
+    question_id = request.POST.get("question_id")
+    if not question_id:
+        return JsonResponse({"error": "question_id is required."}, status=400)
+    try:
+        qid_int = int(question_id)
+    except ValueError:
+        return JsonResponse({"error": "Invalid question_id."}, status=400)
+
+    question = get_object_or_404(SurveyQuestion, survey=survey, id=qid_int)
+    if question.type not in ("text", "textarea"):
+        return JsonResponse(
+            {"error": "Theme analysis is only available for text questions."},
+            status=400,
+        )
+
+    # Date-range filter (optional; defaults to all responses).
+    from .services.response_analytics import filter_responses_by_date
+
+    date_from = request.POST.get("from") or None
+    date_to = request.POST.get("to") or None
+    responses, date_error = filter_responses_by_date(survey, date_from, date_to)
+    if date_error:
+        return JsonResponse({"error": date_error}, status=400)
+
+    # Collate the decrypted free text for this question only.
+    from .services.response_analytics import (
+        compute_text_collation,
+    )
+
+    collation = compute_text_collation(
+        question,
+        responses,
+        survey_key=survey_key,
+        total_responses=responses.count(),
+    )
+    response_texts = collation.responses
+    if not response_texts:
+        return JsonResponse(
+            {
+                "summary": "",
+                "error": "No responses to summarise for this question.",
+                "success": False,
+            },
+            status=200,
+        )
+
+    from .theme_analyzer import summarise_themes
+
+    result = summarise_themes(
+        question.text,
+        response_texts,
+    )
+
+    # Audit-log with metadata only (planning doc §3.3, AGENTS.md). Never log
+    # the input free text or the LLM output verbatim.
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.SURVEY,
+        survey=survey,
+        action=AuditLog.Action.UPDATE,
+        severity=AuditLog.Severity.INFO,
+        message="LLM theme analysis requested",
+        metadata={
+            "survey_id": str(survey.id),
+            "survey_slug": survey.slug,
+            "question_id": str(question.id),
+            "response_count": len(response_texts),
+            "token_count": result.get("token_count", 0),
+            "model_name": result.get("model_name", ""),
+            "duration_ms": result.get("duration_ms", 0),
+            "success": bool(result.get("success")),
+            # Intentionally no input text or output summary here.
+        },
+    )
+
+    return JsonResponse(
+        {
+            "summary": result.get("summary", ""),
+            "success": bool(result.get("success")),
+            "error": result.get("error", ""),
+            "question_id": str(question.id),
+        },
+        status=200 if result.get("success") else 503,
+    )
+
+
+@login_required
 @require_http_methods(["POST"])
 def update_survey_title(request: HttpRequest, slug: str) -> JsonResponse:
     """Update the title/name of a survey via AJAX."""
