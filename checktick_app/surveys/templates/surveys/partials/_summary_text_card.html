@@ -1,0 +1,85 @@
+{% comment %}
+Text/textarea-question card for the summary report.
+
+Renders:
+  - the list of collated responses (each truncated to ~500 chars upstream),
+  - the answered/skipped counts,
+  - the word cloud (rendered client-side from the JSON payload by
+    summary-charts.js — no LLM, planning doc §3.4),
+  - a "Summarise themes" button per question that POSTs to the themes
+    endpoint (planning doc §3.3 — opt-in, per-question, unlock-gated,
+    separately rate-limited, audit-logged with metadata only).
+
+Expected context:
+  - coll: a TextCollation instance with .question_id, .question_text,
+    .answered_count, .skipped_count, .responses (list of strings),
+    .word_cloud (list of WordCloudEntry), and .word_cloud_json
+    (the safe JSON payload).
+  - survey: the Survey instance (for the themes endpoint URL).
+{% endcomment %}
+{% load i18n %}
+<section class="card bg-base-100 shadow-sm mb-6 print:shadow-none print:break-inside-avoid" aria-labelledby="text-q-{{ coll.question_id }}">
+  <div class="card-body">
+    <div class="flex items-center justify-between gap-3">
+      <h2 id="text-q-{{ coll.question_id }}" class="card-title text-base font-semibold">
+        {{ coll.question_text }}
+      </h2>
+      <span class="badge badge-ghost badge-sm">
+        {{ coll.answered_count }} {% trans "answered" %} · {{ coll.skipped_count }} {% trans "skipped" %}
+      </span>
+    </div>
+
+    {% if coll.answered_count == 0 %}
+    <p class="text-sm text-base-content/70 mt-2">
+      {% trans "No responses were submitted for this question." %}
+    </p>
+    {% else %}
+
+    {# Word cloud — client-side render from JSON payload. The container is #}
+    {# populated by summary-charts.js; the data attribute carries the safe #}
+    {# JSON. No LLM involved (planning doc §3.4). #}
+    <div class="mt-4 print:hidden" aria-label="{% trans 'Word cloud' %}">
+      <div
+        class="word-cloud-container min-h-[6rem] flex flex-wrap gap-2 items-baseline"
+        data-word-cloud="{{ coll.word_cloud_json }}"
+        data-question-id="{{ coll.question_id }}"
+      >
+        <noscript>
+          <p class="text-xs text-base-content/60">
+            {% trans "The word cloud requires JavaScript. See the response list below for the underlying text." %}
+          </p>
+        </noscript>
+      </div>
+    </div>
+
+    {# Collated response list — each response truncated to ~500 chars. #}
+    <details class="mt-4 print:block" open>
+      <summary class="cursor-pointer select-none text-sm font-medium print:hidden">
+        {% blocktrans with count=coll.answered_count %}Show all {{ count }} responses{% endblocktrans %}
+      </summary>
+      <ul class="mt-3 space-y-2 list-disc list-inside text-sm">
+        {% for response in coll.responses %}
+        <li>{{ response }}</li>
+        {% endfor %}
+      </ul>
+    </details>
+
+    {# LLM theme analysis — opt-in, per question. The button POSTs to the #}
+    {# themes endpoint; summary-charts.js wires it up and renders the #}
+    {# sanitised markdown into the placeholder below. #}
+    <div class="mt-4 print:hidden" data-theme-target="{{ coll.question_id }}">
+      <button
+        type="button"
+        class="btn btn-outline btn-sm summarise-themes-btn"
+        data-survey-slug="{{ survey.slug }}"
+        data-question-id="{{ coll.question_id }}"
+        data-themes-url="{% url 'surveys:survey_summary_themes' slug=survey.slug %}"
+        title="{% trans 'Summarise the recurring themes in these responses with the LLM' %}">
+        {% include "components/icons/llm.html" with classes="w-4 h-4 mr-1" %}
+        {% trans "Summarise themes" %}
+      </button>
+      <div class="theme-summary-result mt-3" data-question-id="{{ coll.question_id }}" aria-live="polite"></div>
+    </div>
+    {% endif %}
+  </div>
+</section>

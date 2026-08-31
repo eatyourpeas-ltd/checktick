@@ -1,0 +1,71 @@
+{% comment %}
+Chartable-question card for the summary report.
+
+Reuses the same bar-chart markup as the dashboard insights partial but adds a
+"Copy data" button that serialises the underlying distribution to CSV/TSV
+via the summary-charts.js module (navigator.clipboard.writeText — no library,
+per planning doc §4.3).
+
+Expected context:
+  - dist: an AnswerDistribution instance with .question_text, .question_type,
+    .total_responses, .options (list of {label, count, percent}), and
+    .options_json (the safe JSON payload).
+{% endcomment %}
+{% load i18n %}
+<section class="card bg-base-100 shadow-sm mb-6 print:shadow-none print:break-inside-avoid" aria-labelledby="chart-q-{{ dist.question_id }}">
+  <div class="card-body">
+    <div class="flex items-center justify-between gap-3">
+      <h2 id="chart-q-{{ dist.question_id }}" class="card-title text-base font-semibold">
+        {{ dist.question_text }}
+      </h2>
+      <span class="badge badge-ghost badge-sm">{{ dist.total_responses }} {% trans "responses" %}</span>
+    </div>
+
+    <div
+      class="response-chart mt-3"
+      data-question-id="{{ dist.question_id }}"
+      data-question-type="{{ dist.question_type }}"
+      data-chart-data="{{ dist.options_json }}"
+    >
+      <div class="space-y-2">
+        {% for option in dist.options %}
+        <div class="flex items-center gap-2 text-sm">
+          <span class="w-32 truncate flex-shrink-0" title="{{ option.label }}">
+            {% if dist.question_type == 'yesno' %}
+              {% if option.label == 'Yes' %}<span class="text-success" aria-hidden="true">✓</span>
+              {% else %}<span class="text-error" aria-hidden="true">✗</span>{% endif %}
+            {% endif %}
+            {{ option.label }}
+          </span>
+          <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
+            <div
+              class="h-full rounded-full {% if dist.question_type == 'yesno' %}{% if option.label == 'Yes' %}bg-success{% else %}bg-error{% endif %}{% else %}bg-primary{% endif %}"
+              style="width: {{ option.percent }}%"
+              role="progressbar"
+              aria-valuenow="{{ option.percent }}"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-label="{{ option.label }}: {{ option.percent }}%"
+            ></div>
+          </div>
+          <span class="w-20 text-right text-base-content/70 flex-shrink-0">
+            {{ option.count }} <span class="text-xs">({{ option.percent }}%)</span>
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card-actions justify-end mt-3 print:hidden">
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs copy-chart-data-btn"
+        data-chart-data="{{ dist.options_json }}"
+        data-question-id="{{ dist.question_id }}"
+        title="{% trans 'Copy this chart data as CSV to the clipboard' %}">
+        {% include "components/icons/copy.html" with classes="w-3 h-3 mr-1" %}
+        {% trans "Copy data" %}
+      </button>
+    </div>
+  </div>
+</section>
