@@ -1286,6 +1286,29 @@ class Survey(models.Model):
             or self.encrypted_kek_org
         )
 
+    def setup_submission_keypair(self) -> bytes:
+        """Generate and attach a submission keypair for this survey.
+
+        Returns:
+            The raw 32-byte X25519 private key. The caller must wrap it with
+            the owner's credentials (password / recovery phrase / OIDC / org
+            key) via the existing encrypted_kek_* setters — those helpers
+            wrap arbitrary 32-byte keys, so no other changes are needed.
+
+        The public key is stored on the survey and used to encrypt responses
+        at submission time; the server never needs the private key to
+        encrypt.
+        """
+        from .utils import generate_submission_keypair
+
+        private_key, public_key = generate_submission_keypair()
+        self.submission_public_key = public_key
+        if self.pk:
+            # Persist immediately: the set_*_encryption helpers save with
+            # narrow update_fields lists that would drop this column.
+            Survey.objects.filter(pk=self.pk).update(submission_public_key=public_key)
+        return private_key
+
     def has_submission_keypair(self) -> bool:
         """Check if this survey encrypts submissions with its public key.
 

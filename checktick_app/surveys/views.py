@@ -997,9 +997,10 @@ def survey_create(request: HttpRequest) -> HttpResponse:
 
                 if password and recovery_phrase:
                     try:
-                        import os
-
-                        survey_kek = os.urandom(32)
+                        # Generate a submission keypair: responses are
+                        # encrypted with the public key; the private key is
+                        # wrapped with the owner's credentials below.
+                        survey_kek = survey.setup_submission_keypair()
 
                         # Store hash for legacy API compatibility
                         from .utils import make_key_hash
@@ -1254,8 +1255,17 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
                 demo[field] = val
         # Enrich with IMD data if enabled and postcode is present
         demo = _enrich_demographics_with_imd(demo, patient_group)
-        # Option 4: Re-derive KEK from stored credentials
-        if demo:
+        if survey.has_submission_keypair() and survey.status != Survey.Status.DRAFT:
+            # Public-key submission encryption: no key material needed from
+            # the participant; decryption requires the owner's unlock.
+            resp.store_submission(
+                bytes(survey.submission_public_key),
+                resp.answers,
+                demo or None,
+            )
+        elif demo:
+            # Legacy path: demographics-only encryption when the owner has
+            # unlocked this survey in the current session.
             survey_key = get_survey_key_from_session(request, slug)
             if survey_key:
                 resp.store_demographics(survey_key, demo)
@@ -3985,10 +3995,9 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
     # Auto-encrypt for organization SSO users (no setup page needed)
     # Applies to ALL surveys (not just patient data surveys)
     if is_org_member and is_sso_user and is_first_publish and not has_encryption:
-        import os
-
-        # Generate survey encryption key
-        kek = os.urandom(32)
+        # Generate a submission keypair (public key encrypts responses;
+        # the private key is wrapped with the owner's OIDC identity below)
+        kek = survey.setup_submission_keypair()
 
         # Set up OIDC encryption for automatic unlock
         try:
@@ -4097,11 +4106,12 @@ def survey_encryption_setup(request: HttpRequest, slug: str) -> HttpResponse:
     is_org_member = survey.organization is not None
 
     if request.method == "POST":
-        import os
-
         from .utils import generate_bip39_phrase
 
-        kek = os.urandom(32)  # 256-bit survey encryption key
+        # Generate a submission keypair: responses are encrypted with the
+        # public key; the private key (kek) is wrapped with the owner's
+        # chosen credentials in each branch below.
+        kek = survey.setup_submission_keypair()
 
         # Handle SSO user choice (individual users only)
         if is_sso_user and not is_org_member:
@@ -4700,7 +4710,7 @@ def _handle_participant_submission(
             submitted_by=request.user if request.user.is_authenticated else None,
             access_token=token_obj if token_obj else None,
         )
-        # Demographics: only store if authenticated and key in session
+        # Demographics: collect if authenticated and key in session
         patient_group, demographics_fields = _get_patient_group_and_fields(survey)
         demo = {}
         for field in demographics_fields:
@@ -4709,8 +4719,17 @@ def _handle_participant_submission(
                 demo[field] = val
         # Enrich with IMD data if enabled and postcode is present
         demo = _enrich_demographics_with_imd(demo, patient_group)
-        # Option 4: Re-derive KEK from stored credentials
-        if demo:
+        if survey.has_submission_keypair() and survey.status != Survey.Status.DRAFT:
+            # Public-key submission encryption: no key material needed from
+            # the participant; decryption requires the owner's unlock.
+            resp.store_submission(
+                bytes(survey.submission_public_key),
+                resp.answers,
+                demo or None,
+            )
+        elif demo:
+            # Legacy path: demographics-only encryption when the owner has
+            # unlocked this survey in the current session.
             survey_key = get_survey_key_from_session(request, survey.slug)
             if survey_key:
                 resp.store_demographics(survey_key, demo)

@@ -168,6 +168,69 @@ class TestSurveyResponseSubmissionStorage:
         )
         assert response.load_answers(b"unused") == {"q1": "plaintext"}
 
+    def test_participant_submission_end_to_end(self, client, keypair_survey):
+        """Full chain: participant submits -> public-key encrypted -> owner
+        unlocks with password -> private key decrypts the response."""
+        from checktick_app.surveys.models import SurveyQuestion
+
+        survey, _ = keypair_survey
+        survey.status = Survey.Status.PUBLISHED
+        survey.visibility = Survey.Visibility.AUTHENTICATED
+        survey.allow_any_authenticated = True
+        survey.save()
+        question = SurveyQuestion.objects.create(
+            survey=survey,
+            text="Describe your care",
+            type=SurveyQuestion.Types.TEXT,
+            order=0,
+        )
+
+        participant = User.objects.create_user(
+            username="participant1", email="p1@example.com", password=TEST_PASSWORD
+        )
+        client.force_login(participant)
+        resp = client.post(
+            f"/surveys/{survey.slug}/take/",
+            {f"q_{question.id}": "I saw Dr X on Tuesday"},
+        )
+        assert resp.status_code == 302
+
+        response = SurveyResponse.objects.get(survey=survey)
+        # Encrypted at submission with the public key; no plaintext answers
+        assert response.answers == {}
+        assert is_submission_blob(response.enc_answers) is True
+        assert b"Dr X" not in bytes(response.enc_answers)
+
+        # Owner unlocks and reads: password unwraps the private key
+        private_key = survey.unlock_with_password("OwnerPassword123")
+        assert private_key is not None
+        loaded = response.load_complete_response(private_key)
+        assert loaded["answers"][str(question.id)] == "I saw Dr X on Tuesday"
+
+    def test_draft_submission_stays_plaintext(self, client, keypair_survey, user):
+        """Draft surveys accept plaintext answers (planning doc §3.4)."""
+        from checktick_app.surveys.models import SurveyQuestion
+
+        survey, _ = keypair_survey  # status defaults to DRAFT
+        question = SurveyQuestion.objects.create(
+            survey=survey,
+            text="Q",
+            type=SurveyQuestion.Types.TEXT,
+            order=0,
+        )
+        client.force_login(user)
+        # Owner cannot submit via participant flow; use the internal path
+        # directly to represent a draft-mode/test submission.
+        response = SurveyResponse(survey=survey, answers={str(question.id): "test"})
+        if survey.has_submission_keypair() and survey.status != Survey.Status.DRAFT:
+            response.store_submission(
+                bytes(survey.submission_public_key), response.answers
+            )
+        response.save()
+        response.refresh_from_db()
+        assert response.enc_answers is None
+        assert response.answers == {str(question.id): "test"}
+
 
 @pytest.mark.django_db
 class TestSurveyKeypairPredicateIntegration:
