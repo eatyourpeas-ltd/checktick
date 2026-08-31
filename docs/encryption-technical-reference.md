@@ -51,89 +51,102 @@ CheckTick implements a **production-ready dual-encryption system** (Option 2 + O
 
 ### Overview
 
-CheckTick protects all survey response data using **dual-path encryption** with:
+CheckTick protects all survey response data using **public-key submission encryption** combined with **dual-path key wrapping**:
 
-- **Primary Method**: Password-based unlock for daily use
+- **Submission Encryption**: Every response is encrypted with the survey's PUBLIC key at submission time — the server can encrypt but cryptographically cannot decrypt
+- **Primary Method**: Password-based unlock for daily use (unwraps the survey's private key)
 - **Backup Method**: BIP39 recovery phrase for account recovery
-- **Algorithm**: AES-GCM (Authenticated Encryption with Associated Data)
-- **Key Derivation**: Scrypt KDF (n=2^14, r=8, p=1)
+- **Payload Algorithm**: AES-256-GCM (Authenticated Encryption with Associated Data) with a random per-response DEK
+- **Key Wrapping**: X25519 ECDH + HKDF-SHA256 (submission), Scrypt KDF (n=2^14, r=8, p=1) for password/recovery wrapping
 - **Key Size**: 256-bit (32 bytes)
-- **Authentication**: PBKDF2-HMAC-SHA256 (200,000 iterations)
-- **Forward Secrecy**: KEK re-derived on each request, never persisted
+- **Authentication**: PBKDF2-HMAC-SHA256 (200,000 iterations) for recovery-phrase derivation
+- **Forward Secrecy**: Private key re-derived on each request, never persisted
 - **Session Security**: 30-minute timeout with encrypted credential storage
+- **Participants**: Never provide any key material — public, unlisted, token, and authenticated surveys all encrypt identically at submission
 
 ### How It Works
 
 #### 1. Survey Creation
 
-When a survey is created via the web interface, users choose their encryption method:
+When a survey is created via the web interface, users choose their encryption method. The server generates a per-survey X25519 keypair:
 
 ```python
-# Generate random 32-byte survey encryption key (KEK)
-kek = os.urandom(32)
+# Generate a submission keypair (X25519)
+# - public key: stored on the survey, used to encrypt responses
+# - private key: returned to the caller, wrapped with owner credentials
+private_key = survey.setup_submission_keypair()
 
-# Set up dual-path encryption (Option 2)
 password = request.POST.get("password")  # User's chosen password
 recovery_words = generate_bip39_phrase(12)  # Generated 12-word phrase
 
-# Encrypt KEK with both password and recovery phrase
-survey.set_dual_encryption(kek, password, recovery_words)
+# Wrap the private key with both password and recovery phrase.
+# The encrypted_kek_password / encrypted_kek_recovery fields hold the
+# wrapped PRIVATE key for keypair surveys (legacy surveys hold a wrapped
+# symmetric KEK — see "Legacy compatibility" below).
+survey.set_dual_encryption(private_key, password, recovery_words)
 
 # Display recovery phrase to user (one-time only)
 # User must write it down and confirm they've saved it
 ```
 
-The dual encryption process:
+The key setup process:
 
-1. **Password Path**: KEK encrypted with user's password using Scrypt KDF
-2. **Recovery Path**: KEK encrypted with BIP39 recovery phrase using PBKDF2
-3. **Storage**: Only encrypted KEKs stored, never plaintext keys
-4. **Hint**: First and last words of recovery phrase stored as hint (e.g., "apple...zebra")
+1. **Keypair Generation**: X25519 keypair generated per survey; public key stored in `Survey.submission_public_key`
+2. **Password Path**: Private key encrypted with user's password using Scrypt KDF
+3. **Recovery Path**: Private key encrypted with BIP39 recovery phrase using PBKDF2
+4. **Storage**: Only the public key (not secret) and wrapped private key are stored, never plaintext key material
+5. **Hint**: First and last words of recovery phrase stored as hint (e.g., "apple...zebra")
 
 #### 2. Data Encryption
 
-All survey responses are encrypted before storage. Every published survey has a KEK configured, and all response data — answers and demographics alike — is stored as encrypted blobs:
+All survey responses are encrypted **at submission time** with the survey's public key. The server performs this using only public-key material — no participant interaction and no secret key on the server:
 
 ```python
-# All survey responses: encrypt answers + any demographics together
-full_response = {
-    "answers": {
-        "q1": "mild",
-        "q2": "3 days",
-    },
-    "demographics": {  # present only if survey collects them
-        "first_name": "John",
-        "nhs_number": "1234567890",
-        "date_of_birth": "1980-01-01"
-    }
-}
-
-# Store complete encrypted response
-response.store_complete_response(survey_key, answers, demographics)
+# At submission (participant never provides a key):
+# answers + demographics are encrypted together into one blob
+response.store_submission(
+    bytes(survey.submission_public_key),  # raw X25519 public key
+    answers,                              # {question_id: answer}
+    demographics or None,                 # patient demographics, if any
+)
 # response.enc_answers contains the encrypted blob
 # response.answers is cleared (empty dict)
-# response.enc_demographics is None (not used for whole-response encryption)
+# response.enc_demographics is None (demographics are inside the payload)
 ```
 
-The encryption process:
+The hybrid encryption process (per response):
 
-1. Derives encryption key from survey key using Scrypt KDF with random salt
-2. Generates random 12-byte nonce
-3. Encrypts JSON data with AES-GCM
-4. Stores: `salt (16 bytes) | nonce (12 bytes) | ciphertext`
+1. Generates a random 32-byte DEK (data encryption key)
+2. Encrypts the JSON payload (answers + demographics) with AES-256-GCM using the DEK
+3. Generates an ephemeral X25519 keypair and computes ECDH against the survey's public key
+4. Derives a wrap key via HKDF-SHA256 and encrypts (wraps) the DEK with AES-256-GCM
+5. Stores: `MAGIC "CKEC2" (5) | ephemeral_pub (32) | wrap_nonce (12) | wrapped_dek (48) | data_nonce (12) | ciphertext+tag`
 
-**Why whole-response encryption for all surveys:**
+**Why public-key submission encryption:**
 
-- Free-text answers may contain identifying information even in non-patient surveys
-- Consistent encryption model — no plaintext path for any response data
+- Participants never provide a key — public, unlisted, token, and authenticated surveys all encrypt identically
+- The server can encrypt but **cryptographically cannot decrypt**: response data is unreadable without the survey's private key, which only exists unwrapped in an unlocked owner session
+- Free-text answers may contain identifying information even in non-patient surveys; demographics ride in the same encrypted payload (this also fixes a historical gap where participant-submitted demographics could be silently dropped)
 - Complete protection prevents re-identification attacks
-- Simpler model: all published surveys are encrypted; all responses are encrypted blobs
 
-> **Note on `patient_details_encrypted` template**: Surveys that collect structured patient data (NHS numbers, clinical identifiers etc.) via this template still have the same underlying storage model. The distinction is in *what fields are collected*, not in whether encryption is applied — all surveys are encrypted.
+**Which surveys encrypt (the Option C predicate):**
+
+`Survey.requires_whole_response_encryption()` returns `True` if ANY of:
+
+1. The survey collects patient data (a `patient_details_encrypted` question group), OR
+2. The declared `respondent_audience` is `patient` or `public`, OR
+3. The survey owner authenticates via SSO / OIDC, OR
+4. The survey has a submission keypair.
+
+It returns `False` **only** for password-user, staff-audience surveys without patient identifiers where the creator has recorded an explicit, audit-logged opt-out declaration (`encryption_opt_out_declared` audit event). Surveys that existed before this upgrade were grandfathered with a `legacy-1.0` declaration (audit-logged, metadata only) so their plaintext responses remain readable without owner keys. Draft surveys may still store plaintext answers regardless of the predicate.
+
+**Legacy compatibility:**
+
+Response blobs written by the previous symmetric-KEK scheme (`salt (16) | nonce (12) | ciphertext`) remain fully readable. `load_answers()` / `load_complete_response()` detect the `CKEC2` magic prefix and dispatch to the correct decryption path; legacy blobs are decrypted with the survey's wrapped KEK exactly as before.
 
 #### 3. Data Decryption
 
-To view encrypted data, users must "unlock" the survey:
+To view encrypted data, users must "unlock" the survey. Unlocking unwraps the survey's private key (for keypair surveys) or the KEK (for legacy surveys):
 
 ```python
 # User provides password or recovery phrase
@@ -164,21 +177,25 @@ if survey_kek:
 # On each request needing the KEK, re-derive it
 survey_key = get_survey_key_from_session(request, survey.slug)
 if survey_key:
-    demographics = response.load_demographics(survey_key)
+    # survey_key is the survey's PRIVATE key (keypair surveys) or the KEK
+    # (legacy surveys); read paths dispatch on the blob format
+    full = response.load_complete_response(survey_key)
+    demographics = full.get("demographics", {})
 ```
 
 ### Current Security Properties
 
-✅ **Zero-Knowledge**: Server never stores encryption keys in plaintext
-✅ **Dual-Path Encryption**: Password + recovery phrase backup method
-✅ **Per-Survey Isolation**: Each survey has unique encryption key
-✅ **Authenticated Encryption**: AES-GCM prevents tampering
-✅ **Strong KDF**: Scrypt protects against brute-force attacks
-✅ **Forward Secrecy**: KEK re-derived on each request, never persisted in session
+✅ **Server Cannot Decrypt**: Responses are encrypted with the survey's public key; the server holds no secret that can open them
+✅ **Zero-Plaintext-Storage**: Private keys/KEKs only ever stored wrapped; responses only stored as ciphertext
+✅ **Dual-Path Key Wrapping**: Password + recovery phrase backup method
+✅ **Per-Survey Isolation**: Each survey has a unique keypair
+✅ **Authenticated Encryption**: AES-256-GCM prevents tampering (payload and DEK wrap)
+✅ **Strong KDF**: Scrypt protects password-wrapped keys against brute-force attacks
+✅ **Forward Secrecy**: Private key re-derived on each request, never persisted in session
 ✅ **Minimal Session Storage**: Only encrypted credentials stored, not key material
 ✅ **Automatic Timeout**: 30-minute session expiration for unlocked surveys
 ✅ **Recovery Phrase**: BIP39-compatible 12-word backup phrases
-✅ **Production Ready**: 46/46 unit tests + 7/7 integration tests passing
+✅ **Keyless Participants**: Public/token/unlisted respondents submit without any key material
 ✅ **Healthcare Compliant**: Designed for clinician workflows
 
 ### Session Security Model

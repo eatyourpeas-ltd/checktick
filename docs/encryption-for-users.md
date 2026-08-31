@@ -25,6 +25,16 @@ CheckTick protects your sensitive survey data with encryption. This guide explai
 
 CheckTick implements **ethical key recovery**: if you lose both your password AND recovery phrase, the platform can help you regain access through a secure identity verification process. This ensures patient data remains accessible while maintaining strong security.
 
+## How Response Encryption Works (2026 upgrade)
+
+Every response collected by an encrypted survey is now sealed with **your survey's own encryption key the moment it is submitted** — before it touches the database:
+
+- **Respondents never provide a key.** Public links, email tokens, unlisted links, and logged-in participants all submit exactly as before — nothing changes for them.
+- **The platform cannot read your responses.** Responses are encrypted with your survey's *public* key; only the matching *private* key — which is wrapped with your password, recovery phrase, or SSO identity — can open them.
+- **Demographics are included.** Any demographics your survey collects are encrypted inside the same sealed response.
+- **Viewing requires unlock.** Dashboard distribution charts, summary reports, and CSV exports show answer content only after you unlock the survey. Response counts and timestamps remain visible without unlocking.
+- **Staff-audience opt-out.** If your survey is for staff/colleagues only, collects no patient identifiers, and you use a password account, you may explicitly opt out of response encryption at publish time by making a signed declaration (logged to the audit trail). Surveys created before this upgrade were automatically grandfathered as plaintext and remain readable without your key.
+
 ---
 
 ## Free Tier
@@ -285,7 +295,7 @@ If you prefer an additional recovery mechanism, you can opt in to **SSO + Recove
 
 #### Whole Survey Encryption
 
-When your survey collects patient data, **the entire response is encrypted**, not just the demographics:
+When your survey is encrypted (the default for all new surveys), **the entire response is encrypted at submission**, not just the demographics:
 
 - ✅ Patient identifiers (NHS number, name, DOB)
 - ✅ Clinical observations and notes
@@ -293,7 +303,7 @@ When your survey collects patient data, **the entire response is encrypted**, no
 - ✅ All checkbox/dropdown selections
 - ✅ Everything in that survey response
 
-This provides complete protection - you can't accidentally expose clinical context by encrypting identifiers alone.
+This provides complete protection - you can't accidentally expose clinical context by encrypting identifiers alone. Responses are sealed with your survey's public key as they are submitted, so respondents (whether anonymous, token holders, or logged in) never handle any key material, and the platform itself cannot read the responses without your unlocked key.
 
 #### Recovery Options for Standalone Teams
 

@@ -178,6 +178,8 @@ As organisation owner, you can recover any survey in your organisation:
 
 For team surveys, recovery is instant. For individual user surveys within your organisation, you may need to follow the platform recovery process.
 
+**Note**: Organisation key escrow and platform/Vault recovery now escrow and unwrap the survey **private key** (the same mechanisms and escrow fields as before). Organisation admins recovering a survey key can decrypt responses as before.
+
 ### Recovery Dashboard
 
 The recovery dashboard shows:
@@ -415,9 +417,9 @@ After time delay completes:
    - XOR combination happens in memory only
    - Full platform key exists briefly, then cleared
 
-4. **User's KEK retrieved from Vault**
-   - Platform key decrypts the escrowed key
-   - Key is made available to user's session
+4. **User's survey private key retrieved from Vault**
+   - Platform key decrypts the escrowed key material (the wrapped survey private key)
+   - Unwrapped private key is made available to user's session
 
 5. **User regains access**
    - Survey unlocks with recovered key
@@ -667,19 +669,19 @@ vault operator rekey
 
 ---
 
-#### 7. Survey KEKs (Key Encryption Keys) ❌ (No Routine Rotation)
+#### 7. Survey Keys (X25519 Keypairs) ❌ (No Routine Rotation)
 
-**What They Are**: Per-survey encryption keys that encrypt patient data.
+**What They Are**: Per-survey X25519 keypairs. The public key is stored on the survey and used to encrypt every response at submission (hybrid encryption: random per-response AES-256-GCM key, wrapped via ephemeral X25519 ECDH). The private key is stored wrapped in the survey's existing key escrow fields and is what unlocks decryption.
 
 **Why Not Rotate**:
 
-- Each survey already has unique key (isolation by design)
-- Password/recovery phrase protect access
+- Each survey already has unique keypair (isolation by design)
+- The server can always encrypt but cryptographically cannot decrypt; only owner unlock or recovery reveals the private key
 - Rotation requires re-encrypting all survey responses
 
 **Exception**: Rotate only when:
 
-- Specific survey's KEK known to be compromised
+- Specific survey's private key known to be compromised
 - User reports unauthorized access to specific survey
 
 **Alternative**: For unauthorized access concerns, audit logs + investigate rather than blanket rotation.
@@ -696,7 +698,7 @@ vault operator rekey
 | **Vault unseal keys** | Only after major incident | `vault operator rekey` | **CRITICAL*** |
 | Organization keys | Only if compromised | Re-encrypt hierarchy | N/A |
 | Team keys | Only if compromised | Re-encrypt team data | N/A |
-| Survey KEKs | Only if compromised | Re-encrypt survey | N/A |
+| Survey keys (X25519 keypairs) | Only if compromised | Re-encrypt survey | N/A |
 
 \* Priority is CRITICAL when needed, but it's rarely needed.
 

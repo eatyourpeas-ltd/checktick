@@ -2,10 +2,23 @@
 title: Security Upgrade — Encrypt All Survey Responses at Rest
 category: security
 priority: 1
-status: planning
+status: in-progress
 ---
 
 # Security Upgrade: Encrypt All Survey Responses at Rest
+
+> **Implementation status (2026-08-31):** Phases 1–3 and the Option B key
+> architecture are implemented on branch `planning-docs`:
+> model fields + Option C predicate (0054), grandfathering of pre-existing
+> password-user non-patient surveys as plaintext via `legacy-1.0`
+> declarations (0055), per-survey X25519 submission keypairs with
+> public-key response encryption — server can encrypt, cannot decrypt —
+> (0056 + crypto layer), keypair generation wired into all encryption
+> setup flows, submission paths encrypting answers + demographics for
+> keypair surveys, and CSV export decryption. Documentation updated.
+> Still to come: publish-flow audience prompt + declaration UI,
+> analytics unlock-gating, and the interactive migration command for
+> legacy encrypted surveys (§4.3 phase 3).
 
 This document is the planning record for a security posture upgrade: extending
 AES-256-GCM at-rest encryption from patient-data surveys only, to **all**

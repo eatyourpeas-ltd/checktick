@@ -22,6 +22,7 @@ This procedure applies to all requests made under UK GDPR Articles 15-22, includ
 1. **Identify the Subject:** Verify the requester's identity (e.g., via registered email or transaction ID).
 2. **Identify the Role:** * If the request concerns **Account Data**, {{ platform_name }} (Controller) handles it.
    * If it concerns **Survey Data**, we notify the Customer (Controller) and assist them in fulfilling the request.
+3. **Encrypted Survey Data:** SARs concerning responses on encrypted surveys (including encrypted **non-patient** surveys) follow the same unlock-and-decrypt path as patient-data surveys: the survey owner unlocks their key material (password, recovery phrase, OIDC, or organisation key) to decrypt the responses, and the extracted data is provided to the Controller to fulfil the request. Surveys with a recorded encryption opt-out store responses in plaintext and can be extracted directly.
 
 ## 4. Handling an Objection (Article 21)
 
