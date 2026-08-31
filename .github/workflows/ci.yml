@@ -130,8 +130,10 @@ jobs:
 
   mirror-codeberg:
     # Mirror main to Codeberg after CI passes. Requires repository secrets:
-    #   CODEBERG_REPO: e.g. eatyourpeas/checktick
-    #   CODEBERG_TOKEN: Codeberg access token with repo write scope
+    #   CODEBERG_REPO: e.g. eatyourpeas/checktick (create the repo on Codeberg
+    #     first, do NOT initialise it with a README — it must be empty)
+    #   CODEBERG_TOKEN: Codeberg access token with write repository scope
+    #     (Codeberg -> Settings -> Applications -> Manage Access Tokens)
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
