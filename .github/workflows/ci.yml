@@ -153,4 +153,7 @@ jobs:
           echo "Mirroring to codeberg.org/$CODEBERG_PATH"
           git clone --bare "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" mirror.git
           cd mirror.git
-          git push --mirror "https://x-access-token:${CODEBERG_TOKEN}@codeberg.org/${CODEBERG_PATH}.git"
+          # Push only main (force-update, no ref deletions). A full `--mirror`
+          # would try to delete stale refs on Codeberg, which Forgejo rejects
+          # if any of them is the repo's default branch.
+          git push --force "https://x-access-token:${CODEBERG_TOKEN}@codeberg.org/${CODEBERG_PATH}.git" "refs/heads/main:refs/heads/main"
