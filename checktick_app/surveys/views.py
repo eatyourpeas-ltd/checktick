@@ -4845,6 +4845,7 @@ def survey_take(request: HttpRequest, slug: str) -> HttpResponse:
         return redirect("/accounts/login/?next=" + request.path)
 
     # For authenticated surveys, check invitation if not allowing any authenticated
+    invitation_token = None
     if (
         survey.visibility == Survey.Visibility.AUTHENTICATED
         and request.user.is_authenticated
@@ -4852,11 +4853,12 @@ def survey_take(request: HttpRequest, slug: str) -> HttpResponse:
     ):
         # Check if user has a valid invitation
         user_email = request.user.email
-        has_invitation = SurveyAccessToken.objects.filter(
-            survey=survey,
-            for_authenticated=True,
-            note__icontains=f"Invited: {user_email}",
-        ).exists()
+        invite_filter = {
+            "survey": survey,
+            "for_authenticated": True,
+            "note__icontains": f"Invited: {user_email}",
+        }
+        has_invitation = SurveyAccessToken.objects.filter(**invite_filter).exists()
 
         if not has_invitation:
             messages.error(
@@ -4865,6 +4867,17 @@ def survey_take(request: HttpRequest, slug: str) -> HttpResponse:
                 "This survey is invitation-only.",
             )
             return redirect("surveys:closed", slug=slug)
+
+        # Resolve an unused invitation so the submission consumes it: the
+        # response links to the token and used_at/used_by are set, which is
+        # how the invites dashboard tracks completion. If every invitation
+        # for this email is already used, pass None — duplicate submissions
+        # are still blocked by the one-response-per-user constraint.
+        invitation_token = (
+            SurveyAccessToken.objects.filter(**invite_filter, used_at__isnull=True)
+            .order_by("-created_at")
+            .first()
+        )
 
     # If survey requires CAPTCHA for anonymous users
     if (
@@ -4876,7 +4889,7 @@ def survey_take(request: HttpRequest, slug: str) -> HttpResponse:
             messages.error(request, "CAPTCHA verification failed.")
             return redirect("surveys:take", slug=slug)
 
-    return _handle_participant_submission(request, survey, token_obj=None)
+    return _handle_participant_submission(request, survey, token_obj=invitation_token)
 
 
 @require_http_methods(["GET", "POST"])
