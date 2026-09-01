@@ -445,7 +445,7 @@ class TestInvitesBadgeVisibility:
 
         assert response.status_code == 200
         content = response.content.decode()
-        assert "Invites:" in content
+        assert "Track invites" in content
         assert "invites_pending" in response.context
 
     def test_invites_badge_hidden_for_public_visibility(self, client, user, survey):
@@ -498,8 +498,8 @@ class TestInvitesBadgeVisibility:
 
         assert response.status_code == 200
         content = response.content.decode()
-        # The badge SHOULD appear for authenticated surveys with invites
-        assert "Invites:" in content
+        # The invite tracking button SHOULD appear for authenticated surveys with invites
+        assert "Track invites" in content
 
     def test_invites_badge_hidden_for_unlisted_visibility(self, client, user, survey):
         """Invites badge should NOT be shown when visibility is 'unlisted'."""

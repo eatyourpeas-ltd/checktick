@@ -115,7 +115,15 @@
   <span class="badge bg-base-200 text-base-content border border-base-300">{% trans "Total responses" %}: {{ total }}{% if survey.max_responses %} / {{ survey.max_responses }}{% endif %}</span>
   {% if survey.visibility == 'token' or survey.visibility == 'authenticated' %}
     {% if invites_sent > 0 %}
-    <a class="badge bg-base-200 text-base-content border border-base-300 hover:bg-base-300 transition-colors cursor-pointer" href="{% url 'surveys:invites_pending' slug=survey.slug %}">{% trans "Invites" %}: {{ invites_sent }}{% if invites_pending > 0 %} ({{ invites_pending }} {% trans "pending" %}){% endif %}</a>
+    <a class="btn btn-outline btn-sm" href="{% url 'surveys:invites_pending' slug=survey.slug %}"
+       title="{% trans 'See who has been invited, who has completed, and resend invitations' %}"
+       aria-label="{% trans 'Track invited participants and their completion status' %}">
+      {% include "components/icons/envelope.html" with classes="w-4 h-4" %}
+      {% trans "Track invites" %}: {{ invites_sent }}
+      {% if invites_pending > 0 %}
+        <span class="badge badge-warning badge-sm">{{ invites_pending }} {% trans "pending" %}</span>
+      {% endif %}
+    </a>
     {% endif %}
   {% endif %}
 </div>

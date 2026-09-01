@@ -682,6 +682,7 @@
       </div>
 
       <div class="modal-action">
+        <a id="email-invites-link" class="btn btn-outline" href="{% url 'surveys:invites_pending' slug=survey.slug %}">{% trans "View invite status" %}</a>
         <button id="email-done-btn" class="btn btn-primary">{% trans "Done" %}</button>
       </div>
     </div>
