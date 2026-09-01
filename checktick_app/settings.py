@@ -465,6 +465,37 @@ STORAGES = {
     },
 }
 
+# Cache backend configuration.
+#
+# The default Django LocMemCache is per-process: with gunicorn --workers 4 the
+# async invite/translation task status (and django-ratelimit counters) written
+# by one worker are invisible to the others, causing spurious "task not found"
+# errors and 4x-looser rate limits in production.
+#
+# - production: DatabaseCache (a plain `django_cache` table in the existing
+#   Postgres service; created via `manage.py createcachetable` in the container
+#   entrypoint). No extra infrastructure required.
+# - development / tests: LocMemCache (no table needed, per-process is fine).
+# - CACHE_BACKEND env var: explicit override ("database" or "locmem").
+_cache_backend = env(
+    "CACHE_BACKEND",
+    default="database" if ENVIRONMENT == "production" else "locmem",
+)
+if _cache_backend == "database":
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "LOCATION": "django_cache",
+            "OPTIONS": {"MAX_ENTRIES": 100000},
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
+
 # Media uploads (used for admin-uploaded icons if configured)
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"

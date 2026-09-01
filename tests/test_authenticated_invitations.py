@@ -16,6 +16,7 @@ from checktick_app.surveys.models import (
     QuestionGroup,
     Survey,
     SurveyAccessToken,
+    SurveyQuestion,
 )
 
 User = get_user_model()
@@ -818,3 +819,101 @@ class TestInvitedUserSurveyListRedirect:
 
         # Should see the list page (with a "not yet open" banner), not be redirected
         assert response.status_code == 200
+
+
+# ============================================================================
+# Completion tracking for authenticated invitations
+# ============================================================================
+
+
+@pytest.mark.django_db
+class TestAuthenticatedInvitationCompletion:
+    """Submitting an authenticated survey must consume the invitee's
+    invitation token so the invites dashboard records completion."""
+
+    def _publish_with_question(self, authenticated_survey):
+        authenticated_survey.status = Survey.Status.PUBLISHED
+        authenticated_survey.save()
+        return SurveyQuestion.objects.create(
+            survey=authenticated_survey,
+            text="What is your name?",
+            type=SurveyQuestion.Types.TEXT,
+            required=True,
+            order=0,
+        )
+
+    def test_submission_marks_invitation_completed(
+        self, client, owner, authenticated_survey, existing_user
+    ):
+        token = SurveyAccessToken.objects.create(
+            survey=authenticated_survey,
+            token="completion-test-token",
+            created_by=owner,
+            note=f"Invited: {existing_user.email}",
+            for_authenticated=True,
+        )
+        question = self._publish_with_question(authenticated_survey)
+
+        client.force_login(existing_user)
+        response = client.post(
+            reverse("surveys:take", kwargs={"slug": authenticated_survey.slug}),
+            {f"q_{question.id}": "Test Answer"},
+        )
+
+        assert response.status_code == 302
+        assert "thank" in response.url
+
+        token.refresh_from_db()
+        assert token.used_at is not None
+        assert token.used_by == existing_user
+
+        resp = authenticated_survey.responses.get(submitted_by=existing_user)
+        assert resp.access_token == token
+
+    def test_invites_page_shows_completed_after_submission(
+        self, client, owner, authenticated_survey, existing_user
+    ):
+        SurveyAccessToken.objects.create(
+            survey=authenticated_survey,
+            token="completion-page-token",
+            created_by=owner,
+            note=f"Invited: {existing_user.email}",
+            for_authenticated=True,
+        )
+        question = self._publish_with_question(authenticated_survey)
+
+        client.force_login(existing_user)
+        client.post(
+            reverse("surveys:take", kwargs={"slug": authenticated_survey.slug}),
+            {f"q_{question.id}": "Test Answer"},
+        )
+
+        client.force_login(owner)
+        response = client.get(
+            reverse(
+                "surveys:invites_pending", kwargs={"slug": authenticated_survey.slug}
+            )
+        )
+
+        assert response.status_code == 200
+        assert b"Completed" in response.content
+        assert b"Pending: 0" in response.content
+
+    def test_self_service_submission_does_not_consume_invitation(
+        self, client, owner, authenticated_survey, existing_user
+    ):
+        """In self-service mode there is no invitation to consume; the
+        response should still be recorded."""
+        authenticated_survey.allow_any_authenticated = True
+        question = self._publish_with_question(authenticated_survey)
+
+        client.force_login(existing_user)
+        response = client.post(
+            reverse("surveys:take", kwargs={"slug": authenticated_survey.slug}),
+            {f"q_{question.id}": "Test Answer"},
+        )
+
+        assert response.status_code == 302
+        assert authenticated_survey.responses.filter(
+            submitted_by=existing_user, access_token__isnull=True
+        ).exists()

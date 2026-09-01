@@ -39,11 +39,11 @@ DEFAULT_GRACE_DAYS = 30
 # Users created before this date are treated as "existing" (pre-feature)
 # This is set to the deployment date of the email confirmation feature.
 # Adjust this constant when deploying to production.
-FEATURE_CUTOFF_DATE = getattr(
-    settings,
-    "EMAIL_CONFIRMATION_CUTOFF",
-    timezone.make_aware(timezone.datetime(2025, 6, 25)),
-)
+#
+# NOTE: this default is a constant, not evaluated at import time against
+# settings — the effective cutoff is read from settings in handle() so that
+# EMAIL_CONFIRMATION_CUTOFF overrides (and test isolation) work reliably.
+DEFAULT_FEATURE_CUTOFF_DATE = timezone.make_aware(timezone.datetime(2025, 6, 25))
 
 User = get_user_model()
 
@@ -91,18 +91,23 @@ class Command(BaseCommand):
         verbose = options["verbose"]
         grace_days = options["grace_days"]
 
+        cutoff = timezone.now() - timedelta(days=grace_days)
+        feature_cutoff_date = getattr(
+            settings,
+            "EMAIL_CONFIRMATION_CUTOFF",
+            DEFAULT_FEATURE_CUTOFF_DATE,
+        )
+
         self.stdout.write(
             self.style.SUCCESS(f"Starting unconfirmed user pruning at {timezone.now()}")
         )
         self.stdout.write(f"  Grace period: {grace_days} days")
-        self.stdout.write(f"  Feature cutoff: {FEATURE_CUTOFF_DATE.date()}")
+        self.stdout.write(f"  Feature cutoff: {feature_cutoff_date.date()}")
 
         if dry_run:
             self.stdout.write(
                 self.style.WARNING("DRY RUN MODE - No changes will be made")
             )
-
-        cutoff = timezone.now() - timedelta(days=grace_days)
 
         # Find unconfirmed, active users whose grace period has expired
         unconfirmed_users = (
@@ -126,7 +131,7 @@ class Command(BaseCommand):
         skipped = 0
 
         for user in unconfirmed_users:
-            is_existing_user = user.date_joined < FEATURE_CUTOFF_DATE
+            is_existing_user = user.date_joined < feature_cutoff_date
             has_data = _user_has_meaningful_data(user)
 
             if verbose or dry_run:

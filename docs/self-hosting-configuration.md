@@ -486,6 +486,7 @@ services:
   web:
     command: >
       sh -c "python manage.py migrate --noinput &&
+             python manage.py createcachetable &&
              python manage.py collectstatic --noinput &&
              gunicorn checktick_app.wsgi:application
              --bind 0.0.0.0:8000
@@ -502,6 +503,37 @@ services:
 - Formula: `(2 × CPU cores) + 1`
 - Example: 4 core server = 9 workers
 - Threads: 2-4 per worker for I/O-bound apps
+
+### Cache Backend
+
+Django's default `LocMemCache` is per-process. With multiple Gunicorn workers,
+async task progress (invitation/translation emails) written by one worker is
+invisible to the others, causing spurious "task not found" errors, and
+`django-ratelimit` counters are effectively per-worker (limits loosened by the
+worker count).
+
+In production (`ENVIRONMENT=production`) CheckTick defaults to
+`django.core.cache.backends.db.DatabaseCache` — a plain `django_cache` table in
+the existing Postgres database (created automatically by
+`manage.py createcachetable` in the container entrypoint). No extra services
+(Redis, memcached) are required.
+
+To override the default:
+
+```bash
+# Explicit choice: "database" (default in production) or "locmem"
+CACHE_BACKEND=database
+```
+
+Notes:
+
+- The database backend stores only ephemeral metadata (task progress,
+  rate-limit counters) — never survey responses, credentials, or patient data.
+- Because counters become shared across workers, rate limits defined in the
+  app (e.g. `10/m` on survey take endpoints) are now enforced as true global
+  limits rather than per-worker limits.
+- The `django_cache` table is throwaway; it can be excluded from backups if
+  desired, though including it is harmless.
 
 ### Memory Limits
 
