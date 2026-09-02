@@ -43,7 +43,7 @@ body:
         3. Fill out '...'
         4. See error
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: expected-behavior
@@ -52,7 +52,7 @@ body:
       description: What you expected to happen
       placeholder: "Describe what you expected to happen"
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: component
@@ -100,7 +100,7 @@ body:
         - CheckTick Version: [if self-hosting, git commit or tag]
         - Docker Version: [if self-hosting]
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: logs
