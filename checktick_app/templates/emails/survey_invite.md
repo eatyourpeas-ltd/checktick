@@ -16,11 +16,7 @@ This is a one-time use link created specifically for you:
 
 [**Complete Survey Now**]({{ survey_link }})
 
-Or copy and paste this URL into your browser:
-
-```
-{{ survey_link }}
-```
+Or copy and paste this link into your browser: <{{ survey_link }}>
 
 {% if qr_code_data_uri %}
 
