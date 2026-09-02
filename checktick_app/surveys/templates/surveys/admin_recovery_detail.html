@@ -224,7 +224,7 @@
                 <form method="post" action="{% url 'surveys:admin_recovery_approve_primary' request_obj.id %}{% if context_type == 'organization' %}?org={{ organization.id }}{% elif context_type == 'team' %}?team={{ team.id }}{% endif %}">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-success"
-                            onclick="return confirm('{% trans "Approve as primary authorizer? A second administrator must also approve." %}')">
+                            data-confirm="{% trans "Approve as primary authorizer? A second administrator must also approve." %}">
                         {% trans "Approve as Primary" %}
                     </button>
                 </form>
@@ -242,7 +242,7 @@
                 <form method="post" action="{% url 'surveys:admin_recovery_approve_secondary' request_obj.id %}{% if context_type == 'organization' %}?org={{ organization.id }}{% elif context_type == 'team' %}?team={{ team.id }}{% endif %}">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-success"
-                            onclick="return confirm('{% trans "Approve as secondary authorizer? This will start the time delay period." %}')">
+                            data-confirm="{% trans "Approve as secondary authorizer? This will start the time delay period." %}">
                         {% trans "Approve as Secondary" %}
                     </button>
                 </form>
@@ -250,7 +250,7 @@
                 {% endif %}
 
                 {% if request_obj.status in 'pending_verification,verification_in_progress,awaiting_primary,awaiting_secondary' and can_reject %}
-                <button class="btn btn-error" onclick="document.getElementById('reject-modal').showModal()">
+                <button type="button" class="btn btn-error" data-open-modal="reject-modal">
                     {% trans "Reject Request" %}
                 </button>
                 {% endif %}
@@ -320,7 +320,7 @@
                           placeholder="{% trans 'Reason for rejection...' %}" required></textarea>
             </div>
             <div class="modal-action">
-                <button type="button" class="btn" onclick="this.closest('dialog').close()">{% trans "Cancel" %}</button>
+                <button type="button" class="btn" data-close-modal>{% trans "Cancel" %}</button>
                 <button type="submit" class="btn btn-error">{% trans "Reject Request" %}</button>
             </div>
         </form>

@@ -55,6 +55,10 @@ document.addEventListener("DOMContentLoaded", function () {
   // Add event listener to team size dropdown
   const teamSizeSelect = document.getElementById("team-size-select");
   if (teamSizeSelect) {
+    // Keep clicks inside the dropdown from toggling the parent tier label
+    teamSizeSelect.addEventListener("click", function (e) {
+      e.stopPropagation();
+    });
     teamSizeSelect.addEventListener("change", function () {
       // Also check the team tier radio when changing team size
       const teamRadio = document.getElementById("team-tier-radio");

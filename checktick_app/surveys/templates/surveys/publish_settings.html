@@ -352,7 +352,7 @@
                   {% trans "Reopen Survey" %}
                 </button>
               {% else %}
-                <button type="submit" name="action" value="close" class="btn btn-error btn-outline" onclick="return confirm('{% trans "Are you sure you want to close this survey? This action cannot be undone." %}')">
+                <button type="submit" name="action" value="close" class="btn btn-error btn-outline" data-confirm="{% trans "Are you sure you want to close this survey? This action cannot be undone." %}">
                   {% trans "Close Survey" %}
                 </button>
               {% endif %}

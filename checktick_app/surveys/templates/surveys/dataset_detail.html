@@ -31,7 +31,7 @@
         </a>
       {% endif %}
       {% if can_delete %}
-        <form method="post" action="{% url 'surveys:dataset_delete' dataset_id=dataset.id %}" onsubmit="return confirm('{% trans "Are you sure you want to delete this dataset?" %}');">
+        <form method="post" action="{% url 'surveys:dataset_delete' dataset_id=dataset.id %}" data-confirm="{% trans "Are you sure you want to delete this dataset?" %}">
           {% csrf_token %}
           <button type="submit" class="btn btn-error btn-sm">
             {% trans "Delete" %}
@@ -41,7 +41,7 @@
       {% if can_create %}
         {% if dataset.category == 'snomed' %}
           <form method="post" action="{% url 'surveys:dataset_snomed_snapshot' dataset_id=dataset.id %}"
-                onsubmit="return confirm('{% trans "This will snapshot all live SNOMED options into a new Postgres dataset. Continue?" %}');">
+                data-confirm="{% trans "This will snapshot all live SNOMED options into a new Postgres dataset. Continue?" %}">
             {% csrf_token %}
             <button type="submit" class="btn btn-accent btn-sm">
               {% trans "Snapshot to Custom Dataset" %}

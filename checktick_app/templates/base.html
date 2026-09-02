@@ -312,6 +312,8 @@
     {# Global toast root for lightweight notifications #}
     <div id="toast-root" class="toast toast-top toast-end z-[1000]" aria-live="polite" aria-atomic="true"></div>
     <script src="{% static 'js/toast.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}"></script>
+    {# CSP-safe replacements for inline event handlers (data-confirm, modal open/close, copy, etc.) #}
+    <script src="{% static 'js/confirm-modals.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}"></script>
 
     {% block extra_js %}{% endblock %}
   </body>
