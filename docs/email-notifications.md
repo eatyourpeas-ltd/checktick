@@ -227,8 +227,9 @@ Each email has two components:
 | `password_changed.md` | Security notification | `user.username`, `user.email`, `brand_title` |
 | `survey_created.md` | Survey creation confirmation | `user.username`, `survey.title`, `survey.slug`, `survey.state` |
 | `survey_deleted.md` | Survey deletion confirmation | `user.username`, `survey_name`, `survey_slug` |
-| `authenticated_invite_existing_user.md` | Existing-user survey invite | `recipient_name`, `inviter_name`, `survey_name`, `dashboard_url` |
-| `authenticated_invite_new_user.md` | New-user survey invite | `recipient_name`, `inviter_name`, `survey_name`, `register_url` |
+| `survey_invite.md` | Anonymous token survey invite | `survey_name`, `survey_link`, `organization_name`, `end_date`, `contact_email`, `brand_title`, `qr_code_data_uri` |
+| `survey_invite_authenticated.md` | Authenticated survey invite (existing user) | `survey_name`, `survey_link`, `organization_name`, `end_date`, `contact_email`, `brand_title`, `qr_code_data_uri` |
+| `survey_invite_authenticated_new.md` | Authenticated survey invite (new user) | `survey_name`, `signup_link`, `survey_link`, `organization_name`, `end_date`, `contact_email`, `brand_title`, `qr_code_data_uri` |
 | `team_invitation.md` | Team invitation | `team_name`, `role`, `role_display`, `invited_by_name`, `invited_by_email`, `signup_link`, `organization_name`, `brand_title` |
 | `org_invitation.md` | Organisation invitation | `org_name`, `role`, `role_display`, `invited_by_name`, `invited_by_email`, `signup_link`, `brand_title` |
 | `subscription_created.md` | Subscription started | `user_name`, `plan_name`, `next_payment_date`, `amount`, `currency` |

@@ -15,6 +15,8 @@ To access this survey, you'll need to create a free CheckTick account. Click the
 [Create Account and Access Survey]({{ signup_link }})
 
 After creating your account, you'll be automatically directed to the survey.
+
+Once logged in, you can also go directly to the survey: <{{ survey_link }}>
 {% if qr_code_data_uri %}
 
 You can also scan this QR code with your phone to get started:

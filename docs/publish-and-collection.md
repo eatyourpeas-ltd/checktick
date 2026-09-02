@@ -232,6 +232,7 @@ When sending invitations (Authenticated or Token modes), you can include a QR co
 1. In the Publish Settings, look for the "Include QR code in invitation emails" checkbox
 2. This is enabled by default
 3. Each recipient gets a unique QR code linking to their survey access
+4. Invitation emails also include the survey link as a visible, copyable URL alongside the QR code, so recipients without a camera or with image-blocked email clients can still access the survey
 
 **QR codes on the dashboard:**
 
