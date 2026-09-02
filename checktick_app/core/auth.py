@@ -14,6 +14,7 @@ Features:
 
 import logging
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -396,6 +397,16 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
             logger.error(f"Error in OIDC get_or_create_user: {e}")
             return None
 
+    # Known OIDC issuer hosts. Matching is done on the parsed hostname (not
+    # substring containment) so a crafted URL such as
+    # ``https://evil.example/?iss=login.microsoftonline.com`` cannot be
+    # mistaken for a legitimate issuer (CodeQL py/incomplete-url-substring-sanitization).
+    _ISSUER_HOSTS = {
+        "accounts.google.com": "google",
+        "login.microsoftonline.com": "azure",
+        "sts.windows.net": "azure",
+    }
+
     def _get_provider_from_claims(self, claims: Dict[str, Any]) -> str:
         """Determine OIDC provider from claims.
 
@@ -407,10 +418,13 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
         """
         issuer = claims.get("iss", "")
 
-        if "accounts.google.com" in issuer:
-            return "google"
-        elif "login.microsoftonline.com" in issuer or "sts.windows.net" in issuer:
-            return "azure"
+        try:
+            issuer_host = (urlparse(issuer).hostname or "").lower()
+        except ValueError:
+            issuer_host = ""
+
+        if issuer_host in self._ISSUER_HOSTS:
+            return self._ISSUER_HOSTS[issuer_host]
 
         # Userinfo responses may omit the issuer; fall back to the session
         # provider recorded when the login flow was initiated.

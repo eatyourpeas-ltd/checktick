@@ -457,6 +457,30 @@ class TestProviderDetection:
         backend = self._backend_with_session(client, None)
         assert backend._get_provider_from_claims({}) == "unknown"
 
+    def test_spoofed_issuer_substring_not_matched(self, client):
+        """A hostile issuer embedding a known host anywhere other than the
+        hostname must NOT be treated as that provider (CodeQL
+        py/incomplete-url-substring-sanitization)."""
+        backend = self._backend_with_session(client, None)
+        assert (
+            backend._get_provider_from_claims(
+                {"iss": "https://evil.example/?iss=login.microsoftonline.com"}
+            )
+            == "unknown"
+        )
+        assert (
+            backend._get_provider_from_claims(
+                {"iss": "https://login.microsoftonline.com.evil.example/"}
+            )
+            == "unknown"
+        )
+        assert (
+            backend._get_provider_from_claims(
+                {"iss": "https://evil.com/accounts.google.com"}
+            )
+            == "unknown"
+        )
+
     def test_get_or_create_user_persists_azure_provider(self, client):
         """End-to-end: an M365 login with no ``iss`` in userinfo stores
         provider="azure" (seeded from the verified ID token payload)."""
