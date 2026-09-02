@@ -348,7 +348,7 @@
                         </form>
                       </td>
                       <td>
-                        <form method="post" action="{% url 'surveys:user_management_hub' %}" class="inline" onsubmit="return confirm('{% trans "Remove this user from the survey?" %}')">
+                        <form method="post" action="{% url 'surveys:user_management_hub' %}" class="inline" data-confirm="{% trans "Remove this user from the survey?" %}">
                           {% csrf_token %}
                           <input type="hidden" name="scope" value="survey" />
                           <input type="hidden" name="action" value="remove" />

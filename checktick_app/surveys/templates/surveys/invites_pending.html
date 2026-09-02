@@ -66,7 +66,7 @@
             </td>
             <td>
               {% if not item.is_completed %}
-              <form method="post" action="{% url 'surveys:invite_resend' slug=survey.slug token_id=item.token.id %}" class="inline" onsubmit="return confirm('{% trans "Resend invitation to" %} {{ item.email }}?');">
+              <form method="post" action="{% url 'surveys:invite_resend' slug=survey.slug token_id=item.token.id %}" class="inline" data-confirm="{% blocktrans with email=item.email %}Resend invitation to {{ email }}?{% endblocktrans %}">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-xs btn-outline btn-primary">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">

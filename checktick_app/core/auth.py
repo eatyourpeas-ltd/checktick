@@ -14,6 +14,7 @@ Features:
 
 import logging
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -352,6 +353,14 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
         logger.info("CustomOIDCAuthenticationBackend.get_or_create_user called")
         try:
             claims = self.get_userinfo(access_token, id_token, payload)
+
+            # Userinfo endpoint responses (Google and Microsoft Graph) do not
+            # include the ``iss`` claim, but the verified ID token payload
+            # does. Seed it so ``_get_provider_from_claims`` can identify the
+            # provider; otherwise every provider is stored as "unknown".
+            if not claims.get("iss"):
+                claims["iss"] = payload.get("iss", "")
+
             email = claims.get("email")
 
             if not email:
@@ -388,16 +397,44 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
             logger.error(f"Error in OIDC get_or_create_user: {e}")
             return None
 
+    # Known OIDC issuer hosts. Matching is done on the parsed hostname (not
+    # substring containment) so a crafted URL such as
+    # ``https://evil.example/?iss=login.microsoftonline.com`` cannot be
+    # mistaken for a legitimate issuer (CodeQL py/incomplete-url-substring-sanitization).
+    _ISSUER_HOSTS = {
+        "accounts.google.com": "google",
+        "login.microsoftonline.com": "azure",
+        "sts.windows.net": "azure",
+    }
+
     def _get_provider_from_claims(self, claims: Dict[str, Any]) -> str:
-        """Determine OIDC provider from claims."""
+        """Determine OIDC provider from claims.
+
+        Falls back to the provider chosen at login (stored in the session by
+        ``HealthcareOIDCAuthView``) because userinfo responses may lack the
+        ``iss`` claim. The returned value is persisted on ``UserOIDC`` and
+        participates in encryption key derivation, so it must stay stable
+        for a given record.
+        """
         issuer = claims.get("iss", "")
 
-        if "accounts.google.com" in issuer:
-            return "google"
-        elif "login.microsoftonline.com" in issuer:
-            return "azure"
-        else:
-            return "unknown"
+        try:
+            issuer_host = (urlparse(issuer).hostname or "").lower()
+        except ValueError:
+            issuer_host = ""
+
+        if issuer_host in self._ISSUER_HOSTS:
+            return self._ISSUER_HOSTS[issuer_host]
+
+        # Userinfo responses may omit the issuer; fall back to the session
+        # provider recorded when the login flow was initiated.
+        request = getattr(self, "request", None)
+        if request is not None and hasattr(request, "session"):
+            session_provider = request.session.get("oidc_provider")
+            if session_provider:
+                return session_provider
+
+        return "unknown"
 
     def _link_oidc_account(
         self, user: User, provider: str, claims: Dict[str, Any]

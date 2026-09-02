@@ -11,6 +11,7 @@ import os
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
+import pytest
 
 from checktick_app.core.models import UserOIDC
 from checktick_app.surveys.models import QuestionGroup, Survey
@@ -309,3 +310,57 @@ class TestOIDCEncryptionViews(TestCase):
         # Should show unlock form (no automatic unlock)
         assert response.status_code == 200
         assert "Unlock this survey using your password" in response.content.decode()
+
+
+@pytest.mark.django_db
+class TestOidcProviderDisplay:
+    """_oidc_provider_display must show the real provider even for accounts
+    created before detection was fixed (stored as "unknown")."""
+
+    def _request(self, client, session_provider=None):
+        from django.test import RequestFactory
+
+        request = RequestFactory().get("/")
+        request.session = client.session
+        if session_provider:
+            request.session["oidc_provider"] = session_provider
+        return request
+
+    def test_stored_provider_used(self, client):
+        from checktick_app.surveys.views import _oidc_provider_display
+
+        user = User.objects.create_user(username="g@example.com", email="g@example.com")
+        UserOIDC.objects.create(user=user, provider="google", subject="s1")
+        request = self._request(client)
+        request.user = user
+        assert _oidc_provider_display(request) == "Google"
+
+    def test_unknown_stored_falls_back_to_session(self, client):
+        from checktick_app.surveys.views import _oidc_provider_display
+
+        user = User.objects.create_user(username="u@example.com", email="u@example.com")
+        UserOIDC.objects.create(user=user, provider="unknown", subject="s2")
+        request = self._request(client, session_provider="azure")
+        request.user = user
+        assert _oidc_provider_display(request) == "Microsoft 365"
+
+    def test_unknown_everywhere_shows_generic_sso(self, client):
+        from checktick_app.surveys.views import _oidc_provider_display
+
+        user = User.objects.create_user(username="x@example.com", email="x@example.com")
+        UserOIDC.objects.create(user=user, provider="unknown", subject="s3")
+        request = self._request(client)
+        request.user = user
+        assert _oidc_provider_display(request) == "SSO"
+
+    def test_stored_provider_not_rewritten(self, client):
+        """The stored provider participates in encryption key derivation and
+        must never be mutated by display logic."""
+        from checktick_app.surveys.views import _oidc_provider_display
+
+        user = User.objects.create_user(username="k@example.com", email="k@example.com")
+        UserOIDC.objects.create(user=user, provider="unknown", subject="s4")
+        request = self._request(client, session_provider="azure")
+        request.user = user
+        _oidc_provider_display(request)
+        assert UserOIDC.objects.get(user=user).provider == "unknown"

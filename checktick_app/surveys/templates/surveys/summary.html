@@ -28,7 +28,7 @@
       <a href="{% url 'surveys:dashboard' slug=survey.slug %}" class="btn btn-ghost btn-sm">
         {% trans "Back to dashboard" %}
       </a>
-      <button onclick="window.print()" class="btn btn-primary btn-sm" type="button">
+      <button type="button" data-print class="btn btn-primary btn-sm">
         {% include "components/icons/download.html" with classes="w-4 h-4 mr-1" %}
         {% trans "Print / Save as PDF" %}
       </button>

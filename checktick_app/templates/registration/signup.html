@@ -103,7 +103,7 @@
                   <span class="label-text font-semibold">{% trans 'TEAM' %}</span>
                   <span class="badge badge-sm badge-primary">{% trans 'From' %} {{ tier_display.team_small }}/{% trans 'month' %}</span>
                 </div>
-                <select id="team-size-select" class="select select-bordered select-sm w-full" onclick="event.stopPropagation();">
+                <select id="team-size-select" class="select select-bordered select-sm w-full">
                   <option value="team_small">
                     {% trans 'Small' %} - {{ subscription_tiers.team_small.max_members }} {% trans 'members' %} ({{ tier_display.team_small }}/{% trans 'mo' %}){% if promotions_by_tier.team_small %} - {{ promotions_by_tier.team_small.short_text }}{% endif %}
                   </option>

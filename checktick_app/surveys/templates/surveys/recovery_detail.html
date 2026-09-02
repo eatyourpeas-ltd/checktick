@@ -280,7 +280,7 @@
                     {% if recovery_request.status == 'awaiting_primary' and can_approve_primary %}
                         <form method="post" action="{% url 'surveys:recovery_approve_primary' request_id=recovery_request.id %}" class="inline">
                             {% csrf_token %}
-                            <button type="submit" class="btn btn-primary" onclick="return confirm('{% trans "Approve as primary approver?" %}')">
+                            <button type="submit" class="btn btn-primary" data-confirm="{% trans "Approve as primary approver?" %}">
                                 {% trans "Approve (Primary)" %}
                             </button>
                         </form>
@@ -289,7 +289,7 @@
                     {% if recovery_request.status == 'awaiting_secondary' and can_approve_secondary and recovery_request.primary_approver != user %}
                         <form method="post" action="{% url 'surveys:recovery_approve_secondary' request_id=recovery_request.id %}" class="inline">
                             {% csrf_token %}
-                            <button type="submit" class="btn btn-primary" onclick="return confirm('{% trans "Approve as secondary approver?" %}')">
+                            <button type="submit" class="btn btn-primary" data-confirm="{% trans "Approve as secondary approver?" %}">
                                 {% trans "Approve (Secondary)" %}
                             </button>
                         </form>
@@ -302,7 +302,7 @@
                     {% endif %}
 
                     {% if recovery_request.status in rejectable_statuses %}
-                        <button class="btn btn-error btn-outline" onclick="reject_modal.showModal()">
+                        <button type="button" class="btn btn-error btn-outline" data-open-modal="reject_modal">
                             {% trans "Reject" %}
                         </button>
                     {% endif %}
@@ -326,7 +326,7 @@
                 <textarea name="reason" class="textarea textarea-bordered h-24" placeholder="{% trans 'Explain why this request is being rejected...' %}" required></textarea>
             </div>
             <div class="modal-action">
-                <button type="button" class="btn" onclick="reject_modal.close()">{% trans "Cancel" %}</button>
+                <button type="button" class="btn" data-close-modal="reject_modal">{% trans "Cancel" %}</button>
                 <button type="submit" class="btn btn-error">{% trans "Reject Request" %}</button>
             </div>
         </form>

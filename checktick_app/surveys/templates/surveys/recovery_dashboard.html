@@ -175,7 +175,7 @@
                         {% if request.status == 'awaiting_primary' %}
                             <form method="post" action="{% url 'surveys:recovery_approve_primary' request_id=request.id %}" class="inline">
                                 {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm('{% trans "SUPERUSER OVERRIDE: Approve as primary approver?" %}')">
+                                <button type="submit" class="btn btn-sm btn-primary" data-confirm="{% trans "SUPERUSER OVERRIDE: Approve as primary approver?" %}">
                                     {% trans "Approve (Primary)" %}
                                 </button>
                             </form>
@@ -184,7 +184,7 @@
                         {% if request.status == 'awaiting_secondary' %}
                             <form method="post" action="{% url 'surveys:recovery_approve_secondary' request_id=request.id %}" class="inline">
                                 {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm('{% trans "SUPERUSER OVERRIDE: Approve as secondary approver? This will start the time delay period." %}')">
+                                <button type="submit" class="btn btn-sm btn-primary" data-confirm="{% trans "SUPERUSER OVERRIDE: Approve as secondary approver? This will start the time delay period." %}">
                                     {% trans "Approve (Secondary)" %}
                                 </button>
                             </form>
@@ -193,7 +193,7 @@
                         {% if request.status in rejectable_statuses %}
                             <form method="post" action="{% url 'surveys:recovery_reject' request_id=request.id %}" class="inline">
                                 {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-error btn-outline" onclick="return confirm('{% trans "Reject this recovery request?" %}')">
+                                <button type="submit" class="btn btn-sm btn-error btn-outline" data-confirm="{% trans "Reject this recovery request?" %}">
                                     {% trans "Reject" %}
                                 </button>
                             </form>

@@ -548,7 +548,7 @@
             {% endfor %}
           </div>
         {% else %}
-          <input class="input input-bordered w-full" type="text" name="q_{{ q.id }}" id="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}\"{% if q.required %} aria-required=\"true\" required{% endif %} />
+          <input class="input input-bordered w-full" type="text" name="q_{{ q.id }}" id="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true" required{% endif %} />
         {% endif %}
     </div>
     {# Close the group card if this is the last question of the group #}

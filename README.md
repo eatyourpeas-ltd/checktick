@@ -8,7 +8,7 @@
 
 <p align="center">
  <a href="https://github.com/eatyourpeas/checktick/releases">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.10.4-5fcfdd?style=flat-square">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.10.5-5fcfdd?style=flat-square">
  </a>
  <a href="https://github.com/eatyourpeas/checktick/blob/main/LICENSE">
   <img alt="GitHub License" src="https://img.shields.io/github/license/eatyourpeas/checktick?style=flat-square&color=5fcfdd">

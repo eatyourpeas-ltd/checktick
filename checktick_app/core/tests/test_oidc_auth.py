@@ -398,3 +398,112 @@ def test_oidc_backend_uses_google_endpoints_for_google_session(client):
     assert captured_payload["client_id"] == settings.OIDC_RP_CLIENT_ID_GOOGLE
     assert backend.OIDC_OP_TOKEN_ENDPOINT == settings.OIDC_OP_TOKEN_ENDPOINT
     assert backend.OIDC_RP_CLIENT_ID == settings.OIDC_RP_CLIENT_ID_GOOGLE
+
+
+@pytest.mark.django_db
+class TestProviderDetection:
+    """Provider must be detected from the verified ID token issuer (or the
+    login session) even though userinfo responses omit the ``iss`` claim.
+
+    Regression: M365/Azure users were stored with provider="unknown" because
+    ``_get_provider_from_claims`` only inspected the userinfo response, which
+    has no issuer. The stored provider participates in encryption key
+    derivation, so detection must be correct at record creation time.
+    """
+
+    def _backend_with_session(self, client, provider):
+        from checktick_app.core.auth import CustomOIDCAuthenticationBackend
+
+        factory = RequestFactory()
+        request = factory.get("/oidc/callback/?code=test-code")
+        request.session = client.session
+        if provider:
+            request.session["oidc_provider"] = provider
+        backend = CustomOIDCAuthenticationBackend()
+        backend.request = request
+        return backend
+
+    def test_azure_issuer_detected(self, client):
+        backend = self._backend_with_session(client, None)
+        assert (
+            backend._get_provider_from_claims(
+                {"iss": "https://login.microsoftonline.com/{tenant}/v2.0"}
+            )
+            == "azure"
+        )
+
+    def test_legacy_azure_v1_issuer_detected(self, client):
+        backend = self._backend_with_session(client, None)
+        assert (
+            backend._get_provider_from_claims(
+                {"iss": "https://sts.windows.net/<tenant-guid>/"}
+            )
+            == "azure"
+        )
+
+    def test_google_issuer_detected(self, client):
+        backend = self._backend_with_session(client, None)
+        assert (
+            backend._get_provider_from_claims({"iss": "https://accounts.google.com"})
+            == "google"
+        )
+
+    def test_session_fallback_when_issuer_missing(self, client):
+        """Userinfo responses lack ``iss``; the login-session provider is used."""
+        backend = self._backend_with_session(client, "azure")
+        assert backend._get_provider_from_claims({}) == "azure"
+
+    def test_unknown_when_no_issuer_and_no_session(self, client):
+        backend = self._backend_with_session(client, None)
+        assert backend._get_provider_from_claims({}) == "unknown"
+
+    def test_spoofed_issuer_substring_not_matched(self, client):
+        """A hostile issuer embedding a known host anywhere other than the
+        hostname must NOT be treated as that provider (CodeQL
+        py/incomplete-url-substring-sanitization)."""
+        backend = self._backend_with_session(client, None)
+        assert (
+            backend._get_provider_from_claims(
+                {"iss": "https://evil.example/?iss=login.microsoftonline.com"}
+            )
+            == "unknown"
+        )
+        assert (
+            backend._get_provider_from_claims(
+                {"iss": "https://login.microsoftonline.com.evil.example/"}
+            )
+            == "unknown"
+        )
+        assert (
+            backend._get_provider_from_claims(
+                {"iss": "https://evil.com/accounts.google.com"}
+            )
+            == "unknown"
+        )
+
+    def test_get_or_create_user_persists_azure_provider(self, client):
+        """End-to-end: an M365 login with no ``iss`` in userinfo stores
+        provider="azure" (seeded from the verified ID token payload)."""
+        from checktick_app.core.auth import CustomOIDCAuthenticationBackend
+
+        backend = self._backend_with_session(client, "azure")
+
+        userinfo = {  # Microsoft Graph userinfo: no ``iss`` claim
+            "email": "m365user@example.com",
+            "sub": "azure-sub-1",
+        }
+        id_token_payload = {
+            "iss": "https://login.microsoftonline.com/<tenant>/v2.0",
+            "sub": "azure-sub-1",
+            "email": "m365user@example.com",
+        }
+
+        with patch.object(
+            CustomOIDCAuthenticationBackend, "get_userinfo", return_value=userinfo
+        ):
+            user = backend.get_or_create_user("tok", "id-token", id_token_payload)
+
+        assert user is not None
+        record = UserOIDC.objects.get(user=user)
+        assert record.provider == "azure"
+        assert record.subject == "azure-sub-1"

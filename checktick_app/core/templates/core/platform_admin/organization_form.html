@@ -118,7 +118,7 @@
         <label class="label">
           <span class="label-text">{% trans "Billing Type" %}</span>
         </label>
-        <select name="billing_type" id="billing_type" class="select select-bordered" onchange="updateBillingFields()">
+        <select name="billing_type" id="billing_type" class="select select-bordered">
           {% for value, label in billing_choices %}
           <option value="{{ value }}"
             {% if editing and org.billing_type == value %}selected{% endif %}
@@ -255,7 +255,11 @@ function updateBillingFields() {
   }
 }
 
-// Initialize on page load
+// Initialize on page load and re-run whenever the billing type changes
+var billingTypeSelect = document.getElementById('billing_type');
+if (billingTypeSelect) {
+  billingTypeSelect.addEventListener('change', updateBillingFields);
+}
 document.addEventListener('DOMContentLoaded', updateBillingFields);
 </script>
 {% endblock %}

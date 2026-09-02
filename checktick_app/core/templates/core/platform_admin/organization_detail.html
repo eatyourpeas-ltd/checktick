@@ -230,10 +230,10 @@
         <h3 class="card-title text-lg">{% trans "Setup Invite" %}</h3>
         {% if invite_url %}
         <div class="form-control">
-          <textarea readonly class="textarea textarea-bordered text-xs h-20" onclick="this.select()">{{ invite_url }}</textarea>
+          <textarea readonly class="textarea textarea-bordered text-xs h-20" data-select-on-click>{{ invite_url }}</textarea>
         </div>
         <div class="flex flex-col gap-2 mt-2">
-          <button onclick="navigator.clipboard.writeText('{{ invite_url }}')" class="btn btn-sm btn-outline w-full">
+          <button type="button" data-copy-value="{{ invite_url }}" class="btn btn-sm btn-outline w-full">
             {% trans "Copy Link" %}
           </button>
           <form method="post" action="{% url 'core:platform_admin_org_send_invite' org_id=org.id %}">
