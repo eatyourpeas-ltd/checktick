@@ -352,6 +352,14 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
         logger.info("CustomOIDCAuthenticationBackend.get_or_create_user called")
         try:
             claims = self.get_userinfo(access_token, id_token, payload)
+
+            # Userinfo endpoint responses (Google and Microsoft Graph) do not
+            # include the ``iss`` claim, but the verified ID token payload
+            # does. Seed it so ``_get_provider_from_claims`` can identify the
+            # provider; otherwise every provider is stored as "unknown".
+            if not claims.get("iss"):
+                claims["iss"] = payload.get("iss", "")
+
             email = claims.get("email")
 
             if not email:
@@ -389,15 +397,30 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
             return None
 
     def _get_provider_from_claims(self, claims: Dict[str, Any]) -> str:
-        """Determine OIDC provider from claims."""
+        """Determine OIDC provider from claims.
+
+        Falls back to the provider chosen at login (stored in the session by
+        ``HealthcareOIDCAuthView``) because userinfo responses may lack the
+        ``iss`` claim. The returned value is persisted on ``UserOIDC`` and
+        participates in encryption key derivation, so it must stay stable
+        for a given record.
+        """
         issuer = claims.get("iss", "")
 
         if "accounts.google.com" in issuer:
             return "google"
-        elif "login.microsoftonline.com" in issuer:
+        elif "login.microsoftonline.com" in issuer or "sts.windows.net" in issuer:
             return "azure"
-        else:
-            return "unknown"
+
+        # Userinfo responses may omit the issuer; fall back to the session
+        # provider recorded when the login flow was initiated.
+        request = getattr(self, "request", None)
+        if request is not None and hasattr(request, "session"):
+            session_provider = request.session.get("oidc_provider")
+            if session_provider:
+                return session_provider
+
+        return "unknown"
 
     def _link_oidc_account(
         self, user: User, provider: str, claims: Dict[str, Any]

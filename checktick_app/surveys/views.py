@@ -1053,7 +1053,7 @@ def survey_create(request: HttpRequest) -> HttpResponse:
 
                         # Determine success message based on encryption methods
                         if hasattr(request.user, "oidc"):
-                            provider_name = request.user.oidc.provider.title()
+                            provider_name = _oidc_provider_display(request)
                             messages.success(
                                 request,
                                 f"Survey created with dual-path encryption + automatic {provider_name} unlock! "
@@ -4365,7 +4365,7 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
                 logger.warning(f"Failed to add organization encryption: {e}")
 
         # Continue with publish (encryption is set up)
-        provider_name = request.user.oidc.provider.title()
+        provider_name = _oidc_provider_display(request)
         messages.success(
             request,
             f"Survey encrypted automatically with your {provider_name} account + organization recovery.",
@@ -4490,7 +4490,7 @@ def survey_encryption_setup(request: HttpRequest, slug: str) -> HttpResponse:
                 if "pending_publish" in request.session:
                     del request.session["pending_publish"]
 
-                provider_name = request.user.oidc.provider.title()
+                provider_name = _oidc_provider_display(request)
                 messages.success(
                     request,
                     f"Survey published with SSO-only encryption ({provider_name}). "
@@ -4724,6 +4724,25 @@ def _send_pending_invites(request: HttpRequest, survey: Survey, pending: dict) -
         "task_id": task_id,
         "email_count": len(email_list),
     }
+
+
+def _oidc_provider_display(request: HttpRequest) -> str:
+    """
+    Human-readable SSO provider name for user-facing messages.
+
+    Prefers the stored UserOIDC provider. Accounts created before provider
+    detection was fixed are stored as "unknown" - the stored value must not
+    be rewritten because it participates in encryption key derivation - so
+    fall back to the provider chosen at login from the session.
+    """
+    provider = ""
+    if hasattr(request.user, "oidc"):
+        provider = (request.user.oidc.provider or "").strip()
+    if not provider or provider == "unknown":
+        provider = (request.session.get("oidc_provider") or "").strip() or provider
+    if not provider or provider == "unknown":
+        return "SSO"
+    return {"azure": "Microsoft 365"}.get(provider, provider.title())
 
 
 def _apply_pending_publish_settings(survey: Survey, pending: dict) -> None:
