@@ -60,7 +60,7 @@
         {% trans "Disabling two-factor authentication will make your account less secure. You'll need to enter your password to confirm." %}
       </p>
 
-      <form method="post" action="{% url 'core:two_factor_disable' %}" class="mt-4">
+      <form method="post" action="{% url 'core:two_factor_disable' %}" class="mt-4" id="disable-2fa-form">
         {% csrf_token %}
         <div class="form-control">
           <label class="label">
@@ -72,9 +72,7 @@
                  placeholder="{% trans 'Enter your password' %}"
                  required />
         </div>
-        <button type="submit"
-                class="btn btn-error btn-outline mt-4"
-                onclick="return confirm('{% trans "Are you sure you want to disable two-factor authentication?" %}')">
+        <button type="submit" class="btn btn-error btn-outline mt-4">
           {% include "components/icons/x.html" with classes="w-4 h-4 mr-2" only %}
           {% trans "Disable 2FA" %}
         </button>
@@ -88,4 +86,17 @@
     </a>
   </div>
 </div>
+
+<script nonce="{{ request.csp_nonce }}">
+(function () {
+  var form = document.getElementById('disable-2fa-form');
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      if (!confirm('{% trans "Are you sure you want to disable two-factor authentication?" %}')) {
+        e.preventDefault();
+      }
+    });
+  }
+})();
+</script>
 {% endblock %}
