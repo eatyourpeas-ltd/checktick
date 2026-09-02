@@ -4499,7 +4499,7 @@ def survey_encryption_setup(request: HttpRequest, slug: str) -> HttpResponse:
                 return redirect("surveys:dashboard", slug=slug)
 
             elif encryption_choice == "sso_recovery":
-                # SSO + recovery phrase (belt and suspenders)
+                # SSO + recovery phrase (belt and braces)
                 recovery_words = generate_bip39_phrase(12)
 
                 try:
