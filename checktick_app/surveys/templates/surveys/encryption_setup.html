@@ -28,10 +28,10 @@
         {% csrf_token %}
 
         <div class="form-control">
-          <label class="label cursor-pointer justify-start gap-4 p-4 border rounded-lg hover:bg-base-200 transition">
-            <input type="radio" name="encryption_choice" value="sso_only" class="radio radio-primary" required />
-            <div class="flex-1">
-              <span class="label-text font-semibold text-lg">{% trans "SSO-Only (Simple)" %}</span>
+          <label class="flex cursor-pointer items-start gap-4 p-4 border rounded-lg hover:bg-base-200 transition">
+            <input type="radio" name="encryption_choice" value="sso_only" class="radio radio-primary shrink-0 mt-1" required />
+            <div class="flex-1 min-w-0">
+              <span class="block font-semibold text-lg break-words">{% trans "SSO-Only (Simple)" %}</span>
               <p class="text-sm mt-1 opacity-70">
                 {% trans "Your survey auto-unlocks when you sign in with SSO. No passwords or recovery phrases to remember." %}
               </p>
@@ -41,10 +41,10 @@
         </div>
 
         <div class="form-control">
-          <label class="label cursor-pointer justify-start gap-4 p-4 border rounded-lg hover:bg-base-200 transition">
-            <input type="radio" name="encryption_choice" value="sso_recovery" class="radio radio-primary" required />
-            <div class="flex-1">
-              <span class="label-text font-semibold text-lg">{% trans "SSO + Recovery Phrase (Belt & Braces)" %}</span>
+          <label class="flex cursor-pointer items-start gap-4 p-4 border rounded-lg hover:bg-base-200 transition">
+            <input type="radio" name="encryption_choice" value="sso_recovery" class="radio radio-primary shrink-0 mt-1" required />
+            <div class="flex-1 min-w-0">
+              <span class="block font-semibold text-lg break-words">{% trans "SSO + Recovery Phrase (Belt & Braces)" %}</span>
               <p class="text-sm mt-1 opacity-70">
                 {% trans "Your survey auto-unlocks with SSO, PLUS you get a recovery phrase as a backup in case you lose SSO access." %}
               </p>
