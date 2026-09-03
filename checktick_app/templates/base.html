@@ -228,68 +228,60 @@
       {% endif %}
       {% block content %}{% endblock %}
     </main>
-    <footer class="mt-10 border-t border-base-300 bg-base-200 print:hidden">
-      <div class="container mx-auto px-4 py-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-base-content/80">
-
-          <!-- Customer Links -->
-          <div class="text-center md:text-left">
-            <h3 class="font-semibold text-base-content mb-2">{% trans "Information" %}</h3>
-            <ul class="space-y-1">
-              <li><a href="{% url 'core:docs_page' slug='getting-started' %}" class="inline-flex min-h-6 items-center underline hover:text-primary">{% trans "Documentation" %}</a></li>
-              <li><a href="{% url 'core:docs_page' slug='accessibility' %}" class="inline-flex min-h-6 items-center underline hover:text-primary">{% trans "Accessibility" %}</a></li>
-              <li><a href="{% url 'core:docs_page' slug='terms-of-service' %}" class="inline-flex min-h-6 items-center underline hover:text-primary">{% trans "Terms of Service" %}</a></li>
-              <li><a href="{% url 'core:docs_page' slug='privacy-notice' %}" class="inline-flex min-h-6 items-center underline hover:text-primary">{% trans "Privacy Policy" %}</a></li>
-              <li><a href="{% url 'core:compliance_index' %}" class="inline-flex min-h-6 items-center underline hover:text-primary">{% trans "DSPT Compliance" %}</a></li>
-              <li><a href="{% url 'core:clinical_safety_page' slug='clinical-safety-case' %}" class="inline-flex min-h-6 items-center underline hover:text-primary">{% trans "Clinical Safety" %}</a></li>
-              <li><a href="{% url 'core:docs_page' slug='refund-policy' %}" class="inline-flex min-h-6 items-center underline hover:text-primary">{% trans "Refund Policy" %}</a></li>
-            </ul>
+    <footer class="mt-10 border-t border-base-300 bg-base-200 text-base-content print:hidden">
+      <footer class="footer sm:footer-horizontal container mx-auto px-4 py-8 text-sm">
+        <aside class="max-w-xs text-center sm:text-left">
+          <div class="text-lg font-semibold">{{ brand.title }}</div>
+          <p class="mt-2 text-sm opacity-70">{% trans "Surveys for UK Healthcare and the NHS." %}</p>
+          <div class="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
+            <a href="https://eatyourpeas.co.uk" target="_blank" rel="noopener" class="link link-hover inline-flex min-h-6 items-center gap-2">
+              <img src="{% static 'icons/peas_circle.png' %}" alt="eatyourpeas" class="h-4 w-auto" />
+              <span>{% trans "Built by eatyourpeas" %}</span>
+            </a>
+            <a href="https://www.odsdatasearchandexport.nhs.uk/?search=generalorg&query=EATYOURPEAS" target="_blank" rel="noopener" class="link link-hover inline-flex min-h-6 items-center">{% trans "ODS Code P6U6C" %}</a>
           </div>
+        </aside>
 
-          <!-- Developer Info -->
-          <div class="text-center md:text-left">
-            <h3 class="font-semibold text-base-content mb-2">{% trans "About" %}</h3>
-            <ul class="space-y-1">
-              <li>© {% now 'Y' %} {{ brand.title }}</li>
-              <li>
-                {% trans "Built by" %}
-                <a href="https://eatyourpeas.co.uk" target="_blank" rel="noopener" class="inline-flex min-h-6 items-center gap-2 hover:text-primary">
-                  <img src="{% static 'icons/eatyourpeas_logo_2022.png' %}" alt="eatyourpeas" class="h-4 w-auto opacity-80" />
-                  <span class="underline">eatyourpeas</span>
-                </a>
-              </li>
-              <li><a href="https://www.odsdatasearchandexport.nhs.uk/?search=generalorg&query=EATYOURPEAS" target="_blank" rel="noopener" class="inline-flex min-h-6 items-center underline hover:text-primary">{% trans "ODS Code P6U6C" %}</a></li>
-              <li>{% trans "Version" %}: {{ build.version }}</li>
-              {% if build.timestamp %}
-                <li>{% trans "Build" %}: {{ build.timestamp }}</li>
-              {% elif build.commit_date %}
-                <li>{{ build.commit_date }}</li>
-              {% endif %}
-            </ul>
+        <nav aria-labelledby="footer-info-title">
+          <h3 id="footer-info-title" class="footer-title">{% trans "Information" %}</h3>
+          <div class="grid grid-cols-2 gap-x-6 gap-y-1">
+            <a href="{% url 'core:docs_page' slug='getting-started' %}" class="link link-hover min-h-6">{% trans "Documentation" %}</a>
+            <a href="{% url 'core:docs_page' slug='terms-of-service' %}" class="link link-hover min-h-6">{% trans "Terms of Service" %}</a>
+            <a href="{% url 'core:docs_page' slug='accessibility' %}" class="link link-hover min-h-6">{% trans "Accessibility" %}</a>
+            <a href="{% url 'core:docs_page' slug='privacy-notice' %}" class="link link-hover min-h-6">{% trans "Privacy Policy" %}</a>
+            <a href="{% url 'core:docs_page' slug='refund-policy' %}" class="link link-hover min-h-6">{% trans "Refund Policy" %}</a>
+            <a href="{% url 'core:compliance_index' %}" class="link link-hover min-h-6">{% trans "DSPT Compliance" %}</a>
+            <a href="{% url 'core:clinical_safety_page' slug='clinical-safety-case' %}" class="link link-hover min-h-6">{% trans "Clinical Safety" %}</a>
           </div>
+        </nav>
+      </footer>
 
-          <!-- GitHub & Development -->
-          <div class="text-center md:text-left">
-            <h3 class="font-semibold text-base-content mb-2">{% trans "Development" %}</h3>
-            <ul class="space-y-1">
-              <li>
-                <a class="inline-flex min-h-6 items-center gap-1 hover:text-primary" href="https://github.com/eatyourpeas/checktick/tree/main/checktick_app" target="_blank" rel="noopener">
-                  {% include "components/icons/github.html" with classes="w-4 h-4" %}
-                  <span class="underline">{% trans "GitHub Repository" %}</span>
-                </a>
-              </li>
-              <li><a href="https://github.com/eatyourpeas/checktick/issues" target="_blank" rel="noopener" class="inline-flex min-h-6 items-center underline hover:text-primary">{% trans "Issues" %}</a></li>
-              <li><a href="https://github.com/eatyourpeas?tab=packages&repo_name=checktick" target="_blank" rel="noopener" class="inline-flex min-h-6 items-center underline hover:text-primary">{% trans "Releases" %}</a></li>
-              <li><a href="{% url 'core:docs_page' slug='contributing' %}" class="inline-flex min-h-6 items-center underline hover:text-primary">{% trans "Contributing" %}</a></li>
-              {% if build.branch %}
-                <li><a class="inline-flex min-h-6 items-center underline hover:text-primary" href="https://github.com/eatyourpeas/checktick/tree/{{ build.branch }}" target="_blank" rel="noopener">{% trans "Branch" %}: {{ build.branch }}</a></li>
-              {% endif %}
-              {% if build.commit %}
-                <li><a class="inline-flex min-h-6 items-center underline hover:text-primary" href="https://github.com/eatyourpeas/checktick/commit/{{ build.commit }}" target="_blank" rel="noopener">{% trans "Commit" %}: {{ build.commit|slice:":7" }}</a></li>
-              {% endif %}
-            </ul>
+      <div class="border-t border-base-300 bg-base-content text-base-100">
+        <div class="container mx-auto px-4 py-3 flex flex-wrap items-center justify-center md:justify-between gap-x-4 gap-y-1 text-xs">
+          <span class="opacity-80">© {% now 'Y' %} {{ brand.title }}</span>
+          <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+            <a class="btn btn-ghost btn-sm" href="https://github.com/eatyourpeas/checktick/tree/main/checktick_app" target="_blank" rel="noopener">
+              {% include "components/icons/github.html" with classes="w-4 h-4" %}
+              <span>GitHub</span>
+            </a>
+            <a href="https://github.com/eatyourpeas/checktick/issues" target="_blank" rel="noopener" class="link link-hover inline-flex min-h-8 items-center">{% trans "Issues" %}</a>
+            <a href="https://github.com/eatyourpeas?tab=packages&repo_name=checktick" target="_blank" rel="noopener" class="link link-hover inline-flex min-h-8 items-center">{% trans "Releases" %}</a>
+            <a href="{% url 'core:docs_page' slug='contributing' %}" class="link link-hover inline-flex min-h-8 items-center">{% trans "Contributing" %}</a>
           </div>
-
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] opacity-70">
+            <span>{% trans "Version" %}: {{ build.version }}</span>
+            {% if build.timestamp %}
+              <span>{% trans "Build" %}: {{ build.timestamp }}</span>
+            {% elif build.commit_date %}
+              <span>{{ build.commit_date }}</span>
+            {% endif %}
+            {% if build.branch %}
+              <a class="link link-hover" href="https://github.com/eatyourpeas/checktick/tree/{{ build.branch }}" target="_blank" rel="noopener">{% trans "Branch" %}: {{ build.branch }}</a>
+            {% endif %}
+            {% if build.commit %}
+              <a class="link link-hover" href="https://github.com/eatyourpeas/checktick/commit/{{ build.commit }}" target="_blank" rel="noopener">{% trans "Commit" %}: {{ build.commit|slice:":7" }}</a>
+            {% endif %}
+          </div>
         </div>
       </div>
     </footer>

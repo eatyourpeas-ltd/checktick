@@ -51,12 +51,16 @@
     <script src="{% static 'js/theme-toggle.js' %}" nonce="{{ request.csp_nonce }}"></script>
     <script src="{% static 'js/toast.js' %}?v=2ba505d" nonce="{{ request.csp_nonce }}"></script>
   </body>
-  <footer class="mt-10 border-t border-base-300 bg-base-200">
-      <div class="container mx-auto px-4 py-6">
+  <footer class="mt-10 border-t border-base-300 bg-base-200 print:hidden">
+      <div class="container mx-auto px-4 py-4">
         <div class="text-xs text-base-content/80 text-center md:text-left flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-2">
-          <span>&copy; {{ current_year }} {{ brand.title }}</span>
-          <a href="{% url 'core:docs_page' slug='privacy-notice' %}" class="link link-hover">Privacy Policy</a>
-          <a href="{% url 'core:docs_page' slug='terms-of-service' %}" class="link link-hover">Terms of Service</a>
+          <a href="{% url 'core:docs_page' slug='privacy-notice' %}" class="link link-hover inline-flex min-h-6 items-center">{% trans "Privacy Policy" %}</a>
+          <a href="{% url 'core:docs_page' slug='terms-of-service' %}" class="link link-hover inline-flex min-h-6 items-center">{% trans "Terms of Service" %}</a>
+        </div>
+      </div>
+      <div class="border-t border-base-300 bg-base-content text-base-100">
+        <div class="container mx-auto px-4 py-2 text-xs text-center md:text-left">
+          <span class="opacity-80">&copy; {{ current_year }} {{ brand.title }}</span>
         </div>
       </div>
     </footer>
