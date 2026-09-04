@@ -131,6 +131,20 @@ The template library contains **section templates** - complete questionnaires wi
 - Not imported from the library
 - Used for collecting structured data sets (demographics, professional information)
 
+### Address lookup (UK postcode → address prefill)
+
+Both specialist templates can optionally collect a full address. In the template's "Configure template fields" panel, enable **Address lookup**:
+
+- **Patient Details**: requires the "Post code" field to be selected (the same field also powers the optional IMD lookup).
+- **Professional Details**: adds a postcode field plus address fields to the template.
+
+Respondents enter their postcode and click **Find address**; matching addresses are shown in a dropdown and the address fields (line 1, line 2, town/city, county) are prefilled. The fields always remain editable, so manual entry works when:
+
+- The postcode isn't found (e.g. Northern Ireland `BT` and Channel Islands `GY`/`JE` postcodes are not covered)
+- The lookup service is unavailable or not configured
+
+> **Note:** the open postcodes.io service (and the RCPCH postcode API, which mirrors it) only provides **postcode metadata** — district, ward, IMD, coordinates. It does **not** include delivery-point addresses. For full address prefill, set `OSDATAHUB_API_URL` / `OSDATAHUB_API_KEY` to the **OS Places API** (e.g. `https://api.os.uk/search/places/v1/` — any URL under `search/places/v<n>/` is normalised to the `postcode` endpoint at call time, and the key is appended per-request, so no need to embed it in the URL). Both postcodes.io-style and OS Places DPA-style responses are supported. The lookup is proxied through CheckTick (respondents never call the API directly) and rate limited; without an address-capable source the widget still supports manual entry.
+
 ## Troubleshooting
 
 ### "No surveys available" message

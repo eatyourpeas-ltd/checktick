@@ -93,8 +93,12 @@
                           <input type="checkbox" class="checkbox" name="include_imd" {% if q.options.include_imd %}checked{% endif %} {% if not post_code_selected %}disabled{% endif %} />
                           <span class="label-text">Include IMD (adds read-only “Index of Multiple Deprivation”)</span>
                         </label>
+                        <label class="flex items-center gap-2 cursor-pointer {% if not post_code_selected %}opacity-60{% endif %}">
+                          <input type="checkbox" class="checkbox" name="address_lookup" {% if q.options.address_lookup %}checked{% endif %} {% if not post_code_selected %}disabled{% endif %} />
+                          <span class="label-text">Address lookup (prefills address fields from the postcode)</span>
+                        </label>
                         {% if not post_code_selected %}
-                          <p class="text-xs opacity-60 mt-1">Select “Post code” above to enable IMD.</p>
+                          <p class="text-xs opacity-60 mt-1">Select “Post code” above to enable these options.</p>
                         {% endif %}
                       </fieldset>
                     {% endwith %}
@@ -133,6 +137,13 @@
                       {% endif %}
                     {% endfor %}
                   </div>
+                </fieldset>
+                <fieldset>
+                  <legend class="label">Address lookup</legend>
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" class="checkbox" name="address_lookup" {% if q.options.address_lookup %}checked{% endif %} />
+                    <span class="label-text">Address lookup (adds postcode + prefilled address fields)</span>
+                  </label>
                 </fieldset>
               </form>
             </div>

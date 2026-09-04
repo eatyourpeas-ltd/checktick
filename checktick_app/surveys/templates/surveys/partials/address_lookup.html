@@ -1,0 +1,91 @@
+{% comment %}
+Reusable UK postcode → address lookup widget (HTMX).
+
+Context:
+  qid               question id — input names follow the survey_detail capture
+                    convention q_{{ qid }}_post_code, q_{{ qid }}_address_line_1, ...
+  postcode_value    current postcode (optional)
+  addresses         list of normalised addresses (optional)
+  selected_index    chosen address index (optional)
+  selected_address  chosen address dict (optional)
+  error             lookup error message (optional)
+  configured        whether the lookup API is configured
+  label             fieldset label (default "Address")
+
+The address fields are always rendered and editable so respondents can enter
+an address manually (lookup outages, NI/Channel Islands postcodes, etc.).
+The lookup only prefills them.
+{% endcomment %}
+<div id="al_q_{{ qid }}" data-address-lookup class="space-y-2 md:col-span-2">
+  <input type="hidden" name="prefix" value="q_{{ qid }}" />
+  <label class="label"><span class="label-text">{{ label|default:"Address" }}</span></label>
+  <div class="flex items-start gap-2">
+    <label class="input input-bordered input-sm flex items-center gap-1.5 flex-1">
+      <span class="sr-only">Post code</span>
+      <input type="text" name="q_{{ qid }}_post_code" value="{{ postcode_value|default:'' }}"
+             class="grow min-w-0 bg-transparent outline-none border-0"
+             placeholder="Post code" aria-label="Post code" autocomplete="postal-code" />
+    </label>
+    {% if configured %}
+    <button type="button" class="btn btn-sm btn-outline"
+            hx-post="{% url 'surveys:address_lookup' %}"
+            hx-include="#al_q_{{ qid }}"
+            hx-target="#al_q_{{ qid }}"
+            hx-swap="outerHTML"
+            hx-indicator="#al_busy_q_{{ qid }}">Find address</button>
+    <span id="al_busy_q_{{ qid }}" class="htmx-indicator loading loading-spinner loading-sm" aria-hidden="true"></span>
+    {% endif %}
+  </div>
+
+  {% if error %}
+    <p class="text-error text-sm" role="alert">{{ error }}</p>
+  {% endif %}
+  {% if not configured %}
+    <p class="text-xs opacity-60">Address lookup is not available — please enter the address manually below.</p>
+  {% endif %}
+
+  {% if addresses and addresses|length > 1 %}
+    <label class="label"><span class="label-text">Select your address</span></label>
+    <select class="select select-bordered select-sm w-full"
+            name="q_{{ qid }}_address_index"
+            aria-label="Select your address"
+            hx-post="{% url 'surveys:address_lookup' %}"
+            hx-include="#al_q_{{ qid }}"
+            hx-trigger="change"
+            hx-target="#al_q_{{ qid }}"
+            hx-swap="outerHTML">
+      <option value="">-- Select an address --</option>
+      {% for a in addresses %}
+        <option value="{{ forloop.counter0 }}" {% if forloop.counter0 == selected_index %}selected{% endif %}>{{ a.summary }}</option>
+      {% endfor %}
+    </select>
+  {% endif %}
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <label class="input input-bordered input-sm flex items-center gap-1.5">
+      <span class="sr-only">Address line 1</span>
+      <input type="text" name="q_{{ qid }}_address_line_1" value="{{ selected_address.line_1|default:'' }}"
+             class="grow min-w-0 bg-transparent outline-none border-0"
+             placeholder="Address line 1" aria-label="Address line 1" autocomplete="address-line1" />
+    </label>
+    <label class="input input-bordered input-sm flex items-center gap-1.5">
+      <span class="sr-only">Address line 2</span>
+      <input type="text" name="q_{{ qid }}_address_line_2" value="{{ selected_address.line_2|default:'' }}"
+             class="grow min-w-0 bg-transparent outline-none border-0"
+             placeholder="Address line 2" aria-label="Address line 2" autocomplete="address-line2" />
+    </label>
+    <label class="input input-bordered input-sm flex items-center gap-1.5">
+      <span class="sr-only">Town or city</span>
+      <input type="text" name="q_{{ qid }}_town_city" value="{{ selected_address.town_city|default:'' }}"
+             class="grow min-w-0 bg-transparent outline-none border-0"
+             placeholder="Town/City" aria-label="Town or city" autocomplete="address-level2" />
+    </label>
+    <label class="input input-bordered input-sm flex items-center gap-1.5">
+      <span class="sr-only">County</span>
+      <input type="text" name="q_{{ qid }}_county" value="{{ selected_address.county|default:'' }}"
+             class="grow min-w-0 bg-transparent outline-none border-0"
+             placeholder="County" aria-label="County" autocomplete="address-level1" />
+    </label>
+  </div>
+  <p class="text-xs opacity-60">You can type the address manually if the lookup does not find it.</p>
+</div>

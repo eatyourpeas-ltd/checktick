@@ -153,6 +153,27 @@ This provides access to:
 - Paediatric Diabetes Units
 - Integrated Care Boards (ICBs)
 
+#### Address Lookup (UK postcode → address prefill)
+
+**Optional** — enables the address lookup option in the Patient Details and Professional Details templates. Without it, those templates simply collect addresses via manual entry.
+
+Two pieces of configuration are involved:
+
+```bash
+# Postcode validation (RCPCH postcodes API or a postcodes.io-compatible service)
+POSTCODES_API_URL=https://api.rcpch.ac.uk/postcodes/postcodes/
+POSTCODES_API_KEY=your-rcpch-api-key
+
+# Address lookup (OS Places API — delivery-point addresses)
+OSDATAHUB_API_URL=https://api.os.uk/search/places/v1/
+OSDATAHUB_API_KEY=your-os-datahub-key
+```
+
+- `POSTCODES_*` powers the standalone postcode validation field. Note that the open postcodes.io service only returns postcode **metadata** (district, ward, IMD) — it contains no delivery-point addresses.
+- `OSDATAHUB_*` powers the actual address prefill. Get a key from https://osdatahub.os.uk (the project must have the **OS Places API** enabled — the OS Names API cannot return addresses). Any URL under `search/places/v1/` is normalised to the `postcode` endpoint at call time, and the key is appended per-request, so there is no need to embed it in the URL.
+
+When address lookup is enabled, respondents can enter a postcode and pick their address; the fields always remain editable (manual entry is the fallback for Northern Ireland `BT` and Channel Islands `GY`/`JE` postcodes, which are not in ONSPD-derived sources). Lookups are proxied through CheckTick and rate limited per IP. See [Question Bank Template Library](question-group-template-library.md) for the respondent-facing behaviour.
+
 #### SNOMED CT (Clinical Terminology)
 
 **Optional** — enables clinical terminology dropdowns (drugs, conditions, procedures) sourced directly from NHS SNOMED CT releases. CheckTick functions normally without this; SNOMED features are simply unavailable.

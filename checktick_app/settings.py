@@ -731,6 +731,31 @@ POSTCODES_API_URL = os.environ.get(
 )
 POSTCODES_API_KEY = os.environ.get("POSTCODES_API_KEY", "")
 
+# Address Lookup API Configuration (UK postcode → address prefill in templates)
+# Must be an *address-capable* API. For the OS Data Hub use the OS Places API:
+#   OSDATAHUB_API_URL=https://api.os.uk/search/places/v1/
+#   OSDATAHUB_API_KEY=<your OS Data Hub key>
+# Any URL under .../search/places/v<n>/ is normalised to the dedicated
+# 'postcode' endpoint at call time (bare base, /find or /{path} templates all
+# work; note search/names/v1 is the OS Names API — place names only, no
+# addresses). The key is appended per-request as the 'key' query parameter —
+# no need to embed it in the URL (embedded ?key= and {path} placeholders are
+# stripped). The ADDRESS_LOOKUP_API_URL / ADDRESS_LOOKUP_API_KEY names are
+# accepted as aliases. When unset, POSTCODES_API_URL / POSTCODES_API_KEY are
+# used; the open postcodes.io service only returns postcode metadata, so
+# lookup will then report no addresses and respondents enter addresses
+# manually.
+ADDRESS_LOOKUP_API_URL = (
+    os.environ.get("OSDATAHUB_API_URL")
+    or os.environ.get("ADDRESS_LOOKUP_API_URL")
+    or ""
+)
+ADDRESS_LOOKUP_API_KEY = (
+    os.environ.get("OSDATAHUB_API_KEY")
+    or os.environ.get("ADDRESS_LOOKUP_API_KEY")
+    or ""
+)
+
 # IMD (Index of Multiple Deprivation) API Configuration
 # Used to look up deprivation decile from postcode when include_imd is enabled
 # API returns quantile (default 10 = deciles): 1=most deprived, 10=least deprived
