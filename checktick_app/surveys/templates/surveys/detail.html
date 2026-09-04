@@ -468,7 +468,7 @@
             <p class="text-sm opacity-70 -mb-1">These responses are encrypted and only visible to the person entering them.</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               {% for field in q.options.fields %}
-                {% if field.selected %}
+                {% if field.selected and q.options.address_lookup and field.key == 'post_code' %}{% else %}
                   <label class="input input-bordered input-sm flex items-center gap-1.5">
                     <input class="grow min-w-0 bg-transparent outline-none border-0" name="q_{{ q.id }}_{{ field.key }}" placeholder="{{ field.label }}" aria-label="{{ field.label }}" />
                     <svg class="!w-4 !h-4 opacity-50 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
@@ -492,6 +492,9 @@
                 </label>
               {% endif %}
             </div>
+            {% if q.options.address_lookup %}
+              {% include "surveys/partials/address_lookup.html" with qid=q.id configured=address_lookup_configured %}
+            {% endif %}
           </div>
         {% elif q.type == 'template_professional' %}
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -526,6 +529,9 @@
               {% endif %}
             {% endfor %}
           </div>
+          {% if q.options.address_lookup %}
+            {% include "surveys/partials/address_lookup.html" with qid=q.id configured=address_lookup_configured %}
+          {% endif %}
         {% elif q.type == 'image' %}
           {# Image choice question - display clickable image cards #}
           <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" role="radiogroup" aria-labelledby="q_label_{{ q.id }}">

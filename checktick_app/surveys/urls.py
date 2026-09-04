@@ -454,6 +454,11 @@ urlpatterns = [
         name="validate_postcode",
     ),
     path(
+        "address/lookup/",
+        views.address_lookup,
+        name="address_lookup",
+    ),
+    path(
         "<slug:slug>/builder/professional/update",
         views.builder_professional_update,
         name="builder_professional_update",

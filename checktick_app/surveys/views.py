@@ -81,6 +81,7 @@ from .permissions import (
     require_can_edit_dataset,
     require_can_view,
 )
+from .services.address_lookup import ADDRESS_FIELD_KEYS, AddressLookupService
 from .utils import parse_datetime_aware, verify_key
 
 logger = logging.getLogger(__name__)
@@ -1165,6 +1166,15 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
                     val = request.POST.get(f"{key}_{fkey}")
                     if val:
                         block[str(fkey)] = val
+                if opts.get("address_lookup"):
+                    if "post_code" not in block:
+                        val = request.POST.get(f"{key}_post_code")
+                        if val:
+                            block["post_code"] = val
+                    for af in ADDRESS_FIELD_KEYS:
+                        val = request.POST.get(f"{key}_{af}")
+                        if val:
+                            block[str(af)] = val
                 if block:
                     template_patient_payload.update(block)
                 answers[str(q.id)] = {
@@ -1206,6 +1216,15 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
                         ods_val = request.POST.get(f"{key}_{fkey}_ods")
                         if ods_val:
                             block[f"{fkey}_ods"] = ods_val
+                if opts.get("address_lookup"):
+                    if "post_code" not in block:
+                        val = request.POST.get(f"{key}_post_code")
+                        if val:
+                            block["post_code"] = val
+                    for af in ADDRESS_FIELD_KEYS:
+                        val = request.POST.get(f"{key}_{af}")
+                        if val:
+                            block[str(af)] = val
                 if block:
                     template_professional_payload.update(block)
                 answers[str(q.id)] = {
@@ -1333,6 +1352,7 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "professional_defs": PROFESSIONAL_FIELD_DEFS,
         "professional_ods": professional_ods,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
+        "address_lookup_configured": AddressLookupService.is_configured(),
         "professional_dataset_options": (
             _get_professional_dataset_options()
             if (show_professional_details or has_professional_template)
@@ -1457,6 +1477,7 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "professional_defs": PROFESSIONAL_FIELD_DEFS,
         "professional_ods": professional_ods,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
+        "address_lookup_configured": AddressLookupService.is_configured(),
         "professional_dataset_options": (
             _get_professional_dataset_options()
             if (show_professional_details or has_professional_template)
@@ -5189,6 +5210,7 @@ def _handle_participant_submission(
         "professional_defs": PROFESSIONAL_FIELD_DEFS,
         "professional_ods": professional_ods,
         "professional_field_datasets": PROFESSIONAL_FIELD_TO_DATASET,
+        "address_lookup_configured": AddressLookupService.is_configured(),
         "professional_dataset_options": (
             _get_professional_dataset_options()
             if (show_professional_details or has_professional_template)
@@ -8250,6 +8272,7 @@ def builder_question_template_patient_update(
         key for key in request.POST.getlist("fields") if key in DEMOGRAPHIC_FIELD_DEFS
     }
     include_imd = request.POST.get("include_imd") in ("on", "true", "1")
+    address_lookup = request.POST.get("address_lookup") in ("on", "true", "1")
 
     updated_fields: list[dict[str, Any]] = []
     for field in normalized.get("fields", []):
@@ -8265,7 +8288,12 @@ def builder_question_template_patient_update(
         )
 
     question.options = _normalize_patient_template_options(
-        {**normalized, "fields": updated_fields, "include_imd": include_imd}
+        {
+            **normalized,
+            "fields": updated_fields,
+            "include_imd": include_imd,
+            "address_lookup": address_lookup,
+        }
     )
     question.save(update_fields=["options"])
 
@@ -8293,6 +8321,7 @@ def builder_group_question_template_patient_update(
         key for key in request.POST.getlist("fields") if key in DEMOGRAPHIC_FIELD_DEFS
     }
     include_imd = request.POST.get("include_imd") in ("on", "true", "1")
+    address_lookup = request.POST.get("address_lookup") in ("on", "true", "1")
 
     updated_fields: list[dict[str, Any]] = []
     for field in normalized.get("fields", []):
@@ -8308,7 +8337,12 @@ def builder_group_question_template_patient_update(
         )
 
     question.options = _normalize_patient_template_options(
-        {**normalized, "fields": updated_fields, "include_imd": include_imd}
+        {
+            **normalized,
+            "fields": updated_fields,
+            "include_imd": include_imd,
+            "address_lookup": address_lookup,
+        }
     )
     question.save(update_fields=["options"])
 
@@ -8339,6 +8373,7 @@ def builder_question_template_professional_update(
         key: request.POST.get(f"ods_{key}") in ("on", "true", "1")
         for key in PROFESSIONAL_ODS_FIELDS
     }
+    address_lookup = request.POST.get("address_lookup") in ("on", "true", "1")
 
     updated_fields: list[dict[str, Any]] = []
     for field in normalized.get("fields", []):
@@ -8360,7 +8395,7 @@ def builder_question_template_professional_update(
         )
 
     question.options = _normalize_professional_template_options(
-        {**normalized, "fields": updated_fields}
+        {**normalized, "fields": updated_fields, "address_lookup": address_lookup}
     )
     question.save(update_fields=["options"])
 
@@ -8391,6 +8426,7 @@ def builder_group_question_template_professional_update(
         key: request.POST.get(f"ods_{key}") in ("on", "true", "1")
         for key in PROFESSIONAL_ODS_FIELDS
     }
+    address_lookup = request.POST.get("address_lookup") in ("on", "true", "1")
 
     updated_fields: list[dict[str, Any]] = []
     for field in normalized.get("fields", []):
@@ -8412,7 +8448,7 @@ def builder_group_question_template_professional_update(
         )
 
     question.options = _normalize_professional_template_options(
-        {**normalized, "fields": updated_fields}
+        {**normalized, "fields": updated_fields, "address_lookup": address_lookup}
     )
     question.save(update_fields=["options"])
 
@@ -12194,6 +12230,73 @@ def validate_nhs_number(request: HttpRequest) -> HttpResponse:
             f'<span id="nhs-error" role="alert" class="sr-only">Invalid NHS number. Please check and try again.</span>'
             f"</label>"
         )
+
+
+def _address_lookup_context(
+    prefix: str, post: QueryDict | None = None
+) -> dict[str, Any]:
+    """Build template context for the address-lookup partial.
+
+    Without ``post``, returns the pristine widget. With ``post`` (an HTMX
+    "Find address" / address-select submission), runs the lookup against the
+    postcode in the form and applies ``{prefix}_address_index`` to prefill the
+    chosen address (a select change re-runs the same postcode lookup).
+    """
+    prefix = (prefix or "").strip()
+    if not prefix or len(prefix) > 64 or not re.fullmatch(r"[A-Za-z0-9_\-]+", prefix):
+        prefix = "address"
+
+    ctx: dict[str, Any] = {
+        # The partial names inputs q_{{ qid }}_*; accept either "12" or "q_12"
+        "qid": prefix[2:] if prefix.startswith("q_") else prefix,
+        "configured": AddressLookupService.is_configured(),
+        "addresses": [],
+        "label": "Address",
+    }
+    if post is None:
+        return ctx
+
+    postcode = (post.get(f"{prefix}_post_code") or "").strip().upper()
+    ctx["postcode_value"] = postcode
+
+    if not ctx["configured"]:
+        # Widget shows the manual-entry hint; no lookup or error needed.
+        return ctx
+
+    if not postcode:
+        ctx["error"] = "Enter a postcode to find the address."
+        return ctx
+
+    result = AddressLookupService.lookup(postcode)
+    if result.is_valid:
+        ctx["addresses"] = result.addresses
+        selected_raw = post.get(f"{prefix}_address_index", "")
+        try:
+            selected_index = int(selected_raw) if selected_raw != "" else None
+        except (TypeError, ValueError):
+            selected_index = None
+        if selected_index is not None and 0 <= selected_index < len(result.addresses):
+            ctx["selected_index"] = selected_index
+            ctx["selected_address"] = result.addresses[selected_index]
+        elif len(result.addresses) == 1:
+            ctx["selected_address"] = result.addresses[0]
+    else:
+        ctx["error"] = result.error
+    return ctx
+
+
+@require_http_methods(["POST"])
+@ratelimit(key="ip", rate="30/m", block=True)
+def address_lookup(request: HttpRequest) -> HttpResponse:
+    """HTMX endpoint: UK postcode → address prefill.
+
+    Expects a ``prefix`` field identifying which widget submitted, so the same
+    endpoint serves any number of address questions/templates on a page.
+    Returns the address-lookup partial. Never logs the postcode (personal data).
+    """
+    prefix = request.POST.get("prefix", "")
+    ctx = _address_lookup_context(prefix, request.POST)
+    return render(request, "surveys/partials/address_lookup.html", ctx)
 
 
 @require_http_methods(["POST"])

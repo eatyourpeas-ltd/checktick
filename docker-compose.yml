@@ -24,6 +24,11 @@ services:
       DEBUG: ${DEBUG:-True} # Default to True for development
       EXTERNAL_DATASET_API_URL: ${EXTERNAL_DATASET_API_URL:-https://api.rcpch.ac.uk}
       EXTERNAL_DATASET_API_KEY: ${EXTERNAL_DATASET_API_KEY:-}
+      # OS Data Hub address lookup (OS Places API) + postcode validation
+      OSDATAHUB_API_URL: ${OSDATAHUB_API_URL:-}
+      OSDATAHUB_API_KEY: ${OSDATAHUB_API_KEY:-}
+      POSTCODES_API_URL: ${POSTCODES_API_URL:-}
+      POSTCODES_API_KEY: ${POSTCODES_API_KEY:-}
       # OIDC Configuration
       OIDC_RP_CLIENT_ID_AZURE: ${OIDC_RP_CLIENT_ID_AZURE}
       OIDC_RP_CLIENT_SECRET_AZURE: ${OIDC_RP_CLIENT_SECRET_AZURE}
