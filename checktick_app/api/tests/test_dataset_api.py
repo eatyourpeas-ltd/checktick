@@ -122,6 +122,40 @@ def seed_test_datasets(db):
             sync_frequency_hours=24,
         )
 
+    # Static reference datasets (synced from local data, not an API)
+    for key, name in [
+        ("countries_iso3166", "Countries (ISO 3166-1)"),
+        ("uk_countries", "UK Countries"),
+    ]:
+        DataSet.objects.create(
+            key=key,
+            name=name,
+            category="reference",
+            source_type="manual",
+            is_custom=False,
+            is_global=True,
+            options=[f"Test {name} Option 1", f"Test {name} Option 2"],
+        )
+
+    # ONS geography datasets (synced from the ONS ArcGIS API)
+    for key, name in [
+        ("uk_counties", "UK Counties (Ceremonial)"),
+        ("local_authorities", "Local Authority Districts"),
+        ("upper_tier_authorities", "Upper Tier Local Authorities"),
+        ("combined_authorities", "Combined Authorities"),
+        ("regions_england", "Regions of England"),
+    ]:
+        DataSet.objects.create(
+            key=key,
+            name=name,
+            category="reference",
+            source_type="api",
+            is_custom=False,
+            is_global=True,
+            options=[f"Test {name} Option 1", f"Test {name} Option 2"],
+            sync_frequency_hours=720,
+        )
+
 
 # ============================================================================
 # Authentication Tests
@@ -205,7 +239,7 @@ def test_list_datasets_returns_all_datasets(client, authenticated_user):
 
     data = resp.json()
     assert resp.status_code == 200
-    assert len(data) == 7  # All seeded datasets
+    assert len(data) == 14  # All seeded datasets (7 RCPCH + 2 static + 5 ONS)
 
 
 @pytest.mark.django_db

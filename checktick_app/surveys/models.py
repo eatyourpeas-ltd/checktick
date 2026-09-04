@@ -4466,6 +4466,7 @@ class DataSet(models.Model):
         ("user_created", "User Created"),
         ("rcpch", "RCPCH API"),
         ("snomed", "SNOMED CT"),
+        ("reference", "Reference Data"),
     ]
 
     SOURCE_TYPE_CHOICES = [

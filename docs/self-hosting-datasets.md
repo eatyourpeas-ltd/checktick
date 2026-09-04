@@ -8,14 +8,58 @@ This guide covers the setup and maintenance of datasets for self-hosted CheckTic
 
 ## Overview
 
-CheckTick provides four types of datasets for dropdown questions:
+CheckTick provides five types of datasets for dropdown questions:
 
 1. **NHS Data Dictionary** - standardised medical codes (scraped from NHS DD website)
 2. **RCPCH NHS Organisations** - Organisational data (synced from RCPCH API)
 3. **SNOMED CT** - Live clinical terminology served from a local snomed.db (optional — requires TRUD API key)
-4. **User-Created** - Custom lists created by organisations
+4. **Reference Data** - Geographic and administrative lists (static or synced from the ONS Open Geography Portal)
+5. **User-Created** - Custom lists created by organisations
 
-NHS DD and RCPCH datasets are stored in the database for fast access and offline capability. SNOMED CT options are served live from a local SQLite file on the `snomed-data` volume — no data is copied into Postgres.
+NHS DD, RCPCH and reference datasets are stored in the database for fast access. SNOMED CT options are served live from a local SQLite file on the `snomed-data` volume — no data is copied into Postgres.
+
+## Dataset Catalogue
+
+This is the **single reference table** for all built-in datasets. When adding a new dataset, add a row here.
+
+### RCPCH NHS Organisations API (daily sync)
+
+| Key | Name | Contents | Notes |
+|---|---|---|---|
+| `hospitals_england_wales` | Hospitals (England & Wales) | ~500 hospitals | ODS codes as keys |
+| `nhs_trusts` | NHS Trusts | ~240 trusts | ODS codes as keys |
+| `welsh_lhbs` | Welsh Local Health Boards | 7 boards + hospitals | ODS codes; indented hierarchy |
+| `london_boroughs` | London Boroughs | 33 boroughs | GSS codes as keys |
+| `nhs_england_regions` | NHS England Regions | 7 regions | ODS codes as keys |
+| `paediatric_diabetes_units` | Paediatric Diabetes Units | ~175 units | PZ/ODS codes as keys |
+| `integrated_care_boards` | Integrated Care Boards (ICBs) | 42 ICBs | ODS codes as keys |
+
+### Static reference data (built locally, no network fetch)
+
+| Key | Name | Contents | Notes |
+|---|---|---|---|
+| `countries_iso3166` | Countries (ISO 3166-1) | 249 countries | ISO alpha-2 codes as keys; built from the `pycountry` package at sync time |
+| `uk_countries` | UK Countries | England, Scotland, Wales, Northern Ireland | ONS GSS codes as keys |
+
+### ONS Open Geography Portal (monthly sync)
+
+| Key | Name | Contents | ONS service | Fields | Notes |
+|---|---|---|---|---|---|
+| `uk_counties` | UK Counties (Ceremonial) | 218 areas (UK-wide) | `Counties_and_Unitary_Authorities_December_2023_Boundaries_UK_BUC` | `CTYUA23CD/NM` | GSS codes as keys |
+| `local_authorities` | Local Authority Districts | 361 areas (UK-wide) | `Local_Authority_Districts_December_2023_Boundaries_UK_BUC` | `LAD23CD/NM` | GSS codes as keys |
+| `upper_tier_authorities` | Upper Tier Local Authorities | 187 areas (UK-wide) | `Upper_Tier_Local_Authorities_December_2022_Boundaries_UK_BUC` | `UTLA22CD/NM` | Covers Scottish council areas and NI districts; Dec 2022 is the latest UK-wide release |
+| `combined_authorities` | Combined Authorities | 10 areas (England) | `Combined_Authorities_December_2023_Boundaries_EN_BUC` | `CAUTH23CD/NM` | GSS codes as keys |
+| `regions_england` | Regions of England | 9 regions (ITL1) | `Regions_December_2023_Boundaries_EN_BUC` | `RGN23CD/NM` | Statistical regions — differ from `nhs_england_regions` |
+
+> **Bumping the ONS release:** ONS publishes boundary releases with versioned service names (e.g. the `December_2023` suffix and the `23CD/23NM` fields). When a new release is published, update the `service`, `code_field` and `name_field` entries in `ONS_DATASETS` in `checktick_app/surveys/external_datasets.py` and the table above. Service names can be browsed at <https://services1.arcgis.com/ESMARspQHYMw9BZ9/arcgis/rest/services> (owner: ONSGeography_data).
+
+### Other sources
+
+| Source | Storage | Sync |
+|---|---|---|
+| NHS Data Dictionary (`nhs_dd`) | 48 scraped datasets in Postgres | Weekly scrape |
+| SNOMED CT (`snomed`) | 22 descriptors; options live from `snomed.db` | On TRUD release |
+| User-created (`user_created`) | Postgres | — |
 
 ## Initial Setup
 
@@ -41,16 +85,17 @@ This creates 48 NHS DD datasets including:
 
 See the [NHS DD Dataset Reference](nhs-data-dictionary-datasets.md) for the complete list.
 
-### 2. Sync External API Datasets
+### 2. Sync External API and Reference Datasets
 
-Fetch organisational data from RCPCH API (creates datasets on first run):
+Fetch organisational data from the RCPCH API and geographic reference data from ONS (creates datasets on first run):
 
 ```bash
-# Fetch data from RCPCH API (takes 2-3 minutes, creates datasets automatically)
+# Fetch data from RCPCH API + ONS, build static datasets
+# (takes 2-3 minutes, creates datasets automatically)
 docker compose exec web python manage.py sync_external_datasets
 ```
 
-This creates and populates 7 datasets:
+This creates and populates 14 datasets:
 
 - Hospitals (England & Wales) - ~500 hospitals
 - NHS Trusts - ~240 trusts
@@ -59,6 +104,15 @@ This creates and populates 7 datasets:
 - NHS England Regions - 7 regions
 - Paediatric Diabetes Units - ~175 units
 - Integrated Care Boards - 42 ICBs
+- Countries (ISO 3166-1) - 249 countries (built locally from `pycountry`)
+- UK Countries - 4 countries (static)
+- UK Counties (Ceremonial) - 218 areas (ONS)
+- Local Authority Districts - 361 areas (ONS)
+- Upper Tier Local Authorities - 187 areas (ONS)
+- Combined Authorities - 10 areas (ONS)
+- Regions of England - 9 regions (ONS)
+
+See the [Dataset Catalogue](#dataset-catalogue) above for the full reference.
 
 ### 3. Seed SNOMED CT Datasets (Optional)
 
@@ -89,7 +143,7 @@ See [SNOMED CT Integration](snomed-integration.md) for the full architecture and
 CheckTick uses **three automated cron jobs** to keep datasets up-to-date:
 
 1. **NHS Data Dictionary Scraping** - Scrapes NHS DD website for standardised codes
-2. **External API Sync** - Syncs organisational data from RCPCH API
+2. **External API Sync** - Syncs organisational data from the RCPCH API, geographic reference data from the ONS Open Geography Portal, and builds the static datasets (ISO countries, UK countries) locally
 3. **SNOMED CT Update** *(optional)* - Checks TRUD for new releases and rebuilds snomed.db
 
 Both NHS DD and RCPCH commands automatically create dataset records on first run, then update them on subsequent runs. No separate seeding commands needed.
@@ -209,7 +263,7 @@ python manage.py sync_nhs_dd_datasets --dry-run
 
 ### sync_external_datasets
 
-Sync external datasets from RCPCH API. **Automatically creates dataset records** if they don't exist.
+Sync external datasets from the RCPCH API and the ONS Open Geography Portal, and build the static reference datasets locally. **Automatically creates dataset records** if they don't exist.
 
 ```bash
 # Sync all external datasets
@@ -217,6 +271,8 @@ python manage.py sync_external_datasets
 
 # Sync a specific dataset
 python manage.py sync_external_datasets --dataset hospitals_england_wales
+python manage.py sync_external_datasets --dataset uk_counties
+python manage.py sync_external_datasets --dataset countries_iso3166
 
 # Force sync even if recently synced
 python manage.py sync_external_datasets --force
@@ -227,17 +283,21 @@ python manage.py sync_external_datasets --dry-run
 
 **Options:**
 
-- `--dataset KEY` - Sync only a specific dataset
+- `--dataset KEY` - Sync only a specific dataset (see the [Dataset Catalogue](#dataset-catalogue))
 - `--force` - Bypass sync frequency check
 - `--dry-run` - Preview without saving
 
 **What it does:**
 
 1. Creates dataset records if they don't exist (first run)
-2. Fetches data from RCPCH API
-3. Transforms into CheckTick format
-4. Updates dataset options in database
-5. Records `last_synced_at` timestamp and increments `version`
+2. Fetches data from the RCPCH API (daily sync frequency) and ONS (monthly sync frequency)
+3. Builds static datasets from local data (`countries_iso3166` via `pycountry`, `uk_countries`)
+4. Transforms into CheckTick format (code → name)
+5. Updates dataset options in database
+6. Records `last_synced_at` timestamp and increments `version`
+7. Static datasets are only updated when their options actually change, so frequent runs are cheap
+
+> **Tip:** the command is safe to run daily on a cron. RCPCH datasets re-sync daily, ONS datasets only re-fetch when their 720-hour (monthly) frequency elapses, and static datasets are skipped when unchanged.
 
 **When to use:**
 
