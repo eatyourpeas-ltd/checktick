@@ -48,6 +48,21 @@ class TestDocImportPromptLoading:
         assert "infer" in prompt.lower(), "Prompt must require inferring types"
         assert "markdown" in prompt.lower(), "Prompt must require markdown output"
 
+    def test_prompt_teaches_format_with_worked_example(self):
+        """Small/medium models follow worked examples, so the prompt must
+        contain one — guard against it being removed or diluted."""
+        prompt = load_doc_import_prompt_from_docs()
+
+        assert "EXAMPLE CONVERSION" in prompt
+        # The example must show questions with types, ids, and a likert mapping
+        assert "## Tell us your name" in prompt
+        assert "(text)" in prompt
+        assert "(likert number)" in prompt
+        assert "min: 1" in prompt
+        assert "# About you {about-you}" in prompt
+        # Numbered items must be described as questions
+        assert "numbered or bulleted item" in prompt.lower()
+
     def test_fallback_prompt_exists(self):
         assert _FALLBACK_DOC_IMPORT_PROMPT
         assert isinstance(_FALLBACK_DOC_IMPORT_PROMPT, str)
