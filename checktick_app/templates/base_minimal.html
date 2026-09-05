@@ -60,7 +60,15 @@
       </div>
       <div class="border-t border-base-300 bg-base-content text-base-100">
         <div class="container mx-auto px-4 py-2 text-xs text-center md:text-left">
-          <span class="opacity-80">&copy; {{ current_year }} {{ brand.title }}</span>
+          <span class="opacity-80 inline-flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-1">
+            <span>&copy; {{ current_year }}</span>
+            <a href="https://eatyourpeas.co.uk" target="_blank" rel="noopener" class="link link-hover inline-flex min-h-6 items-center gap-1.5">
+              <img src="{% static 'icons/peas_circle.png' %}" alt="eatyourpeas" class="h-4 w-auto" />
+              <span>eatyourpeas ltd</span>
+            </a>
+            <span class="opacity-40" aria-hidden="true">|</span>
+            <a href="https://www.odsdatasearchandexport.nhs.uk/?search=generalorg&query=EATYOURPEAS" target="_blank" rel="noopener" class="link link-hover">{% trans "ODS Code P6U6C" %}</a>
+          </span>
         </div>
       </div>
     </footer>

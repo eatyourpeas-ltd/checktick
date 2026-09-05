@@ -99,6 +99,10 @@
         {% with num=summary.numeric_summaries|get_item_at:entry.1 %}
           {% include "surveys/partials/_summary_numeric_card.html" with num=num %}
         {% endwith %}
+      {% elif entry.0 == "datetime" %}
+        {% with dt=summary.datetime_summaries|get_item_at:entry.1 %}
+          {% include "surveys/partials/_summary_datetime_card.html" with dt=dt %}
+        {% endwith %}
       {% endif %}
     {% endwith %}
   {% endfor %}

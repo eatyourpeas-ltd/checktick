@@ -6,6 +6,12 @@
     {% with q.options.0 as meta %}
       {% if meta and meta.format == 'number' %}
         <input class="input input-bordered w-full" type="number" disabled />
+      {% elif meta and meta.format == 'date' %}
+        <input class="input input-bordered w-full" type="date" min="{{ meta.min|default:'' }}" max="{{ meta.max|default:'' }}" disabled />
+      {% elif meta and meta.format == 'time' %}
+        <input class="input input-bordered w-full" type="time" min="{{ meta.min|default:'' }}" max="{{ meta.max|default:'' }}" disabled />
+      {% elif meta and meta.format == 'datetime' %}
+        <input class="input input-bordered w-full" type="datetime-local" min="{{ meta.min|default:'' }}" max="{{ meta.max|default:'' }}" disabled />
       {% else %}
         <input class="input input-bordered w-full" type="text" disabled />
       {% endif %}

@@ -1,0 +1,51 @@
+{% comment %}
+Date/time-question card for the summary report.
+
+Renders a compact range summary (count, earliest, latest) for a date, time
+or date & time question. The stats are computed server-side in pure Python
+(planning doc §4.1) — no patient data leaves the DB layer. Unparseable
+submitted values are skipped rather than coerced.
+
+Expected context:
+  - dt: a DatetimeSummary instance with .question_id, .question_text, .fmt,
+    .count, .earliest, .latest, and .summary_json (the safe JSON payload for
+    the copy-data button).
+{% endcomment %}
+{% load i18n %}
+<section class="card bg-base-100 shadow-sm mb-6 print:shadow-none print:break-inside-avoid" aria-labelledby="dt-q-{{ dt.question_id }}">
+  <div class="card-body">
+    <div class="flex items-center justify-between gap-3">
+      <h2 id="dt-q-{{ dt.question_id }}" class="card-title text-base font-semibold">
+        {{ dt.question_text }}
+      </h2>
+      <span class="badge badge-ghost badge-sm">{{ dt.count }} {% trans "responses" %}</span>
+    </div>
+
+    {% if dt.count == 0 %}
+    <p class="text-sm text-base-content/70 mt-2">
+      {% trans "No date/time answers were submitted for this question." %}
+    </p>
+    {% else %}
+    <table class="table table-zebra mt-3 text-sm" aria-label="{% trans 'Date/time summary' %}">
+      <tbody>
+        <tr><th scope="row">{% trans "Count" %}</th><td>{{ dt.count }}</td></tr>
+        <tr><th scope="row">{% trans "Earliest" %}</th><td>{% if dt.fmt == 'datetime' %}{{ dt.earliest|cut:"T" }}{% else %}{{ dt.earliest }}{% endif %}</td></tr>
+        <tr><th scope="row">{% trans "Latest" %}</th><td>{% if dt.fmt == 'datetime' %}{{ dt.latest|cut:"T" }}{% else %}{{ dt.latest }}{% endif %}</td></tr>
+      </tbody>
+    </table>
+    {% endif %}
+
+    <div class="card-actions justify-end mt-3 print:hidden">
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs copy-chart-data-btn"
+        data-chart-data="{{ dt.summary_json }}"
+        data-question-id="{{ dt.question_id }}"
+        data-copy-format="json"
+        title="{% trans 'Copy summary statistics as JSON to the clipboard' %}">
+        {% include "components/icons/copy.html" with classes="w-3 h-3 mr-1" %}
+        {% trans "Copy data" %}
+      </button>
+    </div>
+  </div>
+</section>

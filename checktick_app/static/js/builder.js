@@ -297,7 +297,27 @@
       const fmtInput = form.querySelector(
         `input[name="text_format"][value="${fmt}"]`,
       );
-      if (fmtInput) fmtInput.checked = true;
+      if (fmtInput) {
+        fmtInput.checked = true;
+        fmtInput.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      // Restore optional min/max range for date/time/datetime questions.
+      const rangeMin = form.querySelector("[data-text-range-min]");
+      const rangeMax = form.querySelector("[data-text-range-max]");
+      if (rangeMin && rangeMax) {
+        const inputType =
+          fmt === "date"
+            ? "date"
+            : fmt === "time"
+              ? "time"
+              : fmt === "datetime"
+                ? "datetime-local"
+                : "text";
+        rangeMin.setAttribute("type", inputType);
+        rangeMax.setAttribute("type", inputType);
+        rangeMin.value = payload.text_min || payload.textMin || "";
+        rangeMax.value = payload.text_max || payload.textMax || "";
+      }
     }
 
     if (payload.type === "likert") {
@@ -872,6 +892,33 @@
       if (imageOptionsSection)
         imageOptionsSection.classList.toggle("hidden", !isImage);
 
+      // Date/time range fields: only shown for date/time/datetime formats.
+      // The min/max inputs switch native input type to match the format.
+      const rangeFields = form.querySelector("[data-text-range-fields]");
+      const rangeMin = form.querySelector("[data-text-range-min]");
+      const rangeMax = form.querySelector("[data-text-range-max]");
+      if (rangeFields) {
+        const fmtChecked = form.querySelector('input[name="text_format"]:checked');
+        const fmt = isText && fmtChecked ? fmtChecked.value : null;
+        const isDatetime = fmt === "date" || fmt === "time" || fmt === "datetime";
+        rangeFields.classList.toggle("hidden", !isDatetime);
+        if (isDatetime && rangeMin && rangeMax) {
+          const inputType =
+            fmt === "date"
+              ? "date"
+              : fmt === "time"
+                ? "time"
+                : "datetime-local";
+          if (rangeMin.getAttribute("type") !== inputType) {
+            rangeMin.setAttribute("type", inputType);
+            rangeMax.setAttribute("type", inputType);
+            // Values are cleared when the native picker type changes.
+            rangeMin.value = "";
+            rangeMax.value = "";
+          }
+        }
+      }
+
       // Show/hide follow-up container within options section.
       // When options come from a prefilled dataset, per-option follow-ups
       // don't scale; offer a single question-level follow-up box instead.
@@ -1394,7 +1441,9 @@
     form.addEventListener("change", function (e) {
       if (
         e.target &&
-        (e.target.name === "type" || e.target.name === "likert_mode")
+        (e.target.name === "type" ||
+          e.target.name === "likert_mode" ||
+          e.target.name === "text_format")
       ) {
         refresh();
         // Reset image upload UI when changing question type

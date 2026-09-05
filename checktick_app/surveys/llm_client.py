@@ -244,6 +244,9 @@ HIDDEN
 ALLOWED QUESTION TYPES:
 - text: Short text input
 - text number: Numeric input with validation
+- text date: Date picker
+- text time: Time picker
+- text datetime: Date and time picker
 - mc_single: Single choice (radio buttons)
 - mc_multi: Multiple choice (checkboxes)
 - dropdown: Select dropdown menu (optionally linked to a dataset — see DATASETS section below)
