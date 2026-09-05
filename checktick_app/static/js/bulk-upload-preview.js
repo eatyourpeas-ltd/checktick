@@ -145,6 +145,52 @@
     return badge;
   };
 
+  // Inline SVG icons per question type, mirroring the builder's
+  // question_type_icon.html partial (24x24 stroke, currentColor).
+  const QUESTION_TYPE_ICON_PATHS = {
+    text: '<path d="M4 7V5h16v2M12 5v14m-3 0h6"></path>',
+    "text number": '<path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"></path>',
+    "text date":
+      '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 11h18"></path>',
+    "text time": '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path>',
+    "text datetime":
+      '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 11h18"></path><circle cx="12" cy="15.5" r="3"></circle><path d="M12 14.2v1.3l1 1"></path>',
+    mc_single:
+      '<circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"></circle>',
+    mc_multi:
+      '<rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M8 12l3 3 5-6"></path>',
+    dropdown:
+      '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M8 10l4 4 4-4"></path>',
+    orderable:
+      '<path d="M8 6h13M8 12h13M8 18h13"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle>',
+    yesno: '<circle cx="12" cy="12" r="9"></circle><path d="M9 12l2 2 4-5"></path>',
+    likert:
+      '<path d="M3 12h18"></path><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"></circle>',
+    "likert number":
+      '<path d="M3 12h18"></path><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"></circle>',
+    "likert categories":
+      '<path d="M3 12h18"></path><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"></circle>',
+    image:
+      '<rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="10" r="2"></circle><path d="M21 16l-5-5-6 6-2-2-5 5"></path>',
+  };
+
+  const createTypePill = (type) => {
+    const pill = createIdToken(type, "info");
+    pill.classList.add("uppercase", "tracking-wide");
+    const path = QUESTION_TYPE_ICON_PATHS[type];
+    if (path) {
+      const icon = document.createElement("span");
+      icon.setAttribute("aria-hidden", "true");
+      icon.className = "leading-none";
+      icon.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+        path +
+        "</svg>";
+      pill.insertBefore(icon, pill.firstChild);
+    }
+    return pill;
+  };
+
   const parseStructure = (md) => {
     const rawLines = (md || "").split(/\r?\n/);
     const normalized = rawLines.map((raw) => {
@@ -509,9 +555,7 @@
           rowMeta.style.marginLeft = "auto";
 
           if (question.type) {
-            const typePill = createIdToken(question.type, "info");
-            typePill.classList.add("uppercase", "tracking-wide");
-            rowMeta.appendChild(typePill);
+            rowMeta.appendChild(createTypePill(question.type));
           }
 
           if (question.hiddenByDefault) {

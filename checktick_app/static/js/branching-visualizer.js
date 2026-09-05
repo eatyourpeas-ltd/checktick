@@ -705,6 +705,7 @@
           qConditions,
           q.group_name,
           pos.x, // Pass node's x position for badge placement
+          q.type,
         );
       });
 
@@ -824,6 +825,28 @@
       ctx.restore();
     }
 
+    // Short labels for the per-question type badge (signposts the question
+    // type on the map). Question type comes from branching_data_api.
+    const TYPE_BADGE_LABELS = {
+      text: "TXT",
+      "text number": "NUM",
+      "text date": "DATE",
+      "text time": "TIME",
+      "text datetime": "D/T",
+      mc_single: "CHOICE",
+      mc_multi: "MULTI",
+      dropdown: "DROP",
+      orderable: "RANK",
+      yesno: "Y/N",
+      likert: "SCALE",
+      "likert number": "SCALE",
+      "likert categories": "SCALE",
+      image: "IMG",
+      template_patient: "TPL",
+      template_professional: "TPL",
+    };
+    const typeBadgeLabel = (type) => TYPE_BADGE_LABELS[type] || null;
+
     function drawLabel(
       x,
       y,
@@ -832,6 +855,7 @@
       nodeConditions,
       groupName,
       nodeX,
+      type,
     ) {
       // Draw text label to the right of the node (and any right-side branches)
       ctx.fillStyle = hasConditions ? colors.primary : colors.accent;
@@ -839,8 +863,19 @@
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
 
-      // Truncate text if too long (reserve space for group label and badge on right)
-      const badgeSpace = nodeConditions.length > 0 ? 80 : 0; // Reserve space for badge
+      // Short type badge (e.g. DATE, CHOICE) signposts the question type
+      const typeBadgeText = typeBadgeLabel(type);
+      let typeBadgeWidth = 0;
+      if (typeBadgeText) {
+        ctx.font = "10px sans-serif";
+        typeBadgeWidth =
+          ctx.measureText(typeBadgeText).width + 8 + 8; // padding + gap
+      }
+
+      // Truncate text if too long (reserve space for type badge, group label
+      // and condition badge on right)
+      const badgeSpace =
+        (nodeConditions.length > 0 ? 80 : 0) + typeBadgeWidth;
       const maxWidth = getCanvasWidth() - x - 150 - badgeSpace;
       let displayText = text;
       if (ctx.measureText(text).width > maxWidth) {
@@ -854,26 +889,50 @@
       }
 
       ctx.fillText(displayText, x, y);
+      ctx.font = hasConditions ? "bold 13px sans-serif" : "13px sans-serif";
+      const textWidth = ctx.measureText(displayText).width;
 
-      // Draw condition count badge to the RIGHT of the question title
+      // Draw type badge to the RIGHT of the question title
+      let afterTitleX = x + textWidth + 8;
+      if (typeBadgeText) {
+        ctx.font = "10px sans-serif";
+        const badgeTextWidth = ctx.measureText(typeBadgeText).width;
+        const badgePadding = 4;
+        const badgeWidth = badgeTextWidth + badgePadding * 2;
+        const badgeHeight = 16;
+
+        ctx.fillStyle = "rgba(128, 128, 128, 0.12)";
+        ctx.beginPath();
+        ctx.roundRect(
+          afterTitleX,
+          y - badgeHeight / 2,
+          badgeWidth,
+          badgeHeight,
+          3,
+        );
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(128, 128, 128, 0.75)";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(typeBadgeText, afterTitleX + badgePadding, y);
+
+        afterTitleX += badgeWidth + 8;
+      }
+
+      // Draw condition count badge to the RIGHT of the title and type badge
       if (nodeConditions.length > 0) {
         const badgeText = `${nodeConditions.length} condition${
           nodeConditions.length > 1 ? "s" : ""
         }`;
 
-        // Measure the displayed text to position badge after it
-        ctx.font = hasConditions ? "bold 13px sans-serif" : "13px sans-serif";
-        const textWidth = ctx.measureText(displayText).width;
-
-        // Measure badge text
         ctx.font = "10px sans-serif";
         const badgeTextWidth = ctx.measureText(badgeText).width;
         const badgePadding = 4;
         const badgeWidth = badgeTextWidth + badgePadding * 2;
         const badgeHeight = 16;
 
-        // Position badge to the RIGHT of the question title
-        const badgeX = x + textWidth + 8; // 8px gap after title
+        const badgeX = afterTitleX;
 
         // Draw badge background
         ctx.fillStyle = "rgba(128, 128, 128, 0.15)";

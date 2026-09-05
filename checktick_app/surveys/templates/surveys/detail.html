@@ -314,6 +314,12 @@
           {% with q.options|options_meta as meta %}
             {% if meta and meta.format == 'number' %}
               <input class="input input-bordered w-full" type="number" name="q_{{ q.id }}" id="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true" required{% endif %} />
+            {% elif meta and meta.format == 'date' %}
+              <input class="input input-bordered w-full" type="date" name="q_{{ q.id }}" id="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if meta.min %} min="{{ meta.min }}"{% endif %}{% if meta.max %} max="{{ meta.max }}"{% endif %}{% if q.required %} aria-required="true" required{% endif %} />
+            {% elif meta and meta.format == 'time' %}
+              <input class="input input-bordered w-full" type="time" name="q_{{ q.id }}" id="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if meta.min %} min="{{ meta.min }}"{% endif %}{% if meta.max %} max="{{ meta.max }}"{% endif %}{% if q.required %} aria-required="true" required{% endif %} />
+            {% elif meta and meta.format == 'datetime' %}
+              <input class="input input-bordered w-full" type="datetime-local" name="q_{{ q.id }}" id="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if meta.min %} min="{{ meta.min }}"{% endif %}{% if meta.max %} max="{{ meta.max }}"{% endif %}{% if q.required %} aria-required="true" required{% endif %} />
             {% else %}
               <input class="input input-bordered w-full" type="text" name="q_{{ q.id }}" id="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true" required{% endif %} />
             {% endif %}

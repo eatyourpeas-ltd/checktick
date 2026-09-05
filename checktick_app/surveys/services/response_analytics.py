@@ -10,6 +10,7 @@ Demographics/IMD require separate unlock and are handled elsewhere.
 
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import date, datetime, time
 import json
 import math
 import re
@@ -27,6 +28,8 @@ CHARTABLE_TYPES = {"mc_single", "mc_multi", "yesno", "likert", "dropdown"}
 TEXT_TYPES = {"text", "textarea"}
 # Question types whose answers are numeric (summary statistics).
 NUMERIC_TYPES = {"number"}
+# Text-question formats whose answers are date/time values (range summaries).
+DATETIME_TEXT_FORMATS = {"date", "time", "datetime"}
 
 # Truncation limit for individual free-text responses in the summary view.
 # Per planning doc §4.1: truncate to ~500 chars each.
@@ -201,6 +204,35 @@ class NumericSummary:
 
 
 @dataclass
+class DatetimeSummary:
+    """Summary for a single date/time/datetime text question.
+
+    Count, earliest and latest of the parseable submitted values. Values that
+    do not parse for the question's format are skipped (never coerce), so a
+    stray free-text answer cannot skew the range.
+    """
+
+    question_id: int
+    question_text: str
+    question_type: str
+    # One of "date", "time", "datetime" — the stored text format.
+    fmt: str = "date"
+    count: int = 0
+    earliest: str | None = None
+    latest: str | None = None
+
+    @property
+    def summary_json(self) -> str:
+        """Safe JSON serialisation of the summary stats."""
+        payload = {
+            "count": self.count,
+            "earliest": self.earliest,
+            "latest": self.latest,
+        }
+        return json.dumps(payload, separators=(",", ":")).replace("</", "<\\/")
+
+
+@dataclass
 class LLMThemeSummary:
     """Lazy LLM theme summary for a single text/textarea question.
 
@@ -236,8 +268,10 @@ class SurveySummary:
     distributions: list[AnswerDistribution] = field(default_factory=list)
     text_collations: list[TextCollation] = field(default_factory=list)
     numeric_summaries: list[NumericSummary] = field(default_factory=list)
+    datetime_summaries: list[DatetimeSummary] = field(default_factory=list)
     question_order: list[int] = field(default_factory=list)
-    # Map question_id -> ("chartable", index) / ("text", index) / ("numeric", index)
+    # Map question_id -> ("chartable", index) / ("text", index) /
+    # ("numeric", index) / ("datetime", index)
     # so the template can render each question in document order regardless of type.
     question_index: dict[int, tuple[str, int]] = field(default_factory=dict)
 
@@ -703,6 +737,107 @@ def compute_numeric_summary(
     )
 
 
+def _coerce_datetime(value: Any, fmt: str):
+    """Coerce a stored answer to a date/time/datetime, or None if invalid."""
+    if value is None or isinstance(value, bool):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        if fmt == "date":
+            return date.fromisoformat(text[:10])
+        if fmt == "time":
+            return time.fromisoformat(text)
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _question_datetime_format(question) -> str | None:
+    """Return "date"/"time"/"datetime" for text questions with that format."""
+    if question.type != "text":
+        return None
+    options = question.options
+    first = None
+    if isinstance(options, list) and options and isinstance(options[0], dict):
+        first = options[0]
+    elif isinstance(options, dict):
+        first = options
+    if not first:
+        return None
+    fmt = str(first.get("format") or "")
+    return fmt if fmt in DATETIME_TEXT_FORMATS else None
+
+
+def compute_datetime_summary(
+    question,
+    responses: QuerySet,
+    is_repeatable: bool = False,
+    survey_key: bytes | None = None,
+) -> DatetimeSummary:
+    """Compute a :class:`DatetimeSummary` for a date/time/datetime question.
+
+    Unparseable values are skipped (not coerced) so a free-text answer in a
+    date question does not skew the earliest/latest range.
+    """
+    fmt = _question_datetime_format(question) or "date"
+    q_id = str(question.id)
+    values: list = []
+
+    for response in responses.iterator():
+        answers = _resolve_response_answers(response, survey_key)
+        if answers is None:
+            continue
+        answer = answers.get(q_id)
+        if _is_blank_answer(answer):
+            continue
+
+        if is_repeatable:
+            if not isinstance(answer, list):
+                answer = [answer]
+            for instance in answer:
+                if _is_blank_answer(instance):
+                    continue
+                parsed = _coerce_datetime(instance, fmt)
+                if parsed is not None:
+                    values.append(parsed)
+            continue
+
+        parsed = _coerce_datetime(answer, fmt)
+        if parsed is not None:
+            values.append(parsed)
+
+    if not values:
+        return DatetimeSummary(
+            question_id=question.id,
+            question_text=_truncate_label(question.text, 100),
+            question_type=question.type,
+            fmt=fmt,
+            count=0,
+        )
+
+    earliest = min(values)
+    latest = max(values)
+
+    def _format(value) -> str:
+        if fmt == "time":
+            if value.second == 0 and value.microsecond == 0:
+                return value.strftime("%H:%M")
+            return value.isoformat()
+        return value.isoformat()
+
+    return DatetimeSummary(
+        question_id=question.id,
+        question_text=_truncate_label(question.text, 100),
+        question_type=question.type,
+        fmt=fmt,
+        count=len(values),
+        earliest=_format(earliest),
+        latest=_format(latest),
+    )
+
+
 def _coerce_numeric(value: Any) -> float | None:
     """Coerce a stored answer to a float, returning None if non-numeric."""
     if value is None:
@@ -778,6 +913,21 @@ def compute_survey_summary(
                 summary.distributions.append(dist)
                 summary.question_order.append(question.id)
         elif q_type in TEXT_TYPES:
+            dt_fmt = _question_datetime_format(question)
+            if dt_fmt:
+                dt_summary = compute_datetime_summary(
+                    question,
+                    responses,
+                    is_repeatable=question.id in repeatable_qids,
+                    survey_key=survey_key,
+                )
+                summary.question_index[question.id] = (
+                    "datetime",
+                    len(summary.datetime_summaries),
+                )
+                summary.datetime_summaries.append(dt_summary)
+                summary.question_order.append(question.id)
+                continue
             coll = compute_text_collation(
                 question,
                 responses,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import csv
+from datetime import date, datetime, time
 import io
 import json
 import logging
@@ -1245,6 +1246,13 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
                 messages.error(request, msg)
             return redirect("surveys:detail", slug=slug)
 
+        # Validate date/time/datetime answers (parseable + within range).
+        datetime_errors = _validate_text_format_answers(survey, answers)
+        if datetime_errors:
+            for msg in datetime_errors:
+                messages.error(request, msg)
+            return redirect("surveys:detail", slug=slug)
+
         # Collect professional details (non-encrypted)
         professional_payload = {**template_professional_payload}
         for field in professional_fields:
@@ -2205,9 +2213,23 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
             options = [line.strip() for line in raw.splitlines() if line.strip()]
     elif qtype == SurveyQuestion.Types.TEXT:
         text_format = (data.get("text_format") or "free").strip()
-        if text_format not in {"number", "free"}:
+        if text_format not in {"number", "free", "date", "time", "datetime"}:
             text_format = "free"
-        options = [{"type": "text", "format": text_format}]
+        option: dict[str, Any] = {"type": "text", "format": text_format}
+        if text_format in _TEXT_DATETIME_FORMATS:
+            text_min = _clean_text_range_value(data.get("text_min"), text_format)
+            text_max = _clean_text_range_value(data.get("text_max"), text_format)
+            # Drop the whole range when min > max — native inputs should prevent
+            # this, but a crafted POST must not persist a contradictory range.
+            lo = _parse_datetime_answer(text_min, text_format) if text_min else None
+            hi = _parse_datetime_answer(text_max, text_format) if text_max else None
+            if lo and hi and lo > hi:
+                text_min = text_max = None
+            if text_min:
+                option["min"] = text_min
+            if text_max:
+                option["max"] = text_max
+        options = [option]
     else:
         options = []
 
@@ -2224,6 +2246,127 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
         "options": options,
         "dataset_key": dataset_key,
     }
+
+
+_TEXT_DATETIME_FORMATS = {"date", "time", "datetime"}
+
+
+def _clean_text_range_value(raw: Any, fmt: str) -> str | None:
+    """Normalise a min/max range value for a date/time/datetime text question.
+
+    Returns the canonical string, or None when blank or invalid. Invalid input
+    is silently dropped rather than persisted — the builder uses native date/
+    time inputs, so malformed values can only arrive from a crafted POST.
+    """
+    if not raw:
+        return None
+    value = str(raw).strip()
+    if not value:
+        return None
+    try:
+        if fmt == "date":
+            return date.fromisoformat(value[:10]).isoformat()
+        if fmt == "time":
+            return time.fromisoformat(value).isoformat()
+        return datetime.fromisoformat(value).isoformat()
+    except ValueError:
+        return None
+
+
+def _parse_datetime_answer(value: Any, fmt: str):
+    """Parse a submitted date/time/datetime answer, or None if invalid."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        if fmt == "date":
+            return date.fromisoformat(text[:10])
+        if fmt == "time":
+            return time.fromisoformat(text)
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _question_text_format(question) -> str | None:
+    """Return the text format (free/number/date/time/datetime) for a question."""
+    if question.type != SurveyQuestion.Types.TEXT:
+        return None
+    options = question.options
+    first = None
+    if isinstance(options, list) and options and isinstance(options[0], dict):
+        first = options[0]
+    elif isinstance(options, dict):
+        first = options
+    if not first:
+        return "free"
+    fmt = str(first.get("format") or "free")
+    return fmt if fmt in {"free", "number", "date", "time", "datetime"} else "free"
+
+
+def _validate_text_format_answers(survey: Survey, answers: dict) -> list[str]:
+    """Validate submitted answers for date/time/datetime text questions.
+
+    Server-side counterpart of the native HTML date/time inputs: rejects
+    answers that are unparseable or outside the configured min/max range.
+    Returns a list of human-readable error messages.
+    """
+    errors: list[str] = []
+    for q in survey.questions.all():
+        fmt = _question_text_format(q)
+        if fmt not in _TEXT_DATETIME_FORMATS:
+            continue
+        answer = answers.get(str(q.id))
+        if _is_blank_answer_value(answer):
+            continue
+        values = answer if isinstance(answer, list) else [answer]
+        first_option = q.options[0] if isinstance(q.options, list) and q.options else {}
+        lo = (
+            _parse_datetime_answer(first_option.get("min"), fmt)
+            if isinstance(first_option, dict)
+            else None
+        )
+        hi = (
+            _parse_datetime_answer(first_option.get("max"), fmt)
+            if isinstance(first_option, dict)
+            else None
+        )
+        for value in values:
+            if _is_blank_answer_value(value):
+                continue
+            parsed = _parse_datetime_answer(value, fmt)
+            if parsed is None:
+                errors.append(
+                    f"'{q.text}' requires a valid "
+                    + {
+                        "date": "date (YYYY-MM-DD)",
+                        "time": "time (HH:MM)",
+                        "datetime": "date and time",
+                    }[fmt]
+                    + "."
+                )
+                continue
+            if lo and parsed < lo:
+                errors.append(
+                    f"'{q.text}' cannot be earlier than {first_option.get('min')}."
+                )
+            elif hi and parsed > hi:
+                errors.append(
+                    f"'{q.text}' cannot be later than {first_option.get('max')}."
+                )
+    return errors
+
+
+def _is_blank_answer_value(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, list):
+        return not any(not _is_blank_answer_value(v) for v in value)
+    return False
 
 
 def _safe_int(value: Any) -> int | None:
@@ -2367,9 +2510,15 @@ def _serialize_question_for_builder(
     options = question.options or []
     if question.type == SurveyQuestion.Types.TEXT:
         fmt = "free"
+        text_min = ""
+        text_max = ""
         if isinstance(options, list) and options and isinstance(options[0], dict):
             fmt = str(options[0].get("format") or fmt)
+            text_min = str(options[0].get("min") or "")
+            text_max = str(options[0].get("max") or "")
         payload["text_format"] = fmt
+        payload["text_min"] = text_min
+        payload["text_max"] = text_max
     elif question.type in {
         SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE,
         SurveyQuestion.Types.MULTIPLE_CHOICE_MULTI,
@@ -5138,6 +5287,14 @@ def _handle_participant_submission(
             # Redirect back to the same participant-facing URL. request.path
             # is the server-resolved path (not user-supplied query data), so
             # this is safe from open-redirect.
+            safe_path = request.path_info or request.path
+            return redirect(safe_path)
+
+        # Validate date/time/datetime answers (parseable + within range).
+        datetime_errors = _validate_text_format_answers(survey, answers)
+        if datetime_errors:
+            for msg in datetime_errors:
+                messages.error(request, msg)
             safe_path = request.path_info or request.path
             return redirect(safe_path)
 
@@ -9808,14 +9965,17 @@ def _export_survey_to_markdown(survey: Survey) -> str:
 
             # Handle special cases where DB type differs from markdown type
             if question.type == "text" and question.options:
-                # Check if it's text number
+                # Check if it's text number/date/time
                 if isinstance(question.options, list) and len(question.options) > 0:
                     first_option = question.options[0]
-                    if (
-                        first_option.get("type") == "text"
-                        and first_option.get("format") == "number"
-                    ):
-                        export_type = "text number"
+                    if first_option.get("type") == "text":
+                        fmt = first_option.get("format")
+                        export_type = {
+                            "number": "text number",
+                            "date": "text date",
+                            "time": "text time",
+                            "datetime": "text datetime",
+                        }.get(fmt, export_type)
             elif question.type == "likert" and question.options:
                 # Check if it's categories or number
                 if isinstance(question.options, list) and len(question.options) > 0:
@@ -9827,6 +9987,23 @@ def _export_survey_to_markdown(survey: Survey) -> str:
 
             # Question type
             lines.append(f"{indent}({export_type})")
+
+            # Optional min/max range for date/time/datetime text questions
+            if (
+                question.type == "text"
+                and isinstance(question.options, list)
+                and question.options
+            ):
+                first_option = question.options[0]
+                if isinstance(first_option, dict) and first_option.get("format") in (
+                    "date",
+                    "time",
+                    "datetime",
+                ):
+                    if first_option.get("min"):
+                        lines.append(f"{indent}min: {first_option['min']}")
+                    if first_option.get("max"):
+                        lines.append(f"{indent}max: {first_option['max']}")
 
             # HIDDEN flag
             if question.hidden_by_default:
@@ -11188,14 +11365,17 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
 
         # Handle special cases where DB type differs from markdown type
         if question.type == "text" and question.options:
-            # Check if it's text number
+            # Check if it's text number/date/time
             if isinstance(question.options, list) and len(question.options) > 0:
                 first_option = question.options[0]
-                if (
-                    first_option.get("type") == "text"
-                    and first_option.get("format") == "number"
-                ):
-                    export_type = "text number"
+                if first_option.get("type") == "text":
+                    fmt = first_option.get("format")
+                    export_type = {
+                        "number": "text number",
+                        "date": "text date",
+                        "time": "text time",
+                        "datetime": "text datetime",
+                    }.get(fmt, export_type)
         elif question.type == "likert" and question.options:
             # Check if it's categories or number
             if isinstance(question.options, list) and len(question.options) > 0:
@@ -11207,6 +11387,23 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
 
         # Question type
         lines.append(f"({export_type})")
+
+        # Optional min/max range for date/time/datetime text questions
+        if (
+            question.type == "text"
+            and isinstance(question.options, list)
+            and question.options
+        ):
+            first_option = question.options[0]
+            if isinstance(first_option, dict) and first_option.get("format") in (
+                "date",
+                "time",
+                "datetime",
+            ):
+                if first_option.get("min"):
+                    lines.append(f"min: {first_option['min']}")
+                if first_option.get("max"):
+                    lines.append(f"max: {first_option['max']}")
 
         # Handle likert type (which can be categories or number)
         if question.type == "likert" and question.options:
@@ -11354,6 +11551,7 @@ def branching_data_api(request: HttpRequest, slug: str) -> JsonResponse:
             "id": str(q.id),
             "text": display_text,
             "full_text": q.text,  # Full question text for hover tooltip
+            "type": q.type,
             "order": index,
             "group_name": q.group.name if q.group else None,
             "group_id": str(q.group.id) if q.group else None,

@@ -222,6 +222,10 @@ ALLOWED QUESTION TYPES:
 
 - text: Short text input
 - text number: Numeric input with validation
+- text date: Date picker
+- text time: Time picker
+- text datetime: Date and time picker
+  - Optional `min:`/`max:` lines after the type restrict the allowed range (e.g. `min: 2026-01-01` for text date, `min: 09:00` for text time, `min: 2026-01-01T09:00` for text datetime)
 - mc_single: Single choice (radio buttons)
 - mc_multi: Multiple choice (checkboxes)
 - dropdown: Select dropdown menu (optionally linked to a dataset — see DATASETS section below)

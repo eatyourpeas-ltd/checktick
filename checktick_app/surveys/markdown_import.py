@@ -1,12 +1,59 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import unicodedata
 
 
 class BulkParseError(Exception):
     pass
+
+
+def _text_datetime_options(q: Dict[str, Any], fmt: str) -> List[Dict[str, Any]]:
+    """Build the options dict for a date/time/datetime text question.
+
+    Picks up optional ``min:``/``max:`` key-value lines (same style as
+    ``likert number``). Invalid values are dropped rather than persisted.
+    """
+    from datetime import date as _date, datetime as _datetime, time as _time
+
+    option: Dict[str, Any] = {"type": "text", "format": fmt}
+
+    def _clean(raw: Any) -> Optional[str]:
+        if not raw:
+            return None
+        value = str(raw).strip()
+        if not value:
+            return None
+        try:
+            if fmt == "date":
+                return _date.fromisoformat(value[:10]).isoformat()
+            if fmt == "time":
+                return _time.fromisoformat(value).isoformat()
+            return _datetime.fromisoformat(value).isoformat()
+        except ValueError:
+            return None
+
+    lo = _clean(q.get("kv", {}).get("min"))
+    hi = _clean(q.get("kv", {}).get("max"))
+    if lo and hi:
+        # Drop contradictory ranges entirely.
+        try:
+            if fmt == "date":
+                bad = _date.fromisoformat(lo[:10]) > _date.fromisoformat(hi[:10])
+            elif fmt == "time":
+                bad = _time.fromisoformat(lo) > _time.fromisoformat(hi)
+            else:
+                bad = _datetime.fromisoformat(lo) > _datetime.fromisoformat(hi)
+        except ValueError:
+            bad = True
+        if bad:
+            return [option]
+    if lo:
+        option["min"] = lo
+    if hi:
+        option["max"] = hi
+    return [option]
 
 
 def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
@@ -412,6 +459,15 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
             elif t in {"text number", "number", "numeric"}:
                 q["final_type"] = "text"
                 q["final_options"] = [{"type": "text", "format": "number"}]
+            elif t in {"text date", "date"}:
+                q["final_type"] = "text"
+                q["final_options"] = _text_datetime_options(q, "date")
+            elif t in {"text time", "time"}:
+                q["final_type"] = "text"
+                q["final_options"] = _text_datetime_options(q, "time")
+            elif t in {"text datetime", "datetime", "date and time", "date/time"}:
+                q["final_type"] = "text"
+                q["final_options"] = _text_datetime_options(q, "datetime")
             elif t in {"mc_single", "single", "radio"}:
                 q["final_type"] = "mc_single"
                 q["final_options"] = _convert_options_to_dicts(q["options"])

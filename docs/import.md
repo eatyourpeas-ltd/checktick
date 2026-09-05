@@ -61,6 +61,9 @@ Spacing is flexible, but keep the relative order (heading → optional descripti
 | --- | --- |
 | `text` | Free-text short answer |
 | `text number` | Numeric input validation |
+| `text date` | Date picker (aliases: `date`). Optional `min:` / `max:` range lines |
+| `text time` | Time picker (aliases: `time`). Optional `min:` / `max:` range lines |
+| `text datetime` | Date and time picker (aliases: `datetime`, `date/time`). Optional `min:` / `max:` range lines |
 | `mc_single` | Multiple choice (single answer) |
 | `mc_multi` | Multiple choice (multiple answers) |
 | `dropdown` | Select menu |
@@ -78,6 +81,10 @@ Spacing is flexible, but keep the relative order (heading → optional descripti
   - `min: 1`
   - `max: 5`
   - Optional `left:` and `right:` labels.
+- For `text date`, `text time` and `text datetime`, optional range lines restrict the picker:
+  - `min: 2026-01-01` / `max: 2026-12-31` for dates
+  - `min: 09:00` / `max: 17:00` for times
+  - `min: 2026-01-01T09:00` / `max: 2026-01-31T17:00` for date & time
 
 **Example with follow-up text:**
 
