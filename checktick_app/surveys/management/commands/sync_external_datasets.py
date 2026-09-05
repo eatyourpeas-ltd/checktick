@@ -128,9 +128,14 @@ class Command(BaseCommand):
 
                 # Update or create dataset
                 if dataset_obj:
-                    # Update existing
+                    # Update existing; also heal sharing flags in case the
+                    # record was created by an older version of this command
+                    # without is_global set (a non-global dataset with no
+                    # owner is invisible to the API).
                     old_count = len(dataset_obj.options)
                     dataset_obj.options = options
+                    dataset_obj.is_global = True
+                    dataset_obj.is_custom = False
                     dataset_obj.last_synced_at = timezone.now()
                     dataset_obj.version += 1
                     dataset_obj.save()
@@ -223,6 +228,8 @@ class Command(BaseCommand):
 
             old_count = len(dataset_obj.options)
             dataset_obj.options = options
+            dataset_obj.is_global = True
+            dataset_obj.is_custom = False
             dataset_obj.last_synced_at = timezone.now()
             dataset_obj.version += 1
             dataset_obj.save()

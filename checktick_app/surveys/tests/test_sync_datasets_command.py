@@ -651,6 +651,34 @@ class StaticDatasetSyncTests(TestCase):
             dataset = DataSet.objects.get(key="regions_england")
             self.assertEqual(dataset.options["E12000006"], "East of England")
 
+    def test_update_heals_non_global_record(self):
+        """Syncing heals records created without is_global (API path).
+
+        A dataset created by an older command version without is_global=True
+        is invisible to the dataset API (404). The sync must restore the
+        sharing flags on update.
+        """
+        DataSet.objects.create(
+            key="uk_counties",
+            name="UK Counties (Ceremonial)",
+            category="reference",
+            source_type="api",
+            is_custom=False,
+            is_global=False,  # broken record
+            sync_frequency_hours=720,
+        )
+
+        with patch(
+            "checktick_app.surveys.management.commands.sync_external_datasets.requests.get"
+        ) as mock_get:
+            patch_requests_get(mock_get)
+            self._sync("uk_counties", flags=["--force"])
+
+        dataset = DataSet.objects.get(key="uk_counties")
+        self.assertTrue(dataset.is_global)
+        self.assertFalse(dataset.is_custom)
+        self.assertIn("E10000006", dataset.options)
+
     def test_static_sync_is_idempotent(self):
         """Re-running sync with unchanged options does not bump the version."""
         self._sync("uk_countries")
