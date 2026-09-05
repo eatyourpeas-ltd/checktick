@@ -1426,6 +1426,28 @@
     manualMarkdownInput.dispatchEvent(new Event("input", { bubbles: true }));
   };
 
+  // Visible loading state — document conversion can legitimately take a
+  // minute or more on the hosted LLM, so the user must see progress.
+  const renderDocBusy = (busy) => {
+    if (!docStatus) return;
+    docStatus.innerHTML = "";
+    if (busy) {
+      const alertBox = document.createElement("div");
+      alertBox.className = "alert alert-info text-sm";
+      const spinner = document.createElement("span");
+      spinner.className = "loading loading-spinner loading-sm";
+      const text = document.createElement("span");
+      text.textContent =
+        "Converting your document — this can take up to a minute. Please keep this page open.";
+      alertBox.appendChild(spinner);
+      alertBox.appendChild(text);
+      docStatus.appendChild(alertBox);
+      docStatus.classList.remove("hidden");
+    } else {
+      docStatus.classList.add("hidden");
+    }
+  };
+
   const convertDocument = async () => {
     const file = docFileInput && docFileInput.files && docFileInput.files[0];
     const pasted = docPasteInput ? docPasteInput.value.trim() : "";
@@ -1438,7 +1460,7 @@
 
     const csrfToken = document.querySelector("[name=csrfmiddlewaretoken]").value;
     docConvertBtn.disabled = true;
-    renderDocStatus("info", []);
+    renderDocBusy(true);
 
     try {
       const formData = new FormData();

@@ -565,6 +565,7 @@ class ConversationalSurveyLLM:
         conversation_history: List[Dict[str, str]],
         temperature: float = None,
         max_tokens: int = None,
+        timeout: float = None,
     ) -> Optional[str]:
         """
         Chat with LLM using a custom system prompt (for specialized tasks like translation).
@@ -574,6 +575,7 @@ class ConversationalSurveyLLM:
             conversation_history: List of message dicts with 'role' and 'content'
             temperature: Override default temperature
             max_tokens: Maximum tokens in response (default: 2000)
+            timeout: Per-request timeout in seconds (default: settings.LLM_TIMEOUT)
 
         Returns:
             LLM response or None on failure
@@ -582,6 +584,7 @@ class ConversationalSurveyLLM:
             temperature = settings.LLM_TEMPERATURE
         if max_tokens is None:
             max_tokens = 2000
+        effective_timeout = timeout if timeout is not None else self.timeout
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(conversation_history)
@@ -604,7 +607,7 @@ class ConversationalSurveyLLM:
                         "temperature": temperature,
                         "max_tokens": max_tokens,
                     },
-                    timeout=self.timeout,
+                    timeout=effective_timeout,
                 )
 
                 response.raise_for_status()

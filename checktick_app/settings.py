@@ -726,6 +726,9 @@ LLM_DOC_IMPORT_MAX_BYTES = env.int(
 LLM_DOC_IMPORT_MAX_CHARS = env.int(
     "LLM_DOC_IMPORT_MAX_CHARS", default=20000
 )  # max extracted chars sent to the LLM
+LLM_DOC_IMPORT_TIMEOUT = env.int(
+    "LLM_DOC_IMPORT_TIMEOUT", default=120
+)  # per-request LLM timeout (s) — large documents need longer than LLM_TIMEOUT
 
 # External Dataset API Configuration
 EXTERNAL_DATASET_API_URL = os.environ.get(

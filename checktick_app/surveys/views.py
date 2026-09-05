@@ -9657,6 +9657,9 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> JsonResponse:
                 }
             ],
             max_tokens=4000,
+            # Document conversion has a much larger input and output than
+            # chat, so allow longer than the default LLM_TIMEOUT.
+            timeout=float(getattr(settings, "LLM_DOC_IMPORT_TIMEOUT", 120)),
         )
         if response:
             extracted = llm.extract_markdown(response)

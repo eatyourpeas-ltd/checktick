@@ -149,6 +149,9 @@ def test_successful_conversion_returns_markdown(logged_in_client, survey):
     messages = chat.call_args[0][1]
     assert len(messages) == 1
     assert "<document>" in messages[0]["content"]
+    # Document conversion must use a longer timeout than the chat default
+    timeout = chat.call_args[1]["timeout"]
+    assert timeout >= 120
 
 
 @pytest.mark.django_db
