@@ -55,6 +55,7 @@ click = ">=8.3.3"
 # Bump via `poetry add pip@latest`.
 pip = ">=26.2,<27"
  pycountry = "^26.2.16"
+ defusedxml = "^0.7.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.3"
