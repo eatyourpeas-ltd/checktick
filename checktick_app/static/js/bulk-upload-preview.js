@@ -1467,6 +1467,28 @@
     }
   };
 
+  // Passive template suggestion: point at the Question Bank rather than
+  // splicing template content into the import (permissions + attribution
+  // stay with the user's explicit action).
+  const renderDocSuggestions = (names) => {
+    if (!docStatus || !names || !names.length) return;
+    const alertBox = document.createElement("div");
+    alertBox.className = "alert alert-info text-sm mt-2";
+    const label = names.length === 1 ? "template" : "templates";
+    const text = document.createElement("span");
+    text.textContent =
+      `This document looks similar to the ${names.join(", ")} ${label} — ` +
+      "you can import it from the Question Bank instead: ";
+    const link = document.createElement("a");
+    const qbUrl = document.getElementById("doc-import-qb-url");
+    link.href = qbUrl ? qbUrl.textContent.trim() : "/surveys/templates/";
+    link.className = "link underline font-semibold";
+    link.textContent = "Browse the Question Bank";
+    alertBox.appendChild(text);
+    alertBox.appendChild(link);
+    docStatus.appendChild(alertBox);
+  };
+
   const applyConversionResult = (data) => {
     // Load the converted outline (or raw extracted text as a fallback)
     // into the Outline tab for review; nothing is imported automatically.
@@ -1572,8 +1594,12 @@
       if (!finalEvent) {
         throw new Error("The conversion stream ended unexpectedly.");
       }
+
       renderDocWorking(false);
       applyConversionResult(finalEvent);
+      if (finalEvent.suggestions && finalEvent.suggestions.length) {
+        renderDocSuggestions(finalEvent.suggestions);
+      }
     } catch (error) {
       renderDocWorking(false);
       console.error("Document conversion failed:", error);

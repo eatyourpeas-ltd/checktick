@@ -419,6 +419,97 @@ def test_manual_tab_prefilled_with_extracted_text_via_get_tab_param(
 
 
 # ---------------------------------------------------------------------------
+# Dataset inference and allowlist enforcement
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+@override_settings(RATELIMIT_ENABLE=False)
+def test_dataset_allowlist_injected_and_enforced(logged_in_client, survey):
+    """The model sees the accessible dataset keys, and emitted dataset
+    references are enforced against that allowlist server-side."""
+    markdown_with_datasets = (
+        "# Work {work}\n"
+        "## Where do you work? {where}\n"
+        "(dropdown)\n"
+        "dataset: nhs_trusts\n"
+        "## Which region? {region}\n"
+        "(dropdown)\n"
+        "dataset: bogus_key\n"
+    )
+    with patch(
+        "checktick_app.surveys.views.get_available_datasets",
+        return_value={"nhs_trusts": "NHS trusts"},
+    ):
+        patcher, chat = _mock_llm(markdown=markdown_with_datasets)
+        with patcher:
+            response = _post_document(logged_in_client, survey, document=_docx_file())
+            data = _sse_done_event(response)
+
+    # Known key survives; unknown key is stripped with a warning
+    assert "dataset: nhs_trusts" in data["markdown"]
+    assert "bogus_key" not in data["markdown"]
+    assert any("bogus_key" in w for w in data["warnings"])
+    # The allowlist reached the model via the user message
+    assert "AVAILABLE DATASETS" in chat.call_args[0][0][0]["content"]
+    assert "nhs_trusts" in chat.call_args[0][0][0]["content"]
+
+
+# ---------------------------------------------------------------------------
+# Passive template suggestions
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+@override_settings(RATELIMIT_ENABLE=False)
+def test_template_suggestion_for_matching_document(logged_in_client, survey, owner):
+    from checktick_app.surveys.models import PublishedQuestionGroup
+
+    PublishedQuestionGroup.objects.create(
+        publisher=owner,
+        name="Professional details",
+        publication_level=PublishedQuestionGroup.PublicationLevel.GLOBAL,
+        status=PublishedQuestionGroup.Status.ACTIVE,
+        markdown="# Professional details {pd}\n## Job title {jt}\n(text)\n",
+    )
+    doc_md = (
+        "# About you {about-you}\n"
+        "## Tell us your name {name}\n"
+        "(text)\n"
+        "## What is your job title? {jt}\n"
+        "(text)\n"
+        "## Where do you work? {wdyw}\n"
+        "(text)\n"
+    )
+    patcher, _ = _mock_llm(markdown=doc_md)
+    with patcher:
+        response = _post_document(logged_in_client, survey, document=_docx_file())
+        data = _sse_done_event(response)
+
+    assert data["suggestions"] == ["Professional details"]
+
+
+@pytest.mark.django_db
+@override_settings(RATELIMIT_ENABLE=False)
+def test_no_template_suggestion_for_unrelated_document(logged_in_client, survey, owner):
+    from checktick_app.surveys.models import PublishedQuestionGroup
+
+    PublishedQuestionGroup.objects.create(
+        publisher=owner,
+        name="Professional details",
+        publication_level=PublishedQuestionGroup.PublicationLevel.GLOBAL,
+        status=PublishedQuestionGroup.Status.ACTIVE,
+        markdown="# Professional details {pd}\n## Job title {jt}\n(text)\n",
+    )
+    patcher, _ = _mock_llm()
+    with patcher:
+        response = _post_document(logged_in_client, survey, document=_docx_file())
+        data = _sse_done_event(response)
+
+    assert data["suggestions"] == []
+
+
+# ---------------------------------------------------------------------------
 # Rate limiting
 # ---------------------------------------------------------------------------
 

@@ -9576,6 +9576,82 @@ def _handle_llm_get_session_details(
         )
 
 
+# Keyword heuristics for suggesting Question Bank templates after a
+# document conversion. Only two templates ship today (professional /
+# patient details), so a small keyword map is more predictable than a
+# content-overlap model. Gated on import permission at query time.
+TEMPLATE_HINT_KEYWORDS = {
+    "professional": [
+        "job title",
+        "where do you work",
+        "place of work",
+        "employing trust",
+        "workplace",
+        "employer",
+        "gmc number",
+        "professional details",
+    ],
+    "patient": [
+        "date of birth",
+        "nhs number",
+        "address",
+        "postcode",
+        "post code",
+        "gp practice",
+        "gp surgery",
+        "hospital number",
+    ],
+}
+
+
+def _suggest_matching_templates(user, markdown: str) -> list[str]:
+    """Suggest Question Bank templates whose theme matches the converted
+    outline. Passive only — we point the user at the Question Bank rather
+    than splicing template content into the import (which would raise
+    permission and attribution issues)."""
+    from .permissions import can_import_published_template
+
+    md = markdown.lower()
+    suggestions: list[str] = []
+    for template in PublishedQuestionGroup.objects.filter(
+        status=PublishedQuestionGroup.Status.ACTIVE
+    ):
+        name = template.name.lower()
+        keywords = next(
+            (words for theme, words in TEMPLATE_HINT_KEYWORDS.items() if theme in name),
+            None,
+        )
+        if not keywords:
+            continue
+        if sum(1 for kw in keywords if kw in md) >= 2 and (
+            can_import_published_template(user, template)
+        ):
+            suggestions.append(template.name)
+    return suggestions
+
+
+def _strip_unavailable_datasets(
+    markdown: str, available_keys: set[str]
+) -> tuple[str, list[str]]:
+    """Remove ``dataset:`` lines referencing datasets the user cannot access.
+
+    The LLM only sees an allowlist, but this is the enforcement: an emitted
+    key outside it is stripped (leaving a plain dropdown question) rather
+    than imported. Returns (markdown, removed_keys).
+    """
+    kept: list[str] = []
+    removed: list[str] = []
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("dataset:"):
+            key = stripped.split(":", 1)[1].strip()
+            if key not in available_keys:
+                removed.append(key)
+                continue
+        kept.append(line)
+    return "\n".join(kept), removed
+
+
 def _llm_output_is_looping(text: str) -> bool:
     """Detect degenerate repetition in LLM output (reasoning loops).
 
@@ -9626,6 +9702,13 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
     ).strip()
     extra_payload = {"reasoning_effort": reasoning_effort} if reasoning_effort else None
 
+    # Dataset allowlist for dropdown inference: the LLM may only reference
+    # datasets accessible to this survey, and emitted keys are verified
+    # against this set before the outline is returned.
+    available_datasets = get_available_datasets(
+        organization=survey.organization, team=survey.team, user=survey.owner
+    )
+
     upload = request.FILES.get("document")
     pasted = (request.POST.get("text") or "").strip()
     warnings: list[str] = []
@@ -9667,11 +9750,27 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
     success = False
     markdown = None
     raw_text = None
+    suggestions: list[str] = []
 
     import json
 
+    user_content = (
+        "Convert this document into CheckTick outline "
+        "markdown.\n\n<document>\n"
+        f"{text}\n</document>"
+    )
+    if available_datasets:
+        dataset_lines = "\n".join(
+            f"  - {key}: {name}" for key, name in sorted(available_datasets.items())
+        )
+        user_content += (
+            "\n\nAVAILABLE DATASETS FOR THIS SURVEY (when a dropdown question's "
+            "options match one of these, use (dropdown) plus a `dataset: <key>` "
+            "line instead of listing manual options):\n" + dataset_lines
+        )
+
     def stream():
-        nonlocal success, markdown, raw_text
+        nonlocal success, markdown, raw_text, suggestions
         full_response = ""
         try:
             llm = ConversationalSurveyLLM()
@@ -9679,11 +9778,7 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
                 [
                     {
                         "role": "user",
-                        "content": (
-                            "Convert this document into CheckTick outline "
-                            "markdown.\n\n<document>\n"
-                            f"{text}\n</document>"
-                        ),
+                        "content": user_content,
                     }
                 ],
                 system_prompt=load_doc_import_prompt_from_docs(),
@@ -9716,9 +9811,25 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
                 extracted = llm.extract_markdown(full_response)
                 if extracted:
                     markdown = llm.sanitize_markdown(extracted)
+                    # Enforce the dataset allowlist before validation so the
+                    # returned outline is exactly what was checked.
+                    if available_datasets:
+                        markdown, removed_keys = _strip_unavailable_datasets(
+                            markdown, set(available_datasets)
+                        )
+                        if removed_keys:
+                            warnings.append(
+                                "Dataset(s) "
+                                + ", ".join(sorted(set(removed_keys)))
+                                + " are not available to you; those dropdown "
+                                "questions were kept without preset options."
+                            )
                     try:
                         parse_bulk_markdown_with_collections(markdown)
                         success = True
+                        suggestions = _suggest_matching_templates(
+                            request.user, markdown
+                        )
                     except BulkParseError as e:
                         markdown = None
                         raw_text = text
@@ -9769,7 +9880,7 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
             },
         )
 
-        yield f"data: {json.dumps({'done': True, 'markdown': markdown, 'raw_text': raw_text, 'warnings': warnings})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'markdown': markdown, 'raw_text': raw_text, 'warnings': warnings, 'suggestions': suggestions})}\n\n"
 
     return StreamingHttpResponse(stream(), content_type="text/event-stream")
 

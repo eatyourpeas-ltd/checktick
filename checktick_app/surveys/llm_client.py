@@ -475,6 +475,8 @@ RULES:
 7. Ids in curly braces are lowercase with hyphens, unique across the whole survey.
 8. Ignore letterhead, cover letters, signatures, and page furniture.
 9. Start your reply with the markdown code block immediately. Do not plan, analyse, or explain your decisions. If anything is ambiguous, choose the simplest option and keep going.
+10. If the user message lists AVAILABLE DATASETS and a dropdown question's options match one, use (dropdown) plus a `dataset: <key>` line and no manual options. Only use keys from that list — never invent dataset keys.
+9. Start your reply with the markdown code block immediately. Do not plan, analyse, or explain your decisions. If anything is ambiguous, choose the simplest option and keep going.
 
 Context: This is for a clinical healthcare platform. The user will review and edit the converted markdown before importing it."""
 
