@@ -1420,103 +1420,30 @@
     docStatus.classList.remove("hidden");
   };
 
-  const putOutlineInManualTab = (markdown) => {
-    if (!manualMarkdownInput || !markdown) return;
-    manualMarkdownInput.value = markdown;
-    manualMarkdownInput.dispatchEvent(new Event("input", { bubbles: true }));
-  };
-
-  // Visible working state while the SSE conversion stream runs. The
-  // model's streamed output (including reasoning) is shown in a bounded,
-  // scrollable container via textContent only — never an HTML sink.
-  let docWorkingText = null;
+  // Visible working state while the SSE conversion stream runs. No model
+  // output is reflected into the page during conversion; the outline is
+  // shown after a page reload through the autoescaped template.
   const renderDocWorking = (busy) => {
     if (!docStatus) return;
     docStatus.innerHTML = "";
-    docWorkingText = null;
     if (busy) {
       const panel = document.createElement("div");
       panel.className =
-        "w-full rounded-lg border border-base-300 bg-base-200/50 p-3 space-y-2";
+        "w-full rounded-lg border border-base-300 bg-base-200/50 p-3";
       const head = document.createElement("div");
       head.className = "flex items-center gap-2 text-sm text-base-content/80";
       const spinner = document.createElement("span");
       spinner.className = "loading loading-spinner loading-sm";
       const label = document.createElement("span");
       label.textContent =
-        "Converting — the AI's working is shown below; the outline appears here when it finishes.";  head.appendChild(spinner);
+        "Converting your document — the outline will appear in the Outline tab when this finishes.";
+      head.appendChild(spinner);
       head.appendChild(label);
-      const streamPre = document.createElement("pre");
-      streamPre.className =
-        "max-h-48 w-full overflow-y-auto whitespace-pre-wrap break-words text-xs text-base-content/70";
-      docWorkingText = streamPre;
       panel.appendChild(head);
-      panel.appendChild(streamPre);
       docStatus.appendChild(panel);
       docStatus.classList.remove("hidden");
     } else {
       docStatus.classList.add("hidden");
-    }
-  };
-
-  const appendDocWorkingText = (fullText) => {
-    if (docWorkingText) {
-      // Keep the DOM small: only the tail of the stream is shown.
-      docWorkingText.textContent = fullText.slice(-4000);
-      docWorkingText.scrollTop = docWorkingText.scrollHeight;
-    }
-  };
-
-  // Passive template suggestion: point at the Question Bank rather than
-  // splicing template content into the import (permissions + attribution
-  // stay with the user's explicit action).
-  const renderDocSuggestions = (names) => {
-    if (!docStatus || !names || !names.length) return;
-    const alertBox = document.createElement("div");
-    alertBox.className = "alert alert-info text-sm mt-2";
-    const label = names.length === 1 ? "template" : "templates";
-    const text = document.createElement("span");
-    text.textContent =
-      `This document looks similar to the ${names.join(", ")} ${label} — ` +
-      "you can import it from the Question Bank instead: ";
-    const link = document.createElement("a");
-    const qbUrl = document.getElementById("doc-import-qb-url");
-    link.href = qbUrl ? qbUrl.textContent.trim() : "/surveys/templates/";
-    link.className = "link underline font-semibold";
-    link.textContent = "Browse the Question Bank";
-    alertBox.appendChild(text);
-    alertBox.appendChild(link);
-    docStatus.appendChild(alertBox);
-  };
-
-  const applyConversionResult = (data) => {
-    // Load the converted outline (or raw extracted text as a fallback)
-    // into the Outline tab for review; nothing is imported automatically.
-    const content = data.markdown || data.raw_text || "";
-    if (content) {
-      putOutlineInManualTab(content);
-      tabManual.checked = true;
-      switchTab();
-    }
-
-    if (data.markdown) {
-      renderDocStatus(
-        data.warnings && data.warnings.length ? "warning" : "success",
-        data.warnings && data.warnings.length
-          ? data.warnings
-          : [
-              "Converted. Review the outline in the Outline tab, then import when you are happy with it.",
-            ],
-      );
-    } else {
-      renderDocStatus(
-        "warning",
-        data.warnings && data.warnings.length
-          ? data.warnings
-          : [
-              "The AI did not return an outline. The extracted text is in the Outline tab — edit it into the outline format.",
-            ],
-      );
     }
   };
 
@@ -1559,11 +1486,12 @@
         );
       }
 
-      // Consume the SSE conversion stream.
+      // Consume the SSE conversion stream. Chunk events are progress
+      // ticks only; the result is delivered via a one-time cache key that
+      // the page reload resolves (no user content in the stream).
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let fullResponse = "";
       let finalEvent = null;
 
       while (true) {
@@ -1578,10 +1506,6 @@
           if (!message.startsWith("data: ")) continue;
           try {
             const data = JSON.parse(message.substring(6).trim());
-            if (data.chunk) {
-              fullResponse += data.chunk;
-              appendDocWorkingText(fullResponse);
-            }
             if (data.done) {
               finalEvent = data;
             }
@@ -1595,11 +1519,10 @@
         throw new Error("The conversion stream ended unexpectedly.");
       }
 
-      renderDocWorking(false);
-      applyConversionResult(finalEvent);
-      if (finalEvent.suggestions && finalEvent.suggestions.length) {
-        renderDocSuggestions(finalEvent.suggestions);
-      }
+      // Reload into the Outline tab: the server pre-fills the textarea
+      // from the one-time cached result and shows warnings/messages.
+      window.location.href =
+        window.location.pathname + (finalEvent.next_url || "?tab=manual");
     } catch (error) {
       renderDocWorking(false);
       console.error("Document conversion failed:", error);

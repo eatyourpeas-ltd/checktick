@@ -43,7 +43,44 @@ _DEFAULT_MAX_CHARS = 20_000
 
 
 class DocImportError(Exception):
-    """Raised for any rejected upload; the message is user-facing."""
+    """Raised for any rejected upload.
+
+    Carries a stable ``code``; the user-facing text always comes from
+    :data:`MESSAGE_BY_CODE` (static strings) so no exception content is
+    ever reflected into an HTTP response.
+    """
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(MESSAGE_BY_CODE.get(code, code))
+
+
+MESSAGE_BY_CODE = {
+    "legacy_doc": "Legacy .doc files are not supported. Please open the "
+    "document in Word and save it as .docx, or paste the text instead.",
+    "unsupported_type": "Unsupported file type. Upload a .docx file, or "
+    "paste the text (.txt and .md are also accepted).",
+    "too_large": "File is too large.",
+    "invalid_docx": "This file is not a valid .docx document. Re-save it "
+    "from Word, or paste the text instead.",
+    "too_many_entries": "This document contains too many internal entries "
+    "and cannot be processed.",
+    "uncompressed_too_large": "This document is too large to process. Split "
+    "it into smaller documents or paste the relevant text.",
+    "no_document_body": "This file does not contain a Word document body. "
+    "Re-save it as .docx from Word.",
+    "unreadable_docx": "This document could not be opened. It may be "
+    "password-protected or corrupted.",
+    "unsupported_xml": "This document contains unsupported XML constructs "
+    "and cannot be processed.",
+    "unparseable_docx": "This document's content could not be parsed. "
+    "Re-save it from Word, or paste the text instead.",
+    "no_text": "No text could be extracted from this document.",
+    "not_utf8": "The file is not valid UTF-8 text. Save it as UTF-8, upload "
+    "a .docx file, or paste the text instead.",
+    "binary_text": "The file contains binary data and cannot be processed " "as text.",
+    "empty_text": "The pasted text or file appears to be empty.",
+}
 
 
 def _max_bytes() -> int:
@@ -79,20 +116,11 @@ def extract_text(filename: str, data: bytes) -> str:
     ext = Path(filename or "").suffix.lower()
 
     if ext == ".doc" or data.startswith(_OLE2_MAGIC):
-        raise DocImportError(
-            "Legacy .doc files are not supported. Please open the document "
-            "in Word and save it as .docx, or paste the text instead."
-        )
+        raise DocImportError("legacy_doc")
     if ext not in ALLOWED_EXTENSIONS:
-        raise DocImportError(
-            "Unsupported file type. Upload a .docx file, or paste the text "
-            "(.txt and .md are also accepted)."
-        )
+        raise DocImportError("unsupported_type")
     if len(data) > _max_bytes():
-        raise DocImportError(
-            "File is too large. The maximum upload size is "
-            f"{_max_bytes() // (1024 * 1024)} MB."
-        )
+        raise DocImportError("too_large")
 
     if ext == ".docx":
         return _extract_docx(data)
@@ -106,48 +134,30 @@ def extract_text(filename: str, data: bytes) -> str:
 
 def _extract_docx(data: bytes) -> str:
     if not data.startswith(_DOC_MAGIC):
-        raise DocImportError(
-            "This file is not a valid .docx document. Re-save it from Word, "
-            "or paste the text instead."
-        )
+        raise DocImportError("invalid_docx")
 
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
     except (zipfile.BadZipFile, OSError):
-        raise DocImportError(
-            "This file is not a valid .docx document. Re-save it from Word, "
-            "or paste the text instead."
-        ) from None
+        raise DocImportError("invalid_docx") from None
 
     with zf:
         names = zf.namelist()
         if len(names) > _max_zip_entries():
-            raise DocImportError(
-                "This document contains too many internal entries and cannot "
-                "be processed."
-            )
+            raise DocImportError("too_many_entries")
         try:
             total_uncompressed = sum(info.file_size for info in zf.infolist())
         except (zipfile.BadZipFile, OSError, ValueError):
-            raise DocImportError("This file is not a valid .docx document.") from None
+            raise DocImportError("invalid_docx") from None
         if total_uncompressed > _max_uncompressed():
-            raise DocImportError(
-                "This document is too large to process. Split it into "
-                "smaller documents or paste the relevant text."
-            )
+            raise DocImportError("uncompressed_too_large")
         if "word/document.xml" not in names:
-            raise DocImportError(
-                "This file does not contain a Word document body. Re-save it "
-                "as .docx from Word."
-            )
+            raise DocImportError("no_document_body")
         try:
             document_xml = zf.read("word/document.xml")
         except (zipfile.BadZipFile, OSError, RuntimeError, KeyError):
             # RuntimeError covers password-protected archives.
-            raise DocImportError(
-                "This document could not be opened. It may be "
-                "password-protected or corrupted."
-            ) from None
+            raise DocImportError("unreadable_docx") from None
 
     return _parse_document_xml(document_xml)
 
@@ -161,22 +171,16 @@ def _parse_document_xml(document_xml: bytes) -> str:
         end = head.find(b"?>")
         head = head[end + 2 :] if end != -1 else head
     if b"<!DOCTYPE" in head or b"<!ENTITY" in head:
-        raise DocImportError(
-            "This document contains unsupported XML constructs and cannot "
-            "be processed."
-        )
+        raise DocImportError("unsupported_xml")
 
     try:
         root = ET.fromstring(document_xml)
     except ET.ParseError:
-        raise DocImportError(
-            "This document's content could not be parsed. Re-save it from "
-            "Word, or paste the text instead."
-        ) from None
+        raise DocImportError("unparseable_docx") from None
 
     body = root.find(f"{_W_NS}body")
     if body is None:
-        raise DocImportError("This document's content could not be parsed.")
+        raise DocImportError("unparseable_docx")
 
     lines: list[str] = []
     for child in body:
@@ -222,7 +226,7 @@ def _clean_lines(lines: list[str]) -> str:
         previous_blank = blank
     text = "\n".join(cleaned).strip()
     if not text:
-        raise DocImportError("No text could be extracted from this document.")
+        raise DocImportError("no_text")
     return text
 
 
@@ -235,21 +239,16 @@ def _extract_plain_text(data: bytes) -> str:
     try:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError:
-        raise DocImportError(
-            "The file is not valid UTF-8 text. Save it as UTF-8, upload a "
-            ".docx file, or paste the text instead."
-        ) from None
+        raise DocImportError("not_utf8") from None
 
     if "\x00" in text:
-        raise DocImportError(
-            "The file contains binary data and cannot be processed as text."
-        )
+        raise DocImportError("binary_text")
 
     lines = text.splitlines()
     try:
         return _clean_lines(lines)
     except DocImportError:
-        raise DocImportError("The pasted text or file appears to be empty.") from None
+        raise DocImportError("empty_text") from None
 
 
 # ---------------------------------------------------------------------------

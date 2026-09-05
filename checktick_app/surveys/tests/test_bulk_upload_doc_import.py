@@ -122,6 +122,17 @@ def _sse_done_event(response):
     return done[0]
 
 
+def _cache_payload(done_event, user):
+    """Fetch the one-time cached conversion result for a done event."""
+    import re
+
+    from django.core.cache import cache
+
+    match = re.search(r"doc_import=([0-9a-f]+)", done_event.get("next_url", ""))
+    assert match, "done event carried no result id"
+    return cache.get(f"doc_import_result:{user.id}:{match.group(1)}")
+
+
 # ---------------------------------------------------------------------------
 # Access control
 # ---------------------------------------------------------------------------
@@ -162,28 +173,44 @@ def test_disabled_llm_returns_error(logged_in_client, survey, settings):
 
 @pytest.mark.django_db
 @override_settings(RATELIMIT_ENABLE=False)
-def test_successful_conversion_returns_markdown(logged_in_client, survey):
+def test_successful_conversion_returns_markdown(logged_in_client, survey, owner):
     patcher, chat = _mock_llm()
     with patcher:
         response = _post_document(logged_in_client, survey, document=_docx_file())
-        # Consume the lazy SSE stream while the mock is still active.
         data = _sse_done_event(response)
 
     assert response.status_code == 200
     assert response["Content-Type"] == "text/event-stream"
-    assert data["markdown"] == VALID_MARKDOWN
-    assert "error" not in data
-    # The LLM was streamed exactly once, one-shot (system prompt is a kwarg;
-    # conversation is a single user message)
+    assert data["success"] is True
+    assert "doc_import=" in data["next_url"]
+    # The result reaches the browser via the one-time cache handoff
+    payload = _cache_payload(data, owner)
+    assert payload["display_markdown"] == VALID_MARKDOWN
+    assert payload["suggestions"] == []
+
+
+@pytest.mark.django_db
+@override_settings(RATELIMIT_ENABLE=False)
+def test_response_never_reflects_document_or_llm_content(
+    logged_in_client, survey, owner
+):
+    """The SSE body carries only static strings and a result id — document
+    and LLM content reaches the browser via the cache-backed reload."""
+    patcher, chat = _mock_llm()
+    with patcher:
+        response = _post_document(logged_in_client, survey, document=_docx_file())
+        body = (
+            b"".join(response.streaming_content).decode()
+            if hasattr(response, "streaming_content")
+            else response.content.decode()
+        )
+
+    assert "Patient experience" not in body
+    assert VALID_MARKDOWN not in body
+    assert "doc_import=" in body
+    # The LLM call still carries the allowlist-scoped prompt context
     assert chat.call_count == 1
-    messages = chat.call_args[0][0]
-    assert len(messages) == 1
-    assert "<document>" in messages[0]["content"]
-    # Streaming acts as an idle timeout between chunks — must be generous
-    assert chat.call_args[1]["timeout"] >= 120
-    assert chat.call_args[1]["max_tokens"] >= 8000
     assert "untrusted" in chat.call_args[1]["system_prompt"].lower()
-    # Reasoning suppression keeps conversions fast and loop-free
     assert chat.call_args[1]["extra_payload"] == {"reasoning_effort": "none"}
 
 
@@ -194,9 +221,11 @@ def test_stream_emits_chunk_events(logged_in_client, survey):
     with patcher:
         response = _post_document(logged_in_client, survey, document=_docx_file())
         events = _sse_events(response)
-    chunks = [e for e in events if "chunk" in e]
-    assert chunks, "SSE stream emitted no chunk events"
-    assert all(e.get("phase") == "working" for e in chunks)
+
+    chunks = [e for e in events if e.get("phase") == "working"]
+    assert chunks, "SSE stream emitted no progress events"
+    # Progress ticks carry no model output text
+    assert all("chunk" not in e for e in chunks)
 
 
 @pytest.mark.django_db
@@ -213,45 +242,48 @@ def test_nothing_is_imported_by_conversion(logged_in_client, survey):
 @pytest.mark.django_db
 @override_settings(RATELIMIT_ENABLE=False)
 def test_llm_output_failing_parser_returns_raw_text_and_warning(
-    logged_in_client, survey
+    logged_in_client, survey, owner
 ):
     patcher, _ = _mock_llm(markdown="## Question with no group\n(text)")
     with patcher:
         response = _post_document(logged_in_client, survey, document=_docx_file())
-        data = _sse_done_event(response)
+        done = _sse_done_event(response)
 
     assert response.status_code == 200
-    assert data["markdown"] is None
-    assert data["raw_text"]
-    assert any("error" in w.lower() or "parse" in w.lower() for w in data["warnings"])
+    assert done["success"] is False
+    payload = _cache_payload(done, owner)
+    assert payload["display_markdown"]
+    assert any("parse" in w.lower() for w in payload["warnings"])
 
 
 @pytest.mark.django_db
 @override_settings(RATELIMIT_ENABLE=False)
-def test_llm_html_is_sanitized_from_markdown(logged_in_client, survey):
+def test_llm_html_is_sanitized_from_markdown(logged_in_client, survey, owner):
     patcher, _ = _mock_llm(
         markdown='# Group {g}\n## Q {q}\n(text)\n<script>alert("x")</script>'
     )
     with patcher:
         response = _post_document(logged_in_client, survey, document=_docx_file())
-        data = _sse_done_event(response)
+        done = _sse_done_event(response)
 
-    assert data["markdown"] is not None
-    assert "<script>" not in data["markdown"]
+    payload = _cache_payload(done, owner)
+    assert payload["display_markdown"] is not None
+    assert "<script>" not in payload["display_markdown"]
 
 
 @pytest.mark.django_db
 @override_settings(RATELIMIT_ENABLE=False)
-def test_llm_failure_returns_raw_extracted_text(logged_in_client, survey):
+def test_llm_failure_returns_raw_extracted_text(logged_in_client, survey, owner):
     patcher, _ = _mock_llm(markdown=None)
     with patcher:
         response = _post_document(logged_in_client, survey, document=_docx_file())
-        data = _sse_done_event(response)
+        done = _sse_done_event(response)
 
     assert response.status_code == 200
-    assert data["markdown"] is None
-    assert "Patient experience survey" in data["raw_text"]
-    assert data["warnings"]
+    assert done["success"] is False
+    payload = _cache_payload(done, owner)
+    assert "Patient experience survey" in payload["display_markdown"]
+    assert payload["warnings"]
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +333,7 @@ def test_oversized_upload_rejected_before_llm(logged_in_client, survey):
 
 @pytest.mark.django_db
 @override_settings(RATELIMIT_ENABLE=False)
-def test_repetition_loop_aborts_stream(logged_in_client, survey):
+def test_repetition_loop_aborts_stream(logged_in_client, survey, owner):
     """A degenerate reasoning loop must be cut short server-side rather than
     running until the token budget is exhausted."""
     loop_line = (
@@ -320,23 +352,57 @@ def test_repetition_loop_aborts_stream(logged_in_client, survey):
     )
     with patcher:
         response = _post_document(logged_in_client, survey, document=_docx_file())
-        data = _sse_done_event(response)
+        done = _sse_done_event(response)
 
-    assert data["markdown"] is None
-    assert any("stuck" in w.lower() for w in data["warnings"])
+    assert done["success"] is False
+    payload = _cache_payload(done, owner)
+    assert any("stuck" in w.lower() for w in payload["warnings"])
 
 
 @pytest.mark.django_db
 @override_settings(RATELIMIT_ENABLE=False)
-def test_pasted_text_path(logged_in_client, survey):
+def test_reload_hands_back_result_via_messages_and_textarea(
+    logged_in_client, survey, owner
+):
+    """The page reload after conversion pre-fills the Outline textarea from
+    the one-time cached result and surfaces warnings as messages."""
+    from django.core.cache import cache
+
+    cache.set(
+        f"doc_import_result:{owner.id}:testresult123",
+        {
+            "display_markdown": VALID_MARKDOWN,
+            "warnings": ["Something to note."],
+            "suggestions": ["Professional details"],
+        },
+        timeout=600,
+    )
+    response = logged_in_client.get(
+        reverse("surveys:bulk_upload", kwargs={"slug": survey.slug}),
+        {"tab": "manual", "doc_import": "testresult123"},
+    )
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert VALID_MARKDOWN in body
+    assert "Something to note." in body
+    assert "Professional details" in body
+    # One-time handoff: the cache entry is deleted after the first read
+    assert cache.get(f"doc_import_result:{owner.id}:testresult123") is None
+
+
+@pytest.mark.django_db
+@override_settings(RATELIMIT_ENABLE=False)
+def test_pasted_text_path(logged_in_client, survey, owner):
     patcher, _ = _mock_llm()
     with patcher:
         response = _post_document(
             logged_in_client, survey, text="How satisfied were you?"
         )
-        data = _sse_done_event(response)
+        done = _sse_done_event(response)
     assert response.status_code == 200
-    assert data["markdown"] == VALID_MARKDOWN
+    assert done["success"] is True
+    payload = _cache_payload(done, owner)
+    assert payload["display_markdown"] == VALID_MARKDOWN
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +491,7 @@ def test_manual_tab_prefilled_with_extracted_text_via_get_tab_param(
 
 @pytest.mark.django_db
 @override_settings(RATELIMIT_ENABLE=False)
-def test_dataset_allowlist_injected_and_enforced(logged_in_client, survey):
+def test_dataset_allowlist_injected_and_enforced(logged_in_client, survey, owner):
     """The model sees the accessible dataset keys, and emitted dataset
     references are enforced against that allowlist server-side."""
     markdown_with_datasets = (
@@ -444,12 +510,13 @@ def test_dataset_allowlist_injected_and_enforced(logged_in_client, survey):
         patcher, chat = _mock_llm(markdown=markdown_with_datasets)
         with patcher:
             response = _post_document(logged_in_client, survey, document=_docx_file())
-            data = _sse_done_event(response)
+            done = _sse_done_event(response)
 
+    payload = _cache_payload(done, owner)
     # Known key survives; unknown key is stripped with a warning
-    assert "dataset: nhs_trusts" in data["markdown"]
-    assert "bogus_key" not in data["markdown"]
-    assert any("bogus_key" in w for w in data["warnings"])
+    assert "dataset: nhs_trusts" in payload["display_markdown"]
+    assert "bogus_key" not in payload["display_markdown"]
+    assert any("dataset references" in w for w in payload["warnings"])
     # The allowlist reached the model via the user message
     assert "AVAILABLE DATASETS" in chat.call_args[0][0][0]["content"]
     assert "nhs_trusts" in chat.call_args[0][0][0]["content"]
@@ -484,9 +551,10 @@ def test_template_suggestion_for_matching_document(logged_in_client, survey, own
     patcher, _ = _mock_llm(markdown=doc_md)
     with patcher:
         response = _post_document(logged_in_client, survey, document=_docx_file())
-        data = _sse_done_event(response)
+        done = _sse_done_event(response)
 
-    assert data["suggestions"] == ["Professional details"]
+    payload = _cache_payload(done, owner)
+    assert payload["suggestions"] == ["Professional details"]
 
 
 @pytest.mark.django_db
@@ -504,9 +572,21 @@ def test_no_template_suggestion_for_unrelated_document(logged_in_client, survey,
     patcher, _ = _mock_llm()
     with patcher:
         response = _post_document(logged_in_client, survey, document=_docx_file())
-        data = _sse_done_event(response)
+        done = _sse_done_event(response)
 
-    assert data["suggestions"] == []
+    payload = _cache_payload(done, owner)
+    assert payload["suggestions"] == []
+
+
+@pytest.mark.django_db
+@override_settings(RATELIMIT_ENABLE=False)
+def test_reload_ignores_unknown_result_id(logged_in_client, survey):
+    """A doc_import id that is absent/expired/foreign simply loads the page."""
+    response = logged_in_client.get(
+        reverse("surveys:bulk_upload", kwargs={"slug": survey.slug}),
+        {"doc_import": "does-not-exist"},
+    )
+    assert response.status_code == 200
 
 
 # ---------------------------------------------------------------------------

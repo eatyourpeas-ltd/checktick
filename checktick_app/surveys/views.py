@@ -44,7 +44,12 @@ from checktick_app.core.decorators import email_confirmed_required
 from checktick_app.core.theme_utils import is_safe_url, sanitize_font_family
 
 from .color import hex_to_oklch
-from .doc_extract import DocImportError, extract_text, truncate_for_llm
+from .doc_extract import (
+    MESSAGE_BY_CODE,
+    DocImportError,
+    extract_text,
+    truncate_for_llm,
+)
 from .external_datasets import get_available_datasets
 from .llm_client import (
     ConversationalSurveyLLM,
@@ -9726,7 +9731,16 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
         try:
             text = extract_text(upload.name, upload.read())
         except DocImportError as e:
-            return JsonResponse({"error": str(e)}, status=400)
+            # Static text keyed by error code — never reflect exception
+            # content into the response.
+            return JsonResponse(
+                {
+                    "error": MESSAGE_BY_CODE.get(
+                        e.code, "The document could not be processed."
+                    )
+                },
+                status=400,
+            )
         source = "upload"
         file_ext = (upload.name or "").rsplit(".", 1)[-1].lower()
         file_bytes = upload.size
@@ -9753,6 +9767,7 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
     suggestions: list[str] = []
 
     import json
+    import uuid
 
     user_content = (
         "Convert this document into CheckTick outline "
@@ -9794,7 +9809,10 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
             ):
                 if chunk:
                     full_response += chunk
-                    yield f"data: {json.dumps({'chunk': chunk, 'phase': 'working'})}\n\n"
+                    # Progress tick only — the model's output text is never
+                    # reflected into the response (it reaches the browser via
+                    # the cache-backed page reload on completion).
+                    yield f"data: {json.dumps({'phase': 'working'})}\n\n"
                     if _llm_output_is_looping(full_response):
                         logger.warning(
                             "LLM output repetition detected; aborting stream "
@@ -9818,11 +9836,17 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
                             markdown, set(available_datasets)
                         )
                         if removed_keys:
+                            logger.warning(
+                                "Doc import removed unavailable dataset keys %s "
+                                "(survey=%s)",
+                                sorted(set(removed_keys)),
+                                survey.slug,
+                            )
                             warnings.append(
-                                "Dataset(s) "
-                                + ", ".join(sorted(set(removed_keys)))
-                                + " are not available to you; those dropdown "
-                                "questions were kept without preset options."
+                                "Some dataset references in the converted "
+                                "outline were removed because they are not "
+                                "available to you; those dropdown questions "
+                                "were kept without preset options."
                             )
                     try:
                         parse_bulk_markdown_with_collections(markdown)
@@ -9831,12 +9855,17 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
                             request.user, markdown
                         )
                     except BulkParseError as e:
+                        logger.warning(
+                            "Doc import outline failed parser (survey=%s): %s",
+                            survey.slug,
+                            e,
+                        )
                         markdown = None
                         raw_text = text
                         warnings.append(
                             "The AI's outline could not be parsed as valid "
-                            f"survey structure ({e}). Edit the extracted text "
-                            "below into the outline format, or try again."
+                            "survey structure. Edit the extracted text below "
+                            "into the outline format, or try again."
                         )
                 else:
                     raw_text = text
@@ -9880,7 +9909,23 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
             },
         )
 
-        yield f"data: {json.dumps({'done': True, 'markdown': markdown, 'raw_text': raw_text, 'warnings': warnings, 'suggestions': suggestions})}\n\n"
+        # Hand the result to the browser without reflecting user- or
+        # LLM-derived content through the response body: the payload is
+        # cached server-side (bound to the user) and displayed after a page
+        # reload through the autoescaped template and messages framework.
+        from django.core.cache import cache
+
+        result_id = uuid.uuid4().hex
+        cache.set(
+            f"doc_import_result:{request.user.id}:{result_id}",
+            {
+                "display_markdown": markdown if markdown else (raw_text or ""),
+                "warnings": warnings,
+                "suggestions": suggestions,
+            },
+            timeout=600,
+        )
+        yield f"data: {json.dumps({'done': True, 'success': success, 'next_url': f'?tab=manual&doc_import={result_id}'})}\n\n"
 
     return StreamingHttpResponse(stream(), content_type="text/event-stream")
 
@@ -9950,6 +9995,30 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
         "initial_tab": initial_tab,
         "markdown": existing_markdown,  # Pre-populate with existing questions
     }
+
+    # Hand back a completed document conversion, if any. Results live in
+    # the cache bound to the user for one read and are displayed through
+    # the autoescaped template and messages framework (never reflected
+    # through a raw response body).
+    doc_import_id = request.GET.get("doc_import")
+    if doc_import_id:
+        from django.core.cache import cache
+
+        cache_key = f"doc_import_result:{request.user.id}:{doc_import_id}"
+        payload = cache.get(cache_key)
+        if payload:
+            cache.delete(cache_key)
+            if payload.get("display_markdown"):
+                context["markdown"] = payload["display_markdown"]
+            for warning in payload.get("warnings", []):
+                messages.warning(request, warning)
+            for template_name in payload.get("suggestions", []):
+                messages.info(
+                    request,
+                    "This document looks similar to the "
+                    f"{template_name} template — you can import it from "
+                    "the Question Bank instead (see the Question Builder).",
+                )
 
     # Get or create LLM session if LLM is enabled
     if llm_enabled:
