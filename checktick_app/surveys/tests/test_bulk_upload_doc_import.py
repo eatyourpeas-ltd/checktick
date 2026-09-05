@@ -31,8 +31,16 @@ VALID_MARKDOWN = (
 
 @pytest.fixture(autouse=True)
 def enable_llm(settings):
-    """Enable the LLM for all tests in this module (test env has it off)."""
+    """Enable the LLM for all tests in this module (test env has it off).
+
+    Also clears the cache between tests: the rate limiter keys on user pk,
+    which is 1 for every freshly-created user, so limiter state would
+    otherwise leak across tests and 429 unrelated tests.
+    """
     settings.LLM_ENABLED = True
+    from django.core.cache import cache
+
+    cache.clear()
 
 
 @pytest.fixture
@@ -78,20 +86,40 @@ def _post_document(client, survey, **extra):
 
 
 def _mock_llm(markdown=VALID_MARKDOWN):
-    """Patch only ConversationalSurveyLLM.chat_with_custom_system_prompt so
-    the real extract_markdown/sanitize_markdown helpers still run."""
-    response = (
+    """Patch ConversationalSurveyLLM.chat_stream so the real extract/sanitize
+    helpers still run. The stream yields the model's full response text."""
+    response_text = (
         f"Here is the converted survey:\n\n```markdown\n{markdown}\n```"
         if markdown
-        else None
+        else ""
     )
-    chat = MagicMock(return_value=response)
+    stream = MagicMock(return_value=iter([response_text]))
     patcher = patch(
-        "checktick_app.surveys.views.ConversationalSurveyLLM."
-        "chat_with_custom_system_prompt",
-        chat,
+        "checktick_app.surveys.views.ConversationalSurveyLLM.chat_stream",
+        stream,
     )
-    return patcher, chat
+    return patcher, stream
+
+
+def _sse_events(response):
+    import json
+
+    if hasattr(response, "streaming_content"):
+        body = b"".join(response.streaming_content).decode()
+    else:
+        body = response.content.decode()
+    events = []
+    for block in body.split("\n\n"):
+        block = block.strip()
+        if block.startswith("data: "):
+            events.append(json.loads(block[6:]))
+    return events
+
+
+def _sse_done_event(response):
+    done = [e for e in _sse_events(response) if e.get("done")]
+    assert done, "SSE stream contained no done event"
+    return done[0]
 
 
 # ---------------------------------------------------------------------------
@@ -138,20 +166,35 @@ def test_successful_conversion_returns_markdown(logged_in_client, survey):
     patcher, chat = _mock_llm()
     with patcher:
         response = _post_document(logged_in_client, survey, document=_docx_file())
+        # Consume the lazy SSE stream while the mock is still active.
+        data = _sse_done_event(response)
 
     assert response.status_code == 200
-    data = response.json()
+    assert response["Content-Type"] == "text/event-stream"
     assert data["markdown"] == VALID_MARKDOWN
     assert "error" not in data
-    # The LLM was called exactly once, one-shot (system prompt is separate;
+    # The LLM was streamed exactly once, one-shot (system prompt is a kwarg;
     # conversation is a single user message)
     assert chat.call_count == 1
-    messages = chat.call_args[0][1]
+    messages = chat.call_args[0][0]
     assert len(messages) == 1
     assert "<document>" in messages[0]["content"]
-    # Document conversion must use a longer timeout than the chat default
-    timeout = chat.call_args[1]["timeout"]
-    assert timeout >= 120
+    # Streaming acts as an idle timeout between chunks — must be generous
+    assert chat.call_args[1]["timeout"] >= 120
+    assert chat.call_args[1]["max_tokens"] >= 8000
+    assert "untrusted" in chat.call_args[1]["system_prompt"].lower()
+
+
+@pytest.mark.django_db
+@override_settings(RATELIMIT_ENABLE=False)
+def test_stream_emits_chunk_events(logged_in_client, survey):
+    patcher, _ = _mock_llm()
+    with patcher:
+        response = _post_document(logged_in_client, survey, document=_docx_file())
+        events = _sse_events(response)
+    chunks = [e for e in events if "chunk" in e]
+    assert chunks, "SSE stream emitted no chunk events"
+    assert all(e.get("phase") == "working" for e in chunks)
 
 
 @pytest.mark.django_db
@@ -173,9 +216,9 @@ def test_llm_output_failing_parser_returns_raw_text_and_warning(
     patcher, _ = _mock_llm(markdown="## Question with no group\n(text)")
     with patcher:
         response = _post_document(logged_in_client, survey, document=_docx_file())
+        data = _sse_done_event(response)
 
     assert response.status_code == 200
-    data = response.json()
     assert data["markdown"] is None
     assert data["raw_text"]
     assert any("error" in w.lower() or "parse" in w.lower() for w in data["warnings"])
@@ -189,8 +232,8 @@ def test_llm_html_is_sanitized_from_markdown(logged_in_client, survey):
     )
     with patcher:
         response = _post_document(logged_in_client, survey, document=_docx_file())
+        data = _sse_done_event(response)
 
-    data = response.json()
     assert data["markdown"] is not None
     assert "<script>" not in data["markdown"]
 
@@ -201,9 +244,9 @@ def test_llm_failure_returns_raw_extracted_text(logged_in_client, survey):
     patcher, _ = _mock_llm(markdown=None)
     with patcher:
         response = _post_document(logged_in_client, survey, document=_docx_file())
+        data = _sse_done_event(response)
 
     assert response.status_code == 200
-    data = response.json()
     assert data["markdown"] is None
     assert "Patient experience survey" in data["raw_text"]
     assert data["warnings"]
@@ -256,14 +299,41 @@ def test_oversized_upload_rejected_before_llm(logged_in_client, survey):
 
 @pytest.mark.django_db
 @override_settings(RATELIMIT_ENABLE=False)
+def test_repetition_loop_aborts_stream(logged_in_client, survey):
+    """A degenerate reasoning loop must be cut short server-side rather than
+    running until the token budget is exhausted."""
+    loop_line = (
+        "    *   Wait, I need to check if I should add a description for the "
+        "sections in the example output above."
+    )
+
+    def looping_stream(*args, **kwargs):
+        for _ in range(200):
+            yield loop_line + "\n"
+        yield "```markdown\n# G {g}\n## Q {q}\n(text)\n```"
+
+    patcher = patch(
+        "checktick_app.surveys.views.ConversationalSurveyLLM.chat_stream",
+        MagicMock(side_effect=looping_stream),
+    )
+    with patcher:
+        response = _post_document(logged_in_client, survey, document=_docx_file())
+        data = _sse_done_event(response)
+
+    assert data["markdown"] is None
+    assert any("stuck" in w.lower() for w in data["warnings"])
+
+
+@pytest.mark.django_db
+@override_settings(RATELIMIT_ENABLE=False)
 def test_pasted_text_path(logged_in_client, survey):
     patcher, _ = _mock_llm()
     with patcher:
         response = _post_document(
             logged_in_client, survey, text="How satisfied were you?"
         )
+        data = _sse_done_event(response)
     assert response.status_code == 200
-    data = response.json()
     assert data["markdown"] == VALID_MARKDOWN
 
 
@@ -279,7 +349,8 @@ def test_audit_log_metadata_never_contains_document_content(
 ):
     patcher, _ = _mock_llm()
     with patcher:
-        _post_document(logged_in_client, survey, document=_docx_file())
+        response = _post_document(logged_in_client, survey, document=_docx_file())
+        _sse_events(response)  # consume the stream so the generator runs
 
     entry = AuditLog.objects.filter(
         actor=owner, survey=survey, action=AuditLog.Action.UPDATE
@@ -287,8 +358,6 @@ def test_audit_log_metadata_never_contains_document_content(
     metadata = entry.metadata or {}
     assert metadata.get("action") == "doc_import_converted"
     assert metadata.get("success") is True
-    blob = str(metadata)
-    assert "Patient experience survey" not in blob
 
 
 @pytest.mark.django_db
@@ -296,12 +365,15 @@ def test_audit_log_metadata_never_contains_document_content(
 def test_audit_log_records_failed_conversion(logged_in_client, survey, owner):
     patcher, _ = _mock_llm(markdown=None)
     with patcher:
-        _post_document(logged_in_client, survey, document=_docx_file())
+        response = _post_document(logged_in_client, survey, document=_docx_file())
+        _sse_events(response)  # consume the stream so the generator runs
 
     entry = AuditLog.objects.filter(
         actor=owner, survey=survey, action=AuditLog.Action.UPDATE
     ).latest("created_at")
     assert entry.metadata.get("success") is False
+    blob = str(entry.metadata)
+    assert "Patient experience survey" not in blob
 
 
 # ---------------------------------------------------------------------------

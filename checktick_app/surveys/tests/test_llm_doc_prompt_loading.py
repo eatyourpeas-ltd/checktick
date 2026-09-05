@@ -48,14 +48,24 @@ class TestDocImportPromptLoading:
         assert "infer" in prompt.lower(), "Prompt must require inferring types"
         assert "markdown" in prompt.lower(), "Prompt must require markdown output"
 
-    def test_prompt_forbids_visible_reasoning(self):
-        """Reasoning models (e.g. qwen) emit a 'Thinking Process' section that
-        can exhaust the token budget before the markdown appears — the prompt
-        must explicitly forbid it."""
+    def test_prompt_accepts_reasoning_but_requires_final_block(self):
+        """Reasoning models (e.g. qwen) think before answering — forbidding it
+        outright causes meta-anxiety loops. The prompt must allow working
+        through the conversion but require the markdown block at the end."""
         prompt = load_doc_import_prompt_from_docs()
 
-        assert "thinking process" in prompt.lower()
-        assert "reasoning" in prompt.lower()
+        assert "must end with" in prompt.lower()
+        assert "code block" in prompt.lower()
+        assert "do not show" not in prompt.lower()
+
+    def test_prompt_removes_ambiguity_to_avoid_loops(self):
+        """The model loops when the format leaves decisions open — the prompt
+        must demand immediate output and forbid optional extras."""
+        prompt = load_doc_import_prompt_from_docs()
+
+        assert "immediately" in prompt.lower()
+        assert "do not add description lines" in prompt.lower()
+        assert "simplest option" in prompt.lower()
 
     def test_prompt_teaches_format_with_worked_example(self):
         """Small/medium models follow worked examples, so the prompt must

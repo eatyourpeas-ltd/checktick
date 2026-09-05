@@ -1426,25 +1426,75 @@
     manualMarkdownInput.dispatchEvent(new Event("input", { bubbles: true }));
   };
 
-  // Visible loading state — document conversion can legitimately take a
-  // minute or more on the hosted LLM, so the user must see progress.
-  const renderDocBusy = (busy) => {
+  // Visible working state while the SSE conversion stream runs. The
+  // model's streamed output (including reasoning) is shown in a bounded,
+  // scrollable container via textContent only — never an HTML sink.
+  let docWorkingText = null;
+  const renderDocWorking = (busy) => {
     if (!docStatus) return;
     docStatus.innerHTML = "";
+    docWorkingText = null;
     if (busy) {
-      const alertBox = document.createElement("div");
-      alertBox.className = "alert alert-info text-sm";
+      const panel = document.createElement("div");
+      panel.className =
+        "w-full rounded-lg border border-base-300 bg-base-200/50 p-3 space-y-2";
+      const head = document.createElement("div");
+      head.className = "flex items-center gap-2 text-sm text-base-content/80";
       const spinner = document.createElement("span");
       spinner.className = "loading loading-spinner loading-sm";
-      const text = document.createElement("span");
-      text.textContent =
-        "Converting your document — this can take up to a minute. Please keep this page open.";
-      alertBox.appendChild(spinner);
-      alertBox.appendChild(text);
-      docStatus.appendChild(alertBox);
+      const label = document.createElement("span");
+      label.textContent =
+        "Converting — the AI's working is shown below; the outline appears here when it finishes.";  head.appendChild(spinner);
+      head.appendChild(label);
+      const streamPre = document.createElement("pre");
+      streamPre.className =
+        "max-h-48 w-full overflow-y-auto whitespace-pre-wrap break-words text-xs text-base-content/70";
+      docWorkingText = streamPre;
+      panel.appendChild(head);
+      panel.appendChild(streamPre);
+      docStatus.appendChild(panel);
       docStatus.classList.remove("hidden");
     } else {
       docStatus.classList.add("hidden");
+    }
+  };
+
+  const appendDocWorkingText = (fullText) => {
+    if (docWorkingText) {
+      // Keep the DOM small: only the tail of the stream is shown.
+      docWorkingText.textContent = fullText.slice(-4000);
+      docWorkingText.scrollTop = docWorkingText.scrollHeight;
+    }
+  };
+
+  const applyConversionResult = (data) => {
+    // Load the converted outline (or raw extracted text as a fallback)
+    // into the Outline tab for review; nothing is imported automatically.
+    const content = data.markdown || data.raw_text || "";
+    if (content) {
+      putOutlineInManualTab(content);
+      tabManual.checked = true;
+      switchTab();
+    }
+
+    if (data.markdown) {
+      renderDocStatus(
+        data.warnings && data.warnings.length ? "warning" : "success",
+        data.warnings && data.warnings.length
+          ? data.warnings
+          : [
+              "Converted. Review the outline in the Outline tab, then import when you are happy with it.",
+            ],
+      );
+    } else {
+      renderDocStatus(
+        "warning",
+        data.warnings && data.warnings.length
+          ? data.warnings
+          : [
+              "The AI did not return an outline. The extracted text is in the Outline tab — edit it into the outline format.",
+            ],
+      );
     }
   };
 
@@ -1460,7 +1510,7 @@
 
     const csrfToken = document.querySelector("[name=csrfmiddlewaretoken]").value;
     docConvertBtn.disabled = true;
-    renderDocBusy(true);
+    renderDocWorking(true);
 
     try {
       const formData = new FormData();
@@ -1477,42 +1527,55 @@
         body: formData,
       });
 
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || data.error) {
+      const contentType = (
+        response.headers.get("content-type") || ""
+      ).toLowerCase();
+      if (!response.ok || contentType.includes("application/json")) {
+        const errData = await response.json().catch(() => ({}));
         throw new Error(
-          data.error || `HTTP error! status: ${response.status}`,
+          errData.error || `HTTP error! status: ${response.status}`,
         );
       }
 
-      // Load the converted outline (or raw extracted text as a fallback)
-      // into the Outline tab for review; nothing is imported automatically.
-      const content = data.markdown || data.raw_text || "";
-      if (content) {
-        putOutlineInManualTab(content);
-        tabManual.checked = true;
-        switchTab();
+      // Consume the SSE conversion stream.
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullResponse = "";
+      let finalEvent = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let boundary;
+        while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+          const message = buffer.substring(0, boundary);
+          buffer = buffer.substring(boundary + 2);
+          if (!message.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(message.substring(6).trim());
+            if (data.chunk) {
+              fullResponse += data.chunk;
+              appendDocWorkingText(fullResponse);
+            }
+            if (data.done) {
+              finalEvent = data;
+            }
+          } catch (e) {
+            console.error("Error parsing conversion stream:", e);
+          }
+        }
       }
 
-      if (data.markdown) {
-        renderDocStatus(
-          data.warnings && data.warnings.length ? "warning" : "success",
-          data.warnings && data.warnings.length
-            ? data.warnings
-            : [
-                "Converted. Review the outline in the Outline tab, then import when you are happy with it.",
-              ],
-        );
-      } else {
-        renderDocStatus(
-          "warning",
-          data.warnings && data.warnings.length
-            ? data.warnings
-            : [
-                "The AI did not return an outline. The extracted text is in the Outline tab — edit it into the outline format.",
-              ],
-        );
+      if (!finalEvent) {
+        throw new Error("The conversion stream ended unexpectedly.");
       }
+      renderDocWorking(false);
+      applyConversionResult(finalEvent);
     } catch (error) {
+      renderDocWorking(false);
       console.error("Document conversion failed:", error);
       renderDocStatus("error", [
         error.message || "Document conversion failed.",

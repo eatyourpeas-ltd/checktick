@@ -9576,13 +9576,32 @@ def _handle_llm_get_session_details(
         )
 
 
-def _handle_doc_import(request: HttpRequest, survey: Survey) -> JsonResponse:
+def _llm_output_is_looping(text: str) -> bool:
+    """Detect degenerate repetition in LLM output (reasoning loops).
+
+    Reasoning models sometimes get stuck repeating a line until the token
+    budget is exhausted. Heuristic: any substantial line (40+ chars)
+    appearing 4+ times in the tail of the response is treated as a loop.
+    """
+    from collections import Counter
+
+    tail = text[-2000:]
+    lines = [ln.strip() for ln in tail.splitlines() if len(ln.strip()) >= 40]
+    if not lines:
+        return False
+    return max(Counter(lines).values()) >= 4
+
+
+def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
     """Convert an uploaded document or pasted text into outline markdown.
 
-    Part of the "Import from document" tab on the Outline page. The result
-    is returned to the browser for review in the Outline textarea; nothing
-    is imported here. Document content is never logged or persisted — audit
-    metadata only (see AGENTS.md logging rules).
+    Part of the "Import from document" tab on the Outline page. Validation
+    failures return JSON errors; a successful pre-flight returns an SSE
+    stream so the user sees the model working (including any reasoning
+    output) while the conversion runs. The result is returned to the
+    browser for review in the Outline textarea; nothing is imported here.
+    Document content is never logged or persisted — audit metadata only
+    (see AGENTS.md logging rules).
     """
     if not settings.LLM_ENABLED:
         return JsonResponse(
@@ -9642,84 +9661,108 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> JsonResponse:
     success = False
     markdown = None
     raw_text = None
-    try:
-        llm = ConversationalSurveyLLM()
-        response = llm.chat_with_custom_system_prompt(
-            load_doc_import_prompt_from_docs(),
-            [
-                {
-                    "role": "user",
-                    "content": (
-                        "Convert this document into CheckTick outline "
-                        "markdown.\n\n<document>\n"
-                        f"{text}\n</document>"
-                    ),
-                }
-            ],
-            max_tokens=8000,
-            # Document conversion has a much larger input and output than
-            # chat, so allow longer than the default LLM_TIMEOUT. Reasoning
-            # models may also spend part of max_tokens on hidden working.
-            timeout=float(getattr(settings, "LLM_DOC_IMPORT_TIMEOUT", 120)),
-        )
-        if response:
-            extracted = llm.extract_markdown(response)
-            if extracted:
-                markdown = llm.sanitize_markdown(extracted)
-                try:
-                    parse_bulk_markdown_with_collections(markdown)
-                    success = True
-                except BulkParseError as e:
-                    markdown = None
+
+    import json
+
+    def stream():
+        nonlocal success, markdown, raw_text
+        full_response = ""
+        try:
+            llm = ConversationalSurveyLLM()
+            for chunk in llm.chat_stream(
+                [
+                    {
+                        "role": "user",
+                        "content": (
+                            "Convert this document into CheckTick outline "
+                            "markdown.\n\n<document>\n"
+                            f"{text}\n</document>"
+                        ),
+                    }
+                ],
+                system_prompt=load_doc_import_prompt_from_docs(),
+                max_tokens=8000,
+                # With streaming this is an idle timeout between chunks, so
+                # long conversions are fine; it only fires if the model
+                # stalls. Reasoning models may spend part of max_tokens on
+                # visible working before the markdown block.
+                timeout=float(getattr(settings, "LLM_DOC_IMPORT_TIMEOUT", 120)),
+            ):
+                if chunk:
+                    full_response += chunk
+                    yield f"data: {json.dumps({'chunk': chunk, 'phase': 'working'})}\n\n"
+                    if _llm_output_is_looping(full_response):
+                        logger.warning(
+                            "LLM output repetition detected; aborting stream "
+                            "(survey=%s)",
+                            survey.slug,
+                        )
+                        warnings.append(
+                            "The AI got stuck repeating itself and was stopped "
+                            "early. Please try again."
+                        )
+                        break
+
+            if full_response:
+                extracted = llm.extract_markdown(full_response)
+                if extracted:
+                    markdown = llm.sanitize_markdown(extracted)
+                    try:
+                        parse_bulk_markdown_with_collections(markdown)
+                        success = True
+                    except BulkParseError as e:
+                        markdown = None
+                        raw_text = text
+                        warnings.append(
+                            "The AI's outline could not be parsed as valid "
+                            f"survey structure ({e}). Edit the extracted text "
+                            "below into the outline format, or try again."
+                        )
+                else:
                     raw_text = text
                     warnings.append(
-                        "The AI's outline could not be parsed as valid survey "
-                        f"structure ({e}). Edit the extracted text below into "
-                        "the outline format, or try again."
+                        "The AI did not return an outline. The extracted "
+                        "document text is provided below — you can edit it "
+                        "into the outline format yourself."
                     )
             else:
                 raw_text = text
                 warnings.append(
-                    "The AI did not return an outline. The extracted document "
+                    "The AI service did not respond. The extracted document "
                     "text is provided below — you can edit it into the "
                     "outline format yourself."
                 )
-        else:
+        except Exception:
+            logger.exception(
+                "Document import conversion failed (survey=%s)", survey.slug
+            )
             raw_text = text
             warnings.append(
-                "The AI service did not respond. The extracted document text "
-                "is provided below — you can edit it into the outline format "
+                "Document conversion failed. The extracted document text is "
+                "provided below — you can edit it into the outline format "
                 "yourself."
             )
-    except Exception:
-        logger.exception("Document import conversion failed (survey=%s)", survey.slug)
-        raw_text = text
-        warnings.append(
-            "Document conversion failed. The extracted document text is "
-            "provided below — you can edit it into the outline format yourself."
+
+        AuditLog.objects.create(
+            actor=request.user,
+            scope=AuditLog.Scope.SURVEY,
+            survey=survey,
+            action=AuditLog.Action.UPDATE,
+            target_user=request.user,
+            metadata={
+                "action": "doc_import_converted",
+                "source": source,
+                "file_ext": file_ext,
+                "file_bytes": file_bytes,
+                "text_chars": len(text),
+                "truncated": truncated,
+                "success": success,
+            },
         )
 
-    AuditLog.objects.create(
-        actor=request.user,
-        scope=AuditLog.Scope.SURVEY,
-        survey=survey,
-        action=AuditLog.Action.UPDATE,
-        target_user=request.user,
-        metadata={
-            "action": "doc_import_converted",
-            "source": source,
-            "file_ext": file_ext,
-            "file_bytes": file_bytes,
-            "text_chars": len(text),
-            "truncated": truncated,
-            "success": success,
-        },
-    )
+        yield f"data: {json.dumps({'done': True, 'markdown': markdown, 'raw_text': raw_text, 'warnings': warnings})}\n\n"
 
-    payload: dict = {"markdown": markdown, "warnings": warnings}
-    if raw_text is not None:
-        payload["raw_text"] = raw_text
-    return JsonResponse(payload)
+    return StreamingHttpResponse(stream(), content_type="text/event-stream")
 
 
 def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
