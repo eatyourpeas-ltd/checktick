@@ -719,6 +719,14 @@ LLM_TIMEOUT = env.int("LLM_TIMEOUT", default=30)  # seconds
 LLM_MAX_RETRIES = env.int("LLM_MAX_RETRIES", default=2)
 LLM_TEMPERATURE = env.float("LLM_TEMPERATURE", default=0.2)  # Low for consistency
 
+# Document import ("Import from document") caps
+LLM_DOC_IMPORT_MAX_BYTES = env.int(
+    "LLM_DOC_IMPORT_MAX_BYTES", default=2 * 1024 * 1024
+)  # max upload size (bytes)
+LLM_DOC_IMPORT_MAX_CHARS = env.int(
+    "LLM_DOC_IMPORT_MAX_CHARS", default=20000
+)  # max extracted chars sent to the LLM
+
 # External Dataset API Configuration
 EXTERNAL_DATASET_API_URL = os.environ.get(
     "EXTERNAL_DATASET_API_URL", "https://api.rcpch.ac.uk"

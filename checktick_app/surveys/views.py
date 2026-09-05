@@ -36,6 +36,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
+from django_ratelimit.core import is_ratelimited
 from django_ratelimit.decorators import ratelimit
 
 from checktick_app.context_processors import branding as platform_branding
@@ -43,8 +44,12 @@ from checktick_app.core.decorators import email_confirmed_required
 from checktick_app.core.theme_utils import is_safe_url, sanitize_font_family
 
 from .color import hex_to_oklch
+from .doc_extract import DocImportError, extract_text, truncate_for_llm
 from .external_datasets import get_available_datasets
-from .llm_client import ConversationalSurveyLLM
+from .llm_client import (
+    ConversationalSurveyLLM,
+    load_doc_import_prompt_from_docs,
+)
 from .markdown_import import BulkParseError, parse_bulk_markdown_with_collections
 from .models import (
     SUPPORTED_SURVEY_LANGUAGES,
@@ -9571,12 +9576,161 @@ def _handle_llm_get_session_details(
         )
 
 
+def _handle_doc_import(request: HttpRequest, survey: Survey) -> JsonResponse:
+    """Convert an uploaded document or pasted text into outline markdown.
+
+    Part of the "Import from document" tab on the Outline page. The result
+    is returned to the browser for review in the Outline textarea; nothing
+    is imported here. Document content is never logged or persisted — audit
+    metadata only (see AGENTS.md logging rules).
+    """
+    if not settings.LLM_ENABLED:
+        return JsonResponse(
+            {"error": "AI document conversion is not available"}, status=400
+        )
+
+    if is_ratelimited(
+        request,
+        group="doc_import",
+        key="user",
+        rate="20/h",
+        method="POST",
+        increment=True,
+    ):
+        return JsonResponse(
+            {"error": "Too many conversions. Please try again later."}, status=429
+        )
+
+    upload = request.FILES.get("document")
+    pasted = (request.POST.get("text") or "").strip()
+    warnings: list[str] = []
+
+    if upload:
+        max_bytes = int(getattr(settings, "LLM_DOC_IMPORT_MAX_BYTES", 2 * 1024 * 1024))
+        if upload.size > max_bytes:
+            return JsonResponse(
+                {
+                    "error": "File is too large. The maximum upload size is "
+                    f"{max_bytes // (1024 * 1024)} MB."
+                },
+                status=413,
+            )
+        try:
+            text = extract_text(upload.name, upload.read())
+        except DocImportError as e:
+            return JsonResponse({"error": str(e)}, status=400)
+        source = "upload"
+        file_ext = (upload.name or "").rsplit(".", 1)[-1].lower()
+        file_bytes = upload.size
+    elif pasted:
+        text = pasted
+        source = "paste"
+        file_ext = "txt"
+        file_bytes = len(pasted.encode("utf-8"))
+    else:
+        return JsonResponse(
+            {"error": "No document uploaded and no text pasted"}, status=400
+        )
+
+    text, truncated = truncate_for_llm(text)
+    if truncated:
+        warnings.append(
+            "The document was truncated for conversion. Only the first part "
+            "was processed — check the outline covers everything you need."
+        )
+
+    success = False
+    markdown = None
+    raw_text = None
+    try:
+        llm = ConversationalSurveyLLM()
+        response = llm.chat_with_custom_system_prompt(
+            load_doc_import_prompt_from_docs(),
+            [
+                {
+                    "role": "user",
+                    "content": (
+                        "Convert this document into CheckTick outline "
+                        "markdown.\n\n<document>\n"
+                        f"{text}\n</document>"
+                    ),
+                }
+            ],
+            max_tokens=4000,
+        )
+        if response:
+            extracted = llm.extract_markdown(response)
+            if extracted:
+                markdown = llm.sanitize_markdown(extracted)
+                try:
+                    parse_bulk_markdown_with_collections(markdown)
+                    success = True
+                except BulkParseError as e:
+                    markdown = None
+                    raw_text = text
+                    warnings.append(
+                        "The AI's outline could not be parsed as valid survey "
+                        f"structure ({e}). Edit the extracted text below into "
+                        "the outline format, or try again."
+                    )
+            else:
+                raw_text = text
+                warnings.append(
+                    "The AI did not return an outline. The extracted document "
+                    "text is provided below — you can edit it into the "
+                    "outline format yourself."
+                )
+        else:
+            raw_text = text
+            warnings.append(
+                "The AI service did not respond. The extracted document text "
+                "is provided below — you can edit it into the outline format "
+                "yourself."
+            )
+    except Exception:
+        logger.exception("Document import conversion failed (survey=%s)", survey.slug)
+        raw_text = text
+        warnings.append(
+            "Document conversion failed. The extracted document text is "
+            "provided below — you can edit it into the outline format yourself."
+        )
+
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.SURVEY,
+        survey=survey,
+        action=AuditLog.Action.UPDATE,
+        target_user=request.user,
+        metadata={
+            "action": "doc_import_converted",
+            "source": source,
+            "file_ext": file_ext,
+            "file_bytes": file_bytes,
+            "text_chars": len(text),
+            "truncated": truncated,
+            "success": success,
+        },
+    )
+
+    payload: dict = {"markdown": markdown, "warnings": warnings}
+    if raw_text is not None:
+        payload["raw_text"] = raw_text
+    return JsonResponse(payload)
+
+
 def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
 
     # Check if LLM is enabled for context
     llm_enabled = settings.LLM_ENABLED
+
+    # Multipart document conversion ("Import from document" tab). Checked
+    # before the JSON-AJAX branch because file uploads are multipart.
+    if request.method == "POST" and (
+        request.FILES.get("document") or request.POST.get("action") == "import_document"
+    ):
+        return _handle_doc_import(request, survey)
 
     # Handle JSON AJAX requests for LLM functionality
     if request.content_type == "application/json":
