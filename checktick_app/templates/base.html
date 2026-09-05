@@ -231,15 +231,18 @@
     <footer class="mt-10 border-t border-base-300 bg-base-200 text-base-content print:hidden">
       <footer class="footer sm:footer-horizontal container mx-auto px-4 py-8 text-sm">
         <aside class="max-w-xs text-center sm:text-left">
-          <div class="text-lg font-semibold">{{ brand.title }}</div>
+          {# Brand icon as used in the navbar, above the strapline #}
+          {% if brand.icon_url %}
+            <span class="theme-light-icon inline-block">
+              <img src="{{ brand.icon_url }}" alt="{{ brand.icon_alt|default:brand.title }}" title="{{ brand.icon_title|default:brand.title }}" class="h-8 w-auto" />
+            </span>
+            <span class="theme-dark-icon inline-block">
+              <img src="{{ brand.icon_url_dark|default:brand.icon_url }}" alt="{{ brand.icon_alt|default:brand.title }}" title="{{ brand.icon_title|default:brand.title }}" class="h-8 w-auto" />
+            </span>
+          {% else %}
+            {% include "components/icons/checktick_long.html" with classes='h-8 w-auto text-accent' aria_label=brand.title title=brand.title %}
+          {% endif %}
           <p class="mt-2 text-sm opacity-70">{% trans "Surveys for UK Healthcare and the NHS." %}</p>
-          <div class="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
-            <a href="https://eatyourpeas.co.uk" target="_blank" rel="noopener" class="link link-hover inline-flex min-h-6 items-center gap-2">
-              <img src="{% static 'icons/peas_circle.png' %}" alt="eatyourpeas" class="h-4 w-auto" />
-              <span>{% trans "Built by eatyourpeas" %}</span>
-            </a>
-            <a href="https://www.odsdatasearchandexport.nhs.uk/?search=generalorg&query=EATYOURPEAS" target="_blank" rel="noopener" class="link link-hover inline-flex min-h-6 items-center">{% trans "ODS Code P6U6C" %}</a>
-          </div>
         </aside>
 
         <nav aria-labelledby="footer-info-title">
@@ -258,7 +261,15 @@
 
       <div class="border-t border-base-300 bg-base-content text-base-100">
         <div class="container mx-auto px-4 py-3 flex flex-wrap items-center justify-center md:justify-between gap-x-4 gap-y-1 text-xs">
-          <span class="opacity-80">© {% now 'Y' %} {{ brand.title }}</span>
+          <span class="opacity-80 inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+            <span>© {% now 'Y' %}</span>
+            <a href="https://eatyourpeas.co.uk" target="_blank" rel="noopener" class="link link-hover inline-flex min-h-6 items-center gap-1.5">
+              <img src="{% static 'icons/peas_circle.png' %}" alt="eatyourpeas" class="h-4 w-auto" />
+              <span>eatyourpeas ltd</span>
+            </a>
+            <span class="opacity-40" aria-hidden="true">|</span>
+            <a href="https://www.odsdatasearchandexport.nhs.uk/?search=generalorg&query=EATYOURPEAS" target="_blank" rel="noopener" class="link link-hover">{% trans "ODS Code P6U6C" %}</a>
+          </span>
           <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
             <a class="btn btn-ghost btn-sm text-base-100" href="https://github.com/eatyourpeas/checktick/tree/main/checktick_app" target="_blank" rel="noopener">
               {% include "components/icons/github.html" with classes="w-4 h-4" %}
