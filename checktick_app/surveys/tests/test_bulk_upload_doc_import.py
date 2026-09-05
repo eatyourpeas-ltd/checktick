@@ -31,13 +31,20 @@ VALID_MARKDOWN = (
 
 @pytest.fixture(autouse=True)
 def enable_llm(settings):
-    """Enable the LLM for all tests in this module (test env has it off).
+    """Enable the LLM for all tests in this module (test env has it off)
+    and provide dummy connection settings — CI does not configure
+    LLM_URL / LLM_API_KEY, and ConversationalSurveyLLM's constructor
+    raises ValueError without them, which would make every conversion
+    fall back regardless of the mocked chat_stream.
 
     Also clears the cache between tests: the rate limiter keys on user pk,
     which is 1 for every freshly-created user, so limiter state would
     otherwise leak across tests and 429 unrelated tests.
     """
     settings.LLM_ENABLED = True
+    settings.LLM_URL = "http://llm.test/v1/chat/completions"
+    settings.LLM_API_KEY = "test-key"
+    settings.LLM_AUTH_TYPE = "bearer"
     from django.core.cache import cache
 
     cache.clear()
