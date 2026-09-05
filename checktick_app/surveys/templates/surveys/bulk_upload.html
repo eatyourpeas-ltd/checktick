@@ -214,6 +214,33 @@ HIDDEN
         </div>
       </div>
 
+      {% if llm_enabled %}
+      <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'From document' %}" id="tab-doc" />
+      <div role="tabpanel" class="tab-content bg-base-100 border-base-300 border-l-4 border-primary rounded-box p-6 space-y-4" id="doc-tab-content">
+        <h3 class="font-semibold flex items-center gap-2">
+          {% include "components/icons/documents.html" with classes="w-5 h-5" %}
+          <span>{% trans "Import from document" %}</span>
+        </h3>
+        <p class="text-sm text-base-content/70">
+          {% trans "Upload a Word document (.docx) or paste text, and the AI will convert it into the outline format — inferring question types and section structure. The converted outline appears in the Outline tab for you to review and edit before importing." %}
+        </p>
+        <div class="space-y-3">
+          <input type="file" id="doc-import-file" class="file-input file-input-bordered w-full" accept=".docx,.txt,.md" />
+          <div class="divider text-xs uppercase text-base-content/60">{% trans "or paste text" %}</div>
+          <textarea id="doc-import-text" class="textarea textarea-bordered w-full min-h-[120px]" placeholder="{% trans 'Paste survey text here...' %}"></textarea>
+          <button type="button" id="doc-import-convert" class="btn btn-primary">
+            {% trans "Convert to outline" %}
+          </button>
+        </div>
+        <div id="doc-import-status" class="hidden" aria-live="polite"></div>
+        <div class="mt-4 p-3 bg-info/10 border border-info/20 rounded-lg">
+          <p class="text-sm text-base-content/70">
+            <strong>{% trans "Privacy:" %}</strong> {% trans "Document text is sent to our self-hosted AI service for conversion. It is not stored, and nothing is imported until you review and confirm the outline in the Outline tab." %}
+          </p>
+        </div>
+      </div>
+      {% endif %}
+
       <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'AI Assistant' %}" id="tab-ai" />
       <div role="tabpanel" class="tab-content bg-base-100 border-base-300 border-l-4 border-primary rounded-box p-6 space-y-4" id="ai-tab-content">
         <div class="flex items-center justify-between">

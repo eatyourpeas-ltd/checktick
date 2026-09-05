@@ -675,6 +675,8 @@
   const newSessionBtn = document.getElementById("new-session-btn");
   const aiLoading = document.getElementById("ai-loading");
   const manualMarkdownInput = document.getElementById("markdown-input");
+  const tabDoc = document.getElementById("tab-doc");
+  const docContent = document.getElementById("doc-tab-content");
 
   if (!tabManual || !tabAI || !manualContent || !aiContent) {
     return;
@@ -728,23 +730,35 @@
 
   // Tab switching
   const switchTab = () => {
-    if (tabManual.checked) {
+    if (tabDoc && tabDoc.checked) {
+      manualContent.classList.add("hidden");
+      aiContent.classList.add("hidden");
+      if (historyContent) historyContent.classList.add("hidden");
+      docContent.classList.remove("hidden");
+    } else if (tabManual.checked) {
       manualContent.classList.remove("hidden");
       aiContent.classList.add("hidden");
       if (historyContent) historyContent.classList.add("hidden");
+      if (docContent) docContent.classList.add("hidden");
     } else if (tabAI.checked) {
       manualContent.classList.add("hidden");
       aiContent.classList.remove("hidden");
       if (historyContent) historyContent.classList.add("hidden");
+      if (docContent) docContent.classList.add("hidden");
     } else if (tabHistory && tabHistory.checked) {
       manualContent.classList.add("hidden");
       aiContent.classList.add("hidden");
       if (historyContent) historyContent.classList.remove("hidden");
+      if (docContent) docContent.classList.add("hidden");
     }
   };
 
   tabManual.addEventListener("change", switchTab);
   tabAI.addEventListener("change", switchTab);
+
+  if (tabDoc) {
+    tabDoc.addEventListener("change", switchTab);
+  }
 
   if (tabHistory) {
     tabHistory.addEventListener("change", () => {
@@ -1377,6 +1391,119 @@
     newSessionBtn.addEventListener("click", startNewSession);
   }
 
+  // ===== Import from document =====
+  const docConvertBtn = document.getElementById("doc-import-convert");
+  const docFileInput = document.getElementById("doc-import-file");
+  const docPasteInput = document.getElementById("doc-import-text");
+  const docStatus = document.getElementById("doc-import-status");
+
+  // Status messages are rendered via textContent only — document- and
+  // LLM-derived strings must never reach an HTML sink.
+  const renderDocStatus = (kind, messages) => {
+    if (!docStatus) return;
+    docStatus.innerHTML = "";
+    if (!messages || !messages.length) {
+      docStatus.classList.add("hidden");
+      return;
+    }
+    const alertBox = document.createElement("div");
+    alertBox.className = `alert alert-${kind} text-sm`;
+    const list = document.createElement("ul");
+    list.className = "list-disc pl-5 space-y-1";
+    messages.forEach((message) => {
+      const li = document.createElement("li");
+      li.textContent = message;
+      list.appendChild(li);
+    });
+    alertBox.appendChild(list);
+    docStatus.appendChild(alertBox);
+    docStatus.classList.remove("hidden");
+  };
+
+  const putOutlineInManualTab = (markdown) => {
+    if (!manualMarkdownInput || !markdown) return;
+    manualMarkdownInput.value = markdown;
+    manualMarkdownInput.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  const convertDocument = async () => {
+    const file = docFileInput && docFileInput.files && docFileInput.files[0];
+    const pasted = docPasteInput ? docPasteInput.value.trim() : "";
+    if (!file && !pasted) {
+      renderDocStatus("warning", [
+        "Choose a document or paste some text first.",
+      ]);
+      return;
+    }
+
+    const csrfToken = document.querySelector("[name=csrfmiddlewaretoken]").value;
+    docConvertBtn.disabled = true;
+    renderDocStatus("info", []);
+
+    try {
+      const formData = new FormData();
+      formData.append("action", "import_document");
+      if (file) {
+        formData.append("document", file);
+      } else {
+        formData.append("text", pasted);
+      }
+
+      const response = await fetch(window.location.href, {
+        method: "POST",
+        headers: { "X-CSRFToken": csrfToken },
+        body: formData,
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.error) {
+        throw new Error(
+          data.error || `HTTP error! status: ${response.status}`,
+        );
+      }
+
+      // Load the converted outline (or raw extracted text as a fallback)
+      // into the Outline tab for review; nothing is imported automatically.
+      const content = data.markdown || data.raw_text || "";
+      if (content) {
+        putOutlineInManualTab(content);
+        tabManual.checked = true;
+        switchTab();
+      }
+
+      if (data.markdown) {
+        renderDocStatus(
+          data.warnings && data.warnings.length ? "warning" : "success",
+          data.warnings && data.warnings.length
+            ? data.warnings
+            : [
+                "Converted. Review the outline in the Outline tab, then import when you are happy with it.",
+              ],
+        );
+      } else {
+        renderDocStatus(
+          "warning",
+          data.warnings && data.warnings.length
+            ? data.warnings
+            : [
+                "The AI did not return an outline. The extracted text is in the Outline tab — edit it into the outline format.",
+              ],
+        );
+      }
+    } catch (error) {
+      console.error("Document conversion failed:", error);
+      renderDocStatus("error", [
+        error.message || "Document conversion failed.",
+      ]);
+    } finally {
+      docConvertBtn.disabled = false;
+    }
+  };
+
+  if (docConvertBtn) {
+    docConvertBtn.addEventListener("click", convertDocument);
+  }
+
   // Handle initial tab selection from data attribute
   const scriptTag = document.querySelector("script[data-initial-tab]");
   if (scriptTag) {
@@ -1386,21 +1513,37 @@
       const manualContent = document.getElementById("manual-tab-content");
       const aiContent = document.getElementById("ai-tab-content");
       const historyContent = document.getElementById("history-tab-content");
+      const docContent = document.getElementById("doc-tab-content");
 
       if (tabAi) tabAi.checked = true;
       if (manualContent) manualContent.classList.add("hidden");
       if (aiContent) aiContent.classList.remove("hidden");
       if (historyContent) historyContent.classList.add("hidden");
+      if (docContent) docContent.classList.add("hidden");
+    } else if (initialTab === "doc") {
+      const tabDoc = document.getElementById("tab-doc");
+      const manualContent = document.getElementById("manual-tab-content");
+      const aiContent = document.getElementById("ai-tab-content");
+      const historyContent = document.getElementById("history-tab-content");
+      const docContent = document.getElementById("doc-tab-content");
+
+      if (tabDoc) tabDoc.checked = true;
+      if (manualContent) manualContent.classList.add("hidden");
+      if (aiContent) aiContent.classList.add("hidden");
+      if (historyContent) historyContent.classList.add("hidden");
+      if (docContent) docContent.classList.remove("hidden");
     } else if (initialTab === "history") {
       const tabHistory = document.getElementById("tab-history");
       const manualContent = document.getElementById("manual-tab-content");
       const aiContent = document.getElementById("ai-tab-content");
       const historyContent = document.getElementById("history-tab-content");
+      const docContent = document.getElementById("doc-tab-content");
 
       if (tabHistory) tabHistory.checked = true;
       if (manualContent) manualContent.classList.add("hidden");
       if (aiContent) aiContent.classList.add("hidden");
       if (historyContent) historyContent.classList.remove("hidden");
+      if (docContent) docContent.classList.add("hidden");
     }
     // manual is default, already checked in HTML
   }

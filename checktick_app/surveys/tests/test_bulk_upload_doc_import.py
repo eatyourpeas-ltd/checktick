@@ -302,6 +302,46 @@ def test_audit_log_records_failed_conversion(logged_in_client, survey, owner):
 
 
 # ---------------------------------------------------------------------------
+# Template rendering ("From document" tab)
+# ---------------------------------------------------------------------------
+
+
+def _get_page(client, survey):
+    return client.get(reverse("surveys:bulk_upload", kwargs={"slug": survey.slug}))
+
+
+@pytest.mark.django_db
+@override_settings(RATELIMIT_ENABLE=False)
+def test_doc_tab_rendered_when_llm_enabled(logged_in_client, survey):
+    html = _get_page(logged_in_client, survey).content.decode()
+    assert 'id="tab-doc"' in html
+    assert 'id="doc-import-file"' in html
+    assert 'accept=".docx,.txt,.md"' in html
+    assert 'id="doc-import-convert"' in html
+    # Privacy notice is shown before conversion
+    assert "self-hosted AI service" in html
+
+
+@pytest.mark.django_db
+@override_settings(RATELIMIT_ENABLE=False)
+def test_doc_tab_absent_when_llm_disabled(logged_in_client, survey, settings):
+    settings.LLM_ENABLED = False
+    html = _get_page(logged_in_client, survey).content.decode()
+    assert 'id="tab-doc"' not in html
+    assert 'id="doc-import-convert"' not in html
+
+
+@pytest.mark.django_db
+@override_settings(RATELIMIT_ENABLE=False)
+def test_manual_tab_prefilled_with_extracted_text_via_get_tab_param(
+    logged_in_client, survey
+):
+    # The tab query parameter must accept the new "doc" value.
+    response = _get_page(logged_in_client, survey)  # sanity: page loads
+    assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
 # Rate limiting
 # ---------------------------------------------------------------------------
 

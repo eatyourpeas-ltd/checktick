@@ -9764,7 +9764,7 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
     # Original bulk upload logic continues
     # Get tab parameter from URL to pre-select a tab
     initial_tab = request.GET.get("tab", "manual")  # default to manual
-    if initial_tab not in ["manual", "ai", "history"]:
+    if initial_tab not in ["manual", "ai", "doc", "history"]:
         initial_tab = "manual"
 
     # Check if survey has existing questions and export to markdown
