@@ -837,6 +837,10 @@
     const questionFollowupToggle = form.querySelector(
       "[data-question-followup-toggle]",
     );
+    const startoverContainer = form.querySelector(
+      "[data-startover-container]",
+    );
+    const startOverBtn = form.querySelector("[data-start-over]");
 
     function refresh() {
       const checked = form.querySelector('input[name="type"]:checked');
@@ -900,6 +904,29 @@
         if (prefilledDataset) {
           prefilledDataset.value = "";
         }
+        if (optionsTextarea) {
+          delete optionsTextarea.dataset.prefilledDataset;
+        }
+      }
+
+      // Once options are populated from a dataset, hide the dataset picker
+      // and offer a "Start over" button instead. Users can edit the loaded
+      // options directly; changing datasets goes through Start over, which
+      // clears the options and brings the picker back.
+      const datasetPopulated = Boolean(
+        isDropdown &&
+          optionsTextarea &&
+          optionsTextarea.value.trim() &&
+          optionsTextarea.dataset.prefilledDataset,
+      );
+      if (prefilledContainer) {
+        prefilledContainer.classList.toggle(
+          "hidden",
+          !isDropdown || datasetPopulated,
+        );
+      }
+      if (startoverContainer) {
+        startoverContainer.classList.toggle("hidden", !datasetPopulated);
       }
 
       if (isLikert && likertSection) {
@@ -962,13 +989,41 @@
       });
     }
 
+    // Start over: clear dataset-loaded options and restore the picker
+    if (startOverBtn && optionsTextarea) {
+      startOverBtn.addEventListener("click", function () {
+        optionsTextarea.value = "";
+        delete optionsTextarea.dataset.prefilledDataset;
+        if (prefilledDataset) {
+          prefilledDataset.value = "";
+        }
+        if (prefilledToggle) {
+          prefilledToggle.checked = false;
+        }
+        if (prefilledSection) {
+          prefilledSection.classList.add("hidden");
+        }
+        populateFollowupOptions("", null);
+        refresh();
+      });
+    }
+
     // Prefilled dataset toggle handler
     if (prefilledToggle && prefilledSection) {
       prefilledToggle.addEventListener("change", function () {
         const isChecked = prefilledToggle.checked;
         prefilledSection.classList.toggle("hidden", !isChecked);
-        if (!isChecked && prefilledDataset) {
-          prefilledDataset.value = "";
+        if (!isChecked) {
+          if (prefilledDataset) {
+            prefilledDataset.value = "";
+          }
+          // Detach the dataset: options already loaded stay in the textarea
+          // as editable manual options, but per-option follow-ups return.
+          // The textarea is deliberately not cleared to avoid data loss.
+          if (optionsTextarea) {
+            delete optionsTextarea.dataset.prefilledDataset;
+          }
+          refresh();
         }
       });
     }
