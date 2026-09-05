@@ -369,8 +369,11 @@ Context: This is for a clinical healthcare platform. The user will review and ed
 **Conversion parameters:**
 
 - **Temperature**: 0.2 (same as survey generation)
-- **Max tokens**: 8000 (reasoning models may spend part of the budget on
-  hidden working before the markdown block)
+- **Max tokens**: 8000
+- **Reasoning**: `reasoning_effort: none` is sent so reasoning models
+  (qwen3.5) skip their thinking phase — conversions drop from ~60–95s to
+  ~2s and degenerate reasoning loops cannot occur. Configurable via
+  `LLM_DOC_IMPORT_REASONING_EFFORT`; set it empty to omit the field.
 - **Model**: Same self-hosted instance as survey generation
 
 ### 4. Prompt Injection Protection

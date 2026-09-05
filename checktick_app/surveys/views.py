@@ -9620,6 +9620,12 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
             {"error": "Too many conversions. Please try again later."}, status=429
         )
 
+    # Backend-specific reasoning control; empty string omits the field.
+    reasoning_effort = str(
+        getattr(settings, "LLM_DOC_IMPORT_REASONING_EFFORT", "none")
+    ).strip()
+    extra_payload = {"reasoning_effort": reasoning_effort} if reasoning_effort else None
+
     upload = request.FILES.get("document")
     pasted = (request.POST.get("text") or "").strip()
     warnings: list[str] = []
@@ -9684,9 +9690,12 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
                 max_tokens=8000,
                 # With streaming this is an idle timeout between chunks, so
                 # long conversions are fine; it only fires if the model
-                # stalls. Reasoning models may spend part of max_tokens on
-                # visible working before the markdown block.
+                # stalls.
                 timeout=float(getattr(settings, "LLM_DOC_IMPORT_TIMEOUT", 120)),
+                # Reasoning models (qwen3.5) otherwise spend 30-90s and most
+                # of the token budget thinking — and can loop. Honoured by
+                # the hosted Ollama backend; harmless if ignored.
+                extra_payload=extra_payload,
             ):
                 if chunk:
                     full_response += chunk

@@ -729,6 +729,9 @@ LLM_DOC_IMPORT_MAX_CHARS = env.int(
 LLM_DOC_IMPORT_TIMEOUT = env.int(
     "LLM_DOC_IMPORT_TIMEOUT", default=120
 )  # per-request LLM timeout (s) — large documents need longer than LLM_TIMEOUT
+LLM_DOC_IMPORT_REASONING_EFFORT = env(
+    "LLM_DOC_IMPORT_REASONING_EFFORT", default="none"
+)  # reasoning control sent to the backend (qwen3.5: 'none' skips thinking); empty string omits the field
 
 # External Dataset API Configuration
 EXTERNAL_DATASET_API_URL = os.environ.get(

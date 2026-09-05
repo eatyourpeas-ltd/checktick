@@ -183,6 +183,8 @@ def test_successful_conversion_returns_markdown(logged_in_client, survey):
     assert chat.call_args[1]["timeout"] >= 120
     assert chat.call_args[1]["max_tokens"] >= 8000
     assert "untrusted" in chat.call_args[1]["system_prompt"].lower()
+    # Reasoning suppression keeps conversions fast and loop-free
+    assert chat.call_args[1]["extra_payload"] == {"reasoning_effort": "none"}
 
 
 @pytest.mark.django_db

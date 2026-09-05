@@ -711,6 +711,7 @@ class ConversationalSurveyLLM:
         system_prompt: str = None,
         max_tokens: int = None,
         timeout: float = None,
+        extra_payload: dict = None,
     ):
         """
         Stream conversation with LLM, yielding chunks as they arrive.
@@ -722,6 +723,9 @@ class ConversationalSurveyLLM:
             max_tokens: Maximum tokens in response (default: 2000)
             timeout: Per-read timeout in seconds (default: settings.LLM_TIMEOUT).
                 With streaming this acts as an idle timeout between chunks.
+            extra_payload: Extra fields merged into the request payload (e.g.
+                backend-specific reasoning controls). Unknown fields are
+                tolerated by the backend.
 
         Yields:
             Chunks of the LLM response as they arrive
@@ -753,6 +757,8 @@ class ConversationalSurveyLLM:
                 "max_tokens": max_tokens or 2000,
                 "stream": True,
             }
+            if extra_payload:
+                payload.update(extra_payload)
 
             # Log outgoing payload (truncated) for debugging — do not log secrets.
             try:
