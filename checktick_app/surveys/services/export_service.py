@@ -15,7 +15,7 @@ from datetime import timedelta
 from io import StringIO
 import logging
 import secrets
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -28,6 +28,46 @@ if TYPE_CHECKING:
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def _question_followup_labels(question: Any) -> dict[str, str] | None:
+    """Map follow-up input suffixes to their configured labels for a question.
+
+    Suffixes match the rendered input names ``q_{id}_followup_{suffix}``:
+    option indices for per-option follow-ups, ``yes``/``no`` for yes/no
+    questions, and ``any`` for a question-level follow-up box. Returns None
+    when the question has no follow-up configuration.
+    """
+    try:
+        options = question.options
+        if not isinstance(options, list):
+            return None
+        labels: dict[str, str] = {}
+        for idx, opt in enumerate(options):
+            if not isinstance(opt, dict):
+                continue
+            if opt.get("type") == "question_followup":
+                if opt.get("enabled"):
+                    labels["any"] = opt.get("label", "Please specify")
+                continue
+            fu = opt.get("followup_text")
+            if isinstance(fu, dict) and fu.get("enabled"):
+                suffix = opt.get("value") if question.type == "yesno" else str(idx)
+                labels[str(suffix)] = fu.get("label", "Please elaborate")
+        return labels or None
+    except Exception:
+        return None
+
+
+def _format_followup_cell(labels: dict[str, str], followups: Any) -> str:
+    """Render a stored follow-up mapping as a single CSV cell."""
+    if not isinstance(followups, dict):
+        return ""
+    parts = []
+    for suffix, value in followups.items():
+        label = labels.get(str(suffix), suffix)
+        parts.append(f"{label}: {value}")
+    return " | ".join(parts)
 
 
 class ExportService:
@@ -214,6 +254,8 @@ class ExportService:
         for question in question_list:
             # Use question text for header, will lookup by ID in answers
             headers.append(question.text)
+            if _question_followup_labels(question):
+                headers.append(f"{question.text} (follow-up)")
 
         writer.writerow(headers)
 
@@ -276,6 +318,13 @@ class ExportService:
                     row.append(" | ".join(parts))
                 else:
                     row.append(str(answer) if answer else "")
+                fu_labels = _question_followup_labels(question)
+                if fu_labels:
+                    row.append(
+                        _format_followup_cell(
+                            fu_labels, answers_dict.get(f"{question.id}_followup")
+                        )
+                    )
 
             writer.writerow(row)
 

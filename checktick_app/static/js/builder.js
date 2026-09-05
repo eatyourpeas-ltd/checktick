@@ -365,6 +365,19 @@
       } else if (typeof form._populateFollowupOptions === "function") {
         form._populateFollowupOptions(optionsField.value, null);
       }
+
+      // Restore question-level follow-up (single box after all options)
+      const qfToggle = form.querySelector("[data-question-followup-toggle]");
+      const qfLabel = form.querySelector('input[name="question_followup_label"]');
+      if (qfToggle) {
+        qfToggle.checked = Boolean(payload.question_followup);
+      }
+      if (qfLabel && payload.question_followup) {
+        qfLabel.value = payload.question_followup.label || "";
+      }
+      if (typeof form._refreshCreateToggles === "function") {
+        form._refreshCreateToggles();
+      }
     }
 
     // Restore follow-up configuration for Yes/No questions
@@ -818,6 +831,12 @@
     const refreshFollowupBtn = form.querySelector(
       "[data-refresh-followup-options]",
     );
+    const questionFollowupContainer = form.querySelector(
+      "[data-question-followup-container]",
+    );
+    const questionFollowupToggle = form.querySelector(
+      "[data-question-followup-toggle]",
+    );
 
     function refresh() {
       const checked = form.querySelector('input[name="type"]:checked');
@@ -849,9 +868,23 @@
       if (imageOptionsSection)
         imageOptionsSection.classList.toggle("hidden", !isImage);
 
-      // Show/hide follow-up container within options section
+      // Show/hide follow-up container within options section.
+      // When options come from a prefilled dataset, per-option follow-ups
+      // don't scale; offer a single question-level follow-up box instead.
+      const hasDataset = Boolean(
+        optionsTextarea && optionsTextarea.dataset.prefilledDataset,
+      );
       if (followupContainer) {
-        followupContainer.classList.toggle("hidden", !showFollowup);
+        followupContainer.classList.toggle(
+          "hidden",
+          !showFollowup || hasDataset,
+        );
+      }
+      if (questionFollowupContainer) {
+        const qfActive =
+          showFollowup &&
+          (hasDataset || (questionFollowupToggle && questionFollowupToggle.checked));
+        questionFollowupContainer.classList.toggle("hidden", !qfActive);
       }
 
       // Only show prefilled options for dropdown type
@@ -1030,6 +1063,8 @@
             optionsTextarea.dataset.prefilledDataset = datasetKey;
             // Also refresh follow-up options
             populateFollowupOptions(optionsTextarea.value, null);
+            // Swap per-option follow-ups for the question-level toggle
+            refresh();
             if (typeof window.showToast === "function") {
               window.showToast(
                 `Loaded ${optionLines.length} options`,

@@ -100,6 +100,39 @@
         }
       });
     });
+    // Handle question-level follow-up: a single text box offered after all
+    // options (used for dataset-backed option lists). Shown whenever any
+    // selection is made for the question, hidden and cleared otherwise.
+    const anyFields = document.querySelectorAll("[data-followup-any]");
+    anyFields.forEach((field) => {
+      const questionId = field.dataset.followupAny; // e.g. "q_123"
+      const controls = document.querySelectorAll(`[name="${questionId}"]`);
+      if (controls.length === 0) return;
+
+      const first = controls[0];
+
+      const showIfSelected = () => {
+        const hasSelection = Array.from(controls).some(
+          (el) =>
+            (el.type === "checkbox" || el.type === "radio")
+              ? el.checked
+              : el.value !== ""
+        );
+        if (hasSelection) {
+          field.classList.remove("hidden");
+        } else {
+          field.classList.add("hidden");
+          const input = field.querySelector("input");
+          if (input) input.value = "";
+        }
+      };
+
+      if (first.tagName === "SELECT") {
+        first.addEventListener("change", showIfSelected);
+      } else {
+        controls.forEach((el) => el.addEventListener("change", showIfSelected));
+      }
+    });
   }
 
   // Initialize on page load
