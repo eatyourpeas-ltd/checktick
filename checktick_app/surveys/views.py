@@ -9656,9 +9656,10 @@ def _handle_doc_import(request: HttpRequest, survey: Survey) -> JsonResponse:
                     ),
                 }
             ],
-            max_tokens=4000,
+            max_tokens=8000,
             # Document conversion has a much larger input and output than
-            # chat, so allow longer than the default LLM_TIMEOUT.
+            # chat, so allow longer than the default LLM_TIMEOUT. Reasoning
+            # models may also spend part of max_tokens on hidden working.
             timeout=float(getattr(settings, "LLM_DOC_IMPORT_TIMEOUT", 120)),
         )
         if response:

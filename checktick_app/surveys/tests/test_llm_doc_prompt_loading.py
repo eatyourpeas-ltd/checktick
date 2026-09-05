@@ -48,6 +48,15 @@ class TestDocImportPromptLoading:
         assert "infer" in prompt.lower(), "Prompt must require inferring types"
         assert "markdown" in prompt.lower(), "Prompt must require markdown output"
 
+    def test_prompt_forbids_visible_reasoning(self):
+        """Reasoning models (e.g. qwen) emit a 'Thinking Process' section that
+        can exhaust the token budget before the markdown appears — the prompt
+        must explicitly forbid it."""
+        prompt = load_doc_import_prompt_from_docs()
+
+        assert "thinking process" in prompt.lower()
+        assert "reasoning" in prompt.lower()
+
     def test_prompt_teaches_format_with_worked_example(self):
         """Small/medium models follow worked examples, so the prompt must
         contain one — guard against it being removed or diluted."""
