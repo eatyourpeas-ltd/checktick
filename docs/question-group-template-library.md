@@ -5,6 +5,8 @@ category: None
 
 The template library lets you discover, browse, and import validated questionnaires and question collections into your surveys.
 
+> **Tip:** When you [import a survey from a document](/docs/import/#import-from-document), CheckTick suggests templates that closely match the converted outline — for example, a document asking for job title and workplace will suggest the Professional details template. Template content is never added automatically; you choose whether to import it here.
+
 > **Note:** For an overview of sections, see [Sections](/docs/groups-view/). To publish your own templates, see [Publishing Question Bank Templates](/docs/publish-question-groups/).
 
 ## Who can access

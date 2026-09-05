@@ -44,6 +44,7 @@ CheckTick offers seven account tiers: **FREE**, **PRO**, **TEAM** (Small/Medium/
 - Full API access
 - Export to CSV, JSON, Excel
 - AI-assisted survey generator
+- Import surveys from Word documents (AI-assisted conversion)
 - Can be invited to collaborate on other surveys
 
 ***Key Characteristics***

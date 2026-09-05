@@ -252,7 +252,25 @@ Supported LLM providers:
 - **Azure API Management**: Any APIM-protected endpoint (use `LLM_AUTH_TYPE=apim`)
 - **Custom endpoints**: Any OpenAI-compatible API
 
-When configured, users will see an "AI Assistant" tab in the Outline interface that allows them to generate surveys through natural conversation. See [AI-Assisted Survey Generator](/docs/ai-survey-generator/) for usage details.
+When configured, users will see an "AI Assistant" tab in the Outline interface that allows them to generate surveys through natural conversation, plus a "From document" tab that converts an uploaded `.docx` or pasted text into the outline format. See [AI-Assisted Survey Generator](/docs/ai-survey-generator/) and [Import from document](/docs/import/#import-from-document) for usage details.
+
+Document import has additional optional limits:
+
+```bash
+# Maximum upload size in bytes (default 2097152 = 2 MB)
+LLM_DOC_IMPORT_MAX_BYTES=2097152
+
+# Maximum extracted characters sent to the LLM (default 20000)
+LLM_DOC_IMPORT_MAX_CHARS=20000
+
+# Per-read timeout in seconds for the streaming conversion (default 120)
+LLM_DOC_IMPORT_TIMEOUT=120
+
+# Reasoning control sent to the backend. 'none' skips reasoning on models
+# that support it (e.g. qwen3), making conversions much faster. Set empty
+# to omit the field entirely.
+LLM_DOC_IMPORT_REASONING_EFFORT=none
+```
 
 #### Data Governance
 

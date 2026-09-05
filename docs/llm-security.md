@@ -11,12 +11,13 @@ This document outlines the security measures and safety controls implemented in 
 
 ## Overview
 
-CheckTick uses Large Language Models (LLMs) for two purposes:
+CheckTick uses Large Language Models (LLMs) for three purposes:
 
 1. **AI Survey Generator**: Helps users create healthcare surveys through natural conversation
 2. **Survey Translation**: Automatically translates surveys into multiple languages
+3. **Document Import**: Converts an uploaded survey document (`.docx`, `.txt`, `.md`) into outline markdown for review
 
-Security and user safety are fundamental to both features.
+Security and user safety are fundamental to all three features.
 
 ## Core Security Principles
 
