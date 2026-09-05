@@ -11,14 +11,44 @@ The survey builder supports multiple ways to create survey content: Outline (imp
 - You need fine-grained control over follow-up text inputs for specific options.
 
 > **New:** You can also create surveys using our [AI-Assisted Survey Generator](/docs/ai-survey-generator/), which helps you design surveys through natural conversation instead of writing markdown manually.
+>
+> **Also new:** If you already have the survey as a Word document or pasted text, the [Import from document](#import-from-document) tab converts it into the outline format for you.
 
 This document covers:
 
+- [Import from document](#import-from-document) - AI-assisted conversion of an existing document
 - [Bulk survey import](#bulk-survey-import) - Complete markdown syntax for importing surveys
 - [Follow-up questions](#follow-up-questions) - Adding conditional text inputs to question options
 - [Repeats](#repeats-nested-repeatable-sections) - Creating nested, repeatable sections
 
 For more details on repeats, see [Repeats (Nested, Repeatable Sections)](/docs/collections/).
+
+## Import from document
+
+The Outline page has a **From document** tab (shown when AI features are enabled): upload a `.docx` file or paste text, and the AI converts it into the outline format. Nothing is imported automatically — the converted outline is placed in the Outline tab for you to review and edit before importing.
+
+### What the AI does
+
+- **Converts every numbered or bulleted item into a question**, preserving the author's wording.
+- **Infers question types** from phrasing: "rate 1–5" → Likert scale (with `min:`/`max:`), "tick all that apply" → multi-select, yes/no phrasing → Yes/No, and open questions → text.
+- **Infers and creates sections** from the document's structure, grouping related questions even when the document has no explicit headings.
+- **Uses datasets where they match**: if a dropdown question's options correspond to a dataset available to your survey (NHS trusts, medical specialities, and so on), the AI links it with a `dataset: <key>` line instead of inventing option lists. Emitted dataset references are verified against your accessible datasets — anything else is stripped with a warning.
+- **Suggests templates**: if the converted outline closely resembles a Question Bank template you can access (for example Professional details), you'll see a passive suggestion with a link to the Question Bank. Template content is never added automatically.
+
+### How to use it
+
+1. Open **From document** on the Outline (Add questions) page.
+2. Upload a `.docx`, `.txt`, or `.md` file, or paste the survey text.
+3. Click **Convert to outline**. The AI's working streams into the panel so you can see progress; conversion is usually quick.
+4. The converted outline appears in the Outline tab with the live structure preview. Edit anything you want to change — wording, types, sections, or add branching and repeats.
+5. Import as usual from the Outline tab.
+
+### Limits and troubleshooting
+
+- Legacy binary `.doc` files are not supported — save as `.docx` first, or paste the text.
+- Uploads are capped (2 MB by default) and very long documents are truncated for conversion; a warning tells you when that happens.
+- If the AI cannot produce a valid outline, the extracted document text is placed in the Outline tab instead so you can format it manually — nothing is lost.
+- Document text is sent to the self-hosted LLM service for conversion and is not stored. See [AI Security & Safety](/docs/llm-security/) for the full security posture, including file validation, the published conversion prompt, and prompt-injection posture.
 
 ## Bulk survey import
 

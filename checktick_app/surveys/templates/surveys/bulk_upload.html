@@ -39,14 +39,19 @@
     <div role="tablist" class="tabs tabs-lift">
       <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'Outline' %}" id="tab-manual" checked />
       <div role="tabpanel" class="tab-content bg-base-100 border-base-300 border-l-4 border-primary rounded-box p-6 space-y-4" id="manual-tab-content">
-        <!-- Inline toggle for format guide (replaces nested sub-tabs) -->
-        <div class="flex items-center justify-between">
-          <label class="label">{% trans "Text format" %}</label>
+      <div class="flex items-center justify-between">
+          <h3 class="font-semibold flex items-center gap-2">
+            {% include "components/icons/pencil.html" with classes="w-5 h-5" %}
+            <span>{% trans "Outline" %}</span>
+          </h3>
           <button type="button" id="toggle-format-guide" class="btn btn-xs btn-ghost text-xs">
             {% trans "Format guide" %}
             <svg class="w-3 h-3 transition-transform" id="format-guide-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
           </button>
-        </div>
+      </div>
+          <p class="text-sm text-base-content/70">
+            {% trans "Use markdown to define the outline structure and questions for your survey. The format guide below explains the markdown syntax and available options." %}
+          </p>
 
         <!-- Format guide (collapsible, hidden by default) -->
         <div id="format-reference-content" class="hidden">
@@ -213,6 +218,33 @@ HIDDEN
           </form>
         </div>
       </div>
+
+      {% if llm_enabled %}
+      <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'Document Upload' %}" id="tab-doc" />
+      <div role="tabpanel" class="tab-content bg-base-100 border-base-300 border-l-4 border-primary rounded-box p-6 space-y-4" id="doc-tab-content">
+        <h3 class="font-semibold flex items-center gap-2">
+          {% include "components/icons/documents.html" with classes="w-5 h-5" %}
+          <span>{% trans "Import from document" %}</span>
+        </h3>
+        <p class="text-sm text-base-content/70">
+          {% trans "Upload a Word document (.docx) or paste text, and the AI will convert it into the outline format — inferring question types and section structure. The converted outline appears in the Outline tab for you to review and edit before importing." %}
+        </p>
+        <div class="space-y-3">
+          <input type="file" id="doc-import-file" class="file-input file-input-bordered w-full" accept=".docx,.txt,.md" />
+          <div class="divider text-xs uppercase text-base-content/60">{% trans "or paste text" %}</div>
+          <textarea id="doc-import-text" class="textarea textarea-bordered w-full min-h-[120px]" placeholder="{% trans 'Paste survey text here...' %}"></textarea>
+          <button type="button" id="doc-import-convert" class="btn btn-primary">
+            {% trans "Convert to outline" %}
+          </button>
+        </div>
+        <div id="doc-import-status" class="hidden" aria-live="polite"></div>
+        <div class="mt-4 p-3 bg-info/10 border border-info/20 rounded-lg">
+          <p class="text-sm text-base-content/70">
+            <strong>{% trans "Privacy:" %}</strong> {% trans "Document text is sent to our self-hosted AI service for conversion. It is not stored, and nothing is imported until you review and confirm the outline in the Outline tab." %}
+          </p>
+        </div>
+      </div>
+      {% endif %}
 
       <input type="radio" name="import_tabs" role="tab" class="tab" aria-label="{% trans 'AI Assistant' %}" id="tab-ai" />
       <div role="tabpanel" class="tab-content bg-base-100 border-base-300 border-l-4 border-primary rounded-box p-6 space-y-4" id="ai-tab-content">

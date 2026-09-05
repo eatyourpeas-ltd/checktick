@@ -36,6 +36,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
+from django_ratelimit.core import is_ratelimited
 from django_ratelimit.decorators import ratelimit
 
 from checktick_app.context_processors import branding as platform_branding
@@ -43,8 +44,17 @@ from checktick_app.core.decorators import email_confirmed_required
 from checktick_app.core.theme_utils import is_safe_url, sanitize_font_family
 
 from .color import hex_to_oklch
+from .doc_extract import (
+    MESSAGE_BY_CODE,
+    DocImportError,
+    extract_text,
+    truncate_for_llm,
+)
 from .external_datasets import get_available_datasets
-from .llm_client import ConversationalSurveyLLM
+from .llm_client import (
+    ConversationalSurveyLLM,
+    load_doc_import_prompt_from_docs,
+)
 from .markdown_import import BulkParseError, parse_bulk_markdown_with_collections
 from .models import (
     SUPPORTED_SURVEY_LANGUAGES,
@@ -9571,12 +9581,368 @@ def _handle_llm_get_session_details(
         )
 
 
+# Keyword heuristics for suggesting Question Bank templates after a
+# document conversion. Only two templates ship today (professional /
+# patient details), so a small keyword map is more predictable than a
+# content-overlap model. Gated on import permission at query time.
+TEMPLATE_HINT_KEYWORDS = {
+    "professional": [
+        "job title",
+        "where do you work",
+        "place of work",
+        "employing trust",
+        "workplace",
+        "employer",
+        "gmc number",
+        "professional details",
+    ],
+    "patient": [
+        "date of birth",
+        "nhs number",
+        "address",
+        "postcode",
+        "post code",
+        "gp practice",
+        "gp surgery",
+        "hospital number",
+    ],
+}
+
+
+def _suggest_matching_templates(user, markdown: str) -> list[str]:
+    """Suggest Question Bank templates whose theme matches the converted
+    outline. Passive only — we point the user at the Question Bank rather
+    than splicing template content into the import (which would raise
+    permission and attribution issues)."""
+    from .permissions import can_import_published_template
+
+    md = markdown.lower()
+    suggestions: list[str] = []
+    for template in PublishedQuestionGroup.objects.filter(
+        status=PublishedQuestionGroup.Status.ACTIVE
+    ):
+        name = template.name.lower()
+        keywords = next(
+            (words for theme, words in TEMPLATE_HINT_KEYWORDS.items() if theme in name),
+            None,
+        )
+        if not keywords:
+            continue
+        if sum(1 for kw in keywords if kw in md) >= 2 and (
+            can_import_published_template(user, template)
+        ):
+            suggestions.append(template.name)
+    return suggestions
+
+
+def _strip_unavailable_datasets(
+    markdown: str, available_keys: set[str]
+) -> tuple[str, list[str]]:
+    """Remove ``dataset:`` lines referencing datasets the user cannot access.
+
+    The LLM only sees an allowlist, but this is the enforcement: an emitted
+    key outside it is stripped (leaving a plain dropdown question) rather
+    than imported. Returns (markdown, removed_keys).
+    """
+    kept: list[str] = []
+    removed: list[str] = []
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("dataset:"):
+            key = stripped.split(":", 1)[1].strip()
+            if key not in available_keys:
+                removed.append(key)
+                continue
+        kept.append(line)
+    return "\n".join(kept), removed
+
+
+def _llm_output_is_looping(text: str) -> bool:
+    """Detect degenerate repetition in LLM output (reasoning loops).
+
+    Reasoning models sometimes get stuck repeating a line until the token
+    budget is exhausted. Heuristic: any substantial line (40+ chars)
+    appearing 4+ times in the tail of the response is treated as a loop.
+    """
+    from collections import Counter
+
+    tail = text[-2000:]
+    lines = [ln.strip() for ln in tail.splitlines() if len(ln.strip()) >= 40]
+    if not lines:
+        return False
+    return max(Counter(lines).values()) >= 4
+
+
+def _handle_doc_import(request: HttpRequest, survey: Survey) -> HttpResponse:
+    """Convert an uploaded document or pasted text into outline markdown.
+
+    Part of the "Import from document" tab on the Outline page. Validation
+    failures return JSON errors; a successful pre-flight returns an SSE
+    stream so the user sees the model working (including any reasoning
+    output) while the conversion runs. The result is returned to the
+    browser for review in the Outline textarea; nothing is imported here.
+    Document content is never logged or persisted — audit metadata only
+    (see AGENTS.md logging rules).
+    """
+    if not settings.LLM_ENABLED:
+        return JsonResponse(
+            {"error": "AI document conversion is not available"}, status=400
+        )
+
+    if is_ratelimited(
+        request,
+        group="doc_import",
+        key="user",
+        rate="20/h",
+        method="POST",
+        increment=True,
+    ):
+        return JsonResponse(
+            {"error": "Too many conversions. Please try again later."}, status=429
+        )
+
+    # Backend-specific reasoning control; empty string omits the field.
+    reasoning_effort = str(
+        getattr(settings, "LLM_DOC_IMPORT_REASONING_EFFORT", "none")
+    ).strip()
+    extra_payload = {"reasoning_effort": reasoning_effort} if reasoning_effort else None
+
+    # Dataset allowlist for dropdown inference: the LLM may only reference
+    # datasets accessible to this survey, and emitted keys are verified
+    # against this set before the outline is returned.
+    available_datasets = get_available_datasets(
+        organization=survey.organization, team=survey.team, user=survey.owner
+    )
+
+    upload = request.FILES.get("document")
+    pasted = (request.POST.get("text") or "").strip()
+    warnings: list[str] = []
+
+    if upload:
+        max_bytes = int(getattr(settings, "LLM_DOC_IMPORT_MAX_BYTES", 2 * 1024 * 1024))
+        if upload.size > max_bytes:
+            return JsonResponse(
+                {
+                    "error": "File is too large. The maximum upload size is "
+                    f"{max_bytes // (1024 * 1024)} MB."
+                },
+                status=413,
+            )
+        try:
+            text = extract_text(upload.name, upload.read())
+        except DocImportError as e:
+            # Static text keyed by error code — never reflect exception
+            # content into the response.
+            return JsonResponse(
+                {
+                    "error": MESSAGE_BY_CODE.get(
+                        e.code, "The document could not be processed."
+                    )
+                },
+                status=400,
+            )
+        source = "upload"
+        file_ext = (upload.name or "").rsplit(".", 1)[-1].lower()
+        file_bytes = upload.size
+    elif pasted:
+        text = pasted
+        source = "paste"
+        file_ext = "txt"
+        file_bytes = len(pasted.encode("utf-8"))
+    else:
+        return JsonResponse(
+            {"error": "No document uploaded and no text pasted"}, status=400
+        )
+
+    text, truncated = truncate_for_llm(text)
+    if truncated:
+        warnings.append(
+            "The document was truncated for conversion. Only the first part "
+            "was processed — check the outline covers everything you need."
+        )
+
+    success = False
+    markdown = None
+    raw_text = None
+    suggestions: list[str] = []
+
+    import json
+    import uuid
+
+    user_content = (
+        "Convert this document into CheckTick outline "
+        "markdown.\n\n<document>\n"
+        f"{text}\n</document>"
+    )
+    if available_datasets:
+        dataset_lines = "\n".join(
+            f"  - {key}: {name}" for key, name in sorted(available_datasets.items())
+        )
+        user_content += (
+            "\n\nAVAILABLE DATASETS FOR THIS SURVEY (when a dropdown question's "
+            "options match one of these, use (dropdown) plus a `dataset: <key>` "
+            "line instead of listing manual options):\n" + dataset_lines
+        )
+
+    def stream():
+        nonlocal success, markdown, raw_text, suggestions
+        full_response = ""
+        try:
+            llm = ConversationalSurveyLLM()
+            for chunk in llm.chat_stream(
+                [
+                    {
+                        "role": "user",
+                        "content": user_content,
+                    }
+                ],
+                system_prompt=load_doc_import_prompt_from_docs(),
+                max_tokens=8000,
+                # With streaming this is an idle timeout between chunks, so
+                # long conversions are fine; it only fires if the model
+                # stalls.
+                timeout=float(getattr(settings, "LLM_DOC_IMPORT_TIMEOUT", 120)),
+                # Reasoning models (qwen3.5) otherwise spend 30-90s and most
+                # of the token budget thinking — and can loop. Honoured by
+                # the hosted Ollama backend; harmless if ignored.
+                extra_payload=extra_payload,
+            ):
+                if chunk:
+                    full_response += chunk
+                    # Progress tick only — the model's output text is never
+                    # reflected into the response (it reaches the browser via
+                    # the cache-backed page reload on completion).
+                    yield f"data: {json.dumps({'phase': 'working'})}\n\n"
+                    if _llm_output_is_looping(full_response):
+                        logger.warning(
+                            "LLM output repetition detected; aborting stream "
+                            "(survey=%s)",
+                            survey.slug,
+                        )
+                        warnings.append(
+                            "The AI got stuck repeating itself and was stopped "
+                            "early. Please try again."
+                        )
+                        break
+
+            if full_response:
+                extracted = llm.extract_markdown(full_response)
+                if extracted:
+                    markdown = llm.sanitize_markdown(extracted)
+                    # Enforce the dataset allowlist before validation so the
+                    # returned outline is exactly what was checked.
+                    if available_datasets:
+                        markdown, removed_keys = _strip_unavailable_datasets(
+                            markdown, set(available_datasets)
+                        )
+                        if removed_keys:
+                            logger.warning(
+                                "Doc import removed unavailable dataset keys %s "
+                                "(survey=%s)",
+                                sorted(set(removed_keys)),
+                                survey.slug,
+                            )
+                            warnings.append(
+                                "Some dataset references in the converted "
+                                "outline were removed because they are not "
+                                "available to you; those dropdown questions "
+                                "were kept without preset options."
+                            )
+                    try:
+                        parse_bulk_markdown_with_collections(markdown)
+                        success = True
+                        suggestions = _suggest_matching_templates(
+                            request.user, markdown
+                        )
+                    except BulkParseError as e:
+                        logger.warning(
+                            "Doc import outline failed parser (survey=%s): %s",
+                            survey.slug,
+                            e,
+                        )
+                        markdown = None
+                        raw_text = text
+                        warnings.append(
+                            "The AI's outline could not be parsed as valid "
+                            "survey structure. Edit the extracted text below "
+                            "into the outline format, or try again."
+                        )
+                else:
+                    raw_text = text
+                    warnings.append(
+                        "The AI did not return an outline. The extracted "
+                        "document text is provided below — you can edit it "
+                        "into the outline format yourself."
+                    )
+            else:
+                raw_text = text
+                warnings.append(
+                    "The AI service did not respond. The extracted document "
+                    "text is provided below — you can edit it into the "
+                    "outline format yourself."
+                )
+        except Exception:
+            logger.exception(
+                "Document import conversion failed (survey=%s)", survey.slug
+            )
+            raw_text = text
+            warnings.append(
+                "Document conversion failed. The extracted document text is "
+                "provided below — you can edit it into the outline format "
+                "yourself."
+            )
+
+        AuditLog.objects.create(
+            actor=request.user,
+            scope=AuditLog.Scope.SURVEY,
+            survey=survey,
+            action=AuditLog.Action.UPDATE,
+            target_user=request.user,
+            metadata={
+                "action": "doc_import_converted",
+                "source": source,
+                "file_ext": file_ext,
+                "file_bytes": file_bytes,
+                "text_chars": len(text),
+                "truncated": truncated,
+                "success": success,
+            },
+        )
+
+        # Hand the result to the browser without reflecting user- or
+        # LLM-derived content through the response body: the payload is
+        # cached server-side (bound to the user) and displayed after a page
+        # reload through the autoescaped template and messages framework.
+        from django.core.cache import cache
+
+        result_id = uuid.uuid4().hex
+        cache.set(
+            f"doc_import_result:{request.user.id}:{result_id}",
+            {
+                "display_markdown": markdown if markdown else (raw_text or ""),
+                "warnings": warnings,
+                "suggestions": suggestions,
+            },
+            timeout=600,
+        )
+        yield f"data: {json.dumps({'done': True, 'success': success, 'next_url': f'?tab=manual&doc_import={result_id}'})}\n\n"
+
+    return StreamingHttpResponse(stream(), content_type="text/event-stream")
+
+
 def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
 
     # Check if LLM is enabled for context
     llm_enabled = settings.LLM_ENABLED
+
+    # Multipart document conversion ("Import from document" tab). Checked
+    # before the JSON-AJAX branch because file uploads are multipart.
+    if request.method == "POST" and (
+        request.FILES.get("document") or request.POST.get("action") == "import_document"
+    ):
+        return _handle_doc_import(request, survey)
 
     # Handle JSON AJAX requests for LLM functionality
     if request.content_type == "application/json":
@@ -9610,7 +9976,7 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
     # Original bulk upload logic continues
     # Get tab parameter from URL to pre-select a tab
     initial_tab = request.GET.get("tab", "manual")  # default to manual
-    if initial_tab not in ["manual", "ai", "history"]:
+    if initial_tab not in ["manual", "ai", "doc", "history"]:
         initial_tab = "manual"
 
     # Check if survey has existing questions and export to markdown
@@ -9629,6 +9995,30 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
         "initial_tab": initial_tab,
         "markdown": existing_markdown,  # Pre-populate with existing questions
     }
+
+    # Hand back a completed document conversion, if any. Results live in
+    # the cache bound to the user for one read and are displayed through
+    # the autoescaped template and messages framework (never reflected
+    # through a raw response body).
+    doc_import_id = request.GET.get("doc_import")
+    if doc_import_id:
+        from django.core.cache import cache
+
+        cache_key = f"doc_import_result:{request.user.id}:{doc_import_id}"
+        payload = cache.get(cache_key)
+        if payload:
+            cache.delete(cache_key)
+            if payload.get("display_markdown"):
+                context["markdown"] = payload["display_markdown"]
+            for warning in payload.get("warnings", []):
+                messages.warning(request, warning)
+            for template_name in payload.get("suggestions", []):
+                messages.info(
+                    request,
+                    "This document looks similar to the "
+                    f"{template_name} template — you can import it from "
+                    "the Question Bank instead (see the Question Builder).",
+                )
 
     # Get or create LLM session if LLM is enabled
     if llm_enabled:

@@ -4,7 +4,7 @@ category: features
 priority: 3
 ---
 
-The AI-assisted survey generator helps you create healthcare surveys through natural conversation with a large language model (LLM). This feature is available alongside the manual markdown import option.
+The AI-assisted survey generator helps you create healthcare surveys through natural conversation with a large language model (LLM). This feature is available alongside the manual markdown import option and the document import option — if you already have the survey written as a Word document or plain text, the [Import from document](/docs/import/#import-from-document) flow may be quicker.
 
 > **Note:** This feature requires configuration of an LLM API endpoint. If you don't see the "AI Assistant" tab in the Import Questions page, the feature may not be enabled for your instance. See [Self-Hosting Configuration](/docs/self-hosting-configuration/) for setup details.
 
@@ -33,9 +33,10 @@ Organisation viewers/members cannot use this feature.
 
 ### 1. Access the AI Assistant
 
-Navigate to your survey's "Import Questions" page. If the feature is enabled, you'll see two tabs:
+Navigate to your survey's "Import Questions" page. If the feature is enabled, you'll see three main tabs:
 
-- **Manual Input** - Traditional markdown import (see [Bulk Survey Import](/docs/import/))
+- **Outline** - Traditional markdown import (see [Bulk Survey Import](/docs/import/))
+- **From document** - AI conversion of an existing Word document or pasted text (see [Import from document](/docs/import/#import-from-document))
 - **AI Assistant** - Conversational survey generation
 
 Click the **AI Assistant** tab to begin.
