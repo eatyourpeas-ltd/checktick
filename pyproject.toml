@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "checktick"
-version = "0.10.8"
+version = "0.10.9"
 description = "Secure, server-rendered survey platform for medical audit and research"
 authors = ["CheckTick Maintainers <simon@eatyourpeas.co.uk>"]
 readme = "README.md"
@@ -54,6 +54,7 @@ click = ">=8.3.3"
 # (CVE-2026-1703, PYSEC-2026-196, PYSEC-2026-2875, PYSEC-2026-2876, PYSEC-2026-3721).
 # Bump via `poetry add pip@latest`.
 pip = ">=26.2,<27"
+ pycountry = "^26.2.16"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.3"

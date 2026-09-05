@@ -25,7 +25,9 @@ These are available to all CheckTick users:
 - **NHS Data Dictionary**: 40+ standardised medical codes (specialties, ethnicities, smoking status, etc.)
 - **RCPCH Organisations**: Hospitals, NHS Trusts, Health Boards, Diabetes Units
 - **SNOMED CT Refsets**: Expert-curated clinical terminology lists (QOF drug lists, paediatric condition sets, and more)
-- **Administrative**: UK counties, London boroughs, NHS regions
+- **Geography & Administration**: Countries (ISO 3166), UK countries, UK ceremonial counties, local authority districts, upper tier local authorities, combined authorities, regions of England, London boroughs, NHS England regions
+
+> For the full list of built-in datasets — including the ONS sources and sync frequencies — see the [Dataset Catalogue](/docs/self-hosting-datasets/#dataset-catalogue) in the self-hosting guide.
 
 ### SNOMED CT Datasets
 
@@ -86,6 +88,7 @@ Filter by where the data comes from:
 - `nhs_dd` - NHS Data Dictionary datasets
 - `rcpch` - Royal College of Paediatrics data
 - `snomed` - SNOMED CT expert-curated refsets
+- `reference` - Geography and administrative reference data (ONS, ISO)
 - `user_created` - Community-created datasets
 
 ### Search

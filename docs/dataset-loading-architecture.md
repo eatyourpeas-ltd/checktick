@@ -17,6 +17,8 @@ survey respondent view** (where datasets power dropdown questions).
 | Category       | `DataSet.options`                             | Live query?                 | Example                     |
 | -------------- | --------------------------------------------- | --------------------------- | --------------------------- |
 | `nhs_dd`       | `{"code": "name", …}` dict                    | No                          | NHS Trusts, ICBs            |
+| `rcpch`        | `{"code": "name", …}` dict                    | No                          | Hospitals, Welsh LHBs       |
+| `reference`    | `{"code": "name", …}` dict                    | No                          | Countries (ISO 3166), UK Counties, Local Authority Districts |
 | `user_created` | List of strings or `{"value", "label"}` dicts | No                          | Bespoke checklist           |
 | `snomed`       | `[]` (always empty)                           | Yes — live from `snomed.db` | QOF Antiepileptic Drug List |
 

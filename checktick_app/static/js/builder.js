@@ -709,6 +709,12 @@
     if (document.getElementById("create-question-form")) {
       initCreateFormToggles();
       bindCancelButton(document.getElementById("create-question-form"));
+      // Re-bind Special Templates handling: section switches replace the form
+      // via a #builder-main swap, which resets the required attribute on the
+      // question-text input. Without re-initialising, submitting from the
+      // Special Templates tab fails native validation on the hidden input
+      // ("An invalid form control with name='text' is not focusable").
+      initTemplateHandling();
     }
     bindEditButtons();
     initConditionForms(target);
@@ -1315,7 +1321,8 @@
   // Template functionality for Special Templates tab
   function initTemplateHandling() {
     const form = document.getElementById("create-question-form");
-    if (!form) return;
+    if (!form || form.dataset.templateHandlingBound) return;
+    form.dataset.templateHandlingBound = "1";
 
     const templateRadios = document.querySelectorAll('input[name="template"]');
     const questionTypeRadios = document.querySelectorAll('input[name="type"]');
