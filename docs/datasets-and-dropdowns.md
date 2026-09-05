@@ -68,6 +68,8 @@ When creating a dropdown question:
 3. Browse or search for the dataset you need
 4. The dropdown will automatically populate with the dataset options
 
+> **Follow-ups with datasets:** per-option follow-up text inputs don't scale to long dataset lists. When options come from a dataset, the builder instead offers a single question-level toggle — **"Offer a follow-up text box after the options"** — which shows one optional free-text box below the answers once the respondent has made a selection. See [Follow-up Text Inputs](/docs/branching-and-repeats/#follow-up-text-inputs).
+
 ## Finding the Right Dataset
 
 ### Filter by Tag

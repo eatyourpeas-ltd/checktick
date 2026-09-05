@@ -17,6 +17,10 @@ from typing import Any
 
 from django.db.models import QuerySet
 
+# Reuses the CSV export's suffix→label mapping for follow-up inputs so both
+# surfaces report follow-up text with the same configured labels.
+from .export_service import _question_followup_labels
+
 # Question types that get a bar-chart distribution.
 CHARTABLE_TYPES = {"mc_single", "mc_multi", "yesno", "likert", "dropdown"}
 # Question types whose answers are free text (collated + word cloud).
@@ -118,6 +122,9 @@ class AnswerDistribution:
     total_responses: int
     options: list[dict[str, Any]] = field(default_factory=list)
     # Each option: {"label": str, "count": int, "percent": float}
+    # Follow-up free text collected for this question (per-option, yes/no, or
+    # the question-level box). Each entry: {"label": str, "text": str}
+    followups: list[dict[str, str]] = field(default_factory=list)
 
     @property
     def options_json(self) -> str:
@@ -336,11 +343,32 @@ def _compute_question_distribution(
     q_id = str(question.id)
     counter: Counter = Counter()
     answered_count = 0
+    followups: list[dict[str, str]] = []
 
     for response in responses.iterator():
         answers = _resolve_response_answers(response, survey_key)
         if answers is None:
             continue
+
+        # Collect follow-up free text (stored under "{qid}_followup") so it is
+        # reported alongside the distribution. Labels come from the question's
+        # follow-up configuration (option index / yes/no / "any" suffix).
+        fu_labels = _question_followup_labels(question)
+        if fu_labels:
+            fu_values = answers.get(f"{q_id}_followup")
+            if isinstance(fu_values, dict):
+                for suffix, text in fu_values.items():
+                    if _is_blank_answer(text):
+                        continue
+                    followups.append(
+                        {
+                            "label": fu_labels.get(str(suffix), str(suffix)),
+                            "text": _truncate_label(
+                                str(text), TEXT_RESPONSE_TRUNCATION
+                            ),
+                        }
+                    )
+
         answer = answers.get(q_id)
 
         if answer is None or answer == "":
@@ -386,6 +414,7 @@ def _compute_question_distribution(
         question_type=question.type,
         total_responses=answered_count,
         options=options,
+        followups=followups,
     )
 
 

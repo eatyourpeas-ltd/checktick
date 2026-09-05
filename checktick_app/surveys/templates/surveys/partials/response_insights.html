@@ -126,6 +126,19 @@ rendering changes
                                 {% endfor %}
                             </div>
                         </div>
+
+                        {% if dist.followups %}
+                          <details class="mt-3">
+                            <summary class="text-sm cursor-pointer font-medium">
+                              {% blocktranslate count fu_count=dist.followups|length %}{{ fu_count }} follow-up response{% plural %}{{ fu_count }} follow-up responses{% endblocktranslate %}
+                            </summary>
+                            <ul class="mt-2 space-y-1">
+                              {% for fu in dist.followups %}
+                                <li class="text-sm"><span class="font-medium">{{ fu.label }}:</span> {{ fu.text }}</li>
+                              {% endfor %}
+                            </ul>
+                          </details>
+                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}

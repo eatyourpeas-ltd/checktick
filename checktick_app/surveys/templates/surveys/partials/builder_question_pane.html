@@ -106,6 +106,10 @@
                     <label class="label">Options (one per line)</label>
                     <textarea name="options" class="textarea textarea-bordered w-full" placeholder="Option A
 Option B" data-options-textarea></textarea>
+                    <div class="mt-2 hidden items-center gap-3" data-startover-container>
+                      <span class="text-xs opacity-60">Options loaded from a dataset — edit them above, or</span>
+                      <button type="button" class="btn btn-xs btn-outline" data-start-over>Start over</button>
+                    </div>
                     <div class="mt-3" data-options-followup-container>
                       <div class="flex items-center justify-between mb-2">
                         <label class="label mb-0">Follow-up text inputs</label>
@@ -114,6 +118,16 @@ Option B" data-options-textarea></textarea>
                       <p class="text-xs opacity-60 mb-2">Enable follow-up text inputs for specific answers (e.g., "If Other, please elaborate")</p>
                       <div id="followup-options-list" class="space-y-2" data-followup-options-list>
                         <!-- Dynamically populated based on options -->
+                      </div>
+                    </div>
+                    <div class="mt-3 hidden" data-question-followup-container>
+                      <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
+                        <input type="checkbox" class="checkbox mt-1" name="question_followup" id="question-followup-toggle" data-question-followup-toggle />
+                        <div class="flex-1">
+                          <label for="question-followup-toggle" class="font-medium cursor-pointer">Offer a follow-up text box after the options</label>
+                          <p class="text-xs opacity-60 mt-1">Shows one optional free-text box below the answers once the respondent has made a selection. Recommended when options come from a dataset.</p>
+                          <input type="text" name="question_followup_label" class="input input-sm input-bordered w-full mt-2" placeholder="e.g. Option not in list? Please add here" />
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -338,6 +338,13 @@
             {% endwith %}
           {% endfor %}
           </div>
+          {% with q|question_followup as qfu %}
+            {% if qfu %}
+              <div class="ml-7 mt-2 hidden" data-followup-any="q_{{ q.id }}">
+                <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_any" placeholder="{{ qfu.label|default:'Please specify' }}" aria-label="{{ qfu.label|default:'Please specify' }}" />
+              </div>
+            {% endif %}
+          {% endwith %}
         {% elif q.type == 'mc_multi' %}
           <div role="group" aria-labelledby="q_label_{{ q.id }}">
           {% for opt in q.options|as_list %}
@@ -358,6 +365,13 @@
             {% endwith %}
           {% endfor %}
           </div>
+          {% with q|question_followup as qfu %}
+            {% if qfu %}
+              <div class="ml-7 mt-2 hidden" data-followup-any="q_{{ q.id }}">
+                <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_any" placeholder="{{ qfu.label|default:'Please specify' }}" aria-label="{{ qfu.label|default:'Please specify' }}" />
+              </div>
+            {% endif %}
+          {% endwith %}
         {% elif q.type == 'dropdown' %}
           {% if q.snomed_unavailable %}
             <div class="alert alert-warning text-sm py-2">
@@ -378,6 +392,13 @@
               </div>
             {% endif %}
           {% endfor %}
+          {% with q|question_followup as qfu %}
+            {% if qfu %}
+              <div class="mt-2 hidden" data-followup-any="q_{{ q.id }}">
+                <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_any" placeholder="{{ qfu.label|default:'Please specify' }}" aria-label="{{ qfu.label|default:'Please specify' }}" />
+              </div>
+            {% endif %}
+          {% endwith %}
           {% endif %}
         {% elif q.type == 'yesno' %}
           <div class="space-y-2">
@@ -741,6 +762,22 @@
 
     Object.entries(savedAnswers).forEach(([questionId, value]) => {
       if (!value) return; // Skip empty values
+
+      // Restore follow-up text inputs (stored under "{qid}_followup" keys)
+      if (questionId.endsWith("_followup") && typeof value === "object") {
+        const qid = questionId.slice(0, -"_followup".length);
+        Object.entries(value).forEach(([suffix, fuValue]) => {
+          const fuInput = document.querySelector(
+            `[name="q_${qid}_followup_${suffix}"]`
+          );
+          if (fuInput && fuValue) {
+            fuInput.value = fuValue;
+            const wrapper = fuInput.closest("[data-followup-field], [data-followup-any]");
+            if (wrapper) wrapper.classList.remove("hidden");
+          }
+        });
+        return;
+      }
 
       // Repeatable questions are stored as a list of per-instance values.
       if (Array.isArray(value) && repeatableSet.has(questionId) && window.SurveyRepeats) {

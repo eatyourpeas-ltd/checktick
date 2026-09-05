@@ -365,6 +365,19 @@
       } else if (typeof form._populateFollowupOptions === "function") {
         form._populateFollowupOptions(optionsField.value, null);
       }
+
+      // Restore question-level follow-up (single box after all options)
+      const qfToggle = form.querySelector("[data-question-followup-toggle]");
+      const qfLabel = form.querySelector('input[name="question_followup_label"]');
+      if (qfToggle) {
+        qfToggle.checked = Boolean(payload.question_followup);
+      }
+      if (qfLabel && payload.question_followup) {
+        qfLabel.value = payload.question_followup.label || "";
+      }
+      if (typeof form._refreshCreateToggles === "function") {
+        form._refreshCreateToggles();
+      }
     }
 
     // Restore follow-up configuration for Yes/No questions
@@ -818,6 +831,16 @@
     const refreshFollowupBtn = form.querySelector(
       "[data-refresh-followup-options]",
     );
+    const questionFollowupContainer = form.querySelector(
+      "[data-question-followup-container]",
+    );
+    const questionFollowupToggle = form.querySelector(
+      "[data-question-followup-toggle]",
+    );
+    const startoverContainer = form.querySelector(
+      "[data-startover-container]",
+    );
+    const startOverBtn = form.querySelector("[data-start-over]");
 
     function refresh() {
       const checked = form.querySelector('input[name="type"]:checked');
@@ -849,9 +872,23 @@
       if (imageOptionsSection)
         imageOptionsSection.classList.toggle("hidden", !isImage);
 
-      // Show/hide follow-up container within options section
+      // Show/hide follow-up container within options section.
+      // When options come from a prefilled dataset, per-option follow-ups
+      // don't scale; offer a single question-level follow-up box instead.
+      const hasDataset = Boolean(
+        optionsTextarea && optionsTextarea.dataset.prefilledDataset,
+      );
       if (followupContainer) {
-        followupContainer.classList.toggle("hidden", !showFollowup);
+        followupContainer.classList.toggle(
+          "hidden",
+          !showFollowup || hasDataset,
+        );
+      }
+      if (questionFollowupContainer) {
+        const qfActive =
+          showFollowup &&
+          (hasDataset || (questionFollowupToggle && questionFollowupToggle.checked));
+        questionFollowupContainer.classList.toggle("hidden", !qfActive);
       }
 
       // Only show prefilled options for dropdown type
@@ -867,6 +904,29 @@
         if (prefilledDataset) {
           prefilledDataset.value = "";
         }
+        if (optionsTextarea) {
+          delete optionsTextarea.dataset.prefilledDataset;
+        }
+      }
+
+      // Once options are populated from a dataset, hide the dataset picker
+      // and offer a "Start over" button instead. Users can edit the loaded
+      // options directly; changing datasets goes through Start over, which
+      // clears the options and brings the picker back.
+      const datasetPopulated = Boolean(
+        isDropdown &&
+          optionsTextarea &&
+          optionsTextarea.value.trim() &&
+          optionsTextarea.dataset.prefilledDataset,
+      );
+      if (prefilledContainer) {
+        prefilledContainer.classList.toggle(
+          "hidden",
+          !isDropdown || datasetPopulated,
+        );
+      }
+      if (startoverContainer) {
+        startoverContainer.classList.toggle("hidden", !datasetPopulated);
       }
 
       if (isLikert && likertSection) {
@@ -929,13 +989,41 @@
       });
     }
 
+    // Start over: clear dataset-loaded options and restore the picker
+    if (startOverBtn && optionsTextarea) {
+      startOverBtn.addEventListener("click", function () {
+        optionsTextarea.value = "";
+        delete optionsTextarea.dataset.prefilledDataset;
+        if (prefilledDataset) {
+          prefilledDataset.value = "";
+        }
+        if (prefilledToggle) {
+          prefilledToggle.checked = false;
+        }
+        if (prefilledSection) {
+          prefilledSection.classList.add("hidden");
+        }
+        populateFollowupOptions("", null);
+        refresh();
+      });
+    }
+
     // Prefilled dataset toggle handler
     if (prefilledToggle && prefilledSection) {
       prefilledToggle.addEventListener("change", function () {
         const isChecked = prefilledToggle.checked;
         prefilledSection.classList.toggle("hidden", !isChecked);
-        if (!isChecked && prefilledDataset) {
-          prefilledDataset.value = "";
+        if (!isChecked) {
+          if (prefilledDataset) {
+            prefilledDataset.value = "";
+          }
+          // Detach the dataset: options already loaded stay in the textarea
+          // as editable manual options, but per-option follow-ups return.
+          // The textarea is deliberately not cleared to avoid data loss.
+          if (optionsTextarea) {
+            delete optionsTextarea.dataset.prefilledDataset;
+          }
+          refresh();
         }
       });
     }
@@ -1030,6 +1118,8 @@
             optionsTextarea.dataset.prefilledDataset = datasetKey;
             // Also refresh follow-up options
             populateFollowupOptions(optionsTextarea.value, null);
+            // Swap per-option follow-ups for the question-level toggle
+            refresh();
             if (typeof window.showToast === "function") {
               window.showToast(
                 `Loaded ${optionLines.length} options`,

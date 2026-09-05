@@ -1234,6 +1234,9 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
                 continue
             value = _collect_question_answer(q, request.POST, repeatable_qids)
             answers[str(q.id)] = value
+            followups = _collect_question_followups(q, request.POST)
+            if followups:
+                answers[f"{q.id}_followup"] = followups
 
         # Validate repeat min_count on submission.
         min_errors = _validate_repeat_min_counts(survey, answers, repeat_config)
@@ -1733,6 +1736,28 @@ def _collect_question_answer(
     return post.getlist(f"q_{q.id}") if is_multi else post.get(f"q_{q.id}")
 
 
+def _collect_question_followups(q: SurveyQuestion, post: QueryDict) -> dict[str, str]:
+    """Collect follow-up text inputs for a question from POST data.
+
+    Follow-up inputs are named ``q_{id}_followup_{suffix}`` where the suffix is
+    the option index (per-option follow-ups), ``yes``/``no`` (yes/no questions),
+    or ``any`` (question-level follow-up offered after all options). Returns a
+    mapping of suffix to non-empty value; empty dict when nothing was entered.
+    """
+    prefix = f"q_{q.id}_followup_"
+    followups: dict[str, str] = {}
+    for key in post.keys():
+        if not key.startswith(prefix):
+            continue
+        suffix = key[len(prefix) :]
+        if not suffix:
+            continue
+        value = (post.get(key) or "").strip()
+        if value:
+            followups[suffix] = value
+    return followups
+
+
 def _validate_repeat_min_counts(
     survey: Survey, answers: dict, repeat_config: dict[int, dict]
 ) -> list[str]:
@@ -2121,6 +2146,25 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
 
             options.append(opt_dict)
 
+        # Question-level follow-up: a single text box offered after all options.
+        # Intended for dataset-backed option lists where per-option follow-ups
+        # don't scale; stored as a marker entry in the options list.
+        if qtype in {
+            SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE,
+            SurveyQuestion.Types.MULTIPLE_CHOICE_MULTI,
+            SurveyQuestion.Types.DROPDOWN,
+        } and data.get("question_followup") in {"on", "true", "1", "yes"}:
+            qfu_label = (data.get("question_followup_label") or "").strip()
+            if not qfu_label:
+                qfu_label = "Please specify"
+            options.append(
+                {
+                    "type": "question_followup",
+                    "enabled": True,
+                    "label": qfu_label,
+                }
+            )
+
         # Prefilled dataset handling is now done via dataset_key return value
         # Options remain as list for compatibility
     elif qtype == SurveyQuestion.Types.YESNO:
@@ -2336,6 +2380,7 @@ def _serialize_question_for_builder(
         values: list[str] = []
         option_followup_config: dict[str, dict[str, Any]] = {}
         prefilled_dataset: str | None = None
+        question_followup_cfg: dict[str, Any] | None = None
 
         # Check if options is a prefilled dataset dict
         if isinstance(options, dict) and options.get("type") == "prefilled":
@@ -2343,6 +2388,12 @@ def _serialize_question_for_builder(
             option_values = options.get("values", [])
             if isinstance(option_values, list):
                 for idx, opt in enumerate(option_values):
+                    if isinstance(opt, dict) and opt.get("type") == "question_followup":
+                        if opt.get("enabled"):
+                            question_followup_cfg = {
+                                "label": opt.get("label", "Please specify")
+                            }
+                        continue
                     if isinstance(opt, str):
                         val = opt.strip()
                         if val:
@@ -2362,6 +2413,12 @@ def _serialize_question_for_builder(
                             }
         elif isinstance(options, list):
             for idx, opt in enumerate(options):
+                if isinstance(opt, dict) and opt.get("type") == "question_followup":
+                    if opt.get("enabled"):
+                        question_followup_cfg = {
+                            "label": opt.get("label", "Please specify")
+                        }
+                    continue
                 if isinstance(opt, str):
                     val = opt.strip()
                     if val:
@@ -2381,6 +2438,8 @@ def _serialize_question_for_builder(
         payload["options"] = values
         if option_followup_config:
             payload["followup_config"] = option_followup_config
+        if question_followup_cfg:
+            payload["question_followup"] = question_followup_cfg
         # Include dataset key if linked to a dataset
         if question.dataset:
             payload["prefilled_dataset"] = question.dataset.key
@@ -5053,6 +5112,9 @@ def _handle_participant_submission(
             # Only save non-empty answers for draft
             if value or not is_draft:
                 answers[str(q.id)] = value
+            followups = _collect_question_followups(q, request.POST)
+            if followups:
+                answers[f"{q.id}_followup"] = followups
 
         # If this is a draft save, update progress and return JSON
         if is_draft and is_ajax:
@@ -9809,6 +9871,12 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             ]:
                 if question.options:
                     for option in question.options:
+                        if (
+                            isinstance(option, dict)
+                            and option.get("type") == "question_followup"
+                        ):
+                            # Question-level follow-up marker; not an option
+                            continue
                         # Options can have 'text', 'label', or 'value' keys
                         option_text = (
                             option.get("text")
@@ -11179,6 +11247,12 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
         ]:
             if question.options:
                 for option in question.options:
+                    if (
+                        isinstance(option, dict)
+                        and option.get("type") == "question_followup"
+                    ):
+                        # Question-level follow-up marker; not an option
+                        continue
                     # Options can have 'text', 'label', or 'value' keys
                     option_text = (
                         option.get("text")

@@ -229,6 +229,23 @@ Use the `+` symbol on an indented line after an option:
   + Please specify where
 ```
 
+### Question-level Follow-ups (Dataset-backed Options)
+
+When a dropdown's options come from an imported dataset (for example an NHS specialty list with hundreds of entries), enabling a follow-up for individual options doesn't scale. For these questions the builder offers a single question-level toggle instead: **"Offer a follow-up text box after the options"**.
+
+When enabled:
+
+- One optional free-text box (with a customisable label, default "Please specify") is shown below the options once the respondent has made a selection.
+- It applies regardless of which option was chosen — ideal for "tell us more" or "anything not listed?" prompts.
+- The per-option follow-up list is hidden in the builder while dataset options are loaded.
+
+### Viewing Follow-up Responses
+
+Follow-up text is stored alongside the question's answer and is reported wherever the answer is:
+
+- **CSV export** — includes a `"{question text} (follow-up)"` column with each entry rendered as `Label: text`.
+- **Dashboard insights and summary report** — chartable questions show a collapsible "follow-up responses" list under the chart, with each response labelled using its configured follow-up label.
+
 ## Best Practices
 
 ### Branching Logic

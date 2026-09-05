@@ -70,11 +70,25 @@ def int_range(start: int, end: int):
         return range(0)
 
 
+QUESTION_FOLLOWUP_TYPE = "question_followup"
+
+
+def _is_question_followup_marker(opt) -> bool:
+    """Return True if an options-list entry is the question-level follow-up marker.
+
+    Dataset-backed dropdowns can carry a single catch-all follow-up text box
+    offered after all options, stored as a marker entry in the options list
+    rather than per-option ``followup_text`` config.
+    """
+    return isinstance(opt, dict) and opt.get("type") == QUESTION_FOLLOWUP_TYPE
+
+
 @register.filter(name="as_list")
 def as_list(value):
     """Normalize a value to a list for template iteration.
 
-    - If it's already a list, return as-is
+    - If it's already a list, return as-is (minus question-level follow-up
+      marker entries, which are configuration, not renderable options)
     - If it's a dict and has a 'values' key, return that
     - If it's a JSON string representing a list or dict, parse accordingly
     - Otherwise, return an empty list
@@ -92,7 +106,7 @@ def as_list(value):
                     return first["options"]
                 if "categories" in first and isinstance(first["categories"], list):
                     return first["categories"]
-            return value
+            return _strip_followup_markers(value)
         if isinstance(value, dict):
             # Direct wrappers
             if "labels" in value and isinstance(value["labels"], list):
@@ -123,7 +137,7 @@ def as_list(value):
                             first["categories"], list
                         ):
                             return first["categories"]
-                    return parsed
+                    return _strip_followup_markers(parsed)
                 if isinstance(parsed, dict):
                     if "labels" in parsed and isinstance(parsed["labels"], list):
                         return parsed["labels"]
@@ -141,6 +155,39 @@ def as_list(value):
     except Exception:
         return []
     return []
+
+
+def _strip_followup_markers(options):
+    """Drop question-level follow-up marker entries from an options list."""
+    if not isinstance(options, list):
+        return options
+    return [opt for opt in options if not _is_question_followup_marker(opt)]
+
+
+def _find_question_followup(options):
+    """Return the question-level follow-up config dict, or None."""
+    if isinstance(options, list):
+        for opt in options:
+            if _is_question_followup_marker(opt) and opt.get("enabled"):
+                return opt
+    return None
+
+
+@register.filter(name="question_followup")
+def question_followup(question):
+    """Return the question-level follow-up config for a question, or None.
+
+    Used for dataset-backed choice questions where a single follow-up text
+    box is offered after all options instead of per-option follow-ups.
+    """
+    try:
+        if not hasattr(question, "type") or not hasattr(question, "options"):
+            return None
+        if question.type not in ("mc_single", "mc_multi", "dropdown"):
+            return None
+        return _find_question_followup(question.options)
+    except Exception:
+        return None
 
 
 @register.filter(name="option_label")
@@ -232,6 +279,15 @@ def has_followup(question):
         if isinstance(options, list):
             for opt in options:
                 if isinstance(opt, dict):
+                    if _is_question_followup_marker(opt):
+                        if opt.get("enabled"):
+                            followups.append(
+                                (
+                                    "Any selected option",
+                                    opt.get("label", "Please specify"),
+                                )
+                            )
+                        continue
                     # Check for followup_text config
                     if (
                         "followup_text" in opt
