@@ -2306,6 +2306,24 @@ def _question_text_format(question) -> str | None:
     return fmt if fmt in {"free", "number", "date", "time", "datetime"} else "free"
 
 
+def _safe_participant_redirect(request: HttpRequest, survey: Survey):
+    """Redirect back to the current participant-facing URL.
+
+    ``request.path_info`` is server-resolved (never user-supplied) so it is
+    safe in practice, but request-derived redirect targets are still flagged
+    by CodeQL's open-redirect query — validate with Django's
+    ``url_has_allowed_host_and_scheme`` and fall back to the named take URL.
+    """
+    safe_path = request.path_info or request.path
+    if url_has_allowed_host_and_scheme(
+        safe_path,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(safe_path)
+    return redirect("surveys:take", slug=survey.slug)
+
+
 def _validate_text_format_answers(survey: Survey, answers: dict) -> list[str]:
     """Validate submitted answers for date/time/datetime text questions.
 
@@ -5284,19 +5302,16 @@ def _handle_participant_submission(
         if min_errors:
             for msg in min_errors:
                 messages.error(request, msg)
-            # Redirect back to the same participant-facing URL. request.path
-            # is the server-resolved path (not user-supplied query data), so
-            # this is safe from open-redirect.
-            safe_path = request.path_info or request.path
-            return redirect(safe_path)
+            # Redirect back to the same participant-facing URL (validated;
+            # see _safe_participant_redirect).
+            return _safe_participant_redirect(request, survey)
 
         # Validate date/time/datetime answers (parseable + within range).
         datetime_errors = _validate_text_format_answers(survey, answers)
         if datetime_errors:
             for msg in datetime_errors:
                 messages.error(request, msg)
-            safe_path = request.path_info or request.path
-            return redirect(safe_path)
+            return _safe_participant_redirect(request, survey)
 
         # Professional details (non-encrypted)
         _, professional_fields, professional_ods = _get_professional_group_and_fields(
