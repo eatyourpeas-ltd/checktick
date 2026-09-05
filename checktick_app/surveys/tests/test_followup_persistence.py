@@ -314,6 +314,124 @@ class TestFollowupPersistence:
 
 
 # ---------------------------------------------------------------------------
+# Reporting analytics
+# ---------------------------------------------------------------------------
+
+
+class TestFollowupAnalytics:
+    def _make_question_with_responses(self, survey, answers_list):
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            text="Select specialty",
+            type=SurveyQuestion.Types.DROPDOWN,
+            order=0,
+            options=[
+                {"label": "Cardiology", "value": "Cardiology"},
+                {
+                    "label": "Other",
+                    "value": "Other",
+                    "followup_text": {"enabled": True, "label": "Which one?"},
+                },
+                dict(QF_MARKER),
+            ],
+        )
+        for answers in answers_list:
+            SurveyResponse.objects.create(survey=survey, answers=answers)
+        return q
+
+    def test_distribution_includes_followup_text_with_labels(self):
+        from checktick_app.surveys.services.response_analytics import (
+            compute_response_analytics,
+        )
+
+        owner = _owner("fuowner13")
+        survey = _make_survey(owner, slug="followup-survey-13")
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            text="Select specialty",
+            type=SurveyQuestion.Types.DROPDOWN,
+            order=0,
+            options=[
+                {"label": "Cardiology", "value": "Cardiology"},
+                {
+                    "label": "Other",
+                    "value": "Other",
+                    "followup_text": {"enabled": True, "label": "Which one?"},
+                },
+                dict(QF_MARKER),
+            ],
+        )
+        SurveyResponse.objects.create(
+            survey=survey,
+            answers={
+                str(q.id): "Other",
+                f"{q.id}_followup": {
+                    "1": "Allergy specialist",
+                    "any": "Also paediatric cardio",
+                },
+            },
+        )
+        SurveyResponse.objects.create(survey=survey, answers={str(q.id): "Cardiology"})
+        analytics = compute_response_analytics(survey)
+        dist = next(d for d in analytics.distributions if d.question_id == q.id)
+        assert dist.followups == [
+            {"label": "Which one?", "text": "Allergy specialist"},
+            {"label": "Please specify", "text": "Also paediatric cardio"},
+        ]
+
+    def test_distribution_has_no_followups_when_not_configured(self):
+        from checktick_app.surveys.services.response_analytics import (
+            compute_response_analytics,
+        )
+
+        owner = _owner("fuowner14")
+        survey = _make_survey(owner, slug="followup-survey-14")
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            text="Plain dropdown",
+            type=SurveyQuestion.Types.DROPDOWN,
+            order=0,
+            options=[{"label": "A", "value": "A"}],
+        )
+        SurveyResponse.objects.create(
+            survey=survey,
+            answers={str(q.id): "A", f"{q.id}_followup": {"any": "stray"}},
+        )
+        analytics = compute_response_analytics(survey)
+        dist = next(d for d in analytics.distributions if d.question_id == q.id)
+        assert dist.followups == []
+
+    def test_yesno_followup_labels_in_analytics(self):
+        from checktick_app.surveys.services.response_analytics import (
+            compute_response_analytics,
+        )
+
+        owner = _owner("fuowner15")
+        survey = _make_survey(owner, slug="followup-survey-15")
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            text="Do you have allergies?",
+            type=SurveyQuestion.Types.YESNO,
+            order=0,
+            options=[
+                {
+                    "label": "Yes",
+                    "value": "yes",
+                    "followup_text": {"enabled": True, "label": "List allergies"},
+                },
+                {"label": "No", "value": "no"},
+            ],
+        )
+        SurveyResponse.objects.create(
+            survey=survey,
+            answers={str(q.id): "yes", f"{q.id}_followup": {"yes": "Penicillin"}},
+        )
+        analytics = compute_response_analytics(survey)
+        dist = next(d for d in analytics.distributions if d.question_id == q.id)
+        assert dist.followups == [{"label": "List allergies", "text": "Penicillin"}]
+
+
+# ---------------------------------------------------------------------------
 # CSV export
 # ---------------------------------------------------------------------------
 
