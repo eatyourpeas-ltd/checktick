@@ -363,15 +363,19 @@ def branding(request):
         except Exception:
             version_val = None
 
-    # Get CSS hash from file or environment for cache-busting
+    # Get CSS hash from file or environment for cache-busting.
+    # Production images bake the hash into /app/staticfiles/css_hash.txt at
+    # build time so the container start command doesn't need to compute it.
     css_hash = os.environ.get("CSS_HASH")
     if not css_hash:
-        try:
-            hash_file = Path("/tmp/css_hash.txt")
-            if hash_file.exists():
-                css_hash = hash_file.read_text().strip()
-        except Exception:
-            pass
+        for hash_path in ("/tmp/css_hash.txt", "/app/staticfiles/css_hash.txt"):
+            try:
+                hash_file = Path(hash_path)
+                if hash_file.exists():
+                    css_hash = hash_file.read_text().strip()
+                    break
+            except Exception:
+                pass
 
     build = {
         "version": version_val or "dev",

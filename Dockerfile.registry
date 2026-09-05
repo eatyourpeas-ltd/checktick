@@ -61,18 +61,31 @@ RUN poetry install --only main --no-interaction --no-ansi
 # Build CSS assets at image build time (not at runtime, to avoid OOM kills)
 RUN npm run build:css
 
+# Collect static files and bake the hashed stylesheet into the image so the
+# container's start command is just gunicorn (minimises deploy downtime).
+# DATABASE_URL is only parsed by settings (never connected to during
+# collectstatic), so a dummy value satisfies settings import at build time.
+RUN DATABASE_URL=postgres://build@localhost/dummy SECRET_KEY=build-secret \
+    python manage.py collectstatic --noinput --clear \
+    && CSS_HASH=$(md5sum /app/staticfiles/build/styles.css | cut -d' ' -f1) \
+    && cp /app/staticfiles/build/styles.css "/app/staticfiles/build/styles.${CSS_HASH}.css" \
+    && echo "${CSS_HASH}" > /app/staticfiles/css_hash.txt
+
 # Create non-root user for security
 RUN groupadd -r checktick && useradd -r -g checktick checktick && \
-    mkdir -p /app/media /app/staticfiles && \
+    mkdir -p /app/media && \
     chown -R checktick:checktick /app
 USER checktick
 
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/api/health || exit 1
+# Health check (matches the core/urls.py healthz endpoint)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -sf http://localhost:8000/healthz || exit 1
 
-# Default command
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py createcachetable && python manage.py sync_branding && python manage.py sync_nhs_dd_datasets && python manage.py collectstatic --noinput --clear && CSS_HASH=$(md5sum /app/staticfiles/build/styles.css | cut -d' ' -f1) && cp /app/staticfiles/build/styles.css /app/staticfiles/build/styles.$CSS_HASH.css && echo $CSS_HASH > /tmp/css_hash.txt && gunicorn checktick_app.wsgi:application --bind 0.0.0.0:8000 --workers 4"]
+# Start command is gunicorn only: migrations and data syncs run in the
+# predeploy job, static files are baked into the image at build time.
+# Falls back to computing the hash at runtime if the baked file is absent
+# (e.g. running a pre-bake image with an overridden start command).
+CMD ["sh", "-c", "if [ -f /app/staticfiles/css_hash.txt ]; then CSS_HASH=$(cat /app/staticfiles/css_hash.txt); elif [ -f /app/staticfiles/build/styles.css ]; then CSS_HASH=$(md5sum /app/staticfiles/build/styles.css | cut -d' ' -f1); fi; export CSS_HASH; exec gunicorn checktick_app.wsgi:application --bind 0.0.0.0:8000 --workers 4"]
