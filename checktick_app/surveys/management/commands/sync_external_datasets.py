@@ -32,6 +32,7 @@ import requests
 
 from checktick_app.surveys.external_datasets import (
     AVAILABLE_DATASETS,
+    ONS_DATASETS,
     STATIC_DATASETS,
     DatasetFetchError,
     _dataset_requires_api_key,
@@ -40,7 +41,6 @@ from checktick_app.surveys.external_datasets import (
     _get_endpoint_for_dataset,
     _transform_response_to_options,
     get_static_dataset_options,
-    ONS_DATASETS,
 )
 from checktick_app.surveys.models import DataSet
 
