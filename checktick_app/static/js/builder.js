@@ -473,6 +473,12 @@
       if (dkFollowupLabel && config.dont_know) {
         dkFollowupLabel.value = config.dont_know.label || "";
       }
+
+      // Sync follow-up wording and Don't-know visibility with the
+      // programmatically set values (no input events fire for these).
+      if (typeof form._refreshYesnoLabels === "function") {
+        form._refreshYesnoLabels();
+      }
     }
 
     // Restore image upload UI for image choice questions
@@ -1029,6 +1035,45 @@
           likertCat.classList.toggle("hidden", mode !== "categories");
         if (likertNum) likertNum.classList.toggle("hidden", mode !== "number");
       }
+
+      refreshYesnoLabels();
+    }
+
+    // Keep the Yes/No follow-up wording in step with the custom answer
+    // labels, and only offer the "Don't know" follow-up when that answer
+    // is enabled.
+    function refreshYesnoLabels() {
+      const defaults = { yes: "Yes", no: "No", dont_know: "Don't know" };
+      const labels = {};
+      form
+        .querySelectorAll("[data-yesno-label-input]")
+        .forEach((input) => {
+          const key = input.dataset.yesnoLabelInput;
+          labels[key] = input.value.trim() || defaults[key];
+        });
+      form
+        .querySelectorAll("[data-yesno-followup-label]")
+        .forEach((labelEl) => {
+          const key = labelEl.dataset.yesnoFollowupLabel;
+          if (labels[key]) {
+            labelEl.textContent = `Enable follow-up for \u201C${labels[key]}\u201D`;
+          }
+        });
+
+      const dkToggle = form.querySelector("[data-yesno-include-dontknow]");
+      const dkLabelInput = form.querySelector(
+        'input[name="yesno_dontknow_label"]',
+      );
+      const dkFollowupBlock = form.querySelector(
+        "[data-yesno-dontknow-followup-block]",
+      );
+      const includeDk = Boolean(dkToggle && dkToggle.checked);
+      if (dkLabelInput) {
+        dkLabelInput.disabled = !includeDk;
+      }
+      if (dkFollowupBlock) {
+        dkFollowupBlock.classList.toggle("hidden", !includeDk);
+      }
     }
 
     // Function to populate follow-up options based on textarea content
@@ -1238,6 +1283,18 @@
     // Expose refresh and populate functions so we can call them externally
     form._refreshCreateToggles = refresh;
     form._populateFollowupOptions = populateFollowupOptions;
+    form._refreshYesnoLabels = refreshYesnoLabels;
+
+    // Live-update the follow-up wording as labels are typed
+    form.querySelectorAll("[data-yesno-label-input]").forEach((input) => {
+      input.addEventListener("input", refreshYesnoLabels);
+    });
+    const dkToggleForEvents = form.querySelector(
+      "[data-yesno-include-dontknow]",
+    );
+    if (dkToggleForEvents) {
+      dkToggleForEvents.addEventListener("change", refreshYesnoLabels);
+    }
 
     // Image upload handling functions
     let currentQuestionId = null;

@@ -190,43 +190,43 @@ Option B" data-options-textarea></textarea>
                     <div class="grid grid-cols-2 gap-3">
                       <div>
                         <label class="label text-xs" for="yesno-yes-label">Positive label</label>
-                        <input type="text" name="yesno_yes_label" id="yesno-yes-label" class="input input-sm input-bordered w-full" placeholder="Yes" />
+                        <input type="text" name="yesno_yes_label" id="yesno-yes-label" class="input input-sm input-bordered w-full" placeholder="Yes" data-yesno-label-input="yes" />
                       </div>
                       <div>
                         <label class="label text-xs" for="yesno-no-label">Negative label</label>
-                        <input type="text" name="yesno_no_label" id="yesno-no-label" class="input input-sm input-bordered w-full" placeholder="No" />
+                        <input type="text" name="yesno_no_label" id="yesno-no-label" class="input input-sm input-bordered w-full" placeholder="No" data-yesno-label-input="no" />
                       </div>
                     </div>
 
                     <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg mt-3">
-                      <input type="checkbox" class="checkbox mt-1" name="yesno_include_dontknow" id="yesno-include-dontknow" />
+                      <input type="checkbox" class="checkbox mt-1" name="yesno_include_dontknow" id="yesno-include-dontknow" data-yesno-include-dontknow />
                       <div class="flex-1">
                         <label for="yesno-include-dontknow" class="font-medium cursor-pointer">Include a third &ldquo;Don't know&rdquo; answer</label>
-                        <input type="text" name="yesno_dontknow_label" id="yesno-dontknow-label" class="input input-sm input-bordered w-full mt-2" placeholder="Don't know" aria-label="Custom label for the third answer" />
+                        <input type="text" name="yesno_dontknow_label" id="yesno-dontknow-label" class="input input-sm input-bordered w-full mt-2" placeholder="Don't know" aria-label="Custom label for the third answer" data-yesno-label-input="dont_know" disabled />
                       </div>
                     </div>
 
                     <label class="label mt-3">Follow-up text inputs</label>
-                    <p class="text-xs opacity-60 mb-2">Enable follow-up text inputs for Yes or No answers</p>
+                    <p class="text-xs opacity-60 mb-2">Enable follow-up text inputs for the answers</p>
                     <div class="space-y-3">
                       <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
                         <input type="checkbox" class="checkbox mt-1" name="yesno_yes_followup" id="yesno-yes-followup" />
                         <div class="flex-1">
-                          <label for="yesno-yes-followup" class="font-medium cursor-pointer">Enable follow-up for "Yes"</label>
+                          <label for="yesno-yes-followup" class="font-medium cursor-pointer" data-yesno-followup-label="yes">Enable follow-up for &ldquo;Yes&rdquo;</label>
                           <input type="text" name="yesno_yes_followup_label" class="input input-sm input-bordered w-full mt-2" placeholder="Please elaborate..." />
                         </div>
                       </div>
                       <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
                         <input type="checkbox" class="checkbox mt-1" name="yesno_no_followup" id="yesno-no-followup" />
                         <div class="flex-1">
-                          <label for="yesno-no-followup" class="font-medium cursor-pointer">Enable follow-up for "No"</label>
+                          <label for="yesno-no-followup" class="font-medium cursor-pointer" data-yesno-followup-label="no">Enable follow-up for &ldquo;No&rdquo;</label>
                           <input type="text" name="yesno_no_followup_label" class="input input-sm input-bordered w-full mt-2" placeholder="Please elaborate..." />
                         </div>
                       </div>
-                      <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
+                      <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg hidden" data-yesno-dontknow-followup-block>
                         <input type="checkbox" class="checkbox mt-1" name="yesno_dont_know_followup" id="yesno-dontknow-followup" />
                         <div class="flex-1">
-                          <label for="yesno-dontknow-followup" class="font-medium cursor-pointer">Enable follow-up for &ldquo;Don't know&rdquo;</label>
+                          <label for="yesno-dontknow-followup" class="font-medium cursor-pointer" data-yesno-followup-label="dont_know">Enable follow-up for &ldquo;Don't know&rdquo;</label>
                           <input type="text" name="yesno_dont_know_followup_label" class="input input-sm input-bordered w-full mt-2" placeholder="Please elaborate..." />
                         </div>
                       </div>
