@@ -10065,6 +10065,19 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                     if g.get("ref"):
                         group_ref_map[g["ref"]] = grp
                     for q in g["questions"]:
+                        if q["final_type"] == "template_patient":
+                            # Mirror the builder UI's FREE-tier restriction on
+                            # collecting patient data.
+                            from checktick_app.core.tier_limits import (
+                                check_patient_data_permission,
+                            )
+
+                            can_collect, reason = check_patient_data_permission(
+                                request.user
+                            )
+                            if not can_collect:
+                                raise BulkParseError(reason)
+
                         # Look up dataset if specified in markdown (with access control)
                         dataset = None
                         dataset_key = q.get("dataset_key")

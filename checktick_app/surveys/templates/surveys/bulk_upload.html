@@ -84,6 +84,8 @@
                   <li><code>orderable</code> — {% trans "orderable list" %}</li>
                   <li><code>yesno</code> — {% trans "yes/no" %}</li>
                   <li><code>image</code> — {% trans "image choice" %}</li>
+                  <li><code>template_patient</code> — {% trans "patient details template (encrypted); field selection can be adjusted in the builder after import" %}</li>
+                  <li><code>template_professional</code> — {% trans "professional details template; add <code>address_lookup: true</code> to enable address lookup, adjust field selection in the builder after import" %}</li>
                   <li><code>likert categories</code> — {% trans "categories listed with <code>-</code>" %}</li>
                   <li><code>likert number</code> — {% trans "provide <code>min</code>/<code>max</code> and optional labels" %}</li>
                 </ul>
@@ -158,6 +160,20 @@ dataset: medical_specialties</code></pre>
                   <li>{% trans "Use <code>&gt;</code> before REPEAT and the section heading to indicate one level of nesting." %}</li>
                   <li>{% trans "Nesting is limited to one level (Parent → Child) by design." %}</li>
                   <li>{% trans "Sections without REPEAT are normal, non-collection sections." %}</li>
+                </ul>
+              </div>
+              <div>
+                <h3 class="font-semibold">{% trans "Optional: Template questions" %}</h3>
+                <p class="text-sm text-base-content/80">{% trans "Template questions bundle a standard set of fields (demographics or professional details) into one question. Field selection can be adjusted in the builder after import." %}</p>
+                <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>## Patient details
+(template_patient)
+
+## Professional details
+(template_professional)
+address_lookup: true</code></pre>
+                <ul class="list-disc pl-5 space-y-1 text-sm">
+                  <li><code>template_patient</code> — {% trans "patient details template (encrypted); requires a paid subscription" %}</li>
+                  <li><code>template_professional</code> — {% trans "professional details template; add <code>address_lookup: true</code> to enable postcode address lookup" %}</li>
                 </ul>
               </div>
               <div>

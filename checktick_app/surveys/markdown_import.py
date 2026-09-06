@@ -415,7 +415,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                             )
                 else:
                     m = re.match(
-                        r"^(min|max|left|right|dataset)\s*:\s*(.*)$",
+                        r"^(min|max|left|right|dataset|address_lookup)\s*:\s*(.*)$",
                         line,
                         re.IGNORECASE,
                     )
@@ -500,6 +500,34 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
             elif t in {"image", "image choice", "image-choice"}:
                 q["final_type"] = "image"
                 q["final_options"] = _convert_options_to_dicts(q["options"])
+            elif t in {
+                "template_patient",
+                "patient details",
+                "patient_details",
+                "patient template",
+            }:
+                q["final_type"] = "template_patient"
+                # Field selection/defaults are filled in by the view normalizer
+                # (_normalize_patient_template_options) at render time.
+                q["final_options"] = {"template": "patient_details_encrypted"}
+            elif t in {
+                "template_professional",
+                "professional details",
+                "professional_details",
+                "professional template",
+            }:
+                q["final_type"] = "template_professional"
+                # Field selection/defaults are filled in by the view normalizer
+                # (_normalize_professional_template_options) at render time.
+                options: Dict[str, Any] = {"template": "professional_details"}
+                if str(q["kv"].get("address_lookup", "")).strip().lower() in {
+                    "true",
+                    "yes",
+                    "on",
+                    "1",
+                }:
+                    options["address_lookup"] = True
+                q["final_options"] = options
             elif t.startswith("likert"):
                 if "categories" in t:
                     if not q["options"]:
