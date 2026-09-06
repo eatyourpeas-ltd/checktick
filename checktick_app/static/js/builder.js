@@ -2,7 +2,6 @@
   let currentEditingRow = null;
   let currentEditingCard = null;
   let currentEditButton = null;
-  let builderEditorCard = null;
   let editButtonsDelegated = false;
 
   function csrfToken() {
@@ -203,8 +202,9 @@
     if (currentEditingCard) {
       currentEditingCard.classList.remove("is-active");
     }
-    if (builderEditorCard) {
-      builderEditorCard.classList.remove("is-active");
+    const editorCard = getEditorCard(form);
+    if (editorCard) {
+      editorCard.classList.remove("is-active");
     }
     if (currentEditingRow && currentEditingRow.parentElement) {
       currentEditingRow.classList.remove("is-editing");
@@ -551,9 +551,7 @@
       ? nextRow.querySelector("[data-question-card]")
       : null;
 
-    if (!builderEditorCard) {
-      builderEditorCard = form.closest("[data-builder-editor-card]") || null;
-    }
+    const editorCard = getEditorCard(form);
 
     if (currentEditButton && currentEditButton !== button) {
       currentEditButton.classList.remove("is-active");
@@ -578,8 +576,8 @@
     if (currentEditingCard) {
       currentEditingCard.classList.add("is-active");
     }
-    if (builderEditorCard) {
-      builderEditorCard.classList.add("is-active");
+    if (editorCard) {
+      editorCard.classList.add("is-active");
     }
 
     updateFormModeUI(form, "edit");
@@ -833,19 +831,32 @@
     }
   });
 
+  // Resolve the editor card from the live DOM on every use. HTMX section
+  // and group swaps replace the editor card element, so caching a node
+  // reference goes stale and click containment checks fail (making any
+  // click inside the editor exit edit mode).
+  function getEditorCard(form) {
+    return form.closest("[data-builder-editor-card]") || null;
+  }
+
   document.addEventListener("pointerdown", function (evt) {
     const form = document.getElementById("create-question-form");
     if (!form || !form.dataset.editingQuestionId) return;
     const target = evt.target;
     if (!target) return;
-    const activeCard = currentEditingCard;
-    const editorCard =
-      builderEditorCard || form.closest("[data-builder-editor-card]") || null;
+    const editingId = form.dataset.editingQuestionId;
+    // Re-resolve the protected areas from the live DOM: HTMX swaps can
+    // replace the question row and editor card after edit mode began.
+    const activeCard =
+      document.getElementById("question-row-" + editingId) ||
+      currentEditingCard;
+    const editorCard = getEditorCard(form);
+    const editButton = currentEditButton;
     if (
       (activeCard && (activeCard === target || activeCard.contains(target))) ||
       (editorCard && (editorCard === target || editorCard.contains(target))) ||
-      (currentEditButton &&
-        (currentEditButton === target || currentEditButton.contains(target)))
+      (editButton &&
+        (editButton === target || editButton.contains(target)))
     ) {
       return;
     }
