@@ -185,7 +185,20 @@ Option B" data-options-textarea></textarea>
                   </div>
 
                   <div data-section="yesno-followup" class="mt-3 hidden">
-                    <label class="label">Follow-up text inputs</label>
+                    <label class="label">Button labels</label>
+                    <p class="text-xs opacity-60 mb-2">Customise the two answer labels. Leave blank to use "Yes" and "No". The saved values stay yes/no, so branching and exports are unaffected.</p>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label class="label text-xs" for="yesno-yes-label">Positive label</label>
+                        <input type="text" name="yesno_yes_label" id="yesno-yes-label" class="input input-sm input-bordered w-full" placeholder="Yes" />
+                      </div>
+                      <div>
+                        <label class="label text-xs" for="yesno-no-label">Negative label</label>
+                        <input type="text" name="yesno_no_label" id="yesno-no-label" class="input input-sm input-bordered w-full" placeholder="No" />
+                      </div>
+                    </div>
+
+                    <label class="label mt-3">Follow-up text inputs</label>
                     <p class="text-xs opacity-60 mb-2">Enable follow-up text inputs for Yes or No answers</p>
                     <div class="space-y-3">
                       <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">

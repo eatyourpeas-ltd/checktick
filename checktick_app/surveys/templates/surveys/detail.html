@@ -407,11 +407,13 @@
           {% endwith %}
           {% endif %}
         {% elif q.type == 'yesno' %}
+          {% trans "Yes" as yesno_yes_default %}
+          {% trans "No" as yesno_no_default %}
           <div class="space-y-2">
             <select class="select select-bordered" name="q_{{ q.id }}" id="q_{{ q.id }}" data-yesno-select="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true" required{% endif %}>
               <option value="">{% trans "-- Select --" %}</option>
-              <option value="yes" data-followup-target="q_{{ q.id }}_yes">{% trans "Yes" %}</option>
-              <option value="no" data-followup-target="q_{{ q.id }}_no">{% trans "No" %}</option>
+              <option value="yes" data-followup-target="q_{{ q.id }}_yes">{{ q.options|as_list|label_for_value:'yes'|default:yesno_yes_default }}</option>
+              <option value="no" data-followup-target="q_{{ q.id }}_no">{{ q.options|as_list|label_for_value:'no'|default:yesno_no_default }}</option>
             </select>
             {% with q.options|as_list as yesno_opts %}
               {% for opt in yesno_opts %}

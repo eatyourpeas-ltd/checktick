@@ -401,8 +401,19 @@
     }
 
     // Restore follow-up configuration for Yes/No questions
-    if (payload.type === "yesno" && payload.yesno_followup_config) {
-      const config = payload.yesno_followup_config;
+    if (payload.type === "yesno") {
+      // Restore custom display labels (fall back to Yes/No)
+      const yesLabelInput = form.querySelector('input[name="yesno_yes_label"]');
+      const noLabelInput = form.querySelector('input[name="yesno_no_label"]');
+      const labels = payload.yesno_labels || {};
+      if (yesLabelInput) {
+        yesLabelInput.value = labels.yes || "";
+      }
+      if (noLabelInput) {
+        noLabelInput.value = labels.no || "";
+      }
+
+      const config = payload.yesno_followup_config || {};
 
       // Yes followup
       const yesCheckbox = form.querySelector(

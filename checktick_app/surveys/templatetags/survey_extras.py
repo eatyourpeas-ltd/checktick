@@ -157,6 +157,29 @@ def as_list(value):
     return []
 
 
+@register.filter(name="label_for_value")
+def label_for_value(options, value):
+    """Return the display label of the option with the given value.
+
+    Used for yes/no questions where the semantic values ("yes"/"no") can
+    carry custom display labels (e.g. "Agree", "No, thank you"). Returns
+    "" when not found so the template's ``|default`` filter can supply the
+    translated fallback.
+    """
+    try:
+        if isinstance(options, str):
+            options = json.loads(options)
+        if isinstance(options, list):
+            for opt in options:
+                if isinstance(opt, dict) and str(opt.get("value")) == str(value):
+                    label = str(opt.get("label") or "").strip()
+                    if label:
+                        return label
+    except Exception:
+        pass
+    return ""
+
+
 def _strip_followup_markers(options):
     """Drop question-level follow-up marker entries from an options list."""
     if not isinstance(options, list):

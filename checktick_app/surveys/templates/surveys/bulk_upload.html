@@ -82,7 +82,7 @@
                   <li><code>mc_multi</code> — {% trans "multiple choice (multi)" %}</li>
                   <li><code>dropdown</code> — {% trans "select menu; add a <code>dataset:</code> line to pre-populate from a <a href='/surveys/datasets/' class='link'>Dataset</a>" %}</li>
                   <li><code>orderable</code> — {% trans "orderable list" %}</li>
-                  <li><code>yesno</code> — {% trans "yes/no" %}</li>
+                  <li><code>yesno</code> — {% trans "yes/no; override the two answer labels with two <code>-</code> option lines (values stay yes/no)" %}</li>
                   <li><code>image</code> — {% trans "image choice" %}</li>
                   <li><code>template_patient</code> — {% trans "patient details template (encrypted); field selection can be adjusted in the builder after import" %}</li>
                   <li><code>template_professional</code> — {% trans "professional details template; add <code>address_lookup: true</code> to enable address lookup, adjust field selection in the builder after import" %}</li>
@@ -124,7 +124,7 @@ dataset: medical_specialties</code></pre>
                   <li>{% trans "Follow-up lines must start with <code>+</code> and be indented (at least 2 spaces)" %}</li>
                   <li>{% trans "The text after <code>+</code> becomes the label for the follow-up input field" %}</li>
                   <li>{% trans "Works with <code>mc_single</code>, <code>mc_multi</code>, <code>dropdown</code>, <code>orderable</code>, and <code>yesno</code>" %}</li>
-                  <li>{% trans "For <code>yesno</code>, provide exactly 2 options (Yes/No) with optional follow-ups" %}</li>
+                  <li>{% trans "For <code>yesno</code>, indented <code>+</code> lines attach follow-ups to the answers; plain <code>-</code> lines (max two) override the display labels, e.g. <code>- Agree</code>, <code>- Disagree</code>" %}</li>
                   <li>{% trans "Not all options need follow-ups—only add them where needed" %}</li>
                 </ul>
               </div>

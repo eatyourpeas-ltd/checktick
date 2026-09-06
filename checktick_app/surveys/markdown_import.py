@@ -491,11 +491,32 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                 if len(q["options"]) >= 1:
                     opt = q["options"][0]
                     if isinstance(opt, tuple):
-                        yes_option["followup_text"] = {"enabled": True, "label": opt[1]}
+                        label = str(opt[0]).strip()
+                        if label:
+                            yes_option["label"] = label
+                        yes_option["followup_text"] = {
+                            "enabled": True,
+                            "label": opt[1],
+                        }
+                    else:
+                        # Plain option line overrides the default display label
+                        label = str(opt).strip()
+                        if label:
+                            yes_option["label"] = label
                 if len(q["options"]) >= 2:
                     opt = q["options"][1]
                     if isinstance(opt, tuple):
-                        no_option["followup_text"] = {"enabled": True, "label": opt[1]}
+                        label = str(opt[0]).strip()
+                        if label:
+                            no_option["label"] = label
+                        no_option["followup_text"] = {
+                            "enabled": True,
+                            "label": opt[1],
+                        }
+                    else:
+                        label = str(opt).strip()
+                        if label:
+                            no_option["label"] = label
                 q["final_options"] = [yes_option, no_option]
             elif t in {"image", "image choice", "image-choice"}:
                 q["final_type"] = "image"

@@ -462,15 +462,28 @@ def _tally_answer(counter: Counter, question, answer) -> None:
         else:
             counter[str(answer)] += 1
     elif question.type == "yesno":
-        # Normalize yes/no
+        # Normalize yes/no, using the question's custom display labels if set
+        labels = _yesno_labels(question)
         val = str(answer).lower()
         if val in ("yes", "true", "1"):
-            counter["Yes"] += 1
+            counter[labels["yes"]] += 1
         else:
-            counter["No"] += 1
+            counter[labels["no"]] += 1
     else:
         # Single value
         counter[str(answer)] += 1
+
+
+def _yesno_labels(question) -> dict[str, str]:
+    """Return display labels for a yes/no question's two semantic values."""
+    labels = {"yes": "Yes", "no": "No"}
+    if isinstance(question.options, list):
+        for opt in question.options:
+            if isinstance(opt, dict) and opt.get("value") in labels:
+                label = str(opt.get("label") or "").strip()
+                if label:
+                    labels[opt["value"]] = label
+    return labels
 
 
 def _truncate_label(text: str, max_len: int) -> str:
