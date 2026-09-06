@@ -2186,8 +2186,30 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
         # Prefilled dataset handling is now done via dataset_key return value
         # Options remain as list for compatibility
     elif qtype == SurveyQuestion.Types.YESNO:
-        # For Yes/No questions, check if either option should have follow-up text
-        options = [{"label": "Yes", "value": "yes"}, {"label": "No", "value": "no"}]
+        # For Yes/No questions, allow custom display labels (e.g. "Agree",
+        # "No, thank you"). The stored value stays "yes"/"no" so branching,
+        # exports, and summaries are unaffected.
+        options = [
+            {
+                "label": (data.get("yesno_yes_label") or "").strip() or "Yes",
+                "value": "yes",
+            },
+            {
+                "label": (data.get("yesno_no_label") or "").strip() or "No",
+                "value": "no",
+            },
+        ]
+
+        # Optional third answer ("Don't know") with its own display label.
+        # The stored value is "dont_know" so branching/exports stay value-based.
+        if data.get("yesno_include_dontknow") in {"on", "true", "1", "yes"}:
+            options.append(
+                {
+                    "label": (data.get("yesno_dontknow_label") or "").strip()
+                    or "Don't know",
+                    "value": "dont_know",
+                }
+            )
 
         for idx, opt in enumerate(options):
             followup_key = f"yesno_{opt['value']}_followup"
@@ -2648,7 +2670,7 @@ def _serialize_question_for_builder(
                 if isinstance(opt, dict):
                     value = opt.get("value")
                     if (
-                        value in ("yes", "no")
+                        value in ("yes", "no", "dont_know")
                         and opt.get("followup_text")
                         and opt["followup_text"].get("enabled")
                     ):
@@ -2659,6 +2681,20 @@ def _serialize_question_for_builder(
                         }
         if yesno_followup_config:
             payload["yesno_followup_config"] = yesno_followup_config
+        # Expose the display labels so the builder can prefill them.
+        yesno_labels: dict[str, str] = {}
+        if isinstance(options, list):
+            for opt in options:
+                if isinstance(opt, dict) and opt.get("value") in (
+                    "yes",
+                    "no",
+                    "dont_know",
+                ):
+                    label = str(opt.get("label") or "").strip()
+                    if label:
+                        yesno_labels[str(opt["value"])] = label
+        if yesno_labels:
+            payload["yesno_labels"] = yesno_labels
     elif question.type == SurveyQuestion.Types.LIKERT:
         if (
             isinstance(options, list)
@@ -10065,6 +10101,19 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                     if g.get("ref"):
                         group_ref_map[g["ref"]] = grp
                     for q in g["questions"]:
+                        if q["final_type"] == "template_patient":
+                            # Mirror the builder UI's FREE-tier restriction on
+                            # collecting patient data.
+                            from checktick_app.core.tier_limits import (
+                                check_patient_data_permission,
+                            )
+
+                            can_collect, reason = check_patient_data_permission(
+                                request.user
+                            )
+                            if not can_collect:
+                                raise BulkParseError(reason)
+
                         # Look up dataset if specified in markdown (with access control)
                         dataset = None
                         dataset_key = q.get("dataset_key")

@@ -103,7 +103,7 @@ rendering changes
                                         class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden"
                                     >
                                         <div
-                                            class="h-full rounded-full transition-all duration-300 {% if dist.question_type == 'yesno' %} {% if option.label == 'Yes' %}bg-success{% else %}bg-error{% endif %} {% else %} bg-primary {% endif %}"
+                                            class="h-full rounded-full transition-all duration-300 {% if dist.question_type == 'yesno' %} {% if option.value == 'yes' or option.label == 'Yes' %}bg-success{% elif option.value == 'dont_know' %}bg-warning{% elif option.value == 'no' or option.label == 'No' %}bg-error{% else %}bg-neutral{% endif %} {% else %} bg-primary {% endif %}"
                                             style="width: {{ option.percent }}%"
                                             role="progressbar"
                                             aria-valuenow="{{ option.percent }}"

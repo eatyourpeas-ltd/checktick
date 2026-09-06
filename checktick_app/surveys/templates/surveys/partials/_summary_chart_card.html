@@ -32,14 +32,15 @@ Expected context:
         <div class="flex items-center gap-2 text-sm">
           <span class="w-32 truncate flex-shrink-0" title="{{ option.label }}">
             {% if dist.question_type == 'yesno' %}
-              {% if option.label == 'Yes' %}<span class="text-success" aria-hidden="true">✓</span>
+              {% if option.value == 'yes' or option.label == 'Yes' %}<span class="text-success" aria-hidden="true">✓</span>
+              {% elif option.value == 'dont_know' %}<span class="opacity-60" aria-hidden="true">?</span>
               {% else %}<span class="text-error" aria-hidden="true">✗</span>{% endif %}
             {% endif %}
             {{ option.label }}
           </span>
           <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
             <div
-              class="h-full rounded-full {% if dist.question_type == 'yesno' %}{% if option.label == 'Yes' %}bg-success{% else %}bg-error{% endif %}{% else %}bg-primary{% endif %}"
+              class="h-full rounded-full {% if dist.question_type == 'yesno' %}{% if option.value == 'yes' or option.label == 'Yes' %}bg-success{% elif option.value == 'dont_know' %}bg-warning{% elif option.value == 'no' or option.label == 'No' %}bg-error{% else %}bg-neutral{% endif %}{% else %}bg-primary{% endif %}"
               style="width: {{ option.percent }}%"
               role="progressbar"
               aria-valuenow="{{ option.percent }}"

@@ -426,17 +426,31 @@ def _compute_question_distribution(
     if answered_count == 0:
         return None
 
-    # Build options list, sorted by count descending
+    # Build options list, sorted by count descending. Keep the untruncated
+    # label until after value tagging so long custom labels don't break the
+    # label -> value mapping.
     options = []
     for label, count in counter.most_common():
         percent = (count / answered_count * 100) if answered_count > 0 else 0
         options.append(
             {
-                "label": _truncate_label(label, 50),
+                "label": label,
                 "count": count,
                 "percent": round(percent, 1),
             }
         )
+
+    # For yes/no questions, tag each option with its semantic value so the
+    # chart templates can colour bars consistently even when the display
+    # labels are customised (e.g. "Agree" instead of "Yes").
+    if question.type == "yesno":
+        labels = _yesno_labels(question)
+        value_by_label = {v: k for k, v in labels.items()}
+        for option in options:
+            option["value"] = value_by_label.get(option["label"], "")
+
+    for option in options:
+        option["label"] = _truncate_label(option["label"], 50)
 
     # For likert/dropdown, try to preserve original order from question options
     if question.type in ("likert", "dropdown", "mc_single"):
@@ -462,15 +476,31 @@ def _tally_answer(counter: Counter, question, answer) -> None:
         else:
             counter[str(answer)] += 1
     elif question.type == "yesno":
-        # Normalize yes/no
+        # Normalize yes/no/dont_know, using the question's custom display
+        # labels if set
+        labels = _yesno_labels(question)
         val = str(answer).lower()
         if val in ("yes", "true", "1"):
-            counter["Yes"] += 1
+            counter[labels["yes"]] += 1
+        elif val in ("dont_know", "don't know", "dontknow", "dk"):
+            counter[labels["dont_know"]] += 1
         else:
-            counter["No"] += 1
+            counter[labels["no"]] += 1
     else:
         # Single value
         counter[str(answer)] += 1
+
+
+def _yesno_labels(question) -> dict[str, str]:
+    """Return display labels for a yes/no question's semantic values."""
+    labels = {"yes": "Yes", "no": "No", "dont_know": "Don't know"}
+    if isinstance(question.options, list):
+        for opt in question.options:
+            if isinstance(opt, dict) and opt.get("value") in labels:
+                label = str(opt.get("label") or "").strip()
+                if label:
+                    labels[opt["value"]] = label
+    return labels
 
 
 def _truncate_label(text: str, max_len: int) -> str:

@@ -2,7 +2,6 @@
   let currentEditingRow = null;
   let currentEditingCard = null;
   let currentEditButton = null;
-  let builderEditorCard = null;
   let editButtonsDelegated = false;
 
   function csrfToken() {
@@ -203,8 +202,9 @@
     if (currentEditingCard) {
       currentEditingCard.classList.remove("is-active");
     }
-    if (builderEditorCard) {
-      builderEditorCard.classList.remove("is-active");
+    const editorCard = getEditorCard(form);
+    if (editorCard) {
+      editorCard.classList.remove("is-active");
     }
     if (currentEditingRow && currentEditingRow.parentElement) {
       currentEditingRow.classList.remove("is-editing");
@@ -401,8 +401,38 @@
     }
 
     // Restore follow-up configuration for Yes/No questions
-    if (payload.type === "yesno" && payload.yesno_followup_config) {
-      const config = payload.yesno_followup_config;
+    if (payload.type === "yesno") {
+      // Restore custom display labels (fall back to Yes/No)
+      const yesLabelInput = form.querySelector('input[name="yesno_yes_label"]');
+      const noLabelInput = form.querySelector('input[name="yesno_no_label"]');
+      const labels = payload.yesno_labels || {};
+      if (yesLabelInput) {
+        yesLabelInput.value = labels.yes || "";
+      }
+      if (noLabelInput) {
+        noLabelInput.value = labels.no || "";
+      }
+
+      // Restore the optional "Don't know" third answer
+      const dkCheckbox = form.querySelector(
+        'input[name="yesno_include_dontknow"]',
+      );
+      const dkLabelInput = form.querySelector(
+        'input[name="yesno_dontknow_label"]',
+      );
+      if (dkCheckbox) {
+        dkCheckbox.checked = Boolean(labels.dont_know);
+      }
+      if (dkLabelInput) {
+        // Prefill the custom label only when it differs from the default,
+        // so the placeholder shows through for uncustomised questions.
+        dkLabelInput.value =
+          labels.dont_know && labels.dont_know !== "Don't know"
+            ? labels.dont_know
+            : "";
+      }
+
+      const config = payload.yesno_followup_config || {};
 
       // Yes followup
       const yesCheckbox = form.querySelector(
@@ -428,6 +458,26 @@
       }
       if (noLabel && config.no) {
         noLabel.value = config.no.label || "";
+      }
+
+      // Don't know followup
+      const dkFollowupCheckbox = form.querySelector(
+        'input[name="yesno_dont_know_followup"]',
+      );
+      const dkFollowupLabel = form.querySelector(
+        'input[name="yesno_dont_know_followup_label"]',
+      );
+      if (dkFollowupCheckbox && config.dont_know) {
+        dkFollowupCheckbox.checked = config.dont_know.enabled || false;
+      }
+      if (dkFollowupLabel && config.dont_know) {
+        dkFollowupLabel.value = config.dont_know.label || "";
+      }
+
+      // Sync follow-up wording and Don't-know visibility with the
+      // programmatically set values (no input events fire for these).
+      if (typeof form._refreshYesnoLabels === "function") {
+        form._refreshYesnoLabels();
       }
     }
 
@@ -501,9 +551,7 @@
       ? nextRow.querySelector("[data-question-card]")
       : null;
 
-    if (!builderEditorCard) {
-      builderEditorCard = form.closest("[data-builder-editor-card]") || null;
-    }
+    const editorCard = getEditorCard(form);
 
     if (currentEditButton && currentEditButton !== button) {
       currentEditButton.classList.remove("is-active");
@@ -528,8 +576,8 @@
     if (currentEditingCard) {
       currentEditingCard.classList.add("is-active");
     }
-    if (builderEditorCard) {
-      builderEditorCard.classList.add("is-active");
+    if (editorCard) {
+      editorCard.classList.add("is-active");
     }
 
     updateFormModeUI(form, "edit");
@@ -783,19 +831,32 @@
     }
   });
 
+  // Resolve the editor card from the live DOM on every use. HTMX section
+  // and group swaps replace the editor card element, so caching a node
+  // reference goes stale and click containment checks fail (making any
+  // click inside the editor exit edit mode).
+  function getEditorCard(form) {
+    return form.closest("[data-builder-editor-card]") || null;
+  }
+
   document.addEventListener("pointerdown", function (evt) {
     const form = document.getElementById("create-question-form");
     if (!form || !form.dataset.editingQuestionId) return;
     const target = evt.target;
     if (!target) return;
-    const activeCard = currentEditingCard;
-    const editorCard =
-      builderEditorCard || form.closest("[data-builder-editor-card]") || null;
+    const editingId = form.dataset.editingQuestionId;
+    // Re-resolve the protected areas from the live DOM: HTMX swaps can
+    // replace the question row and editor card after edit mode began.
+    const activeCard =
+      document.getElementById("question-row-" + editingId) ||
+      currentEditingCard;
+    const editorCard = getEditorCard(form);
+    const editButton = currentEditButton;
     if (
       (activeCard && (activeCard === target || activeCard.contains(target))) ||
       (editorCard && (editorCard === target || editorCard.contains(target))) ||
-      (currentEditButton &&
-        (currentEditButton === target || currentEditButton.contains(target)))
+      (editButton &&
+        (editButton === target || editButton.contains(target)))
     ) {
       return;
     }
@@ -984,6 +1045,45 @@
         if (likertCat)
           likertCat.classList.toggle("hidden", mode !== "categories");
         if (likertNum) likertNum.classList.toggle("hidden", mode !== "number");
+      }
+
+      refreshYesnoLabels();
+    }
+
+    // Keep the Yes/No follow-up wording in step with the custom answer
+    // labels, and only offer the "Don't know" follow-up when that answer
+    // is enabled.
+    function refreshYesnoLabels() {
+      const defaults = { yes: "Yes", no: "No", dont_know: "Don't know" };
+      const labels = {};
+      form
+        .querySelectorAll("[data-yesno-label-input]")
+        .forEach((input) => {
+          const key = input.dataset.yesnoLabelInput;
+          labels[key] = input.value.trim() || defaults[key];
+        });
+      form
+        .querySelectorAll("[data-yesno-followup-label]")
+        .forEach((labelEl) => {
+          const key = labelEl.dataset.yesnoFollowupLabel;
+          if (labels[key]) {
+            labelEl.textContent = `Enable follow-up for \u201C${labels[key]}\u201D`;
+          }
+        });
+
+      const dkToggle = form.querySelector("[data-yesno-include-dontknow]");
+      const dkLabelInput = form.querySelector(
+        'input[name="yesno_dontknow_label"]',
+      );
+      const dkFollowupBlock = form.querySelector(
+        "[data-yesno-dontknow-followup-block]",
+      );
+      const includeDk = Boolean(dkToggle && dkToggle.checked);
+      if (dkLabelInput) {
+        dkLabelInput.disabled = !includeDk;
+      }
+      if (dkFollowupBlock) {
+        dkFollowupBlock.classList.toggle("hidden", !includeDk);
       }
     }
 
@@ -1194,6 +1294,18 @@
     // Expose refresh and populate functions so we can call them externally
     form._refreshCreateToggles = refresh;
     form._populateFollowupOptions = populateFollowupOptions;
+    form._refreshYesnoLabels = refreshYesnoLabels;
+
+    // Live-update the follow-up wording as labels are typed
+    form.querySelectorAll("[data-yesno-label-input]").forEach((input) => {
+      input.addEventListener("input", refreshYesnoLabels);
+    });
+    const dkToggleForEvents = form.querySelector(
+      "[data-yesno-include-dontknow]",
+    );
+    if (dkToggleForEvents) {
+      dkToggleForEvents.addEventListener("change", refreshYesnoLabels);
+    }
 
     // Image upload handling functions
     let currentQuestionId = null;

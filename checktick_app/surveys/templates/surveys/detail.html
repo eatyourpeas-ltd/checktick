@@ -407,11 +407,19 @@
           {% endwith %}
           {% endif %}
         {% elif q.type == 'yesno' %}
+          {% trans "Yes" as yesno_yes_default %}
+          {% trans "No" as yesno_no_default %}
+          {% trans "Don't know" as yesno_dontknow_default %}
           <div class="space-y-2">
             <select class="select select-bordered" name="q_{{ q.id }}" id="q_{{ q.id }}" data-yesno-select="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true" required{% endif %}>
               <option value="">{% trans "-- Select --" %}</option>
-              <option value="yes" data-followup-target="q_{{ q.id }}_yes">{% trans "Yes" %}</option>
-              <option value="no" data-followup-target="q_{{ q.id }}_no">{% trans "No" %}</option>
+              <option value="yes" data-followup-target="q_{{ q.id }}_yes">{{ q.options|as_list|label_for_value:'yes'|default:yesno_yes_default }}</option>
+              <option value="no" data-followup-target="q_{{ q.id }}_no">{{ q.options|as_list|label_for_value:'no'|default:yesno_no_default }}</option>
+              {% for opt in q.options|as_list %}
+                {% if opt.value == 'dont_know' %}
+                  <option value="dont_know" data-followup-target="q_{{ q.id }}_dont_know">{{ opt.label|default:yesno_dontknow_default }}</option>
+                {% endif %}
+              {% endfor %}
             </select>
             {% with q.options|as_list as yesno_opts %}
               {% for opt in yesno_opts %}
@@ -422,6 +430,10 @@
                 {% elif opt.value == "no" and opt.followup_text and opt.followup_text.enabled %}
                   <div class="mt-2 hidden" data-followup-field="q_{{ q.id }}_no">
                     <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_no" placeholder="{{ opt.followup_text.label|default:'Please elaborate' }}" />
+                  </div>
+                {% elif opt.value == "dont_know" and opt.followup_text and opt.followup_text.enabled %}
+                  <div class="mt-2 hidden" data-followup-field="q_{{ q.id }}_dont_know">
+                    <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_dont_know" placeholder="{{ opt.followup_text.label|default:'Please elaborate' }}" />
                   </div>
                 {% endif %}
               {% endfor %}

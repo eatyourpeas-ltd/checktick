@@ -678,6 +678,8 @@ def test_group_builder_still_works_after_extraction(auth_client, owner):
         visibility=Survey.Visibility.AUTHENTICATED,
     )
     group = create_default_section(survey, owner)
+    group.name = "Audit Details"
+    group.save()
     SurveyQuestion.objects.create(
         survey=survey,
         group=group,
@@ -690,8 +692,11 @@ def test_group_builder_still_works_after_extraction(auth_client, owner):
     )
     assert resp.status_code == 200
     assert (
-        b"Questions in this group" in resp.content
-    ), "group_builder should still render the question list after partial extraction."
+        b"Audit Details" in resp.content
+    ), "The question pane heading should inherit the section name."
+    assert (
+        b"Questions in this group" not in resp.content
+    ), "The legacy 'group' wording should no longer be used."
     assert (
         b"create-question-form" in resp.content
     ), "group_builder should still render the question-create form after partial extraction."

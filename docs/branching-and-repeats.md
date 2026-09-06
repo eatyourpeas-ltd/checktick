@@ -60,6 +60,13 @@ If you mark a question hidden by default but add no `Show` condition for it, the
 4. Choose:
    - **Which previous question** to check
    - **What answer** triggers the condition
+   - **The target type** — Question or Section. The Action options stay
+     disabled until you pick one, because the valid actions depend on the
+     target: `Show`/`Hide` only apply to question targets, while Section
+     targets support `Jump to` and `End survey` only
+   - **The target** — the question or section the condition acts on. The
+     target's hidden-by-default toggle determines whether `Show` or `Hide`
+     is offered
    - **What action** to take
 5. Save the condition
 

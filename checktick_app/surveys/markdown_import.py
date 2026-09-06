@@ -415,7 +415,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                             )
                 else:
                     m = re.match(
-                        r"^(min|max|left|right|dataset)\s*:\s*(.*)$",
+                        r"^(min|max|left|right|dataset|address_lookup)\s*:\s*(.*)$",
                         line,
                         re.IGNORECASE,
                     )
@@ -487,19 +487,92 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                 # YesNo can also have follow-up text
                 yes_option: Dict[str, Any] = {"label": "Yes", "value": "yes"}
                 no_option: Dict[str, Any] = {"label": "No", "value": "no"}
-                # Check if options were provided for yes/no (unusual but supported)
+                # Plain option lines override the default display labels:
+                # line 1 = yes label, line 2 = no label, line 3 = the optional
+                # "Don't know" answer's label. Tuples carry follow-up labels.
                 if len(q["options"]) >= 1:
                     opt = q["options"][0]
                     if isinstance(opt, tuple):
-                        yes_option["followup_text"] = {"enabled": True, "label": opt[1]}
+                        label = str(opt[0]).strip()
+                        if label:
+                            yes_option["label"] = label
+                        yes_option["followup_text"] = {
+                            "enabled": True,
+                            "label": opt[1],
+                        }
+                    else:
+                        # Plain option line overrides the default display label
+                        label = str(opt).strip()
+                        if label:
+                            yes_option["label"] = label
                 if len(q["options"]) >= 2:
                     opt = q["options"][1]
                     if isinstance(opt, tuple):
-                        no_option["followup_text"] = {"enabled": True, "label": opt[1]}
+                        label = str(opt[0]).strip()
+                        if label:
+                            no_option["label"] = label
+                        no_option["followup_text"] = {
+                            "enabled": True,
+                            "label": opt[1],
+                        }
+                    else:
+                        label = str(opt).strip()
+                        if label:
+                            no_option["label"] = label
                 q["final_options"] = [yes_option, no_option]
+                # A third option line adds a "Don't know" answer (value
+                # dont_know). A plain line overrides its default label; a
+                # tuple (from a '+' follow-up line) also enables a follow-up.
+                if len(q["options"]) >= 3:
+                    opt = q["options"][2]
+                    dontknow_option: Dict[str, Any] = {
+                        "label": "Don't know",
+                        "value": "dont_know",
+                    }
+                    if isinstance(opt, tuple):
+                        label = str(opt[0]).strip()
+                        if label:
+                            dontknow_option["label"] = label
+                        dontknow_option["followup_text"] = {
+                            "enabled": True,
+                            "label": opt[1],
+                        }
+                    else:
+                        label = str(opt).strip()
+                        if label:
+                            dontknow_option["label"] = label
+                    q["final_options"].append(dontknow_option)
             elif t in {"image", "image choice", "image-choice"}:
                 q["final_type"] = "image"
                 q["final_options"] = _convert_options_to_dicts(q["options"])
+            elif t in {
+                "template_patient",
+                "patient details",
+                "patient_details",
+                "patient template",
+            }:
+                q["final_type"] = "template_patient"
+                # Field selection/defaults are filled in by the view normalizer
+                # (_normalize_patient_template_options) at render time.
+                q["final_options"] = {"template": "patient_details_encrypted"}
+            elif t in {
+                "template_professional",
+                "professional details",
+                "professional_details",
+                "professional template",
+            }:
+                q["final_type"] = "template_professional"
+                # Field selection/defaults are filled in by the view normalizer
+                # (_normalize_professional_template_options) at render time.
+                options: Dict[str, Any] = {"template": "professional_details"}
+                if str(q["kv"].get("address_lookup", "")).strip().lower() in {
+                    "true",
+                    "yes",
+                    "on",
+                    "1",
+                }:
+                    options["address_lookup"] = True
+                q["final_options"] = options
             elif t.startswith("likert"):
                 if "categories" in t:
                     if not q["options"]:

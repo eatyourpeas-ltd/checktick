@@ -17,7 +17,7 @@
           <div class="card-body">
             <h2 class="card-title inline-flex items-center gap-2 text-base-content">
               {% include "components/icons/checktick_question.html" with classes="w-5 h-5 text-base-content" %}
-              <span>{% trans "Questions in this group" %}</span>
+              <span>{% if group.name %}{{ group.name }}{% else %}{% trans "Questions in this section" %}{% endif %}</span>
             </h2>
             <div id="questions-list">
               <ul id="questions-draggable" class="flex flex-col gap-3 w-full" data-reorder-url="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/reorder">
@@ -185,21 +185,49 @@ Option B" data-options-textarea></textarea>
                   </div>
 
                   <div data-section="yesno-followup" class="mt-3 hidden">
-                    <label class="label">Follow-up text inputs</label>
-                    <p class="text-xs opacity-60 mb-2">Enable follow-up text inputs for Yes or No answers</p>
+                    <label class="label">Button labels</label>
+                    <p class="text-xs opacity-60 mb-2">Customise the two answer labels. Leave blank to use "Yes" and "No". The saved values stay yes/no, so branching and exports are unaffected.</p>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label class="label text-xs" for="yesno-yes-label">Positive label</label>
+                        <input type="text" name="yesno_yes_label" id="yesno-yes-label" class="input input-sm input-bordered w-full" placeholder="Yes" data-yesno-label-input="yes" />
+                      </div>
+                      <div>
+                        <label class="label text-xs" for="yesno-no-label">Negative label</label>
+                        <input type="text" name="yesno_no_label" id="yesno-no-label" class="input input-sm input-bordered w-full" placeholder="No" data-yesno-label-input="no" />
+                      </div>
+                    </div>
+
+                    <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg mt-3">
+                      <input type="checkbox" class="checkbox mt-1" name="yesno_include_dontknow" id="yesno-include-dontknow" data-yesno-include-dontknow />
+                      <div class="flex-1">
+                        <label for="yesno-include-dontknow" class="font-medium cursor-pointer">Include a third &ldquo;Don't know&rdquo; answer</label>
+                        <input type="text" name="yesno_dontknow_label" id="yesno-dontknow-label" class="input input-sm input-bordered w-full mt-2" placeholder="Don't know" aria-label="Custom label for the third answer" data-yesno-label-input="dont_know" disabled />
+                      </div>
+                    </div>
+
+                    <label class="label mt-3">Follow-up text inputs</label>
+                    <p class="text-xs opacity-60 mb-2">Enable follow-up text inputs for the answers</p>
                     <div class="space-y-3">
                       <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
                         <input type="checkbox" class="checkbox mt-1" name="yesno_yes_followup" id="yesno-yes-followup" />
                         <div class="flex-1">
-                          <label for="yesno-yes-followup" class="font-medium cursor-pointer">Enable follow-up for "Yes"</label>
+                          <label for="yesno-yes-followup" class="font-medium cursor-pointer" data-yesno-followup-label="yes">Enable follow-up for &ldquo;Yes&rdquo;</label>
                           <input type="text" name="yesno_yes_followup_label" class="input input-sm input-bordered w-full mt-2" placeholder="Please elaborate..." />
                         </div>
                       </div>
                       <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
                         <input type="checkbox" class="checkbox mt-1" name="yesno_no_followup" id="yesno-no-followup" />
                         <div class="flex-1">
-                          <label for="yesno-no-followup" class="font-medium cursor-pointer">Enable follow-up for "No"</label>
+                          <label for="yesno-no-followup" class="font-medium cursor-pointer" data-yesno-followup-label="no">Enable follow-up for &ldquo;No&rdquo;</label>
                           <input type="text" name="yesno_no_followup_label" class="input input-sm input-bordered w-full mt-2" placeholder="Please elaborate..." />
+                        </div>
+                      </div>
+                      <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg hidden" data-yesno-dontknow-followup-block>
+                        <input type="checkbox" class="checkbox mt-1" name="yesno_dont_know_followup" id="yesno-dontknow-followup" />
+                        <div class="flex-1">
+                          <label for="yesno-dontknow-followup" class="font-medium cursor-pointer" data-yesno-followup-label="dont_know">Enable follow-up for &ldquo;Don't know&rdquo;</label>
+                          <input type="text" name="yesno_dont_know_followup_label" class="input input-sm input-bordered w-full mt-2" placeholder="Please elaborate..." />
                         </div>
                       </div>
                     </div>
