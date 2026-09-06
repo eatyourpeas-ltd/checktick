@@ -17,7 +17,7 @@
           <div class="card-body">
             <h2 class="card-title inline-flex items-center gap-2 text-base-content">
               {% include "components/icons/checktick_question.html" with classes="w-5 h-5 text-base-content" %}
-              <span>{% trans "Questions in this group" %}</span>
+              <span>{% if group.name %}{{ group.name }}{% else %}{% trans "Questions in this section" %}{% endif %}</span>
             </h2>
             <div id="questions-list">
               <ul id="questions-draggable" class="flex flex-col gap-3 w-full" data-reorder-url="/surveys/{{ survey.slug }}/builder/groups/{{ group.id }}/questions/reorder">
