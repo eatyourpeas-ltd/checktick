@@ -198,6 +198,14 @@ Option B" data-options-textarea></textarea>
                       </div>
                     </div>
 
+                    <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg mt-3">
+                      <input type="checkbox" class="checkbox mt-1" name="yesno_include_dontknow" id="yesno-include-dontknow" />
+                      <div class="flex-1">
+                        <label for="yesno-include-dontknow" class="font-medium cursor-pointer">Include a third &ldquo;Don't know&rdquo; answer</label>
+                        <input type="text" name="yesno_dontknow_label" id="yesno-dontknow-label" class="input input-sm input-bordered w-full mt-2" placeholder="Don't know" aria-label="Custom label for the third answer" />
+                      </div>
+                    </div>
+
                     <label class="label mt-3">Follow-up text inputs</label>
                     <p class="text-xs opacity-60 mb-2">Enable follow-up text inputs for Yes or No answers</p>
                     <div class="space-y-3">
@@ -213,6 +221,13 @@ Option B" data-options-textarea></textarea>
                         <div class="flex-1">
                           <label for="yesno-no-followup" class="font-medium cursor-pointer">Enable follow-up for "No"</label>
                           <input type="text" name="yesno_no_followup_label" class="input input-sm input-bordered w-full mt-2" placeholder="Please elaborate..." />
+                        </div>
+                      </div>
+                      <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
+                        <input type="checkbox" class="checkbox mt-1" name="yesno_dont_know_followup" id="yesno-dontknow-followup" />
+                        <div class="flex-1">
+                          <label for="yesno-dontknow-followup" class="font-medium cursor-pointer">Enable follow-up for &ldquo;Don't know&rdquo;</label>
+                          <input type="text" name="yesno_dont_know_followup_label" class="input input-sm input-bordered w-full mt-2" placeholder="Please elaborate..." />
                         </div>
                       </div>
                     </div>

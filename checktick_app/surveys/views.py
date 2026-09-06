@@ -2200,6 +2200,17 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
             },
         ]
 
+        # Optional third answer ("Don't know") with its own display label.
+        # The stored value is "dont_know" so branching/exports stay value-based.
+        if data.get("yesno_include_dontknow") in {"on", "true", "1", "yes"}:
+            options.append(
+                {
+                    "label": (data.get("yesno_dontknow_label") or "").strip()
+                    or "Don't know",
+                    "value": "dont_know",
+                }
+            )
+
         for idx, opt in enumerate(options):
             followup_key = f"yesno_{opt['value']}_followup"
             followup_label_key = f"yesno_{opt['value']}_followup_label"
@@ -2659,7 +2670,7 @@ def _serialize_question_for_builder(
                 if isinstance(opt, dict):
                     value = opt.get("value")
                     if (
-                        value in ("yes", "no")
+                        value in ("yes", "no", "dont_know")
                         and opt.get("followup_text")
                         and opt["followup_text"].get("enabled")
                     ):
@@ -2674,7 +2685,11 @@ def _serialize_question_for_builder(
         yesno_labels: dict[str, str] = {}
         if isinstance(options, list):
             for opt in options:
-                if isinstance(opt, dict) and opt.get("value") in ("yes", "no"):
+                if isinstance(opt, dict) and opt.get("value") in (
+                    "yes",
+                    "no",
+                    "dont_know",
+                ):
                     label = str(opt.get("label") or "").strip()
                     if label:
                         yesno_labels[str(opt["value"])] = label

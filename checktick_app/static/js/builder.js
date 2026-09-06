@@ -413,6 +413,25 @@
         noLabelInput.value = labels.no || "";
       }
 
+      // Restore the optional "Don't know" third answer
+      const dkCheckbox = form.querySelector(
+        'input[name="yesno_include_dontknow"]',
+      );
+      const dkLabelInput = form.querySelector(
+        'input[name="yesno_dontknow_label"]',
+      );
+      if (dkCheckbox) {
+        dkCheckbox.checked = Boolean(labels.dont_know);
+      }
+      if (dkLabelInput) {
+        // Prefill the custom label only when it differs from the default,
+        // so the placeholder shows through for uncustomised questions.
+        dkLabelInput.value =
+          labels.dont_know && labels.dont_know !== "Don't know"
+            ? labels.dont_know
+            : "";
+      }
+
       const config = payload.yesno_followup_config || {};
 
       // Yes followup
@@ -439,6 +458,20 @@
       }
       if (noLabel && config.no) {
         noLabel.value = config.no.label || "";
+      }
+
+      // Don't know followup
+      const dkFollowupCheckbox = form.querySelector(
+        'input[name="yesno_dont_know_followup"]',
+      );
+      const dkFollowupLabel = form.querySelector(
+        'input[name="yesno_dont_know_followup_label"]',
+      );
+      if (dkFollowupCheckbox && config.dont_know) {
+        dkFollowupCheckbox.checked = config.dont_know.enabled || false;
+      }
+      if (dkFollowupLabel && config.dont_know) {
+        dkFollowupLabel.value = config.dont_know.label || "";
       }
     }
 
