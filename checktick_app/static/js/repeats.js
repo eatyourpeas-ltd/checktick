@@ -60,6 +60,7 @@
     "data-followup-select",
     "data-yesno-select",
     "data-name",
+    "list",
   ];
 
   function reindexInstance(instance, idx) {
@@ -100,13 +101,26 @@
   }
 
   function initInstanceWidgets(root) {
-    // Likert range value display
+    // Likert range value display (number scales show the number; category
+    // sliders show the label at the current position and sync the hidden input)
     root.querySelectorAll('input[type="range"]').forEach(function (input) {
       const qid = input.id.replace("range_q_", "");
       const display = root.querySelector("#range_value_q_" + qid);
-      if (display) {
+      const labels = input.dataset.likertLabels
+        ? input.dataset.likertLabels.split("|")
+        : null;
+      if (display || labels) {
         input.addEventListener("input", function () {
-          display.textContent = input.value;
+          const text = labels ? labels[input.value] : input.value;
+          if (labels) {
+            const group = input.closest("[data-likert-group]");
+            const hidden = group
+              ? group.querySelector('input[type="hidden"]')
+              : null;
+            if (hidden) hidden.value = text;
+            input.setAttribute("aria-valuetext", text);
+          }
+          if (display) display.textContent = text;
         });
       }
     });

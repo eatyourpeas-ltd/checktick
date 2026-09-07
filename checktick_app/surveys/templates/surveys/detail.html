@@ -442,9 +442,9 @@
         {% elif q.type == 'likert' %}
           {% with q.options.0 as meta %}
             {% if meta and meta.type == 'number-scale' %}
-              <div class="flex items-center gap-4" role="group" aria-labelledby="q_label_{{ q.id }}">
-                {% if meta.left %}<span class="text-sm opacity-70 min-w-16 text-right" id="range_left_{{ q.id }}">{{ meta.left }}</span>{% endif %}
-                <div class="flex-1">
+              <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4" role="group" aria-labelledby="q_label_{{ q.id }}">
+                {% if meta.left %}<span class="text-sm opacity-70 text-center sm:min-w-16 sm:text-right" id="range_left_{{ q.id }}">{{ meta.left }}</span>{% endif %}
+                <div class="w-full sm:flex-1">
                   {% with min_val=meta.min|default:1 max_val=meta.max|default:5 %}
                     {% widthratio min_val|add:max_val 2 1 as mid_val %}
                     <input type="range" class="range range-primary w-full" min="{{ min_val }}" max="{{ max_val }}" step="1" value="{{ mid_val }}" name="q_{{ q.id }}" id="range_q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}{% if meta.left %} range_left_{{ q.id }}{% endif %}{% if meta.right %} range_right_{{ q.id }}{% endif %}" aria-valuemin="{{ min_val }}" aria-valuemax="{{ max_val }}" aria-valuenow="{{ mid_val }}"{% if q.required %} aria-required="true"{% endif %} />
@@ -455,27 +455,37 @@
                     </div>
                   {% endwith %}
                 </div>
-                {% if meta.right %}<span class="text-sm opacity-70 min-w-16" id="range_right_{{ q.id }}">{{ meta.right }}</span>{% endif %}
+                {% if meta.right %}<span class="text-sm opacity-70 text-center sm:min-w-16 sm:text-left" id="range_right_{{ q.id }}">{{ meta.right }}</span>{% endif %}
               </div>
             {% else %}
               {% if meta.labels %}
-                <div class="flex flex-wrap items-center gap-4" role="radiogroup" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true"{% endif %}>
-                  {% for opt in meta.labels %}
-                    <label class="inline-flex items-center gap-2 cursor-pointer">
-                      <input type="radio" class="radio" name="q_{{ q.id }}" value="{{ opt }}" />
-                      <span class="text-sm">{{ opt }}</span>
-                    </label>
-                  {% endfor %}
-                </div>
+                {% with slider=meta.labels|likert_slider %}
+                  <div role="group" aria-labelledby="q_label_{{ q.id }}" data-likert-group{% if q.required %} aria-required="true"{% endif %}>
+                    <input type="hidden" name="q_{{ q.id }}" value="{{ slider.mid_label }}" />
+                    <div id="range_value_q_{{ q.id }}" class="text-xs font-semibold text-primary text-center" aria-hidden="true">{{ slider.mid_label }}</div>
+                    <input type="range" class="range range-primary w-full mt-1" min="0" max="{{ slider.max }}" step="1" value="{{ slider.mid }}" id="range_q_{{ q.id }}" list="range_ticks_{{ q.id }}" data-likert-labels="{{ slider.labels|join:'|' }}" aria-labelledby="q_label_{{ q.id }}" aria-valuemin="0" aria-valuemax="{{ slider.max }}" aria-valuenow="{{ slider.mid }}" aria-valuetext="{{ slider.mid_label }}" />
+                    <datalist id="range_ticks_{{ q.id }}">
+                      {% for l in slider.labels %}<option value="{{ forloop.counter0 }}"></option>{% endfor %}
+                    </datalist>
+                    <div class="flex justify-between text-[11px] opacity-70 mt-1 gap-0.5" aria-hidden="true">
+                      {% for l in slider.labels %}<span class="flex-1 text-center leading-tight min-w-0">{{ l }}</span>{% endfor %}
+                    </div>
+                  </div>
+                {% endwith %}
               {% else %}
-                <div class="flex flex-wrap items-center gap-4" role="radiogroup" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true"{% endif %}>
-                  {% for opt in q.options|as_list %}
-                    <label class="inline-flex items-center gap-2 cursor-pointer">
-                      <input type="radio" class="radio" name="q_{{ q.id }}" value="{{ opt|option_value }}"{% if q.required %} required{% endif %} />
-                      <span class="text-sm">{{ opt|option_label }}</span>
-                    </label>
-                  {% endfor %}
-                </div>
+                {% with slider=q.options|as_list|likert_slider %}
+                  <div role="group" aria-labelledby="q_label_{{ q.id }}" data-likert-group{% if q.required %} aria-required="true"{% endif %}>
+                    <input type="hidden" name="q_{{ q.id }}" value="{{ slider.mid_label }}" />
+                    <div id="range_value_q_{{ q.id }}" class="text-xs font-semibold text-primary text-center" aria-hidden="true">{{ slider.mid_label }}</div>
+                    <input type="range" class="range range-primary w-full mt-1" min="0" max="{{ slider.max }}" step="1" value="{{ slider.mid }}" id="range_q_{{ q.id }}" list="range_ticks_{{ q.id }}" data-likert-labels="{{ slider.labels|join:'|' }}" aria-labelledby="q_label_{{ q.id }}" aria-valuemin="0" aria-valuemax="{{ slider.max }}" aria-valuenow="{{ slider.mid }}" aria-valuetext="{{ slider.mid_label }}" />
+                    <datalist id="range_ticks_{{ q.id }}">
+                      {% for l in slider.labels %}<option value="{{ forloop.counter0 }}"></option>{% endfor %}
+                    </datalist>
+                    <div class="flex justify-between text-[11px] opacity-70 mt-1 gap-0.5" aria-hidden="true">
+                      {% for l in slider.labels %}<span class="flex-1 text-center leading-tight min-w-0">{{ l }}</span>{% endfor %}
+                    </div>
+                  </div>
+                {% endwith %}
               {% endif %}
             {% endif %}
           {% endwith %}
@@ -727,19 +737,48 @@
 <script src="{% static 'js/branching.js' %}" nonce="{{ request.csp_nonce }}"></script>
 {# Load repeating sections script #}
 <script src="{% static 'js/repeats.js' %}" nonce="{{ request.csp_nonce }}"></script>
-
 <script nonce="{{ request.csp_nonce }}">
-  // Update displayed value for Likert scale range sliders
+  // Update displayed value for Likert scale range sliders.
+  // Number scales submit their numeric value directly; category sliders keep
+  // a hidden input in sync with the category label at the current position.
+  function syncLikertSlider(idSuffix, value) {
+    const range = document.getElementById('range_q_' + idSuffix);
+    if (!range) return;
+    const valueDisplay = document.getElementById('range_value_q_' + idSuffix);
+    const labels = range.dataset.likertLabels ? range.dataset.likertLabels.split('|') : null;
+    if (!labels) {
+      range.value = value;
+      if (valueDisplay) valueDisplay.textContent = value;
+      return;
+    }
+    const idx = labels.indexOf(String(value));
+    if (idx >= 0) range.value = idx;
+    const text = labels[range.value] || value;
+    range.setAttribute('aria-valuetext', text);
+    const group = range.closest('[data-likert-group]');
+    const hidden = group ? group.querySelector('input[type="hidden"]') : null;
+    if (hidden) hidden.value = text;
+    if (valueDisplay) valueDisplay.textContent = text;
+  }
+
   document.addEventListener('DOMContentLoaded', function() {
     const rangeInputs = document.querySelectorAll('input[type="range"]');
     rangeInputs.forEach(function(input) {
       const questionId = input.id.replace('range_q_', '');
       const valueDisplay = document.getElementById('range_value_q_' + questionId);
+      const labels = input.dataset.likertLabels ? input.dataset.likertLabels.split('|') : null;
 
-      if (valueDisplay) {
+      if (valueDisplay || labels) {
         // Update on input (real-time as user drags)
         input.addEventListener('input', function() {
-          valueDisplay.textContent = this.value;
+          const text = labels ? labels[this.value] : this.value;
+          if (labels) {
+            const group = this.closest('[data-likert-group]');
+            const hidden = group ? group.querySelector('input[type="hidden"]') : null;
+            if (hidden) hidden.value = text;
+            this.setAttribute('aria-valuetext', text);
+          }
+          if (valueDisplay) valueDisplay.textContent = text;
         });
       }
     });
@@ -756,7 +795,10 @@
       if (inputs.length === 0) return;
       const firstInput = inputs[0];
 
-      if (firstInput.type === 'checkbox') {
+      if (firstInput.type === 'hidden' && firstInput.closest('[data-likert-group]')) {
+        // Likert category slider: saved value is a category label
+        syncLikertSlider(questionId + nameSuffix, value);
+      } else if (firstInput.type === 'checkbox') {
         // Multiple choice (multiple selections)
         if (Array.isArray(value)) {
           value.forEach(v => {
@@ -770,9 +812,7 @@
       } else if (firstInput.tagName === 'SELECT') {
         firstInput.value = value;
       } else if (firstInput.type === 'range') {
-        firstInput.value = value;
-        const valueDisplay = document.getElementById('range_value_q_' + questionId + nameSuffix);
-        if (valueDisplay) valueDisplay.textContent = value;
+        syncLikertSlider(questionId + nameSuffix, value);
       } else {
         firstInput.value = value;
       }
@@ -831,12 +871,12 @@
       } else if (firstInput.tagName === 'SELECT') {
         // Handle dropdowns
         firstInput.value = value;
+      } else if (firstInput.type === 'hidden' && firstInput.closest('[data-likert-group]')) {
+        // Handle Likert category sliders
+        syncLikertSlider(questionId, value);
       } else if (firstInput.type === 'range') {
         // Handle Likert scales
-        firstInput.value = value;
-        const questionIdNum = questionId;
-        const valueDisplay = document.getElementById('range_value_q_' + questionIdNum);
-        if (valueDisplay) valueDisplay.textContent = value;
+        syncLikertSlider(questionId, value);
       } else {
         // Handle text/number inputs
         firstInput.value = value;
