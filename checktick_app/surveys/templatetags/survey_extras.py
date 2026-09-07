@@ -280,6 +280,30 @@ def options_meta(value):
     return {}
 
 
+@register.filter(name="likert_slider")
+def likert_slider(labels):
+    """Return slider rendering metadata for a likert categories list.
+
+    Returns a dict with ``labels``, ``max`` (last index), ``mid`` (default
+    index) and ``mid_label`` so templates can render a range input whose
+    numeric positions map onto category labels.
+    """
+
+    try:
+        clean = [str(label) for label in (labels or [])]
+    except Exception:
+        return {}
+    if not clean:
+        return {}
+    mid = len(clean) // 2
+    return {
+        "labels": clean,
+        "max": len(clean) - 1,
+        "mid": mid,
+        "mid_label": clean[mid],
+    }
+
+
 @register.filter(name="has_followup")
 def has_followup(question):
     """Check if a question has follow-up text inputs configured.
