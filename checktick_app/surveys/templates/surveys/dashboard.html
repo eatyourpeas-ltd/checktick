@@ -406,18 +406,19 @@
 <div class="mt-6">
   {% if has_questions %}
   <h3 class="text-sm font-semibold text-base-content/70 uppercase tracking-wide mb-3">{% trans "Add or edit questions" %}</h3>
-  <div class="flex flex-wrap gap-2 mb-2">
+  <div class="flex flex-wrap items-center gap-2 mb-2">
+    {# Input options — left aligned #}
     {# Builder #}
     {% if groups.first %}
-      <a href="{% url 'surveys:survey_builder' slug=survey.slug %}" class="btn btn-sm btn-ghost gap-2" title="{% trans 'Add and arrange questions visually using the drag-and-drop builder' %}">
-        {% include "components/icons/hammer_wrench.html" with classes="w-4 h-4" %}
-        {% trans "Builder" %}
-      </a>
+    <a href="{% url 'surveys:survey_builder' slug=survey.slug %}" class="btn btn-sm btn-ghost gap-2" title="{% trans 'Add and arrange questions visually using the drag-and-drop builder' %}">
+      {% include "components/icons/hammer_wrench.html" with classes="w-4 h-4" %}
+      {% trans "Builder" %}
+    </a>
     {% else %}
-      <a href="{% url 'surveys:groups' slug=survey.slug %}" class="btn btn-sm btn-ghost gap-2" title="{% trans 'Add and arrange questions visually using the drag-and-drop builder' %}">
-        {% include "components/icons/hammer_wrench.html" with classes="w-4 h-4" %}
-        {% trans "Builder" %}
-      </a>
+    <a href="{% url 'surveys:groups' slug=survey.slug %}" class="btn btn-sm btn-ghost gap-2" title="{% trans 'Add and arrange questions visually using the drag-and-drop builder' %}">
+      {% include "components/icons/hammer_wrench.html" with classes="w-4 h-4" %}
+      {% trans "Builder" %}
+    </a>
     {% endif %}
     {# Outline #}
     <a href="{% url 'surveys:bulk_upload' slug=survey.slug %}?tab=manual" class="btn btn-sm btn-ghost gap-2" title="{% trans 'Type or paste questions as a structured outline' %}">
@@ -429,6 +430,25 @@
       {% include "components/icons/llm.html" with classes="w-4 h-4" %}
       {% trans "AI Assistant" %}
     </a>
+
+    {# Organise & Survey Map — pulled right on desktop, wraps on mobile #}
+    <div class="ml-auto flex flex-wrap gap-2">
+      <a href="/surveys/{{ survey.slug }}/groups/" class="btn btn-sm btn-ghost gap-2" title="{% trans 'Reorder sections, set layout, configure repeats and branching' %}">
+        {% if survey.layout == 'section_menu' %}
+        {% include "components/icons/layout_section_menu.html" with classes="w-4 h-4" %}
+        {% else %}
+        {% include "components/icons/layout_linear.html" with classes="w-4 h-4" %}
+        {% endif %}
+        {% trans "Organise" %}
+        {% if survey.layout == 'section_menu' %}
+        <span class="badge badge-accent badge-xs">{% trans "Section menu" %}</span>
+        {% endif %}
+      </a>
+      <a href="/surveys/{{ survey.slug }}/survey-map/" class="btn btn-sm btn-ghost gap-2" title="{% trans 'Visualise sections, questions, and branching logic' %}">
+        {% include "components/icons/survey-map.html" with classes="w-4 h-4" %}
+        {% trans "Survey Map" %}
+      </a>
+    </div>
   </div>
   {% else %}
   <h3 class="text-sm font-semibold text-base-content/70 uppercase tracking-wide mb-3">{% trans "Add or edit questions" %}</h3>
@@ -477,21 +497,6 @@
 
   </div>
   {% endif %}
-
-  {# Organise & layout — always visible, compact link row #}
-  <div class="flex flex-wrap gap-2 mt-3">
-    <a href="/surveys/{{ survey.slug }}/groups/" class="btn btn-sm btn-ghost gap-2" title="{% trans 'Reorder sections, set layout, configure repeats and branching' %}">
-      {% include "components/icons/layout_linear.html" with classes="w-4 h-4" %}
-      {% trans "Organise" %}
-      {% if survey.layout == 'section_menu' %}
-      <span class="badge badge-accent badge-xs">{% trans "Section menu" %}</span>
-      {% endif %}
-    </a>
-    <a href="/surveys/{{ survey.slug }}/survey-map/" class="btn btn-sm btn-ghost gap-2" title="{% trans 'Visualise sections, questions, and branching logic' %}">
-      {% include "components/icons/survey-map.html" with classes="w-4 h-4" %}
-      {% trans "Survey Map" %}
-    </a>
-  </div>
 </div>
 
 <div class="mt-6">
