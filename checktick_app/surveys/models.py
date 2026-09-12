@@ -889,6 +889,26 @@ class Survey(models.Model):
         default=False,
         help_text="Allow any authenticated user to access this survey (not just invited users)",
     )
+
+    # Survey layout — high-level shape of the survey (see
+    # docs/survey-layouts.md). "linear" is the default and matches the
+    # current behaviour: sections flow in the order the author arranges
+    # them. "section_menu" opens on a picker page where the participant
+    # chooses which sections to complete.
+    class Layout(models.TextChoices):
+        LINEAR = "linear", "Linear"
+        SECTION_MENU = "section_menu", "Section menu"
+
+    layout = models.CharField(
+        max_length=20,
+        choices=Layout.choices,
+        default=Layout.LINEAR,
+        help_text=(
+            'High-level shape of the survey. "linear" flows sections in '
+            'authored order; "section_menu" lets the participant pick which '
+            "sections to complete."
+        ),
+    )
     # Resume + redaction toggles (see docs/survey-progress-tracking.md and
     # docs/survey-layouts.md). Both default to True; creators can disable
     # in the publication workflow.
