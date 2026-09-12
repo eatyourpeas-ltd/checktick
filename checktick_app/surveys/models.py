@@ -889,6 +889,24 @@ class Survey(models.Model):
         default=False,
         help_text="Allow any authenticated user to access this survey (not just invited users)",
     )
+    # Resume + redaction toggles (see docs/survey-progress-tracking.md and
+    # docs/survey-layouts.md). Both default to True; creators can disable
+    # in the publication workflow.
+    allow_resume = models.BooleanField(
+        default=True,
+        help_text=(
+            "Allow participants to save progress and resume later. "
+            "Disable for surveys with a fresh-state requirement."
+        ),
+    )
+    allow_response_redaction = models.BooleanField(
+        default=True,
+        help_text=(
+            "Offer public-survey participants an opt-out token after submission "
+            "so they can request deletion later. Authenticated/token surveys "
+            "already issue a receipt_token where pseudonymous."
+        ),
+    )
     # One-time survey key: store only hash + salt for verification
     key_salt = models.BinaryField(blank=True, null=True, editable=False)
     key_hash = models.BinaryField(blank=True, null=True, editable=False)
@@ -3048,19 +3066,35 @@ class SurveyResponse(models.Model):
             Survey.Visibility.TOKEN,
         ]
 
-    def generate_receipt_token(self) -> uuid.UUID | None:
+    def generate_receipt_token(self, opt_in: bool = False) -> uuid.UUID | None:
         """
         Generate a receipt token for data subject rights requests.
 
-        Only generates token for pseudonymous responses.
+        Only generates token for pseudonymous responses by default.
         Anonymous responses do not get tokens to preserve anonymity.
 
+        For public/unlisted surveys (anonymous responses), a token is only
+        generated when the participant explicitly opts in at submission
+        time (opt_in=True) AND the survey has allow_response_redaction=True.
+        This extends the original anonymity-preserving design with an
+        opt-in path to redaction (see docs/survey-progress-tracking.md
+        §Opt-out token).
+
+        Args:
+            opt_in: True when the participant explicitly requested a
+                redaction token at submission time (public surveys only).
+
         Returns:
-            UUID receipt token if generated, None if anonymous
+            UUID receipt token if generated, None if anonymous and not
+            opted in.
         """
         if not self.is_pseudonymous:
-            # Anonymous response - no receipt token
-            return None
+            # Anonymous response — only issue a token if the participant
+            # explicitly opted in and the survey allows redaction.
+            if not opt_in:
+                return None
+            if not getattr(self.survey, "allow_response_redaction", True):
+                return None
 
         if not self.receipt_token:
             self.receipt_token = uuid.uuid4()
@@ -3624,6 +3658,59 @@ class SurveyProgress(models.Model):
     # Auto-cleanup: delete old progress after 30 days
     expires_at = models.DateTimeField()
 
+    # [Planned] Resume token for public surveys only. Authenticated and token
+    # surveys resume via the user FK / access_token FK and do not need this
+    # field populated. Null for non-public surveys.
+    resume_token = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Bearer token for resuming a public survey (opt-in only)",
+    )
+
+    # [Planned] Explicit lifecycle. Today "in progress" is inferred from the
+    # row existing; this makes it queryable and lets the retention job
+    # distinguish abandoned from active.
+    class Status(models.TextChoices):
+        IN_PROGRESS = "in_progress", "In progress"
+        COMPLETED = "completed", "Completed"
+        ABANDONED = "abandoned", "Abandoned"
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.IN_PROGRESS,
+        help_text="Lifecycle state of this progress record",
+    )
+
+    # [Planned] Resume position inside a repeat instance.
+    # current_question_id (above) identifies the question; this identifies
+    # *which* instance of a repeating section.
+    current_repeat_index = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Index of the repeat instance the participant was on",
+    )
+
+    # [Planned] Section menu selection. Only populated for surveys with
+    # layout = \"section_menu\" (see docs/survey-layouts.md). Empty list for
+    # linear surveys.
+    selected_group_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Section IDs the participant selected in a section_menu survey",
+    )
+
+    # [Planned] Timestamp when the survey was submitted (status=COMPLETED).
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the participant submitted the survey (status=COMPLETED)",
+    )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -3657,6 +3744,47 @@ class SurveyProgress(models.Model):
             self.current_question_id = current_q_id
         self.last_question_answered_at = timezone.now()
         self.save()
+
+    def mark_completed(self) -> None:
+        """Mark this progress record as completed (survey submitted).
+
+        Replaces the previous behaviour of deleting the row on submit. The
+        row is kept with status=COMPLETED and completed_at set for audit, then
+        swept by the retention job. The resume token (if any) is invalidated
+        by clearing it — the token's job is done once the response exists.
+        """
+        self.status = self.Status.COMPLETED
+        self.completed_at = timezone.now()
+        self.resume_token = None
+        self.save(update_fields=["status", "completed_at", "resume_token"])
+
+    def mark_abandoned(self) -> None:
+        """Mark this progress record as abandoned (retention sweep)."""
+        self.status = self.Status.ABANDONED
+        self.save(update_fields=["status"])
+
+    def is_expired(self) -> bool:
+        """Check if this progress record has passed its expiry."""
+        return timezone.now() > self.expires_at
+
+    @classmethod
+    def find_by_resume_token(cls, resume_token: uuid.UUID) -> "SurveyProgress | None":
+        """Find an active, non-expired progress record by resume token.
+
+        Returns None if the token does not match an in-progress, non-expired
+        row. Callers must not reveal whether the token existed — return a
+        neutral error page for both invalid and expired tokens.
+        """
+        try:
+            progress = cls.objects.select_related("survey").get(
+                resume_token=resume_token,
+                status=cls.Status.IN_PROGRESS,
+            )
+        except cls.DoesNotExist:
+            return None
+        if progress.is_expired():
+            return None
+        return progress
 
 
 def validate_markdown_survey(md_text: str) -> list[dict]:

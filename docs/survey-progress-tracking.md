@@ -4,372 +4,123 @@ category: features
 priority: 8
 ---
 
-CheckTick includes a survey progress tracking feature that allows users to save their progress while completing surveys and resume later. This feature works with all survey access methods and provides a visual progress bar to help respondents track their completion.
+CheckTick saves your progress automatically as you fill out a survey, so you can leave and come back without losing your work. How this works depends on how the survey creator has published the survey.
 
-## Table of Contents
+## How Progress Saving Works
 
-- [Overview](#overview)
-- [Features](#features)
-- [How It Works](#how-it-works)
-- [User Experience](#user-experience)
-- [Technical Implementation](#technical-implementation)
-- [Maintenance](#maintenance)
-- [Privacy and Security](#privacy-and-security)
+### Authenticated surveys (login required)
 
----
+If the survey requires you to log in, your progress is saved to your account automatically. You can leave the survey, come back on a different device, log in, and continue where you left off. No special link is needed — just return to the survey URL.
 
-## Overview
+### Invite token surveys (one-time codes)
 
-The survey progress tracking feature automatically saves respondents' answers as they fill out surveys, allowing them to:
+If you accessed the survey via a unique invite link, your progress is saved automatically while you use that link. If you close the browser and return to the same link (in the same browser), your answers are restored. You don't need a separate resume link — the invite link itself is your way back.
 
-- See their completion progress in real-time
-- Leave a survey and return later without losing their work
-- Have their previous answers automatically restored when they return
+### Public and unlisted surveys (open links)
 
-This feature is particularly useful for:
+For public surveys, CheckTick does **not** save your answers to its servers automatically. This protects your privacy — there is no account or token linking you to your partial answers, so nothing is stored on a shared or public computer unless you choose to save it.
 
-- **Long surveys** with many questions
-- **Complex medical audits** that may take time to complete
-- **Multi-session data collection** where respondents need to gather information
-- **Mobile users** who may be interrupted while completing surveys
+Instead:
 
----
+- **Crash recovery** uses your browser's local storage. If your browser crashes or you accidentally close the tab, your answers are still there when you reopen the survey in the same browser. This data never leaves your device.
+- **Save and come back later** is an explicit choice. If you want to save your progress on CheckTick's servers so you can resume from a different device or after clearing your browser data, click the **"Save and come back later"** button. You'll receive a unique resume link that is valid for 30 days. Your answers are stored against that link and deleted when you submit the survey.
 
-## Features
+> **Privacy note:** The resume link is the only way back to your saved answers. If you lose it, we cannot recover your progress. Anyone with the link can resume your survey, so keep it private.
 
-### Visual Progress Bar
+## The Progress Bar
 
-A DaisyUI-styled progress bar appears at the top of each survey showing:
+A progress bar appears at the top of each survey showing:
 
-- **Completion percentage** (0-100%)
+- **Completion percentage** (0–100%)
 - **Question count** (e.g., "15 of 50 questions answered")
-- **Save status** ("Saved", "Saving...", or "Save failed")
+- **Save status** ("Saved", "Saving…", or "Save failed")
 - **Last saved timestamp** (e.g., "Last saved: 2 minutes ago")
 
-### Auto-Save
+For public surveys where server-side saving is not active, the progress bar shows your local progress (from browser storage) but does not show a "last saved to server" timestamp.
 
-- Progress is automatically saved **3 seconds after the last change**
-- Works with all question types (text, multiple choice, dropdowns, etc.)
-- Saves in the background via AJAX without interrupting the user
-- Shows real-time feedback of save status
+## Save and Come Back Later (Public Surveys)
 
-### Answer Restoration
+If you're completing a public survey and want to save your progress to come back later — perhaps on a different device — click **"Save and come back later"**.
 
-When a user returns to an incomplete survey:
+You'll see:
 
-- All previously answered questions are automatically filled in
-- Works with all question types:
-  - Text and number inputs
-  - Radio buttons (single choice)
-  - Checkboxes (multiple choice)
-  - Dropdown selects
-  - Likert scales
-  - Yes/No questions
+- A unique **resume link** (e.g., `https://checktick.uk/take/resume/abc123…`)
+- A warning that this link is the only way back to your answers
+- An option to **email the link to yourself**
 
-### Works with All Access Methods
+### Emailing the link
 
-Progress tracking supports all three ways to access surveys:
+If you choose to email the link to yourself:
 
-1. **Authenticated surveys** - Progress tied to user account (persists across devices)
-2. **Unlisted surveys** - Progress tied to browser session
-3. **Token-based surveys** - Progress tied to browser session
+- CheckTick sends the email immediately and does **not** store your email address on its servers
+- The email contains only the resume link and the survey name — no answers, no question text
+- You will not receive any further emails from CheckTick about this survey
 
----
+### When you return
 
-## How It Works
+When you click the resume link, your saved answers are restored and you continue where you left off. The link is valid for 30 days from when you created it, or until you submit the survey (whichever comes first). After you submit, the link stops working.
 
-### For Authenticated Users (Logged In)
+## Opt-Out Tokens (After Submission)
 
-When a logged-in user starts a survey:
+After you submit a public survey, you may be offered an **opt-out token** on the thank-you page. This is a unique code that lets you request deletion of your response later.
 
-1. A `SurveyProgress` record is created linked to their user account
-2. As they answer questions, progress is saved automatically
-3. If they leave and return (even from a different device), their answers are restored
-4. Progress is deleted when they successfully submit the survey
-5. Unused progress records expire after **30 days**
+### How it works
 
-### For Anonymous Users (Unlisted/Token Links)
+1. After submitting, you see a checkbox: "Give me a token so I can request deletion later"
+2. If you tick it, a token is generated and shown once
+3. Copy the token and keep it safe — it will not be shown again
+4. You can also choose to email the token to yourself (same privacy contract as the resume link: your email address is not stored)
+5. If you later want your response deleted, contact the survey creator and give them the token
 
-When an anonymous user accesses a survey via an unlisted link or token:
+### If you're not offered a token
 
-1. A `SurveyProgress` record is created linked to their browser session
-2. Progress is saved as they answer questions
-3. If they close the browser and return (same browser), their answers are restored
-4. Progress is deleted when they submit the survey
-5. Unused progress records expire after **30 days**
+The survey creator may have disabled opt-out tokens for this survey. In that case, your response is fully anonymous and cannot be linked to you for redaction. This is the original anonymity promise: if no token is offered, your response cannot be identified for deletion.
 
----
+### If you lose your token
 
-## User Experience
+If you lose your opt-out token, we cannot identify your response to delete it. There is no way to recover a lost token — this is the trade-off for the privacy of not collecting your identity.
 
-### Starting a Survey
+## Privacy and Data Retention
 
-When a user first accesses a survey, they see:
+### Progress records
 
-```text
-┌────────────────────────────────────────────┐
-│ Survey Progress                        0%  │
-│ ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱ │
-│ 0 of 25 questions answered                │
-└────────────────────────────────────────────┘
-```
+- Authenticated and token survey progress is deleted when you submit, or expires after 30 days if unused
+- Public survey resume tokens expire after 30 days and are deleted on submission
+- No progress data is retained beyond these periods
 
-### Answering Questions
+### Opt-out tokens
 
-As the user answers questions:
+- Opt-out tokens persist for as long as the survey retains your response (the survey's retention period, typically 6 months after closure)
+- The token is a UUID stored on your response record — it does not contain any personal information
+- If you submit without opting in, no token is stored and your response is fully anonymous
 
-```text
-┌────────────────────────────────────────────┐
-│ Survey Progress                       40%  │
-│ ████████████████▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱ │
-│ 10 of 25 questions answered    ✓ Saved    │
-└────────────────────────────────────────────┘
-```
+### Email addresses
 
-### Returning to a Survey
-
-When a user returns to an incomplete survey:
-
-- The progress bar shows their current completion percentage
-- All previously answered questions are automatically filled in
-- They can continue from where they left off
-
-### Submitting a Survey
-
-When the user clicks "Submit":
-
-- The survey is validated and saved
-- The progress record is automatically deleted
-- They're redirected to the thank you page
-
----
-
-## Technical Implementation
-
-### Database Model
-
-```python
-class SurveyProgress(models.Model):
-    survey = ForeignKey(Survey)           # Survey being completed
-    user = ForeignKey(User, null=True)    # For authenticated users
-    session_key = CharField(null=True)     # For anonymous users
-    access_token = ForeignKey(SurveyAccessToken, null=True)
-
-    partial_answers = JSONField()          # Saved answers
-    current_question_id = IntegerField()
-    total_questions = IntegerField()
-    answered_count = IntegerField()
-
-    created_at = DateTimeField()
-    updated_at = DateTimeField()
-    last_question_answered_at = DateTimeField()
-    expires_at = DateTimeField()           # Auto-cleanup after 30 days
-```
-
-### API Endpoint
-
-Progress is saved via AJAX POST to the same survey submission endpoint:
-
-```http
-POST /surveys/{slug}/take/
-Content-Type: application/x-www-form-urlencoded
-
-action=save_draft
-q_123=Answer1
-q_124=Answer2
-...
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "progress": {
-    "percentage": 40,
-    "answered": 10,
-    "total": 25
-  }
-}
-```
-
-### JavaScript Auto-Save
-
-The auto-save functionality uses debouncing to avoid excessive saves:
-
-1. User changes an answer
-2. Timer starts (3 seconds)
-3. If another change occurs, timer resets
-4. After 3 seconds of no changes, progress is saved
-5. Progress bar updates with new percentage
-
-### Constraints
-
-- **One progress record per user per survey** (for authenticated users)
-- **One progress record per session per survey** (for anonymous users)
-- Prevents duplicate progress records
-- Enforced at the database level
-
----
-
-## Maintenance
-
-### Automatic Cleanup
-
-Progress records are automatically cleaned up to prevent database bloat:
-
-- Records expire after **30 days** from last update
-- Very old records (>90 days) are deleted as a safety net
-- Cleanup runs via the `cleanup_survey_progress` management command
-
-### Running Cleanup Manually
-
-```bash
-# Dry run to see what would be deleted
-python manage.py cleanup_survey_progress --dry-run --verbose
-
-# Actually delete expired records
-python manage.py cleanup_survey_progress
-```
-
-### Scheduling Cleanup
-
-Add to your cron or scheduled tasks to run daily:
-
-```bash
-# Run at 2 AM daily
-0 2 * * * cd /path/to/checktick && python manage.py cleanup_survey_progress
-```
-
-Or for Docker deployments:
-
-```bash
-0 2 * * * docker compose exec web python manage.py cleanup_survey_progress
-```
-
-### Monitoring in Django Admin
-
-Progress records can be viewed and managed in Django Admin:
-
-1. Log in to Django Admin
-2. Navigate to **Surveys > Survey progresses**
-3. View, filter, and search progress records
-4. See which surveys have incomplete responses
-5. Manually delete progress if needed
-
-**Admin List View Shows:**
-
-- Survey name and slug
-- User (or "anonymous" for session-based)
-- Session key (for anonymous users)
-- Answered count / Total questions
-- Last updated timestamp
-- Expiry date
-
----
-
-## Privacy and Security
-
-### Data Storage
-
-- **Authenticated users**: Progress is tied to their user account
-- **Anonymous users**: Progress is tied to their browser session only
-- **Session keys**: Django session keys are used (secure, random tokens)
-- **Encrypted surveys**: Progress respects existing encryption (demographics remain encrypted)
-
-### Data Retention
-
-- Progress records automatically expire after **30 days**
-- Users can delete their progress by clearing browser data (for session-based)
-- Authenticated users' progress is removed when they submit or after 30 days
-- No personally identifiable information is stored beyond what's in the answers
-
-### Security Considerations
-
-- **CSRF protection**: All AJAX saves include CSRF tokens
-- **Rate limiting**: Uses existing rate limiting (10 requests/minute per IP)
-- **Session validation**: Session keys are validated before saving progress
-- **Duplicate prevention**: Database constraints prevent duplicate progress records
-- **Auto-expiry**: Old progress is automatically deleted
-
-### GDPR Compliance
-
-Progress tracking is GDPR-compliant:
-
-- **Consent**: Implicit consent when user starts survey
-- **Right to erasure**: Progress auto-deletes after 30 days
-- **Data minimization**: Only saves answered questions
-- **Purpose limitation**: Used only for survey completion
-- **Storage limitation**: 30-day expiry enforces this
-
----
+- Email addresses provided for token delivery are **never stored** on CheckTick's servers
+- The address is used to send the email immediately and then discarded
+- No log entries, audit records, or database fields retain the address
 
 ## Troubleshooting
 
-### Progress Not Saving
+### My progress isn't saving
 
-**Check:**
+- **Authenticated survey:** Make sure you're logged in. Progress is tied to your account.
+- **Token survey:** Make sure you're using the same invite link. Progress is tied to the link.
+- **Public survey:** Progress is saved to your browser, not to CheckTick. If you cleared your browser data or are using a different browser, your local progress is gone. Use "Save and come back later" to save server-side.
 
-1. Is JavaScript enabled in the browser?
-2. Are browser console errors showing?
-3. Is the session valid (for anonymous users)?
-4. Is CSRF token present in the form?
+### My resume link doesn't work
 
-**Debug:**
+- The link may have expired (30-day limit)
+- You may have already submitted the survey — links are destroyed on submission
+- Check that you copied the full link
 
-- Open browser developer tools → Network tab
-- Look for POST requests with `action=save_draft`
-- Check the response status and body
+### I lost my opt-out token
 
-### Answers Not Restoring
-
-**Check:**
-
-1. Is the user using the same browser/session?
-2. Has the progress record expired (>30 days)?
-3. Did the user clear their browser data?
-4. Are question IDs matching?
-
-**Debug:**
-
-- Check Django Admin → Survey progresses
-- Verify the `partial_answers` JSON contains the answers
-- Check browser console for JavaScript errors
-
-### Performance Issues
-
-If auto-save is causing performance issues:
-
-1. Increase the debounce delay (currently 3 seconds)
-2. Check database indexes are present
-3. Consider adding database query optimization
-4. Monitor AJAX request volume
-
----
-
-## Future Enhancements
-
-Potential improvements for future versions:
-
-- **Manual save button** for users who want explicit control
-- **Multiple save points** for very long surveys
-- **Progress synchronization** across devices for authenticated users
-- **Offline support** using service workers
-- **Progress notifications** ("You're 50% complete!")
-- **Configurable expiry** per survey (instead of fixed 30 days)
-- **Progress analytics** for survey creators (where users drop off)
-
----
+Unfortunately, lost tokens cannot be recovered. Without the token, we cannot identify your response for deletion. This is a deliberate privacy trade-off: the token is the only link between you and your response.
 
 ## Related Documentation
 
-- [Surveys](surveys.md) - Creating and managing surveys
-- [Data Governance](data-governance.md) - Data retention and deletion policies
-- [Authentication and Permissions](authentication-and-permissions.md) - User access control
-- [Self-Hosting Scheduled Tasks](self-hosting-scheduled-tasks.md) - Scheduling cleanup commands
-
----
-
-**Last Updated**: November 2025
-**Feature Version**: 1.0
-**Status**: Production Ready
+- [Publish & Collect Responses](publish-and-collection.md) — how survey visibility affects progress saving
+- [Survey Progress Tracking (Technical)](survey-progress-tracking-technical.md) — developer reference
+- [Data Governance](data-governance.md) — data retention and deletion policies
+- [Privacy Notice](privacy-notice.md) — your privacy rights as a survey respondent

@@ -319,6 +319,26 @@
             </label>
           </div>
 
+          <div class="form-control">
+            <label class="cursor-pointer flex items-start gap-3">
+              <input type="checkbox" class="checkbox mt-0.5" name="allow_resume" {% if survey.allow_resume %}checked{% endif %} />
+              <div>
+                <span class="label-text font-medium">{% trans "Allow participants to save progress and resume later" %}</span>
+                <p class="text-sm opacity-70 mt-1">{% trans "When enabled, participants can leave and return to continue where they left off. Disable for surveys that must be completed in a single session." %}</p>
+              </div>
+            </label>
+          </div>
+
+          <div class="form-control">
+            <label class="cursor-pointer flex items-start gap-3">
+              <input type="checkbox" class="checkbox mt-0.5" name="allow_response_redaction" {% if survey.allow_response_redaction %}checked{% endif %} />
+              <div>
+                <span class="label-text font-medium">{% trans "Offer participants a redaction token after submission" %}</span>
+                <p class="text-sm opacity-70 mt-1">{% trans "When enabled, public-survey participants can opt to receive a token after submitting so they can request deletion of their response later. If disabled, responses are fully anonymous and cannot be redacted." %}</p>
+              </div>
+            </label>
+          </div>
+
           <div class="form-control" id="patient-data-warning">
             <div class="alert alert-warning">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

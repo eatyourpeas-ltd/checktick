@@ -16,6 +16,26 @@ From your survey dashboard, click **Publish Settings** to configure:
 - **How many responses**: Set a maximum number of responses (optional)
 - **Who can access it**: Choose a visibility mode (see below)
 - **Security features**: Enable CAPTCHA for anonymous surveys
+- **Progress saving**: Allow participants to save progress and resume later (default: enabled)
+- **Response redaction**: Offer public-survey participants an opt-out token after submission so they can request deletion later (default: enabled)
+
+### Progress Saving Toggle
+
+The **"Allow participants to save progress and resume later"** toggle controls whether CheckTick saves partial answers server-side:
+
+- **Enabled (default)**: participants can leave and return to continue where they left off. For authenticated and token surveys, this is automatic. For public surveys, participants must click "Save and come back later" to opt in.
+- **Disabled**: participants must complete the survey in a single session. No progress is saved server-side. Useful for assessments with a fresh-state requirement.
+
+### Response Redaction Toggle
+
+The **"Offer participants a redaction token after submission"** toggle controls whether public-survey participants are offered an opt-out token on the thank-you page:
+
+- **Enabled (default)**: after submitting, participants can opt to receive a token that lets them request deletion of their response later. If they decline, their response is fully anonymous.
+- **Disabled**: no opt-out token is offered. Responses are fully anonymous and cannot be redacted. The original anonymity promise stands.
+
+This toggle only affects public and unlisted surveys. Authenticated and token surveys already issue a receipt token automatically (where pseudonymous).
+
+See [Data Governance](/docs/data-governance/) for the privacy implications of disabling redaction.
 
 ## Question Order, Preview, and Live Publication
 
@@ -276,9 +296,25 @@ From your dashboard:
 
 ## Participant Experience
 
-### Progress Saving
+### Progress Saving and Resume
 
-Participants can save their progress and resume later. This is especially helpful for longer surveys. See [Survey Progress Tracking](/docs/survey-progress-tracking/) for details.
+Participants can save their progress and resume later. How this works depends on the survey's visibility mode:
+
+- **Authenticated surveys**: progress is saved to the participant's account automatically and resumes on any device after login.
+- **Invite token surveys**: progress is saved automatically and resumes when the participant returns to the same invite link.
+- **Public/unlisted surveys**: progress is not saved to CheckTick's servers by default. Participants can click "Save and come back later" to receive a resume link (valid for 30 days) that lets them continue from any device. Crash recovery uses the browser's local storage.
+
+Survey creators can disable progress saving for a survey via the publication workflow (see below).
+
+See [Survey Progress Tracking](/docs/survey-progress-tracking/) for full details.
+
+### Opt-Out Tokens for Public Surveys
+
+After submitting a public or unlisted survey, participants may be offered an **opt-out token** — a unique code that lets them request deletion of their response later. This is opt-in: the participant chooses whether to accept the token. If they decline, their response is fully anonymous and cannot be redacted.
+
+Survey creators can disable opt-out tokens for a survey via the publication workflow (see below).
+
+See [Data Governance](/docs/data-governance/) and [Privacy Notice](/docs/privacy-notice/) for the privacy implications.
 
 ### Completion
 

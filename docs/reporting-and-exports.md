@@ -299,3 +299,22 @@ The Summary Report is unlock-gated when any response has `enc_answers` set. Unlo
 ### Rate limit exceeded
 
 If you see a rate limit error, wait an hour before trying again. The summary view is 100/h; the LLM theme endpoint is 20/h; the CSV export is 30/h. If you need more frequent access to the raw data, use the CSV export.
+
+## Participant Withdrawal and Opt-Out Tokens
+
+Responses from public and unlisted surveys may have an associated **opt-out token** (receipt token) if the participant opted in at submission time and the survey creator enabled `allow_response_redaction`. When a participant requests deletion of their response:
+
+1. Ask for their opt-out token
+2. Use the token to locate the response via `DataSubjectRequest.find_by_receipt_token()`
+3. Delete the response and document the reason
+
+If the participant does not have a token (either they declined it at submission time or the survey creator disabled redaction), the response is fully anonymous and cannot be identified for deletion. Inform the participant that their response cannot be located.
+
+See [Data Governance](/docs/data-governance/) §Participant Withdrawal and [Data Subject Request Procedure](/docs/compliance/data-subject-request-procedure/) for the full workflow.
+
+## Related Documentation
+
+- [Survey Progress Tracking](/docs/survey-progress-tracking/) - How participants save and resume progress
+- [Data Governance](/docs/data-governance/) - Retention, deletion, and participant withdrawal
+- [Privacy Notice](/docs/privacy-notice/) - Privacy rights for survey respondents
+- [Publish & Collect Responses](/docs/publish-and-collection/) - Publication workflow and visibility modes

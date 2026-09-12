@@ -9,6 +9,7 @@ import logging
 import re
 import secrets
 from typing import Any, Iterable, Union
+import uuid
 
 from django import forms
 from django.conf import settings
@@ -3621,6 +3622,8 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
         end_at_str = request.POST.get("end_at") or None
         max_responses = request.POST.get("max_responses") or None
         captcha_required = bool(request.POST.get("captcha_required"))
+        allow_resume = bool(request.POST.get("allow_resume"))
+        allow_response_redaction = bool(request.POST.get("allow_response_redaction"))
         # If survey is already published with no_patient_data_ack=True, preserve it (disabled checkboxes don't submit)
         no_patient_data_ack = bool(request.POST.get("no_patient_data_ack")) or (
             survey.status == Survey.Status.PUBLISHED and survey.no_patient_data_ack
@@ -3750,6 +3753,8 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
                     "captcha_required": captcha_required,
                     "no_patient_data_ack": no_patient_data_ack,
                     "allow_any_authenticated": allow_any_authenticated,
+                    "allow_resume": allow_resume,
+                    "allow_response_redaction": allow_response_redaction,
                     "invite_emails": invite_emails,
                 }
                 messages.info(
@@ -3766,6 +3771,8 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             survey.max_responses = max_responses
             survey.captcha_required = captcha_required
             survey.no_patient_data_ack = no_patient_data_ack
+            survey.allow_resume = allow_resume
+            survey.allow_response_redaction = allow_response_redaction
 
             # Handle allow_any_authenticated for authenticated surveys
             # (allow_any_authenticated already computed above for validation)
@@ -3913,6 +3920,8 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             survey.max_responses = max_responses
             survey.captcha_required = captcha_required
             survey.no_patient_data_ack = no_patient_data_ack
+            survey.allow_resume = allow_resume
+            survey.allow_response_redaction = allow_response_redaction
 
             # Handle allow_any_authenticated for authenticated surveys
             if visibility == Survey.Visibility.AUTHENTICATED:
@@ -5053,6 +5062,8 @@ def _apply_pending_publish_settings(survey: Survey, pending: dict) -> None:
     survey.max_responses = pending.get("max_responses")
     survey.captcha_required = pending.get("captcha_required", False)
     survey.no_patient_data_ack = pending.get("no_patient_data_ack", False)
+    survey.allow_resume = pending.get("allow_resume", True)
+    survey.allow_response_redaction = pending.get("allow_response_redaction", True)
 
     # Restore allow_any_authenticated from pending settings
     if survey.visibility == Survey.Visibility.AUTHENTICATED:
@@ -5116,6 +5127,49 @@ def survey_encryption_display(request: HttpRequest, slug: str) -> HttpResponse:
         "recovery_hint": recovery_hint,
     }
     return render(request, "surveys/encryption_display.html", context)
+
+
+@require_http_methods(["GET", "POST"])
+@ratelimit(key="ip", rate="10/m", block=True)
+def survey_take_resume(request: HttpRequest, resume_token: uuid.UUID) -> HttpResponse:
+    """Resume a public survey via an opt-in resume token.
+
+    This route is only meaningful for public/unlisted surveys where the
+    participant has explicitly clicked "Save and come back later" and been
+    issued a resume token. Authenticated and token surveys resume via their
+    existing credentials (user FK / access token) and do not use this route.
+
+    See docs/survey-progress-tracking.md §Resume Tokens.
+    """
+    progress = SurveyProgress.find_by_resume_token(resume_token)
+    if progress is None:
+        # Neutral error page — never reveal whether the token existed.
+        return render(
+            request,
+            "surveys/resume_expired.html",
+            {"status": 404},
+            status=404,
+        )
+
+    survey = progress.survey
+    if not survey.is_live():
+        return redirect("surveys:closed", slug=survey.slug)
+    if survey.visibility not in (Survey.Visibility.PUBLIC, Survey.Visibility.UNLISTED):
+        # Resume tokens are only for public/unlisted surveys. An
+        # authenticated/token survey should never have a resume token; if
+        # we find one, treat it as expired to avoid leaking information.
+        return render(
+            request,
+            "surveys/resume_expired.html",
+            {"status": 404},
+            status=404,
+        )
+
+    # Delegate to the standard submission handler, passing the progress
+    # record so it doesn't create a new one.
+    return _handle_participant_submission(
+        request, survey, token_obj=None, progress=progress
+    )
 
 
 @require_http_methods(["GET", "POST"])
@@ -5282,7 +5336,10 @@ def survey_take_token(request: HttpRequest, slug: str, token: str) -> HttpRespon
 
 
 def _handle_participant_submission(
-    request: HttpRequest, survey: Survey, token_obj: SurveyAccessToken | None
+    request: HttpRequest,
+    survey: Survey,
+    token_obj: SurveyAccessToken | None,
+    progress: SurveyProgress | None = None,
 ) -> HttpResponse:
     # Block survey owner from taking their own survey
     if request.user.is_authenticated and survey.owner_id == request.user.id:
@@ -5305,8 +5362,10 @@ def _handle_participant_submission(
         )
         raise Http404()
 
-    # Get or create progress record
-    progress, _ = _get_or_create_progress(request, survey, token_obj)
+    # Get or create progress record (or use the one passed in from the
+    # resume route)
+    if progress is None:
+        progress, _ = _get_or_create_progress(request, survey, token_obj)
 
     if request.method == "POST":
         # Check if this is a draft save (AJAX request)
@@ -5331,6 +5390,21 @@ def _handle_participant_submission(
 
         # If this is a draft save, update progress and return JSON
         if is_draft and is_ajax:
+            if progress is None:
+                # Server-side progress is disabled for this survey
+                # (public/unlisted without credential, or allow_resume=False).
+                # Client-side localStorage handles crash recovery.
+                return JsonResponse(
+                    {
+                        "success": True,
+                        "progress": {
+                            "percentage": 0,
+                            "answered": 0,
+                            "total": survey.questions.count(),
+                        },
+                        "server_save_disabled": True,
+                    }
+                )
             progress.update_progress(answers)
             return JsonResponse(
                 {
@@ -5342,6 +5416,156 @@ def _handle_participant_submission(
                     },
                 }
             )
+
+        # "Save and come back later" — explicit opt-in to server-side
+        # progress for public/unlisted surveys. Creates a SurveyProgress
+        # row with a resume token and returns the resume URL. See
+        # docs/survey-progress-tracking.md §Resume Tokens.
+        is_save_resume = request.POST.get("action") == "save_resume"
+        if is_save_resume and is_ajax:
+            if not survey.allow_resume:
+                return JsonResponse(
+                    {"success": False, "error": "Resume is disabled for this survey."},
+                    status=403,
+                )
+            # For public/unlisted surveys, create a progress row with a
+            # resume token if one doesn't exist yet. For authenticated/token
+            # surveys, the existing progress row is reused (resume is
+            # automatic via the user FK / access token).
+            if progress is None:
+                # Check for an existing row by session_key (public surveys)
+                # before creating a new one, so a second "save and come back
+                # later" reuses the same resume token.
+                from datetime import timedelta
+
+                if not request.session.session_key:
+                    request.session.create()
+                session_key = request.session.session_key
+
+                existing = SurveyProgress.objects.filter(
+                    survey=survey,
+                    session_key=session_key,
+                    status=SurveyProgress.Status.IN_PROGRESS,
+                ).first()
+                if request.user.is_authenticated:
+                    existing = (
+                        existing
+                        or SurveyProgress.objects.filter(
+                            survey=survey,
+                            user=request.user,
+                            status=SurveyProgress.Status.IN_PROGRESS,
+                        ).first()
+                    )
+
+                if existing:
+                    progress = existing
+                    progress.update_progress(answers)
+                else:
+                    progress = SurveyProgress.objects.create(
+                        survey=survey,
+                        user=request.user if request.user.is_authenticated else None,
+                        session_key=session_key,
+                        partial_answers=answers,
+                        answered_count=len([v for v in answers.values() if v]),
+                        total_questions=survey.questions.count(),
+                        expires_at=timezone.now() + timedelta(days=30),
+                    )
+            else:
+                progress.update_progress(answers)
+            resume_url = request.build_absolute_uri(
+                reverse(
+                    "surveys:take_resume",
+                    kwargs={"resume_token": progress.resume_token},
+                )
+            )
+            return JsonResponse(
+                {
+                    "success": True,
+                    "resume_url": resume_url,
+                    "resume_token": str(progress.resume_token),
+                }
+            )
+
+        # "Email token" — send a resume or opt-out token link to the
+        # participant's email address. The address is NOT stored server-
+        # side (see docs/survey-progress-tracking.md §Email Delivery).
+        is_email_token = request.POST.get("action") == "email_token"
+        if is_email_token and is_ajax:
+            email_address = request.POST.get("email", "").strip()
+            token_type = request.POST.get("token_type", "resume")
+            if not email_address or "@" not in email_address:
+                return JsonResponse(
+                    {"success": False, "error": "A valid email address is required."},
+                    status=400,
+                )
+            if token_type not in ("resume", "opt_out"):
+                return JsonResponse(
+                    {"success": False, "error": "Invalid token type."}, status=400
+                )
+
+            # Build the token URL. For resume tokens, look up the progress
+            # row. For opt-out tokens, the receipt token is in the session
+            # (set on submit). Either way, we send the URL and do not store
+            # the email address.
+            if token_type == "resume":
+                # Look up the progress row by session_key (public surveys
+                # don't auto-create a progress row, so _get_or_create_progress
+                # returned None). The participant must have already clicked
+                # "save and come back later" to have a resume token.
+                if progress is None or progress.resume_token is None:
+                    if not request.session.session_key:
+                        request.session.create()
+                    session_key = request.session.session_key
+                    progress = SurveyProgress.objects.filter(
+                        survey=survey,
+                        session_key=session_key,
+                        status=SurveyProgress.Status.IN_PROGRESS,
+                        resume_token__isnull=False,
+                    ).first()
+                if progress is None or progress.resume_token is None:
+                    return JsonResponse(
+                        {"success": False, "error": "No resume token available."},
+                        status=400,
+                    )
+                token_url = request.build_absolute_uri(
+                    reverse(
+                        "surveys:take_resume",
+                        kwargs={"resume_token": progress.resume_token},
+                    )
+                )
+            else:  # opt_out
+                receipt_token = request.session.get(f"receipt_token_{survey.slug}")
+                if not receipt_token:
+                    return JsonResponse(
+                        {"success": False, "error": "No redaction token available."},
+                        status=400,
+                    )
+                # The opt-out token is the receipt token itself; the URL is
+                # the thank-you page with the token pre-filled (the participant
+                # uses the token value to request deletion via DSR).
+                token_url = request.build_absolute_uri(
+                    reverse("surveys:thank_you", kwargs={"slug": survey.slug})
+                )
+                token_url += f"?token={receipt_token}"
+
+            from checktick_app.core.email_utils import send_token_email
+
+            sent = send_token_email(
+                to_email=email_address,
+                survey_name=survey.name,
+                token_url=token_url,
+                token_type=token_type,
+            )
+            # Log only the fact that an email was sent — never the address.
+            logger.info(
+                "Token email sent",
+                extra={
+                    "survey_id": survey.id,
+                    "token_type": token_type,
+                    "sent": sent,
+                },
+            )
+            return JsonResponse({"success": sent})
 
         # Validate repeat min_count on final submission (not drafts).
         min_errors = _validate_repeat_min_counts(survey, answers, repeat_config)
@@ -5423,15 +5647,20 @@ def _handle_participant_submission(
                 token_obj.used_by = request.user
             token_obj.save(update_fields=["used_at", "used_by"])
 
-        # Delete progress record after successful submission
+        # Mark progress as completed (replaces the previous delete-on-submit
+        # behaviour — the row is kept for audit then swept by the retention
+        # job). The resume token is invalidated by mark_completed().
         if progress:
-            progress.delete()
+            progress.mark_completed()
 
-        # Store receipt token in session for pseudonymous responses
-        # This allows showing it on thank-you page (only opportunity to share it)
-        if resp.is_pseudonymous:
-            resp.generate_receipt_token()
-            request.session[f"receipt_token_{survey.slug}"] = str(resp.receipt_token)
+        # Store receipt token in session for pseudonymous responses, or for
+        # anonymous (public/unlisted) responses when the participant opted
+        # in and the survey allows redaction. This allows showing it on the
+        # thank-you page (the only opportunity to share it).
+        opted_in_redaction = bool(request.POST.get("opt_in_redaction"))
+        token = resp.generate_receipt_token(opt_in=opted_in_redaction)
+        if token:
+            request.session[f"receipt_token_{survey.slug}"] = str(token)
 
         messages.success(request, "Thank you for your response.")
         # Redirect to thank-you page
@@ -5497,13 +5726,18 @@ def _handle_participant_submission(
             else {}
         ),
         "is_preview": False,  # Flag to indicate this is public submission
-        # Progress tracking
-        "show_progress": True,
-        "progress_percentage": progress.calculate_progress_percentage(),
-        "answered_count": progress.answered_count,
-        "total_questions": progress.total_questions,
-        "saved_answers": progress.partial_answers,
-        "last_saved": progress.updated_at if progress.answered_count > 0 else None,
+        # Progress tracking (None for public/unlisted surveys without
+        # credential — see _get_or_create_progress)
+        "show_progress": progress is not None,
+        "progress_percentage": (
+            progress.calculate_progress_percentage() if progress else 0
+        ),
+        "answered_count": progress.answered_count if progress else 0,
+        "total_questions": progress.total_questions if progress else 0,
+        "saved_answers": progress.partial_answers if progress else {},
+        "last_saved": (
+            progress.updated_at if progress and progress.answered_count > 0 else None
+        ),
     }
     return render(request, "surveys/detail.html", ctx)
 
@@ -7157,9 +7391,35 @@ def _get_or_create_progress(
 ):
     """
     Get or create progress record for current user/session.
-    Returns tuple of (SurveyProgress, created: bool)
+    Returns tuple of (SurveyProgress | None, created: bool).
+
+    Returns (None, False) when server-side progress tracking is disabled:
+    - survey.allow_resume is False (creator disabled resume), OR
+    - public/unlisted surveys with no participant credential (no token, no
+      user). These surveys have no way to identify the participant on
+      return, so auto-saving to a session cookie is a weak protection and a
+      PHI retention liability on shared computers. Crash recovery for these
+      surveys uses client-side localStorage instead (see
+      docs/survey-progress-tracking.md §Public Surveys).
+
+    Authenticated and token surveys always get a progress row: the user FK
+    or the access token is the credential for resume.
     """
     from datetime import timedelta
+
+    # Creator disabled resume entirely
+    if not survey.allow_resume:
+        return None, False
+
+    # Public/unlisted surveys with no credential: no auto-save.
+    # Token surveys have a token_obj and are NOT anonymous, so they proceed.
+    is_anonymous_public = (
+        not request.user.is_authenticated
+        and token_obj is None
+        and survey.visibility in (Survey.Visibility.PUBLIC, Survey.Visibility.UNLISTED)
+    )
+    if is_anonymous_public:
+        return None, False
 
     total_questions = survey.questions.count()
     expires_at = timezone.now() + timedelta(days=30)

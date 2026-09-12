@@ -57,6 +57,18 @@ This is sufficient time for:
 
 ## Extended Retention
 
+### Survey Progress Records
+
+Separate from the survey response retention period, CheckTick retains **survey progress records** (partial, unsubmitted answers) for a maximum of **30 days**:
+
+- **Authenticated and token surveys**: progress records are created automatically and deleted when the participant submits, or expire after 30 days if unused.
+- **Public/unlisted surveys**: progress records are only created when the participant explicitly clicks "Save and come back later" and accepts a resume token. The record and token are deleted on submission, or expire after 30 days.
+- **Disabled resume**: if the survey creator has disabled `allow_resume`, no progress records are created at all.
+
+Progress records are swept by the `cleanup_survey_progress` management command, which runs daily. The command marks expired records as `ABANDONED` before deleting them, so dashboards can distinguish drop-off from active progress.
+
+See [Survey Progress Tracking (Technical)](/docs/survey-progress-tracking-technical/) for the full reference.
+
 ### Maximum Period
 
 You can extend retention up to **24 months** (2 years) from closure.

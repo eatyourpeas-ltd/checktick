@@ -260,6 +260,30 @@ If your survey collects sensitive demographics, use the **Authenticated** mode s
 
 **Encryption:** All demographic fields are encrypted per-survey. The decryption key is handled server-side and never exposed in public pages or APIs.
 
+## Progress and Redaction Toggles
+
+Two boolean fields on `Survey` control the progress tracking and response redaction features (see [Survey Progress Tracking (Technical)](/docs/survey-progress-tracking-technical/)):
+
+```python
+class Survey(models.Model):
+    ...
+    allow_resume = models.BooleanField(
+        default=True,
+        help_text="Allow participants to save progress and resume later.",
+    )
+    allow_response_redaction = models.BooleanField(
+        default=True,
+        help_text="Offer public-survey participants an opt-out token after submission.",
+    )
+```
+
+Both are set in the publication workflow (`survey_publish_settings` view) and persisted via `_apply_pending_publish_settings`. They default to `True`.
+
+- **`allow_resume`**: when `False`, `_get_or_create_progress` returns `(None, False)` for all access tiers — no `SurveyProgress` row is created, no resume token is issued.
+- **`allow_response_redaction`**: when `False`, `generate_receipt_token()` returns `None` for public/unlisted surveys even if the participant opts in. Authenticated/token surveys are unaffected.
+
+See [Data Governance](/docs/data-governance/) for the privacy implications of disabling redaction.
+
 ## Security Protections
 
 ### CSRF Protection
@@ -503,4 +527,6 @@ print(f"Is valid: {token.is_valid()}")
 - [Publish & Collect Responses](/docs/publish-and-collection/) - User-friendly guide
 - [Authentication and Permissions](/docs/authentication-and-permissions/) - Access control
 - [API Reference](/docs/api/) - API endpoints and protections
-- [Survey Progress Tracking](/docs/survey-progress-tracking/) - Auto-save functionality
+- [Survey Progress Tracking](/docs/survey-progress-tracking/) - User-facing auto-save and resume guide
+- [Survey Progress Tracking (Technical)](/docs/survey-progress-tracking-technical/) - Developer reference for progress, resume tokens, and opt-out tokens
+- [Data Governance](/docs/data-governance/) - Retention, deletion, and participant withdrawal
