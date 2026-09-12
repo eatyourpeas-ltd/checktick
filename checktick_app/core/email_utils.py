@@ -361,6 +361,60 @@ def send_branded_email(
         return False
 
 
+def send_token_email(
+    to_email: str,
+    survey_name: str,
+    token_url: str,
+    token_type: str,
+) -> bool:
+    """Send a resume or opt-out token link to a participant.
+
+    Privacy contract (see docs/survey-progress-tracking.md §Email Delivery):
+    - The email address is NOT stored server-side. The caller accepts it in
+      the POST body, passes it here, and lets it fall out of scope. No
+      model field, log line, or audit row retains it.
+    - The email contains only the token URL and the survey name — no
+      answers, no question text.
+    - The RedactionFilter catches emails in logs as a safety net, but this
+      function must not rely on it: the address is never passed to logger.
+
+    Args:
+        to_email: Recipient email address (transient — not stored).
+        survey_name: Survey name for context in the email body.
+        token_url: The resume or opt-out URL to include in the email.
+        token_type: "resume" or "opt_out" — selects the email template.
+
+    Returns:
+        True if email sent successfully, False otherwise.
+    """
+    if token_type == "resume":
+        subject = f"Your saved progress for {survey_name}"
+        markdown_content = (
+            f"You saved your progress on **{survey_name}**. "
+            f"Use the link below to continue where you left off.\n\n"
+            f"[Continue your survey]({token_url})\n\n"
+            f"This link expires in 30 days. If you did not request this, "
+            f"you can ignore this email."
+        )
+    else:  # opt_out
+        subject = f"Your redaction token for {survey_name}"
+        markdown_content = (
+            f"You submitted a response to **{survey_name}** and requested "
+            f"a redaction token. Keep this link safe — you can use it to "
+            f"request deletion of your response later.\n\n"
+            f"[Your redaction token]({token_url})\n\n"
+            f"If you lose this link, we cannot identify your response to "
+            f"delete it. This link is valid for as long as the survey "
+            f"retains your response."
+        )
+
+    return send_branded_email(
+        to_email=to_email,
+        subject=subject,
+        markdown_content=markdown_content,
+    )
+
+
 def send_welcome_email(user) -> bool:
     """Send welcome email to newly registered user.
 

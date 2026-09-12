@@ -24,6 +24,12 @@ from checktick_app.surveys.models import (
 TEST_PASSWORD = "x"
 
 
+@pytest.fixture(autouse=True)
+def disable_rate_limiting(settings):
+    """Disable rate limiting for all tests in this module."""
+    settings.RATELIMIT_ENABLE = False
+
+
 @pytest.fixture
 def survey_owner(django_user_model):
     return django_user_model.objects.create_user(
@@ -695,3 +701,146 @@ class TestOptOutToken:
 
         resp = SurveyResponse.objects.get(survey=survey, submitted_by=participant)
         assert resp.receipt_token is not None
+
+
+@pytest.mark.django_db
+class TestEmailTokenDelivery:
+    """Email delivery of resume and opt-out tokens.
+
+    Privacy contract: the email address is NOT stored server-side — no
+    model field, log line, or audit row retains it.
+    """
+
+    def test_email_resume_token_sends_email(self, client, public_survey_for_resume):
+        """Emailing a resume token sends an email and returns success."""
+        from django.core import mail
+        from django.urls import reverse
+
+        # First, create a resume token
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+        client.post(
+            url,
+            {"action": "save_resume", f"q_{q_id}": "Answer"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        # Now email the token
+        response = client.post(
+            url,
+            {
+                "action": "email_token",
+                "token_type": "resume",
+                "email": "participant@example.com",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        assert len(mail.outbox) == 1
+        assert "participant@example.com" in mail.outbox[0].to
+        assert "/take/resume/" in mail.outbox[0].body
+
+    def test_email_opt_out_token_sends_email(self, client, public_survey_for_resume):
+        """Emailing an opt-out token after submission sends an email."""
+        from django.core import mail
+        from django.urls import reverse
+
+        # Submit with opt-in to get a receipt token
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+        client.post(url, {f"q_{q_id}": "Answer", "opt_in_redaction": "on"})
+
+        # The receipt token is in the session — email it
+        response = client.post(
+            url,
+            {
+                "action": "email_token",
+                "token_type": "opt_out",
+                "email": "participant@example.com",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        assert len(mail.outbox) == 1
+        assert "participant@example.com" in mail.outbox[0].to
+
+    def test_email_token_invalid_email_rejected(self, client, public_survey_for_resume):
+        """An invalid email address is rejected."""
+        from django.urls import reverse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        response = client.post(
+            url,
+            {
+                "action": "email_token",
+                "token_type": "resume",
+                "email": "not-an-email",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        assert response.status_code == 400
+
+    def test_email_token_no_resume_token_available(
+        self, client, public_survey_for_resume
+    ):
+        """Emailing a resume token when none exists returns an error."""
+        from django.urls import reverse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        response = client.post(
+            url,
+            {
+                "action": "email_token",
+                "token_type": "resume",
+                "email": "participant@example.com",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        assert response.status_code == 400
+        assert "No resume token" in response.json()["error"]
+
+    def test_email_address_not_stored_in_any_model(
+        self, client, public_survey_for_resume
+    ):
+        """The email address must not be stored in any model field after the
+        request completes."""
+        from django.core import mail
+        from django.urls import reverse
+
+        # Create a resume token
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+        client.post(
+            url,
+            {"action": "save_resume", f"q_{q_id}": "Answer"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        # Email the token
+        client.post(
+            url,
+            {
+                "action": "email_token",
+                "token_type": "resume",
+                "email": "unique-test@example.com",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        # The email was sent
+        assert len(mail.outbox) == 1
+
+        # The email address must not appear in any SurveyProgress field
+        progress = SurveyProgress.objects.get(survey=public_survey_for_resume)
+        assert "unique-test@example.com" not in str(progress.partial_answers)
+        assert progress.resume_token is not None  # token still there
+
+        # No model field stores the email — check that no SurveyProgress
+        # field contains the address. (There is no resume_email field.)
+        assert not hasattr(progress, "resume_email")

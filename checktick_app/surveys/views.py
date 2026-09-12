@@ -5486,6 +5486,87 @@ def _handle_participant_submission(
                 }
             )
 
+        # "Email token" — send a resume or opt-out token link to the
+        # participant's email address. The address is NOT stored server-
+        # side (see docs/survey-progress-tracking.md §Email Delivery).
+        is_email_token = request.POST.get("action") == "email_token"
+        if is_email_token and is_ajax:
+            email_address = request.POST.get("email", "").strip()
+            token_type = request.POST.get("token_type", "resume")
+            if not email_address or "@" not in email_address:
+                return JsonResponse(
+                    {"success": False, "error": "A valid email address is required."},
+                    status=400,
+                )
+            if token_type not in ("resume", "opt_out"):
+                return JsonResponse(
+                    {"success": False, "error": "Invalid token type."}, status=400
+                )
+
+            # Build the token URL. For resume tokens, look up the progress
+            # row. For opt-out tokens, the receipt token is in the session
+            # (set on submit). Either way, we send the URL and do not store
+            # the email address.
+            if token_type == "resume":
+                # Look up the progress row by session_key (public surveys
+                # don't auto-create a progress row, so _get_or_create_progress
+                # returned None). The participant must have already clicked
+                # "save and come back later" to have a resume token.
+                if progress is None or progress.resume_token is None:
+                    if not request.session.session_key:
+                        request.session.create()
+                    session_key = request.session.session_key
+                    progress = SurveyProgress.objects.filter(
+                        survey=survey,
+                        session_key=session_key,
+                        status=SurveyProgress.Status.IN_PROGRESS,
+                        resume_token__isnull=False,
+                    ).first()
+                if progress is None or progress.resume_token is None:
+                    return JsonResponse(
+                        {"success": False, "error": "No resume token available."},
+                        status=400,
+                    )
+                token_url = request.build_absolute_uri(
+                    reverse(
+                        "surveys:take_resume",
+                        kwargs={"resume_token": progress.resume_token},
+                    )
+                )
+            else:  # opt_out
+                receipt_token = request.session.get(f"receipt_token_{survey.slug}")
+                if not receipt_token:
+                    return JsonResponse(
+                        {"success": False, "error": "No redaction token available."},
+                        status=400,
+                    )
+                # The opt-out token is the receipt token itself; the URL is
+                # the thank-you page with the token pre-filled (the participant
+                # uses the token value to request deletion via DSR).
+                token_url = request.build_absolute_uri(
+                    reverse("surveys:thank_you", kwargs={"slug": survey.slug})
+                )
+                token_url += f"?token={receipt_token}"
+
+            from checktick_app.core.email_utils import send_token_email
+
+            sent = send_token_email(
+                to_email=email_address,
+                survey_name=survey.name,
+                token_url=token_url,
+                token_type=token_type,
+            )
+            # Log only the fact that an email was sent — never the address.
+            logger.info(
+                "Token email sent",
+                extra={
+                    "survey_id": survey.id,
+                    "token_type": token_type,
+                    "sent": sent,
+                },
+            )
+            return JsonResponse({"success": sent})
+
         # Validate repeat min_count on final submission (not drafts).
         min_errors = _validate_repeat_min_counts(survey, answers, repeat_config)
         if min_errors:
