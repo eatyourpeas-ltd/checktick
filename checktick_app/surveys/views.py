@@ -1822,12 +1822,21 @@ def _validate_repeat_min_counts(
     return errors
 
 
-def _resolved_group_order_ids(survey: Survey) -> list[int]:
+def _resolved_group_order_ids(
+    survey: Survey, selected_group_ids: list[int] | None = None
+) -> list[int]:
     """Return group IDs in the same display order as the /groups page.
 
     Order rule:
     1) Explicit IDs from ``survey.style['group_order']`` (valid IDs only)
     2) Remaining groups sorted by name (case-insensitive), then id
+
+    When ``selected_group_ids`` is provided (section_menu layout), the
+    result is filtered to only those IDs. This is the single hook the
+    section_menu layout adds to the runtime ordering pipeline (see
+    docs/survey-layouts.md §Runtime). Mandatory sections are expected to
+    be included in ``selected_group_ids`` by the caller (the picker
+    handler unions them in before storing on SurveyProgress).
     """
     groups = list(survey.question_groups.only("id", "name").all())
     groups_map = {g.id: g for g in groups}
@@ -1846,7 +1855,11 @@ def _resolved_group_order_ids(survey: Survey) -> list[int]:
         (g for g in groups if g.id not in explicit_ids),
         key=lambda g: ((g.name or "").lower(), g.id),
     )
-    return explicit_ids + [g.id for g in remaining]
+    ordered = explicit_ids + [g.id for g in remaining]
+    if selected_group_ids is None:
+        return ordered
+    selected_set = {int(gid) for gid in selected_group_ids if str(gid).isdigit()}
+    return [gid for gid in ordered if gid in selected_set]
 
 
 def _annotate_question_render_sequence(
@@ -1873,10 +1886,16 @@ def _annotate_question_render_sequence(
 
 
 def _order_questions_by_group(
-    survey: Survey, questions: list[SurveyQuestion]
+    survey: Survey,
+    questions: list[SurveyQuestion],
+    selected_group_ids: list[int] | None = None,
 ) -> list[SurveyQuestion]:
-    """Order questions by group position, then by question.order within each group."""
-    group_order = _resolved_group_order_ids(survey)
+    """Order questions by group position, then by question.order within each group.
+
+    When ``selected_group_ids`` is provided (section_menu layout), groups
+    not in the selection are dropped — see ``_resolved_group_order_ids``.
+    """
+    group_order = _resolved_group_order_ids(survey, selected_group_ids)
 
     # Separate questions by group
     grouped_questions: dict[int | None, list[SurveyQuestion]] = {}
@@ -1900,22 +1919,27 @@ def _order_questions_by_group(
             ordered.extend(grouped_questions[gid])
             del grouped_questions[gid]
 
-    # Any remaining (e.g. orphaned group refs) sorted by group name then id
-    remaining_group_ids = sorted(
-        grouped_questions.keys(),
-        key=lambda gid: (
-            (
-                (grouped_questions[gid][0].group.name or "").lower()
-                if grouped_questions[gid] and grouped_questions[gid][0].group
-                else ""
+    # Any remaining (e.g. orphaned group refs) sorted by group name then id.
+    # When filtering by selected_group_ids, these are intentionally excluded
+    # (non-selected sections) — drop them rather than appending.
+    if selected_group_ids is None:
+        remaining_group_ids = sorted(
+            grouped_questions.keys(),
+            key=lambda gid: (
+                (
+                    (grouped_questions[gid][0].group.name or "").lower()
+                    if grouped_questions[gid] and grouped_questions[gid][0].group
+                    else ""
+                ),
+                gid,
             ),
-            gid,
-        ),
-    )
-    for gid in remaining_group_ids:
-        ordered.extend(grouped_questions[gid])
+        )
+        for gid in remaining_group_ids:
+            ordered.extend(grouped_questions[gid])
 
-    # Add ungrouped questions at the end, sorted by order
+    # Add ungrouped questions at the end, sorted by order.
+    # When filtering by selected_group_ids, ungrouped questions (no section)
+    # are kept — they don't belong to any selectable section.
     ungrouped_questions.sort(key=lambda q: (q.order, q.id))
     ordered.extend(ungrouped_questions)
 
@@ -5337,6 +5361,76 @@ def survey_take_token(request: HttpRequest, slug: str, token: str) -> HttpRespon
     return _handle_participant_submission(request, survey, token_obj=tok)
 
 
+def _render_section_menu_picker(
+    request: HttpRequest, survey: Survey, progress: SurveyProgress | None
+) -> HttpResponse:
+    """Render the section menu picker page (see docs/survey-layouts.md step 5).
+
+    The picker is a pre-step: the participant chooses which pickable
+    sections to complete. Mandatory sections are shown as locked/included.
+    On POST (action=select_sections) the selection is stored on
+    SurveyProgress.selected_group_ids and the take view re-renders with
+    the filtered question list.
+    """
+    menu = getattr(survey, "section_menu", None)
+    if menu is None:
+        # No config yet — create a default menu so the picker can render.
+        menu = SectionMenu.objects.create(survey=survey)
+    # Sync items so every survey group has a row.
+    _sync_section_menu_items(menu, survey)
+    items_by_group = {
+        item.group_id: item for item in menu.items.select_related("group")
+    }
+    order_ids = _resolved_group_order_ids(survey)
+    # Build a list of (group, item) in authored order, with question counts.
+    from django.db.models import Count, Q as _Q
+
+    groups_qs = survey.question_groups.annotate(
+        q_count=Count("surveyquestion", filter=_Q(surveyquestion__survey=survey))
+    )
+    groups_map = {g.id: g for g in groups_qs}
+    picker_rows = []
+    for gid in order_ids:
+        g = groups_map.get(gid)
+        if not g:
+            continue
+        item = items_by_group.get(gid)
+        picker_rows.append(
+            {
+                "group": g,
+                "item": item,
+                "is_mandatory": bool(item and not item.is_pickable),
+                "estimated_minutes": item.estimated_minutes if item else None,
+            }
+        )
+    mandatory_rows = [r for r in picker_rows if r["is_mandatory"]]
+    pickable_rows = [r for r in picker_rows if not r["is_mandatory"]]
+    ctx = {
+        "survey": survey,
+        "menu": menu,
+        "mandatory_rows": mandatory_rows,
+        "pickable_rows": pickable_rows,
+        "show_select_all": menu.show_select_all,
+        "show_estimated_time": menu.show_estimated_time,
+        "min_selected": menu.min_selected,
+        "max_selected": menu.max_selected,
+        "is_preview": False,
+        "show_progress": progress is not None,
+        "progress_percentage": (
+            progress.calculate_progress_percentage() if progress else 0
+        ),
+        "answered_count": progress.answered_count if progress else 0,
+        "total_questions": progress.total_questions if progress else 0,
+        "saved_answers": progress.partial_answers if progress else {},
+        "last_saved": (
+            progress.updated_at if progress and progress.answered_count > 0 else None
+        ),
+        # Step indicator: the picker is step 1.
+        "picker_step": True,
+    }
+    return render(request, "surveys/section_menu_picker.html", ctx)
+
+
 def _handle_participant_submission(
     request: HttpRequest,
     survey: Survey,
@@ -5367,7 +5461,93 @@ def _handle_participant_submission(
     # Get or create progress record (or use the one passed in from the
     # resume route)
     if progress is None:
-        progress, _ = _get_or_create_progress(request, survey, token_obj)
+        progress, _created = _get_or_create_progress(request, survey, token_obj)
+
+    # Section menu picker submission (see docs/survey-layouts.md step 5).
+    # The picker is a pre-step: the participant's chosen group IDs (plus
+    # mandatory ones) are stored on SurveyProgress.selected_group_ids, then
+    # the take view re-renders with the filtered question list.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "select_sections"
+        and survey.layout == Survey.Layout.SECTION_MENU
+    ):
+        if progress is None:
+            # Public/unlisted without a credential: create a throwaway
+            # progress row to hold the selection. This mirrors the
+            # save_resume path's session-key handling.
+            from datetime import timedelta
+
+            if not request.session.session_key:
+                request.session.create()
+            session_key = request.session.session_key
+            progress = SurveyProgress.objects.create(
+                survey=survey,
+                user=request.user if request.user.is_authenticated else None,
+                session_key=session_key,
+                total_questions=survey.questions.count(),
+                expires_at=timezone.now() + timedelta(days=30),
+            )
+        chosen_raw = request.POST.getlist("selected_groups")
+        chosen_ids = {int(x) for x in chosen_raw if str(x).isdigit()}
+        # Union with mandatory sections from the SectionMenu config.
+        mandatory_ids: set[int] = set()
+        menu = getattr(survey, "section_menu", None)
+        if menu is not None:
+            mandatory_ids = set(
+                menu.items.filter(is_pickable=False).values_list("group_id", flat=True)
+            )
+        # Only keep IDs that are actually in this survey.
+        survey_group_ids = set(survey.question_groups.values_list("id", flat=True))
+        final_ids = (chosen_ids | mandatory_ids) & survey_group_ids
+        # Validate min/max against the menu config (pickable only).
+        pickable_chosen = chosen_ids & {
+            item.group_id for item in (menu.items.all() if menu else [])
+        }
+        if menu is not None:
+            min_sel = menu.min_selected or 0
+            if len(pickable_chosen) < min_sel:
+                messages.error(
+                    request,
+                    _("Select at least %(n)d section(s).") % {"n": min_sel},
+                )
+                return _safe_participant_redirect(request, survey)
+            if menu.max_selected and len(pickable_chosen) > menu.max_selected:
+                messages.error(
+                    request,
+                    _("Select at most %(n)d section(s).") % {"n": menu.max_selected},
+                )
+                return _safe_participant_redirect(request, survey)
+        # Order the final selection by the resolved group order (authored)
+        # unless the menu says participant order — in which case keep the
+        # participant's tick order, with mandatory sections first in authored
+        # order.
+        if menu is not None and menu.order_mode == SectionMenu.OrderMode.PARTICIPANT:
+            # Preserve tick order for pickable; mandatory first in authored order.
+            authored = _resolved_group_order_ids(survey)
+            mandatory_ordered = [gid for gid in authored if gid in mandatory_ids]
+            pickable_ordered = [
+                int(x) for x in chosen_raw if str(x).isdigit() and int(x) in chosen_ids
+            ]
+            ordered_ids = mandatory_ordered + pickable_ordered
+        else:
+            ordered_ids = _resolved_group_order_ids(survey, list(final_ids))
+        progress.selected_group_ids = ordered_ids
+        progress.save(update_fields=["selected_group_ids"])
+        messages.success(request, _("Sections selected. Let's begin."))
+        return _safe_participant_redirect(request, survey)
+
+    # Section menu: 'change_sections' clears the selection so the picker
+    # re-renders on the next GET. The participant re-picks.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "change_sections"
+        and survey.layout == Survey.Layout.SECTION_MENU
+        and progress is not None
+    ):
+        progress.selected_group_ids = []
+        progress.save(update_fields=["selected_group_ids"])
+        return _safe_participant_redirect(request, survey)
 
     if request.method == "POST":
         # Check if this is a draft save (AJAX request)
@@ -5586,8 +5766,8 @@ def _handle_participant_submission(
             return _safe_participant_redirect(request, survey)
 
         # Professional details (non-encrypted)
-        _, professional_fields, professional_ods = _get_professional_group_and_fields(
-            survey
+        _prof_group, professional_fields, professional_ods = (
+            _get_professional_group_and_fields(survey)
         )
         professional_payload = {}
         for field in professional_fields:
@@ -5669,9 +5849,23 @@ def _handle_participant_submission(
         return redirect("surveys:thank_you", slug=survey.slug)
 
     # GET: render using existing detail template
+    # Section menu picker (see docs/survey-layouts.md step 5). When the
+    # survey uses the section_menu layout and the participant has not yet
+    # selected sections (selected_group_ids is empty), render the picker
+    # instead of the question list. On resume, selected_group_ids is
+    # populated so the picker is skipped.
+    selected_group_ids: list[int] = []
+    if survey.layout == Survey.Layout.SECTION_MENU and progress is not None:
+        raw = progress.selected_group_ids or []
+        if isinstance(raw, list):
+            selected_group_ids = [int(x) for x in raw if str(x).isdigit()]
+    show_picker = survey.layout == Survey.Layout.SECTION_MENU and not selected_group_ids
+    if show_picker:
+        return _render_section_menu_picker(request, survey, progress)
+
     _prepare_question_rendering(survey)
     all_questions = list(survey.questions.select_related("group", "dataset").all())
-    qs = _order_questions_by_group(survey, all_questions)
+    qs = _order_questions_by_group(survey, all_questions, selected_group_ids or None)
     _inject_dataset_options(qs)
     _annotate_question_render_sequence(survey, qs)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
@@ -5728,6 +5922,9 @@ def _handle_participant_submission(
             else {}
         ),
         "is_preview": False,  # Flag to indicate this is public submission
+        # Section menu: the selected group IDs (for the 'Change sections' link).
+        "selected_group_ids": selected_group_ids,
+        "is_section_menu": survey.layout == Survey.Layout.SECTION_MENU,
         # Progress tracking (None for public/unlisted surveys without
         # credential — see _get_or_create_progress)
         "show_progress": progress is not None,

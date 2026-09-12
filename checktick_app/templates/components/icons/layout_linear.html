@@ -1,0 +1,9 @@
+{% comment %} {# Linear layout icon (sections flowing in a row). Uses the same viewBox, box dimensions, and stroke-width as layout_section_menu.html so the two cards visually match. Usage: {% include "components/icons/layout_linear.html" with classes="w-full h-24 text-base-content/70" %} #} {% endcomment %}
+<svg xmlns="http://www.w3.org/2000/svg" class="{{ classes|default:'w-6 h-6' }}" viewBox="0 0 800 450" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Three section boxes in a row, vertically centred (y=170, h=110 → centre at 225) -->
+  <rect x="40" y="170" width="200" height="110" rx="16" ry="16" />
+  <rect x="300" y="170" width="200" height="110" rx="16" ry="16" />
+  <rect x="560" y="170" width="200" height="110" rx="16" ry="16" />
+  <!-- Flow arrows between boxes -->
+  <path d="M240,225 L300,225 M500,225 L560,225" />
+</svg>

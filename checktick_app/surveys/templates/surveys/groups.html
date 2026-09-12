@@ -67,14 +67,8 @@
               <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
             {% endif %}
           </div>
-          {# Inline SVG wireframe — CSP-safe, inherits theme tokens #}
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40" class="w-full h-10 text-base-content/70" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <rect x="4" y="12" width="20" height="16" rx="2" />
-            <rect x="32" y="12" width="20" height="16" rx="2" />
-            <rect x="60" y="12" width="20" height="16" rx="2" />
-            <rect x="88" y="12" width="20" height="16" rx="2" />
-            <path d="M24 20h8M52 20h8M80 20h8" stroke-linecap="round" />
-          </svg>
+          {# Layout wireframe — CSP-safe, inherits daisyUI theme tokens. Same viewBox/box-size/stroke-width as the section menu icon so the two cards match. #}
+          {% include "components/icons/layout_linear.html" with classes="w-full h-24 text-base-content/70" %}
           <p class="text-xs text-base-content/70">{% trans 'Sections flow in order. Every respondent sees every section.' %}</p>
           {% if can_edit and survey.layout != 'linear' %}
             <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
@@ -96,13 +90,7 @@
               <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
             {% endif %}
           </div>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40" class="w-full h-10 text-base-content/70" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <rect x="48" y="2" width="24" height="10" rx="2" />
-            <path d="M60 12v4M30 22h60M30 22l-6 8M60 22v8M90 22l6 8" stroke-linecap="round" />
-            <rect x="18" y="30" width="20" height="8" rx="2" />
-            <rect x="50" y="30" width="20" height="8" rx="2" />
-            <rect x="82" y="30" width="20" height="8" rx="2" />
-          </svg>
+          {% include "components/icons/layout_section_menu.html" with classes="w-full h-24 text-base-content/70" %}
           <p class="text-xs text-base-content/70">{% trans 'Participant picks which sections to complete. Mandatory sections are always included.' %}</p>
           {% if section_count < 2 %}
             <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>

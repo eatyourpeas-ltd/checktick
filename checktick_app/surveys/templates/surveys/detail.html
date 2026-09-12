@@ -266,6 +266,17 @@
                 <span data-save-status aria-live="polite" aria-atomic="true"></span>
             {% endif %}
         </div>
+        {% if is_section_menu and selected_group_ids %}
+        <div class="mt-2">
+            <form method="post" action="{{ request.path }}" class="inline" data-confirm-submit="{% trans 'Changing sections will discard your answers in deselected sections. Continue?' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="change_sections" />
+                <button type="submit" class="link link-hover text-xs underline text-primary">
+                    {% trans "Change sections" %}
+                </button>
+            </form>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endif %}

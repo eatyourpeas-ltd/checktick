@@ -68,13 +68,16 @@ def test_survey_layout_can_be_set_to_section_menu(survey_owner):
 
 
 @pytest.mark.django_db
-def test_section_menu_survey_still_renders_like_linear(
-    client, published_survey, survey_owner
-):
-    """Step 2 is a no-op behaviour change: a section_menu survey renders the
-    question list exactly as a linear one does (picker lands in step 5)."""
+def test_section_menu_survey_renders_picker(client, published_survey, survey_owner):
+    """Step 5: a section_menu survey with no selection renders the picker
+    instead of the question list."""
+    from checktick_app.surveys.models import QuestionGroup
+
     published_survey.layout = Survey.Layout.SECTION_MENU
     published_survey.save(update_fields=["layout"])
+    # The picker needs at least one section to show pickable rows.
+    g = QuestionGroup.objects.create(name="Section 1", owner=survey_owner)
+    published_survey.question_groups.add(g)
 
     survey_owner.__class__.objects.create_user(
         username="participant@example.com", password=TEST_PASSWORD
@@ -83,8 +86,8 @@ def test_section_menu_survey_still_renders_like_linear(
     url = reverse("surveys:take", kwargs={"slug": published_survey.slug})
     response = client.get(url)
     assert response.status_code == 200
-    # The question text should appear — no picker template yet.
-    assert b"Q1" in response.content
+    # The picker renders, not the question list.
+    assert b"section-picker-form" in response.content
 
 
 @pytest.mark.django_db

@@ -57,6 +57,9 @@ def test_organise_page_shows_layout_picker(client, owner, survey):
     assert "Section menu" in html
     # Linear is current by default
     assert "Current" in html
+    # Layout icons render (distinctive SVG paths from the icon components)
+    assert "M240,225" in html  # linear flow arrows
+    assert "M 400,170" in html  # section menu tree connector
 
 
 @pytest.mark.django_db
