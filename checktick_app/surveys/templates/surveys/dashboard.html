@@ -477,6 +477,21 @@
 
   </div>
   {% endif %}
+
+  {# Organise & layout — always visible, compact link row #}
+  <div class="flex flex-wrap gap-2 mt-3">
+    <a href="/surveys/{{ survey.slug }}/groups/" class="btn btn-sm btn-ghost gap-2" title="{% trans 'Reorder sections, set layout, configure repeats and branching' %}">
+      {% include "components/icons/layout_linear.html" with classes="w-4 h-4" %}
+      {% trans "Organise" %}
+      {% if survey.layout == 'section_menu' %}
+      <span class="badge badge-accent badge-xs">{% trans "Section menu" %}</span>
+      {% endif %}
+    </a>
+    <a href="/surveys/{{ survey.slug }}/survey-map/" class="btn btn-sm btn-ghost gap-2" title="{% trans 'Visualise sections, questions, and branching logic' %}">
+      {% include "components/icons/survey-map.html" with classes="w-4 h-4" %}
+      {% trans "Survey Map" %}
+    </a>
+  </div>
 </div>
 
 <div class="mt-6">
