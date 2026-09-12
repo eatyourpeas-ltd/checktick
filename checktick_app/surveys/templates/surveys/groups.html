@@ -120,6 +120,109 @@
     </div>
   </section>
 
+  {# === Section menu configuration card (step 4) === #}
+  {% if survey.layout == 'section_menu' %}
+  <section class="not-prose mb-6" aria-labelledby="section-menu-config-heading">
+    <div class="card bg-base-100 border border-base-300 max-w-3xl">
+      <div class="card-body gap-3 p-4">
+        <h3 id="section-menu-config-heading" class="font-semibold text-base-content">
+          {% trans 'Section menu configuration' %}
+        </h3>
+        {% if can_edit %}
+        <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="space-y-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_section_menu" />
+
+          <div>
+            <label class="label text-xs" for="id_prompt_text">{% trans 'Picker prompt' %}</label>
+            <input id="id_prompt_text" type="text" name="prompt_text" maxlength="255"
+                   class="input input-bordered input-sm w-full"
+                   value="{{ section_menu.prompt_text|default:'Which sections would you like to complete?' }}" />
+          </div>
+
+          <div>
+            <span class="label text-xs">{% trans 'Sections' %}</span>
+            <ul class="mt-1 divide-y divide-base-200 border border-base-200 rounded-lg">
+              {% for g in groups %}
+                {% with item=section_menu_items_by_group|get_item:g.id %}
+                  <li class="flex items-center gap-3 p-2">
+                    <label class="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                      <input type="checkbox" name="mandatory_group_ids" value="{{ g.id }}"
+                             class="checkbox checkbox-sm"
+                             {% if item and not item.is_pickable %}checked{% endif %}
+                             aria-label="{% trans 'Mandatory' %}" />
+                      <span class="truncate">{{ g.name }}</span>
+                    </label>
+                    <span class="text-xs text-base-content/60 shrink-0">
+                      {% if item and not item.is_pickable %}{% trans 'Mandatory' %}{% else %}{% trans 'Pickable' %}{% endif %}
+                    </span>
+                    <span class="badge badge-neutral badge-sm shrink-0">{{ g.q_count|default:0 }}</span>
+                    <input type="hidden" name="estimated_minutes_group_ids" value="{{ g.id }}" />
+                    <input type="number" min="1" name="estimated_minutes_{{ g.id }}"
+                           class="input input-bordered input-xs w-16"
+                           placeholder="min"
+                           value="{{ item.estimated_minutes|default:'' }}"
+                           aria-label="{% trans 'Estimated minutes' %}" />
+                  </li>
+                {% endwith %}
+              {% endfor %}
+            </ul>
+          </div>
+
+          <fieldset class="flex flex-wrap gap-x-6 gap-y-2 items-end">
+            <div>
+              <label class="label text-xs" for="id_min_selected">{% trans 'Min pickable selected' %}</label>
+              <input id="id_min_selected" type="number" min="0" name="min_selected"
+                     class="input input-bordered input-sm w-20"
+                     value="{{ section_menu.min_selected|default:1 }}" />
+            </div>
+            <div>
+              <label class="label text-xs" for="id_max_selected">{% trans 'Max (blank = no cap)' %}</label>
+              <input id="id_max_selected" type="number" min="1" name="max_selected"
+                     class="input input-bordered input-sm w-20"
+                     value="{{ section_menu.max_selected|default:'' }}" />
+            </div>
+            <div>
+              <span class="label text-xs">{% trans 'Order after selection' %}</span>
+              <div class="flex gap-3">
+                {% for value, label in section_menu_order_modes %}
+                  <label class="flex items-center gap-1 cursor-pointer text-sm">
+                    <input type="radio" name="order_mode" value="{{ value }}"
+                           class="radio radio-sm"
+                           {% if section_menu.order_mode == value or forloop.first and not section_menu.order_mode %}checked{% endif %} />
+                    {{ label }}
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="flex flex-wrap gap-x-6 gap-y-2">
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" name="show_select_all" class="checkbox checkbox-sm"
+                     {% if section_menu.show_select_all %}checked{% endif %} />
+              {% trans 'Show “Select all” button' %}
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" name="show_estimated_time" class="checkbox checkbox-sm"
+                     {% if section_menu.show_estimated_time %}checked{% endif %} />
+              {% trans 'Show estimated time per section' %}
+            </label>
+          </fieldset>
+
+          <div class="flex gap-2 pt-1">
+            <button type="submit" class="btn btn-primary btn-sm">{% trans 'Save layout' %}</button>
+            <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/survey-map/">{% trans 'Review in Survey Map' %}</a>
+          </div>
+        </form>
+        {% else %}
+        <p class="text-sm text-base-content/70">{% trans 'This survey is read-only.' %}</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   {# === Empty state: no groups yet (legacy surveys; new surveys get a default group automatically on creation via create_default_section) === #}
   {% if not groups %}
   <div class="not-prose mt-6 max-w-2xl">

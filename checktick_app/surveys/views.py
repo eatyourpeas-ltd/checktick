@@ -69,6 +69,8 @@ from .models import (
     PublishedQuestionGroup,
     QuestionGroup,
     RecoveryRequest,
+    SectionMenu,
+    SectionMenuItem,
     Survey,
     SurveyAccessToken,
     SurveyMembership,
@@ -5955,6 +5957,31 @@ from the Groups UI and bulk upload. Collections remain as backend entities only.
 """
 
 
+def _sync_section_menu_items(menu: SectionMenu, survey: Survey) -> None:
+    """Ensure one SectionMenuItem per survey group, preserving existing rows.
+
+    New groups get a default pickable row at the end of the order. Groups
+    that have been removed from the survey are cascade-deleted via the FK.
+    Order follows the Organise page's resolved group order.
+    """
+    order_ids = _resolved_group_order_ids(survey)
+    existing = {item.group_id: item for item in menu.items.all()}
+    seen: set[int] = set()
+    for idx, gid in enumerate(order_ids, start=1):
+        seen.add(gid)
+        if gid in existing:
+            item = existing[gid]
+            if item.order != idx:
+                item.order = idx
+                item.save(update_fields=["order"])
+        else:
+            SectionMenuItem.objects.create(
+                menu=menu, group_id=gid, is_pickable=True, order=idx
+            )
+    # Drop items whose group is no longer in the survey.
+    menu.items.exclude(group_id__in=seen).delete()
+
+
 @login_required
 def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
@@ -5994,6 +6021,92 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             request,
             _("Layout set to %(layout)s.") % {"layout": survey.get_layout_display()},
         )
+        return redirect("surveys:groups", slug=slug)
+
+    # Section menu configuration save (step 4). Only meaningful when the
+    # survey is in section_menu layout. The handler creates/syncs the
+    # SectionMenu + items row-by-row from the form.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_section_menu"
+        and survey.layout == Survey.Layout.SECTION_MENU
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = SectionMenu.objects.get_or_create(survey=survey)
+        menu.prompt_text = (
+            request.POST.get("prompt_text", "")
+            or "Which sections would you like to complete?"
+        )[:255]
+        # min_selected: must be a non-negative integer.
+        try:
+            min_selected = int(request.POST.get("min_selected", "1"))
+        except ValueError:
+            min_selected = 1
+        menu.min_selected = max(0, min_selected)
+        # max_selected: blank = no cap (null).
+        max_raw = (request.POST.get("max_selected", "") or "").strip()
+        if max_raw:
+            try:
+                menu.max_selected = max(0, int(max_raw)) or None
+            except ValueError:
+                menu.max_selected = None
+        else:
+            menu.max_selected = None
+        order_mode = request.POST.get("order_mode", SectionMenu.OrderMode.AUTHORED)
+        if order_mode in {choice[0] for choice in SectionMenu.OrderMode.choices}:
+            menu.order_mode = order_mode
+        menu.show_select_all = bool(request.POST.get("show_select_all"))
+        menu.show_estimated_time = bool(request.POST.get("show_estimated_time"))
+        menu.save()
+
+        # Sync items (create new, update order) before applying per-row edits.
+        _sync_section_menu_items(menu, survey)
+
+        # Per-row: is_pickable + estimated_minutes. mandatory_group_ids is a
+        # list of group IDs the author marked as mandatory (checkbox).
+        mandatory_ids = {
+            int(x)
+            for x in request.POST.getlist("mandatory_group_ids")
+            if str(x).isdigit()
+        }
+        est_raw = request.POST.getlist("estimated_minutes_group_ids")
+        est_map: dict[int, int | None] = {}
+        for gid_str in est_raw:
+            if not gid_str.isdigit():
+                continue
+            gid = int(gid_str)
+            val_raw = (request.POST.get(f"estimated_minutes_{gid}", "") or "").strip()
+            if val_raw:
+                try:
+                    est_map[gid] = max(1, int(val_raw))
+                except ValueError:
+                    est_map[gid] = None
+            else:
+                est_map[gid] = None
+
+        for item in menu.items.all():
+            item.is_pickable = item.group_id not in mandatory_ids
+            if item.group_id in est_map:
+                item.estimated_minutes = est_map[item.group_id]
+            item.save(update_fields=["is_pickable", "estimated_minutes"])
+
+        # Empty-selection guard: at least one section must be mandatory OR
+        # min_selected >= 1. Warn (do not block) — the author may be mid-edit.
+        has_mandatory = menu.items.filter(is_pickable=False).exists()
+        if not has_mandatory and menu.min_selected < 1:
+            messages.warning(
+                request,
+                _(
+                    "With no mandatory sections and min_selected = 0, a "
+                    "participant could end up with an empty survey. Set at "
+                    "least one section as mandatory or raise min_selected."
+                ),
+            )
+        messages.success(request, _("Section menu configuration saved."))
         return redirect("surveys:groups", slug=slug)
 
     groups_qs = survey.question_groups.annotate(
@@ -6041,6 +6154,17 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             ),
         )
 
+    # Section menu configuration (only for section_menu layout). Sync items
+    # so the config card shows one row per current survey group.
+    section_menu = None
+    section_menu_items_by_group: dict[int, SectionMenuItem] = {}
+    if survey.layout == Survey.Layout.SECTION_MENU:
+        section_menu, _created = SectionMenu.objects.get_or_create(survey=survey)
+        _sync_section_menu_items(section_menu, survey)
+        section_menu_items_by_group = {
+            item.group_id: item for item in section_menu.items.all()
+        }
+
     ctx = {
         "survey": survey,
         "groups": groups,
@@ -6052,6 +6176,10 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         # for survey-shape decisions, so the layout picker lives here.
         "layout_choices": Survey.Layout.choices,
         "section_count": survey.question_groups.count(),
+        # Section menu config (step 4). None for linear surveys.
+        "section_menu": section_menu,
+        "section_menu_items_by_group": section_menu_items_by_group,
+        "section_menu_order_modes": SectionMenu.OrderMode.choices,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
