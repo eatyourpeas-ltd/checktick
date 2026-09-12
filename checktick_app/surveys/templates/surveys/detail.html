@@ -249,6 +249,33 @@
 </div>
 {% endif %}
 
+{% if is_preview and section_menu_preview %}
+{# Simulate Selection panel (step 9) #}
+<div class="card bg-info/10 border border-info/30 mb-6">
+  <div class="card-body p-4">
+    <h3 class="text-sm font-semibold text-base-content/80 mb-2">{% trans 'Simulate section selection' %}</h3>
+    <p class="text-xs text-base-content/60 mb-3">{% trans 'Pre-tick a subset to preview what a participant would see. Mandatory sections are always included.' %}</p>
+    <form method="get" action="" class="flex flex-wrap gap-2 items-center">
+      {% for item in section_menu_preview.pickable_items %}
+      <label class="flex items-center gap-1 cursor-pointer text-sm">
+        <input type="checkbox" name="simulate_groups" value="{{ item.group_id }}"
+               class="checkbox checkbox-xs"
+               {% if item.group_id in simulated_group_ids %}checked{% endif %} />
+        {{ item.group.name }}
+        {% if section_menu_preview.menu.show_estimated_time and item.estimated_minutes %}
+        <span class="text-xs text-base-content/50">~{{ item.estimated_minutes }} min</span>
+        {% endif %}
+      </label>
+      {% endfor %}
+      <button type="submit" class="btn btn-xs btn-primary ml-2">{% trans 'Apply' %}</button>
+      {% if simulated_group_ids %}
+      <a href="{{ request.path }}" class="btn btn-xs btn-ghost">{% trans 'Reset' %}</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endif %}
+
 {% if show_progress and not is_preview %}
 {# Progress bar - show at top of survey for participants #}
 <div class="card bg-base-200 shadow-sm mb-6">

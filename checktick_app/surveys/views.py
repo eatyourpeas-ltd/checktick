@@ -1441,13 +1441,42 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         return redirect("surveys:preview_thank_you", slug=slug)
 
     # Render the same detail template in preview mode
+    # Section menu: simulate selection (step 9). If the survey uses
+    # section_menu layout, the preview shows a Simulate Selection panel.
+    # When ``?simulate_groups=1,3`` is present, the questions are filtered
+    # to those groups (plus mandatory ones).
+    simulated_group_ids: list[int] | None = None
+    section_menu_preview = None
+    if survey.layout == Survey.Layout.SECTION_MENU:
+        menu = getattr(survey, "section_menu", None)
+        if menu is None:
+            menu = SectionMenu.objects.create(survey=survey)
+        _sync_section_menu_items(menu, survey)
+        mandatory_ids = set(
+            menu.items.filter(is_pickable=False).values_list("group_id", flat=True)
+        )
+        pickable_items = list(
+            menu.items.filter(is_pickable=True)
+            .select_related("group")
+            .order_by("order")
+        )
+        section_menu_preview = {
+            "menu": menu,
+            "pickable_items": pickable_items,
+            "mandatory_ids": mandatory_ids,
+        }
+        sim_raw = request.GET.get("simulate_groups", "")
+        if sim_raw:
+            sim_ids = {int(x) for x in sim_raw.split(",") if str(x).isdigit()}
+            simulated_group_ids = list((sim_ids | mandatory_ids))
+
     _prepare_question_rendering(survey)
     all_questions = list(
         survey.questions.select_related("group", "dataset")
         .prefetch_related("images")
         .all()
     )
-    qs = _order_questions_by_group(survey, all_questions)
+    qs = _order_questions_by_group(survey, all_questions, simulated_group_ids)
     _inject_dataset_options(qs)
     _annotate_question_render_sequence(survey, qs)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
@@ -1508,6 +1537,9 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
             else {}
         ),
         "is_preview": True,  # Flag to indicate this is preview mode
+        # Section menu simulate selection panel (step 9).
+        "section_menu_preview": section_menu_preview,
+        "simulated_group_ids": simulated_group_ids or [],
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
@@ -8707,9 +8739,22 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
 
+    # Section menu info for pickable badges (step 9).
+    section_menu_info = None
+    if survey.layout == Survey.Layout.SECTION_MENU:
+        menu = getattr(survey, "section_menu", None)
+        if menu is None:
+            menu = SectionMenu.objects.create(survey=survey)
+        _sync_section_menu_items(menu, survey)
+        section_menu_info = {
+            "menu": menu,
+            "items": list(menu.items.select_related("group").order_by("order", "id")),
+        }
+
     ctx = {
         "survey": survey,
         "has_questions": survey.questions.exists(),
+        "section_menu_info": section_menu_info,
     }
     return render(request, "surveys/survey_map.html", ctx)
 
