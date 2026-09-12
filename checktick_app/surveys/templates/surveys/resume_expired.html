@@ -1,0 +1,47 @@
+{% extends 'base_minimal.html' %}
+{% load i18n %}
+{% load static %}
+{% block title %}{% trans "Link Expired" %} - CheckTick{% endblock %}
+{% block content %}
+<div class="hero min-h-[60vh] bg-base-100 rounded-box">
+  <div class="hero-content text-center">
+    <div class="max-w-xl">
+      {# Show brand icon/logo #}
+      <div class="mb-6 flex justify-center">
+        {% if brand.icon_url %}
+          <a href="{% url 'core:home' %}">
+            <img src="{{ brand.icon_url }}" alt="{{ brand.icon_alt|default:brand.title }}" class="{{ brand.icon_size_class|default:'w-16 h-16' }}" />
+          </a>
+        {% else %}
+          <a href="{% url 'core:home' %}">
+            {% include "components/icons/checktick.html" with classes=brand.icon_size_class|default:'w-16 h-16' aria_label=brand.icon_alt|default:brand.title title=brand.icon_title|default:brand.title %}
+          </a>
+        {% endif %}
+      </div>
+
+      <div class="alert alert-warning mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="h-6 w-6 shrink-0 stroke-current">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+        <span class="font-semibold">{% trans "Link Expired" %}</span>
+      </div>
+
+      <h1 class="text-3xl font-bold mb-4">{% trans "This link has expired" %}</h1>
+
+      <p class="py-4 opacity-80">
+        {% trans "This resume link is no longer valid. Resume links expire 30 days after they are created, or when the survey is submitted." %}
+      </p>
+
+      <p class="py-4 opacity-80">
+        {% trans "If you have already submitted your survey, your response has been recorded and this link is no longer needed." %}
+      </p>
+
+      <p class="text-sm opacity-60 mt-6">
+        {% trans "If you believe this is an error, please contact the survey organiser." %}
+      </p>
+
+      <p class="text-sm opacity-60 mt-4">{% trans "You may now close this page" %}</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

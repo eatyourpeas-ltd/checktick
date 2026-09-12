@@ -9,6 +9,7 @@ import logging
 import re
 import secrets
 from typing import Any, Iterable, Union
+import uuid
 
 from django import forms
 from django.conf import settings
@@ -5130,6 +5131,49 @@ def survey_encryption_display(request: HttpRequest, slug: str) -> HttpResponse:
 
 @require_http_methods(["GET", "POST"])
 @ratelimit(key="ip", rate="10/m", block=True)
+def survey_take_resume(request: HttpRequest, resume_token: uuid.UUID) -> HttpResponse:
+    """Resume a public survey via an opt-in resume token.
+
+    This route is only meaningful for public/unlisted surveys where the
+    participant has explicitly clicked "Save and come back later" and been
+    issued a resume token. Authenticated and token surveys resume via their
+    existing credentials (user FK / access token) and do not use this route.
+
+    See docs/survey-progress-tracking.md §Resume Tokens.
+    """
+    progress = SurveyProgress.find_by_resume_token(resume_token)
+    if progress is None:
+        # Neutral error page — never reveal whether the token existed.
+        return render(
+            request,
+            "surveys/resume_expired.html",
+            {"status": 404},
+            status=404,
+        )
+
+    survey = progress.survey
+    if not survey.is_live():
+        return redirect("surveys:closed", slug=survey.slug)
+    if survey.visibility not in (Survey.Visibility.PUBLIC, Survey.Visibility.UNLISTED):
+        # Resume tokens are only for public/unlisted surveys. An
+        # authenticated/token survey should never have a resume token; if
+        # we find one, treat it as expired to avoid leaking information.
+        return render(
+            request,
+            "surveys/resume_expired.html",
+            {"status": 404},
+            status=404,
+        )
+
+    # Delegate to the standard submission handler, passing the progress
+    # record so it doesn't create a new one.
+    return _handle_participant_submission(
+        request, survey, token_obj=None, progress=progress
+    )
+
+
+@require_http_methods(["GET", "POST"])
+@ratelimit(key="ip", rate="10/m", block=True)
 def survey_take(request: HttpRequest, slug: str) -> HttpResponse:
     """Participant-facing endpoint. Supports AUTHENTICATED and PUBLIC visibility here.
     UNLISTED and TOKEN have dedicated routes.
@@ -5292,7 +5336,10 @@ def survey_take_token(request: HttpRequest, slug: str, token: str) -> HttpRespon
 
 
 def _handle_participant_submission(
-    request: HttpRequest, survey: Survey, token_obj: SurveyAccessToken | None
+    request: HttpRequest,
+    survey: Survey,
+    token_obj: SurveyAccessToken | None,
+    progress: SurveyProgress | None = None,
 ) -> HttpResponse:
     # Block survey owner from taking their own survey
     if request.user.is_authenticated and survey.owner_id == request.user.id:
@@ -5315,8 +5362,10 @@ def _handle_participant_submission(
         )
         raise Http404()
 
-    # Get or create progress record
-    progress, _ = _get_or_create_progress(request, survey, token_obj)
+    # Get or create progress record (or use the one passed in from the
+    # resume route)
+    if progress is None:
+        progress, _ = _get_or_create_progress(request, survey, token_obj)
 
     if request.method == "POST":
         # Check if this is a draft save (AJAX request)
@@ -5365,6 +5414,75 @@ def _handle_participant_submission(
                         "answered": progress.answered_count,
                         "total": progress.total_questions,
                     },
+                }
+            )
+
+        # "Save and come back later" — explicit opt-in to server-side
+        # progress for public/unlisted surveys. Creates a SurveyProgress
+        # row with a resume token and returns the resume URL. See
+        # docs/survey-progress-tracking.md §Resume Tokens.
+        is_save_resume = request.POST.get("action") == "save_resume"
+        if is_save_resume and is_ajax:
+            if not survey.allow_resume:
+                return JsonResponse(
+                    {"success": False, "error": "Resume is disabled for this survey."},
+                    status=403,
+                )
+            # For public/unlisted surveys, create a progress row with a
+            # resume token if one doesn't exist yet. For authenticated/token
+            # surveys, the existing progress row is reused (resume is
+            # automatic via the user FK / access token).
+            if progress is None:
+                # Check for an existing row by session_key (public surveys)
+                # before creating a new one, so a second "save and come back
+                # later" reuses the same resume token.
+                from datetime import timedelta
+
+                if not request.session.session_key:
+                    request.session.create()
+                session_key = request.session.session_key
+
+                existing = SurveyProgress.objects.filter(
+                    survey=survey,
+                    session_key=session_key,
+                    status=SurveyProgress.Status.IN_PROGRESS,
+                ).first()
+                if request.user.is_authenticated:
+                    existing = (
+                        existing
+                        or SurveyProgress.objects.filter(
+                            survey=survey,
+                            user=request.user,
+                            status=SurveyProgress.Status.IN_PROGRESS,
+                        ).first()
+                    )
+
+                if existing:
+                    progress = existing
+                    progress.update_progress(answers)
+                else:
+                    progress = SurveyProgress.objects.create(
+                        survey=survey,
+                        user=request.user if request.user.is_authenticated else None,
+                        session_key=session_key,
+                        partial_answers=answers,
+                        answered_count=len([v for v in answers.values() if v]),
+                        total_questions=survey.questions.count(),
+                        expires_at=timezone.now() + timedelta(days=30),
+                    )
+            else:
+                progress.update_progress(answers)
+            resume_url = request.build_absolute_uri(
+                reverse(
+                    "surveys:take_resume",
+                    kwargs={"resume_token": progress.resume_token},
+                )
+            )
+            return JsonResponse(
+                {
+                    "success": True,
+                    "resume_url": resume_url,
+                    "resume_token": str(progress.resume_token),
                 }
             )
 

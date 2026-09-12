@@ -191,6 +191,13 @@ urlpatterns = [
         views.survey_take_token,
         name="take_token",
     ),
+    # Resume a public survey via an opt-in resume token (see
+    # docs/survey-progress-tracking.md §Resume Tokens).
+    path(
+        "take/resume/<uuid:resume_token>/",
+        views.survey_take_resume,
+        name="take_resume",
+    ),
     path("<slug:slug>/thank-you/", views.survey_thank_you, name="thank_you"),
     path("<slug:slug>/closed/", views.survey_closed, name="closed"),
     path("<slug:slug>/", views.survey_detail, name="detail"),

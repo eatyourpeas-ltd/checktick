@@ -337,3 +337,206 @@ class TestPublishWorkflowToggle:
         s.refresh_from_db()
         assert s.allow_resume is False
         assert s.allow_response_redaction is True
+
+
+@pytest.fixture
+def public_survey_for_resume(survey_owner, test_organization):
+    """A public survey with allow_resume=True for resume token tests."""
+    from checktick_app.surveys.models import SurveyQuestion
+
+    s = Survey.objects.create(
+        owner=survey_owner,
+        name="Resume Survey",
+        slug="resume-survey",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.PUBLIC,
+        organization=test_organization,
+        allow_resume=True,
+    )
+    q = SurveyQuestion.objects.create(
+        survey=s, text="Q1", type=SurveyQuestion.Types.TEXT, required=False, order=0
+    )
+    s._test_q1_id = q.id
+    return s
+
+
+@pytest.mark.django_db
+class TestSaveAndComeBackLater:
+    """The 'save_resume' action issues a resume token for public surveys."""
+
+    def test_save_resume_creates_progress_with_token(
+        self, client, public_survey_for_resume
+    ):
+        """Clicking 'Save and come back later' creates a SurveyProgress row
+        with a resume token and returns the resume URL."""
+        from django.urls import reverse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+
+        response = client.post(
+            url,
+            {
+                "action": "save_resume",
+                f"q_{q_id}": "My answer",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "resume_url" in data
+        assert "resume_token" in data
+        assert "/take/resume/" in data["resume_url"]
+
+        # A progress row was created with the resume token
+        progress = SurveyProgress.objects.get(survey=public_survey_for_resume)
+        assert progress.resume_token is not None
+        assert str(progress.resume_token) == data["resume_token"]
+        assert progress.partial_answers[str(q_id)] == "My answer"
+        assert progress.status == SurveyProgress.Status.IN_PROGRESS
+
+    def test_save_resume_reuses_existing_token(self, client, public_survey_for_resume):
+        """A second 'save_resume' call reuses the existing progress row's
+        token rather than creating a new one."""
+        from django.urls import reverse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+
+        # First save
+        response1 = client.post(
+            url,
+            {"action": "save_resume", f"q_{q_id}": "Answer 1"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        token1 = response1.json()["resume_token"]
+
+        # Second save — should reuse the same token
+        response2 = client.post(
+            url,
+            {"action": "save_resume", f"q_{q_id}": "Answer 2"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        token2 = response2.json()["resume_token"]
+
+        assert token1 == token2
+        assert (
+            SurveyProgress.objects.filter(survey=public_survey_for_resume).count() == 1
+        )
+
+    def test_save_resume_disabled_when_allow_resume_false(
+        self, client, public_survey_for_resume
+    ):
+        """When allow_resume is False, the save_resume action is rejected."""
+        from django.urls import reverse
+
+        public_survey_for_resume.allow_resume = False
+        public_survey_for_resume.save(update_fields=["allow_resume"])
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+
+        response = client.post(
+            url,
+            {"action": "save_resume", f"q_{q_id}": "Answer"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        assert response.status_code == 403
+        assert not SurveyProgress.objects.filter(
+            survey=public_survey_for_resume
+        ).exists()
+
+
+@pytest.mark.django_db
+class TestResumeRoute:
+    """The /take/resume/<uuid>/ route resolves a resume token and continues
+    the survey."""
+
+    def test_resume_route_returns_survey_with_saved_answers(
+        self, client, public_survey_for_resume
+    ):
+        """Resuming via token shows the survey with previously saved answers."""
+        from django.urls import reverse
+
+        # Create a progress row with a resume token
+        progress = _make_progress(
+            public_survey_for_resume,
+            partial_answers={str(public_survey_for_resume._test_q1_id): "Saved"},
+            answered_count=1,
+        )
+
+        url = reverse(
+            "surveys:take_resume", kwargs={"resume_token": progress.resume_token}
+        )
+        response = client.get(url)
+
+        assert response.status_code == 200
+        context = response.context
+        assert context["show_progress"] is True
+        assert (
+            context["saved_answers"][str(public_survey_for_resume._test_q1_id)]
+            == "Saved"
+        )
+
+    def test_resume_route_invalid_token_shows_expired_page(self, client):
+        """An unknown resume token shows the neutral expired page, not a 500."""
+        from django.urls import reverse
+
+        unknown_token = uuid.uuid4()
+        url = reverse("surveys:take_resume", kwargs={"resume_token": unknown_token})
+        response = client.get(url)
+
+        assert response.status_code == 404
+        assert b"expired" in response.content.lower()
+
+    def test_resume_route_expired_token_shows_expired_page(
+        self, client, public_survey_for_resume
+    ):
+        """An expired resume token shows the neutral expired page."""
+        from django.urls import reverse
+
+        progress = _make_progress(
+            public_survey_for_resume,
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+        url = reverse(
+            "surveys:take_resume", kwargs={"resume_token": progress.resume_token}
+        )
+        response = client.get(url)
+
+        assert response.status_code == 404
+        assert b"expired" in response.content.lower()
+
+    def test_resume_route_completed_token_shows_expired_page(
+        self, client, public_survey_for_resume
+    ):
+        """A resume token for a completed survey shows the expired page."""
+        from django.urls import reverse
+
+        progress = _make_progress(public_survey_for_resume)
+        token = progress.resume_token
+        progress.mark_completed()
+
+        url = reverse("surveys:take_resume", kwargs={"resume_token": token})
+        response = client.get(url)
+
+        assert response.status_code == 404
+
+    def test_resume_route_authenticated_survey_token_rejected(
+        self, client, survey, survey_owner
+    ):
+        """A resume token for an authenticated survey is rejected (resume
+        tokens are only for public/unlisted surveys)."""
+        from django.urls import reverse
+
+        progress = _make_progress(survey, user=survey_owner)
+        url = reverse(
+            "surveys:take_resume", kwargs={"resume_token": progress.resume_token}
+        )
+        response = client.get(url)
+
+        # Should show the expired page, not the survey
+        assert response.status_code == 404
