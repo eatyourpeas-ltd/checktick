@@ -737,6 +737,20 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
     repeat_stack: List[int] = []  # stores group_index at each depth
     group_count_seen = 0
 
+    # SECTION_MENU block parsing (see docs/survey-layouts.md §Outline syntax).
+    # The block appears before any group headings and contains only config
+    # lines (prompt, min, max, order, etc.). The ``~ pickable`` suffix is
+    # placed on the actual content group headings themselves, e.g.::
+    #
+    #     # Medical {medical}    ~ pickable, 5 min
+    #
+    # This avoids duplicate group headings and keeps the parser single-pass.
+    section_menu: Dict[str, Any] | None = None
+    in_section_menu_block = False
+    # Map group name -> {is_pickable, estimated_minutes} collected from
+    # ``~ pickable`` suffixes on content group headings.
+    section_menu_items: Dict[str, Dict[str, Any]] = {}
+
     for raw in raw_lines:
         # Count leading '>' as depth
         s = raw
@@ -756,6 +770,74 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 continue
             break
         content = s[i:].rstrip()
+        stripped = content.strip()
+
+        # SECTION_MENU block start
+        if _re.match(r"^SECTION_MENU$", stripped, flags=_re.IGNORECASE):
+            in_section_menu_block = True
+            section_menu = {
+                "prompt_text": "Which sections would you like to complete?",
+                "min_selected": 1,
+                "max_selected": None,
+                "order_mode": "authored",
+                "show_select_all": False,
+                "show_estimated_time": False,
+            }
+            continue
+
+        # SECTION_MENU config lines (indented under the block header).
+        if in_section_menu_block and (depth > 0 or raw[:1].isspace()):
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            if cfg_match and section_menu is not None:
+                key = cfg_match.group(1).lower()
+                val_raw = cfg_match.group(2).strip()
+                if (val_raw.startswith('"') and val_raw.endswith('"')) or (
+                    val_raw.startswith("'") and val_raw.endswith("'")
+                ):
+                    val_raw = val_raw[1:-1]
+                if key == "prompt":
+                    section_menu["prompt_text"] = val_raw
+                elif key == "min":
+                    try:
+                        section_menu["min_selected"] = int(val_raw)
+                    except ValueError:
+                        pass
+                elif key == "max":
+                    try:
+                        section_menu["max_selected"] = int(val_raw) or None
+                    except ValueError:
+                        pass
+                elif key == "order":
+                    if val_raw in ("authored", "participant"):
+                        section_menu["order_mode"] = val_raw
+                elif key == "select_all":
+                    section_menu["show_select_all"] = val_raw.lower() in (
+                        "true",
+                        "yes",
+                        "on",
+                    )
+                elif key == "estimated_time":
+                    section_menu["show_estimated_time"] = val_raw.lower() in (
+                        "true",
+                        "yes",
+                        "on",
+                    )
+                continue
+            # Blank line inside indented block — skip
+            if not stripped:
+                continue
+            # Unknown indented line — skip
+            continue
+
+        # Blank line ends the SECTION_MENU config block
+        if in_section_menu_block and not stripped:
+            in_section_menu_block = False
+            continue
+
+        # Unknown non-indented line inside SECTION_MENU block also ends it
+        if in_section_menu_block and depth == 0 and not raw[:1].isspace():
+            in_section_menu_block = False
+            # Fall through to regular parsing for this line
 
         # REPEAT marker?
         m = _re.match(r"^REPEAT(?:-(\d+))?$", content.strip(), flags=_re.IGNORECASE)
@@ -767,6 +849,39 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
 
         # Group heading detection (top-level groups only: '# ')
         if content.strip().startswith("# ") and not content.strip().startswith("## "):
+            # Detect and strip ``~ pickable`` suffix (section_menu layout).
+            # The suffix is recorded in section_menu_items and stripped from
+            # the heading before it reaches the regular parser.
+            heading_content = content
+            tilde_idx = heading_content.find("~")
+            if tilde_idx != -1 and section_menu is not None:
+                suffix = heading_content[tilde_idx + 1 :].strip()
+                heading_content = heading_content[:tilde_idx].rstrip()
+                is_pickable = True
+                estimated_minutes = None
+                min_match = _re.search(r"(\d+)\s*min", suffix, flags=_re.IGNORECASE)
+                if min_match:
+                    estimated_minutes = int(min_match.group(1))
+                # Extract group name from the cleaned heading
+                heading_text = heading_content.strip()[2:]  # remove "# "
+                ref_match = _re.search(r"\{([^{}]+)\}\s*$", heading_text)
+                if ref_match:
+                    heading_text = heading_text[: ref_match.start()].rstrip()
+                section_menu_items[heading_text] = {
+                    "is_pickable": is_pickable,
+                    "estimated_minutes": estimated_minutes,
+                }
+                content = heading_content
+            elif section_menu is not None:
+                # Group without ~ suffix under section_menu → mandatory
+                heading_text = content.strip()[2:]
+                ref_match = _re.search(r"\{([^{}]+)\}\s*$", heading_text)
+                if ref_match:
+                    heading_text = heading_text[: ref_match.start()].rstrip()
+                section_menu_items[heading_text] = {
+                    "is_pickable": False,
+                    "estimated_minutes": None,
+                }
             # Trim or expand repeat_stack to current depth
             while len(repeat_stack) > depth:
                 repeat_stack.pop()
@@ -797,4 +912,22 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
 
     cleaned_md = "\n".join(cleaned_lines)
     groups = parse_bulk_markdown(cleaned_md)
-    return {"groups": groups, "repeats": repeats}
+
+    # Apply section_menu item flags to parsed groups by name.
+    if section_menu is not None and section_menu_items:
+        for g in groups:
+            item_info = section_menu_items.get(g["name"])
+            if item_info:
+                g["section_menu_pickable"] = item_info["is_pickable"]
+                g["section_menu_estimated_minutes"] = item_info["estimated_minutes"]
+            else:
+                # Groups not listed in the SECTION_MENU block default to
+                # mandatory (is_pickable=False).
+                g["section_menu_pickable"] = False
+                g["section_menu_estimated_minutes"] = None
+
+    return {
+        "groups": groups,
+        "repeats": repeats,
+        "section_menu": section_menu,
+    }

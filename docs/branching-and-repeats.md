@@ -39,6 +39,8 @@ When a condition is met, you can choose what happens:
 
 `Show` and `Hide` are visibility overrides on a single question. `Jump to` is the only navigation action, and it's the only one that can target a whole section. Sections themselves don't have a visibility toggle — you navigate to them with `Jump to`.
 
+> **Section menu layout:** When a survey uses the [Section menu](survey-layouts.md) layout, a `Jump to` that targets a section the participant didn't pick is a **no-op at runtime** — the target section is simply not in their path. The branching config is built from the filtered question list, so conditions targeting absent sections are never triggered. The Organise page shows a warning when this happens; see [Survey Layouts (Technical)](survey-layouts-technical.md) for details.
+
 ### Hidden by default
 
 Every question has a **Hidden by default** toggle. This declares the question's default visibility on the question itself, rather than as a side-effect of conditions elsewhere:

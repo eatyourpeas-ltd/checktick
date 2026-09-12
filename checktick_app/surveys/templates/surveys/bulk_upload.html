@@ -205,6 +205,36 @@ HIDDEN
                   <li>{% trans "<code>jump to</code> is forward-only — the target must come after the triggering question in the survey order." %}</li>
                 </ul>
               </div>
+              <div>
+                <h3 class="font-semibold">{% trans "Optional: Section menu layout" %}</h3>
+                <p class="text-sm text-base-content/80">{% trans "Add a <code>SECTION_MENU</code> block at the top of the outline to switch the survey to the section menu layout, where participants pick which sections to complete. Mark pickable sections with <code>~ pickable</code> on the section heading; sections without <code>~</code> are mandatory (always included)." %}</p>
+                <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>SECTION_MENU
+  prompt: "Which areas would you like to cover?"
+  min: 1
+  max: 4
+  order: authored
+  select_all: true
+  estimated_time: true
+
+# Demographics {demographics}
+## Name {name}
+(text)
+
+# Medical history {medical-history}    ~ pickable
+## Condition {condition}
+(text)
+
+# Medications {medications}    ~ pickable, 5 min
+## Drug {drug}
+(text)</code></pre>
+                <ul class="list-disc pl-5 space-y-1 text-sm">
+                  <li>{% trans "Config lines are indented under <code>SECTION_MENU</code>: <code>prompt</code>, <code>min</code>, <code>max</code>, <code>order</code> (authored/participant), <code>select_all</code>, <code>estimated_time</code>." %}</li>
+                  <li>{% trans "Place <code>~ pickable</code> after the section heading (and after the <code>{id}</code> if present). Add <code>, N min</code> to set an estimated time." %}</li>
+                  <li>{% trans "Sections without <code>~</code> are mandatory — the participant cannot deselect them." %}</li>
+                  <li>{% trans "A blank line ends the config block. Section headings below it are the actual survey content." %}</li>
+                  <li>{% trans "See <a href='/docs/survey-layouts.md' class='link'>Survey Layouts</a> for the full guide." %}</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>

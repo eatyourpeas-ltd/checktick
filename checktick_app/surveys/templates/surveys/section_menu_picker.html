@@ -1,0 +1,111 @@
+{% extends 'base_minimal.html' %}
+{% load survey_extras %}
+{% load static %}
+{% load i18n %}
+{% block body_class %}{% if survey.style.nhs_styling %} nhs-theme{% endif %}{% endblock %}
+{% block title %}{{ survey.name }} — {% trans "Choose sections" %}{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 py-6">
+  <h1 class="text-2xl font-bold text-base-content">{{ survey.name }}</h1>
+  <p class="mt-2 text-base text-base-content/80">{{ menu.prompt_text }}</p>
+
+  {% if mandatory_rows %}
+  <section class="mt-6" aria-labelledby="mandatory-heading">
+    <h2 id="mandatory-heading" class="text-sm font-semibold text-base-content/70 uppercase tracking-wide">
+      {% trans "Included automatically" %}
+    </h2>
+    <ul class="mt-2 space-y-1">
+      {% for row in mandatory_rows %}
+        <li class="flex items-center gap-2 p-2 bg-base-200 rounded-lg">
+          {% include "components/icons/checktick_question_group.html" with classes="w-4 h-4 text-base-content/60" %}
+          <span class="font-medium text-base-content">{{ row.group.name }}</span>
+          {% if show_estimated_time and row.estimated_minutes %}
+            <span class="text-xs text-base-content/60 ml-auto">~{{ row.estimated_minutes }} min</span>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if pickable_rows %}
+  <section class="mt-6" aria-labelledby="pickable-heading">
+    <h2 id="pickable-heading" class="text-sm font-semibold text-base-content/70 uppercase tracking-wide">
+      {% if max_selected %}
+        {% blocktrans with min=min_selected max=max_selected %}Choose any (pick {{ min }}–{{ max }}){% endblocktrans %}
+      {% else %}
+        {% blocktrans with min=min_selected %}Choose any others (pick at least {{ min }}){% endblocktrans %}
+      {% endif %}
+    </h2>
+    <form method="post" action="{{ request.path }}" id="section-picker-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="select_sections" />
+      <ul class="mt-2 space-y-1">
+        {% for row in pickable_rows %}
+          <li class="flex items-center gap-3 p-3 bg-base-100 border border-base-300 rounded-lg hover:border-primary transition-colors">
+            <label class="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+              <input type="checkbox" name="selected_groups" value="{{ row.group.id }}"
+                     class="checkbox checkbox-sm section-picker-checkbox"
+                     data-min="{{ min_selected }}" data-max="{{ max_selected|default:'' }}" />
+              <span class="font-medium text-base-content truncate">{{ row.group.name }}</span>
+            </label>
+            {% if row.group.q_count %}
+              <span class="badge badge-neutral badge-sm shrink-0">{{ row.group.q_count }}</span>
+            {% endif %}
+            {% if show_estimated_time and row.estimated_minutes %}
+              <span class="text-xs text-base-content/60 shrink-0">~{{ row.estimated_minutes }} min</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+
+      <div class="mt-6 flex flex-wrap gap-2 items-center">
+        {% if show_select_all %}
+          <button type="button" id="select-all-btn" class="btn btn-ghost btn-sm">
+            {% trans "Select all" %}
+          </button>
+        {% endif %}
+        <button type="submit" id="picker-continue-btn" class="btn btn-primary btn-sm" disabled>
+          {% trans "Continue" %}
+        </button>
+      </div>
+    </form>
+  </section>
+  {% endif %}
+
+  <p class="mt-8 text-xs text-base-content/50">
+    {% trans "Step 1" %} · {% trans "Choose sections" %}
+  </p>
+</div>
+
+<script>
+  (function() {
+    var checkboxes = document.querySelectorAll('.section-picker-checkbox');
+    var continueBtn = document.getElementById('picker-continue-btn');
+    var selectAllBtn = document.getElementById('select-all-btn');
+
+    function updateContinue() {
+      var checked = 0;
+      checkboxes.forEach(function(cb) { if (cb.checked) checked++; });
+      var min = parseInt(checkboxes[0] ? checkboxes[0].dataset.min : '1', 10) || 1;
+      var maxRaw = checkboxes[0] ? checkboxes[0].dataset.max : '';
+      var max = maxRaw ? parseInt(maxRaw, 10) : 0;
+      var ok = checked >= min;
+      if (max && checked > max) ok = false;
+      if (continueBtn) {
+        continueBtn.disabled = !ok;
+        continueBtn.setAttribute('aria-disabled', ok ? 'false' : 'true');
+      }
+    }
+
+    checkboxes.forEach(function(cb) { cb.addEventListener('change', updateContinue); });
+    if (selectAllBtn) {
+      selectAllBtn.addEventListener('click', function() {
+        checkboxes.forEach(function(cb) { cb.checked = true; });
+        updateContinue();
+      });
+    }
+    updateContinue();
+  })();
+</script>
+{% endblock %}

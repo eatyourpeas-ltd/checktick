@@ -889,6 +889,26 @@ class Survey(models.Model):
         default=False,
         help_text="Allow any authenticated user to access this survey (not just invited users)",
     )
+
+    # Survey layout — high-level shape of the survey (see
+    # docs/survey-layouts.md). "linear" is the default and matches the
+    # current behaviour: sections flow in the order the author arranges
+    # them. "section_menu" opens on a picker page where the participant
+    # chooses which sections to complete.
+    class Layout(models.TextChoices):
+        LINEAR = "linear", "Linear"
+        SECTION_MENU = "section_menu", "Section menu"
+
+    layout = models.CharField(
+        max_length=20,
+        choices=Layout.choices,
+        default=Layout.LINEAR,
+        help_text=(
+            'High-level shape of the survey. "linear" flows sections in '
+            'authored order; "section_menu" lets the participant pick which '
+            "sections to complete."
+        ),
+    )
     # Resume + redaction toggles (see docs/survey-progress-tracking.md and
     # docs/survey-layouts.md). Both default to True; creators can disable
     # in the publication workflow.
@@ -3785,6 +3805,103 @@ class SurveyProgress(models.Model):
         if progress.is_expired():
             return None
         return progress
+
+
+class SectionMenu(models.Model):
+    """Configuration for a survey with ``layout = section_menu``.
+
+    A SectionMenu is a OneToOne related to ``Survey`` and holds the
+    picker-level settings (prompt text, min/max selected, order mode,
+    convenience toggles). Per-section settings (mandatory vs pickable,
+    estimated time) live on ``SectionMenuItem`` rows.
+
+    See docs/survey-layouts.md §Data model. A ``linear`` survey has no
+    ``SectionMenu`` row and renders exactly as it does today.
+    """
+
+    survey = models.OneToOneField(
+        Survey,
+        related_name="section_menu",
+        on_delete=models.CASCADE,
+    )
+    prompt_text = models.CharField(
+        max_length=255,
+        default="Which sections would you like to complete?",
+        help_text="Prompt shown to the participant on the picker page.",
+    )
+    min_selected = models.PositiveIntegerField(
+        default=1,
+        help_text=(
+            "Minimum number of pickable sections the participant must select. "
+            "May be 0 only if at least one section is mandatory."
+        ),
+    )
+    max_selected = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Maximum number of pickable sections (blank = no cap).",
+    )
+
+    class OrderMode(models.TextChoices):
+        AUTHORED = "authored", "As authored"
+        PARTICIPANT = "participant", "In pick order"
+
+    order_mode = models.CharField(
+        max_length=20,
+        choices=OrderMode.choices,
+        default=OrderMode.AUTHORED,
+        help_text=(
+            "How chosen sections are ordered after selection. 'authored' "
+            "uses the Organise page order; 'participant' uses the order the "
+            "participant ticked the boxes."
+        ),
+    )
+    show_select_all = models.BooleanField(
+        default=False,
+        help_text='Show a "Select all" button on the picker page.',
+    )
+    show_estimated_time = models.BooleanField(
+        default=False,
+        help_text="Show per-section estimated time on the picker page.",
+    )
+
+    def __str__(self) -> str:
+        return f"SectionMenu for {self.survey.name}"
+
+
+class SectionMenuItem(models.Model):
+    """Per-section configuration for a ``SectionMenu``.
+
+    One row per ``QuestionGroup`` in the survey. ``is_pickable=False``
+    marks a section as mandatory (always included, cannot be deselected
+    by the participant). ``order`` follows the Organise page order.
+    """
+
+    menu = models.ForeignKey(
+        SectionMenu, related_name="items", on_delete=models.CASCADE
+    )
+    group = models.ForeignKey(QuestionGroup, on_delete=models.CASCADE)
+    is_pickable = models.BooleanField(
+        default=True,
+        help_text="False = mandatory (always included, cannot be deselected).",
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Display order on the picker (matches Organise page order).",
+    )
+    estimated_minutes = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Optional estimated completion time (shown when show_estimated_time is on).",
+    )
+
+    class Meta:
+        unique_together = ("menu", "group")
+        ordering = ["order", "id"]
+
+    def __str__(self) -> str:
+        tag = "pickable" if self.is_pickable else "mandatory"
+        return f"{self.group.name} ({tag})"
 
 
 def validate_markdown_survey(md_text: str) -> list[dict]:

@@ -39,6 +39,41 @@
     </div>
   </div>
 
+  {# === Section menu pickable badges (step 9) === #}
+  {% if section_menu_info %}
+  <div class="not-prose max-w-2xl">
+    <div class="card bg-base-100 shadow-sm border border-base-300">
+      <div class="card-body p-4">
+        <h3 class="text-sm font-semibold text-base-content/80 mb-2">{% trans 'Section menu — pickable status' %}</h3>
+        <div class="flex flex-wrap gap-2">
+          {% for item in section_menu_info.items %}
+            {% if item.is_pickable %}
+              <span class="badge badge-accent badge-sm gap-1">
+                {{ item.group.name }}
+                <span class="text-xs opacity-70">{% trans 'pickable' %}</span>
+              </span>
+            {% else %}
+              <span class="badge badge-primary badge-sm gap-1">
+                {{ item.group.name }}
+                <span class="text-xs opacity-70">{% trans 'mandatory' %}</span>
+              </span>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% if section_menu_info.menu.show_estimated_time %}
+        <p class="text-xs text-base-content/60 mt-2">
+          {% for item in section_menu_info.items %}
+            {% if item.estimated_minutes %}
+              {{ item.group.name }}: ~{{ item.estimated_minutes }} min{% if not forloop.last %} · {% endif %}
+            {% endif %}
+          {% endfor %}
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   {# === Visualiser (reused from the Organise page; now in its own space) === #}
   {% if has_questions %}
   <div>

@@ -1,0 +1,13 @@
+{% comment %} {# Section menu layout icon (parent picker branching to child sections). Usage: {% include "components/icons/layout_section_menu.html" with classes="w-6 h-6" %} #} {% endcomment %}
+<svg xmlns="http://www.w3.org/2000/svg" class="{{ classes|default:'w-6 h-6' }}" viewBox="0 0 800 450" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Connection lines (T-shape: parent down, across, then down to each child) -->
+  <path d="M 400,170 L 400,225 M 180,225 L 620,225 M 180,225 L 180,280 M 400,225 L 400,280 M 620,225 L 620,280" />
+  <!-- Parent card (picker) -->
+  <rect x="300" y="60" width="200" height="110" rx="16" ry="16" />
+  <!-- Child card 1 (left) -->
+  <rect x="80" y="280" width="200" height="110" rx="16" ry="16" />
+  <!-- Child card 2 (middle) -->
+  <rect x="300" y="280" width="200" height="110" rx="16" ry="16" />
+  <!-- Child card 3 (right) -->
+  <rect x="520" y="280" width="200" height="110" rx="16" ry="16" />
+</svg>
