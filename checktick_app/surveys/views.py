@@ -3621,6 +3621,8 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
         end_at_str = request.POST.get("end_at") or None
         max_responses = request.POST.get("max_responses") or None
         captcha_required = bool(request.POST.get("captcha_required"))
+        allow_resume = bool(request.POST.get("allow_resume"))
+        allow_response_redaction = bool(request.POST.get("allow_response_redaction"))
         # If survey is already published with no_patient_data_ack=True, preserve it (disabled checkboxes don't submit)
         no_patient_data_ack = bool(request.POST.get("no_patient_data_ack")) or (
             survey.status == Survey.Status.PUBLISHED and survey.no_patient_data_ack
@@ -3750,6 +3752,8 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
                     "captcha_required": captcha_required,
                     "no_patient_data_ack": no_patient_data_ack,
                     "allow_any_authenticated": allow_any_authenticated,
+                    "allow_resume": allow_resume,
+                    "allow_response_redaction": allow_response_redaction,
                     "invite_emails": invite_emails,
                 }
                 messages.info(
@@ -3766,6 +3770,8 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             survey.max_responses = max_responses
             survey.captcha_required = captcha_required
             survey.no_patient_data_ack = no_patient_data_ack
+            survey.allow_resume = allow_resume
+            survey.allow_response_redaction = allow_response_redaction
 
             # Handle allow_any_authenticated for authenticated surveys
             # (allow_any_authenticated already computed above for validation)
@@ -3913,6 +3919,8 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             survey.max_responses = max_responses
             survey.captcha_required = captcha_required
             survey.no_patient_data_ack = no_patient_data_ack
+            survey.allow_resume = allow_resume
+            survey.allow_response_redaction = allow_response_redaction
 
             # Handle allow_any_authenticated for authenticated surveys
             if visibility == Survey.Visibility.AUTHENTICATED:
@@ -5053,6 +5061,8 @@ def _apply_pending_publish_settings(survey: Survey, pending: dict) -> None:
     survey.max_responses = pending.get("max_responses")
     survey.captcha_required = pending.get("captcha_required", False)
     survey.no_patient_data_ack = pending.get("no_patient_data_ack", False)
+    survey.allow_resume = pending.get("allow_resume", True)
+    survey.allow_response_redaction = pending.get("allow_response_redaction", True)
 
     # Restore allow_any_authenticated from pending settings
     if survey.visibility == Survey.Visibility.AUTHENTICATED:

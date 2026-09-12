@@ -214,3 +214,126 @@ class TestSurveyResumeRedactionToggles:
             allow_response_redaction=False,
         )
         assert s.allow_response_redaction is False
+
+
+@pytest.mark.django_db
+class TestPublishWorkflowToggle:
+    """The allow_resume and allow_response_redaction toggles are wired into
+    the publication workflow (publish_settings view)."""
+
+    def test_publish_preserves_default_toggles(self, client, survey_owner):
+        """Publishing with the toggle checkboxes checked keeps them True.
+
+        Uses staff audience + opt-out declaration to avoid the encryption
+        setup redirect — the toggles are independent of audience/encryption.
+        """
+        from django.urls import reverse
+
+        s = Survey.objects.create(
+            owner=survey_owner,
+            name="Pub",
+            slug="pub-toggle-default",
+            status=Survey.Status.DRAFT,
+            visibility=Survey.Visibility.PUBLIC,
+        )
+        client.force_login(survey_owner)
+        client.post(
+            reverse("surveys:publish_settings", args=[s.slug]),
+            {
+                "action": "publish",
+                "visibility": "public",
+                "respondent_audience": "staff",
+                "encryption_opt_out": "on",
+                "no_patient_data_ack": "on",
+                "allow_resume": "on",
+                "allow_response_redaction": "on",
+            },
+        )
+        s.refresh_from_db()
+        assert s.status == Survey.Status.PUBLISHED
+        assert s.allow_resume is True
+        assert s.allow_response_redaction is True
+
+    def test_publish_can_disable_resume(self, client, survey_owner):
+        from django.urls import reverse
+
+        s = Survey.objects.create(
+            owner=survey_owner,
+            name="Pub",
+            slug="pub-toggle-no-resume",
+            status=Survey.Status.DRAFT,
+            visibility=Survey.Visibility.PUBLIC,
+        )
+        client.force_login(survey_owner)
+        client.post(
+            reverse("surveys:publish_settings", args=[s.slug]),
+            {
+                "action": "publish",
+                "visibility": "public",
+                "respondent_audience": "staff",
+                "encryption_opt_out": "on",
+                "no_patient_data_ack": "on",
+                "allow_resume": "",  # unchecked
+                "allow_response_redaction": "on",
+            },
+        )
+        s.refresh_from_db()
+        assert s.allow_resume is False
+        assert s.allow_response_redaction is True
+
+    def test_publish_can_disable_redaction(self, client, survey_owner):
+        from django.urls import reverse
+
+        s = Survey.objects.create(
+            owner=survey_owner,
+            name="Pub",
+            slug="pub-toggle-no-redaction",
+            status=Survey.Status.DRAFT,
+            visibility=Survey.Visibility.PUBLIC,
+        )
+        client.force_login(survey_owner)
+        client.post(
+            reverse("surveys:publish_settings", args=[s.slug]),
+            {
+                "action": "publish",
+                "visibility": "public",
+                "respondent_audience": "staff",
+                "encryption_opt_out": "on",
+                "no_patient_data_ack": "on",
+                "allow_resume": "on",
+                "allow_response_redaction": "",  # unchecked
+            },
+        )
+        s.refresh_from_db()
+        assert s.allow_resume is True
+        assert s.allow_response_redaction is False
+
+    def test_save_action_updates_toggles(self, client, survey_owner):
+        """The 'save' action (for already-published surveys) also persists
+        the toggles."""
+        from django.urls import reverse
+
+        s = Survey.objects.create(
+            owner=survey_owner,
+            name="Pub",
+            slug="pub-save-toggle",
+            status=Survey.Status.PUBLISHED,
+            visibility=Survey.Visibility.PUBLIC,
+            respondent_audience=Survey.RespondentAudience.PUBLIC,
+            audience_confirmed=True,
+            allow_resume=True,
+            allow_response_redaction=True,
+        )
+        client.force_login(survey_owner)
+        client.post(
+            reverse("surveys:publish_settings", args=[s.slug]),
+            {
+                "action": "save",
+                "visibility": "public",
+                "allow_resume": "",  # disable
+                "allow_response_redaction": "on",
+            },
+        )
+        s.refresh_from_db()
+        assert s.allow_resume is False
+        assert s.allow_response_redaction is True
