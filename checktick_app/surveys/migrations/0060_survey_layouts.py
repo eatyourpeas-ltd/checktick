@@ -1,25 +1,59 @@
-"""Add SectionMenu and SectionMenuItem models (docs/survey-layouts.md step 4).
+"""Add Survey.layout field + SectionMenu/SectionMenuItem models.
 
-These hold the per-survey configuration for the section_menu layout:
-- SectionMenu: OneToOne with Survey, picker-level settings (prompt, min/max,\n  order mode, convenience toggles).\n- SectionMenuItem: per-QuestionGroup row (mandatory vs pickable, order,\n  estimated_minutes).\n\nRows are only created for surveys with layout = section_menu. A linear\nsurvey has no rows and renders exactly as it does today.\n
+This is the single migration for the survey layouts feature (see
+docs/survey-layouts.md). It combines what was previously three
+migrations into one:
+
+1. Survey.layout field (choices: linear/section_menu, default linear)
+2. SectionMenu model (OneToOne with Survey): picker-level settings
+3. SectionMenuItem model (per-QuestionGroup): mandatory/pickable, order,
+   estimated_minutes
+
+The prerequisite fields (Survey.allow_resume,
+Survey.allow_response_redaction, SurveyProgress.selected_group_ids
+etc.) were added in migration 0059 (v0.12.0, PR #319) and are NOT
+re-added here.
+
+BigAutoField is used for the SectionMenu and SectionMenuItem id fields
+to match the project's DEFAULT_AUTO_FIELD setting.
 """
 
 from django.db import migrations, models
+import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("surveys", "0060_survey_layout_field"),
+        ("surveys", "0059_progress_resume_and_redaction_fields"),
     ]
 
     operations = [
+        # --- Survey: add layout field ---
+        migrations.AddField(
+            model_name="survey",
+            name="layout",
+            field=models.CharField(
+                choices=[
+                    ("linear", "Linear"),
+                    ("section_menu", "Section menu"),
+                ],
+                default="linear",
+                help_text=(
+                    'High-level shape of the survey. "linear" flows sections in '
+                    'authored order; "section_menu" lets the participant pick which '
+                    "sections to complete."
+                ),
+                max_length=20,
+            ),
+        ),
+        # --- SectionMenu model ---
         migrations.CreateModel(
             name="SectionMenu",
             fields=[
                 (
                     "id",
-                    models.AutoField(
+                    models.BigAutoField(
                         auto_created=True,
                         primary_key=True,
                         serialize=False,
@@ -85,19 +119,20 @@ class Migration(migrations.Migration):
                 (
                     "survey",
                     models.OneToOneField(
-                        on_delete=models.deletion.CASCADE,
+                        on_delete=django.db.models.deletion.CASCADE,
                         related_name="section_menu",
                         to="surveys.survey",
                     ),
                 ),
             ],
         ),
+        # --- SectionMenuItem model ---
         migrations.CreateModel(
             name="SectionMenuItem",
             fields=[
                 (
                     "id",
-                    models.AutoField(
+                    models.BigAutoField(
                         auto_created=True,
                         primary_key=True,
                         serialize=False,
@@ -132,14 +167,14 @@ class Migration(migrations.Migration):
                 (
                     "group",
                     models.ForeignKey(
-                        on_delete=models.deletion.CASCADE,
+                        on_delete=django.db.models.deletion.CASCADE,
                         to="surveys.questiongroup",
                     ),
                 ),
                 (
                     "menu",
                     models.ForeignKey(
-                        on_delete=models.deletion.CASCADE,
+                        on_delete=django.db.models.deletion.CASCADE,
                         related_name="items",
                         to="surveys.sectionmenu",
                     ),
