@@ -6355,12 +6355,54 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
     # so the config card shows one row per current survey group.
     section_menu = None
     section_menu_items_by_group: dict[int, SectionMenuItem] = {}
+    section_menu_warnings: list[str] = []
     if survey.layout == Survey.Layout.SECTION_MENU:
         section_menu, _created = SectionMenu.objects.get_or_create(survey=survey)
         _sync_section_menu_items(section_menu, survey)
         section_menu_items_by_group = {
             item.group_id: item for item in section_menu.items.all()
         }
+        # Warning: branching conditions that target pickable sections
+        # (dead branches if the participant doesn't pick that section).
+        # Check both target_group (section jumps) and target_question
+        # (question jumps into a pickable section).
+        pickable_group_ids = set(
+            section_menu.items.filter(is_pickable=True).values_list(
+                "group_id", flat=True
+            )
+        )
+        if pickable_group_ids:
+            dead_branches = (
+                SurveyQuestionCondition.objects.filter(
+                    action=SurveyQuestionCondition.Action.JUMP_TO,
+                )
+                .filter(
+                    Q(target_group_id__in=pickable_group_ids)
+                    | Q(target_question__group_id__in=pickable_group_ids)
+                )
+                .select_related("target_group", "question", "target_question__group")
+            )
+            for cond in dead_branches:
+                target_name = (
+                    cond.target_group.name
+                    if cond.target_group
+                    else (
+                        cond.target_question.group.name
+                        if cond.target_question and cond.target_question.group
+                        else "unknown"
+                    )
+                )
+                section_menu_warnings.append(
+                    _(
+                        "Branching condition on '%(question)s' targets "
+                        "the pickable section '%(section)s' — it will be "
+                        "skipped if the participant doesn't pick it."
+                    )
+                    % {
+                        "question": cond.question.text[:50],
+                        "section": target_name,
+                    }
+                )
 
     ctx = {
         "survey": survey,
@@ -6377,6 +6419,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "section_menu": section_menu,
         "section_menu_items_by_group": section_menu_items_by_group,
         "section_menu_order_modes": SectionMenu.OrderMode.choices,
+        "section_menu_warnings": section_menu_warnings,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"

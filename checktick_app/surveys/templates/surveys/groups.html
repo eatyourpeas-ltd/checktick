@@ -206,6 +206,18 @@
         {% else %}
         <p class="text-sm text-base-content/70">{% trans 'This survey is read-only.' %}</p>
         {% endif %}
+
+        {# Branching warnings (step 8) #}
+        {% if section_menu_warnings %}
+        <div class="mt-2 space-y-1">
+          {% for warning in section_menu_warnings %}
+          <div class="alert alert-warning py-2 px-3 text-xs" role="status">
+            {% include "components/icons/exclamation-triangle.html" with classes="w-4 h-4 shrink-0" %}
+            <span>{{ warning }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
     </div>
   </section>
