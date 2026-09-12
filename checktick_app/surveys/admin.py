@@ -15,6 +15,8 @@ from .models import (
     QuestionGroup,
     RecoveryAuditEntry,
     RecoveryRequest,
+    SectionMenu,
+    SectionMenuItem,
     Survey,
     SurveyProgress,
     SurveyQuestion,
@@ -626,6 +628,33 @@ class SurveyProgressAdmin(admin.ModelAdmin):
     list_filter = ("survey", "updated_at", "expires_at")
     search_fields = ("survey__name", "survey__slug", "user__username", "session_key")
     readonly_fields = ("created_at", "updated_at", "last_question_answered_at")
+
+
+class SectionMenuItemInline(admin.TabularInline):
+    model = SectionMenuItem
+    extra = 0
+
+
+@admin.register(SectionMenu)
+class SectionMenuAdmin(admin.ModelAdmin):
+    list_display = (
+        "survey",
+        "prompt_text",
+        "min_selected",
+        "max_selected",
+        "order_mode",
+    )
+    list_filter = ("order_mode",)
+    search_fields = ("survey__name", "survey__slug")
+    inlines = [SectionMenuItemInline]
+
+
+@admin.register(SectionMenuItem)
+class SectionMenuItemAdmin(admin.ModelAdmin):
+    list_display = ("menu", "group", "is_pickable", "order", "estimated_minutes")
+    list_filter = ("is_pickable",)
+    search_fields = ("menu__survey__name", "group__name")
+    ordering = ("menu", "order", "id")
 
 
 class CollectionItemInline(admin.TabularInline):

@@ -49,6 +49,180 @@
     {% trans 'Select multiple sections to repeat them together as a block.' %}
   </p>
 
+  {# === Survey layout picker (docs/survey-layouts.md) === #}
+  <section class="not-prose mt-2 mb-6" aria-labelledby="layout-heading">
+    <h3 id="layout-heading" class="text-sm font-semibold text-base-content/80 mb-2">
+      {% trans 'Survey layout' %}
+    </h3>
+    <p class="text-xs text-base-content/60 mb-3">
+      {% trans 'How sections are offered to the participant. Switch to “Section menu” to let participants pick which sections to complete.' %}
+    </p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-3xl">
+      {# Linear card #}
+      <div class="card bg-base-100 border {% if survey.layout == 'linear' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+        <div class="card-body gap-2 p-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-semibold text-base-content">{% trans 'Default (linear)' %}</h4>
+            {% if survey.layout == 'linear' %}
+              <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% endif %}
+          </div>
+          {# Layout wireframe — CSP-safe, inherits daisyUI theme tokens. Same viewBox/box-size/stroke-width as the section menu icon so the two cards match. #}
+          {% include "components/icons/layout_linear.html" with classes="w-full h-24 text-base-content/70" %}
+          <p class="text-xs text-base-content/70">{% trans 'Sections flow in order. Every respondent sees every section.' %}</p>
+          {% if can_edit and survey.layout != 'linear' %}
+            <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_layout" />
+              <input type="hidden" name="layout" value="linear" />
+              <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+
+      {# Section menu card #}
+      <div class="card bg-base-100 border {% if survey.layout == 'section_menu' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+        <div class="card-body gap-2 p-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-semibold text-base-content">{% trans 'Section menu' %}</h4>
+            {% if survey.layout == 'section_menu' %}
+              <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% endif %}
+          </div>
+          {% include "components/icons/layout_section_menu.html" with classes="w-full h-24 text-base-content/70" %}
+          <p class="text-xs text-base-content/70">{% trans 'Participant picks which sections to complete. Mandatory sections are always included.' %}</p>
+          {% if section_count < 2 %}
+            <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>
+          {% endif %}
+          {% if can_edit and survey.layout != 'section_menu' %}
+            <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_layout" />
+              <input type="hidden" name="layout" value="section_menu" />
+              <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# === Section menu configuration card (step 4) === #}
+  {% if survey.layout == 'section_menu' %}
+  <section class="not-prose mb-6" aria-labelledby="section-menu-config-heading">
+    <div class="card bg-base-100 border border-base-300 max-w-3xl">
+      <div class="card-body gap-3 p-4">
+        <h3 id="section-menu-config-heading" class="font-semibold text-base-content">
+          {% trans 'Section menu configuration' %}
+        </h3>
+        {% if can_edit %}
+        <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="space-y-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_section_menu" />
+
+          <div>
+            <label class="label text-xs" for="id_prompt_text">{% trans 'Picker prompt' %}</label>
+            <input id="id_prompt_text" type="text" name="prompt_text" maxlength="255"
+                   class="input input-bordered input-sm w-full"
+                   value="{{ section_menu.prompt_text|default:'Which sections would you like to complete?' }}" />
+          </div>
+
+          <div>
+            <span class="label text-xs">{% trans 'Sections' %}</span>
+            <ul class="mt-1 divide-y divide-base-200 border border-base-200 rounded-lg">
+              {% for g in groups %}
+                {% with item=section_menu_items_by_group|get_item:g.id %}
+                  <li class="flex items-center gap-3 p-2">
+                    <label class="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                      <input type="checkbox" name="mandatory_group_ids" value="{{ g.id }}"
+                             class="checkbox checkbox-sm"
+                             {% if item and not item.is_pickable %}checked{% endif %}
+                             aria-label="{% trans 'Mandatory' %}" />
+                      <span class="truncate">{{ g.name }}</span>
+                    </label>
+                    <span class="text-xs text-base-content/60 shrink-0">
+                      {% if item and not item.is_pickable %}{% trans 'Mandatory' %}{% else %}{% trans 'Pickable' %}{% endif %}
+                    </span>
+                    <span class="badge badge-neutral badge-sm shrink-0">{{ g.q_count|default:0 }}</span>
+                    <input type="hidden" name="estimated_minutes_group_ids" value="{{ g.id }}" />
+                    <input type="number" min="1" name="estimated_minutes_{{ g.id }}"
+                           class="input input-bordered input-xs w-16"
+                           placeholder="min"
+                           value="{{ item.estimated_minutes|default:'' }}"
+                           aria-label="{% trans 'Estimated minutes' %}" />
+                  </li>
+                {% endwith %}
+              {% endfor %}
+            </ul>
+          </div>
+
+          <fieldset class="flex flex-wrap gap-x-6 gap-y-2 items-end">
+            <div>
+              <label class="label text-xs" for="id_min_selected">{% trans 'Min pickable selected' %}</label>
+              <input id="id_min_selected" type="number" min="0" name="min_selected"
+                     class="input input-bordered input-sm w-20"
+                     value="{{ section_menu.min_selected|default:1 }}" />
+            </div>
+            <div>
+              <label class="label text-xs" for="id_max_selected">{% trans 'Max (blank = no cap)' %}</label>
+              <input id="id_max_selected" type="number" min="1" name="max_selected"
+                     class="input input-bordered input-sm w-20"
+                     value="{{ section_menu.max_selected|default:'' }}" />
+            </div>
+            <div>
+              <span class="label text-xs">{% trans 'Order after selection' %}</span>
+              <div class="flex gap-3">
+                {% for value, label in section_menu_order_modes %}
+                  <label class="flex items-center gap-1 cursor-pointer text-sm">
+                    <input type="radio" name="order_mode" value="{{ value }}"
+                           class="radio radio-sm"
+                           {% if section_menu.order_mode == value or forloop.first and not section_menu.order_mode %}checked{% endif %} />
+                    {{ label }}
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="flex flex-wrap gap-x-6 gap-y-2">
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" name="show_select_all" class="checkbox checkbox-sm"
+                     {% if section_menu.show_select_all %}checked{% endif %} />
+              {% trans 'Show “Select all” button' %}
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" name="show_estimated_time" class="checkbox checkbox-sm"
+                     {% if section_menu.show_estimated_time %}checked{% endif %} />
+              {% trans 'Show estimated time per section' %}
+            </label>
+          </fieldset>
+
+          <div class="flex gap-2 pt-1">
+            <button type="submit" class="btn btn-primary btn-sm">{% trans 'Save layout' %}</button>
+            <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/survey-map/">{% trans 'Review in Survey Map' %}</a>
+          </div>
+        </form>
+        {% else %}
+        <p class="text-sm text-base-content/70">{% trans 'This survey is read-only.' %}</p>
+        {% endif %}
+
+        {# Branching warnings (step 8) #}
+        {% if section_menu_warnings %}
+        <div class="mt-2 space-y-1">
+          {% for warning in section_menu_warnings %}
+          <div class="alert alert-warning py-2 px-3 text-xs" role="status">
+            {% include "components/icons/exclamation-triangle.html" with classes="w-4 h-4 shrink-0" %}
+            <span>{{ warning }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   {# === Empty state: no groups yet (legacy surveys; new surveys get a default group automatically on creation via create_default_section) === #}
   {% if not groups %}
   <div class="not-prose mt-6 max-w-2xl">

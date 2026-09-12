@@ -41,7 +41,9 @@ The **Organise** page (`/surveys/<slug>/groups/`) is for bulk section operations
 - **Create repeats (collections)** - Select multiple sections and make them repeatable together (single-section repeats can be done from the Builder rail)
 - **Nest repeats** - Create one level of nesting (e.g., "People" containing "Visits")
 - **Remove from repeats** - Unlink sections from collections
-- **Visualise the survey** - View the survey as a flow diagram on the **Survey Map** page (`/surveys/<slug>/survey-map/`), linked from the quick-nav toolbar.
+- **Set survey layout** - Choose between **Default (linear)** and **Section menu** layouts. The Section menu layout lets participants pick which sections to complete (see [Survey Layouts](survey-layouts.md)).
+- **Configure section menu** - When using the Section menu layout, mark sections as mandatory or pickable, set min/max selection, and configure the picker prompt.
+- **Visualise the survey** - View the survey as a flow diagram on the **Survey Map** page (`/surveys/<slug>/survey-map/`), linked from the quick-nav toolbar. The Survey Map shows pickable/mandatory badges when using the Section menu layout.
 - **Publish sections as templates** - Share validated questionnaires
 
 Renaming, deleting, and single-section repeats are done in the **Builder** rail. The Organise page focuses on bulk operations that affect multiple sections at once.

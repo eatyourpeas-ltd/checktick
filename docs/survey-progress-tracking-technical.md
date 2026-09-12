@@ -256,7 +256,7 @@ Migration `0059_progress_resume_and_redaction_fields` adds the new fields and ba
 ## Related Documentation
 
 - [Survey Progress Tracking](survey-progress-tracking.md) — user-facing guide
-- [Survey Layouts](survey-layouts.md) — the planned section_menu layout that depends on `selected_group_ids`
+- [Survey Layouts (Technical)](survey-layouts-technical.md) — the section_menu layout that depends on `selected_group_ids`
 - [Branching Technical Guide](branching-technical.md) — `should_show_question`, ordering pipeline
 - [Publishing Surveys (Technical)](publishing-surveys.md) — visibility modes and publish settings
 - [Data Governance](data-governance.md) — retention and deletion policies
