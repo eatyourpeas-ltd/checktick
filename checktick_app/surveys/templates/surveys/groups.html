@@ -49,6 +49,77 @@
     {% trans 'Select multiple sections to repeat them together as a block.' %}
   </p>
 
+  {# === Survey layout picker (docs/survey-layouts.md) === #}
+  <section class="not-prose mt-2 mb-6" aria-labelledby="layout-heading">
+    <h3 id="layout-heading" class="text-sm font-semibold text-base-content/80 mb-2">
+      {% trans 'Survey layout' %}
+    </h3>
+    <p class="text-xs text-base-content/60 mb-3">
+      {% trans 'How sections are offered to the participant. Switch to “Section menu” to let participants pick which sections to complete.' %}
+    </p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-3xl">
+      {# Linear card #}
+      <div class="card bg-base-100 border {% if survey.layout == 'linear' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+        <div class="card-body gap-2 p-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-semibold text-base-content">{% trans 'Default (linear)' %}</h4>
+            {% if survey.layout == 'linear' %}
+              <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% endif %}
+          </div>
+          {# Inline SVG wireframe — CSP-safe, inherits theme tokens #}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40" class="w-full h-10 text-base-content/70" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <rect x="4" y="12" width="20" height="16" rx="2" />
+            <rect x="32" y="12" width="20" height="16" rx="2" />
+            <rect x="60" y="12" width="20" height="16" rx="2" />
+            <rect x="88" y="12" width="20" height="16" rx="2" />
+            <path d="M24 20h8M52 20h8M80 20h8" stroke-linecap="round" />
+          </svg>
+          <p class="text-xs text-base-content/70">{% trans 'Sections flow in order. Every respondent sees every section.' %}</p>
+          {% if can_edit and survey.layout != 'linear' %}
+            <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_layout" />
+              <input type="hidden" name="layout" value="linear" />
+              <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+
+      {# Section menu card #}
+      <div class="card bg-base-100 border {% if survey.layout == 'section_menu' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+        <div class="card-body gap-2 p-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-semibold text-base-content">{% trans 'Section menu' %}</h4>
+            {% if survey.layout == 'section_menu' %}
+              <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% endif %}
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40" class="w-full h-10 text-base-content/70" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <rect x="48" y="2" width="24" height="10" rx="2" />
+            <path d="M60 12v4M30 22h60M30 22l-6 8M60 22v8M90 22l6 8" stroke-linecap="round" />
+            <rect x="18" y="30" width="20" height="8" rx="2" />
+            <rect x="50" y="30" width="20" height="8" rx="2" />
+            <rect x="82" y="30" width="20" height="8" rx="2" />
+          </svg>
+          <p class="text-xs text-base-content/70">{% trans 'Participant picks which sections to complete. Mandatory sections are always included.' %}</p>
+          {% if section_count < 2 %}
+            <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>
+          {% endif %}
+          {% if can_edit and survey.layout != 'section_menu' %}
+            <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_layout" />
+              <input type="hidden" name="layout" value="section_menu" />
+              <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
   {# === Empty state: no groups yet (legacy surveys; new surveys get a default group automatically on creation via create_default_section) === #}
   {% if not groups %}
   <div class="not-prose mt-6 max-w-2xl">

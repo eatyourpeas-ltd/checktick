@@ -5960,6 +5960,42 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
     can_edit = can_edit_survey(request.user, survey)
+
+    # Layout switching (see docs/survey-layouts.md step 3). Only the layout
+    # field itself is changed here; the SectionMenu configuration card is
+    # wired up in step 4. Switching back to "linear" leaves any existing
+    # SectionMenu rows in place (they are simply unused) so the author can
+    # flip back without losing their configuration.
+    if request.method == "POST" and request.POST.get("action") == "set_layout":
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        chosen = request.POST.get("layout", "")
+        if chosen not in {choice[0] for choice in Survey.Layout.choices}:
+            messages.error(request, _("Unknown layout."))
+            return redirect("surveys:groups", slug=slug)
+        # Single-section guard: a section menu with < 2 sections is pointless.
+        # We do not block the switch (the author may be mid-build) but we warn.
+        if chosen == Survey.Layout.SECTION_MENU:
+            section_count = survey.question_groups.count()
+            if section_count < 2:
+                messages.warning(
+                    request,
+                    _(
+                        "Section menu needs at least 2 sections to be useful. "
+                        "Add more sections first."
+                    ),
+                )
+        survey.layout = chosen
+        survey.save(update_fields=["layout"])
+        messages.success(
+            request,
+            _("Layout set to %(layout)s.") % {"layout": survey.get_layout_display()},
+        )
+        return redirect("surveys:groups", slug=slug)
+
     groups_qs = survey.question_groups.annotate(
         q_count=models.Count(
             "surveyquestion", filter=models.Q(surveyquestion__survey=survey)
@@ -6012,6 +6048,10 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "repeat_info": repeat_info,
         "existing_repeats": existing_repeats,
         "patient_data_readonly": patient_data_readonly,
+        # Layout (see docs/survey-layouts.md). The Organise page is the home
+        # for survey-shape decisions, so the layout picker lives here.
+        "layout_choices": Survey.Layout.choices,
+        "section_count": survey.question_groups.count(),
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
