@@ -10938,6 +10938,42 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
         ):
             summary_parts.append(" Previous survey content was replaced.")
 
+        # Apply SECTION_MENU config from the outline (step 7).
+        section_menu_cfg = parsed.get("section_menu")
+        if section_menu_cfg:
+            survey.layout = Survey.Layout.SECTION_MENU
+            survey.save(update_fields=["layout"])
+            menu, _created = SectionMenu.objects.get_or_create(survey=survey)
+            menu.prompt_text = section_menu_cfg.get(
+                "prompt_text", "Which sections would you like to complete?"
+            )
+            menu.min_selected = section_menu_cfg.get("min_selected", 1)
+            menu.max_selected = section_menu_cfg.get("max_selected")
+            menu.order_mode = section_menu_cfg.get("order_mode", "authored")
+            menu.show_select_all = section_menu_cfg.get("show_select_all", False)
+            menu.show_estimated_time = section_menu_cfg.get(
+                "show_estimated_time", False
+            )
+            menu.save()
+            # Sync items and apply per-group flags from the parsed outline.
+            _sync_section_menu_items(menu, survey)
+            for g in parsed["groups"]:
+                grp = group_ref_map.get(g.get("ref"))  # may be None if no ref
+                if grp is None:
+                    # Fall back to name match
+                    grp = next(
+                        (gg for gg in created_groups_in_order if gg.name == g["name"]),
+                        None,
+                    )
+                if grp is None:
+                    continue
+                item = menu.items.filter(group=grp).first()
+                if item:
+                    item.is_pickable = g.get("section_menu_pickable", True)
+                    item.estimated_minutes = g.get("section_menu_estimated_minutes")
+                    item.save(update_fields=["is_pickable", "estimated_minutes"])
+            summary_parts.append(" Section menu layout applied.")
+
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)
     return render(request, "surveys/bulk_upload.html", context)
@@ -10965,7 +11001,7 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             child_collections[coll.parent_id].append(coll)
 
     # Get all question groups for this survey
-    groups = (
+    groups = list(
         survey.question_groups.all()
         .prefetch_related(
             models.Prefetch(
@@ -10978,6 +11014,30 @@ def _export_survey_to_markdown(survey: Survey) -> str:
 
     # Build markdown
     lines = []
+
+    # SECTION_MENU block (see docs/survey-layouts.md §Outline syntax).
+    # Emitted at the top when the survey uses the section_menu layout.
+    # Only config lines are emitted here; the ``~ pickable`` suffix is
+    # placed on the actual content group headings below.
+    section_menu_items_by_group: dict = {}
+    if survey.layout == Survey.Layout.SECTION_MENU:
+        menu = getattr(survey, "section_menu", None)
+        if menu is not None:
+            lines.append("SECTION_MENU")
+            lines.append(f'  prompt: "{menu.prompt_text}"')
+            lines.append(f"  min: {menu.min_selected}")
+            if menu.max_selected is not None:
+                lines.append(f"  max: {menu.max_selected}")
+            lines.append(f"  order: {menu.order_mode}")
+            if menu.show_select_all:
+                lines.append("  select_all: true")
+            if menu.show_estimated_time:
+                lines.append("  estimated_time: true")
+            lines.append("")
+            # Build a lookup for per-group item flags
+            section_menu_items_by_group = {
+                item.group_id: item for item in menu.items.all()
+            }
 
     for group in groups:
         # Check if this group is part of a collection
@@ -11028,7 +11088,15 @@ def _export_survey_to_markdown(survey: Survey) -> str:
 
         # Add group heading
         group_ref = group.name.lower().replace(" ", "-")
-        lines.append(f"{indent}# {group.name} {{{group_ref}}}")
+        heading = f"{indent}# {group.name} {{{group_ref}}}"
+        # Append ``~ pickable`` suffix for section_menu layout
+        sm_item = section_menu_items_by_group.get(group.id)
+        if sm_item and sm_item.is_pickable:
+            suffix = "~ pickable"
+            if sm_item.estimated_minutes:
+                suffix += f", {sm_item.estimated_minutes} min"
+            heading = f"{heading}    {suffix}"
+        lines.append(heading)
         if group.description:
             lines.append(f"{indent}{group.description}")
         lines.append("")
