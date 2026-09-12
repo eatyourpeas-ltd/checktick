@@ -2,7 +2,7 @@
 title: Survey Layouts
 category: features
 priority: 7
-status: design
+status: implemented
 ---
 
 > **Status: Design document, ready to implement.** The `linear` layout is
