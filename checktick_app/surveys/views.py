@@ -5341,6 +5341,21 @@ def _handle_participant_submission(
 
         # If this is a draft save, update progress and return JSON
         if is_draft and is_ajax:
+            if progress is None:
+                # Server-side progress is disabled for this survey
+                # (public/unlisted without credential, or allow_resume=False).
+                # Client-side localStorage handles crash recovery.
+                return JsonResponse(
+                    {
+                        "success": True,
+                        "progress": {
+                            "percentage": 0,
+                            "answered": 0,
+                            "total": survey.questions.count(),
+                        },
+                        "server_save_disabled": True,
+                    }
+                )
             progress.update_progress(answers)
             return JsonResponse(
                 {
@@ -5507,13 +5522,18 @@ def _handle_participant_submission(
             else {}
         ),
         "is_preview": False,  # Flag to indicate this is public submission
-        # Progress tracking
-        "show_progress": True,
-        "progress_percentage": progress.calculate_progress_percentage(),
-        "answered_count": progress.answered_count,
-        "total_questions": progress.total_questions,
-        "saved_answers": progress.partial_answers,
-        "last_saved": progress.updated_at if progress.answered_count > 0 else None,
+        # Progress tracking (None for public/unlisted surveys without
+        # credential — see _get_or_create_progress)
+        "show_progress": progress is not None,
+        "progress_percentage": (
+            progress.calculate_progress_percentage() if progress else 0
+        ),
+        "answered_count": progress.answered_count if progress else 0,
+        "total_questions": progress.total_questions if progress else 0,
+        "saved_answers": progress.partial_answers if progress else {},
+        "last_saved": (
+            progress.updated_at if progress and progress.answered_count > 0 else None
+        ),
     }
     return render(request, "surveys/detail.html", ctx)
 
@@ -7167,9 +7187,35 @@ def _get_or_create_progress(
 ):
     """
     Get or create progress record for current user/session.
-    Returns tuple of (SurveyProgress, created: bool)
+    Returns tuple of (SurveyProgress | None, created: bool).
+
+    Returns (None, False) when server-side progress tracking is disabled:
+    - survey.allow_resume is False (creator disabled resume), OR
+    - public/unlisted surveys with no participant credential (no token, no
+      user). These surveys have no way to identify the participant on
+      return, so auto-saving to a session cookie is a weak protection and a
+      PHI retention liability on shared computers. Crash recovery for these
+      surveys uses client-side localStorage instead (see
+      docs/survey-progress-tracking.md §Public Surveys).
+
+    Authenticated and token surveys always get a progress row: the user FK
+    or the access token is the credential for resume.
     """
     from datetime import timedelta
+
+    # Creator disabled resume entirely
+    if not survey.allow_resume:
+        return None, False
+
+    # Public/unlisted surveys with no credential: no auto-save.
+    # Token surveys have a token_obj and are NOT anonymous, so they proceed.
+    is_anonymous_public = (
+        not request.user.is_authenticated
+        and token_obj is None
+        and survey.visibility in (Survey.Visibility.PUBLIC, Survey.Visibility.UNLISTED)
+    )
+    if is_anonymous_public:
+        return None, False
 
     total_questions = survey.questions.count()
     expires_at = timezone.now() + timedelta(days=30)

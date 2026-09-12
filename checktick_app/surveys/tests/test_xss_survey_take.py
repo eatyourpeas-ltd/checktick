@@ -407,16 +407,28 @@ def test_saved_answers_xss_encoded_via_json_script(client, owner, org):
     """
     Partial answers stored in SurveyProgress (from a previous visit) are
     reflected back via Django's json_script filter.  That filter encodes
-    <, >, &, ' as Unicode escape sequences (\\u003C etc.), so the payload
+    <, >, &, ' as Unicode escape sequences (\u003c etc.), so the payload
     can never be treated as HTML by the browser.
+
+    Uses an authenticated survey because public surveys no longer auto-save
+    progress server-side (see docs/survey-progress-tracking.md). The XSS
+    protection for saved answers applies to all surveys that do save progress.
     """
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    participant = User.objects.create_user(
+        username="xss-participant@example.com", password="x"
+    )
+
     survey = Survey.objects.create(
         owner=owner,
         organization=org,
         name="Progress XSS Survey",
         slug="progress-xss-survey",
         status=Survey.Status.PUBLISHED,
-        visibility=Survey.Visibility.PUBLIC,
+        visibility=Survey.Visibility.AUTHENTICATED,
+        allow_any_authenticated=True,
     )
     q = SurveyQuestion.objects.create(
         survey=survey,
@@ -426,12 +438,12 @@ def test_saved_answers_xss_encoded_via_json_script(client, owner, org):
         order=0,
     )
 
+    client.login(username="xss-participant@example.com", password="x")
+
     # Seed a progress record with an XSS payload as a stored partial answer.
     client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
-    session_key = client.session.session_key
-    assert session_key, "Session was not created on first visit"
 
-    SurveyProgress.objects.filter(survey=survey, session_key=session_key).update(
+    SurveyProgress.objects.filter(survey=survey, user=participant).update(
         partial_answers={str(q.id): SCRIPT_TAG},
         answered_count=1,
     )
@@ -443,7 +455,7 @@ def test_saved_answers_xss_encoded_via_json_script(client, owner, org):
     assert (
         RAW_SCRIPT_OPEN not in resp.content
     ), "Raw XSS payload found in saved_answers output — json_script not applied"
-    # Django's json_script encodes < as \\u003C inside the JSON element.
+    # Django's json_script encodes < as \u003C inside the JSON element.
     assert (
         b"\\u003C" in resp.content or b"\\u003c" in resp.content
     ), "Expected json_script Unicode-escaped output not found for < character"
@@ -455,14 +467,25 @@ def test_saved_answers_double_quote_encoded_via_json_script(client, owner, org):
     Double-quotes in saved answers must be JSON-string-escaped (as \") inside
     the <script type="application/json"> element — they cannot terminate
     the JSON string and inject additional keys or break out of the script element.
+
+    Uses an authenticated survey because public surveys no longer auto-save
+    progress server-side.
     """
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    participant = User.objects.create_user(
+        username="xss-dquote@example.com", password="x"
+    )
+
     survey = Survey.objects.create(
         owner=owner,
         organization=org,
         name="Progress DQuote Survey",
         slug="progress-dquote-survey",
         status=Survey.Status.PUBLISHED,
-        visibility=Survey.Visibility.PUBLIC,
+        visibility=Survey.Visibility.AUTHENTICATED,
+        allow_any_authenticated=True,
     )
     q = SurveyQuestion.objects.create(
         survey=survey,
@@ -472,11 +495,11 @@ def test_saved_answers_double_quote_encoded_via_json_script(client, owner, org):
         order=0,
     )
 
+    client.login(username="xss-dquote@example.com", password="x")
     client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
-    session_key = client.session.session_key
 
     # Payload that could act as JSON injection if not encoded.
-    SurveyProgress.objects.filter(survey=survey, session_key=session_key).update(
+    SurveyProgress.objects.filter(survey=survey, user=participant).update(
         partial_answers={str(q.id): '", "injected": "value'},
         answered_count=1,
     )

@@ -388,14 +388,20 @@ class TestAuthenticatedProgress:
 
 @pytest.mark.django_db
 class TestAnonymousProgress:
-    """Tests for progress tracking with anonymous users using sessions."""
+    """Tests for progress tracking with anonymous users using sessions.
 
-    def test_progress_saved_for_anonymous_user(self, client, public_survey):
-        """Progress should be saved for anonymous users using session key."""
+    Public/unlisted surveys no longer auto-save server-side progress by
+    default (see docs/survey-progress-tracking.md §Public Surveys). These
+    tests assert the new behaviour: no SurveyProgress row is created for
+    anonymous public-survey participants unless they explicitly opt in via
+    a resume token (tested in test_resume_redaction.py).
+    """
+
+    def test_progress_not_saved_for_anonymous_public_user(self, client, public_survey):
+        """Public surveys should NOT auto-save progress server-side."""
         url = reverse("surveys:take", kwargs={"slug": public_survey.slug})
         questions = public_survey.questions.all()
 
-        # Anonymous user saves draft
         response = client.post(
             url,
             {
@@ -408,96 +414,42 @@ class TestAnonymousProgress:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
+        assert data.get("server_save_disabled") is True
 
-        # Verify progress record created with session key
-        session_key = client.session.session_key
-        progress = SurveyProgress.objects.get(
-            survey=public_survey, session_key=session_key
-        )
-        assert progress.user is None
-        assert progress.answered_count == 1
+        # No progress record should be created
+        assert not SurveyProgress.objects.filter(survey=public_survey).exists()
 
-    def test_anonymous_progress_restored_same_session(self, client, public_survey):
-        """Anonymous user should see their progress in the same session."""
-        questions = public_survey.questions.all()
-
-        # First request to establish session and save some progress
+    def test_anonymous_public_no_progress_shown_on_get(self, client, public_survey):
+        """Anonymous public-survey GET should not show server-side progress."""
         url = reverse("surveys:take", kwargs={"slug": public_survey.slug})
-        client.post(
-            url,
-            {
-                "action": "save_draft",
-                f"q_{questions[0].id}": "Saved Answer",
-            },
-            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
-        )
-        session_key = client.session.session_key
-
-        # Verify progress was created
-        progress = SurveyProgress.objects.get(
-            survey=public_survey, session_key=session_key
-        )
-        assert progress.partial_answers[str(questions[0].id)] == "Saved Answer"
-
-        # Get survey again in same session
         response = client.get(url)
 
         assert response.status_code == 200
         context = response.context
-        assert context["show_progress"] is True
-        assert context["saved_answers"][str(questions[0].id)] == "Saved Answer"
+        assert context["show_progress"] is False
+        assert context["saved_answers"] == {}
 
-    def test_different_sessions_have_separate_progress(self, client, public_survey):
-        """Different anonymous sessions should have independent progress."""
-        questions = list(public_survey.questions.all())
+    def test_anonymous_public_progress_saved_when_resume_disabled(
+        self, client, public_survey
+    ):
+        """When allow_resume=False, public surveys also don't save progress."""
+        public_survey.allow_resume = False
+        public_survey.save(update_fields=["allow_resume"])
+
         url = reverse("surveys:take", kwargs={"slug": public_survey.slug})
+        questions = public_survey.questions.all()
 
-        # Session 1
-        response1 = client.post(
+        response = client.post(
             url,
             {
                 "action": "save_draft",
-                f"q_{questions[0].id}": "Session 1",
+                f"q_{questions[0].id}": "Answer",
             },
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
-        assert response1.status_code == 200
-        session1_key = client.session.session_key
 
-        # Verify session 1 progress
-        progress1 = SurveyProgress.objects.get(
-            survey=public_survey, session_key=session1_key
-        )
-        assert str(questions[0].id) in progress1.partial_answers
-
-        # Clear session to simulate new browser
-        client.session.flush()
-
-        # Session 2
-        response2 = client.post(
-            url,
-            {
-                "action": "save_draft",
-                f"q_{questions[0].id}": "Session 2",
-            },
-            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
-        )
-        assert response2.status_code == 200
-        session2_key = client.session.session_key
-
-        # Should have 2 separate progress records
-        assert SurveyProgress.objects.filter(survey=public_survey).count() == 2
-
-        progress1.refresh_from_db()
-        progress2 = SurveyProgress.objects.get(
-            survey=public_survey, session_key=session2_key
-        )
-
-        # Verify both have correct data
-        assert str(questions[0].id) in progress1.partial_answers
-        assert str(questions[0].id) in progress2.partial_answers
-        assert progress1.partial_answers[str(questions[0].id)] == "Session 1"
-        assert progress2.partial_answers[str(questions[0].id)] == "Session 2"
+        assert response.status_code == 200
+        assert not SurveyProgress.objects.filter(survey=public_survey).exists()
 
 
 # ============================================================================
