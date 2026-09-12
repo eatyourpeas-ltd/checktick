@@ -308,14 +308,18 @@ To lift suspension:
 
 ## 9. Anonymous Surveys
 
-### 9.1 DSRs Not Applicable
+### 9.1 DSRs and Opt-Out Tokens
 
 For anonymous surveys (public, unlisted without personal tokens):
 
-- No receipt token is issued
+- No receipt token is issued by default
 - Responses cannot be linked to individuals
-- DSRs cannot be fulfilled (no identifiable data subject)
+- DSRs cannot be fulfilled unless the participant opted in to an opt-out token
 - Respondent is warned before submission
+
+**Opt-out tokens (new):** If the survey creator has enabled `allow_response_redaction` (default: True), participants in public/unlisted surveys can opt to receive a receipt token after submission. If they accept, the token is stored on the response and can be used to locate it for redaction via `DataSubjectRequest.find_by_receipt_token()`. If the participant declines the token, the response remains fully anonymous and DSRs cannot be fulfilled.
+
+If the survey creator has disabled `allow_response_redaction`, no opt-out token is offered and the original anonymity guarantee stands — DSRs are not applicable.
 
 ### 9.2 Pre-Submission Notice
 
@@ -326,6 +330,8 @@ Anonymous surveys display:
 > This survey is anonymous. Your response cannot be linked to your identity.
 > After submission, you will not be able to request access to, correction of,
 > or deletion of your response because we cannot identify which response is yours.
+
+If the survey has `allow_response_redaction=True`, the notice also states that the participant can opt to receive a token for later redaction.
 
 ## 10. Record Keeping
 

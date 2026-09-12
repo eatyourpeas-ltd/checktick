@@ -6,7 +6,7 @@ priority: 2
 
 # Privacy Notice
 
-**Last Updated: 31 May 2026**
+**Last Updated: September 2026**
 
 This Privacy Notice explains how Eatyourpeas Ltd ("we", "us", or "our"), trading as CheckTick, collects, uses, stores, and protects your personal information when you use our survey platform and services.
 
@@ -208,13 +208,30 @@ If unresolved, contact: <dpo@checktick.uk>
 
 ### 11.3 Anonymous vs Pseudonymous
 
-Anonymous responses cannot be linked to individuals and rights cannot be exercised.
+Anonymous responses cannot be linked to individuals and rights cannot be exercised — unless the survey creator has enabled opt-out tokens and the participant chooses to receive one at submission time (see §11.4). In that case, the participant's response can be linked to them via the token for the sole purpose of redaction.
+
+If a participant in a public survey is not offered a token, the original anonymity promise stands: the response cannot be linked to them and cannot be redacted.
 
 ### 11.4 Receipt Tokens
 
-Used to identify responses without revealing identity.
+Receipt tokens are used to identify responses without revealing identity. They are issued in two circumstances:
 
-### 11.5 Dispute Resolution
+- **Pseudonymous surveys** (authenticated or invite token): a receipt token is issued automatically after submission. The participant can use it to request access to, correction of, or deletion of their response.
+- **Public/unlisted surveys**: a receipt token (called an opt-out token) is offered on an opt-in basis after submission, but only if the survey creator has enabled it. The participant chooses whether to accept the token. If they accept, they can later request deletion of their response using the token. If they decline, the response is fully anonymous and cannot be redacted.
+
+Tokens are shown once on the thank-you page after submission. If the participant loses the token, we cannot identify their response for deletion. Participants can optionally email the token to themselves — the email address is used only to send the email and is not stored on our servers.
+
+### 11.5 Saving Progress
+
+Participants can save their progress and resume later:
+
+- **Authenticated surveys**: progress is saved to the participant's account automatically and resumes on any device after login.
+- **Invite token surveys**: progress is saved automatically and resumes when the participant returns to the same invite link.
+- **Public/unlisted surveys**: progress is not saved to our servers by default. The participant can click "Save and come back later" to receive a resume link (valid for 30 days). The link is the only way back to saved answers — if lost, progress cannot be recovered. The participant can optionally email the link to themselves; the email address is not stored.
+
+Survey creators can disable progress saving for individual surveys via the publication workflow ("Allow participants to save progress and resume later" toggle).
+
+### 11.6 Dispute Resolution
 
 We may:
 
@@ -222,7 +239,7 @@ We may:
 * Restrict processing
 * Escalate issues
 
-### 11.6 Complaints
+### 11.7 Complaints
 
 You may complain to:
 
