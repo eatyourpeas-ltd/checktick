@@ -434,11 +434,7 @@
     {# Organise & Survey Map — pulled right on desktop, wraps on mobile #}
     <div class="ml-auto flex flex-wrap gap-2">
       <a href="/surveys/{{ survey.slug }}/groups/" class="btn btn-sm btn-ghost gap-2" title="{% trans 'Reorder sections, set layout, configure repeats and branching' %}">
-        {% if survey.layout == 'section_menu' %}
-        {% include "components/icons/layout_section_menu.html" with classes="w-4 h-4" %}
-        {% else %}
-        {% include "components/icons/layout_linear.html" with classes="w-4 h-4" %}
-        {% endif %}
+        {% include "components/icons/documents.html" with classes="w-4 h-4" %}
         {% trans "Organise" %}
         {% if survey.layout == 'section_menu' %}
         <span class="badge badge-accent badge-xs">{% trans "Section menu" %}</span>
