@@ -252,10 +252,12 @@ class TestAuthenticatedProgress:
         assert saved_answers[str(questions[0].id)] == "Jane Smith"
         assert saved_answers[str(questions[1].id)] == "25"
 
-    def test_progress_deleted_on_submission(
+    def test_progress_marked_completed_on_submission(
         self, client, published_survey, participant
     ):
-        """Progress should be deleted when survey is successfully submitted."""
+        """Progress should be marked completed (not deleted) when survey is
+        successfully submitted. The row is kept for audit then swept by the
+        retention job."""
         questions = published_survey.questions.all()
 
         # Create existing progress
@@ -285,10 +287,12 @@ class TestAuthenticatedProgress:
         assert response.status_code == 302
         assert "/thank-you/" in response.url
 
-        # Progress should be deleted
-        assert not SurveyProgress.objects.filter(
-            survey=published_survey, user=participant
-        ).exists()
+        # Progress should be marked completed, not deleted
+        progress = SurveyProgress.objects.get(survey=published_survey, user=participant)
+        assert progress.status == SurveyProgress.Status.COMPLETED
+        assert progress.completed_at is not None
+        # Resume token is invalidated on submit
+        assert progress.resume_token is None
 
     def test_one_progress_per_user_per_survey(
         self, client, published_survey, participant

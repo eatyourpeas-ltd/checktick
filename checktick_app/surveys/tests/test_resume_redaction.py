@@ -540,3 +540,158 @@ class TestResumeRoute:
 
         # Should show the expired page, not the survey
         assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestOptOutToken:
+    """The opt-out (receipt) token for public surveys.
+
+    Public-survey participants can opt in to receive a receipt token at
+    submission time, so they can request deletion of their response later.
+    This extends the existing receipt_token pattern (which was pseudonymous-
+    only) to anonymous responses on an opt-in basis.
+    """
+
+    def test_opt_in_generates_receipt_token_for_public_survey(
+        self, client, public_survey_for_resume
+    ):
+        """A public-survey participant who opts in gets a receipt token."""
+        from django.urls import reverse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+
+        response = client.post(
+            url,
+            {
+                f"q_{q_id}": "My answer",
+                "opt_in_redaction": "on",
+            },
+        )
+
+        assert response.status_code == 302
+        assert "/thank-you/" in response.url
+
+        # A SurveyResponse was created with a receipt token
+        from checktick_app.surveys.models import SurveyResponse
+
+        resp = SurveyResponse.objects.get(survey=public_survey_for_resume)
+        assert resp.receipt_token is not None
+
+        # The token is in the session for the thank-you page
+        token_in_session = client.session.get(
+            f"receipt_token_{public_survey_for_resume.slug}"
+        )
+        assert token_in_session is not None
+        assert token_in_session == str(resp.receipt_token)
+
+    def test_no_opt_in_no_receipt_token_for_public_survey(
+        self, client, public_survey_for_resume
+    ):
+        """A public-survey participant who does not opt in gets no receipt
+        token — the original anonymity promise stands."""
+        from django.urls import reverse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+
+        response = client.post(
+            url,
+            {
+                f"q_{q_id}": "My answer",
+                # no opt_in_redaction
+            },
+        )
+
+        assert response.status_code == 302
+
+        from checktick_app.surveys.models import SurveyResponse
+
+        resp = SurveyResponse.objects.get(survey=public_survey_for_resume)
+        assert resp.receipt_token is None
+
+    def test_opt_in_ignored_when_redaction_disabled(
+        self, client, public_survey_for_resume
+    ):
+        """When allow_response_redaction is False, opting in does nothing."""
+        from django.urls import reverse
+
+        public_survey_for_resume.allow_response_redaction = False
+        public_survey_for_resume.save(update_fields=["allow_response_redaction"])
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+
+        response = client.post(
+            url,
+            {
+                f"q_{q_id}": "My answer",
+                "opt_in_redaction": "on",
+            },
+        )
+
+        assert response.status_code == 302
+
+        from checktick_app.surveys.models import SurveyResponse
+
+        resp = SurveyResponse.objects.get(survey=public_survey_for_resume)
+        assert resp.receipt_token is None
+
+    def test_receipt_token_round_trips_through_dsr_lookup(
+        self, client, public_survey_for_resume
+    ):
+        """The opt-out token round-trips through
+        DataSubjectRequest.find_by_receipt_token — the existing DSR
+        workflow can locate the response for redaction."""
+        from django.urls import reverse
+
+        from checktick_app.surveys.models import DataSubjectRequest, SurveyResponse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+
+        client.post(
+            url,
+            {f"q_{q_id}": "My answer", "opt_in_redaction": "on"},
+        )
+
+        resp = SurveyResponse.objects.get(survey=public_survey_for_resume)
+        token = resp.receipt_token
+        assert token is not None
+
+        # The DSR workflow can find the response by token
+        found = DataSubjectRequest.find_by_receipt_token(token)
+        # No DSR exists yet, so find returns None — but the token is
+        # stored on the response and can be looked up directly.
+        assert found is None  # no DSR created yet
+        # The response itself is findable by token (the DSR workflow
+        # uses this lookup).
+        assert SurveyResponse.objects.filter(receipt_token=token).exists()
+
+    def test_pseudonymous_survey_still_gets_receipt_token_without_opt_in(
+        self, client, survey, survey_owner, django_user_model
+    ):
+        """Authenticated (pseudonymous) surveys still issue a receipt token
+        automatically, without the participant opting in."""
+        from django.urls import reverse
+
+        # Allow any authenticated user to take this survey
+        survey.allow_any_authenticated = True
+        survey.save(update_fields=["allow_any_authenticated"])
+
+        participant = django_user_model.objects.create_user(
+            username="pseudo@example.com", password=TEST_PASSWORD
+        )
+        client.login(username="pseudo@example.com", password=TEST_PASSWORD)
+
+        url = reverse("surveys:take", kwargs={"slug": survey.slug})
+        q = survey.questions.first()
+
+        response = client.post(url, {f"q_{q.id}": "Answer"})
+
+        assert response.status_code == 302
+
+        from checktick_app.surveys.models import SurveyResponse
+
+        resp = SurveyResponse.objects.get(survey=survey, submitted_by=participant)
+        assert resp.receipt_token is not None

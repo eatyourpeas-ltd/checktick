@@ -5566,15 +5566,20 @@ def _handle_participant_submission(
                 token_obj.used_by = request.user
             token_obj.save(update_fields=["used_at", "used_by"])
 
-        # Delete progress record after successful submission
+        # Mark progress as completed (replaces the previous delete-on-submit
+        # behaviour — the row is kept for audit then swept by the retention
+        # job). The resume token is invalidated by mark_completed().
         if progress:
-            progress.delete()
+            progress.mark_completed()
 
-        # Store receipt token in session for pseudonymous responses
-        # This allows showing it on thank-you page (only opportunity to share it)
-        if resp.is_pseudonymous:
-            resp.generate_receipt_token()
-            request.session[f"receipt_token_{survey.slug}"] = str(resp.receipt_token)
+        # Store receipt token in session for pseudonymous responses, or for
+        # anonymous (public/unlisted) responses when the participant opted
+        # in and the survey allows redaction. This allows showing it on the
+        # thank-you page (the only opportunity to share it).
+        opted_in_redaction = bool(request.POST.get("opt_in_redaction"))
+        token = resp.generate_receipt_token(opt_in=opted_in_redaction)
+        if token:
+            request.session[f"receipt_token_{survey.slug}"] = str(token)
 
         messages.success(request, "Thank you for your response.")
         # Redirect to thank-you page

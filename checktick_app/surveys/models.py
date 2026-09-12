@@ -3066,19 +3066,35 @@ class SurveyResponse(models.Model):
             Survey.Visibility.TOKEN,
         ]
 
-    def generate_receipt_token(self) -> uuid.UUID | None:
+    def generate_receipt_token(self, opt_in: bool = False) -> uuid.UUID | None:
         """
         Generate a receipt token for data subject rights requests.
 
-        Only generates token for pseudonymous responses.
+        Only generates token for pseudonymous responses by default.
         Anonymous responses do not get tokens to preserve anonymity.
 
+        For public/unlisted surveys (anonymous responses), a token is only
+        generated when the participant explicitly opts in at submission
+        time (opt_in=True) AND the survey has allow_response_redaction=True.
+        This extends the original anonymity-preserving design with an
+        opt-in path to redaction (see docs/survey-progress-tracking.md
+        §Opt-out token).
+
+        Args:
+            opt_in: True when the participant explicitly requested a
+                redaction token at submission time (public surveys only).
+
         Returns:
-            UUID receipt token if generated, None if anonymous
+            UUID receipt token if generated, None if anonymous and not
+            opted in.
         """
         if not self.is_pseudonymous:
-            # Anonymous response - no receipt token
-            return None
+            # Anonymous response — only issue a token if the participant
+            # explicitly opted in and the survey allows redaction.
+            if not opt_in:
+                return None
+            if not getattr(self.survey, "allow_response_redaction", True):
+                return None
 
         if not self.receipt_token:
             self.receipt_token = uuid.uuid4()
