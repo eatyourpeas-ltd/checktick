@@ -11203,7 +11203,10 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                 # Check if it's text number/date/time
                 if isinstance(question.options, list) and len(question.options) > 0:
                     first_option = question.options[0]
-                    if first_option.get("type") == "text":
+                    if (
+                        isinstance(first_option, dict)
+                        and first_option.get("type") == "text"
+                    ):
                         fmt = first_option.get("format")
                         export_type = {
                             "number": "text number",
@@ -11215,9 +11218,14 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                 # Check if it's categories or number
                 if isinstance(question.options, list) and len(question.options) > 0:
                     first_option = question.options[0]
-                    if first_option.get("type") == "categories":
+                    if (
+                        isinstance(first_option, dict)
+                        and first_option.get("type") == "categories"
+                    ):
                         export_type = "likert categories"
-                    elif first_option.get("type") in ["number", "number-scale"]:
+                    elif isinstance(first_option, dict) and first_option.get(
+                        "type"
+                    ) in ["number", "number-scale"]:
                         export_type = "likert number"
 
             # Question type
@@ -11250,13 +11258,16 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                 if isinstance(question.options, list) and len(question.options) > 0:
                     first_option = question.options[0]
                     if (
-                        first_option.get("type") == "categories"
+                        isinstance(first_option, dict)
+                        and first_option.get("type") == "categories"
                         and "labels" in first_option
                     ):
                         # Likert categories - export as list
                         for label in first_option["labels"]:
                             lines.append(f"{indent}- {label}")
-                    elif first_option.get("type") in ["number", "number-scale"]:
+                    elif isinstance(first_option, dict) and first_option.get(
+                        "type"
+                    ) in ["number", "number-scale"]:
                         # Likert number - export min/max/labels
                         min_val = first_option.get("min")
                         max_val = first_option.get("max")
@@ -11289,15 +11300,19 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                         ):
                             # Question-level follow-up marker; not an option
                             continue
-                        # Options can have 'text', 'label', or 'value' keys
-                        option_text = (
-                            option.get("text")
-                            or option.get("label")
-                            or option.get("value", "")
-                        )
+                        if isinstance(option, dict):
+                            # Options can have 'text', 'label', or 'value' keys
+                            option_text = (
+                                option.get("text")
+                                or option.get("label")
+                                or option.get("value", "")
+                            )
+                        else:
+                            # Option is a plain string
+                            option_text = str(option)
                         lines.append(f"{indent}- {option_text}")
-                        # Check for follow-up text
-                        if option.get("has_followup_text"):
+                        # Check for follow-up text (only for dict options)
+                        if isinstance(option, dict) and option.get("has_followup_text"):
                             followup_label = option.get(
                                 "followup_text_label", "Please specify"
                             )
@@ -11305,7 +11320,7 @@ def _export_survey_to_markdown(survey: Survey) -> str:
 
             # Likert number settings
             elif question.type == "likert number":
-                if question.options:
+                if question.options and isinstance(question.options, dict):
                     min_val = question.options.get("min")
                     max_val = question.options.get("max")
                     left_label = question.options.get("left_label", "")
