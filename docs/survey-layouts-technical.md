@@ -241,6 +241,49 @@ were done in PR #320 (v0.13.0).
   risks discarded answers. Default to allow-with-confirm, or lock the
   selection after Continue? Worth a quick user test.
 
+## Planned layouts
+
+The following layouts are planned for future releases. See
+[Survey Layouts](survey-layouts.md#planned-layouts) for the user-facing
+descriptions. Technical notes:
+
+### Randomised (RCT)
+
+- System assigns section order or section subset based on a random seed
+  stored on `SurveyProgress` at first access.
+- Natural extension of `selected_group_ids` — system assigns instead of
+  participant choosing.
+- May need a `RandomisedMenu` model (arms, allocation ratio, seed
+  strategy) alongside `SectionMenu`.
+- Priority: high — unblocks clinical trial use case.
+
+### Guided (one question at a time)
+
+- Primarily a rendering change: one question per screen with Next/Back.
+- The runtime already has the question sequence and progress tracking.
+- The section_menu picker could serve as the first screen.
+- May need a `guided` layout value and a new template variant of
+  `detail.html`.
+- Priority: medium — improves participant experience across all layouts.
+
+### Staged (longitudinal)
+
+- Each section group has a defined phase window (start/end offsets from
+  survey open or from participant enrolment).
+- Builds on `SurveyProgress` lifecycle status and timestamps.
+- May need a `StagedMenu` model with phase definitions per section.
+- Priority: medium — makes CheckTick suitable for repeated-measures
+  designs.
+
+### Matrix (free navigation)
+
+- All sections visible as cards; participant navigates freely.
+- Different from section_menu (pick once, then linear) — matrix is
+  ongoing free navigation with completion indicators.
+- May need a `MatrixMenu` model or reuse `SectionMenu` with a different
+  `order_mode`.
+- Priority: low — niche workflow but useful for clinical audits.
+
 ## Related documentation
 
 - [Survey Layouts](survey-layouts.md) — user-facing guide.

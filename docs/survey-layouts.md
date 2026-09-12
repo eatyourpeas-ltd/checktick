@@ -178,6 +178,75 @@ The layout config survives export → import round-trips, so you can
 export a Section menu survey, edit the outline, and re-import without
 losing the configuration.
 
+## Planned layouts
+
+The following layouts are planned for future releases. They are not yet
+implemented.
+
+### Randomised (RCT)
+
+For clinical trials and research, the system randomly assigns section
+order or randomly assigns participants to different section subsets
+(e.g., intervention vs control questionnaire). Unlike the Section menu
+layout where the participant chooses, the system chooses based on a
+random seed stored on the participant's progress record at first access.
+
+**When to use:** clinical trials, A/B testing of question wording,
+randomised controlled trials where arm assignment must be
+system-controlled and not participant-chosen.
+
+**Why it matters:** randomisation is a common reason researchers reach
+for Qualtrics or REDCap instead of simpler tools. This layout would
+unblock that use case natively in CheckTick.
+
+### Guided (one question at a time)
+
+A wizard-style layout that shows one question per screen with a progress
+bar, rather than scrolling through all questions on a single page. The
+participant navigates with Next/Back buttons. The section_menu picker
+could serve as the first screen in a guided flow.
+
+**When to use:** long patient-facing surveys where scroll fatigue
+causes drop-off; mobile-first surveys where a single-question focus
+reduces cognitive load.
+
+**Why it matters:** this is primarily a rendering change rather than a
+data model change — the runtime already has the question sequence and
+progress tracking. It would improve the participant experience across
+all layouts.
+
+### Staged (longitudinal)
+
+Sections unlock over time — baseline now, follow-up in 2 weeks, 6-month
+review later. Each section group has a defined phase window. The
+participant sees only the current phase. This builds on the progress
+tracking feature, which already has lifecycle status and timestamps on
+`SurveyProgress`.
+
+**When to use:** audit cycles, longitudinal research, multi-phase
+quality improvement projects where you don't want participants seeing
+future phases.
+
+**Why it matters:** staged surveys are common in clinical audit and
+research. This layout would make CheckTick suitable for repeated-measures
+designs without requiring separate surveys for each time point.
+
+### Matrix (free navigation)
+
+All sections visible as cards on a landing page. The participant jumps
+in and out of any section in any order, with completion indicators
+showing which sections are done. Different from Section menu (pick
+once, then linear through the chosen set) — matrix is ongoing free
+navigation.
+
+**When to use:** audits where a clinician fills in different sections
+at different times during a patient encounter; complex assessments
+where the participant needs to revisit and revise earlier sections.
+
+**Why it matters:** some clinical workflows don't fit a linear or
+pick-once model. Matrix gives the participant agency over navigation
+order throughout the survey, not just at the start.
+
 ## Related documentation
 
 - [Organise](groups-view.md) — the page where layout is configured.
