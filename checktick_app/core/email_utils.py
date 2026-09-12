@@ -81,7 +81,12 @@ def _get_din_font_face_css(site_url: str, font_heading: str) -> str:
             f"  font-display: swap;\n"
             f"}}"
         )
-    return mark_safe("\n".join(lines))
+    # Safe because: all interpolated values are from trusted Django settings
+    # (STATIC_URL, SITE_URL) and hardcoded filenames — no user input. CSS
+    # inside <style> must not be HTML-escaped (browsers don't decode entities
+    # in <style>, so escaped quotes would break every @font-face rule).
+    css = mark_safe("\n".join(lines))  # nosemgrep
+    return css
 
 
 def _make_absolute(url: str, site_url: str) -> str:
