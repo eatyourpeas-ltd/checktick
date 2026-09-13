@@ -6,6 +6,7 @@ from datetime import date, datetime, time
 import io
 import json
 import logging
+import random
 import re
 import secrets
 from typing import Any, Iterable, Union
@@ -44,6 +45,7 @@ from checktick_app.context_processors import branding as platform_branding
 from checktick_app.core.decorators import email_confirmed_required
 from checktick_app.core.theme_utils import is_safe_url, sanitize_font_family
 
+from .allocation import MAX_SEED, pick_arm
 from .color import hex_to_oklch
 from .doc_extract import (
     MESSAGE_BY_CODE,
@@ -68,6 +70,8 @@ from .models import (
     OrganizationMembership,
     PublishedQuestionGroup,
     QuestionGroup,
+    RandomisedArm,
+    RandomisedMenu,
     RecoveryRequest,
     SectionMenu,
     SectionMenuItem,
@@ -6209,6 +6213,67 @@ def _sync_section_menu_items(menu: SectionMenu, survey: Survey) -> None:
             )
     # Drop items whose group is no longer in the survey.
     menu.items.exclude(group_id__in=seen).delete()
+
+
+def _ensure_randomised_menu(survey: Survey) -> RandomisedMenu:
+    """Get or create a RandomisedMenu for ``survey``.
+
+    A freshly-switched RCT survey has no menu yet. We create a default with
+    two empty arms ("Intervention", "Control") so the survey is at least
+    runnable; the author configures real arms on the Organise page.
+    """
+    menu, created = RandomisedMenu.objects.get_or_create(survey=survey)
+    if created:
+        RandomisedArm.objects.create(menu=menu, name="Intervention", order=1)
+        RandomisedArm.objects.create(menu=menu, name="Control", order=2)
+    return menu
+
+
+def _assign_arm_for_progress(
+    progress: SurveyProgress, menu: RandomisedMenu
+) -> RandomisedArm:
+    """Assign and persist an RCT arm for ``progress``, returning the arm.
+
+    Idempotent: if ``progress.assigned_arm`` is already set, returns it.
+    Sets ``randomisation_seed`` on first call if absent (system-generated
+    unless ``menu.seed`` is set, in which case the menu seed salts the
+    allocation for reproducible dry-runs).
+
+    Kept as a standalone pluggable function so a future Delphi
+    ``_assign_round_for_progress`` can sit next to it without touching RCT
+    (see docs/survey-layouts-technical.md §Delphi compatibility).
+    """
+    if progress.assigned_arm_id is not None:
+        return progress.assigned_arm
+    arms = list(menu.arms.order_by("order", "id"))
+    if not arms:
+        # No arms configured — the take view should have blocked this.
+        # As a last resort, return without assigning; the caller handles
+        # the empty case.
+        raise ValueError("No arms configured for RandomisedMenu")
+    ratios = [arm.allocation_ratio for arm in arms]
+    # Seed: menu.seed (if set) salts every allocation for reproducibility;
+    # otherwise the per-participant randomisation_seed drives the draw.
+    if progress.randomisation_seed is None:
+        if menu.seed is not None:
+            progress.randomisation_seed = menu.seed
+        else:
+            progress.randomisation_seed = random.randint(0, MAX_SEED)
+        progress.save(update_fields=["randomisation_seed"])
+    effective_seed = menu.seed if menu.seed is not None else progress.randomisation_seed
+    allocation_count = SurveyProgress.objects.filter(
+        survey=progress.survey_id, assigned_arm__in=arms
+    ).count()
+    chosen = pick_arm(
+        arms,
+        ratios,
+        menu.allocation_strategy,
+        effective_seed,
+        allocation_count,
+    )
+    progress.assigned_arm = chosen
+    progress.save(update_fields=["assigned_arm"])
+    return chosen
 
 
 @login_required
