@@ -102,9 +102,9 @@ def test_organise_page_headings_have_icons(client, owner, survey):
     # The layout heading uses the generic layout_panel icon (distinctive
     # <title> tag).
     assert "<title>Layout</title>" in html
-    # The sections heading uses the documents icon (two overlapping outlined
-    # rectangles — distinctive nested <rect> pair with rx="2" ry="2").
-    assert "<title>Documents</title>" in html
+    # The sections heading uses the checktick_question_group icon (the section
+    # concept icon). It has a distinctive viewBox and cls-1 class.
+    assert "viewBox=\"0 0 109.97 95.96\"" in html
 
 
 @pytest.mark.django_db

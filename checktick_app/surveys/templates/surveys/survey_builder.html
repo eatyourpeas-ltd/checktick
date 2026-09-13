@@ -8,9 +8,9 @@
   {% trans "Surveys" as crumb1_text %}
   {% trans "Survey Dashboard" as crumb2_text %}
   {% trans "Builder" as crumb3_text %}
-  {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href="/surveys/" crumb2_label=crumb2_text crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" crumb3_label=crumb3_text %}
+  {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href="/surveys/" crumb2_label=crumb2_text crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" crumb3_label=crumb3_text crumb3_icon="components/icons/hammer_wrench.html" %}
     <h1 class="inline-flex items-center gap-2 text-base-content">
-      {% include "components/icons/checktick_question.html" with classes="w-6 h-6 text-base-content" %}
+      {% include "components/icons/hammer_wrench.html" with classes="w-6 h-6 text-base-content" %}
       <span>{% trans "Builder" %}</span>
     </h1>
     <h2 class="mt-0 text-base-content/80">{{ survey.name }}</h2>
@@ -35,9 +35,7 @@
   {% if has_questions %}
   <div class="flex flex-wrap gap-2 items-center">
     <a class="btn btn-sm btn-outline" href="/surveys/{{ survey.slug }}/groups/">
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-      </svg>
+      {% include "components/icons/checktick_question_group.html" with classes="w-4 h-4" %}
       {% trans "Organise" %}
     </a>
     <a class="btn btn-sm btn-ghost" href="/surveys/{{ survey.slug }}/survey-map/">

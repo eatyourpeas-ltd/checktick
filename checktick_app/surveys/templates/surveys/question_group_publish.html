@@ -3,7 +3,7 @@
 {% block title %}{% trans "Share as template" %} - CheckTick{% endblock %}
 {% block content %}
 <div class="max-w-3xl mx-auto">
-  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Organise' crumb2_href='/surveys/'|add:survey.slug|add:'/groups/' crumb3_label=group.name crumb3_href='/surveys/'|add:survey.slug|add:'/groups/' crumb4_label='Share' %}
+  {% include 'components/breadcrumbs.html' with crumb1_label='Surveys' crumb1_href='/surveys/' crumb2_label='Organise' crumb2_href='/surveys/'|add:survey.slug|add:'/groups/' crumb2_icon='components/icons/checktick_question_group.html' crumb3_label=group.name crumb3_href='/surveys/'|add:survey.slug|add:'/groups/' crumb4_label='Share' %}
 
   <div class="card bg-base-100 shadow">
     <div class="card-body">

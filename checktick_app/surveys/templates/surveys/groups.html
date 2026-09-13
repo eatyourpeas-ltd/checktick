@@ -23,7 +23,7 @@
   {# === Quick navigation === #}
   <div class="flex flex-wrap gap-2 items-center mb-4">
     <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/builder/">
-      {% include "components/icons/checktick_question.html" with classes="w-4 h-4" %}
+      {% include "components/icons/hammer_wrench.html" with classes="w-4 h-4" %}
       {% trans 'Back to builder' %}
     </a>
     <a class="btn btn-sm btn-ghost" href="/surveys/{{ survey.slug }}/survey-map/">
@@ -419,7 +419,7 @@
   {# === Sections: reorder, repeats, share to Question Bank === #}
   <section id="sections" class="not-prose mt-2 mb-6" aria-labelledby="sections-heading">
     <h2 id="sections-heading" class="text-sm font-semibold text-base-content/80 mb-1 inline-flex items-center gap-2">
-      {% include "components/icons/documents.html" with classes="w-4 h-4 shrink-0" %}
+      {% include "components/icons/checktick_question_group.html" with classes="w-4 h-4 shrink-0" %}
       {% trans 'Sections' %}
     </h2>
     <p class="text-xs text-base-content/60 mb-3">
