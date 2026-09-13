@@ -894,10 +894,14 @@ class Survey(models.Model):
     # docs/survey-layouts.md). "linear" is the default and matches the
     # current behaviour: sections flow in the order the author arranges
     # them. "section_menu" opens on a picker page where the participant
-    # chooses which sections to complete.
+    # chooses which sections to complete. "rct" system-assigns the
+    # participant to an arm at first access; the arm's group set becomes
+    # their selected_group_ids (see docs/survey-layouts-technical.md
+    # §Randomised (RCT) layout).
     class Layout(models.TextChoices):
         LINEAR = "linear", "Linear"
         SECTION_MENU = "section_menu", "Section menu"
+        RCT = "rct", "Randomised (RCT)"
 
     layout = models.CharField(
         max_length=20,
@@ -906,7 +910,8 @@ class Survey(models.Model):
         help_text=(
             'High-level shape of the survey. "linear" flows sections in '
             'authored order; "section_menu" lets the participant pick which '
-            "sections to complete."
+            'sections to complete; "rct" system-assigns the participant to '
+            "an arm whose group set they complete."
         ),
     )
     # Resume + redaction toggles (see docs/survey-progress-tracking.md and
@@ -3724,6 +3729,33 @@ class SurveyProgress(models.Model):
         help_text="Section IDs the participant selected in a section_menu survey",
     )
 
+    # [Planned] RCT arm assignment (see docs/survey-layouts-technical.md
+    # §Randomised (RCT) layout). Only populated for surveys with
+    # layout = "rct". Null for other layouts. The seed is set on first
+    # access (system-generated unless RandomisedMenu.seed is set); the
+    # assigned_arm FK is the audit record of which arm the participant
+    # was randomised to. selected_group_ids is resolved from the arm's
+    # group set at first access and preserved on resume — see
+    # _assign_arm_for_progress in views.py. Designed to be reusable as
+    # the precedent for a future Delphi "delphi_round" FK: arms and
+    # rounds are orthogonal dimensions.
+    randomisation_seed = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text=("Stable seed used for RCT arm allocation (set on first access)"),
+    )
+    assigned_arm = models.ForeignKey(
+        "RandomisedArm",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="progress_records",
+        help_text=(
+            "The RCT arm this participant was assigned to at first access. "
+            "Null for non-RCT surveys."
+        ),
+    )
+
     # [Planned] Timestamp when the survey was submitted (status=COMPLETED).
     completed_at = models.DateTimeField(
         null=True,
@@ -3902,6 +3934,103 @@ class SectionMenuItem(models.Model):
     def __str__(self) -> str:
         tag = "pickable" if self.is_pickable else "mandatory"
         return f"{self.group.name} ({tag})"
+
+
+class RandomisedMenu(models.Model):
+    """Configuration for a survey with ``layout = rct``.
+
+    A RandomisedMenu is a OneToOne related to ``Survey`` and holds the
+    allocation strategy (balanced blocked vs simple weighted) plus an
+    optional fixed seed for reproducible dry-runs. Per-arm settings
+    (name, allocation ratio, group subset) live on ``RandomisedArm``
+    rows.
+
+    See docs/survey-layouts-technical.md §Randomised (RCT) layout. A
+    ``linear`` or ``section_menu`` survey has no ``RandomisedMenu`` row.
+    """
+
+    survey = models.OneToOneField(
+        Survey,
+        related_name="randomised_menu",
+        on_delete=models.CASCADE,
+    )
+
+    class AllocationStrategy(models.TextChoices):
+        BALANCED = "balanced", "Balanced (blocked)"
+        SIMPLE = "simple", "Simple (weighted)"
+
+    allocation_strategy = models.CharField(
+        max_length=20,
+        choices=AllocationStrategy.choices,
+        default=AllocationStrategy.BALANCED,
+        help_text=(
+            "How participants are assigned to arms. 'balanced' uses "
+            "permuted blocks of size sum(ratios) so arm counts stay "
+            "close to the ratios; 'simple' is an independent weighted "
+            "draw per participant."
+        ),
+    )
+    seed = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Optional fixed seed for deterministic allocation across "
+            "runs (useful for dry-runs). Blank = system-generated per "
+            "participant. Leave blank for real trials to avoid "
+            "predictability."
+        ),
+    )
+
+    def __str__(self) -> str:
+        return f"RandomisedMenu for {self.survey.name}"
+
+
+class RandomisedArm(models.Model):
+    """A single arm of an RCT survey.
+
+    Each arm has a name, an integer ``allocation_ratio`` (e.g. 1 for a
+    1:1 trial, 2 for a 2:1 arm), an ``order`` for display, and an M2M
+    to the ``QuestionGroup``s the arm sees. A group may belong to
+    multiple arms (e.g. a demographics section shared by all arms).
+    """
+
+    menu = models.ForeignKey(
+        RandomisedMenu,
+        related_name="arms",
+        on_delete=models.CASCADE,
+    )
+    name = models.CharField(
+        max_length=100,
+        help_text="Arm name (e.g. 'Intervention', 'Control').",
+    )
+    allocation_ratio = models.PositiveIntegerField(
+        default=1,
+        help_text=(
+            "Integer ratio for balanced allocation. 1:1 uses ratio 1 on "
+            "each arm; 2:1 uses ratio 2 on the larger arm."
+        ),
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Display order on the Organise page and in the arm badges.",
+    )
+    groups = models.ManyToManyField(
+        QuestionGroup,
+        related_name="arms",
+        blank=True,
+        help_text=(
+            "Sections this arm sees. A group may appear in multiple arms. "
+            "Groups not in any arm are unreachable — warned on the "
+            "Organise page."
+        ),
+    )
+
+    class Meta:
+        unique_together = ("menu", "name")
+        ordering = ["order", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.name} (ratio {self.allocation_ratio})"
 
 
 def validate_markdown_survey(md_text: str) -> list[dict]:
