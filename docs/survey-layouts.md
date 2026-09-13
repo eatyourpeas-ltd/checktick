@@ -159,44 +159,9 @@ glance which sections are optional.
 
 ## Outline syntax
 
-When using the [bulk upload / text editor](bulk-upload.md), you can
-configure the Section menu layout directly in the outline:
-
-```text
-SECTION_MENU
-  prompt: "Which areas would you like to cover?"
-  min: 1
-  max: 4
-  order: authored
-  select_all: true
-  estimated_time: true
-
-# Demographics {demographics}
-## Name {name}
-(text)
-
-# Medical history {medical-history}    ~ pickable
-## Condition {condition}
-(text)
-
-# Medications {medications}    ~ pickable, 5 min
-## Drug {drug}
-(text)
-```
-
-- The `SECTION_MENU` block goes at the top of the outline, before any
-  section headings.
-- Config lines are indented: `prompt`, `min`, `max`, `order`
-  (`authored` or `participant`), `select_all`, `estimated_time`.
-- Place `~ pickable` after the section heading (and after the `{id}` if
-  present) to mark a section as pickable.
-- Add `, N min` to set an estimated time (e.g. `~ pickable, 5 min`).
-- Sections without `~` are mandatory.
-- A blank line ends the config block.
-
-The layout config survives export → import round-trips, so you can
-export a Section menu survey, edit the outline, and re-import without
-losing the configuration.
+The Section menu layout can be configured directly in the [Outline / bulk
+upload](import.md#section-menu-layout) text editor using a `SECTION_MENU`
+block. The layout config survives export → import round-trips.
 
 ## Randomised (RCT)
 
@@ -270,43 +235,9 @@ arm-exclusive.
 
 ### Outline syntax
 
-You can configure RCT directly in the bulk upload / text editor:
-
-```text
-RANDOMISED
-  strategy: balanced
-  seed: 7
-
-# Demographics {demographics}    ~ arm:intervention, arm:control
-## Name {name}
-(text)
-
-# Intervention {intervention}    ~ arm:intervention
-## Dose {dose}
-(text)
-
-# Control {control}    ~ arm:control
-## Placebo {placebo}
-(text)
-```
-
-- The `RANDOMISED` block goes at the top of the outline, before any
-  section headings.
-- Config lines are indented: `strategy` (`balanced` or `simple`), `seed`
-  (optional integer for reproducible dry-runs; omit for real trials).
-- Place `~ arm:<name>` after the section heading (and after the `{id}` if
-  present) to mark a section as belonging to an arm. Comma-separate
-  multiple arms: `~ arm:intervention, arm:control`.
-- Sections without `~ arm:` are reachable by all arms (the union of all
-  arm group sets).
-- Arms are created in the order their names first appear in the outline.
-  Allocation ratios default to 1; adjust them on the Organise page after
-  import.
-- A blank line ends the config block.
-
-The layout config survives export → import round-trips, so you can
-export an RCT survey, edit the outline, and re-import without losing
-the configuration.
+The RCT layout can be configured directly in the [Outline / bulk
+upload](import.md#randomised-rct-layout) text editor using a `RANDOMISED`
+block. The layout config survives export → import round-trips.
 
 ## Planned layouts
 

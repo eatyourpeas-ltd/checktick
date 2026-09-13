@@ -271,6 +271,79 @@ Notes:
 - The target in curly braces can reference a group ID (jump to that group) or a question ID (jump directly to the question).
 - IDs are normalised to lowercase slugs; ensure each ID is unique across all groups and questions.
 
+### Section menu layout
+
+Add a `SECTION_MENU` block at the top of the outline (before any group headings) to switch the survey to the section menu layout, where participants pick which sections to complete. Mark pickable sections with `~ pickable` on the section heading; sections without `~` are mandatory (always included).
+
+```markdown
+SECTION_MENU
+  prompt: "Which areas would you like to cover?"
+  min: 1
+  max: 4
+  order: authored
+  select_all: true
+  estimated_time: true
+
+# Demographics {demographics}
+## Name {name}
+(text)
+
+# Medical history {medical-history}    ~ pickable
+## Condition {condition}
+(text)
+
+# Medications {medications}    ~ pickable, 5 min
+## Drug {drug}
+(text)
+```
+
+Config lines are indented under `SECTION_MENU`:
+
+- `prompt` — the picker prompt text (quoted).
+- `min` — minimum number of pickable sections the participant must select.
+- `max` — maximum (blank or omitted = no cap).
+- `order` — `authored` (use the Organise page order) or `participant` (use the order the participant ticked the boxes).
+- `select_all` — `true` / `false`; show a "Select all" button on the picker.
+- `estimated_time` — `true` / `false`; show per-section estimated times on the picker.
+- Place `~ pickable` after the section heading (and after the `{id}` if present). Add `, N min` to set an estimated time.
+- Sections without `~` are mandatory — the participant cannot deselect them.
+- A blank line ends the config block. Section headings below it are the actual survey content.
+
+See [Survey Layouts](survey-layouts.md) for the full guide to when to use the Section menu layout.
+
+### Randomised (RCT) layout
+
+Add a `RANDOMISED` block at the top of the outline to switch the survey to the randomised trial layout, where the system assigns each participant to an arm at first access. Each arm sees only its own sections. Mark which sections belong to which arm with `~ arm:<name>` on the section heading; a section can be in multiple arms (e.g. a shared demographics section). Sections without `~ arm:` are reachable by all arms (the union of all arm group sets).
+
+```markdown
+RANDOMISED
+  strategy: balanced
+  seed: 7
+
+# Demographics {demographics}    ~ arm:intervention, arm:control
+## Name {name}
+(text)
+
+# Intervention {intervention}    ~ arm:intervention
+## Dose {dose}
+(text)
+
+# Control {control}    ~ arm:control
+## Placebo {placebo}
+(text)
+```
+
+Config lines are indented under `RANDOMISED`:
+
+- `strategy` — `balanced` (permuted blocks of size `sum(ratios)` so arm counts stay close to the ratios) or `simple` (independent weighted random draw per participant).
+- `seed` — optional integer for reproducible dry-runs. Leave blank for real trials so allocation is unpredictable per participant.
+- Place `~ arm:<name>` after the section heading (and after the `{id}` if present). Comma-separate multiple arms: `~ arm:intervention, arm:control`.
+- Sections without `~ arm:` are reachable by every arm.
+- Arms are created in the order their names first appear in the outline. Allocation ratios default to 1; adjust them on the Organise page after import.
+- A blank line ends the config block.
+
+See [Survey Layouts](survey-layouts.md) for the full guide to when to use the Randomised (RCT) layout.
+
 ## Error handling and validation
 
 The Outline provides comprehensive error detection and reporting at two levels:

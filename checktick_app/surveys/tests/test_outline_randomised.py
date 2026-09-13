@@ -171,7 +171,7 @@ def rct_survey_for_upload(owner, org):
 def test_bulk_upload_page_documents_randomised_syntax(
     client, rct_survey_for_upload, owner
 ):
-    """The bulk upload outline syntax explainer documents the RANDOMISED block."""
+    """The bulk upload advanced-features card points to the RCT outline reference."""
     from django.urls import reverse
 
     client.force_login(owner)
@@ -179,9 +179,11 @@ def test_bulk_upload_page_documents_randomised_syntax(
     res = client.get(url)
     assert res.status_code == 200
     html = res.content.decode()
-    assert "RANDOMISED" in html
-    assert "arm:intervention" in html
-    assert "strategy: balanced" in html or "strategy: balanced</code>" in html
+    # The advanced-features card lists RCT as an option and links to the
+    # outline reference (the inline examples moved to the docs).
+    assert "Randomised (RCT)" in html
+    assert "/docs/import.md#randomised-rct-layout" in html
+    assert "/docs/survey-layouts.md" in html
 
 
 @pytest.mark.django_db

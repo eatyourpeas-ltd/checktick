@@ -145,24 +145,6 @@ dataset: medical_specialties</code></pre>
                 </ul>
               </div>
               <div>
-                <h3 class="font-semibold">{% trans "Optional: Collections with REPEAT" %}</h3>
-                <p class="text-sm text-base-content/80">{% trans "To mark a section as repeatable, add a line with <strong>REPEAT</strong> (or <strong>REPEAT-5</strong> to cap it) immediately above the section heading." %}</p>
-                <p class="text-sm text-base-content/80">{% trans "To define a child collection nested under a repeatable parent, indent with <code>&gt;</code> and add <strong>REPEAT</strong> above the child section:" %}</p>
-                <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>REPEAT-5
-                    # Patient
-                    ... section content ...
-
-                    &gt; REPEAT
-                    &gt; # Visit
-                    &gt; ... child section content ...</code></pre>
-                <ul class="list-disc pl-5 space-y-1 text-sm">
-                  <li>{% trans "<strong>REPEAT</strong> = unlimited repeats. <strong>REPEAT-1</strong> means one allowed." %}</li>
-                  <li>{% trans "Use <code>&gt;</code> before REPEAT and the section heading to indicate one level of nesting." %}</li>
-                  <li>{% trans "Nesting is limited to one level (Parent → Child) by design." %}</li>
-                  <li>{% trans "Sections without REPEAT are normal, non-collection sections." %}</li>
-                </ul>
-              </div>
-              <div>
                 <h3 class="font-semibold">{% trans "Optional: Template questions" %}</h3>
                 <p class="text-sm text-base-content/80">{% trans "Template questions bundle a standard set of fields (demographics or professional details) into one question. Field selection can be adjusted in the builder after import." %}</p>
                 <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>## Patient details
@@ -177,90 +159,15 @@ address_lookup: true</code></pre>
                 </ul>
               </div>
               <div>
-                <h3 class="font-semibold">{% trans "Optional: Questions with conditional branching" %}</h3>
-                <p class="text-sm text-base-content/80">{% trans "Assign stable IDs by placing them in curly braces at the end of section or question headings. Then add branching rules below the question's <code>(type)</code> line using <code>? [action] when &lt;operator&gt; &lt;value&gt; -&gt; {target-id}</code> or <code>-&gt; #section-name</code>." %}</p>
-                <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code># Intro {intro}
-## Consent {intro-consent}
-(text)
-? show when equals "Yes" -> {follow-up}
-? hide when equals "No"  -> {intro-exit}
-? when equals "No" -> #Exit
-? end  when equals "N/A"
-
-# Follow up {follow-up}
-## Feedback {follow-up-feedback}
-(text)
-HIDDEN
-
-# Exit {intro-exit}
-## Thanks {intro-exit-thanks}
-(text)</code></pre>
+                <h3 class="font-semibold">{% trans "Advanced features" %}</h3>
+                <p class="text-sm text-base-content/80">{% trans "The outline also supports optional advanced features. Each is documented in the full outline syntax reference linked below." %}</p>
                 <ul class="list-disc pl-5 space-y-1 text-sm">
-                  <li>{% trans "Branching rules start with <code>?</code> followed by an optional action keyword and <code>when</code>." %}</li>
-                  <li>{% trans "Action keywords: <code>show</code> (reveal a hidden-by-default question), <code>hide</code> (hide a shown-by-default question), <code>end</code> (end the survey, no target). Omit the keyword for <code>jump to</code> (the default)." %}</li>
-                  <li>{% trans "Targets: <code>{question-id}</code> for a specific question, or <code>#section-name</code> to jump to a whole section (resolved to its first question)." %}</li>
-                  <li>{% trans "Mark a question as hidden by default by adding a <code>HIDDEN</code> line after its <code>(type)</code> line. Only <code>show</code> conditions can target hidden-by-default questions; only <code>hide</code> conditions can target shown-by-default questions." %}</li>
-                  <li>{% trans "Operators mirror the survey builder: <code>equals</code>, <code>not_equals</code>, <code>contains</code>, <code>greater_than</code>, and more." %}</li>
-                  <li>{% trans "IDs are normalised to lowercase slugs; keep them unique within your document." %}</li>
-                  <li>{% trans "<code>jump to</code> is forward-only — the target must come after the triggering question in the survey order." %}</li>
+                  <li>{% trans "<strong>Repeats (collections)</strong> — mark a section as repeatable with <code>REPEAT</code> or <code>REPEAT-N</code> above the section heading; nest with <code>&gt;</code>. See <a href='/docs/import.md#repeatable-collections' class='link'>Repeats in the outline reference</a>." %}</li>
+                  <li>{% trans "<strong>Conditional branching</strong> — jump to a question or section based on an answer with <code>? when … -&gt; {target}</code>. See <a href='/docs/import.md#conditional-branching' class='link'>Conditional branching in the outline reference</a>." %}</li>
+                  <li>{% trans "<strong>Section menu layout</strong> — let participants pick which sections to complete with a <code>SECTION_MENU</code> block and <code>~ pickable</code> suffixes. See <a href='/docs/import.md#section-menu-layout' class='link'>Section menu layout in the outline reference</a> and <a href='/docs/survey-layouts.md' class='link'>Survey Layouts</a>." %}</li>
+                  <li>{% trans "<strong>Randomised (RCT) layout</strong> — system-assign participants to arms with a <code>RANDOMISED</code> block and <code>~ arm:&lt;name&gt;</code> suffixes. See <a href='/docs/import.md#randomised-rct-layout' class='link'>Randomised (RCT) layout in the outline reference</a> and <a href='/docs/survey-layouts.md' class='link'>Survey Layouts</a>." %}</li>
                 </ul>
-              </div>
-              <div>
-                <h3 class="font-semibold">{% trans "Optional: Section menu layout" %}</h3>
-                <p class="text-sm text-base-content/80">{% trans "Add a <code>SECTION_MENU</code> block at the top of the outline to switch the survey to the section menu layout, where participants pick which sections to complete. Mark pickable sections with <code>~ pickable</code> on the section heading; sections without <code>~</code> are mandatory (always included)." %}</p>
-                <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>SECTION_MENU
-  prompt: "Which areas would you like to cover?"
-  min: 1
-  max: 4
-  order: authored
-  select_all: true
-  estimated_time: true
-
-# Demographics {demographics}
-## Name {name}
-(text)
-
-# Medical history {medical-history}    ~ pickable
-## Condition {condition}
-(text)
-
-# Medications {medications}    ~ pickable, 5 min
-## Drug {drug}
-(text)</code></pre>
-                <ul class="list-disc pl-5 space-y-1 text-sm">
-                  <li>{% trans "Config lines are indented under <code>SECTION_MENU</code>: <code>prompt</code>, <code>min</code>, <code>max</code>, <code>order</code> (authored/participant), <code>select_all</code>, <code>estimated_time</code>." %}</li>
-                  <li>{% trans "Place <code>~ pickable</code> after the section heading (and after the <code>{id}</code> if present). Add <code>, N min</code> to set an estimated time." %}</li>
-                  <li>{% trans "Sections without <code>~</code> are mandatory — the participant cannot deselect them." %}</li>
-                  <li>{% trans "A blank line ends the config block. Section headings below it are the actual survey content." %}</li>
-                  <li>{% trans "See <a href='/docs/survey-layouts.md' class='link'>Survey Layouts</a> for the full guide." %}</li>
-                </ul>
-              </div>
-              <div>
-                <h3 class="font-semibold">{% trans "Optional: Randomised (RCT) layout" %}</h3>
-                <p class="text-sm text-base-content/80">{% trans "Add a <code>RANDOMISED</code> block at the top of the outline to switch the survey to the randomised trial layout, where the system assigns each participant to an arm. Each arm sees only its own sections. Mark which sections belong to which arm with <code>~ arm:&lt;name&gt;</code> on the section heading; a section can be in multiple arms (e.g. a shared demographics section). Sections without <code>~ arm:</code> are reachable by all arms." %}</p>
-                <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>RANDOMISED
-  strategy: balanced
-  seed: 7
-
-# Demographics {demographics}    ~ arm:intervention, arm:control
-## Name {name}
-(text)
-
-# Intervention {intervention}    ~ arm:intervention
-## Dose {dose}
-(text)
-
-# Control {control}    ~ arm:control
-## Placebo {placebo}
-(text)</code></pre>
-                <ul class="list-disc pl-5 space-y-1 text-sm">
-                  <li>{% trans "Config lines are indented under <code>RANDOMISED</code>: <code>strategy</code> (<code>balanced</code> for permuted blocks or <code>simple</code> for weighted random), <code>seed</code> (optional integer for reproducible dry-runs; leave blank for real trials)." %}</li>
-                  <li>{% trans "Place <code>~ arm:&lt;name&gt;</code> after the section heading (and after the <code>{id}</code> if present). Comma-separate multiple arms: <code>~ arm:intervention, arm:control</code>." %}</li>
-                  <li>{% trans "Sections without <code>~ arm:</code> are reachable by every arm (the union of all arm group sets)." %}</li>
-                  <li>{% trans "Arms are created in the order their names first appear in the outline. Allocation ratios default to 1; adjust them on the Organise page after import." %}</li>
-                  <li>{% trans "A blank line ends the config block. Section headings below it are the actual survey content." %}</li>
-                  <li>{% trans "See <a href='/docs/survey-layouts.md' class='link'>Survey Layouts</a> for the full guide." %}</li>
-                </ul>
+                <p class="text-sm text-base-content/70 mt-2">{% trans "For the complete outline grammar and worked examples, see the <a href='/docs/import.md' class='link'>Outline reference</a>." %}</p>
               </div>
             </div>
           </div>
