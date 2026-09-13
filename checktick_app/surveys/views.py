@@ -5885,13 +5885,56 @@ def _handle_participant_submission(
         return redirect("surveys:thank_you", slug=survey.slug)
 
     # GET: render using existing detail template
+    # RCT arm assignment (see docs/survey-layouts-technical.md §Randomised
+    # (RCT) layout §Runtime hook). When the survey uses the rct layout and
+    # the participant has not yet been assigned an arm (assigned_arm is
+    # None), ensure a RandomisedMenu, assign an arm via
+    # _assign_arm_for_progress, resolve selected_group_ids from the arm's
+    # groups (ordered by _resolved_group_order_ids so the arm's sections
+    # keep the Organise-page order), and store both on SurveyProgress.
+    # On resume, assigned_arm is already set and selected_group_ids is
+    # already populated, so the assignment is skipped. There is no picker
+    # for RCT — the participant never sees their arm.
+    selected_group_ids: list[int] = []
+    if survey.layout == Survey.Layout.RCT and progress is not None:
+        if progress.assigned_arm_id is None:
+            menu = _ensure_randomised_menu(survey)
+            try:
+                arm = _assign_arm_for_progress(progress, menu)
+            except ValueError:
+                # No arms configured (or all arms empty). Block the take
+                # view with a clear error rather than crashing.
+                messages.error(
+                    request,
+                    _(
+                        "This survey is configured as a randomised trial but "
+                        "has no arms set up. Please contact the survey author."
+                    ),
+                )
+                return redirect("surveys:detail", slug=survey.slug)
+            # Resolve selected_group_ids from the arm's groups, ordered by
+            # the Organise-page order so the arm's sections keep their
+            # authored sequence.
+            arm_group_ids = set(arm.groups.values_list("id", flat=True))
+            if arm_group_ids:
+                ordered_ids = _resolved_group_order_ids(survey)
+                selected_group_ids = [g for g in ordered_ids if g in arm_group_ids]
+                progress.selected_group_ids = selected_group_ids
+                progress.save(update_fields=["selected_group_ids"])
+            else:
+                # Empty arm — fall back to all sections so the survey is
+                # still completable; the warnings step flags this.
+                selected_group_ids = []
+        else:
+            raw = progress.selected_group_ids or []
+            if isinstance(raw, list):
+                selected_group_ids = [int(x) for x in raw if str(x).isdigit()]
     # Section menu picker (see docs/survey-layouts.md step 5). When the
     # survey uses the section_menu layout and the participant has not yet
     # selected sections (selected_group_ids is empty), render the picker
     # instead of the question list. On resume, selected_group_ids is
     # populated so the picker is skipped.
-    selected_group_ids: list[int] = []
-    if survey.layout == Survey.Layout.SECTION_MENU and progress is not None:
+    elif survey.layout == Survey.Layout.SECTION_MENU and progress is not None:
         raw = progress.selected_group_ids or []
         if isinstance(raw, list):
             selected_group_ids = [int(x) for x in raw if str(x).isdigit()]
