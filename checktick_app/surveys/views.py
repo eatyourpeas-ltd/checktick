@@ -59,6 +59,13 @@ from .llm_client import (
     load_doc_import_prompt_from_docs,
 )
 from .markdown_import import BulkParseError, parse_bulk_markdown_with_collections
+from .matrix import (
+    add_completed_group as _matrix_add_completed,
+    all_sections_complete as _matrix_all_complete,
+    landing_card_states as _matrix_card_states,
+    missing_required_question_ids as _matrix_missing_required,
+    remove_completed_group as _matrix_remove_completed,
+)
 from .models import (
     SUPPORTED_SURVEY_LANGUAGES,
     AuditLog,
@@ -66,6 +73,7 @@ from .models import (
     CollectionItem,
     DataSet,
     LLMConversationSession,
+    MatrixMenu,
     Organization,
     OrganizationMembership,
     PublishedQuestionGroup,
@@ -5526,6 +5534,179 @@ def _render_section_menu_picker(
     return render(request, "surveys/section_menu_picker.html", ctx)
 
 
+def _collect_matrix_section_answers(survey: Survey, post) -> dict:
+    """Collect answers from POST for a matrix section view.
+
+    Only the current section's questions are rendered in the form, so only
+    those will have POST values. Reuses ``_collect_question_answer`` so the
+    answer shape matches the existing submission path.
+    """
+    answers: dict = {}
+    repeat_config = _build_repeat_config(survey)
+    repeatable_qids = _repeatable_question_ids(survey, repeat_config)
+    for q in survey.questions.all():
+        value = _collect_question_answer(q, post, repeatable_qids)
+        if value:
+            answers[str(q.id)] = value
+        followups = _collect_question_followups(q, post)
+        if followups:
+            answers[f"{q.id}_followup"] = followups
+    return answers
+
+
+def _render_matrix_landing(
+    request: HttpRequest, survey: Survey, progress: SurveyProgress
+) -> HttpResponse:
+    """Render the matrix landing page (cards with completion indicators).
+
+    See docs/survey-layouts-technical.md §Matrix (free navigation) layout
+    §Runtime hook. Each section is a card showing its state (complete /
+    in_progress / not_started) and a link to open that section. A final
+    "Submit survey" button is shown when all sections are complete.
+    """
+    menu = getattr(survey, "matrix_menu", None)
+    if menu is None:
+        menu = MatrixMenu.objects.create(survey=survey)
+    group_ids = _resolved_group_order_ids(survey)
+    cards = _matrix_card_states(progress, survey.id, group_ids)
+    # Attach the QuestionGroup objects for template rendering.
+    groups_map = {g.id: g for g in survey.question_groups.all()}
+    for card in cards:
+        card["group"] = groups_map.get(card["group_id"])
+    all_complete = _matrix_all_complete(progress, survey.id, group_ids)
+    ctx = {
+        "survey": survey,
+        "matrix_menu": menu,
+        "matrix_cards": cards,
+        "all_sections_complete": all_complete,
+        "is_preview": False,
+        # Progress tracking
+        "show_progress": progress is not None,
+        "progress_percentage": (
+            progress.calculate_progress_percentage() if progress else 0
+        ),
+        "answered_count": progress.answered_count if progress else 0,
+        "total_questions": progress.total_questions if progress else 0,
+        "saved_answers": progress.partial_answers if progress else {},
+        "last_saved": (
+            progress.updated_at if progress and progress.answered_count > 0 else None
+        ),
+    }
+    return render(request, "surveys/matrix_landing.html", ctx)
+
+
+def _matrix_final_submit(
+    request: HttpRequest,
+    survey: Survey,
+    token_obj: SurveyAccessToken | None,
+    progress: SurveyProgress,
+) -> HttpResponse:
+    """Handle the final ``submit_survey`` action for a matrix survey.
+
+    Re-validates all required questions across all sections (hard gate —
+    ``completed_group_ids`` is a soft indicator and can lie if the participant
+    edited a section after marking it complete). Builds the SurveyResponse
+    from ``progress.partial_answers`` (accumulated across section visits)
+    plus demographics/professional from POST.
+    """
+    # Merge any pending answers from the current POST (the landing page's
+    # submit form may include demographics/professional fields).
+    answers = dict(progress.partial_answers or {})
+    # Collect demographics from POST (same as the existing submission path).
+    patient_group, demographics_fields = _get_patient_group_and_fields(survey)
+    demo = {}
+    for field in demographics_fields:
+        val = request.POST.get(field)
+        if val:
+            demo[field] = val
+    demo = _enrich_demographics_with_imd(demo, patient_group)
+    # Collect professional details from POST.
+    _prof_group, professional_fields, professional_ods = (
+        _get_professional_group_and_fields(survey)
+    )
+    professional_payload = {}
+    for field in professional_fields:
+        val = request.POST.get(f"prof_{field}")
+        if val:
+            professional_payload[field] = val
+        if professional_ods.get(field):
+            ods_val = request.POST.get(f"prof_{field}_ods")
+            if ods_val:
+                professional_payload[f"{field}_ods"] = ods_val
+    # Hard gate: re-validate all required questions across all sections.
+    group_ids = _resolved_group_order_ids(survey)
+    missing_sections: list[str] = []
+    groups_map = {g.id: g for g in survey.question_groups.all()}
+    for gid in group_ids:
+        missing = _matrix_missing_required(answers, survey.id, gid)
+        if missing:
+            gname = groups_map.get(gid)
+            missing_sections.append(gname.name if gname else f"Section {gid}")
+    if missing_sections:
+        messages.error(
+            request,
+            _(
+                "Some sections still have unanswered required questions: "
+                "%(sections)s. Please complete them before submitting."
+            )
+            % {"sections": ", ".join(missing_sections)},
+        )
+        return redirect(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    # Validate repeat min_count on final submission.
+    repeat_config = _build_repeat_config(survey)
+    min_errors = _validate_repeat_min_counts(survey, answers, repeat_config)
+    if min_errors:
+        for msg in min_errors:
+            messages.error(request, msg)
+        return redirect(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    # Validate date/time/datetime answers.
+    datetime_errors = _validate_text_format_answers(survey, answers)
+    if datetime_errors:
+        for msg in datetime_errors:
+            messages.error(request, msg)
+        return redirect(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    # Build the SurveyResponse from accumulated answers.
+    resp = SurveyResponse(
+        survey=survey,
+        answers={
+            **answers,
+            **({"professional": professional_payload} if professional_payload else {}),
+        },
+        submitted_by=request.user if request.user.is_authenticated else None,
+        access_token=token_obj if token_obj else None,
+    )
+    if survey.has_submission_keypair() and survey.status != Survey.Status.DRAFT:
+        resp.store_submission(
+            bytes(survey.submission_public_key),
+            resp.answers,
+            demo or None,
+        )
+    elif demo:
+        survey_key = get_survey_key_from_session(request, survey.slug)
+        if survey_key:
+            resp.store_demographics(survey_key, demo)
+    try:
+        resp.save()
+    except Exception:
+        messages.error(request, "You have already submitted this survey.")
+        return redirect("surveys:take", slug=survey.slug)
+    # Mark token as used.
+    if token_obj:
+        token_obj.used_at = timezone.now()
+        if request.user.is_authenticated:
+            token_obj.used_by = request.user
+        token_obj.save(update_fields=["used_at", "used_by"])
+    # Mark progress as completed.
+    progress.mark_completed()
+    # Store receipt token in session.
+    opted_in_redaction = bool(request.POST.get("opt_in_redaction"))
+    token = resp.generate_receipt_token(opt_in=opted_in_redaction)
+    if token:
+        request.session[f"receipt_token_{survey.slug}"] = str(token)
+    messages.success(request, "Thank you for your response.")
+    return redirect("surveys:thank_you", slug=survey.slug)
+
+
 def _handle_participant_submission(
     request: HttpRequest,
     survey: Survey,
@@ -5557,6 +5738,24 @@ def _handle_participant_submission(
     # resume route)
     if progress is None:
         progress, _created = _get_or_create_progress(request, survey, token_obj)
+
+    # Matrix layout requires a progress row for server-side completion
+    # tracking (completed_group_ids). For public/unlisted surveys without
+    # a credential, _get_or_create_progress returns None — create a
+    # session-based row so matrix can track section states. This mirrors
+    # the section_menu picker's throwaway progress row handling.
+    if progress is None and survey.layout == Survey.Layout.MATRIX:
+        from datetime import timedelta
+
+        if not request.session.session_key:
+            request.session.create()
+        progress = SurveyProgress.objects.create(
+            survey=survey,
+            user=request.user if request.user.is_authenticated else None,
+            session_key=request.session.session_key,
+            total_questions=survey.questions.count(),
+            expires_at=timezone.now() + timedelta(days=30),
+        )
 
     # Section menu picker submission (see docs/survey-layouts.md step 5).
     # The picker is a pre-step: the participant's chosen group IDs (plus
@@ -5644,6 +5843,79 @@ def _handle_participant_submission(
         progress.save(update_fields=["selected_group_ids"])
         return _safe_participant_redirect(request, survey)
 
+    # Matrix layout: 'complete_section' validates one section's required
+    # questions, saves the draft, marks it complete on
+    # SurveyProgress.completed_group_ids, and redirects to the landing page.
+    # See docs/survey-layouts-technical.md §Matrix (free navigation) layout
+    # §Runtime hook.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "complete_section"
+        and survey.layout == Survey.Layout.MATRIX
+        and progress is not None
+    ):
+        section_id_raw = request.POST.get("section_id", "")
+        if not section_id_raw.isdigit():
+            messages.error(request, _("Invalid section."))
+            return _safe_participant_redirect(request, survey)
+        section_id = int(section_id_raw)
+        # Collect answers from POST (only this section's questions are rendered).
+        answers = _collect_matrix_section_answers(survey, request.POST)
+        progress.partial_answers.update(answers)
+        progress.answered_count = len(
+            [v for v in progress.partial_answers.values() if v]
+        )
+        progress.last_question_answered_at = timezone.now()
+        # Validate required questions in this section.
+        missing = _matrix_missing_required(
+            progress.partial_answers, survey.id, section_id
+        )
+        if missing:
+            progress.save(
+                update_fields=[
+                    "partial_answers",
+                    "answered_count",
+                    "last_question_answered_at",
+                ]
+            )
+            messages.error(
+                request,
+                _(
+                    "Please answer all required questions in this section "
+                    "before marking it complete."
+                ),
+            )
+            # Redirect back to the same section.
+            return redirect(
+                reverse("surveys:take", kwargs={"slug": survey.slug})
+                + f"?section={section_id}"
+            )
+        _matrix_add_completed(progress, section_id)
+        progress.save(
+            update_fields=[
+                "partial_answers",
+                "answered_count",
+                "last_question_answered_at",
+                "completed_group_ids",
+            ]
+        )
+        messages.success(request, _("Section marked complete."))
+        return redirect(reverse("surveys:take", kwargs={"slug": survey.slug}))
+
+    # Matrix layout: 'submit_survey' is the final whole-survey submission.
+    # Re-validates all required questions across all sections (hard gate —
+    # completed_group_ids is a soft indicator and can lie if the participant
+    # edited a section after marking it complete). Builds the SurveyResponse
+    # from progress.partial_answers (accumulated across section visits) plus
+    # demographics/professional from POST.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "submit_survey"
+        and survey.layout == Survey.Layout.MATRIX
+        and progress is not None
+    ):
+        return _matrix_final_submit(request, survey, token_obj, progress)
+
     if request.method == "POST":
         # Check if this is a draft save (AJAX request)
         is_draft = request.POST.get("action") == "save_draft"
@@ -5683,6 +5955,14 @@ def _handle_participant_submission(
                     }
                 )
             progress.update_progress(answers)
+            # Matrix: editing a completed section un-marks it so the landing
+            # page shows "in progress" again (see docs/survey-layouts-
+            # technical.md §Matrix (free navigation) layout §Save and resume).
+            if survey.layout == Survey.Layout.MATRIX:
+                section_id_raw = request.POST.get("section_id", "")
+                if section_id_raw.isdigit():
+                    _matrix_remove_completed(progress, int(section_id_raw))
+                    progress.save(update_fields=["completed_group_ids"])
             return JsonResponse(
                 {
                     "success": True,
@@ -6033,6 +6313,24 @@ def _handle_participant_submission(
                 "surveys/staged_no_phases.html",
                 {"survey": survey, "is_preview": False},
             )
+    # Matrix (free navigation) layout (see docs/survey-layouts-technical.md
+    # §Matrix (free navigation) layout). Unlike the other layouts (which
+    # filter selected_group_ids and render a single take page), matrix has a
+    # landing page + per-section take pages. On GET without ?section=<gid>,
+    # render the landing page (cards with completion indicators). On GET with
+    # ?section=<gid>, filter selected_group_ids to just that one group so
+    # the existing detail.html renders only that section's questions.
+    if survey.layout == Survey.Layout.MATRIX and progress is not None:
+        section_id_raw = request.GET.get("section", "")
+        if not section_id_raw or not section_id_raw.isdigit():
+            return _render_matrix_landing(request, survey, progress)
+        section_id = int(section_id_raw)
+        # Validate that the section belongs to this survey.
+        survey_group_ids = set(survey.question_groups.values_list("id", flat=True))
+        if section_id not in survey_group_ids:
+            return _render_matrix_landing(request, survey, progress)
+        # Filter to just this one section.
+        selected_group_ids = [section_id]
     show_picker = survey.layout == Survey.Layout.SECTION_MENU and not selected_group_ids
     if show_picker:
         return _render_section_menu_picker(request, survey, progress)
@@ -6114,6 +6412,16 @@ def _handle_participant_submission(
         # on top of the existing pipeline — all questions still render in
         # the DOM and guided.js shows one at a time.
         "is_guided": survey.layout == Survey.Layout.GUIDED,
+        # Matrix layout: per-section navigation (see docs/survey-layouts-
+        # technical.md §Matrix (free navigation) layout). The current section
+        # ID is passed so the template can render matrix nav (Back to
+        # overview, Complete section).
+        "is_matrix": survey.layout == Survey.Layout.MATRIX,
+        "matrix_section_id": (
+            int(request.GET.get("section", ""))
+            if request.GET.get("section", "").isdigit()
+            else None
+        ),
         # Progress tracking (None for public/unlisted surveys without
         # credential — see _get_or_create_progress)
         "show_progress": progress is not None,

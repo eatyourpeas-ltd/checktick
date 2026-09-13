@@ -838,7 +838,21 @@
     <script src="https://js.hcaptcha.com/1/api.js" async defer nonce="{{ request.csp_nonce }}"></script>
   {% endif %}
 
-  {% if is_preview %}
+  {% if is_matrix %}
+  {# Matrix layout: per-section navigation. The participant completes one
+     section at a time and returns to the landing page. "Complete section"
+     validates required questions and marks the section done. "Back to
+     overview" returns to the landing page without marking complete. #}
+  <input type="hidden" name="section_id" value="{{ matrix_section_id }}" />
+  <div class="flex flex-wrap gap-2 mt-4">
+    {% if is_preview %}
+    <button class="btn btn-primary" type="submit">{% trans "Complete Preview" %}</button>
+    {% else %}
+    <button class="btn btn-primary" type="submit" name="action" value="complete_section">{% trans "Save and complete section" %}</button>
+    <button class="btn btn-outline" type="button" onclick="window.location.href='/surveys/{{ survey.slug }}/take/'">{% trans "Back to overview" %}</button>
+    {% endif %}
+  </div>
+  {% elif is_preview %}
     <button class="btn btn-primary" type="submit">{% trans "Complete Preview" %}</button>
   {% else %}
     <button class="btn btn-primary" type="submit">{% trans "Submit" %}</button>
