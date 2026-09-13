@@ -14,6 +14,7 @@
     var removeRepeatIds = $("#remove-repeat-group-ids");
     var modal = $("#repeat-modal");
     var inputIds = $("#repeat-group-ids");
+    var publishBtn = $("#publish-to-bank-btn");
     var selected = new Set();
 
     function getSelectedRepeatedGroups() {
@@ -107,6 +108,29 @@
         count.textContent = String(selected.size);
         bar.classList.toggle("hidden", selected.size === 0);
       }
+
+      // Publish-to-Question-Bank button: enabled only when exactly one
+      // non-imported section is selected (the Question Bank publishes
+      // individual sections; imported sections cannot be re-published).
+      if (publishBtn) {
+        var publishable = $all("li[data-gid]", root).filter(function (li) {
+          return selected.has(li.dataset.gid) && li.dataset.imported !== "1";
+        });
+        if (publishable.length === 1 && selected.size === 1) {
+          publishBtn.disabled = false;
+          publishBtn.title = "";
+          publishBtn.dataset.gid = publishable[0].dataset.gid;
+        } else {
+          publishBtn.disabled = true;
+          publishBtn.title =
+            selected.size === 0
+              ? "Select a single section to publish to the Question Bank"
+              : selected.size > 1
+                ? "Select a single section (the Question Bank publishes sections individually)"
+                : "Imported sections cannot be re-published";
+          delete publishBtn.dataset.gid;
+        }
+      }
     }
 
     function updateSelection(li, isChecked) {
@@ -180,6 +204,16 @@
         if (!nonRepeatedIds.length) return;
         if (inputIds) inputIds.value = nonRepeatedIds.join(",");
         if (modal && modal.showModal) modal.showModal();
+      });
+
+    // Publish-to-Question-Bank: navigate to the publish page for the
+    // single selected section.
+    if (publishBtn)
+      publishBtn.addEventListener("click", function () {
+        var gid = publishBtn.dataset.gid;
+        if (!gid) return;
+        var slug = publishBtn.dataset.surveySlug || "";
+        window.location.href = "/surveys/" + slug + "/groups/" + gid + "/publish/";
       });
 
     var cancelBtn = $("#repeat-cancel-btn");

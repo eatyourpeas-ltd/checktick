@@ -312,7 +312,8 @@ def test_question_bank_page_title(auth_client, owner):
 
 @pytest.mark.django_db
 def test_publish_page_heading(auth_client, owner):
-    """The publish page heading says 'Share section as template'."""
+    """The publish page heading says 'Share section as template' and breadcrumbs
+    link back to the survey's Organise page (not a broken generic URL)."""
     survey = Survey.objects.create(
         owner=owner,
         name="Publish Heading Survey",
@@ -342,6 +343,15 @@ def test_publish_page_heading(auth_client, owner):
     assert (
         b"Publish Question Group" not in resp.content
     ), "The old 'Publish Question Group' heading should no longer appear."
+    # Breadcrumbs: the "Organise" crumb must link to the survey-specific
+    # Organise page, not the broken generic /surveys/groups/ URL.
+    html = resp.content.decode()
+    assert f"/surveys/{survey.slug}/groups/" in html
+    assert "/surveys/groups/" not in html.replace(f"/surveys/{survey.slug}/groups/", "")
+    # The group name should appear in the breadcrumbs (crumb3).
+    assert group.name in html
+    # The final crumb should say "Share", not "Publish".
+    assert ">Share<" in html
 
 
 # ---------------------------------------------------------------------------
@@ -441,10 +451,10 @@ def test_groups_page_no_delete_button(auth_client, owner):
     assert (
         delete_url.encode() not in resp.content
     ), "The Organise page should not have a per-row delete form (it's builder-only now)."
-    # But the publish button should still be there.
+    # But the publish-to-bank toolbar button should still be there.
     assert (
-        b"Publish" in resp.content
-    ), "The Organise page should still have a Publish button."
+        b"publish-to-bank-btn" in resp.content
+    ), "The Organise page should still have a Publish to Question Bank button."
 
 
 @pytest.mark.django_db
@@ -2232,10 +2242,13 @@ def test_organise_page_no_explainer_card(auth_client, owner):
     assert (
         b"Select groups by clicking their row" not in resp.content
     ), "The old repeat tip alert should be gone."
-    # The new one-line subtitle should be present.
+    # The new one-line subtitle should frame the page's purpose.
     assert (
-        b"Bulk reorder" in resp.content
-    ), "The new subtitle should mention bulk reorder."
+        b"Question Bank" in resp.content
+    ), "The new subtitle should mention the Question Bank."
+    assert (
+        b"survey-wide" in resp.content
+    ), "The new subtitle should frame the page as survey-wide settings."
 
 
 @pytest.mark.django_db
