@@ -5,7 +5,7 @@ priority: 7
 ---
 
 A **Survey Layout** is the high-level shape of a survey — how its sections
-are offered to the participant. CheckTick supports three layouts:
+are offered to the participant. CheckTick supports four layouts:
 
 - **Default (linear)** — sections flow in the order you arrange them. Every
   respondent sees every section. This is how all surveys worked before
@@ -19,6 +19,12 @@ are offered to the participant. CheckTick supports three layouts:
   participant only sees the sections in their assigned arm. Use this for
   clinical trials and A/B testing where arm assignment must be
   system-controlled.
+- **Guided** — one question per screen with Next/Back navigation, instead
+  of scrolling through all questions on a single page. Reduces scroll
+  fatigue on long or mobile-first surveys. Guided composes with the
+  other layouts: a Section menu or RCT survey in guided layout still
+  shows the picker / assigns the arm first, then walks the chosen
+  sections one question at a time.
 
 The name **Layout** is deliberately distinct from **Template**, which is
 already used for published sections shared into the Question Bank (see
@@ -59,12 +65,29 @@ Randomisation is a common reason researchers reach for Qualtrics or REDCap
 instead of simpler tools. This layout unblocks that use case natively in
 CheckTick.
 
+### Guided
+
+Use the Guided layout when:
+
+- **Long patient-facing surveys** where scroll fatigue causes drop-off.
+- **Mobile-first surveys** where a single-question focus reduces
+  cognitive load.
+- **Validated instruments** where a one-question-at-a-time presentation
+  matches the intended administration.
+
+Guided is a rendering change, not a selection mechanism — it composes
+with the other layouts. A Section menu survey in guided layout shows the
+picker first, then walks the chosen sections one question at a time; an
+RCT survey in guided layout walks the assigned arm's sections one
+question at a time. Branching, repeats, follow-ups, autosave, and
+save-and-resume all work unchanged.
+
 ## Choosing a layout
 
 The layout choice lives on the [Organise](groups-view.md) page
-(`/surveys/<slug>/groups/`), not in the Builder. The Organise page gains
-a **Survey layout** section at the top with two cards — one per layout.
-Each card has a wireframe icon and a short description. Click **Use this
+(`/surveys/<slug>/groups/`), not in the Builder. The Organise page has
+a **Survey layout** section at the top with a card per layout. Each
+card has a wireframe icon and a short description. Click **Use this
 layout** to switch.
 
 The Builder shows a small, dismissible label above the section rail
@@ -243,22 +266,6 @@ block. The layout config survives export → import round-trips.
 
 The following layouts are planned for future releases. They are not yet
 implemented.
-
-### Guided (one question at a time)
-
-A wizard-style layout that shows one question per screen with a progress
-bar, rather than scrolling through all questions on a single page. The
-participant navigates with Next/Back buttons. The section_menu picker
-could serve as the first screen in a guided flow.
-
-**When to use:** long patient-facing surveys where scroll fatigue
-causes drop-off; mobile-first surveys where a single-question focus
-reduces cognitive load.
-
-**Why it matters:** this is primarily a rendering change rather than a
-data model change — the runtime already has the question sequence and
-progress tracking. It would improve the participant experience across
-all layouts.
 
 ### Staged (longitudinal)
 

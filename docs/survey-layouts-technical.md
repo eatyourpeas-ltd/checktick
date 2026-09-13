@@ -466,20 +466,77 @@ reuse its ingredients:
   or convergence tracking — those are Delphi-only and stay out of this
   PR to keep RCT scope tight.
 
+## Guided layout
+
+The Guided layout shows one question per screen with Next/Back
+navigation, instead of scrolling through all questions on a single
+page. It is primarily a **rendering change** layered on top of the
+existing ordering pipeline — no new model, no new `SurveyProgress` field,
+and no new runtime hook. The migration (`0062_guided_layout`) only adds
+the `guided` choice to `Survey.layout`.
+
+### Rendering contract
+
+All questions still render in the DOM (so branching, repeats, follow-ups,
+autosave, and the save-and-resume buttons all work unchanged). A
+client-side `guided.js` module shows one step at a time by toggling data
+attributes that the scoped CSS in `detail.html` reacts to:
+
+- `data-guided` on the form (gates the scoped CSS).
+- `data-guided-group` on each group fieldset (so the section header
+  shows for the current question's group).
+- `data-guided-extra` on patient/professional details fieldsets (final
+  steps before submit).
+- `data-guided-current` / `data-guided-current-group` /
+  `data-guided-current-instance` markers set by `guided.js` on the
+  visible step and its ancestors.
+- A sticky guided nav bar (Back / step indicator / Next, with a real
+  Submit button revealed on the last step so native form validation
+  runs).
+
+### Visibility contract with branching.js
+
+`branching.js` sets inline `style.display` on `[data-question-id]`
+(`""` = visible, `"none"` = hidden by a condition). The guided layer
+uses data attributes + stylesheet rules, never inline display, so the
+two never fight: a question hidden by branching stays hidden (inline
+`none` beats CSS); a question shown by branching but not current is
+hidden by the CSS rule (inline `""` removes the inline style so the
+stylesheet `display:none` applies). The guided nav skips
+branching-hidden questions so the participant never lands on one.
+
+### Orthogonality and Delphi compatibility
+
+Guided is orthogonal to the selection mechanism (linear,
+section_menu, rct, or a future Delphi round allocator): it operates on
+whatever `[data-question-id]` / `[data-guided-extra]` elements the
+pipeline produced, regardless of how `selected_group_ids` was
+populated. This means:
+
+- A future Delphi round allocator can reuse `guided.js` unchanged —
+  it just renders a different subset of questions per round, and the
+  guided nav walks them one at a time.
+- Guided composes with section_menu and rct: a section_menu survey in
+  guided layout shows the picker first, then walks the chosen
+  sections one question at a time; an rct survey in guided layout
+  walks the assigned arm's sections one question at a time.
+
+### Save and resume
+
+The guided layer does not change the submit path or the save/resume
+buttons. The scoped CSS only hides the default `button[type="submit"]`
+that is a direct child of `form[data-guided]` (replaced by the guided
+nav's own submit button on the last step). The AJAX-driven "Save and
+come back later" button is `type="button"` and is not a direct-child
+submit, so it is unaffected. Autosave (`save_draft`) fires on
+`input`/`change` events that bubble to the form regardless of which
+step is visible.
+
 ## Planned layouts
 
 The following layouts are still planned for future releases. See
 [Survey Layouts](survey-layouts.md#planned-layouts) for the user-facing
 descriptions. Technical notes:
-
-### Guided (one question at a time)
-
-- Primarily a rendering change: one question per screen with Next/Back.
-- The runtime already has the question sequence and progress tracking.
-- The section_menu picker could serve as the first screen.
-- May need a `guided` layout value and a new template variant of
-  `detail.html`.
-- Priority: medium — improves participant experience across all layouts.
 
 ### Staged (longitudinal)
 
