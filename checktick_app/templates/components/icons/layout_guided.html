@@ -1,0 +1,12 @@
+{% comment %} {# Guided layout icon (one question presented at a time). Usage: {% include "components/icons/layout_guided.html" with classes="w-6 h-6" %} #} {% endcomment %}
+<svg xmlns="http://www.w3.org/2000/svg" class="{{ classes|default:'w-6 h-6' }}" viewBox="0 0 800 450" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Straight connecting line between upper and lower cards -->
+  <path d="M 400,170 L 400,280" />
+
+  <!-- Primary Question Card (top) -->
+  <rect x="300" y="60" width="200" height="110" rx="16" ry="16" />
+  <path d="M 385,100 C 385,85 415,85 415,102 C 415,117 400,118 400,130 M 400,145 L 400,146" stroke-width="14" />
+
+  <!-- Ghosted/Dashed Next Card (bottom) -->
+  <rect x="300" y="280" width="200" height="110" rx="16" ry="16" stroke-dasharray="16 12" opacity="0.6" />
+</svg>
