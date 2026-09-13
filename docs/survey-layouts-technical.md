@@ -1032,8 +1032,8 @@ the body survives export → import round-trips.
 The builder form for `content_block` uses a **multiline textarea** for
 `body_md` (Markdown). This is intrinsic to the content block — the body
 is authored content, not a one-line config value. The textarea builder
-component is shared with the `long_text` question type, which lands first
-(see §Long text below).
+component is shared with the `long_text` question type (see §Long text
+below), which landed in v0.16.1.
 
 `body_md` is structurally distinct from question labels:
 `SurveyQuestion.text` and `QuestionGroup.description` are already
@@ -1041,11 +1041,11 @@ component is shared with the `long_text` question type, which lands first
 content of the block, rendered as Markdown → HTML, and can be multiple
 paragraphs. Labels are short; `body_md` is long-form.
 
-## Long text (prerequisite PR)
+## Long text (textarea)
 
-A `long_text` question type — a textarea version of `text` — lands
-before the content block PR. It gives authors a "please describe..." /
-"any other comments" question with a multi-line input.
+A `long_text` question type — a textarea version of `text` — gives
+authors a "please describe..." / "any other comments" question with a
+multi-line input. It landed in v0.16.1 (migration `0065_long_text`).
 
 ### Data model
 
@@ -1060,12 +1060,13 @@ class SurveyQuestion(models.Model):
 is one type per rendering shape (see `template_patient` /
 `template_professional`), and the builder, template, and export are all
 type-dispatched already. The answer is stored as a string, same as
-`text`.
+`text`. CSV export reuses the existing string answer path
+(`_format_answer_for_export`).
 
 ### Builder
 
-The builder form renders a `<textarea>` for `long_text` questions.
-This component is reused by the content block's `body_md` field.
+The builder form renders a `<textarea>` for `long_text` questions
+(rows=4). No config section is shown (no options, no format variants).
 
 ### Outline grammar
 
