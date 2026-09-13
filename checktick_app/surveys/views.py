@@ -100,6 +100,7 @@ from .permissions import (
     require_can_view,
 )
 from .services.address_lookup import ADDRESS_FIELD_KEYS, AddressLookupService
+from .staged import open_group_ids as _staged_open_group_ids
 from .utils import parse_datetime_aware, verify_key
 
 logger = logging.getLogger(__name__)
@@ -5966,13 +5967,59 @@ def _handle_participant_submission(
         raw = progress.selected_group_ids or []
         if isinstance(raw, list):
             selected_group_ids = [int(x) for x in raw if str(x).isdigit()]
+    # Staged (longitudinal) layout (see docs/survey-layouts-technical.md
+    # §Staged (longitudinal) layout). Unlike rct (fixed arm assignment)
+    # and section_menu (participant picks once), staged recomputes the
+    # currently-open phases on every access and resolves
+    # selected_group_ids from their union. The open set changes over time,
+    # so we never read a stored value — we recompute and overwrite each
+    # visit. Reuses the same _resolved_group_order_ids filtering hook as
+    # the other layouts; StagedPhase is the precedent for a future
+    # DelphiRound.
+    if survey.layout == Survey.Layout.STAGED and progress is not None:
+        menu = getattr(survey, "staged_menu", None)
+        open_ids: set[int] = set()
+        if menu is not None:
+            open_ids = set(
+                _staged_open_group_ids(
+                    menu,
+                    enrolment=progress.created_at,
+                    survey_start=survey.start_at,
+                    now=timezone.now(),
+                )
+            )
+        ordered_ids = _resolved_group_order_ids(survey)
+        selected_group_ids = [g for g in ordered_ids if g in open_ids]
+        progress.selected_group_ids = selected_group_ids
+        progress.save(update_fields=["selected_group_ids"])
+        if not selected_group_ids:
+            # No phase is currently open (or no StagedMenu / no phases
+            # configured yet). Render a friendly "check back later" page
+            # instead of an empty form. The participant's progress row is
+            # preserved so resume works when a phase opens later. We never
+            # leak future-phase sections to a participant.
+            return render(
+                request,
+                "surveys/staged_no_phases.html",
+                {"survey": survey, "is_preview": False},
+            )
     show_picker = survey.layout == Survey.Layout.SECTION_MENU and not selected_group_ids
     if show_picker:
         return _render_section_menu_picker(request, survey, progress)
 
     _prepare_question_rendering(survey)
     all_questions = list(survey.questions.select_related("group", "dataset").all())
-    qs = _order_questions_by_group(survey, all_questions, selected_group_ids or None)
+    # Staged: an empty open set means "no sections available right now",
+    # not "show everything". Pass the (possibly empty) list explicitly so
+    # _order_questions_by_group filters to nothing rather than falling
+    # back to all sections. Other layouts use the ``or None`` form so an
+    # empty selection renders everything (linear) or is gated by the
+    # picker (section_menu) / arm fallback (rct).
+    if survey.layout == Survey.Layout.STAGED:
+        filter_ids: list[int] | None = selected_group_ids
+    else:
+        filter_ids = selected_group_ids or None
+    qs = _order_questions_by_group(survey, all_questions, filter_ids)
     _inject_dataset_options(qs)
     _annotate_question_render_sequence(survey, qs)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
