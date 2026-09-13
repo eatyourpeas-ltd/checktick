@@ -132,6 +132,23 @@
   </div>
   {% endif %}
 
+  {# === Matrix configuration badges === #}
+  {% if matrix_info %}
+  <div class="not-prose mb-6">
+    <div class="card bg-base-100 border border-base-300 max-w-4xl">
+      <div class="card-body p-4">
+        <h3 class="text-sm font-semibold text-base-content/80 mb-1">{% trans 'Matrix — free navigation' %}</h3>
+        <p class="text-xs text-base-content/60 mb-2">{% trans 'All sections are cards on a landing page. Participants complete them in any order with completion indicators.' %}</p>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <span class="badge badge-secondary badge-sm">{% trans 'Prompt' %}: {{ matrix_info.menu.prompt_text }}</span>
+          <span class="badge badge-outline badge-sm">{% trans 'Order' %}: {{ matrix_info.menu.get_order_mode_display }}</span>
+          <span class="badge badge-outline badge-sm">{% if matrix_info.menu.allow_revisit %}{% trans 'Revisit allowed' %}{% else %}{% trans 'Revisit disabled' %}{% endif %}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   {# === Visualiser (reused from the Organise page; now in its own space) === #}
   {% if has_questions %}
   <div>

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{{ survey.name }} — {% trans 'Overview' %}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-6">
+  <h1 class="text-2xl font-bold text-base-content mb-2">{{ survey.name }}</h1>
+  {% if matrix_menu.prompt_text %}
+  <p class="text-sm text-base-content/70 mb-6">{{ matrix_menu.prompt_text }}</p>
+  {% endif %}
+
+  {# Progress indicator #}
+  {% if show_progress %}
+  <div class="mb-6">
+    <div class="flex items-center justify-between text-xs text-base-content/60 mb-1">
+      <span>{% trans 'Overall progress' %}</span>
+      <span>{{ answered_count }} / {{ total_questions }}</span>
+    </div>
+    <progress class="progress progress-primary w-full" value="{{ progress_percentage }}" max="100"></progress>
+  </div>
+  {% endif %}
+
+  {# Section cards #}
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+    {% for card in matrix_cards %}
+    <a href="/surveys/{{ survey.slug }}/take/?section={{ card.group_id }}"
+       class="card bg-base-100 border {% if card.state == 'complete' %}border-success{% elif card.state == 'in_progress' %}border-primary{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+      <div class="card-body gap-2 p-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-semibold text-base-content">{{ card.group.name }}</h2>
+          {% if card.state == 'complete' %}
+          <span class="badge badge-success badge-sm">{% trans 'Complete' %}</span>
+          {% elif card.state == 'in_progress' %}
+          <span class="badge badge-primary badge-sm">{% trans 'In progress' %}</span>
+          {% else %}
+          <span class="badge badge-ghost badge-sm">{% trans 'Not started' %}</span>
+          {% endif %}
+        </div>
+        <p class="text-xs text-base-content/60">
+          {% blocktrans with answered=card.answered_count total=card.total_questions %}{{ answered }} of {{ total }} questions answered{% endblocktrans %}
+        </p>
+        {% if card.state == 'complete' %}
+        <p class="text-xs text-success">{% trans 'Click to review or edit' %}</p>
+        {% elif card.state == 'in_progress' %}
+        <p class="text-xs text-primary">{% trans 'Click to continue' %}</p>
+        {% else %}
+        <p class="text-xs text-base-content/50">{% trans 'Click to begin' %}</p>
+        {% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  {# Submit button #}
+  <div class="border-t border-base-200 pt-6">
+    {% if all_sections_complete %}
+    <form method="post" action="/surveys/{{ survey.slug }}/take/">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="submit_survey" />
+      <button type="submit" class="btn btn-primary btn-wide">
+        {% trans 'Submit survey' %}
+      </button>
+    </form>
+    {% else %}
+    <div class="alert alert-info">
+      {% include "components/icons/information-circle.html" with classes="w-5 h-5 shrink-0" %}
+      <span class="text-sm">{% trans 'Complete all sections to enable submission.' %}</span>
+    </div>
+    <button type="button" class="btn btn-disabled btn-wide mt-2" disabled>
+      {% trans 'Submit survey' %}
+    </button>
+    {% endif %}
+  </div>
+
+  {# Save and resume link #}
+  {% if last_saved %}
+  <p class="text-xs text-base-content/50 mt-6">
+    {% blocktrans with time=last_saved|timesince %}Last saved {{ time }} ago{% endblocktrans %}
+  </p>
+  {% endif %}
+</div>
+{% endblock %}

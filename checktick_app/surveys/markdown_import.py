@@ -787,6 +787,15 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
     # optional ``phase:`` config lines in the STAGED block.
     staged_phase_windows: Dict[str, Dict[str, Any]] = {}
 
+    # MATRIX block parsing (see docs/survey-layouts-technical.md §Matrix
+    # (free navigation) layout §Outline grammar). Analogous to the other
+    # layout blocks: appears before any group headings and contains only
+    # config lines (prompt, order_mode, allow_revisit). No ``~`` suffixes
+    # are needed — every section in the survey is a card on the matrix
+    # landing page by default.
+    matrix: Dict[str, Any] | None = None
+    in_matrix_block = False
+
     for raw in raw_lines:
         # Count leading '>' as depth
         s = raw
@@ -971,6 +980,55 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
             in_staged_block = False
             # Fall through to regular parsing for this line
 
+        # MATRIX block start (see docs/survey-layouts-technical.md §Matrix
+        # (free navigation) layout §Outline grammar).
+        if _re.match(r"^MATRIX$", stripped, flags=_re.IGNORECASE):
+            in_matrix_block = True
+            matrix = {
+                "prompt_text": (
+                    "Click a section to begin. You can complete them in any order."
+                ),
+                "order_mode": "authored",
+                "allow_revisit": True,
+            }
+            continue
+
+        # MATRIX config lines (indented under the block header).
+        #   prompt: "<text>"
+        #   order: authored|participant
+        #   allow_revisit: true|false
+        if in_matrix_block and (depth > 0 or raw[:1].isspace()):
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            if cfg_match and matrix is not None:
+                key = cfg_match.group(1).lower()
+                val_raw = cfg_match.group(2).strip()
+                if (val_raw.startswith('"') and val_raw.endswith('"')) or (
+                    val_raw.startswith("'") and val_raw.endswith("'")
+                ):
+                    val_raw = val_raw[1:-1]
+                if key == "prompt":
+                    matrix["prompt_text"] = val_raw
+                elif key == "order":
+                    if val_raw in ("authored", "participant"):
+                        matrix["order_mode"] = val_raw
+                elif key == "allow_revisit":
+                    matrix["allow_revisit"] = val_raw.lower() in (
+                        "true",
+                        "yes",
+                        "on",
+                    )
+            continue
+
+        # Blank line ends the MATRIX config block
+        if in_matrix_block and not stripped:
+            in_matrix_block = False
+            continue
+
+        # Unknown non-indented line inside MATRIX block also ends it
+        if in_matrix_block and depth == 0 and not raw[:1].isspace():
+            in_matrix_block = False
+            # Fall through to regular parsing for this line
+
         # REPEAT marker?
         m = _re.match(r"^REPEAT(?:-(\d+))?$", content.strip(), flags=_re.IGNORECASE)
         if m:
@@ -1144,4 +1202,5 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
         "section_menu": section_menu,
         "randomised": randomised,
         "staged": staged,
+        "matrix": matrix,
     }

@@ -739,34 +739,236 @@ can reuse its ingredients:
   tracking, or inter-round feedback — those are Delphi-only and stay out
   of this PR to keep Staged scope tight.
 
+## Matrix (free navigation) layout
+
+The Matrix layout shows all sections as cards on a landing page. The
+participant jumps in and out of any section in any order, with completion
+indicators showing which sections are done. Unlike the other layouts (which
+filter `selected_group_ids` and render a single take page that submits the
+whole survey at once), matrix has a **landing page + per-section take pages +
+a final submit**. This is the biggest layout change since section_menu.
+
+### Data model
+
+```python
+class Survey(models.Model):
+    class Layout(models.TextChoices):
+        ...
+        MATRIX = "matrix", "Matrix (free navigation)"
+
+
+class MatrixMenu(models.Model):
+    survey = models.OneToOneField(
+        Survey, related_name="matrix_menu", on_delete=models.CASCADE,
+    )
+    prompt_text = models.CharField(
+        max_length=255,
+        default="Click a section to begin. You can complete them in any order.",
+    )
+
+    class OrderMode(models.TextChoices):
+        AUTHORED = "authored", "As authored"
+        PARTICIPANT = "participant", "In visit order"
+
+    order_mode = models.CharField(
+        max_length=20, choices=OrderMode.choices, default=OrderMode.AUTHORED,
+    )
+    allow_revisit = models.BooleanField(default=True)
+
+
+class SurveyProgress(models.Model):
+    ...
+    completed_group_ids = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            "Section IDs the participant has marked complete in a matrix "
+            "survey (soft indicator; final submit re-validates)."
+        ),
+    )
+```
+
+A `linear` / `section_menu` / `rct` / `guided` / `staged` survey has no
+`MatrixMenu` row and `completed_group_ids` stays empty.
+
+**Migration:** `0064_matrix_layout` (adds the `Layout.MATRIX` choice, the
+`MatrixMenu` model, and the `SurveyProgress.completed_group_ids` field).
+
+### Runtime hook
+
+Matrix does **not** use the `selected_group_ids` filtering hook the way the
+other layouts do. Instead, it has a dedicated runtime path in
+`_handle_participant_submission`:
+
+1. **GET without `?section=<gid>`** → renders `matrix_landing.html` (cards
+   with completion indicators). Each card shows the section state
+   (`complete` / `in_progress` / `not_started`) computed from
+   `partial_answers` + `completed_group_ids`.
+2. **GET with `?section=<gid>`** → filters `selected_group_ids` to just
+   that one group so `detail.html` renders only that section's questions.
+   The template shows "Save and complete section" + "Back to overview"
+   buttons instead of the standard Submit.
+3. **POST `action=complete_section`** → collects answers, validates the
+   section's required questions, marks `completed_group_ids`, redirects to
+   the landing page.
+4. **POST `action=save_draft`** → saves answers; if the section was
+   complete, un-marks it (editing → back to "in progress").
+5. **POST `action=submit_survey`** → final whole-survey submission.
+   Re-validates all required questions across all sections (hard gate —
+   `completed_group_ids` is a soft indicator and can lie). Builds the
+   `SurveyResponse` from `progress.partial_answers` (accumulated across
+   section visits) plus demographics/professional from POST.
+
+For public/unlisted surveys without a credential, a session-based
+`SurveyProgress` row is created on first access (matrix requires
+server-side completion tracking). This mirrors the section_menu picker's
+throwaway progress row handling.
+
+### Section states
+
+`checktick_app/surveys/matrix.py` holds pure, testable functions used by
+the take view. Kept separate from the runtime pipeline so a future Delphi
+round scheduler can sit next to it without touching the take view.
+
+- `section_state(progress, survey_id, group_id)` — returns `complete`,
+  `in_progress`, or `not_started`.
+- `missing_required_question_ids(partial_answers, survey_id, group_id)` —
+  used by `complete_section` (validates before marking complete) and by the
+  final `submit_survey` (re-validates all sections).
+- `landing_card_states(progress, survey_id, group_ids)` — one card-state
+dict per group, in order.
+- `all_sections_complete(progress, survey_id, group_ids)` — soft check;
+  final submit re-validates as a hard gate.
+- `add_completed_group` / `remove_completed_group` — idempotent list
+  helpers.
+
+### Outline grammar
+
+The `MATRIX` block sits at the top of the outline (analogous to
+`SECTION_MENU` / `RANDOMISED` / `STAGED`) and carries only config lines.
+No `~` suffixes are needed — every section in the survey is a card on the
+matrix landing page by default.
+
+```text
+MATRIX
+  prompt: "Choose a section to begin"
+  order: participant
+  allow_revisit: false
+
+# Demographics {demographics}
+## Name {name}
+(text)
+
+# History {history}
+## Condition {condition}
+(text)
+```
+
+- `prompt` is the landing-page prompt text (quoted).
+- `order` is `authored` or `participant`.
+- `allow_revisit` is `true` or `false`.
+- A blank line ends the config block.
+
+The grammar is **optional** — the Organise page UI is the primary config
+path. The grammar exists so the AI builder and power users can
+import/export matrix surveys via the outline.
+
+The export side emits the `MATRIX` block with config lines, and the config
+survives export → import round-trips.
+
+### Warnings
+
+- **Single-section survey** — matrix with < 2 sections is pointless; warn
+  on layout switch.
+- **Cross-section branching** — a `jump_to` that targets a question in a
+  *different* section is meaningless in matrix (the participant navigates
+  via the landing page, not linearly). Same-section jumps work normally.
+  Non-blocking; links to Survey Map for review.
+
+### Preview
+
+`survey_preview` accepts `?simulate_section=<gid>`. When present, the
+questions are filtered to that one section so the author can preview what
+a participant would see when they open that card. A "Simulate section"
+panel on `detail.html` (preview mode only) lists the sections as radio
+buttons.
+
+### Survey Map
+
+The Survey Map shows the matrix configuration badges above the visualiser:
+prompt text, order mode, and revisit toggle.
+
+### Issues and edge cases
+
+| Issue | Why it matters | Handling |
+|---|---|---|
+| Soft vs hard completion | `completed_group_ids` can lie if the participant edits a section after marking it complete. | `save_draft` on a completed section un-marks it. Final `submit_survey` re-validates all required questions regardless of `completed_group_ids`. |
+| Per-section validation | The participant should not be able to mark a section complete with missing required questions. | `complete_section` validates required questions before marking complete; redirects back to the section with an error if any are missing. |
+| Accumulated answers | Answers are spread across multiple section visits, not in a single POST. | `SurveyProgress.partial_answers` accumulates across visits. `submit_survey` builds the `SurveyResponse` from `partial_answers`, not from POST. |
+| Public/unlisted surveys | Matrix requires server-side completion tracking, but `_get_or_create_progress` returns None for public/unlisted without credentials. | Create a session-based `SurveyProgress` row on first access (mirrors section_menu picker handling). |
+| Demographics/professional | These fields are not per-section question answers. | Collected from POST on `submit_survey` (the landing page's submit form includes them). |
+| Outline round-trip | Matrix config must survive export → import. | `MATRIX` block + config lines; round-trip test in `test_outline_matrix.py`. |
+| Cross-section branching | `jump_to` to a different section is meaningless. | Warn on the Organise page (non-blocking). |
+
+### Delphi compatibility
+
+The Matrix design is deliberately shaped so the planned Delphi workflow can
+reuse its ingredients:
+
+- `SurveyProgress.completed_group_ids` is the reusable ingredient for
+  Delphi's within-round completion tracking. A future
+  `delphi_completed_rounds` field would have the same shape (list of IDs,
+  soft indicator, hard gate on final submit). Matrix proves the pattern:
+  accumulate → validate → submit.
+- The per-section take + `complete_section` pattern is the precedent for
+  Delphi's per-round take + `complete_round`. The runtime hook
+  (`_handle_participant_submission` branching on layout) is unchanged —
+  Delphi will add another branch, not modify matrix's.
+- `matrix.py`'s pure functions (`section_state`,
+  `missing_required_question_ids`, `landing_card_states`) are the
+  precedent for Delphi's round-state helpers. A future `delphi.py` sits
+  next to it without touching matrix.
+- The `?simulate_section=` preview path is the precedent for Delphi's
+  "show me round N aggregate" inter-round feedback view.
+- Matrix does **not** introduce inter-round feedback, convergence
+  tracking, or anonymity-beyond-aggregation — those are Delphi-only and
+  stay out of this PR to keep Matrix scope tight.
+
+### Open questions
+
+- **Generalized landing page across layouts.** The matrix card component
+  (`_section_card.html` pattern) could be extracted so other layouts
+  (e.g. section_menu) get a landing page with a positionable picker card.
+  Deferred to a follow-up PR — matrix's landing page is structured for
+  future reuse but the abstraction should wait until Delphi's needs are
+  clear.
+- **Section_menu positionable picker.** The section_menu picker is
+  currently a fixed pre-step. Two follow-up options: (A) picker as a card
+  on a shared landing page (UX layering change); (B) picker inline
+  mid-survey at an authored insertion point (runtime pipeline change).
+  Both are non-trivial and deserve their own design pass.
+
 ## Planned layouts
 
 The following layouts are still planned for future releases. See
 [Survey Layouts](survey-layouts.md#planned-layouts) for the user-facing
 descriptions. Technical notes:
 
-### Staged (longitudinal)
+### Delphi (consensus rounds)
 
-- Each phase has a window measured in integer days from an anchor
-  (participant enrolment or survey open).
-- Builds on `SurveyProgress` lifecycle status and timestamps.
-- `StagedMenu` model with anchor choice; `StagedPhase` model with
-  `start_offset_days` / `end_offset_days` (null = open-ended) and an M2M
-  to `QuestionGroup`.
-- No new `SurveyProgress` field: unlike rct (fixed arm assignment),
-  staged recomputes the open set each access. `StagedPhase` is the
-  precedent for a future `DelphiRound` model.
-- Priority: medium — makes CheckTick suitable for repeated-measures
-  designs.
-
-### Matrix (free navigation)
-
-- All sections visible as cards; participant navigates freely.
-- Different from section_menu (pick once, then linear) — matrix is
-  ongoing free navigation with completion indicators.
-- May need a `MatrixMenu` model or reuse `SectionMenu` with a different
-  `order_mode`.
-- Priority: low — niche workflow but useful for clinical audits.
+- Multi-round structured consensus workflow. Participants complete
+  rounds, see aggregate feedback between rounds, and revise.
+- Builds on the ingredients proven by the earlier layouts:
+  - `SurveyProgress.assigned_arm` (RCT) → `delphi_round` FK to a future
+    `DelphiRound` model.
+  - `StagedPhase` (start/end offsets, M2M to groups) → `DelphiRound`
+    (round windows, group membership).
+  - `SurveyProgress.completed_group_ids` (Matrix) →
+    `delphi_completed_rounds` (within-round completion tracking).
+  - `matrix.py` / `staged.py` pure helpers → `delphi.py` round-state
+    helpers.
+  - `?simulate_section=` / `?simulate_phase=` preview → inter-round
+    aggregate feedback view.
+- Priority: high — the stretch goal this matrix work is part of.
 
 ## Related documentation
 

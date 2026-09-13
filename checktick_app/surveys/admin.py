@@ -9,6 +9,7 @@ from .models import (
     DataExport,
     DataSet,
     IdentityVerification,
+    MatrixMenu,
     Organization,
     OrganizationMembership,
     PublishedQuestionGroup,
@@ -709,6 +710,13 @@ class StagedPhaseAdmin(admin.ModelAdmin):
     search_fields = ("menu__survey__name", "name")
     ordering = ("menu", "order", "id")
     filter_horizontal = ("groups",)
+
+
+@admin.register(MatrixMenu)
+class MatrixMenuAdmin(admin.ModelAdmin):
+    list_display = ("survey", "order_mode", "allow_revisit")
+    list_filter = ("order_mode", "allow_revisit")
+    search_fields = ("survey__name", "survey__slug")
 
 
 class CollectionItemInline(admin.TabularInline):

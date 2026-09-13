@@ -324,6 +324,30 @@
 </div>
 {% endif %}
 
+{% if is_preview and matrix_preview %}
+{# Simulate section panel (step 6) #}
+<div class="card bg-info/10 border border-info/30 mb-6">
+  <div class="card-body p-4">
+    <h3 class="text-sm font-semibold text-base-content/80 mb-2">{% trans 'Simulate section' %}</h3>
+    <p class="text-xs text-base-content/60 mb-3">{% trans 'Pick a section to preview what a participant would see when they open that card.' %}</p>
+    <form method="get" action="" class="flex flex-wrap gap-2 items-center">
+      {% for g in survey.question_groups.all %}
+      <label class="flex items-center gap-1 cursor-pointer text-sm">
+        <input type="radio" name="simulate_section" value="{{ g.id }}"
+               class="radio radio-xs"
+               {% if g.id|stringformat:"s" in request.GET.simulate_section %}checked{% endif %} />
+        {{ g.name }}
+      </label>
+      {% endfor %}
+      <button type="submit" class="btn btn-xs btn-primary ml-2">{% trans 'Apply' %}</button>
+      {% if request.GET.simulate_section %}
+      <a href="{{ request.path }}" class="btn btn-xs btn-ghost">{% trans 'Reset' %}</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endif %}
+
 {% if show_progress and not is_preview %}
 {# Progress bar - show at top of survey for participants #}
 <div class="card bg-base-200 shadow-sm mb-6">
@@ -838,7 +862,21 @@
     <script src="https://js.hcaptcha.com/1/api.js" async defer nonce="{{ request.csp_nonce }}"></script>
   {% endif %}
 
-  {% if is_preview %}
+  {% if is_matrix %}
+  {# Matrix layout: per-section navigation. The participant completes one
+     section at a time and returns to the landing page. "Complete section"
+     validates required questions and marks the section done. "Back to
+     overview" returns to the landing page without marking complete. #}
+  <input type="hidden" name="section_id" value="{{ matrix_section_id }}" />
+  <div class="flex flex-wrap gap-2 mt-4">
+    {% if is_preview %}
+    <button class="btn btn-primary" type="submit">{% trans "Complete Preview" %}</button>
+    {% else %}
+    <button class="btn btn-primary" type="submit" name="action" value="complete_section">{% trans "Save and complete section" %}</button>
+    <button class="btn btn-outline" type="button" onclick="window.location.href='/surveys/{{ survey.slug }}/take/'">{% trans "Back to overview" %}</button>
+    {% endif %}
+  </div>
+  {% elif is_preview %}
     <button class="btn btn-primary" type="submit">{% trans "Complete Preview" %}</button>
   {% else %}
     <button class="btn btn-primary" type="submit">{% trans "Submit" %}</button>
