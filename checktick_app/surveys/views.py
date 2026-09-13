@@ -1569,6 +1569,9 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "simulated_group_ids": simulated_group_ids or [],
         # RCT simulate arm panel (step 8).
         "rct_preview": rct_preview,
+        # Guided layout: preview also renders one question per screen so the
+        # author can test the flow without a real participant.
+        "is_guided": survey.layout == Survey.Layout.GUIDED,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
@@ -6029,6 +6032,11 @@ def _handle_participant_submission(
         # Section menu: the selected group IDs (for the 'Change sections' link).
         "selected_group_ids": selected_group_ids,
         "is_section_menu": survey.layout == Survey.Layout.SECTION_MENU,
+        # Guided layout: one question per screen (see docs/survey-layouts-
+        # technical.md §Guided layout). The rendering is a client-side layer
+        # on top of the existing pipeline — all questions still render in
+        # the DOM and guided.js shows one at a time.
+        "is_guided": survey.layout == Survey.Layout.GUIDED,
         # Progress tracking (None for public/unlisted surveys without
         # credential — see _get_or_create_progress)
         "show_progress": progress is not None,
