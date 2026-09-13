@@ -11303,6 +11303,58 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                     item.save(update_fields=["is_pickable", "estimated_minutes"])
             summary_parts.append(" Section menu layout applied.")
 
+        # Apply RANDOMISED config from the outline (step 6).
+        randomised_cfg = parsed.get("randomised")
+        if randomised_cfg:
+            survey.layout = Survey.Layout.RCT
+            survey.save(update_fields=["layout"])
+            menu, _created = RandomisedMenu.objects.get_or_create(survey=survey)
+            menu.allocation_strategy = randomised_cfg.get(
+                "allocation_strategy", RandomisedMenu.AllocationStrategy.BALANCED
+            )
+            if randomised_cfg.get("seed") is not None:
+                menu.seed = randomised_cfg["seed"]
+            else:
+                menu.seed = None
+            menu.save()
+            # Create arms by name (ordered by first appearance in the outline).
+            arm_order = randomised_cfg.get("arm_order", [])
+            arms_by_name: dict[str, RandomisedArm] = {}
+            for idx, arm_name in enumerate(arm_order, start=1):
+                arm, _ = RandomisedArm.objects.get_or_create(
+                    menu=menu,
+                    name=arm_name,
+                    defaults={"order": idx, "allocation_ratio": 1},
+                )
+                if arm.order != idx:
+                    arm.order = idx
+                    arm.save(update_fields=["order"])
+                arms_by_name[arm_name] = arm
+            # Drop arms that are no longer in the outline.
+            menu.arms.exclude(name__in=arm_order).delete()
+            # Assign groups to arms by name.
+            for g in parsed["groups"]:
+                grp = group_ref_map.get(g.get("ref"))
+                if grp is None:
+                    grp = next(
+                        (gg for gg in created_groups_in_order if gg.name == g["name"]),
+                        None,
+                    )
+                if grp is None:
+                    continue
+                arm_names_for_group = g.get("randomised_arms", [])
+                if arm_names_for_group:
+                    # Specific arms
+                    for an in arm_names_for_group:
+                        arm = arms_by_name.get(an)
+                        if arm is not None:
+                            arm.groups.add(grp)
+                else:
+                    # No ~ arm: suffix → reachable by all arms
+                    for arm in arms_by_name.values():
+                        arm.groups.add(grp)
+            summary_parts.append(" Randomised (RCT) layout applied.")
+
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)
     return render(request, "surveys/bulk_upload.html", context)
@@ -11368,6 +11420,24 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                 item.group_id: item for item in menu.items.all()
             }
 
+    # RANDOMISED block (see docs/survey-layouts-technical.md §Randomised
+    # (RCT) layout §Outline grammar). Emitted at the top when the survey
+    # uses the rct layout. The ``~ arm:<name>`` suffix is placed on the
+    # actual content group headings below.
+    randomised_arms_by_group: dict[int, list[str]] = {}
+    if survey.layout == Survey.Layout.RCT:
+        rmenu = getattr(survey, "randomised_menu", None)
+        if rmenu is not None:
+            lines.append("RANDOMISED")
+            lines.append(f"  strategy: {rmenu.allocation_strategy}")
+            if rmenu.seed is not None:
+                lines.append(f"  seed: {rmenu.seed}")
+            lines.append("")
+            # Build a lookup: group_id → list of arm names.
+            for arm in rmenu.arms.order_by("order", "id").prefetch_related("groups"):
+                for grp in arm.groups.all():
+                    randomised_arms_by_group.setdefault(grp.id, []).append(arm.name)
+
     for group in groups:
         # Check if this group is part of a collection
         parent_coll_item = (
@@ -11425,6 +11495,11 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             if sm_item.estimated_minutes:
                 suffix += f", {sm_item.estimated_minutes} min"
             heading = f"{heading}    {suffix}"
+        # Append ``~ arm:<name>`` suffixes for RCT layout
+        rct_arms = randomised_arms_by_group.get(group.id)
+        if rct_arms:
+            arm_suffix = ", ".join(f"arm:{name}" for name in rct_arms)
+            heading = f"{heading}    ~ {arm_suffix}"
         lines.append(heading)
         if group.description:
             lines.append(f"{indent}{group.description}")
