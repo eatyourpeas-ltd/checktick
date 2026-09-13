@@ -1,8 +1,33 @@
 # Organise page: signposting refactor (working note)
 
-Not a published doc — a guide for a small 1–2 commit follow-up PR that
-resolves the Organise page's mild identity problem without splitting it
-into separate routes.
+Not a published doc — a guide for a small follow-up PR that resolves the
+Organise page's mild identity problem.
+
+## Implementation status
+
+**Implemented (language + framing approach):** the sub-nav approach
+originally prescribed below was reconsidered and dropped. The page is not
+tall enough for most surveys (linear is the majority) to warrant jump
+links, and a sub-nav would add chrome without value. The real problem
+was language, not navigation. What shipped:
+
+- Renamed the per-section "Publish" button to "Share" (title: "Share to
+  Question Bank") — aligns with the destination page's "Share section as
+  template" heading and the established "Question Bank" concept, and
+  avoids clashing with publishing the survey itself
+  (`Survey.Status.PUBLISHED`).
+- Rewrote the intro to frame the page's purpose (survey-wide settings +
+  Question Bank) instead of listing operations.
+- Added a single "Sections" heading above the section list to mark the
+  boundary between the layout half and the section-operations half.
+- Fixed broken breadcrumbs on the section publish page
+  (`question_group_publish.html`): the "Sections" crumb linked to a
+  non-existent `/surveys/groups/` URL; now links to the survey-specific
+  Organise page. The `question_group.name` reference (context variable
+  didn't exist — view passes `group`) was fixed, and the final crumb now
+  says "Share" instead of "Publish".
+
+## Original analysis (preserved for context)
 
 ## The problem
 

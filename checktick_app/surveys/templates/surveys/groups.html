@@ -36,17 +36,11 @@
     </a>
   </div>
 
-  <p class="text-sm text-base-content/60 mb-2">
-    {% trans 'Bulk reorder, repeats, branching, and publishing. For adding and editing questions, use the' %}
+  <p class="text-sm text-base-content/60 mb-4">
+    {% trans 'This page handles survey-wide settings (layout, repeats) and sharing sections to the Question Bank. For adding and editing questions, use the' %}
     <a href="/surveys/{{ survey.slug }}/builder/" class="link underline font-semibold">{% trans 'Builder' %}</a>.
     {% trans 'Visualise the flow on the' %}
     <a href="/surveys/{{ survey.slug }}/survey-map/" class="link underline font-semibold">{% trans 'Survey Map' %}</a>.
-  </p>
-  <p class="text-xs text-base-content/50 mb-4">
-    {% include 'components/icons/repeat.html' with classes='w-3 h-3 inline-block opacity-60' %}
-    {% trans 'Select one section to repeat its questions individually.' %}
-    {% include 'components/icons/repeat_multi.html' with classes='w-3 h-3 inline-block opacity-60' %}
-    {% trans 'Select multiple sections to repeat them together as a block.' %}
   </p>
 
   {# === Survey layout picker (docs/survey-layouts.md) === #}
@@ -399,13 +393,28 @@
   </div>
   {% endif %}
 
-  <div class="mt-4">
-    <div class="space-y-3">
-      <ul id="groups-draggable" class="orderable-list w-full flex flex-col gap-3" aria-label="Reorder groups" data-reorder-url="/surveys/{{ survey.slug }}/groups/reorder" data-can-edit="{{ can_edit|yesno:'true,false' }}" data-survey-slug="{{ survey.slug }}">
+  {# === Sections: reorder, repeats, share to Question Bank === #}
+  <section id="sections" class="not-prose mt-2 mb-6" aria-labelledby="sections-heading">
+    <h2 id="sections-heading" class="text-sm font-semibold text-base-content/80 mb-1">
+      {% trans 'Sections' %}
+    </h2>
+    <p class="text-xs text-base-content/60 mb-3">
+      {% trans 'Multi-section operations: repeats and publishing to the Question Bank. For reordering single sections and branching, use the' %}
+      <a href="/surveys/{{ survey.slug }}/builder/" class="link underline">{% trans 'Builder' %}</a>.
+    </p>
+    <p class="text-xs text-base-content/50 mb-4">
+      {% include 'components/icons/repeat.html' with classes='w-3 h-3 inline-block opacity-60' %}
+      {% trans 'Select one section to repeat its questions individually.' %}
+      {% include 'components/icons/repeat_multi.html' with classes='w-3 h-3 inline-block opacity-60' %}
+      {% trans 'Select multiple sections to repeat them together as a block.' %}
+    </p>
+    <div class="mt-4">
+      <div class="space-y-3">
+        <ul id="groups-draggable" class="orderable-list w-full flex flex-col gap-3" aria-label="Reorder groups" data-reorder-url="/surveys/{{ survey.slug }}/groups/reorder" data-can-edit="{{ can_edit|yesno:'true,false' }}" data-survey-slug="{{ survey.slug }}">
         {% for g in groups %}
           {% with info=repeat_info|get_item:g.id %}
-            <li class="w-full" data-gid="{{ g.id }}" data-repeat="{{ info.is_repeated|default_if_none:False|yesno:'1,0' }}" title="{{ info.tooltip }}">
-              <div class="w-full bg-base-100 rounded-lg border border-base-300 p-3 selectable-group hover:border-primary cursor-pointer transition-colors {% if info.is_repeated %}ring-1 ring-primary/40 bg-primary/5{% endif %}">
+            <li class="w-full" data-gid="{{ g.id }}" data-repeat="{{ info.is_repeated|default_if_none:False|yesno:'1,0' }}" data-imported="{{ g.imported_from|yesno:'1,0' }}" title="{{ info.tooltip }}">
+              <div class="w-full bg-base-100 rounded-lg border border-base-300 p-3 selectable-group hover:border-primary cursor-pointer transition-colors {% if info.is_repeated %}ring-1 ring-info/40 bg-info/5{% endif %}">
                 <!-- Main row: controls + name -->
                 <div class="flex items-center gap-2 sm:gap-3">
                   {% if can_edit %}
@@ -464,19 +473,11 @@
                   {% endif %}
                 </div>
 
-                {# Rename and delete are now builder-only (the rail has both). The Organise page focuses on bulk reorder, repeats, and publishing. #}
+                {# Rename and delete are builder-only (the rail has both). Sharing to the Question Bank is done from the toolbar below by selecting a section. #}
                 {% if can_edit %}
                   <div class="-mx-1 overflow-x-auto mt-3">
                     <div class="px-1 min-w-max flex items-center gap-2">
-                      {% if not g.imported_from %}
-                        <a href="{% url 'surveys:question_group_publish' slug=survey.slug gid=g.id %}" class="btn btn-xs btn-outline" title="{% trans 'Publish as template' %}">
-                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                          </svg>
-                          <span class="hidden sm:inline">{% trans 'Publish' %}</span>
-                        </a>
-                      {% endif %}
-                      <span class="text-xs text-base-content/50 ml-auto">{% trans 'Rename & delete in the' %} <a href="/surveys/{{ survey.slug }}/builder/" class="link underline">{% trans 'Builder' %}</a></span>
+                      <span class="text-xs text-base-content/50">{% trans 'Rename & delete in the' %} <a href="/surveys/{{ survey.slug }}/builder/" class="link underline">{% trans 'Builder' %}</a></span>
                     </div>
                   </div>
                 {% endif %}
@@ -489,6 +490,12 @@
       </ul>
       <div class="flex flex-wrap gap-2 items-center sticky top-0 z-40 bg-base-200/95 backdrop-blur supports-[backdrop-filter]:bg-base-200/70 py-2">
         {% if can_edit %}
+          <button id="publish-to-bank-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2" type="button" disabled data-survey-slug="{{ survey.slug }}">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <span>{% trans 'Publish to Question Bank' %}</span>
+          </button>
           <button id="create-repeat-btn" class="btn btn-secondary btn-sm inline-flex items-center gap-2" type="button" disabled>
             <span class="repeat-icon-single">{% include 'components/icons/repeat.html' with classes='w-4 h-4' %}</span>
             <span class="repeat-icon-multi hidden">{% include 'components/icons/repeat_multi.html' with classes='w-4 h-4' %}</span>
@@ -529,8 +536,9 @@
           </form>
         </div>
       {% endif %}
+      </div>
     </div>
-  </div>
+  </section>
 
   {% comment %}
   The Survey Map visualiser now lives on its own route (/survey-map/);
