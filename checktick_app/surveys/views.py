@@ -1474,6 +1474,29 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
             sim_ids = {int(x) for x in sim_raw.split(",") if str(x).isdigit()}
             simulated_group_ids = list((sim_ids | mandatory_ids))
 
+    # RCT: simulate arm (step 8). If ``?simulate_arm=<arm_id>`` is present,
+    # the questions are filtered to that arm's groups (ordered by
+    # _resolved_group_order_ids). A "Simulate arm" panel on the preview
+    # page lets the author pick an arm without a real participant.
+    rct_preview = None
+    if survey.layout == Survey.Layout.RCT:
+        rmenu = getattr(survey, "randomised_menu", None)
+        if rmenu is None:
+            rmenu = RandomisedMenu.objects.create(survey=survey)
+        rct_arms = list(rmenu.arms.order_by("order", "id").prefetch_related("groups"))
+        rct_preview = {"menu": rmenu, "arms": rct_arms}
+        sim_arm_raw = request.GET.get("simulate_arm", "")
+        if sim_arm_raw.isdigit():
+            sim_arm_id = int(sim_arm_raw)
+            sim_arm = next((a for a in rct_arms if a.id == sim_arm_id), None)
+            if sim_arm is not None:
+                arm_group_ids = set(sim_arm.groups.values_list("id", flat=True))
+                if arm_group_ids:
+                    ordered = _resolved_group_order_ids(survey)
+                    simulated_group_ids = [g for g in ordered if g in arm_group_ids]
+                else:
+                    simulated_group_ids = []
+
     _prepare_question_rendering(survey)
     all_questions = list(
         survey.questions.select_related("group", "dataset")
@@ -1544,6 +1567,8 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         # Section menu simulate selection panel (step 9).
         "section_menu_preview": section_menu_preview,
         "simulated_group_ids": simulated_group_ids or [],
+        # RCT simulate arm panel (step 8).
+        "rct_preview": rct_preview,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
@@ -6671,6 +6696,100 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
     arm_group_ids: dict[int, set[int]] = {
         arm.id: set(arm.groups.values_list("id", flat=True)) for arm in randomised_arms
     }
+    # RCT warnings (step 7). Non-blocking — surfaced on the Organise page
+    # configuration card so the author can fix the configuration before
+    # publishing.
+    randomised_warnings: list[str] = []
+    if survey.layout == Survey.Layout.RCT and randomised_menu is not None:
+        arms = randomised_arms
+        all_group_ids = {g.id for g in groups}
+        if len(arms) == 1:
+            randomised_warnings.append(
+                _(
+                    "Only one arm is configured. A randomised trial with a "
+                    "single arm is degenerate — add a second arm."
+                )
+            )
+        # Allocation ratio sum zero.
+        if arms and all(a.allocation_ratio == 0 for a in arms):
+            randomised_warnings.append(
+                _(
+                    "Every arm has allocation ratio 0. Set at least one arm's "
+                    "ratio to 1 or higher."
+                )
+            )
+        # Unreachable sections: groups not in any arm.
+        if arms:
+            reachable = set()
+            for a in arms:
+                reachable.update(a.groups.values_list("id", flat=True))
+            unreachable = all_group_ids - reachable
+            if unreachable:
+                unreachable_names = sorted(
+                    g.name for g in groups if g.id in unreachable
+                )
+                for name in unreachable_names:
+                    randomised_warnings.append(
+                        _(
+                            "Section '%(section)s' is not in any arm — no "
+                            "participant will see it."
+                        )
+                        % {"section": name}
+                    )
+        # All arms share the same group set → structurally identical to linear.
+        if len(arms) >= 2:
+            group_sets = [set(a.groups.values_list("id", flat=True)) for a in arms]
+            if all(gs == group_sets[0] for gs in group_sets):
+                randomised_warnings.append(
+                    _(
+                        "All arms share the same sections — this RCT is "
+                        "structurally identical to a linear survey."
+                    )
+                )
+        # Branching targets an arm-exclusive section (dead branch).
+        if arms:
+            # Build a map group_id → arms that contain it.
+            group_to_arms: dict[int, set[int]] = {}
+            for a in arms:
+                for gid in a.groups.values_list("id", flat=True):
+                    group_to_arms.setdefault(gid, set()).add(a.id)
+            arm_exclusive_group_ids = {
+                gid for gid, arms_with in group_to_arms.items() if len(arms_with) == 1
+            }
+            if arm_exclusive_group_ids:
+                dead_branches = (
+                    SurveyQuestionCondition.objects.filter(
+                        action=SurveyQuestionCondition.Action.JUMP_TO,
+                    )
+                    .filter(
+                        Q(target_group_id__in=arm_exclusive_group_ids)
+                        | Q(target_question__group_id__in=arm_exclusive_group_ids)
+                    )
+                    .select_related(
+                        "target_group", "question", "target_question__group"
+                    )
+                )
+                for cond in dead_branches:
+                    target_name = (
+                        cond.target_group.name
+                        if cond.target_group
+                        else (
+                            cond.target_question.group.name
+                            if cond.target_question and cond.target_question.group
+                            else "unknown"
+                        )
+                    )
+                    randomised_warnings.append(
+                        _(
+                            "Branching condition on '%(question)s' targets "
+                            "the arm-exclusive section '%(section)s' — it will "
+                            "be a dead branch for participants in other arms."
+                        )
+                        % {
+                            "question": cond.question.text[:50],
+                            "section": target_name,
+                        }
+                    )
 
     ctx = {
         "survey": survey,
@@ -6693,6 +6812,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "randomised_arms": randomised_arms,
         "randomised_strategy_choices": randomised_strategy_choices,
         "arm_group_ids": arm_group_ids,
+        "randomised_warnings": randomised_warnings,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
@@ -8992,10 +9112,23 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
             "items": list(menu.items.select_related("group").order_by("order", "id")),
         }
 
+    # RCT info for arm badges (step 9). Lists each arm and its sections so
+    # the Survey Map can show which sections are arm-exclusive.
+    rct_info = None
+    if survey.layout == Survey.Layout.RCT:
+        rmenu = getattr(survey, "randomised_menu", None)
+        if rmenu is None:
+            rmenu = RandomisedMenu.objects.create(survey=survey)
+        rct_info = {
+            "menu": rmenu,
+            "arms": list(rmenu.arms.order_by("order", "id").prefetch_related("groups")),
+        }
+
     ctx = {
         "survey": survey,
         "has_questions": survey.questions.exists(),
         "section_menu_info": section_menu_info,
+        "rct_info": rct_info,
     }
     return render(request, "surveys/survey_map.html", ctx)
 
