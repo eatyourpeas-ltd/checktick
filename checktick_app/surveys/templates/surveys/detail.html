@@ -324,6 +324,30 @@
 </div>
 {% endif %}
 
+{% if is_preview and matrix_preview %}
+{# Simulate section panel (step 6) #}
+<div class="card bg-info/10 border border-info/30 mb-6">
+  <div class="card-body p-4">
+    <h3 class="text-sm font-semibold text-base-content/80 mb-2">{% trans 'Simulate section' %}</h3>
+    <p class="text-xs text-base-content/60 mb-3">{% trans 'Pick a section to preview what a participant would see when they open that card.' %}</p>
+    <form method="get" action="" class="flex flex-wrap gap-2 items-center">
+      {% for g in survey.question_groups.all %}
+      <label class="flex items-center gap-1 cursor-pointer text-sm">
+        <input type="radio" name="simulate_section" value="{{ g.id }}"
+               class="radio radio-xs"
+               {% if g.id|stringformat:"s" in request.GET.simulate_section %}checked{% endif %} />
+        {{ g.name }}
+      </label>
+      {% endfor %}
+      <button type="submit" class="btn btn-xs btn-primary ml-2">{% trans 'Apply' %}</button>
+      {% if request.GET.simulate_section %}
+      <a href="{{ request.path }}" class="btn btn-xs btn-ghost">{% trans 'Reset' %}</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endif %}
+
 {% if show_progress and not is_preview %}
 {# Progress bar - show at top of survey for participants #}
 <div class="card bg-base-200 shadow-sm mb-6">

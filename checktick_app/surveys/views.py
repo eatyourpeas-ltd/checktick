@@ -1534,6 +1534,22 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
                 else:
                     simulated_group_ids = []
 
+    # Matrix: simulate section (step 6). If ``?simulate_section=<gid>`` is
+    # present, the questions are filtered to that one section so the author
+    # can preview what a participant would see when they open that card.
+    matrix_preview = None
+    if survey.layout == Survey.Layout.MATRIX:
+        mmenu = getattr(survey, "matrix_menu", None)
+        if mmenu is None:
+            mmenu = MatrixMenu.objects.create(survey=survey)
+        matrix_preview = {"menu": mmenu}
+        sim_section_raw = request.GET.get("simulate_section", "")
+        if sim_section_raw.isdigit():
+            sim_section_id = int(sim_section_raw)
+            survey_group_ids = set(survey.question_groups.values_list("id", flat=True))
+            if sim_section_id in survey_group_ids:
+                simulated_group_ids = [sim_section_id]
+
     _prepare_question_rendering(survey)
     all_questions = list(
         survey.questions.select_related("group", "dataset")
@@ -1608,6 +1624,8 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "rct_preview": rct_preview,
         # Staged simulate phase panel (step 6).
         "staged_preview": staged_preview,
+        # Matrix simulate section panel (step 6).
+        "matrix_preview": matrix_preview,
         # Guided layout: preview also renders one question per screen so the
         # author can test the flow without a real participant.
         "is_guided": survey.layout == Survey.Layout.GUIDED,
@@ -9910,12 +9928,22 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
             ),
         }
 
+    # Matrix info for the Survey Map. Shows the landing-page prompt and
+    # order mode so the author can see the matrix configuration at a glance.
+    matrix_info = None
+    if survey.layout == Survey.Layout.MATRIX:
+        mmenu = getattr(survey, "matrix_menu", None)
+        if mmenu is None:
+            mmenu = MatrixMenu.objects.create(survey=survey)
+        matrix_info = {"menu": mmenu}
+
     ctx = {
         "survey": survey,
         "has_questions": survey.questions.exists(),
         "section_menu_info": section_menu_info,
         "rct_info": rct_info,
         "staged_info": staged_info,
+        "matrix_info": matrix_info,
     }
     return render(request, "surveys/survey_map.html", ctx)
 
