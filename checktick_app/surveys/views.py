@@ -1500,6 +1500,32 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
                 else:
                     simulated_group_ids = []
 
+    # Staged: simulate phase (step 6). If ``?simulate_phase=<phase_id>`` is
+    # present, the questions are filtered to that phase's groups (ordered
+    # by _resolved_group_order_ids) regardless of whether the phase is
+    # currently open. A "Simulate phase" panel on the preview page lets the
+    # author preview a future phase without waiting for its window.
+    staged_preview = None
+    if survey.layout == Survey.Layout.STAGED:
+        smenu = getattr(survey, "staged_menu", None)
+        if smenu is None:
+            smenu = StagedMenu.objects.create(survey=survey)
+        staged_phases = list(
+            smenu.phases.order_by("order", "id").prefetch_related("groups")
+        )
+        staged_preview = {"menu": smenu, "phases": staged_phases}
+        sim_phase_raw = request.GET.get("simulate_phase", "")
+        if sim_phase_raw.isdigit():
+            sim_phase_id = int(sim_phase_raw)
+            sim_phase = next((p for p in staged_phases if p.id == sim_phase_id), None)
+            if sim_phase is not None:
+                phase_group_ids = set(sim_phase.groups.values_list("id", flat=True))
+                if phase_group_ids:
+                    ordered = _resolved_group_order_ids(survey)
+                    simulated_group_ids = [g for g in ordered if g in phase_group_ids]
+                else:
+                    simulated_group_ids = []
+
     _prepare_question_rendering(survey)
     all_questions = list(
         survey.questions.select_related("group", "dataset")
@@ -1572,6 +1598,8 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "simulated_group_ids": simulated_group_ids or [],
         # RCT simulate arm panel (step 8).
         "rct_preview": rct_preview,
+        # Staged simulate phase panel (step 6).
+        "staged_preview": staged_preview,
         # Guided layout: preview also renders one question per screen so the
         # author can test the flow without a real participant.
         "is_guided": survey.layout == Survey.Layout.GUIDED,
@@ -9457,11 +9485,27 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
             "arms": list(rmenu.arms.order_by("order", "id").prefetch_related("groups")),
         }
 
+    # Staged info for phase badges (step 6). Lists each phase, its window,
+    # and its sections so the Survey Map can show which sections belong to
+    # which phase.
+    staged_info = None
+    if survey.layout == Survey.Layout.STAGED:
+        smenu = getattr(survey, "staged_menu", None)
+        if smenu is None:
+            smenu = StagedMenu.objects.create(survey=survey)
+        staged_info = {
+            "menu": smenu,
+            "phases": list(
+                smenu.phases.order_by("order", "id").prefetch_related("groups")
+            ),
+        }
+
     ctx = {
         "survey": survey,
         "has_questions": survey.questions.exists(),
         "section_menu_info": section_menu_info,
         "rct_info": rct_info,
+        "staged_info": staged_info,
     }
     return render(request, "surveys/survey_map.html", ctx)
 

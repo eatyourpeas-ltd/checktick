@@ -300,6 +300,30 @@
 </div>
 {% endif %}
 
+{% if is_preview and staged_preview %}
+{# Simulate phase panel (step 6) #}
+<div class="card bg-info/10 border border-info/30 mb-6">
+  <div class="card-body p-4">
+    <h3 class="text-sm font-semibold text-base-content/80 mb-2">{% trans 'Simulate phase' %}</h3>
+    <p class="text-xs text-base-content/60 mb-3">{% trans 'Pick a phase to preview what a participant would see when that phase is open. This previews the phase regardless of whether it is currently open.' %}</p>
+    <form method="get" action="" class="flex flex-wrap gap-2 items-center">
+      {% for phase in staged_preview.phases %}
+      <label class="flex items-center gap-1 cursor-pointer text-sm">
+        <input type="radio" name="simulate_phase" value="{{ phase.id }}"
+               class="radio radio-xs"
+               {% if phase.id|stringformat:"s" in request.GET.simulate_phase %}checked{% endif %} />
+        {{ phase.name }}
+      </label>
+      {% endfor %}
+      <button type="submit" class="btn btn-xs btn-primary ml-2">{% trans 'Apply' %}</button>
+      {% if request.GET.simulate_phase %}
+      <a href="{{ request.path }}" class="btn btn-xs btn-ghost">{% trans 'Reset' %}</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endif %}
+
 {% if show_progress and not is_preview %}
 {# Progress bar - show at top of survey for participants #}
 <div class="card bg-base-200 shadow-sm mb-6">
