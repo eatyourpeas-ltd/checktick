@@ -185,19 +185,80 @@ implemented.
 
 ### Randomised (RCT)
 
-For clinical trials and research, the system randomly assigns section
-order or randomly assigns participants to different section subsets
-(e.g., intervention vs control questionnaire). Unlike the Section menu
-layout where the participant chooses, the system chooses based on a
-random seed stored on the participant's progress record at first access.
+For clinical trials and research, the system randomly assigns each
+participant to an **arm** (e.g. intervention vs control). Each arm has its
+own set of sections, and the participant only sees the sections in their
+assigned arm. Unlike the Section menu layout where the participant
+chooses, the system chooses based on a random seed stored on the
+participant's progress record at first access.
 
 **When to use:** clinical trials, A/B testing of question wording,
 randomised controlled trials where arm assignment must be
 system-controlled and not participant-chosen.
 
 **Why it matters:** randomisation is a common reason researchers reach
-for Qualtrics or REDCap instead of simpler tools. This layout would
-unblock that use case natively in CheckTick.
+for Qualtrics or REDCap instead of simpler tools. This layout unblocks
+that use case natively in CheckTick.
+
+#### Configuring an RCT
+
+On the Organise page, choose the **Randomised (RCT)** layout card. A
+configuration card appears where you:
+
+- **Add arms** — name each arm (e.g. "Intervention", "Control").
+- **Set allocation ratio** per arm (e.g. 1:1, 2:1). The system balances
+  assignment across arms per the ratios.
+- **Choose allocation strategy** — *Balanced (blocked)* (default; keeps
+  arm counts close to the ratios) or *Simple (weighted)* (independent
+  random draw per participant).
+- **Assign sections to arms** — tick which sections each arm sees. A
+  section can be in multiple arms (e.g. a demographics section shared
+  by all arms).
+- **Optional seed** — set a fixed seed for reproducible dry-runs. Leave
+  blank for real trials so allocation is unpredictable.
+
+#### Participant experience
+
+The participant never sees the picker or their arm. They open the survey
+and see the sections in their assigned arm, in the authored order. On
+resume, they return to the same sections. There is no "Change sections"
+link — the assignment is fixed for the lifetime of their progress record.
+
+#### Preview
+
+The preview page includes a **Simulate arm** panel that lets you pick
+an arm from a dropdown and see exactly what a participant in that arm
+would see. Useful for verifying arm composition before going live.
+
+#### Outline syntax
+
+You can configure RCT directly in the bulk upload / text editor:
+
+```text
+RANDOMISED
+  strategy: balanced
+  seed: 7
+
+# Demographics {demographics}    ~ arm:intervention, arm:control
+## Name {name}
+(text)
+
+# Intervention {intervention}    ~ arm:intervention
+## Dose {dose}
+(text)
+
+# Control {control}    ~ arm:control
+## Placebo {placebo}
+(text)
+```
+
+- `strategy` is `balanced` or `simple`.
+- `seed` is optional (an integer; omit for system-generated).
+- `~ arm:<name>` marks a section as belonging to an arm. Repeat for
+  multi-arm sections. Sections without `~ arm:` are reachable by all
+  arms (the union of all arm group sets).
+
+The layout config survives export → import round-trips.
 
 ### Guided (one question at a time)
 
