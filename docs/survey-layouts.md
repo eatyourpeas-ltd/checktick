@@ -378,12 +378,7 @@ The Staged layout can be configured directly in the [Outline / bulk
 upload](import.md#staged-longitudinal-layout) text editor using a `STAGED`
 block. The layout config survives export → import round-trips.
 
-## Planned layouts
-
-The following layouts are planned for future releases. They are not yet
-implemented.
-
-### Matrix (free navigation)
+## Matrix (free navigation)
 
 All sections visible as cards on a landing page. The participant jumps
 in and out of any section in any order, with completion indicators
@@ -398,6 +393,54 @@ where the participant needs to revisit and revise earlier sections.
 **Why it matters:** some clinical workflows don't fit a linear or
 pick-once model. Matrix gives the participant agency over navigation
 order throughout the survey, not just at the start.
+
+### How it works
+
+1. The participant lands on a **cards page** showing every section with
+   a state badge: *Not started*, *In progress*, or *Complete*.
+2. They click a card to open that section. Only that section's questions
+   are shown.
+3. They fill in the answers and click **Save and complete section**.
+   Required questions are validated before the section is marked
+   complete.
+4. They return to the landing page. The card now shows *Complete*.
+5. They can revisit a completed section to edit answers — editing
+   un-marks it as complete so the landing page shows *In progress*
+   again.
+6. When all sections are complete, the **Submit survey** button is
+   enabled. Final submission re-validates all required questions across
+   all sections (a hard gate — the completion indicators are a soft
+   UX aid, not a guarantee).
+
+### Configuration
+
+On the [Organise](groups-view.md) page, the Matrix configuration card
+lets you set:
+
+- **Landing page prompt** — the text shown above the section cards.
+- **Card order** — *As authored* (Organise page order) or *In visit
+  order* (most-recently-visited last).
+- **Allow participants to revisit and edit completed sections** — when
+  unchecked, completed sections are locked.
+
+### Outline syntax
+
+The Matrix layout can be configured directly in the [Outline / bulk
+upload](import.md#matrix-free-navigation-layout) text editor using a
+`MATRIX` block. The grammar is optional (the Organise page UI is the
+primary config path) but useful for the AI builder and power users.
+
+## Planned layouts
+
+The following layouts are planned for future releases. They are not yet
+implemented.
+
+### Delphi (consensus rounds)
+
+Multi-round structured consensus workflow. Participants complete rounds,
+see aggregate feedback between rounds, and revise their answers. Builds
+on the ingredients proven by the earlier layouts (RCT arms, Staged
+phases, Matrix completion tracking).
 
 ## Related documentation
 
