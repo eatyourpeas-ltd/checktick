@@ -124,6 +124,28 @@
           {% endif %}
         </div>
       </div>
+
+      {# Guided card (one question at a time) #}
+      <div class="card bg-base-100 border {% if survey.layout == 'guided' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+        <div class="card-body gap-2 p-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-semibold text-base-content">{% trans 'Guided' %}</h4>
+            {% if survey.layout == 'guided' %}
+              <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% endif %}
+          </div>
+          {% include "components/icons/layout_guided.html" with classes="w-full h-24 text-base-content/70" %}
+          <p class="text-xs text-base-content/70">{% trans 'One question per screen with Next/Back. Reduces scroll fatigue on long or mobile-first surveys.' %}</p>
+          {% if can_edit and survey.layout != 'guided' %}
+            <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_layout" />
+              <input type="hidden" name="layout" value="guided" />
+              <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </section>
 
