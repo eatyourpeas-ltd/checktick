@@ -75,6 +75,8 @@ from .models import (
     RecoveryRequest,
     SectionMenu,
     SectionMenuItem,
+    StagedMenu,
+    StagedPhase,
     Survey,
     SurveyAccessToken,
     SurveyMembership,
@@ -100,6 +102,7 @@ from .permissions import (
     require_can_view,
 )
 from .services.address_lookup import ADDRESS_FIELD_KEYS, AddressLookupService
+from .staged import open_group_ids as _staged_open_group_ids
 from .utils import parse_datetime_aware, verify_key
 
 logger = logging.getLogger(__name__)
@@ -1497,6 +1500,32 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
                 else:
                     simulated_group_ids = []
 
+    # Staged: simulate phase (step 6). If ``?simulate_phase=<phase_id>`` is
+    # present, the questions are filtered to that phase's groups (ordered
+    # by _resolved_group_order_ids) regardless of whether the phase is
+    # currently open. A "Simulate phase" panel on the preview page lets the
+    # author preview a future phase without waiting for its window.
+    staged_preview = None
+    if survey.layout == Survey.Layout.STAGED:
+        smenu = getattr(survey, "staged_menu", None)
+        if smenu is None:
+            smenu = StagedMenu.objects.create(survey=survey)
+        staged_phases = list(
+            smenu.phases.order_by("order", "id").prefetch_related("groups")
+        )
+        staged_preview = {"menu": smenu, "phases": staged_phases}
+        sim_phase_raw = request.GET.get("simulate_phase", "")
+        if sim_phase_raw.isdigit():
+            sim_phase_id = int(sim_phase_raw)
+            sim_phase = next((p for p in staged_phases if p.id == sim_phase_id), None)
+            if sim_phase is not None:
+                phase_group_ids = set(sim_phase.groups.values_list("id", flat=True))
+                if phase_group_ids:
+                    ordered = _resolved_group_order_ids(survey)
+                    simulated_group_ids = [g for g in ordered if g in phase_group_ids]
+                else:
+                    simulated_group_ids = []
+
     _prepare_question_rendering(survey)
     all_questions = list(
         survey.questions.select_related("group", "dataset")
@@ -1569,6 +1598,8 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "simulated_group_ids": simulated_group_ids or [],
         # RCT simulate arm panel (step 8).
         "rct_preview": rct_preview,
+        # Staged simulate phase panel (step 6).
+        "staged_preview": staged_preview,
         # Guided layout: preview also renders one question per screen so the
         # author can test the flow without a real participant.
         "is_guided": survey.layout == Survey.Layout.GUIDED,
@@ -5966,13 +5997,59 @@ def _handle_participant_submission(
         raw = progress.selected_group_ids or []
         if isinstance(raw, list):
             selected_group_ids = [int(x) for x in raw if str(x).isdigit()]
+    # Staged (longitudinal) layout (see docs/survey-layouts-technical.md
+    # §Staged (longitudinal) layout). Unlike rct (fixed arm assignment)
+    # and section_menu (participant picks once), staged recomputes the
+    # currently-open phases on every access and resolves
+    # selected_group_ids from their union. The open set changes over time,
+    # so we never read a stored value — we recompute and overwrite each
+    # visit. Reuses the same _resolved_group_order_ids filtering hook as
+    # the other layouts; StagedPhase is the precedent for a future
+    # DelphiRound.
+    if survey.layout == Survey.Layout.STAGED and progress is not None:
+        menu = getattr(survey, "staged_menu", None)
+        open_ids: set[int] = set()
+        if menu is not None:
+            open_ids = set(
+                _staged_open_group_ids(
+                    menu,
+                    enrolment=progress.created_at,
+                    survey_start=survey.start_at,
+                    now=timezone.now(),
+                )
+            )
+        ordered_ids = _resolved_group_order_ids(survey)
+        selected_group_ids = [g for g in ordered_ids if g in open_ids]
+        progress.selected_group_ids = selected_group_ids
+        progress.save(update_fields=["selected_group_ids"])
+        if not selected_group_ids:
+            # No phase is currently open (or no StagedMenu / no phases
+            # configured yet). Render a friendly "check back later" page
+            # instead of an empty form. The participant's progress row is
+            # preserved so resume works when a phase opens later. We never
+            # leak future-phase sections to a participant.
+            return render(
+                request,
+                "surveys/staged_no_phases.html",
+                {"survey": survey, "is_preview": False},
+            )
     show_picker = survey.layout == Survey.Layout.SECTION_MENU and not selected_group_ids
     if show_picker:
         return _render_section_menu_picker(request, survey, progress)
 
     _prepare_question_rendering(survey)
     all_questions = list(survey.questions.select_related("group", "dataset").all())
-    qs = _order_questions_by_group(survey, all_questions, selected_group_ids or None)
+    # Staged: an empty open set means "no sections available right now",
+    # not "show everything". Pass the (possibly empty) list explicitly so
+    # _order_questions_by_group filters to nothing rather than falling
+    # back to all sections. Other layouts use the ``or None`` form so an
+    # empty selection renders everything (linear) or is gated by the
+    # picker (section_menu) / arm fallback (rct).
+    if survey.layout == Survey.Layout.STAGED:
+        filter_ids: list[int] | None = selected_group_ids
+    else:
+        filter_ids = selected_group_ids or None
+    qs = _order_questions_by_group(survey, all_questions, filter_ids)
     _inject_dataset_options(qs)
     _annotate_question_render_sequence(survey, qs)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
@@ -6396,6 +6473,18 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                         "useful. Add more sections first."
                     ),
                 )
+        # Same guard for staged — a longitudinal survey with < 2 sections
+        # has nothing to phase.
+        if chosen == Survey.Layout.STAGED:
+            section_count = survey.question_groups.count()
+            if section_count < 2:
+                messages.warning(
+                    request,
+                    _(
+                        "Staged surveys need at least 2 sections to be "
+                        "useful. Add more sections first."
+                    ),
+                )
         survey.layout = chosen
         survey.save(update_fields=["layout"])
         messages.success(
@@ -6584,6 +6673,106 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             if menu is not None:
                 menu.arms.filter(id=int(arm_id_raw)).delete()
                 messages.success(request, _("Arm removed."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Staged configuration save (step 4). Only meaningful when the survey
+    # is in staged layout. Saves the anchor and per-phase name /
+    # start_offset_days / end_offset_days / group membership.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_staged_menu"
+        and survey.layout == Survey.Layout.STAGED
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = StagedMenu.objects.get_or_create(survey=survey)
+        anchor = request.POST.get("anchor", StagedMenu.Anchor.ENROLMENT)
+        if anchor in {choice[0] for choice in StagedMenu.Anchor.choices}:
+            menu.anchor = anchor
+        menu.save()
+        # Per-phase: name, start, end, groups. phase_ids is the list of
+        # existing phase IDs submitted from the form.
+        phase_ids = [
+            int(x) for x in request.POST.getlist("phase_ids") if str(x).isdigit()
+        ]
+        for phase_id in phase_ids:
+            try:
+                phase = menu.phases.get(id=phase_id)
+            except StagedPhase.DoesNotExist:
+                continue
+            phase.name = (
+                request.POST.get(f"phase_name_{phase_id}", phase.name) or phase.name
+            )[:100]
+            try:
+                phase.start_offset_days = max(
+                    0, int(request.POST.get(f"phase_start_{phase_id}", 0))
+                )
+            except ValueError:
+                phase.start_offset_days = 0
+            end_raw = (request.POST.get(f"phase_end_{phase_id}", "") or "").strip()
+            if end_raw:
+                try:
+                    phase.end_offset_days = max(1, int(end_raw))
+                except ValueError:
+                    phase.end_offset_days = None
+            else:
+                phase.end_offset_days = None
+            phase.save(
+                update_fields=[
+                    "name",
+                    "start_offset_days",
+                    "end_offset_days",
+                ]
+            )
+            group_ids = [
+                int(x)
+                for x in request.POST.getlist(f"phase_groups_{phase_id}")
+                if str(x).isdigit()
+            ]
+            phase.groups.set(group_ids)
+        messages.success(request, _("Staged configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Add phase (step 4). Creates a new empty phase at the end of the order.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "add_phase"
+        and survey.layout == Survey.Layout.STAGED
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = StagedMenu.objects.get_or_create(survey=survey)
+        next_order = (menu.phases.aggregate(m=models.Max("order"))["m"] or 0) + 1
+        StagedPhase.objects.create(
+            menu=menu, name=f"Phase {next_order}", order=next_order
+        )
+        messages.success(request, _("Phase added."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Remove phase (step 4). Deletes the phase. Participants keep their
+    # stored selected_group_ids (recomputed on next access anyway).
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "remove_phase"
+        and survey.layout == Survey.Layout.STAGED
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        phase_id_raw = request.POST.get("phase_id", "")
+        if phase_id_raw.isdigit():
+            menu = getattr(survey, "staged_menu", None)
+            if menu is not None:
+                menu.phases.filter(id=int(phase_id_raw)).delete()
+                messages.success(request, _("Phase removed."))
         return redirect("surveys:groups", slug=slug)
 
     groups_qs = survey.question_groups.annotate(
@@ -6799,6 +6988,164 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                         }
                     )
 
+    # Staged configuration (only for staged layout). Ensure the menu exists
+    # so a freshly-switched survey is configurable.
+    staged_menu = None
+    staged_phases: list[StagedPhase] = []
+    staged_anchor_choices = StagedMenu.Anchor.choices
+    if survey.layout == Survey.Layout.STAGED:
+        staged_menu, _created = StagedMenu.objects.get_or_create(survey=survey)
+        staged_phases = list(
+            staged_menu.phases.order_by("order", "id").prefetch_related("groups")
+        )
+    # Precompute phase → set of group IDs for the template's checkbox
+    # membership check (Django templates can't call values_list directly).
+    staged_phase_group_ids: dict[int, set[int]] = {
+        phase.id: set(phase.groups.values_list("id", flat=True))
+        for phase in staged_phases
+    }
+    # Staged warnings (step 5). Non-blocking — surfaced on the Organise
+    # page configuration card so the author can fix the configuration
+    # before publishing.
+    staged_warnings: list[str] = []
+    if survey.layout == Survey.Layout.STAGED and staged_menu is not None:
+        phases = staged_phases
+        all_group_ids = {g.id for g in groups}
+        # No phases configured.
+        if not phases:
+            staged_warnings.append(
+                _(
+                    "No phases are configured. Add at least one phase and "
+                    "assign sections to it."
+                )
+            )
+        # Single phase — a longitudinal survey with one phase is
+        # degenerate (structurally identical to linear).
+        if len(phases) == 1:
+            staged_warnings.append(
+                _(
+                    "Only one phase is configured. A staged survey with a "
+                    "single phase is structurally identical to a linear "
+                    "survey — add a second phase."
+                )
+            )
+        # survey_open anchor with no Survey.start_at: anchor is None, so
+        # nothing ever opens.
+        if (
+            staged_menu.anchor == StagedMenu.Anchor.SURVEY_OPEN
+            and survey.start_at is None
+        ):
+            staged_warnings.append(
+                _(
+                    "Phase windows are measured from the survey open date, "
+                    "but this survey has no start date. Set a start date or "
+                    "switch the anchor to 'From participant enrolment'."
+                )
+            )
+        # Unreachable sections: groups not in any phase.
+        if phases:
+            reachable: set[int] = set()
+            for p in phases:
+                reachable.update(p.groups.values_list("id", flat=True))
+            unreachable = all_group_ids - reachable
+            if unreachable:
+                unreachable_names = sorted(
+                    g.name for g in groups if g.id in unreachable
+                )
+                for name in unreachable_names:
+                    staged_warnings.append(
+                        _(
+                            "Section '%(section)s' is not in any phase — no "
+                            "participant will see it."
+                        )
+                        % {"section": name}
+                    )
+        # Overlapping phase windows for the same group: a group in two
+        # phases whose windows overlap is ambiguous (the runtime unions
+        # them, so it stays open across both — usually fine, but worth
+        # flagging so the author knows the windows overlap).
+        if len(phases) >= 2:
+            # Build group → list of (phase, start, end) for overlap checks.
+            group_phases: dict[int, list[tuple[StagedPhase, int, int | None]]] = {}
+            for p in phases:
+                for gid in p.groups.values_list("id", flat=True):
+                    group_phases.setdefault(gid, []).append(
+                        (p, p.start_offset_days, p.end_offset_days)
+                    )
+            for gid, entries in group_phases.items():
+                if len(entries) < 2:
+                    continue
+                # Check pairwise overlap of [start, end) windows. end=None
+                # is treated as infinity.
+                for i in range(len(entries)):
+                    for j in range(i + 1, len(entries)):
+                        _pa, s1, e1 = entries[i]
+                        _pb, s2, e2 = entries[j]
+                        # Overlap unless one ends before the other starts.
+                        e1_eff = e1 if e1 is not None else float("inf")
+                        e2_eff = e2 if e2 is not None else float("inf")
+                        if s1 < e2_eff and s2 < e1_eff:
+                            group_name = next(
+                                (g.name for g in groups if g.id == gid),
+                                "unknown",
+                            )
+                            staged_warnings.append(
+                                _(
+                                    "Section '%(section)s' is in two phases "
+                                    "whose windows overlap — it will stay "
+                                    "open across both. Merge the phases or "
+                                    "adjust the windows if this is "
+                                    "unintended."
+                                )
+                                % {"section": group_name}
+                            )
+                            break
+                    else:
+                        continue
+                    break
+        # Branching targets a section that is only in a phase that isn't
+        # currently open (a dead branch at this moment). We flag jumps into
+        # any phased section — the runtime will skip them when the phase
+        # is closed. Non-blocking; links to Survey Map for review.
+        if phases:
+            phased_group_ids: set[int] = set()
+            for p in phases:
+                phased_group_ids.update(p.groups.values_list("id", flat=True))
+            if phased_group_ids:
+                dead_branches = (
+                    SurveyQuestionCondition.objects.filter(
+                        action=SurveyQuestionCondition.Action.JUMP_TO,
+                    )
+                    .filter(
+                        Q(target_group_id__in=phased_group_ids)
+                        | Q(target_question__group_id__in=phased_group_ids)
+                    )
+                    .select_related(
+                        "target_group", "question", "target_question__group"
+                    )
+                )
+                for cond in dead_branches:
+                    target_name = (
+                        cond.target_group.name
+                        if cond.target_group
+                        else (
+                            cond.target_question.group.name
+                            if cond.target_question and cond.target_question.group
+                            else "unknown"
+                        )
+                    )
+                    staged_warnings.append(
+                        _(
+                            "Branching condition on '%(question)s' targets "
+                            "the phased section '%(section)s' — it will be "
+                            "skipped when that phase is closed."
+                        )
+                        % {
+                            "question": cond.question.text[:50],
+                            "section": target_name,
+                        }
+                    )
+
     ctx = {
         "survey": survey,
         "groups": groups,
@@ -6821,6 +7168,12 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "randomised_strategy_choices": randomised_strategy_choices,
         "arm_group_ids": arm_group_ids,
         "randomised_warnings": randomised_warnings,
+        # Staged config (step 4). None for non-staged surveys.
+        "staged_menu": staged_menu,
+        "staged_phases": staged_phases,
+        "staged_anchor_choices": staged_anchor_choices,
+        "staged_phase_group_ids": staged_phase_group_ids,
+        "staged_warnings": staged_warnings,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
@@ -9132,11 +9485,27 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
             "arms": list(rmenu.arms.order_by("order", "id").prefetch_related("groups")),
         }
 
+    # Staged info for phase badges (step 6). Lists each phase, its window,
+    # and its sections so the Survey Map can show which sections belong to
+    # which phase.
+    staged_info = None
+    if survey.layout == Survey.Layout.STAGED:
+        smenu = getattr(survey, "staged_menu", None)
+        if smenu is None:
+            smenu = StagedMenu.objects.create(survey=survey)
+        staged_info = {
+            "menu": smenu,
+            "phases": list(
+                smenu.phases.order_by("order", "id").prefetch_related("groups")
+            ),
+        }
+
     ctx = {
         "survey": survey,
         "has_questions": survey.questions.exists(),
         "section_menu_info": section_menu_info,
         "rct_info": rct_info,
+        "staged_info": staged_info,
     }
     return render(request, "surveys/survey_map.html", ctx)
 
@@ -11496,6 +11865,63 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                         arm.groups.add(grp)
             summary_parts.append(" Randomised (RCT) layout applied.")
 
+        # Apply STAGED config from the outline (step 7).
+        staged_cfg = parsed.get("staged")
+        if staged_cfg:
+            survey.layout = Survey.Layout.STAGED
+            survey.save(update_fields=["layout"])
+            menu, _created = StagedMenu.objects.get_or_create(survey=survey)
+            anchor = staged_cfg.get("anchor", StagedMenu.Anchor.ENROLMENT)
+            if anchor in {choice[0] for choice in StagedMenu.Anchor.choices}:
+                menu.anchor = anchor
+            menu.save()
+            # Create phases by name (ordered by first appearance in the
+            # outline). Phase windows come from the ``phase <name>:`` config
+            # lines; phases referenced only via ``~ phase:`` suffixes (no
+            # config line) default to start=0, end=None.
+            phase_order = staged_cfg.get("phase_order", [])
+            phase_windows = staged_cfg.get("phase_windows", {})
+            phases_by_name: dict[str, StagedPhase] = {}
+            for idx, phase_name in enumerate(phase_order, start=1):
+                window = phase_windows.get(phase_name, {})
+                phase, _ = StagedPhase.objects.get_or_create(
+                    menu=menu,
+                    name=phase_name,
+                    defaults={
+                        "order": idx,
+                        "start_offset_days": window.get("start_offset_days", 0),
+                        "end_offset_days": window.get("end_offset_days"),
+                    },
+                )
+                if phase.order != idx:
+                    phase.order = idx
+                    phase.save(update_fields=["order"])
+                # Apply window from config if present.
+                if window:
+                    phase.start_offset_days = window.get("start_offset_days", 0)
+                    phase.end_offset_days = window.get("end_offset_days")
+                    phase.save(update_fields=["start_offset_days", "end_offset_days"])
+                phases_by_name[phase_name] = phase
+            # Drop phases that are no longer in the outline.
+            menu.phases.exclude(name__in=phase_order).delete()
+            # Assign groups to phases by name.
+            for g in parsed["groups"]:
+                grp = group_ref_map.get(g.get("ref"))
+                if grp is None:
+                    grp = next(
+                        (gg for gg in created_groups_in_order if gg.name == g["name"]),
+                        None,
+                    )
+                if grp is None:
+                    continue
+                phase_names_for_group = g.get("staged_phases", [])
+                for pn in phase_names_for_group:
+                    phase = phases_by_name.get(pn)
+                    if phase is not None:
+                        phase.groups.add(grp)
+                # No ~ phase: suffix → not in any phase (unreachable; warned).
+            summary_parts.append(" Staged (longitudinal) layout applied.")
+
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)
     return render(request, "surveys/bulk_upload.html", context)
@@ -11579,6 +12005,32 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                 for grp in arm.groups.all():
                     randomised_arms_by_group.setdefault(grp.id, []).append(arm.name)
 
+    # STAGED block (see docs/survey-layouts-technical.md §Staged (longitudinal)
+    # layout §Outline grammar). Emitted at the top when the survey uses the
+    # staged layout. The ``~ phase:<name>`` suffix is placed on the actual
+    # content group headings below.
+    staged_phases_by_group: dict[int, list[str]] = {}
+    if survey.layout == Survey.Layout.STAGED:
+        smenu = getattr(survey, "staged_menu", None)
+        if smenu is not None:
+            lines.append("STAGED")
+            lines.append(f"  anchor: {smenu.anchor}")
+            # Emit phase window config lines (``phase <name>: <start> [.. <end>]``).
+            for phase in smenu.phases.order_by("order", "id"):
+                if phase.end_offset_days is not None:
+                    lines.append(
+                        f"  phase {phase.name}: {phase.start_offset_days} .. {phase.end_offset_days}"
+                    )
+                else:
+                    lines.append(f"  phase {phase.name}: {phase.start_offset_days}")
+            lines.append("")
+            # Build a lookup: group_id → list of phase names.
+            for phase in smenu.phases.order_by("order", "id").prefetch_related(
+                "groups"
+            ):
+                for grp in phase.groups.all():
+                    staged_phases_by_group.setdefault(grp.id, []).append(phase.name)
+
     for group in groups:
         # Check if this group is part of a collection
         parent_coll_item = (
@@ -11641,6 +12093,11 @@ def _export_survey_to_markdown(survey: Survey) -> str:
         if rct_arms:
             arm_suffix = ", ".join(f"arm:{name}" for name in rct_arms)
             heading = f"{heading}    ~ {arm_suffix}"
+        # Append ``~ phase:<name>`` suffixes for staged layout
+        staged_phases = staged_phases_by_group.get(group.id)
+        if staged_phases:
+            phase_suffix = ", ".join(f"phase:{name}" for name in staged_phases)
+            heading = f"{heading}    ~ {phase_suffix}"
         lines.append(heading)
         if group.description:
             lines.append(f"{indent}{group.description}")

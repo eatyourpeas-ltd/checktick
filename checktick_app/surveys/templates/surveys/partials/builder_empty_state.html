@@ -47,4 +47,11 @@
     <a href="/docs/groups-view/" class="link underline font-semibold" target="_blank" rel="noopener noreferrer">{% trans "Sections guide" %}</a>
     {% trans "for more information." %}
   </p>
+  <p class="text-xs">
+    {% trans "Surveys can use different layouts — section menu, randomised (RCT), guided, or staged (longitudinal). Choose one on the " %}
+    <a href="{% url 'surveys:groups' slug=survey.slug %}" class="link underline font-semibold">{% trans "Organise page" %}</a>{% trans "." %}
+    {% trans " See the " %}
+    <a href="/docs/survey-layouts.md" class="link underline font-semibold" target="_blank" rel="noopener noreferrer">{% trans "Survey Layouts guide" %}</a>
+    {% trans "for when to use each." %}
+  </p>
 </div>

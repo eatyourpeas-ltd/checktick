@@ -901,12 +901,19 @@ class Survey(models.Model):
     # screen with Next/Back navigation — a rendering change layered on
     # top of the existing ordering pipeline (see docs/survey-layouts-
     # technical.md §Guided layout). The guided JS is layout-agnostic so
-    # a future Delphi round allocator can reuse it unchanged.
+    # a future Delphi round allocator can reuse it unchanged. "staged"
+    # unlocks sections over time in defined phase windows (baseline now,
+    # follow-up in 2 weeks, 6-month review later) — see docs/survey-layouts-
+    # technical.md §Staged (longitudinal) layout. Staged recomputes the
+    # open phases on each access and resolves selected_group_ids from the
+    # currently-open phases, reusing the same runtime hook as section_menu
+    # and rct. StagedPhase is the precedent for a future DelphiRound model.
     class Layout(models.TextChoices):
         LINEAR = "linear", "Linear"
         SECTION_MENU = "section_menu", "Section menu"
         RCT = "rct", "Randomised (RCT)"
         GUIDED = "guided", "Guided"
+        STAGED = "staged", "Staged (longitudinal)"
 
     layout = models.CharField(
         max_length=20,
@@ -917,7 +924,8 @@ class Survey(models.Model):
             'authored order; "section_menu" lets the participant pick which '
             'sections to complete; "rct" system-assigns the participant to '
             'an arm whose group set they complete; "guided" shows one '
-            "question per screen with Next/Back navigation."
+            'question per screen with Next/Back navigation; "staged" unlocks '
+            "sections over time in defined phase windows."
         ),
     )
     # Resume + redaction toggles (see docs/survey-progress-tracking.md and
@@ -4037,6 +4045,106 @@ class RandomisedArm(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} (ratio {self.allocation_ratio})"
+
+
+class StagedMenu(models.Model):
+    """Configuration for a survey with ``layout = staged``.
+
+    A StagedMenu is a OneToOne related to ``Survey`` and holds the anchor
+    for phase windows (offsets measured from participant enrolment or from
+    survey open). Per-phase settings (name, start/end offsets, group
+    membership) live on ``StagedPhase`` rows.
+
+    See docs/survey-layouts-technical.md §Staged (longitudinal) layout.
+    A ``linear`` / ``section_menu`` / ``rct`` / ``guided`` survey has no
+    ``StagedMenu`` row.
+    """
+
+    survey = models.OneToOneField(
+        Survey,
+        related_name="staged_menu",
+        on_delete=models.CASCADE,
+    )
+
+    class Anchor(models.TextChoices):
+        ENROLMENT = "enrolment", "From participant enrolment"
+        SURVEY_OPEN = "survey_open", "From survey open date"
+
+    anchor = models.CharField(
+        max_length=20,
+        choices=Anchor.choices,
+        default=Anchor.ENROLMENT,
+        help_text=(
+            "Reference point for phase windows. 'enrolment' offsets from "
+            "the participant's first access (SurveyProgress.created_at); "
+            "'survey_open' offsets from Survey.start_at. Use 'survey_open' "
+            "when all participants should move through phases on the same "
+            "calendar schedule."
+        ),
+    )
+
+    def __str__(self) -> str:
+        return f"StagedMenu for {self.survey.name}"
+
+
+class StagedPhase(models.Model):
+    """A single phase of a staged (longitudinal) survey.
+
+    Each phase has a name (e.g. 'Baseline', 'Follow-up', '6-month review'),
+    an ``order`` for display, and a window defined as integer-day offsets
+    from the StagedMenu anchor: ``[anchor + start_offset_days,
+    anchor + end_offset_days)``. ``end_offset_days`` is null for an
+    open-ended phase. A group may appear in multiple phases (e.g. a
+    demographics section open in every phase).
+    """
+
+    menu = models.ForeignKey(
+        StagedMenu,
+        related_name="phases",
+        on_delete=models.CASCADE,
+    )
+    name = models.CharField(
+        max_length=100,
+        help_text="Phase name (e.g. 'Baseline', 'Follow-up').",
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Display order on the Organise page and in the phase badges.",
+    )
+    start_offset_days = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Days after the anchor when this phase opens. 0 = opens at the "
+            "anchor time."
+        ),
+    )
+    end_offset_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Days after the anchor when this phase closes (exclusive). "
+            "Blank = open-ended (never closes)."
+        ),
+    )
+    groups = models.ManyToManyField(
+        QuestionGroup,
+        related_name="phases",
+        blank=True,
+        help_text=(
+            "Sections that unlock during this phase. A group may appear in "
+            "multiple phases (e.g. a demographics section open in every "
+            "phase). Groups not in any phase are unreachable — warned on "
+            "the Organise page."
+        ),
+    )
+
+    class Meta:
+        unique_together = ("menu", "name")
+        ordering = ["order", "id"]
+
+    def __str__(self) -> str:
+        end = self.end_offset_days if self.end_offset_days is not None else "\u221e"
+        return f"{self.name} (days {self.start_offset_days}\u2013{end})"
 
 
 def validate_markdown_survey(md_text: str) -> list[dict]:

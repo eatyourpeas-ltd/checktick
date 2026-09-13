@@ -101,6 +101,37 @@
   </div>
   {% endif %}
 
+  {# === Staged phase badges (step 6) === #}
+  {% if staged_info %}
+  <div class="not-prose mb-6">
+    <div class="card bg-base-100 border border-base-300 max-w-4xl">
+      <div class="card-body p-4">
+        <h3 class="text-sm font-semibold text-base-content/80 mb-1">{% trans 'Staged — phase composition' %}</h3>
+        <p class="text-xs text-base-content/60 mb-2">{% trans 'Sections unlock over time. Each phase has a window (days from the anchor); a section may appear in multiple phases.' %}</p>
+        <div class="space-y-2">
+          {% for phase in staged_info.phases %}
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="badge badge-secondary badge-sm shrink-0">{{ phase.name }}</span>
+            <span class="text-xs text-base-content/60 shrink-0">{% if phase.end_offset_days is None %}{% blocktrans with start=phase.start_offset_days %}days {{ start }}+{% endblocktrans %}{% else %}{% blocktrans with start=phase.start_offset_days end=phase.end_offset_days %}days {{ start }}–{{ end }}{% endblocktrans %}{% endif %}</span>
+            <div class="flex flex-wrap gap-1">
+              {% for grp in phase.groups.all %}
+              <span class="badge badge-outline badge-sm">{{ grp.name }}</span>
+              {% endfor %}
+              {% if not phase.groups.all %}
+              <span class="text-xs text-warning">{% trans 'no sections' %}</span>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+          {% if not staged_info.phases %}
+          <span class="text-xs text-warning">{% trans 'no phases configured' %}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   {# === Visualiser (reused from the Organise page; now in its own space) === #}
   {% if has_questions %}
   <div>

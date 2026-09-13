@@ -19,6 +19,8 @@ from .models import (
     RecoveryRequest,
     SectionMenu,
     SectionMenuItem,
+    StagedMenu,
+    StagedPhase,
     Survey,
     SurveyProgress,
     SurveyQuestion,
@@ -676,6 +678,34 @@ class RandomisedMenuAdmin(admin.ModelAdmin):
 class RandomisedArmAdmin(admin.ModelAdmin):
     list_display = ("menu", "name", "allocation_ratio", "order")
     list_filter = ("allocation_ratio",)
+    search_fields = ("menu__survey__name", "name")
+    ordering = ("menu", "order", "id")
+    filter_horizontal = ("groups",)
+
+
+class StagedPhaseInline(admin.TabularInline):
+    model = StagedPhase
+    extra = 0
+
+
+@admin.register(StagedMenu)
+class StagedMenuAdmin(admin.ModelAdmin):
+    list_display = ("survey", "anchor")
+    list_filter = ("anchor",)
+    search_fields = ("survey__name", "survey__slug")
+    inlines = [StagedPhaseInline]
+
+
+@admin.register(StagedPhase)
+class StagedPhaseAdmin(admin.ModelAdmin):
+    list_display = (
+        "menu",
+        "name",
+        "order",
+        "start_offset_days",
+        "end_offset_days",
+    )
+    list_filter = ("menu__anchor",)
     search_fields = ("menu__survey__name", "name")
     ordering = ("menu", "order", "id")
     filter_horizontal = ("groups",)

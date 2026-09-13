@@ -344,6 +344,41 @@ Config lines are indented under `RANDOMISED`:
 
 See [Survey Layouts](survey-layouts.md) for the full guide to when to use the Randomised (RCT) layout.
 
+### Staged (longitudinal) layout
+
+Add a `STAGED` block at the top of the outline to switch the survey to the staged (longitudinal) layout, where sections unlock over time in defined phase windows. Each phase has a window measured in integer days from an anchor (participant enrolment or survey open). Mark which sections belong to which phase with `~ phase:<name>` on the section heading; a section can be in multiple phases (e.g. a demographics section open in every phase). Sections without `~ phase:` are in no phase (unreachable; warned on the Organise page).
+
+```text
+STAGED
+  anchor: enrolment
+  phase Baseline: 0 .. 14
+  phase Follow-up: 14 .. 28
+  phase Review: 180
+
+# Demographics {demographics}    ~ phase:Baseline, phase:Follow-up
+## Name {name}
+(text)
+
+# Baseline {baseline}    ~ phase:Baseline
+## BQ {bq}
+(text)
+
+# Follow-up {followup}    ~ phase:Follow-up
+## FQ {fq}
+(text)
+```
+
+Config lines are indented under `STAGED`:
+
+- `anchor` — `enrolment` (default; each participant's clock starts at their first access) or `survey_open` (all participants move through phases on the same calendar schedule, offset from `Survey.start_at`).
+- `phase <name>: <start> [.. <end>]` — defines a phase window in integer days. `<end>` is optional (blank = open-ended). Windows are half-open: `[anchor + start, anchor + end)`.
+- Place `~ phase:<name>` after the section heading (and after the `{id}` if present). Comma-separate multiple phases: `~ phase:Baseline, phase:Follow-up`.
+- Sections without `~ phase:` are in no phase (unreachable).
+- Phases are created in the order their names first appear in the outline. Phases referenced only via `~ phase:` suffixes (no config line) default to `start=0, end=None` (open from the anchor).
+- A blank line ends the config block.
+
+See [Survey Layouts](survey-layouts.md) for the full guide to when to use the Staged (longitudinal) layout.
+
 ## Error handling and validation
 
 The Outline provides comprehensive error detection and reporting at two levels:

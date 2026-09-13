@@ -1,0 +1,24 @@
+{% comment %} {# Staged (longitudinal) layout icon: sections unlocking over time along a timeline. Usage: {% include "components/icons/layout_staged.html" with classes="w-6 h-6" %} #} {% endcomment %}
+<svg xmlns="http://www.w3.org/2000/svg" class="{{ classes|default:'w-6 h-6' }}" viewBox="0 0 800 450" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Timeline arrow (left to right) -->
+  <path d="M 120,360 L 680,360 M 660,345 L 680,360 L 660,375" />
+  <!-- Phase markers on the timeline -->
+  <circle cx="180" cy="360" r="14" fill="currentColor" stroke="none" />
+  <circle cx="400" cy="360" r="14" />
+  <circle cx="620" cy="360" r="14" />
+
+  <!-- Phase 1 card (open now) -->
+  <rect x="100" y="120" width="160" height="180" rx="16" ry="16" />
+  <path d="M 130,170 L 230,170 M 130,210 L 230,210 M 130,250 L 200,250" stroke-width="10" />
+  <path d="M 180,300 L 180,346" stroke-width="8" />
+
+  <!-- Phase 2 card (future, dashed outline) -->
+  <rect x="320" y="160" width="160" height="140" rx="16" ry="16" stroke-dasharray="20 16" />
+  <path d="M 350,205 L 450,205 M 350,245 L 410,245" stroke-width="10" />
+  <path d="M 400,300 L 400,346" stroke-width="8" />
+
+  <!-- Phase 3 card (future, dashed outline) -->
+  <rect x="540" y="190" width="160" height="110" rx="16" ry="16" stroke-dasharray="20 16" />
+  <path d="M 570,230 L 670,230 M 570,265 L 630,265" stroke-width="10" />
+  <path d="M 620,300 L 620,346" stroke-width="8" />
+</svg>

@@ -147,6 +147,31 @@
           {% endif %}
         </div>
       </div>
+
+      {# Staged (longitudinal) card #}
+      <div class="card bg-base-100 border {% if survey.layout == 'staged' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+        <div class="card-body gap-2 p-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-semibold text-base-content">{% trans 'Staged (longitudinal)' %}</h4>
+            {% if survey.layout == 'staged' %}
+              <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% endif %}
+          </div>
+          {% include "components/icons/layout_staged.html" with classes="w-full h-24 text-base-content/70" %}
+          <p class="text-xs text-base-content/70">{% trans 'Sections unlock over time in phases (baseline now, follow-up in 2 weeks, 6-month review later). Participants see only the current phase.' %}</p>
+          {% if section_count < 2 %}
+            <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>
+          {% endif %}
+          {% if can_edit and survey.layout != 'staged' %}
+            <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_layout" />
+              <input type="hidden" name="layout" value="staged" />
+              <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </section>
 
@@ -362,6 +387,114 @@
         {% if randomised_warnings %}
         <div class="mt-2 space-y-1">
           {% for warning in randomised_warnings %}
+          <div class="alert alert-warning py-2 px-3 text-xs" role="status">
+            {% include "components/icons/exclamation-triangle.html" with classes="w-4 h-4 shrink-0" %}
+            <span>{{ warning }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {# === Staged (longitudinal) configuration card (step 4) === #}
+  {% if survey.layout == 'staged' %}
+  <section class="not-prose mb-6" aria-labelledby="staged-config-heading">
+    <div class="card bg-base-100 border border-base-300 max-w-4xl">
+      <div class="card-body gap-3 p-4">
+        <h3 id="staged-config-heading" class="font-semibold text-base-content">
+          {% trans 'Staged (longitudinal) configuration' %}
+        </h3>
+        {% if can_edit %}
+        <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="space-y-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_staged_menu" />
+
+          <fieldset class="flex flex-wrap gap-x-6 gap-y-2 items-end">
+            <div>
+              <span class="label text-xs">{% trans 'Phase windows measured from' %}</span>
+              <div class="flex gap-3">
+                {% for value, label in staged_anchor_choices %}
+                <label class="flex items-center gap-1 cursor-pointer text-sm">
+                  <input type="radio" name="anchor" value="{{ value }}"
+                         class="radio radio-sm"
+                         {% if staged_menu.anchor == value or forloop.first and not staged_menu.anchor %}checked{% endif %} />
+                  {{ label }}
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+          </fieldset>
+
+          <div>
+            <span class="label text-xs">{% trans 'Phases' %}</span>
+            <ul class="mt-1 space-y-3">
+              {% for phase in staged_phases %}
+              <li class="border border-base-200 rounded-lg p-3 space-y-2">
+                <input type="hidden" name="phase_ids" value="{{ phase.id }}" />
+                <div class="flex items-center gap-3 flex-wrap">
+                  <label class="flex items-center gap-1 text-sm">
+                    <span class="text-xs text-base-content/60">{% trans 'Name' %}</span>
+                    <input type="text" name="phase_name_{{ phase.id }}" value="{{ phase.name }}"
+                           class="input input-bordered input-sm w-40" maxlength="100" />
+                  </label>
+                  <label class="flex items-center gap-1 text-sm">
+                    <span class="text-xs text-base-content/60">{% trans 'Opens (days)' %}</span>
+                    <input type="number" min="0" name="phase_start_{{ phase.id }}"
+                           value="{{ phase.start_offset_days }}"
+                           class="input input-bordered input-sm w-20" />
+                  </label>
+                  <label class="flex items-center gap-1 text-sm">
+                    <span class="text-xs text-base-content/60">{% trans 'Closes (days, blank = open-ended)' %}</span>
+                    <input type="number" min="1" name="phase_end_{{ phase.id }}"
+                           value="{{ phase.end_offset_days|default:'' }}"
+                           class="input input-bordered input-sm w-20" placeholder="blank" />
+                  </label>
+                  <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="remove_phase" />
+                    <input type="hidden" name="phase_id" value="{{ phase.id }}" />
+                    <button type="submit" class="btn btn-ghost btn-xs text-error">{% trans 'Remove' %}</button>
+                  </form>
+                </div>
+                <div>
+                  <span class="text-xs text-base-content/60">{% trans 'Sections in this phase' %}</span>
+                  <div class="mt-1 flex flex-wrap gap-2">
+                    {% for g in groups %}
+                    <label class="flex items-center gap-1 cursor-pointer text-xs">
+                      <input type="checkbox" name="phase_groups_{{ phase.id }}" value="{{ g.id }}"
+                             class="checkbox checkbox-xs"
+                             {% if g.id in staged_phase_group_ids|get_item:phase.id %}checked{% endif %} />
+                      <span class="truncate max-w-32">{{ g.name }}</span>
+                    </label>
+                    {% endfor %}
+                  </div>
+                </div>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          <div class="flex gap-2 pt-1">
+            <button type="submit" class="btn btn-primary btn-sm">{% trans 'Save layout' %}</button>
+            <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="add_phase" />
+              <button type="submit" class="btn btn-outline btn-sm">{% trans 'Add phase' %}</button>
+            </form>
+            <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/survey-map/">{% trans 'Review in Survey Map' %}</a>
+          </div>
+        </form>
+        {% else %}
+        <p class="text-sm text-base-content/70">{% trans 'This survey is read-only.' %}</p>
+        {% endif %}
+
+        {# Staged warnings (step 5) #}
+        {% if staged_warnings %}
+        <div class="mt-2 space-y-1">
+          {% for warning in staged_warnings %}
           <div class="alert alert-warning py-2 px-3 text-xs" role="status">
             {% include "components/icons/exclamation-triangle.html" with classes="w-4 h-4 shrink-0" %}
             <span>{{ warning }}</span>

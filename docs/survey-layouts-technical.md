@@ -532,6 +532,213 @@ submit, so it is unaffected. Autosave (`save_draft`) fires on
 `input`/`change` events that bubble to the form regardless of which
 step is visible.
 
+## Staged (longitudinal) layout
+
+The Staged layout unlocks sections over time in defined phase windows.
+Each phase has a window measured in integer days from an anchor
+(participant enrolment or survey open). The runtime recomputes the
+open phases on each access and resolves `selected_group_ids` from their
+union, reusing the same `_resolved_group_order_ids` filtering hook as
+section_menu and rct. Unlike rct (fixed arm assignment), the open set
+changes over time, so `selected_group_ids` is recomputed and
+overwritten each visit — never read from a stored value.
+
+### Data model
+
+```python
+class Survey(models.Model):
+    class Layout(models.TextChoices):
+        LINEAR = "linear", "Linear"
+        SECTION_MENU = "section_menu", "Section menu"
+        RCT = "rct", "Randomised (RCT)"
+        GUIDED = "guided", "Guided"
+        STAGED = "staged", "Staged (longitudinal)"
+
+
+class StagedMenu(models.Model):
+    survey = models.OneToOneField(
+        Survey, related_name="staged_menu", on_delete=models.CASCADE,
+    )
+
+    class Anchor(models.TextChoices):
+        ENROLMENT = "enrolment", "From participant enrolment"
+        SURVEY_OPEN = "survey_open", "From survey open date"
+
+    anchor = models.CharField(
+        max_length=20, choices=Anchor.choices, default=Anchor.ENROLMENT,
+    )
+
+
+class StagedPhase(models.Model):
+    menu = models.ForeignKey(
+        StagedMenu, related_name="phases", on_delete=models.CASCADE,
+    )
+    name = models.CharField(max_length=100)
+    order = models.PositiveIntegerField(default=0)
+    start_offset_days = models.PositiveIntegerField(default=0)
+    end_offset_days = models.PositiveIntegerField(
+        null=True, blank=True,  # null = open-ended
+    )
+    groups = models.ManyToManyField(
+        QuestionGroup, related_name="phases", blank=True,
+    )
+
+    class Meta:
+        unique_together = ("menu", "name")
+        ordering = ["order", "id"]
+```
+
+A `linear` / `section_menu` / `rct` / `guided` survey has no `StagedMenu`
+row. No new `SurveyProgress` field is needed: unlike rct (fixed arm
+assignment), staged recomputes the open set each access.
+
+**Migration:** `0063_staged_layout` (adds the `Layout.STAGED` choice and
+both models, including `BigAutoField` on the new tables and the M2M
+through table).
+
+### Phase resolution
+
+`checktick_app/surveys/staged.py` holds pure, testable functions used
+by the take view. Kept separate from the runtime pipeline so a future
+Delphi round scheduler can sit next to it without touching the take
+view (see §Delphi compatibility below).
+
+- `anchor_time(menu, enrolment, survey_start)` — the reference time for
+  phase windows. For `enrolment`, the participant's
+  `SurveyProgress.created_at` (falling back to `survey_start` on first
+  access). For `survey_open`, `Survey.start_at`.
+- `is_phase_open(phase, anchor, now)` — True when
+  `anchor + start <= now < anchor + end` (end null = open-ended).
+- `open_phases(menu, enrolment, survey_start, now)` — ordered list of
+  open phases.
+- `open_group_ids(menu, enrolment, survey_start, now)` — ordered,
+  de-duplicated group IDs from currently-open phases.
+
+All offsets are integer days. `datetime` arithmetic uses timezone-aware
+values throughout.
+
+### Runtime hook
+
+In `_handle_participant_submission`, when `survey.layout == STAGED` and
+`progress is not None`, the runtime:
+
+1. Computes `open_ids` via `staged.open_group_ids(menu, enrolment,
+   survey_start, now)`.
+2. Orders the final selection via `_resolved_group_order_ids(survey)` so
+   the open phases' sections keep the Organise-page order.
+3. Stores the result on `SurveyProgress.selected_group_ids` (overwriting
+   any previous value — staged recomputes each visit).
+4. If the open set is empty, renders `surveys/staged_no_phases.html` (a
+   friendly "check back later" page) instead of an empty form. The
+   progress row is preserved so resume works when a phase opens later.
+
+On resume, the open phases are recomputed — if a new phase has opened
+since the last visit, the participant sees it; if a phase has closed,
+they no longer see it. There is no picker for staged — the open set is
+system-controlled.
+
+### Outline grammar
+
+The `STAGED` block sits at the top of the outline (analogous to
+`SECTION_MENU` / `RANDOMISED`) and the `~ phase:<name>` suffix marks
+which phase(s) a section belongs to:
+
+```text
+STAGED
+  anchor: enrolment
+  phase Baseline: 0 .. 14
+  phase Follow-up: 14 .. 28
+  phase Review: 180
+
+# Demographics {demographics}    ~ phase:Baseline, phase:Follow-up
+## Name {name}
+(text)
+
+# Baseline {baseline}    ~ phase:Baseline
+## BQ {bq}
+(text)
+
+# Follow-up {followup}    ~ phase:Follow-up
+## FQ {fq}
+(text)
+```
+
+- `anchor` is `enrolment` or `survey_open`.
+- `phase <name>: <start> [.. <end>]` defines a phase window in integer
+  days. `<end>` is optional (open-ended). Phases referenced only via
+  `~ phase:` suffixes (no config line) default to `start=0, end=None`.
+- `~ phase:<name>` may repeat (a section in multiple phases). Sections
+  with no `~ phase:` suffix under a `STAGED` block are in no phase
+  (unreachable; warned on the Organise page).
+- A blank line ends the config block.
+
+The export side emits the `STAGED` block and `~ phase:<name>` suffixes,
+and the config survives export → import round-trips.
+
+### Warnings
+
+- **No phases configured** — the survey has no phases; add at least one.
+- **Single phase** — structurally identical to a linear survey.
+- **survey_open anchor with no start date** — anchor is None, nothing
+  ever opens.
+- **Unreachable section** — a section not in any phase.
+- **Overlapping phase windows for the same section** — the runtime
+  unions them, so the section stays open across both (flagged so the
+  author knows).
+- **Branching targets a phased section** — a `jump_to` into a phased
+  section is a dead branch when the phase is closed.
+
+### Preview
+
+`survey_preview` accepts `?simulate_phase=<phase_id>`. When present, the
+questions are filtered to that phase's groups (ordered by
+`_resolved_group_order_ids`) regardless of whether the phase is
+currently open. A "Simulate phase" panel on `detail.html` (preview mode
+only) lists the phases as radio buttons and applies the filter on
+submit.
+
+### Survey Map
+
+The Survey Map shows the full authored survey. When `layout == staged`,
+a **phase composition** badge summary appears above the visualiser
+listing each phase, its day-window, and its sections, so the author can
+see at a glance which sections belong to which phase.
+
+### Issues and edge cases
+
+| Issue | Why it matters | Handling |
+|---|---|---|
+| Recompute vs store | Unlike rct (fixed arm), the open set changes over time. | Recompute `selected_group_ids` on every access; never read a stored value. |
+| No phases open | A participant arrives between phases. | Render `staged_no_phases.html`; preserve the progress row so resume works when a phase opens. |
+| No StagedMenu configured | A freshly-switched survey has no phases. | Render `staged_no_phases.html`; the organise-view warnings flag the misconfiguration. |
+| survey_open anchor, no start_at | Anchor is None, nothing ever opens. | Warn on the Organise page; the take view renders the no-phases page. |
+| Overlapping phase windows | A section in two overlapping phases stays open across both. | Warn (non-blocking); the runtime unions the open phases. |
+| Outline round-trip | Phase config must survive export → import. | `STAGED` block + `~ phase:` suffixes; round-trip test in `test_outline_staged.py`. |
+| Future-phase leakage | Participants must not see sections from phases that haven't opened. | The take view only resolves groups from currently-open phases; future phases are never in `selected_group_ids`. |
+
+### Delphi compatibility
+
+The Staged design is deliberately shaped so the planned Delphi workflow
+can reuse its ingredients:
+
+- `StagedPhase` (with `start_offset_days` / `end_offset_days` and an M2M
+  to `QuestionGroup`) is the direct precedent for a future `DelphiRound`
+  model. Same shape, separate model — phases and rounds are orthogonal
+  dimensions.
+- The runtime hook (`_resolved_group_order_ids` filtering by
+  `selected_group_ids`) is unchanged. Delphi will resolve
+  `selected_group_ids` from the current round's section set instead of
+  the open phases' union — same hook, different scheduler.
+- `staged.py`'s pure functions (`anchor_time`, `is_phase_open`,
+  `open_phases`, `open_group_ids`) are the precedent for Delphi's
+  round-scheduling helpers. A future `delphi.py` sits next to it without
+  touching staged.
+- The `?simulate_phase=` preview path is the precedent for Delphi's
+  "show me round N aggregate" inter-round feedback view.
+- Staged does **not** introduce anonymity-beyond-aggregation, convergence
+  tracking, or inter-round feedback — those are Delphi-only and stay out
+  of this PR to keep Staged scope tight.
+
 ## Planned layouts
 
 The following layouts are still planned for future releases. See
@@ -540,10 +747,15 @@ descriptions. Technical notes:
 
 ### Staged (longitudinal)
 
-- Each section group has a defined phase window (start/end offsets from
-  survey open or from participant enrolment).
+- Each phase has a window measured in integer days from an anchor
+  (participant enrolment or survey open).
 - Builds on `SurveyProgress` lifecycle status and timestamps.
-- May need a `StagedMenu` model with phase definitions per section.
+- `StagedMenu` model with anchor choice; `StagedPhase` model with
+  `start_offset_days` / `end_offset_days` (null = open-ended) and an M2M
+  to `QuestionGroup`.
+- No new `SurveyProgress` field: unlike rct (fixed arm assignment),
+  staged recomputes the open set each access. `StagedPhase` is the
+  precedent for a future `DelphiRound` model.
 - Priority: medium — makes CheckTick suitable for repeated-measures
   designs.
 
