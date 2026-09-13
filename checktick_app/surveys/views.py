@@ -75,6 +75,8 @@ from .models import (
     RecoveryRequest,
     SectionMenu,
     SectionMenuItem,
+    StagedMenu,
+    StagedPhase,
     Survey,
     SurveyAccessToken,
     SurveyMembership,
@@ -6443,6 +6445,18 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                         "useful. Add more sections first."
                     ),
                 )
+        # Same guard for staged — a longitudinal survey with < 2 sections
+        # has nothing to phase.
+        if chosen == Survey.Layout.STAGED:
+            section_count = survey.question_groups.count()
+            if section_count < 2:
+                messages.warning(
+                    request,
+                    _(
+                        "Staged surveys need at least 2 sections to be "
+                        "useful. Add more sections first."
+                    ),
+                )
         survey.layout = chosen
         survey.save(update_fields=["layout"])
         messages.success(
@@ -6631,6 +6645,106 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             if menu is not None:
                 menu.arms.filter(id=int(arm_id_raw)).delete()
                 messages.success(request, _("Arm removed."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Staged configuration save (step 4). Only meaningful when the survey
+    # is in staged layout. Saves the anchor and per-phase name /
+    # start_offset_days / end_offset_days / group membership.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_staged_menu"
+        and survey.layout == Survey.Layout.STAGED
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = StagedMenu.objects.get_or_create(survey=survey)
+        anchor = request.POST.get("anchor", StagedMenu.Anchor.ENROLMENT)
+        if anchor in {choice[0] for choice in StagedMenu.Anchor.choices}:
+            menu.anchor = anchor
+        menu.save()
+        # Per-phase: name, start, end, groups. phase_ids is the list of
+        # existing phase IDs submitted from the form.
+        phase_ids = [
+            int(x) for x in request.POST.getlist("phase_ids") if str(x).isdigit()
+        ]
+        for phase_id in phase_ids:
+            try:
+                phase = menu.phases.get(id=phase_id)
+            except StagedPhase.DoesNotExist:
+                continue
+            phase.name = (
+                request.POST.get(f"phase_name_{phase_id}", phase.name) or phase.name
+            )[:100]
+            try:
+                phase.start_offset_days = max(
+                    0, int(request.POST.get(f"phase_start_{phase_id}", 0))
+                )
+            except ValueError:
+                phase.start_offset_days = 0
+            end_raw = (request.POST.get(f"phase_end_{phase_id}", "") or "").strip()
+            if end_raw:
+                try:
+                    phase.end_offset_days = max(1, int(end_raw))
+                except ValueError:
+                    phase.end_offset_days = None
+            else:
+                phase.end_offset_days = None
+            phase.save(
+                update_fields=[
+                    "name",
+                    "start_offset_days",
+                    "end_offset_days",
+                ]
+            )
+            group_ids = [
+                int(x)
+                for x in request.POST.getlist(f"phase_groups_{phase_id}")
+                if str(x).isdigit()
+            ]
+            phase.groups.set(group_ids)
+        messages.success(request, _("Staged configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Add phase (step 4). Creates a new empty phase at the end of the order.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "add_phase"
+        and survey.layout == Survey.Layout.STAGED
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = StagedMenu.objects.get_or_create(survey=survey)
+        next_order = (menu.phases.aggregate(m=models.Max("order"))["m"] or 0) + 1
+        StagedPhase.objects.create(
+            menu=menu, name=f"Phase {next_order}", order=next_order
+        )
+        messages.success(request, _("Phase added."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Remove phase (step 4). Deletes the phase. Participants keep their
+    # stored selected_group_ids (recomputed on next access anyway).
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "remove_phase"
+        and survey.layout == Survey.Layout.STAGED
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        phase_id_raw = request.POST.get("phase_id", "")
+        if phase_id_raw.isdigit():
+            menu = getattr(survey, "staged_menu", None)
+            if menu is not None:
+                menu.phases.filter(id=int(phase_id_raw)).delete()
+                messages.success(request, _("Phase removed."))
         return redirect("surveys:groups", slug=slug)
 
     groups_qs = survey.question_groups.annotate(
@@ -6846,6 +6960,26 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                         }
                     )
 
+    # Staged configuration (only for staged layout). Ensure the menu exists
+    # so a freshly-switched survey is configurable.
+    staged_menu = None
+    staged_phases: list[StagedPhase] = []
+    staged_anchor_choices = StagedMenu.Anchor.choices
+    if survey.layout == Survey.Layout.STAGED:
+        staged_menu, _created = StagedMenu.objects.get_or_create(survey=survey)
+        staged_phases = list(
+            staged_menu.phases.order_by("order", "id").prefetch_related("groups")
+        )
+    # Precompute phase → set of group IDs for the template's checkbox
+    # membership check (Django templates can't call values_list directly).
+    staged_phase_group_ids: dict[int, set[int]] = {
+        phase.id: set(phase.groups.values_list("id", flat=True))
+        for phase in staged_phases
+    }
+    # Staged warnings are populated in step 5; empty list here so the
+    # template renders cleanly during the config-card step.
+    staged_warnings: list[str] = []
+
     ctx = {
         "survey": survey,
         "groups": groups,
@@ -6868,6 +7002,12 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "randomised_strategy_choices": randomised_strategy_choices,
         "arm_group_ids": arm_group_ids,
         "randomised_warnings": randomised_warnings,
+        # Staged config (step 4). None for non-staged surveys.
+        "staged_menu": staged_menu,
+        "staged_phases": staged_phases,
+        "staged_anchor_choices": staged_anchor_choices,
+        "staged_phase_group_ids": staged_phase_group_ids,
+        "staged_warnings": staged_warnings,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
