@@ -64,6 +64,18 @@ def test_builder_shows_section_menu_layout_label(client, owner, survey):
 
 
 @pytest.mark.django_db
+def test_builder_shows_guided_layout_label(client, owner, survey):
+    survey.layout = Survey.Layout.GUIDED
+    survey.save(update_fields=["layout"])
+    client.force_login(owner)
+    res = client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Layout: Guided" in html
+    assert "Need a different layout?" in html
+
+
+@pytest.mark.django_db
 def test_builder_layout_label_links_to_organise(client, owner, survey):
     client.force_login(owner)
     res = client.get(reverse("surveys:survey_builder", kwargs={"slug": survey.slug}))

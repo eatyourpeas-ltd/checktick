@@ -22,6 +22,12 @@
     {% if survey.layout == 'section_menu' %}
       {% include "components/icons/layout_section_menu.html" with classes="w-5 h-5 shrink-0" %}
       <span>{% trans "Layout: Section menu" %}</span>
+    {% elif survey.layout == 'rct' %}
+      {% include "components/icons/layout_rct.html" with classes="w-5 h-5 shrink-0" %}
+      <span>{% trans "Layout: Randomised (RCT)" %}</span>
+    {% elif survey.layout == 'guided' %}
+      {% include "components/icons/layout_guided.html" with classes="w-5 h-5 shrink-0" %}
+      <span>{% trans "Layout: Guided" %}</span>
     {% else %}
       {% include "components/icons/layout_linear.html" with classes="w-5 h-5 shrink-0" %}
       <span>{% trans "Layout: Default (linear)" %}</span>

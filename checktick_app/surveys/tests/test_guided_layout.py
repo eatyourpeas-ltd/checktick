@@ -149,3 +149,27 @@ def test_guided_survey_submits_like_linear(client, guided_survey, participant):
     # Successful submit redirects to the thank-you page.
     assert res.status_code == 302
     assert SurveyResponse.objects.filter(survey=guided_survey).exists()
+
+
+@pytest.mark.django_db
+def test_dashboard_shows_guided_badge(client, guided_survey, owner):
+    """The survey dashboard shows a 'Guided' badge on the Organise button
+    when the survey uses the guided layout."""
+    client.force_login(owner)
+    res = client.get(reverse("surveys:dashboard", kwargs={"slug": guided_survey.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Guided" in html
+
+
+@pytest.mark.django_db
+def test_builder_shows_guided_label(client, guided_survey, owner):
+    """The Builder shows a 'Layout: Guided' label with a link to Organise."""
+    client.force_login(owner)
+    res = client.get(
+        reverse("surveys:survey_builder", kwargs={"slug": guided_survey.slug})
+    )
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Layout: Guided" in html
+    assert "Need a different layout?" in html
