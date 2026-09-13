@@ -25,6 +25,13 @@ are offered to the participant. CheckTick supports four layouts:
   other layouts: a Section menu or RCT survey in guided layout still
   shows the picker / assigns the arm first, then walks the chosen
   sections one question at a time.
+- **Staged (longitudinal)** — sections unlock over time in defined
+  phase windows (baseline now, follow-up in 2 weeks, 6-month review
+  later). Each phase has a window measured in days from an anchor
+  (participant enrolment or survey open). The participant sees only the
+  currently-open phase; future phases are hidden until their window
+  opens. Builds on the progress tracking feature's lifecycle status and
+  timestamps.
 
 The name **Layout** is deliberately distinct from **Template**, which is
 already used for published sections shared into the Question Bank (see
@@ -81,6 +88,28 @@ picker first, then walks the chosen sections one question at a time; an
 RCT survey in guided layout walks the assigned arm's sections one
 question at a time. Branching, repeats, follow-ups, autosave, and
 save-and-resume all work unchanged.
+
+### Staged (longitudinal)
+
+Use the Staged layout when:
+
+- **Audit cycles** where you collect baseline data now and follow-up
+  data at fixed intervals.
+- **Longitudinal research** with repeated-measures designs at multiple
+  time points.
+- **Multi-phase quality improvement** projects where participants
+  shouldn't see future phases.
+
+Staged is a selection mechanism like Section menu and RCT, but the
+selection changes over time. The runtime recomputes the open phases on
+each access and resolves the visible sections from their union — unlike
+RCT (fixed arm assignment), the open set changes over time. When no
+phase is currently open, the participant sees a friendly "check back
+later" page; their progress row is preserved so resume works when a
+phase opens later. Participants never see future-phase sections.
+
+Staged composes with Guided: a staged survey in guided layout walks the
+currently-open phase's sections one question at a time.
 
 ## Choosing a layout
 
@@ -262,26 +291,97 @@ The RCT layout can be configured directly in the [Outline / bulk
 upload](import.md#randomised-rct-layout) text editor using a `RANDOMISED`
 block. The layout config survives export → import round-trips.
 
-## Planned layouts
+## Staged (longitudinal)
 
-The following layouts are planned for future releases. They are not yet
-implemented.
-
-### Staged (longitudinal)
-
-Sections unlock over time — baseline now, follow-up in 2 weeks, 6-month
-review later. Each section group has a defined phase window. The
-participant sees only the current phase. This builds on the progress
-tracking feature, which already has lifecycle status and timestamps on
-`SurveyProgress`.
+For audit cycles and longitudinal research, sections unlock over time in
+defined phase windows. Each phase has a window measured in integer days
+from an anchor (participant enrolment or survey open). The runtime
+recomputes the open phases on each access and resolves the visible
+sections from their union. Unlike RCT (fixed arm assignment), the open
+set changes over time — a participant who returns in two weeks sees a
+different set of sections than they did today.
 
 **When to use:** audit cycles, longitudinal research, multi-phase
 quality improvement projects where you don't want participants seeing
 future phases.
 
 **Why it matters:** staged surveys are common in clinical audit and
-research. This layout would make CheckTick suitable for repeated-measures
+research. This layout makes CheckTick suitable for repeated-measures
 designs without requiring separate surveys for each time point.
+
+### Configuring a Staged survey
+
+On the Organise page, choose the **Staged (longitudinal)** layout card.
+A configuration card appears where you:
+
+- **Choose the anchor** — *From participant enrolment* (default; each
+  participant's clock starts at their first access) or *From survey open
+  date* (all participants move through phases on the same calendar
+  schedule, offset from `Survey.start_at`).
+- **Add phases** — name each phase (e.g. "Baseline", "Follow-up",
+  "6-month review").
+- **Set phase windows** — each phase has a `start_offset_days` and an
+  optional `end_offset_days` (blank = open-ended). Windows are
+  half-open: `[anchor + start, anchor + end)`.
+- **Assign sections to phases** — tick which sections each phase sees. A
+  section can be in multiple phases (e.g. a demographics section open in
+  every phase).
+
+### Warnings
+
+The configuration card shows live warnings when:
+
+- **No phases configured** — the survey has no phases; add at least one.
+- **Single phase** — a staged survey with one phase is structurally
+  identical to a linear survey.
+- **survey_open anchor with no start date** — phase windows are measured
+  from `Survey.start_at` but the survey has no start date; set one or
+  switch the anchor to enrolment.
+- **Unreachable section** — a section not in any phase is never seen by
+  any participant.
+- **Overlapping phase windows for the same section** — a section in two
+  phases whose windows overlap will stay open across both (the runtime
+  unions them). Usually fine, but flagged so you know.
+- **Branching targets a phased section** — a `jump to` into a phased
+  section is a dead branch when that phase is closed.
+
+### Participant experience
+
+The participant opens the survey and sees only the sections in the
+currently-open phase, in the authored order. When no phase is currently
+open, they see a friendly "check back later" page; their progress row is
+preserved so resume works when a phase opens later. On resume, the open
+phases are recomputed — if a new phase has opened since their last visit,
+they see it; if a phase has closed, they no longer see it. Participants
+never see future-phase sections. There is no picker — the open set is
+system-controlled.
+
+### Previewing a Staged survey
+
+The preview page includes a **Simulate phase** panel that lets you pick
+a phase and see exactly what a participant would see when that phase is
+open. This previews the phase regardless of whether it is currently open,
+so you can verify a future phase's composition without waiting for its
+window.
+
+### Survey Map
+
+The [Survey Map](branching-and-repeats.md#the-survey-map) shows the full
+authored survey. When using the Staged layout, a **phase composition**
+badge summary appears above the visualiser listing each phase, its day
+window, and its sections, so you can see at a glance which sections
+belong to which phase.
+
+### Outline syntax
+
+The Staged layout can be configured directly in the [Outline / bulk
+upload](import.md#staged-longitudinal-layout) text editor using a `STAGED`
+block. The layout config survives export → import round-trips.
+
+## Planned layouts
+
+The following layouts are planned for future releases. They are not yet
+implemented.
 
 ### Matrix (free navigation)
 
