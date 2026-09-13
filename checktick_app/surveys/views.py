@@ -3351,7 +3351,10 @@ def survey_summary_themes(request: HttpRequest, slug: str) -> JsonResponse:
         return JsonResponse({"error": "Invalid question_id."}, status=400)
 
     question = get_object_or_404(SurveyQuestion, survey=survey, id=qid_int)
-    if question.type not in ("text", "textarea"):
+    # Theme analysis is available for free-text questions — both `text`
+    # (single-line) and `long_text` (textarea). Numeric, choice, likert,
+    # and template questions are out of scope.
+    if question.type not in ("text", "long_text"):
         return JsonResponse(
             {"error": "Theme analysis is only available for text questions."},
             status=400,

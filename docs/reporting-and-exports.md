@@ -106,7 +106,7 @@ Free-text theme summarisation uses the **self-hosted RCPCH Ollama instance** doc
 
 - **Self-hosted, on RCPCH infrastructure.** The model runs on RCPCH servers. No data is sent to any third-party commercial AI service, and the model is not used for training. See `docs/llm-security.md` §6 for the full data-provenance statement.
 - **Only decrypted content is sent, and only to authorised users.** The "Summarise themes" button is unlock-gated exactly like the rest of the report: if the survey is encrypted, the button fails closed with "Unlock the survey first" until you enter your password or recovery phrase (or your SSO identity unlocks it). A non-member or a locked session cannot trigger the LLM call.
-- **Per-question, opt-in, never automatic.** You click the button for one text question at a time. The report never sends all free text in one batch; each click is one bounded request for one question's responses.
+- **Per-question, opt-in, never automatic.** You click the button for one text question at a time. The report never sends all free text in one batch; each click is one bounded request for one question's responses. Theme analysis is available for both `text` (single-line) and `long_text` (textarea) questions; numeric, choice, likert, and template questions are out of scope.
 - **Non-persistent alongside patient data.** The theme summary is session-scoped — it is rendered into the page and never written back into `enc_answers` or any other table. Refreshing the page clears it.
 - **Sanitised before render.** The model's output is passed through the existing `sanitize_markdown()` pipeline (strips HTML, script tags, dangerous patterns), and the client renders it as preformatted text — never as `innerHTML` of raw markdown.
 - **Separately rate-limited.** The view is 100 requests/hour per user; the theme endpoint is 20 requests/hour per user, because LLM calls are expensive.
@@ -218,6 +218,7 @@ Questions appear as separate columns with their text as the header (truncated if
 | Question Type | Export Format |
 |---------------|---------------|
 | Text | Plain text answer |
+| Long text | Plain text answer (multi-line) |
 | Yes/No | "yes" or "no" |
 | Single choice | Selected option text |
 | Multiple choice | Options separated by semicolons (`;`) |
