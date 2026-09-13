@@ -13,6 +13,8 @@ from .models import (
     OrganizationMembership,
     PublishedQuestionGroup,
     QuestionGroup,
+    RandomisedArm,
+    RandomisedMenu,
     RecoveryAuditEntry,
     RecoveryRequest,
     SectionMenu,
@@ -655,6 +657,28 @@ class SectionMenuItemAdmin(admin.ModelAdmin):
     list_filter = ("is_pickable",)
     search_fields = ("menu__survey__name", "group__name")
     ordering = ("menu", "order", "id")
+
+
+class RandomisedArmInline(admin.TabularInline):
+    model = RandomisedArm
+    extra = 0
+
+
+@admin.register(RandomisedMenu)
+class RandomisedMenuAdmin(admin.ModelAdmin):
+    list_display = ("survey", "allocation_strategy", "seed")
+    list_filter = ("allocation_strategy",)
+    search_fields = ("survey__name", "survey__slug")
+    inlines = [RandomisedArmInline]
+
+
+@admin.register(RandomisedArm)
+class RandomisedArmAdmin(admin.ModelAdmin):
+    list_display = ("menu", "name", "allocation_ratio", "order")
+    list_filter = ("allocation_ratio",)
+    search_fields = ("menu__survey__name", "name")
+    ordering = ("menu", "order", "id")
+    filter_horizontal = ("groups",)
 
 
 class CollectionItemInline(admin.TabularInline):

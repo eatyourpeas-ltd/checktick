@@ -5,7 +5,7 @@ priority: 7
 ---
 
 A **Survey Layout** is the high-level shape of a survey — how its sections
-are offered to the participant. CheckTick supports two layouts:
+are offered to the participant. CheckTick supports three layouts:
 
 - **Default (linear)** — sections flow in the order you arrange them. Every
   respondent sees every section. This is how all surveys worked before
@@ -14,6 +14,11 @@ are offered to the participant. CheckTick supports two layouts:
   participant chooses which sections to complete. You mark some sections
   as *mandatory* (always included) and some as *pickable* (the
   participant decides).
+- **Randomised (RCT)** — the system assigns each participant to an **arm**
+  at first access. Each arm has its own set of sections, and the
+  participant only sees the sections in their assigned arm. Use this for
+  clinical trials and A/B testing where arm assignment must be
+  system-controlled.
 
 The name **Layout** is deliberately distinct from **Template**, which is
 already used for published sections shared into the Question Bank (see
@@ -38,6 +43,21 @@ Use the Section menu layout when:
 - **Long assessments** where forcing every section causes drop-off.
 - **"Rank your priorities" surveys** where the participant's pick order
   matters (use the *In pick order* setting).
+
+### Randomised (RCT)
+
+Use the Randomised layout when:
+
+- **Clinical trials** where participants must be randomised to intervention
+  vs control arms.
+- **A/B testing of question wording** where different arms see different
+  phrasings of the same question.
+- **Randomised controlled trials** where arm assignment must be
+  system-controlled and not participant-chosen.
+
+Randomisation is a common reason researchers reach for Qualtrics or REDCap
+instead of simpler tools. This layout unblocks that use case natively in
+CheckTick.
 
 ## Choosing a layout
 
@@ -139,65 +159,90 @@ glance which sections are optional.
 
 ## Outline syntax
 
-When using the [bulk upload / text editor](bulk-upload.md), you can
-configure the Section menu layout directly in the outline:
+The Section menu layout can be configured directly in the [Outline / bulk
+upload](import.md#section-menu-layout) text editor using a `SECTION_MENU`
+block. The layout config survives export → import round-trips.
 
-```text
-SECTION_MENU
-  prompt: "Which areas would you like to cover?"
-  min: 1
-  max: 4
-  order: authored
-  select_all: true
-  estimated_time: true
+## Randomised (RCT)
 
-# Demographics {demographics}
-## Name {name}
-(text)
-
-# Medical history {medical-history}    ~ pickable
-## Condition {condition}
-(text)
-
-# Medications {medications}    ~ pickable, 5 min
-## Drug {drug}
-(text)
-```
-
-- The `SECTION_MENU` block goes at the top of the outline, before any
-  section headings.
-- Config lines are indented: `prompt`, `min`, `max`, `order`
-  (`authored` or `participant`), `select_all`, `estimated_time`.
-- Place `~ pickable` after the section heading (and after the `{id}` if
-  present) to mark a section as pickable.
-- Add `, N min` to set an estimated time (e.g. `~ pickable, 5 min`).
-- Sections without `~` are mandatory.
-- A blank line ends the config block.
-
-The layout config survives export → import round-trips, so you can
-export a Section menu survey, edit the outline, and re-import without
-losing the configuration.
-
-## Planned layouts
-
-The following layouts are planned for future releases. They are not yet
-implemented.
-
-### Randomised (RCT)
-
-For clinical trials and research, the system randomly assigns section
-order or randomly assigns participants to different section subsets
-(e.g., intervention vs control questionnaire). Unlike the Section menu
-layout where the participant chooses, the system chooses based on a
-random seed stored on the participant's progress record at first access.
+For clinical trials and research, the system randomly assigns each
+participant to an **arm** (e.g. intervention vs control). Each arm has its
+own set of sections, and the participant only sees the sections in their
+assigned arm. Unlike the Section menu layout where the participant
+chooses, the system chooses based on a random seed stored on the
+participant's progress record at first access.
 
 **When to use:** clinical trials, A/B testing of question wording,
 randomised controlled trials where arm assignment must be
 system-controlled and not participant-chosen.
 
 **Why it matters:** randomisation is a common reason researchers reach
-for Qualtrics or REDCap instead of simpler tools. This layout would
-unblock that use case natively in CheckTick.
+for Qualtrics or REDCap instead of simpler tools. This layout unblocks
+that use case natively in CheckTick.
+
+### Configuring an RCT
+
+On the Organise page, choose the **Randomised (RCT)** layout card. A
+configuration card appears where you:
+
+- **Add arms** — name each arm (e.g. "Intervention", "Control").
+- **Set allocation ratio** per arm (e.g. 1:1, 2:1). The system balances
+  assignment across arms per the ratios.
+- **Choose allocation strategy** — *Balanced (blocked)* (default; keeps
+  arm counts close to the ratios) or *Simple (weighted)* (independent
+  random draw per participant).
+- **Assign sections to arms** — tick which sections each arm sees. A
+  section can be in multiple arms (e.g. a demographics section shared
+  by all arms).
+- **Optional seed** — set a fixed seed for reproducible dry-runs. Leave
+  blank for real trials so allocation is unpredictable.
+
+### Warnings
+
+The configuration card shows live warnings when:
+
+- **Single arm** — RCT with one arm is degenerate; add a second arm.
+- **Allocation ratio sum zero** — every arm has ratio 0; set at least one
+  arm's ratio to 1 or higher.
+- **Unreachable section** — a section not in any arm's group set is
+  never seen by any participant.
+- **All arms share the same sections** — the RCT is structurally
+  identical to a linear survey.
+- **Branching targets an arm-exclusive section** — a `jump to` into a
+  section not in the participant's assigned arm is a dead branch for
+  other arms.
+
+### Participant experience
+
+The participant never sees the picker or their arm. They open the survey
+and see the sections in their assigned arm, in the authored order. On
+resume, they return to the same sections. There is no "Change sections"
+link — the assignment is fixed for the lifetime of their progress record.
+
+### Previewing an RCT survey
+
+The preview page includes a **Simulate arm** panel that lets you pick
+an arm and see exactly what a participant assigned to that arm would
+see. Useful for verifying arm composition before going live.
+
+### Survey Map
+
+The [Survey Map](branching-and-repeats.md#the-survey-map) shows the full
+authored survey. When using the RCT layout, an **arm composition** badge
+summary appears above the visualiser listing each arm, its allocation
+ratio, and its sections, so you can see at a glance which sections are
+arm-exclusive.
+
+### Outline syntax
+
+The RCT layout can be configured directly in the [Outline / bulk
+upload](import.md#randomised-rct-layout) text editor using a `RANDOMISED`
+block. The layout config survives export → import round-trips.
+
+## Planned layouts
+
+The following layouts are planned for future releases. They are not yet
+implemented.
 
 ### Guided (one question at a time)
 

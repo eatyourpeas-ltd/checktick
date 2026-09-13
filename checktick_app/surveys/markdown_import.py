@@ -751,6 +751,22 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
     # ``~ pickable`` suffixes on content group headings.
     section_menu_items: Dict[str, Dict[str, Any]] = {}
 
+    # RANDOMISED block parsing (see docs/survey-layouts-technical.md
+    # §Randomised (RCT) layout §Outline grammar). Analogous to
+    # SECTION_MENU: the block appears before any group headings and
+    # contains only config lines (strategy, seed). The ``~ arm:<name>``
+    # suffix is placed on the actual content group headings, e.g.::
+    #
+    #     # Intervention {intervention}    ~ arm:intervention
+    #
+    # A group may be in multiple arms: ``~ arm:intervention, arm:control``.
+    randomised: Dict[str, Any] | None = None
+    in_randomised_block = False
+    # Map group name -> list of arm names collected from ``~ arm:`` suffixes.
+    randomised_arm_items: Dict[str, List[str]] = {}
+    # Ordered list of arm names seen in the outline (for arm creation order).
+    randomised_arm_order: List[str] = []
+
     for raw in raw_lines:
         # Count leading '>' as depth
         s = raw
@@ -839,6 +855,46 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
             in_section_menu_block = False
             # Fall through to regular parsing for this line
 
+        # RANDOMISED block start (see docs/survey-layouts-technical.md
+        # §Randomised (RCT) layout §Outline grammar).
+        if _re.match(r"^RANDOMISED$", stripped, flags=_re.IGNORECASE):
+            in_randomised_block = True
+            randomised = {
+                "allocation_strategy": "balanced",
+                "seed": None,
+            }
+            continue
+
+        # RANDOMISED config lines (indented under the block header).
+        if in_randomised_block and (depth > 0 or raw[:1].isspace()):
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            if cfg_match and randomised is not None:
+                key = cfg_match.group(1).lower()
+                val_raw = cfg_match.group(2).strip()
+                if key == "strategy":
+                    if val_raw in ("balanced", "simple"):
+                        randomised["allocation_strategy"] = val_raw
+                elif key == "seed":
+                    try:
+                        randomised["seed"] = int(val_raw)
+                    except ValueError:
+                        pass
+                continue
+            # Blank line inside indented block — skip
+            if not stripped:
+                continue
+            continue
+
+        # Blank line ends the RANDOMISED config block
+        if in_randomised_block and not stripped:
+            in_randomised_block = False
+            continue
+
+        # Unknown non-indented line inside RANDOMISED block also ends it
+        if in_randomised_block and depth == 0 and not raw[:1].isspace():
+            in_randomised_block = False
+            # Fall through to regular parsing for this line
+
         # REPEAT marker?
         m = _re.match(r"^REPEAT(?:-(\d+))?$", content.strip(), flags=_re.IGNORECASE)
         if m:
@@ -849,12 +905,13 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
 
         # Group heading detection (top-level groups only: '# ')
         if content.strip().startswith("# ") and not content.strip().startswith("## "):
-            # Detect and strip ``~ pickable`` suffix (section_menu layout).
-            # The suffix is recorded in section_menu_items and stripped from
+            # Detect and strip ``~`` suffix (section_menu ``~ pickable`` or
+            # RCT ``~ arm:<name>``). The suffix is recorded and stripped from
             # the heading before it reaches the regular parser.
             heading_content = content
             tilde_idx = heading_content.find("~")
             if tilde_idx != -1 and section_menu is not None:
+                # ``~ pickable[, N min]`` for section_menu layout.
                 suffix = heading_content[tilde_idx + 1 :].strip()
                 heading_content = heading_content[:tilde_idx].rstrip()
                 is_pickable = True
@@ -872,6 +929,25 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                     "estimated_minutes": estimated_minutes,
                 }
                 content = heading_content
+            elif tilde_idx != -1 and randomised is not None:
+                # ``~ arm:<name>[, arm:<name>...]`` for RCT layout.
+                suffix = heading_content[tilde_idx + 1 :].strip()
+                heading_content = heading_content[:tilde_idx].rstrip()
+                # Extract all arm: tokens (comma-separated).
+                arm_matches = _re.findall(
+                    r"arm:([\w\s-]+?)\s*(?:,|$)", suffix, flags=_re.IGNORECASE
+                )
+                arm_names = [a.strip() for a in arm_matches if a.strip()]
+                # Extract group name from the cleaned heading
+                heading_text = heading_content.strip()[2:]  # remove "# "
+                ref_match = _re.search(r"\{([^{}]+)\}\s*$", heading_text)
+                if ref_match:
+                    heading_text = heading_text[: ref_match.start()].rstrip()
+                randomised_arm_items[heading_text] = arm_names
+                for an in arm_names:
+                    if an not in randomised_arm_order:
+                        randomised_arm_order.append(an)
+                content = heading_content
             elif section_menu is not None:
                 # Group without ~ suffix under section_menu → mandatory
                 heading_text = content.strip()[2:]
@@ -882,6 +958,15 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                     "is_pickable": False,
                     "estimated_minutes": None,
                 }
+            elif randomised is not None:
+                # Group without ~ suffix under RANDOMISED → reachable by all
+                # arms (the union of all arm group sets). Record as empty list
+                # so the bulk upload view knows it was seen under the block.
+                heading_text = content.strip()[2:]
+                ref_match = _re.search(r"\{([^{}]+)\}\s*$", heading_text)
+                if ref_match:
+                    heading_text = heading_text[: ref_match.start()].rstrip()
+                randomised_arm_items[heading_text] = []  # all arms
             # Trim or expand repeat_stack to current depth
             while len(repeat_stack) > depth:
                 repeat_stack.pop()
@@ -926,8 +1011,20 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 g["section_menu_pickable"] = False
                 g["section_menu_estimated_minutes"] = None
 
+    # Apply randomised arm items to parsed groups by name.
+    if randomised is not None:
+        randomised["arm_order"] = randomised_arm_order
+        for g in groups:
+            arm_names = randomised_arm_items.get(g["name"])
+            if arm_names is not None:
+                g["randomised_arms"] = arm_names
+            else:
+                # Groups not in the RANDOMISED block default to all arms.
+                g["randomised_arms"] = []
+
     return {
         "groups": groups,
         "repeats": repeats,
         "section_menu": section_menu,
+        "randomised": randomised,
     }

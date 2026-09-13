@@ -74,6 +74,33 @@
   </div>
   {% endif %}
 
+  {# === RCT arm badges (step 9) === #}
+  {% if rct_info %}
+  <div class="not-prose max-w-2xl">
+    <div class="card bg-base-100 shadow-sm border border-base-300">
+      <div class="card-body p-4">
+        <h3 class="text-sm font-semibold text-base-content/80 mb-2">{% trans 'Randomised trial — arm composition' %}</h3>
+        <div class="space-y-2">
+          {% for arm in rct_info.arms %}
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="badge badge-secondary badge-sm shrink-0">{{ arm.name }}</span>
+            <span class="text-xs text-base-content/60 shrink-0">ratio {{ arm.allocation_ratio }}</span>
+            <div class="flex flex-wrap gap-1">
+              {% for grp in arm.groups.all %}
+              <span class="badge badge-outline badge-sm">{{ grp.name }}</span>
+              {% endfor %}
+              {% if not arm.groups.all %}
+              <span class="text-xs text-warning">{% trans 'no sections' %}</span>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   {# === Visualiser (reused from the Organise page; now in its own space) === #}
   {% if has_questions %}
   <div>

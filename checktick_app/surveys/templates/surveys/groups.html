@@ -55,9 +55,9 @@
       {% trans 'Survey layout' %}
     </h3>
     <p class="text-xs text-base-content/60 mb-3">
-      {% trans 'How sections are offered to the participant. Switch to “Section menu” to let participants pick which sections to complete.' %}
+      {% trans 'How sections are offered to the participant. “Section menu” lets participants pick which sections to complete; “Randomised (RCT)” system-assigns participants to an arm.' %}
     </p>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-3xl">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-4xl">
       {# Linear card #}
       <div class="card bg-base-100 border {% if survey.layout == 'linear' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
         <div class="card-body gap-2 p-4">
@@ -100,6 +100,31 @@
               {% csrf_token %}
               <input type="hidden" name="action" value="set_layout" />
               <input type="hidden" name="layout" value="section_menu" />
+              <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+
+      {# RCT card #}
+      <div class="card bg-base-100 border {% if survey.layout == 'rct' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+        <div class="card-body gap-2 p-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-semibold text-base-content">{% trans 'Randomised (RCT)' %}</h4>
+            {% if survey.layout == 'rct' %}
+              <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% endif %}
+          </div>
+          {% include "components/icons/layout_rct.html" with classes="w-full h-24 text-base-content/70" %}
+          <p class="text-xs text-base-content/70">{% trans 'System assigns each participant to an arm. Each arm sees only its own sections.' %}</p>
+          {% if section_count < 2 %}
+            <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>
+          {% endif %}
+          {% if can_edit and survey.layout != 'rct' %}
+            <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_layout" />
+              <input type="hidden" name="layout" value="rct" />
               <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
             </form>
           {% endif %}
@@ -223,7 +248,115 @@
   </section>
   {% endif %}
 
-  {# === Empty state: no groups yet (legacy surveys; new surveys get a default group automatically on creation via create_default_section) === #}
+  {# === RCT configuration card (step 5) === #}
+  {% if survey.layout == 'rct' %}
+  <section class="not-prose mb-6" aria-labelledby="rct-config-heading">
+    <div class="card bg-base-100 border border-base-300 max-w-4xl">
+      <div class="card-body gap-3 p-4">
+        <h3 id="rct-config-heading" class="font-semibold text-base-content">
+          {% trans 'Randomised trial configuration' %}
+        </h3>
+        {% if can_edit %}
+        <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="space-y-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_randomised_menu" />
+
+          <fieldset class="flex flex-wrap gap-x-6 gap-y-2 items-end">
+            <div>
+              <span class="label text-xs">{% trans 'Allocation strategy' %}</span>
+              <div class="flex gap-3">
+                {% for value, label in randomised_strategy_choices %}
+                <label class="flex items-center gap-1 cursor-pointer text-sm">
+                  <input type="radio" name="allocation_strategy" value="{{ value }}"
+                         class="radio radio-sm"
+                         {% if randomised_menu.allocation_strategy == value or forloop.first and not randomised_menu.allocation_strategy %}checked{% endif %} />
+                  {{ label }}
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            <div>
+              <label class="label text-xs" for="id_seed">{% trans 'Seed (blank = random)' %}</label>
+              <input id="id_seed" type="number" name="seed"
+                     class="input input-bordered input-sm w-32"
+                     value="{{ randomised_menu.seed|default:'' }}"
+                     placeholder="blank" />
+            </div>
+          </fieldset>
+
+          <div>
+            <span class="label text-xs">{% trans 'Arms' %}</span>
+            <ul class="mt-1 space-y-3">
+              {% for arm in randomised_arms %}
+              <li class="border border-base-200 rounded-lg p-3 space-y-2">
+                <input type="hidden" name="arm_ids" value="{{ arm.id }}" />
+                <div class="flex items-center gap-3 flex-wrap">
+                  <label class="flex items-center gap-1 text-sm">
+                    <span class="text-xs text-base-content/60">{% trans 'Name' %}</span>
+                    <input type="text" name="arm_name_{{ arm.id }}" value="{{ arm.name }}"
+                           class="input input-bordered input-sm w-40" maxlength="100" />
+                  </label>
+                  <label class="flex items-center gap-1 text-sm">
+                    <span class="text-xs text-base-content/60">{% trans 'Ratio' %}</span>
+                    <input type="number" min="1" name="arm_ratio_{{ arm.id }}"
+                           value="{{ arm.allocation_ratio }}"
+                           class="input input-bordered input-sm w-16" />
+                  </label>
+                  <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="remove_arm" />
+                    <input type="hidden" name="arm_id" value="{{ arm.id }}" />
+                    <button type="submit" class="btn btn-ghost btn-xs text-error">{% trans 'Remove' %}</button>
+                  </form>
+                </div>
+                <div>
+                  <span class="text-xs text-base-content/60">{% trans 'Sections in this arm' %}</span>
+                  <div class="mt-1 flex flex-wrap gap-2">
+                    {% for g in groups %}
+                    <label class="flex items-center gap-1 cursor-pointer text-xs">
+                      <input type="checkbox" name="arm_groups_{{ arm.id }}" value="{{ g.id }}"
+                             class="checkbox checkbox-xs"
+                             {% if g.id in arm_group_ids|get_item:arm.id %}checked{% endif %} />
+                      <span class="truncate max-w-32">{{ g.name }}</span>
+                    </label>
+                    {% endfor %}
+                  </div>
+                </div>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          <div class="flex gap-2 pt-1">
+            <button type="submit" class="btn btn-primary btn-sm">{% trans 'Save layout' %}</button>
+            <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="add_arm" />
+              <button type="submit" class="btn btn-outline btn-sm">{% trans 'Add arm' %}</button>
+            </form>
+            <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/survey-map/">{% trans 'Review in Survey Map' %}</a>
+          </div>
+        </form>
+        {% else %}
+        <p class="text-sm text-base-content/70">{% trans 'This survey is read-only.' %}</p>
+        {% endif %}
+
+        {# RCT warnings (step 7) #}
+        {% if randomised_warnings %}
+        <div class="mt-2 space-y-1">
+          {% for warning in randomised_warnings %}
+          <div class="alert alert-warning py-2 px-3 text-xs" role="status">
+            {% include "components/icons/exclamation-triangle.html" with classes="w-4 h-4 shrink-0" %}
+            <span>{{ warning }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+  {# === (legacy surveys; new surveys get a default group automatically on creation via create_default_section) === #}
   {% if not groups %}
   <div class="not-prose mt-6 max-w-2xl">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -241,21 +241,236 @@ were done in PR #320 (v0.13.0).
   risks discarded answers. Default to allow-with-confirm, or lock the
   selection after Continue? Worth a quick user test.
 
+## Randomised (RCT) layout
+
+The RCT layout is the system-assigned counterpart to Section menu. Instead
+of the participant choosing which sections to complete, the system assigns
+them to an **arm** at first access, and the arm's group set becomes their
+`selected_group_ids`. The runtime hook (`_resolved_group_order_ids`
+filtering by `selected_group_ids`) is reused unchanged — RCT only changes
+*who* populates `selected_group_ids`, not how the pipeline consumes it.
+
+### Data model
+
+```python
+class Survey(models.Model):
+    class Layout(models.TextChoices):
+        LINEAR = "linear", "Linear"
+        SECTION_MENU = "section_menu", "Section menu"
+        RCT = "rct", "Randomised (RCT)"
+
+
+class RandomisedMenu(models.Model):
+    survey = models.OneToOneField(
+        Survey, related_name="randomised_menu", on_delete=models.CASCADE,
+    )
+
+    class AllocationStrategy(models.TextChoices):
+        BALANCED = "balanced", "Balanced (blocked)"
+        SIMPLE = "simple", "Simple (weighted)"
+
+    allocation_strategy = models.CharField(
+        max_length=20,
+        choices=AllocationStrategy.choices,
+        default=AllocationStrategy.BALANCED,
+    )
+    seed = models.BigIntegerField(
+        null=True, blank=True,
+        help_text=(
+            "Optional fixed seed for deterministic allocation across "
+            "runs. Blank = system-generated per participant."
+        ),
+    )
+
+
+class RandomisedArm(models.Model):
+    menu = models.ForeignKey(
+        RandomisedMenu, related_name="arms", on_delete=models.CASCADE,
+    )
+    name = models.CharField(max_length=100)
+    allocation_ratio = models.PositiveIntegerField(default=1)
+    order = models.PositiveIntegerField(default=0)
+    groups = models.ManyToManyField(
+        QuestionGroup, related_name="arms", blank=True,
+    )
+
+    class Meta:
+        unique_together = ("menu", "name")
+        ordering = ["order", "id"]
+
+
+class SurveyProgress(models.Model):
+    ...
+    # [Planned] RCT arm assignment. Only populated for surveys with
+    # layout = rct (see docs/survey-layouts.md). Null for other layouts.
+    randomisation_seed = models.BigIntegerField(
+        null=True, blank=True,
+        help_text="Stable seed used for RCT arm allocation (set on first access)",
+    )
+    assigned_arm = models.ForeignKey(
+        "RandomisedArm", null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="progress_records",
+        help_text="The RCT arm this participant was assigned to at first access",
+    )
+```
+
+A `linear` or `section_menu` survey has no `RandomisedMenu` row and the
+new `SurveyProgress` fields stay null.
+
+**Migration:** `0061_randomised_layout` (adds the `Layout.RCT` choice,
+both models, the M2M through table, and both `SurveyProgress` fields).
+
+### Allocation strategy
+
+`_assign_arm_for_progress(progress, menu)` is a standalone pluggable
+allocator in `views.py` (kept separate from the runtime pipeline so a
+future Delphi `RoundAllocator` can sit next to it without touching RCT).
+
+- **Balanced (blocked):** builds permuted blocks of size
+  `sum(arm.allocation_ratio)`, walks the block by allocation count for
+  the survey. Deterministic from `(seed, allocation_count)`.
+- **Simple (weighted):** weighted random pick from `seed`. Deterministic
+  from `seed` alone.
+
+`allocation_count` is `SurveyProgress.objects.filter(survey=…,
+assigned_arm__in=arms).count()` — there is a known race window if two
+participants hit first-access simultaneously. For the first RCT PR this
+is acceptable; a follow-up can serialise allocation under a
+`select_for_update` or a per-survey allocation counter.
+
+The seed lives on `SurveyProgress.randomisation_seed` and is set on first
+access if absent (system-generated, `random.randint(0, 2**63-1)`). If the
+author sets `RandomisedMenu.seed`, it is used as the salt for every
+allocation — useful for reproducible dry-runs but should be left blank
+for real trials to avoid arm predictability.
+
+### Runtime hook
+
+In `_handle_participant_submission`, when `survey.layout == RCT` and
+`progress.assigned_arm is None`, the runtime:
+
+1. Ensures a `RandomisedMenu` exists (creates a default with two empty
+   arms if missing — "Intervention" and "Control" — so a freshly
+   switched survey is at least runnable).
+2. Calls `_assign_arm_for_progress(progress, menu)`.
+3. Resolves `selected_group_ids` from the arm's `groups` (M2M), ordered
+   by `_resolved_group_order_ids` so the arm's sections keep the
+   Organise-page order.
+4. Stores both `assigned_arm_id` and `selected_group_ids` on
+   `SurveyProgress` and re-renders the take view.
+
+On resume (`assigned_arm` already set), the picker/assignment is skipped
+and the take view renders with the previously-resolved
+`selected_group_ids`. There is no picker page for RCT — the participant
+never sees their arm.
+
+### Outline grammar
+
+The `RANDOMISED` block sits at the top of the outline (analogous to
+`SECTION_MENU`) and the `~ arm:<name>` suffix marks which arm(s) a
+section belongs to:
+
+```text
+RANDOMISED
+  strategy: balanced
+  seed: 7
+
+# Demographics {demographics}    ~ arm:intervention, arm:control
+## Name {name}
+(text)
+
+# Intervention {intervention}    ~ arm:intervention
+## Dose {dose}
+(text)
+
+# Control {control}    ~ arm:control
+## Placebo {placebo}
+(text)
+```
+
+- `strategy` is `balanced` or `simple`.
+- `seed` is optional (an integer; omit for system-generated).
+- `~ arm:<name>` may repeat (a section in multiple arms). Sections with
+  no `~ arm:` suffix are reachable by all arms (the union of all arm
+  group sets); the configuration warns if a section is unreachable.
+- A blank line ends the config block.
+
+The export side emits the `RANDOMISED` block and `~ arm:<name>` suffixes,
+and the config survives export → import round-trips.
+
+### Warnings
+
+- **No arms configured** — the survey cannot be taken; block the take
+  view with a clear error and warn on the Organise page.
+- **Single arm** — RCT with one arm is degenerate; warn (don't block —
+  the author may be mid-setup).
+- **Allocation ratio sum zero** — every arm has ratio 0; warn.
+- **Unreachable section** — a section not in any arm's group set is
+  never seen by any participant; warn.
+- **Branching targets an arm-exclusive section** — a `jump_to` into a
+  section not in the participant's assigned arm is a dead branch; warn
+  (non-blocking, links to Survey Map).
+- **All arms share the same group set** — the RCT is structurally
+  identical to a linear survey; warn.
+
+### Preview
+
+`survey_preview` accepts `?simulate_arm=<arm_id>`. When present, the
+questions are filtered to that arm's groups (ordered by
+`_resolved_group_order_ids`). A "Simulate arm" panel on `detail.html`
+(preview mode only) lists the arms as radio buttons and applies the
+filter on submit.
+
+### Survey Map
+
+The Survey Map shows the full authored survey. When `layout == rct`, a
+badge summary above the visualiser lists each arm and its sections, so
+the author can see at a glance which sections are arm-exclusive.
+
+### Issues and edge cases
+
+| Issue | Why it matters | Handling |
+|---|---|---|
+| Allocation race | Two participants hitting first access simultaneously could both compute the same `allocation_count`. | Acceptable for first PR. Document; follow-up can `select_for_update`. |
+| Author edits arms after enrolment | A participant already enrolled keeps their `assigned_arm`; the `RandomisedArm` FK protects them via `SET_NULL` only if the arm is deleted. | Warn on arm deletion: enrolled participants keep their stored `selected_group_ids` even if the arm is removed. |
+| Empty arm | An arm with no groups yields an empty survey. | Warn on save; block the take view if the assigned arm has no groups (fall back to all sections). |
+| Min/Max drift analogue | Author shrinks an arm's group set after enrolment. | Stored `selected_group_ids` is preserved on resume; the arm's current group set is only consulted on first assignment. |
+| Outline round-trip | Arm assignment must survive export → import. | `RANDOMISED` block + `~ arm:` suffixes; round-trip test in `test_outline_randomised.py`. |
+| Determinism | Authors running dry-runs want reproducible allocation. | Optional `RandomisedMenu.seed` salts the allocator; blank in real trials. |
+
+### Delphi compatibility
+
+The RCT design is deliberately shaped so the planned Delphi workflow can
+reuse its ingredients:
+
+- `SurveyProgress.assigned_arm` (FK, set at first access, queryable for
+  analysis) is the direct precedent for `SurveyProgress.delphi_round`
+  (FK to a future `DelphiRound` model). Same shape, separate field —
+  arms and rounds are orthogonal dimensions.
+- `SurveyProgress.randomisation_seed` is the precedent for Delphi's
+  per-participant stable identifier used to keep round-N+1 assignment
+  stable across resume.
+- The runtime hook (`_resolved_group_order_ids` filtering by
+  `selected_group_ids`) is unchanged. Delphi will resolve
+  `selected_group_ids` from the current round's section set instead of
+  an arm's group set — same hook, different allocator.
+- `_assign_arm_for_progress` is a standalone pluggable function; a
+  future `_assign_round_for_progress` sits next to it without touching
+  RCT.
+- The `?simulate_arm=` preview path is the precedent for Delphi's
+  "show me round N aggregate" inter-round feedback view. A small
+  `_aggregate_responses_by_group(survey, group_ids)` helper added for
+  the arm-preview panel is reusable for Delphi's median/IQR/themes.
+- RCT does **not** introduce scheduling, anonymity-beyond-aggregation,
+  or convergence tracking — those are Delphi-only and stay out of this
+  PR to keep RCT scope tight.
+
 ## Planned layouts
 
-The following layouts are planned for future releases. See
+The following layouts are still planned for future releases. See
 [Survey Layouts](survey-layouts.md#planned-layouts) for the user-facing
 descriptions. Technical notes:
-
-### Randomised (RCT)
-
-- System assigns section order or section subset based on a random seed
-  stored on `SurveyProgress` at first access.
-- Natural extension of `selected_group_ids` — system assigns instead of
-  participant choosing.
-- May need a `RandomisedMenu` model (arms, allocation ratio, seed
-  strategy) alongside `SectionMenu`.
-- Priority: high — unblocks clinical trial use case.
 
 ### Guided (one question at a time)
 

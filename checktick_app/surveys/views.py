@@ -6,6 +6,7 @@ from datetime import date, datetime, time
 import io
 import json
 import logging
+import random
 import re
 import secrets
 from typing import Any, Iterable, Union
@@ -44,6 +45,7 @@ from checktick_app.context_processors import branding as platform_branding
 from checktick_app.core.decorators import email_confirmed_required
 from checktick_app.core.theme_utils import is_safe_url, sanitize_font_family
 
+from .allocation import MAX_SEED, pick_arm
 from .color import hex_to_oklch
 from .doc_extract import (
     MESSAGE_BY_CODE,
@@ -68,6 +70,8 @@ from .models import (
     OrganizationMembership,
     PublishedQuestionGroup,
     QuestionGroup,
+    RandomisedArm,
+    RandomisedMenu,
     RecoveryRequest,
     SectionMenu,
     SectionMenuItem,
@@ -1470,6 +1474,29 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
             sim_ids = {int(x) for x in sim_raw.split(",") if str(x).isdigit()}
             simulated_group_ids = list((sim_ids | mandatory_ids))
 
+    # RCT: simulate arm (step 8). If ``?simulate_arm=<arm_id>`` is present,
+    # the questions are filtered to that arm's groups (ordered by
+    # _resolved_group_order_ids). A "Simulate arm" panel on the preview
+    # page lets the author pick an arm without a real participant.
+    rct_preview = None
+    if survey.layout == Survey.Layout.RCT:
+        rmenu = getattr(survey, "randomised_menu", None)
+        if rmenu is None:
+            rmenu = RandomisedMenu.objects.create(survey=survey)
+        rct_arms = list(rmenu.arms.order_by("order", "id").prefetch_related("groups"))
+        rct_preview = {"menu": rmenu, "arms": rct_arms}
+        sim_arm_raw = request.GET.get("simulate_arm", "")
+        if sim_arm_raw.isdigit():
+            sim_arm_id = int(sim_arm_raw)
+            sim_arm = next((a for a in rct_arms if a.id == sim_arm_id), None)
+            if sim_arm is not None:
+                arm_group_ids = set(sim_arm.groups.values_list("id", flat=True))
+                if arm_group_ids:
+                    ordered = _resolved_group_order_ids(survey)
+                    simulated_group_ids = [g for g in ordered if g in arm_group_ids]
+                else:
+                    simulated_group_ids = []
+
     _prepare_question_rendering(survey)
     all_questions = list(
         survey.questions.select_related("group", "dataset")
@@ -1540,6 +1567,8 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         # Section menu simulate selection panel (step 9).
         "section_menu_preview": section_menu_preview,
         "simulated_group_ids": simulated_group_ids or [],
+        # RCT simulate arm panel (step 8).
+        "rct_preview": rct_preview,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
@@ -5881,13 +5910,56 @@ def _handle_participant_submission(
         return redirect("surveys:thank_you", slug=survey.slug)
 
     # GET: render using existing detail template
+    # RCT arm assignment (see docs/survey-layouts-technical.md §Randomised
+    # (RCT) layout §Runtime hook). When the survey uses the rct layout and
+    # the participant has not yet been assigned an arm (assigned_arm is
+    # None), ensure a RandomisedMenu, assign an arm via
+    # _assign_arm_for_progress, resolve selected_group_ids from the arm's
+    # groups (ordered by _resolved_group_order_ids so the arm's sections
+    # keep the Organise-page order), and store both on SurveyProgress.
+    # On resume, assigned_arm is already set and selected_group_ids is
+    # already populated, so the assignment is skipped. There is no picker
+    # for RCT — the participant never sees their arm.
+    selected_group_ids: list[int] = []
+    if survey.layout == Survey.Layout.RCT and progress is not None:
+        if progress.assigned_arm_id is None:
+            menu = _ensure_randomised_menu(survey)
+            try:
+                arm = _assign_arm_for_progress(progress, menu)
+            except ValueError:
+                # No arms configured (or all arms empty). Block the take
+                # view with a clear error rather than crashing.
+                messages.error(
+                    request,
+                    _(
+                        "This survey is configured as a randomised trial but "
+                        "has no arms set up. Please contact the survey author."
+                    ),
+                )
+                return redirect("surveys:detail", slug=survey.slug)
+            # Resolve selected_group_ids from the arm's groups, ordered by
+            # the Organise-page order so the arm's sections keep their
+            # authored sequence.
+            arm_group_ids = set(arm.groups.values_list("id", flat=True))
+            if arm_group_ids:
+                ordered_ids = _resolved_group_order_ids(survey)
+                selected_group_ids = [g for g in ordered_ids if g in arm_group_ids]
+                progress.selected_group_ids = selected_group_ids
+                progress.save(update_fields=["selected_group_ids"])
+            else:
+                # Empty arm — fall back to all sections so the survey is
+                # still completable; the warnings step flags this.
+                selected_group_ids = []
+        else:
+            raw = progress.selected_group_ids or []
+            if isinstance(raw, list):
+                selected_group_ids = [int(x) for x in raw if str(x).isdigit()]
     # Section menu picker (see docs/survey-layouts.md step 5). When the
     # survey uses the section_menu layout and the participant has not yet
     # selected sections (selected_group_ids is empty), render the picker
     # instead of the question list. On resume, selected_group_ids is
     # populated so the picker is skipped.
-    selected_group_ids: list[int] = []
-    if survey.layout == Survey.Layout.SECTION_MENU and progress is not None:
+    elif survey.layout == Survey.Layout.SECTION_MENU and progress is not None:
         raw = progress.selected_group_ids or []
         if isinstance(raw, list):
             selected_group_ids = [int(x) for x in raw if str(x).isdigit()]
@@ -6211,6 +6283,67 @@ def _sync_section_menu_items(menu: SectionMenu, survey: Survey) -> None:
     menu.items.exclude(group_id__in=seen).delete()
 
 
+def _ensure_randomised_menu(survey: Survey) -> RandomisedMenu:
+    """Get or create a RandomisedMenu for ``survey``.
+
+    A freshly-switched RCT survey has no menu yet. We create a default with
+    two empty arms ("Intervention", "Control") so the survey is at least
+    runnable; the author configures real arms on the Organise page.
+    """
+    menu, created = RandomisedMenu.objects.get_or_create(survey=survey)
+    if created:
+        RandomisedArm.objects.create(menu=menu, name="Intervention", order=1)
+        RandomisedArm.objects.create(menu=menu, name="Control", order=2)
+    return menu
+
+
+def _assign_arm_for_progress(
+    progress: SurveyProgress, menu: RandomisedMenu
+) -> RandomisedArm:
+    """Assign and persist an RCT arm for ``progress``, returning the arm.
+
+    Idempotent: if ``progress.assigned_arm`` is already set, returns it.
+    Sets ``randomisation_seed`` on first call if absent (system-generated
+    unless ``menu.seed`` is set, in which case the menu seed salts the
+    allocation for reproducible dry-runs).
+
+    Kept as a standalone pluggable function so a future Delphi
+    ``_assign_round_for_progress`` can sit next to it without touching RCT
+    (see docs/survey-layouts-technical.md §Delphi compatibility).
+    """
+    if progress.assigned_arm_id is not None:
+        return progress.assigned_arm
+    arms = list(menu.arms.order_by("order", "id"))
+    if not arms:
+        # No arms configured — the take view should have blocked this.
+        # As a last resort, return without assigning; the caller handles
+        # the empty case.
+        raise ValueError("No arms configured for RandomisedMenu")
+    ratios = [arm.allocation_ratio for arm in arms]
+    # Seed: menu.seed (if set) salts every allocation for reproducibility;
+    # otherwise the per-participant randomisation_seed drives the draw.
+    if progress.randomisation_seed is None:
+        if menu.seed is not None:
+            progress.randomisation_seed = menu.seed
+        else:
+            progress.randomisation_seed = random.randint(0, MAX_SEED)
+        progress.save(update_fields=["randomisation_seed"])
+    effective_seed = menu.seed if menu.seed is not None else progress.randomisation_seed
+    allocation_count = SurveyProgress.objects.filter(
+        survey=progress.survey_id, assigned_arm__in=arms
+    ).count()
+    chosen = pick_arm(
+        arms,
+        ratios,
+        menu.allocation_strategy,
+        effective_seed,
+        allocation_count,
+    )
+    progress.assigned_arm = chosen
+    progress.save(update_fields=["assigned_arm"])
+    return chosen
+
+
 @login_required
 def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
@@ -6242,6 +6375,17 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                     _(
                         "Section menu needs at least 2 sections to be useful. "
                         "Add more sections first."
+                    ),
+                )
+        # Same guard for RCT — a trial with < 2 sections is degenerate.
+        if chosen == Survey.Layout.RCT:
+            section_count = survey.question_groups.count()
+            if section_count < 2:
+                messages.warning(
+                    request,
+                    _(
+                        "Randomised trials need at least 2 sections to be "
+                        "useful. Add more sections first."
                     ),
                 )
         survey.layout = chosen
@@ -6336,6 +6480,102 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                 ),
             )
         messages.success(request, _("Section menu configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # RCT configuration save (step 5). Only meaningful when the survey is
+    # in rct layout. Saves allocation strategy + optional seed, and per-arm
+    # name / allocation_ratio / group membership.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_randomised_menu"
+        and survey.layout == Survey.Layout.RCT
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = RandomisedMenu.objects.get_or_create(survey=survey)
+        strategy = request.POST.get(
+            "allocation_strategy", RandomisedMenu.AllocationStrategy.BALANCED
+        )
+        if strategy in {
+            choice[0] for choice in RandomisedMenu.AllocationStrategy.choices
+        }:
+            menu.allocation_strategy = strategy
+        seed_raw = (request.POST.get("seed", "") or "").strip()
+        if seed_raw:
+            try:
+                menu.seed = int(seed_raw)
+            except ValueError:
+                menu.seed = None
+        else:
+            menu.seed = None
+        menu.save()
+        # Per-arm: name, ratio, groups. arm_ids is the list of existing
+        # arm IDs submitted from the form.
+        arm_ids = [int(x) for x in request.POST.getlist("arm_ids") if str(x).isdigit()]
+        for arm_id in arm_ids:
+            try:
+                arm = menu.arms.get(id=arm_id)
+            except RandomisedArm.DoesNotExist:
+                continue
+            arm.name = (request.POST.get(f"arm_name_{arm_id}", arm.name) or arm.name)[
+                :100
+            ]
+            try:
+                arm.allocation_ratio = max(
+                    1, int(request.POST.get(f"arm_ratio_{arm_id}", 1))
+                )
+            except ValueError:
+                arm.allocation_ratio = 1
+            arm.save(update_fields=["name", "allocation_ratio"])
+            group_ids = [
+                int(x)
+                for x in request.POST.getlist(f"arm_groups_{arm_id}")
+                if str(x).isdigit()
+            ]
+            arm.groups.set(group_ids)
+        messages.success(request, _("RCT configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Add arm (step 5). Creates a new empty arm at the end of the order.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "add_arm"
+        and survey.layout == Survey.Layout.RCT
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = RandomisedMenu.objects.get_or_create(survey=survey)
+        next_order = (menu.arms.aggregate(m=models.Max("order"))["m"] or 0) + 1
+        RandomisedArm.objects.create(
+            menu=menu, name=f"Arm {next_order}", order=next_order
+        )
+        messages.success(request, _("Arm added."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Remove arm (step 5). Deletes the arm; enrolled participants keep
+    # their stored selected_group_ids (SET_NULL on the FK).
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "remove_arm"
+        and survey.layout == Survey.Layout.RCT
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        arm_id_raw = request.POST.get("arm_id", "")
+        if arm_id_raw.isdigit():
+            menu = getattr(survey, "randomised_menu", None)
+            if menu is not None:
+                menu.arms.filter(id=int(arm_id_raw)).delete()
+                messages.success(request, _("Arm removed."))
         return redirect("surveys:groups", slug=slug)
 
     groups_qs = survey.question_groups.annotate(
@@ -6436,6 +6676,121 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                     }
                 )
 
+    # RCT configuration (only for rct layout). Ensure the menu has at
+    # least two default arms so a freshly-switched survey is configurable.
+    randomised_menu = None
+    randomised_arms: list[RandomisedArm] = []
+    randomised_strategy_choices = RandomisedMenu.AllocationStrategy.choices
+    if survey.layout == Survey.Layout.RCT:
+        randomised_menu, _created = RandomisedMenu.objects.get_or_create(survey=survey)
+        if randomised_menu.arms.count() == 0:
+            RandomisedArm.objects.create(
+                menu=randomised_menu, name="Intervention", order=1
+            )
+            RandomisedArm.objects.create(menu=randomised_menu, name="Control", order=2)
+        randomised_arms = list(
+            randomised_menu.arms.order_by("order", "id").prefetch_related("groups")
+        )
+    # Precompute arm → set of group IDs for the template's checkbox
+    # membership check (Django templates can't call values_list directly).
+    arm_group_ids: dict[int, set[int]] = {
+        arm.id: set(arm.groups.values_list("id", flat=True)) for arm in randomised_arms
+    }
+    # RCT warnings (step 7). Non-blocking — surfaced on the Organise page
+    # configuration card so the author can fix the configuration before
+    # publishing.
+    randomised_warnings: list[str] = []
+    if survey.layout == Survey.Layout.RCT and randomised_menu is not None:
+        arms = randomised_arms
+        all_group_ids = {g.id for g in groups}
+        if len(arms) == 1:
+            randomised_warnings.append(
+                _(
+                    "Only one arm is configured. A randomised trial with a "
+                    "single arm is degenerate — add a second arm."
+                )
+            )
+        # Allocation ratio sum zero.
+        if arms and all(a.allocation_ratio == 0 for a in arms):
+            randomised_warnings.append(
+                _(
+                    "Every arm has allocation ratio 0. Set at least one arm's "
+                    "ratio to 1 or higher."
+                )
+            )
+        # Unreachable sections: groups not in any arm.
+        if arms:
+            reachable = set()
+            for a in arms:
+                reachable.update(a.groups.values_list("id", flat=True))
+            unreachable = all_group_ids - reachable
+            if unreachable:
+                unreachable_names = sorted(
+                    g.name for g in groups if g.id in unreachable
+                )
+                for name in unreachable_names:
+                    randomised_warnings.append(
+                        _(
+                            "Section '%(section)s' is not in any arm — no "
+                            "participant will see it."
+                        )
+                        % {"section": name}
+                    )
+        # All arms share the same group set → structurally identical to linear.
+        if len(arms) >= 2:
+            group_sets = [set(a.groups.values_list("id", flat=True)) for a in arms]
+            if all(gs == group_sets[0] for gs in group_sets):
+                randomised_warnings.append(
+                    _(
+                        "All arms share the same sections — this RCT is "
+                        "structurally identical to a linear survey."
+                    )
+                )
+        # Branching targets an arm-exclusive section (dead branch).
+        if arms:
+            # Build a map group_id → arms that contain it.
+            group_to_arms: dict[int, set[int]] = {}
+            for a in arms:
+                for gid in a.groups.values_list("id", flat=True):
+                    group_to_arms.setdefault(gid, set()).add(a.id)
+            arm_exclusive_group_ids = {
+                gid for gid, arms_with in group_to_arms.items() if len(arms_with) == 1
+            }
+            if arm_exclusive_group_ids:
+                dead_branches = (
+                    SurveyQuestionCondition.objects.filter(
+                        action=SurveyQuestionCondition.Action.JUMP_TO,
+                    )
+                    .filter(
+                        Q(target_group_id__in=arm_exclusive_group_ids)
+                        | Q(target_question__group_id__in=arm_exclusive_group_ids)
+                    )
+                    .select_related(
+                        "target_group", "question", "target_question__group"
+                    )
+                )
+                for cond in dead_branches:
+                    target_name = (
+                        cond.target_group.name
+                        if cond.target_group
+                        else (
+                            cond.target_question.group.name
+                            if cond.target_question and cond.target_question.group
+                            else "unknown"
+                        )
+                    )
+                    randomised_warnings.append(
+                        _(
+                            "Branching condition on '%(question)s' targets "
+                            "the arm-exclusive section '%(section)s' — it will "
+                            "be a dead branch for participants in other arms."
+                        )
+                        % {
+                            "question": cond.question.text[:50],
+                            "section": target_name,
+                        }
+                    )
+
     ctx = {
         "survey": survey,
         "groups": groups,
@@ -6452,6 +6807,12 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "section_menu_items_by_group": section_menu_items_by_group,
         "section_menu_order_modes": SectionMenu.OrderMode.choices,
         "section_menu_warnings": section_menu_warnings,
+        # RCT config (step 5). None for non-RCT surveys.
+        "randomised_menu": randomised_menu,
+        "randomised_arms": randomised_arms,
+        "randomised_strategy_choices": randomised_strategy_choices,
+        "arm_group_ids": arm_group_ids,
+        "randomised_warnings": randomised_warnings,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
@@ -8751,10 +9112,23 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
             "items": list(menu.items.select_related("group").order_by("order", "id")),
         }
 
+    # RCT info for arm badges (step 9). Lists each arm and its sections so
+    # the Survey Map can show which sections are arm-exclusive.
+    rct_info = None
+    if survey.layout == Survey.Layout.RCT:
+        rmenu = getattr(survey, "randomised_menu", None)
+        if rmenu is None:
+            rmenu = RandomisedMenu.objects.create(survey=survey)
+        rct_info = {
+            "menu": rmenu,
+            "arms": list(rmenu.arms.order_by("order", "id").prefetch_related("groups")),
+        }
+
     ctx = {
         "survey": survey,
         "has_questions": survey.questions.exists(),
         "section_menu_info": section_menu_info,
+        "rct_info": rct_info,
     }
     return render(request, "surveys/survey_map.html", ctx)
 
@@ -11062,6 +11436,58 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                     item.save(update_fields=["is_pickable", "estimated_minutes"])
             summary_parts.append(" Section menu layout applied.")
 
+        # Apply RANDOMISED config from the outline (step 6).
+        randomised_cfg = parsed.get("randomised")
+        if randomised_cfg:
+            survey.layout = Survey.Layout.RCT
+            survey.save(update_fields=["layout"])
+            menu, _created = RandomisedMenu.objects.get_or_create(survey=survey)
+            menu.allocation_strategy = randomised_cfg.get(
+                "allocation_strategy", RandomisedMenu.AllocationStrategy.BALANCED
+            )
+            if randomised_cfg.get("seed") is not None:
+                menu.seed = randomised_cfg["seed"]
+            else:
+                menu.seed = None
+            menu.save()
+            # Create arms by name (ordered by first appearance in the outline).
+            arm_order = randomised_cfg.get("arm_order", [])
+            arms_by_name: dict[str, RandomisedArm] = {}
+            for idx, arm_name in enumerate(arm_order, start=1):
+                arm, _ = RandomisedArm.objects.get_or_create(
+                    menu=menu,
+                    name=arm_name,
+                    defaults={"order": idx, "allocation_ratio": 1},
+                )
+                if arm.order != idx:
+                    arm.order = idx
+                    arm.save(update_fields=["order"])
+                arms_by_name[arm_name] = arm
+            # Drop arms that are no longer in the outline.
+            menu.arms.exclude(name__in=arm_order).delete()
+            # Assign groups to arms by name.
+            for g in parsed["groups"]:
+                grp = group_ref_map.get(g.get("ref"))
+                if grp is None:
+                    grp = next(
+                        (gg for gg in created_groups_in_order if gg.name == g["name"]),
+                        None,
+                    )
+                if grp is None:
+                    continue
+                arm_names_for_group = g.get("randomised_arms", [])
+                if arm_names_for_group:
+                    # Specific arms
+                    for an in arm_names_for_group:
+                        arm = arms_by_name.get(an)
+                        if arm is not None:
+                            arm.groups.add(grp)
+                else:
+                    # No ~ arm: suffix → reachable by all arms
+                    for arm in arms_by_name.values():
+                        arm.groups.add(grp)
+            summary_parts.append(" Randomised (RCT) layout applied.")
+
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)
     return render(request, "surveys/bulk_upload.html", context)
@@ -11127,6 +11553,24 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                 item.group_id: item for item in menu.items.all()
             }
 
+    # RANDOMISED block (see docs/survey-layouts-technical.md §Randomised
+    # (RCT) layout §Outline grammar). Emitted at the top when the survey
+    # uses the rct layout. The ``~ arm:<name>`` suffix is placed on the
+    # actual content group headings below.
+    randomised_arms_by_group: dict[int, list[str]] = {}
+    if survey.layout == Survey.Layout.RCT:
+        rmenu = getattr(survey, "randomised_menu", None)
+        if rmenu is not None:
+            lines.append("RANDOMISED")
+            lines.append(f"  strategy: {rmenu.allocation_strategy}")
+            if rmenu.seed is not None:
+                lines.append(f"  seed: {rmenu.seed}")
+            lines.append("")
+            # Build a lookup: group_id → list of arm names.
+            for arm in rmenu.arms.order_by("order", "id").prefetch_related("groups"):
+                for grp in arm.groups.all():
+                    randomised_arms_by_group.setdefault(grp.id, []).append(arm.name)
+
     for group in groups:
         # Check if this group is part of a collection
         parent_coll_item = (
@@ -11184,6 +11628,11 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             if sm_item.estimated_minutes:
                 suffix += f", {sm_item.estimated_minutes} min"
             heading = f"{heading}    {suffix}"
+        # Append ``~ arm:<name>`` suffixes for RCT layout
+        rct_arms = randomised_arms_by_group.get(group.id)
+        if rct_arms:
+            arm_suffix = ", ".join(f"arm:{name}" for name in rct_arms)
+            heading = f"{heading}    ~ {arm_suffix}"
         lines.append(heading)
         if group.description:
             lines.append(f"{indent}{group.description}")
