@@ -114,7 +114,7 @@ def test_groups_page_sections_signpost(client):
     res = client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
     assert res.status_code == 200
     html = res.content.decode()
-    assert "Multi-section operations" in html
+    assert "Publish sections to the Question Bank" in html
 
 
 @pytest.mark.django_db
