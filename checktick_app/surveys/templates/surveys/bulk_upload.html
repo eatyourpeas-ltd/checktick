@@ -7,7 +7,7 @@
   {% trans "Surveys" as crumb1_text %}
   {% trans "Survey Dashboard" as crumb2_text %}
   {% trans "Add Questions" as crumb3_text %}
-  {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href="/surveys/" crumb2_label=crumb2_text crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" crumb3_label=crumb3_text %}
+  {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href="/surveys/" crumb2_label=crumb2_text crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" crumb3_label=crumb3_text crumb3_icon="components/icons/checktick_question.html" %}
 </div>
 
 <h1 class="inline-flex items-center gap-2 text-3xl font-bold mb-6">
@@ -41,7 +41,7 @@
       <div role="tabpanel" class="tab-content bg-base-100 border-base-300 border-l-4 border-primary rounded-box p-6 space-y-4" id="manual-tab-content">
       <div class="flex items-center justify-between">
           <h3 class="font-semibold flex items-center gap-2">
-            {% include "components/icons/pencil.html" with classes="w-5 h-5" %}
+            {% include "components/icons/document.html" with classes="w-5 h-5" %}
             <span>{% trans "Outline" %}</span>
           </h3>
           <button type="button" id="toggle-format-guide" class="btn btn-xs btn-ghost text-xs">

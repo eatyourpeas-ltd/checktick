@@ -897,11 +897,16 @@ class Survey(models.Model):
     # chooses which sections to complete. "rct" system-assigns the
     # participant to an arm at first access; the arm's group set becomes
     # their selected_group_ids (see docs/survey-layouts-technical.md
-    # §Randomised (RCT) layout).
+    # §Randomised (RCT) layout). "guided" renders one question per
+    # screen with Next/Back navigation — a rendering change layered on
+    # top of the existing ordering pipeline (see docs/survey-layouts-
+    # technical.md §Guided layout). The guided JS is layout-agnostic so
+    # a future Delphi round allocator can reuse it unchanged.
     class Layout(models.TextChoices):
         LINEAR = "linear", "Linear"
         SECTION_MENU = "section_menu", "Section menu"
         RCT = "rct", "Randomised (RCT)"
+        GUIDED = "guided", "Guided"
 
     layout = models.CharField(
         max_length=20,
@@ -911,7 +916,8 @@ class Survey(models.Model):
             'High-level shape of the survey. "linear" flows sections in '
             'authored order; "section_menu" lets the participant pick which '
             'sections to complete; "rct" system-assigns the participant to '
-            "an arm whose group set they complete."
+            'an arm whose group set they complete; "guided" shows one '
+            "question per screen with Next/Back navigation."
         ),
     )
     # Resume + redaction toggles (see docs/survey-progress-tracking.md and

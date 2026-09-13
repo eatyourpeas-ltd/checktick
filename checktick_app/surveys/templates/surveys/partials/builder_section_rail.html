@@ -9,7 +9,10 @@
   <div class="hidden md:block">
     <div class="card bg-base-100 shadow-sm border-l-4 border-secondary">
     <div class="card-body p-3">
-      <h2 class="card-title text-sm font-semibold text-base-content/70 uppercase tracking-wide mb-2">{% trans "Sections" %}</h2>
+      <h2 class="card-title text-sm font-semibold text-base-content/70 uppercase tracking-wide mb-2 inline-flex items-center gap-2">
+        {% include "components/icons/checktick_question_group.html" with classes="w-4 h-4" %}
+        {% trans "Sections" %}
+      </h2>
       <ul id="builder-rail-list" class="space-y-1" data-reorder-url="/surveys/{{ survey.slug }}/groups/reorder" data-can-edit="{{ can_edit|yesno:'true,false' }}">
         {% for g in groups %}
         {% with info=repeat_info|get_item:g.id %}

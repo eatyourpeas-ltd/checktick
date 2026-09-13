@@ -76,6 +76,52 @@ def test_organise_page_marks_section_menu_as_current(client, owner, survey):
 
 
 @pytest.mark.django_db
+def test_organise_page_shows_guided_card(client, owner, survey):
+    """The Organise page shows a Guided layout card with its wireframe icon."""
+    client.force_login(owner)
+    res = client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Guided" in html
+    # The guided icon renders (distinctive dashed next-card path from
+    # layout_guided.html).
+    assert "stroke-dasharray" in html
+    # Guided has no single-section guard — the "Use this layout" button is
+    # always present when the survey is not already guided.
+    assert 'value="guided"' in html
+
+
+@pytest.mark.django_db
+def test_organise_page_headings_have_icons(client, owner, survey):
+    """The 'Survey layout' and 'Sections' headings each have a concept icon
+    to distinguish them as separate concerns."""
+    client.force_login(owner)
+    res = client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    # The layout heading uses the generic layout_panel icon (distinctive
+    # <title> tag).
+    assert "<title>Layout</title>" in html
+    # The sections heading uses the checktick_question_group icon (the section
+    # concept icon). It has a distinctive viewBox and cls-1 class.
+    assert 'viewBox="0 0 109.97 95.96"' in html
+
+
+@pytest.mark.django_db
+def test_organise_page_marks_guided_as_current(client, owner, survey):
+    survey.layout = Survey.Layout.GUIDED
+    survey.save(update_fields=["layout"])
+    client.force_login(owner)
+    res = client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Guided" in html
+    # The guided card is current so it shows the Current badge and no
+    # "Use this layout" button for guided.
+    assert 'value="guided"' not in html
+
+
+@pytest.mark.django_db
 def test_switch_layout_to_section_menu(client, owner, survey):
     client.force_login(owner)
     assert survey.layout == Survey.Layout.LINEAR
@@ -100,6 +146,20 @@ def test_switch_layout_back_to_linear(client, owner, survey):
     assert res.status_code == 302
     survey.refresh_from_db()
     assert survey.layout == Survey.Layout.LINEAR
+
+
+@pytest.mark.django_db
+def test_switch_layout_to_guided(client, owner, survey):
+    """Switching to guided succeeds (no single-section guard for guided)."""
+    client.force_login(owner)
+    assert survey.layout == Survey.Layout.LINEAR
+    res = client.post(
+        reverse("surveys:groups", kwargs={"slug": survey.slug}),
+        {"action": "set_layout", "layout": "guided"},
+    )
+    assert res.status_code == 302
+    survey.refresh_from_db()
+    assert survey.layout == Survey.Layout.GUIDED
 
 
 @pytest.mark.django_db

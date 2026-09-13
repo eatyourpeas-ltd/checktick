@@ -8,9 +8,9 @@
   {% trans "Surveys" as crumb1_text %}
   {% trans "Survey Dashboard" as crumb2_text %}
   {% trans "Builder" as crumb3_text %}
-  {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href="/surveys/" crumb2_label=crumb2_text crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" crumb3_label=crumb3_text %}
+  {% include 'components/breadcrumbs.html' with crumb1_label=crumb1_text crumb1_href="/surveys/" crumb2_label=crumb2_text crumb2_href="/surveys/"|add:survey.slug|add:"/dashboard/" crumb3_label=crumb3_text crumb3_icon="components/icons/hammer_wrench.html" %}
     <h1 class="inline-flex items-center gap-2 text-base-content">
-      {% include "components/icons/checktick_question.html" with classes="w-6 h-6 text-base-content" %}
+      {% include "components/icons/hammer_wrench.html" with classes="w-6 h-6 text-base-content" %}
       <span>{% trans "Builder" %}</span>
     </h1>
     <h2 class="mt-0 text-base-content/80">{{ survey.name }}</h2>
@@ -19,13 +19,12 @@
   {# === Layout label — dismissible, links to Organise page (docs/survey-layouts.md step 6) === #}
   {% if has_questions %}
   <div class="alert alert-info py-2 px-3 text-sm flex items-center gap-2" role="status">
-    {% if survey.layout == 'section_menu' %}
-      {% include "components/icons/layout_section_menu.html" with classes="w-5 h-5 shrink-0" %}
-      <span>{% trans "Layout: Section menu" %}</span>
-    {% else %}
-      {% include "components/icons/layout_linear.html" with classes="w-5 h-5 shrink-0" %}
-      <span>{% trans "Layout: Default (linear)" %}</span>
-    {% endif %}
+    {% comment %} A single layout concept icon represents all layouts here — the detailed
+       wireframe icons (layout_linear, layout_section_menu, layout_rct,
+       layout_guided) are designed for the Organise page tiles and don't reduce
+       well to icon size. {% endcomment %}
+    {% include "components/icons/layout_panel.html" with classes="w-5 h-5 shrink-0" %}
+    <span>{% if survey.layout == 'section_menu' %}{% trans "Layout: Section menu" %}{% elif survey.layout == 'rct' %}{% trans "Layout: Randomised (RCT)" %}{% elif survey.layout == 'guided' %}{% trans "Layout: Guided" %}{% else %}{% trans "Layout: Default (linear)" %}{% endif %}</span>
     <a href="/surveys/{{ survey.slug }}/groups/" class="link link-hover underline text-primary ml-auto">
       {% trans "Need a different layout?" %}
     </a>
@@ -36,9 +35,7 @@
   {% if has_questions %}
   <div class="flex flex-wrap gap-2 items-center">
     <a class="btn btn-sm btn-outline" href="/surveys/{{ survey.slug }}/groups/">
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-      </svg>
+      {% include "components/icons/checktick_question_group.html" with classes="w-4 h-4" %}
       {% trans "Organise" %}
     </a>
     <a class="btn btn-sm btn-ghost" href="/surveys/{{ survey.slug }}/survey-map/">
