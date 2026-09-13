@@ -6352,6 +6352,17 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                         "Add more sections first."
                     ),
                 )
+        # Same guard for RCT — a trial with < 2 sections is degenerate.
+        if chosen == Survey.Layout.RCT:
+            section_count = survey.question_groups.count()
+            if section_count < 2:
+                messages.warning(
+                    request,
+                    _(
+                        "Randomised trials need at least 2 sections to be "
+                        "useful. Add more sections first."
+                    ),
+                )
         survey.layout = chosen
         survey.save(update_fields=["layout"])
         messages.success(
@@ -6444,6 +6455,102 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                 ),
             )
         messages.success(request, _("Section menu configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # RCT configuration save (step 5). Only meaningful when the survey is
+    # in rct layout. Saves allocation strategy + optional seed, and per-arm
+    # name / allocation_ratio / group membership.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_randomised_menu"
+        and survey.layout == Survey.Layout.RCT
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = RandomisedMenu.objects.get_or_create(survey=survey)
+        strategy = request.POST.get(
+            "allocation_strategy", RandomisedMenu.AllocationStrategy.BALANCED
+        )
+        if strategy in {
+            choice[0] for choice in RandomisedMenu.AllocationStrategy.choices
+        }:
+            menu.allocation_strategy = strategy
+        seed_raw = (request.POST.get("seed", "") or "").strip()
+        if seed_raw:
+            try:
+                menu.seed = int(seed_raw)
+            except ValueError:
+                menu.seed = None
+        else:
+            menu.seed = None
+        menu.save()
+        # Per-arm: name, ratio, groups. arm_ids is the list of existing
+        # arm IDs submitted from the form.
+        arm_ids = [int(x) for x in request.POST.getlist("arm_ids") if str(x).isdigit()]
+        for arm_id in arm_ids:
+            try:
+                arm = menu.arms.get(id=arm_id)
+            except RandomisedArm.DoesNotExist:
+                continue
+            arm.name = (request.POST.get(f"arm_name_{arm_id}", arm.name) or arm.name)[
+                :100
+            ]
+            try:
+                arm.allocation_ratio = max(
+                    1, int(request.POST.get(f"arm_ratio_{arm_id}", 1))
+                )
+            except ValueError:
+                arm.allocation_ratio = 1
+            arm.save(update_fields=["name", "allocation_ratio"])
+            group_ids = [
+                int(x)
+                for x in request.POST.getlist(f"arm_groups_{arm_id}")
+                if str(x).isdigit()
+            ]
+            arm.groups.set(group_ids)
+        messages.success(request, _("RCT configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Add arm (step 5). Creates a new empty arm at the end of the order.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "add_arm"
+        and survey.layout == Survey.Layout.RCT
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = RandomisedMenu.objects.get_or_create(survey=survey)
+        next_order = (menu.arms.aggregate(m=models.Max("order"))["m"] or 0) + 1
+        RandomisedArm.objects.create(
+            menu=menu, name=f"Arm {next_order}", order=next_order
+        )
+        messages.success(request, _("Arm added."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Remove arm (step 5). Deletes the arm; enrolled participants keep
+    # their stored selected_group_ids (SET_NULL on the FK).
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "remove_arm"
+        and survey.layout == Survey.Layout.RCT
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        arm_id_raw = request.POST.get("arm_id", "")
+        if arm_id_raw.isdigit():
+            menu = getattr(survey, "randomised_menu", None)
+            if menu is not None:
+                menu.arms.filter(id=int(arm_id_raw)).delete()
+                messages.success(request, _("Arm removed."))
         return redirect("surveys:groups", slug=slug)
 
     groups_qs = survey.question_groups.annotate(
@@ -6544,6 +6651,27 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                     }
                 )
 
+    # RCT configuration (only for rct layout). Ensure the menu has at
+    # least two default arms so a freshly-switched survey is configurable.
+    randomised_menu = None
+    randomised_arms: list[RandomisedArm] = []
+    randomised_strategy_choices = RandomisedMenu.AllocationStrategy.choices
+    if survey.layout == Survey.Layout.RCT:
+        randomised_menu, _created = RandomisedMenu.objects.get_or_create(survey=survey)
+        if randomised_menu.arms.count() == 0:
+            RandomisedArm.objects.create(
+                menu=randomised_menu, name="Intervention", order=1
+            )
+            RandomisedArm.objects.create(menu=randomised_menu, name="Control", order=2)
+        randomised_arms = list(
+            randomised_menu.arms.order_by("order", "id").prefetch_related("groups")
+        )
+    # Precompute arm → set of group IDs for the template's checkbox
+    # membership check (Django templates can't call values_list directly).
+    arm_group_ids: dict[int, set[int]] = {
+        arm.id: set(arm.groups.values_list("id", flat=True)) for arm in randomised_arms
+    }
+
     ctx = {
         "survey": survey,
         "groups": groups,
@@ -6560,6 +6688,11 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "section_menu_items_by_group": section_menu_items_by_group,
         "section_menu_order_modes": SectionMenu.OrderMode.choices,
         "section_menu_warnings": section_menu_warnings,
+        # RCT config (step 5). None for non-RCT surveys.
+        "randomised_menu": randomised_menu,
+        "randomised_arms": randomised_arms,
+        "randomised_strategy_choices": randomised_strategy_choices,
+        "arm_group_ids": arm_group_ids,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"

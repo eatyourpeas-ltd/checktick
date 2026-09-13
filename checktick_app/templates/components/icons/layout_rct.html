@@ -1,0 +1,17 @@
+{% comment %} {# Randomized control trial layout icon (RCT branching into A/B variants). Usage: {% include "components/icons/layout_rct.html" with classes="w-6 h-6" %} #} {% endcomment %}
+<svg xmlns="http://www.w3.org/2000/svg" class="{{ classes|default:'w-6 h-6' }}" viewBox="0 0 800 450" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Connection lines (Parent branching down to two child cards) -->
+  <path d="M 400,170 L 400,225 M 280,225 L 520,225 M 280,225 L 280,280 M 520,225 L 520,280" />
+
+  <!-- Central Question Mark Node -->
+  <circle cx="400" cy="115" r="55" />
+  <path d="M 385,100 C 385,85 415,85 415,102 C 415,117 400,118 400,130 M 400,145 L 400,146" stroke-width="14" />
+
+  <!-- Child card A (left) -->
+  <rect x="180" y="280" width="200" height="110" rx="16" ry="16" />
+  <path d="M 270,355 L 280,325 L 290,355 M 273,346 L 287,346" stroke-width="10" />
+
+  <!-- Child card B (right) -->
+  <rect x="420" y="280" width="200" height="110" rx="16" ry="16" />
+  <path d="M 512,325 L 526,325 C 532,325 536,328 536,332 C 536,336 531,339 524,339 C 532,339 537,343 537,348 C 537,353 532,355 524,355 L 512,355 M 512,339 L 526,339" stroke-width="10" />
+</svg>
