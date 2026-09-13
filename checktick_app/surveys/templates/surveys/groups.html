@@ -172,6 +172,31 @@
           {% endif %}
         </div>
       </div>
+
+      {# Matrix (free navigation) card #}
+      <div class="card bg-base-100 border {% if survey.layout == 'matrix' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+        <div class="card-body gap-2 p-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-semibold text-base-content">{% trans 'Matrix (free navigation)' %}</h4>
+            {% if survey.layout == 'matrix' %}
+              <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% endif %}
+          </div>
+          {% include "components/icons/layout_matrix.html" with classes="w-full h-24 text-base-content/70" %}
+          <p class="text-xs text-base-content/70">{% trans 'All sections visible as cards. Participants jump in and out of any section in any order, with completion indicators.' %}</p>
+          {% if section_count < 2 %}
+            <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>
+          {% endif %}
+          {% if can_edit and survey.layout != 'matrix' %}
+            <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_layout" />
+              <input type="hidden" name="layout" value="matrix" />
+              <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </section>
 
@@ -495,6 +520,74 @@
         {% if staged_warnings %}
         <div class="mt-2 space-y-1">
           {% for warning in staged_warnings %}
+          <div class="alert alert-warning py-2 px-3 text-xs" role="status">
+            {% include "components/icons/exclamation-triangle.html" with classes="w-4 h-4 shrink-0" %}
+            <span>{{ warning }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {# === Matrix (free navigation) configuration card === #}
+  {% if survey.layout == 'matrix' %}
+  <section class="not-prose mb-6" aria-labelledby="matrix-config-heading">
+    <div class="card bg-base-100 border border-base-300 max-w-4xl">
+      <div class="card-body gap-3 p-4">
+        <h3 id="matrix-config-heading" class="font-semibold text-base-content">
+          {% trans 'Matrix (free navigation) configuration' %}
+        </h3>
+        {% if can_edit %}
+        <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="space-y-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_matrix_menu" />
+
+          <div>
+            <label class="flex flex-col gap-1">
+              <span class="label text-xs">{% trans 'Landing page prompt' %}</span>
+              <input type="text" name="prompt_text" value="{{ matrix_menu.prompt_text }}"
+                     class="input input-bordered input-sm w-full" maxlength="255" />
+            </label>
+          </div>
+
+          <fieldset class="flex flex-wrap gap-x-6 gap-y-2 items-end">
+            <div>
+              <span class="label text-xs">{% trans 'Card order' %}</span>
+              <div class="flex gap-3">
+                {% for value, label in matrix_order_mode_choices %}
+                <label class="flex items-center gap-1 cursor-pointer text-sm">
+                  <input type="radio" name="order_mode" value="{{ value }}"
+                         class="radio radio-sm"
+                         {% if matrix_menu.order_mode == value or forloop.first and not matrix_menu.order_mode %}checked{% endif %} />
+                  {{ label }}
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" name="allow_revisit" value="1"
+                     class="checkbox checkbox-sm"
+                     {% if matrix_menu.allow_revisit %}checked{% endif %} />
+              {% trans 'Allow participants to revisit and edit completed sections' %}
+            </label>
+          </fieldset>
+
+          <div class="flex gap-2 pt-1">
+            <button type="submit" class="btn btn-primary btn-sm">{% trans 'Save layout' %}</button>
+            <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/survey-map/">{% trans 'Review in Survey Map' %}</a>
+          </div>
+        </form>
+        {% else %}
+        <p class="text-sm text-base-content/70">{% trans 'This survey is read-only.' %}</p>
+        {% endif %}
+
+        {# Matrix warnings #}
+        {% if matrix_warnings %}
+        <div class="mt-2 space-y-1">
+          {% for warning in matrix_warnings %}
           <div class="alert alert-warning py-2 px-3 text-xs" role="status">
             {% include "components/icons/exclamation-triangle.html" with classes="w-4 h-4 shrink-0" %}
             <span>{{ warning }}</span>

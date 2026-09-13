@@ -1,0 +1,23 @@
+{% comment %} {# Matrix (free navigation) layout icon: section cards on a landing page with completion indicators. Usage: {% include "components/icons/layout_matrix.html" with classes="w-6 h-6" %} #} {% endcomment %}
+<svg xmlns="http://www.w3.org/2000/svg" class="{{ classes|default:'w-6 h-6' }}" viewBox="0 0 800 450" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Card 1 (complete — checkmark badge) -->
+  <rect x="80" y="80" width="200" height="160" rx="16" ry="16" />
+  <path d="M 110,130 L 180,130 M 110,170 L 250,170 M 110,205 L 220,205" stroke-width="10" />
+  <circle cx="265" cy="95" r="18" fill="currentColor" stroke="none" />
+  <path d="M 257,95 L 263,101 L 273,89" stroke="white" stroke-width="8" />
+
+  <!-- Card 2 (in progress — half-filled badge) -->
+  <rect x="300" y="80" width="200" height="160" rx="16" ry="16" />
+  <path d="M 330,130 L 430,130 M 330,170 L 470,170 M 330,205 L 400,205" stroke-width="10" />
+  <circle cx="485" cy="95" r="18" />
+  <path d="M 485,95 L 485,95" />
+
+  <!-- Card 3 (not started — empty badge) -->
+  <rect x="520" y="80" width="200" height="160" rx="16" ry="16" stroke-dasharray="20 16" />
+  <path d="M 550,130 L 650,130 M 550,170 L 690,170 M 550,205 L 620,205" stroke-width="10" />
+  <circle cx="705" cy="95" r="18" />
+
+  <!-- Submit button at bottom -->
+  <rect x="250" y="290" width="300" height="60" rx="12" ry="12" />
+  <path d="M 340,320 L 460,320" stroke-width="10" />
+</svg>

@@ -6793,6 +6793,18 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                         "useful. Add more sections first."
                     ),
                 )
+        # Same guard for matrix — a free-navigation survey with < 2
+        # sections is just a single card.
+        if chosen == Survey.Layout.MATRIX:
+            section_count = survey.question_groups.count()
+            if section_count < 2:
+                messages.warning(
+                    request,
+                    _(
+                        "Matrix surveys need at least 2 sections to be "
+                        "useful. Add more sections first."
+                    ),
+                )
         survey.layout = chosen
         survey.save(update_fields=["layout"])
         messages.success(
@@ -7081,6 +7093,32 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             if menu is not None:
                 menu.phases.filter(id=int(phase_id_raw)).delete()
                 messages.success(request, _("Phase removed."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Matrix configuration save. Only meaningful when the survey is in
+    # matrix layout. Saves the landing-page prompt, order mode, and
+    # allow_revisit toggle.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_matrix_menu"
+        and survey.layout == Survey.Layout.MATRIX
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = MatrixMenu.objects.get_or_create(survey=survey)
+        menu.prompt_text = (
+            request.POST.get("prompt_text", "")
+            or "Click a section to begin. You can complete them in any order."
+        )[:255]
+        order_mode = request.POST.get("order_mode", MatrixMenu.OrderMode.AUTHORED)
+        if order_mode in {choice[0] for choice in MatrixMenu.OrderMode.choices}:
+            menu.order_mode = order_mode
+        menu.allow_revisit = bool(request.POST.get("allow_revisit"))
+        menu.save()
+        messages.success(request, _("Matrix configuration saved."))
         return redirect("surveys:groups", slug=slug)
 
     groups_qs = survey.question_groups.annotate(
@@ -7454,6 +7492,66 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                         }
                     )
 
+    # Matrix configuration (only for matrix layout). Ensure the menu exists
+    # so a freshly-switched survey is configurable.
+    matrix_menu = None
+    matrix_order_mode_choices = MatrixMenu.OrderMode.choices
+    if survey.layout == Survey.Layout.MATRIX:
+        matrix_menu, _created = MatrixMenu.objects.get_or_create(survey=survey)
+    # Matrix warnings. Non-blocking — surfaced on the Organise page
+    # configuration card.
+    matrix_warnings: list[str] = []
+    if survey.layout == Survey.Layout.MATRIX and matrix_menu is not None:
+        # Single-section guard: matrix with < 2 sections is pointless.
+        if survey.question_groups.count() < 2:
+            matrix_warnings.append(
+                _(
+                    "Matrix layout needs at least 2 sections to be useful. "
+                    "Add more sections first."
+                )
+            )
+        # Cross-section branching: a jump_to that targets a question in a
+        # different section is meaningless in matrix (the participant
+        # navigates via the landing page, not linearly). Same-section jumps
+        # work normally. Non-blocking; links to Survey Map for review.
+        all_group_ids = {g.id for g in groups}
+        if all_group_ids:
+            dead_branches = (
+                SurveyQuestionCondition.objects.filter(
+                    action=SurveyQuestionCondition.Action.JUMP_TO,
+                )
+                .exclude(question__group_id=models.F("target_group_id"))
+                .select_related(
+                    "target_group",
+                    "question",
+                    "question__group",
+                    "target_question",
+                    "target_question__group",
+                )
+            )
+            for cond in dead_branches:
+                target_name = (
+                    cond.target_group.name
+                    if cond.target_group
+                    else (
+                        cond.target_question.group.name
+                        if cond.target_question and cond.target_question.group
+                        else "unknown"
+                    )
+                )
+                matrix_warnings.append(
+                    _(
+                        "Branching condition on '%(question)s' targets a "
+                        "different section ('%(section)s'). In matrix layout, "
+                        "participants navigate freely between sections — cross-"
+                        "section jumps are ignored."
+                    )
+                    % {
+                        "question": cond.question.text[:50],
+                        "section": target_name,
+                    }
+                )
+
     ctx = {
         "survey": survey,
         "groups": groups,
@@ -7482,6 +7580,10 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "staged_anchor_choices": staged_anchor_choices,
         "staged_phase_group_ids": staged_phase_group_ids,
         "staged_warnings": staged_warnings,
+        # Matrix config. None for non-matrix surveys.
+        "matrix_menu": matrix_menu,
+        "matrix_order_mode_choices": matrix_order_mode_choices,
+        "matrix_warnings": matrix_warnings,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
