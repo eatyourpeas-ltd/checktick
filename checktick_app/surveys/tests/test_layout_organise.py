@@ -92,6 +92,22 @@ def test_organise_page_shows_guided_card(client, owner, survey):
 
 
 @pytest.mark.django_db
+def test_organise_page_headings_have_icons(client, owner, survey):
+    """The 'Survey layout' and 'Sections' headings each have a concept icon
+    to distinguish them as separate concerns."""
+    client.force_login(owner)
+    res = client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    # The layout heading uses the generic layout_panel icon (distinctive
+    # <title> tag).
+    assert "<title>Layout</title>" in html
+    # The sections heading uses the documents icon (two overlapping outlined
+    # rectangles — distinctive nested <rect> pair with rx="2" ry="2").
+    assert "<title>Documents</title>" in html
+
+
+@pytest.mark.django_db
 def test_organise_page_marks_guided_as_current(client, owner, survey):
     survey.layout = Survey.Layout.GUIDED
     survey.save(update_fields=["layout"])

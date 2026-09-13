@@ -45,7 +45,8 @@
 
   {# === Survey layout picker (docs/survey-layouts.md) === #}
   <section class="not-prose mt-2 mb-6" aria-labelledby="layout-heading">
-    <h3 id="layout-heading" class="text-sm font-semibold text-base-content/80 mb-2">
+    <h3 id="layout-heading" class="text-sm font-semibold text-base-content/80 mb-2 inline-flex items-center gap-2">
+      {% include "components/icons/layout_panel.html" with classes="w-4 h-4 shrink-0" %}
       {% trans 'Survey layout' %}
     </h3>
     <p class="text-xs text-base-content/60 mb-3">
@@ -417,7 +418,8 @@
 
   {# === Sections: reorder, repeats, share to Question Bank === #}
   <section id="sections" class="not-prose mt-2 mb-6" aria-labelledby="sections-heading">
-    <h2 id="sections-heading" class="text-sm font-semibold text-base-content/80 mb-1">
+    <h2 id="sections-heading" class="text-sm font-semibold text-base-content/80 mb-1 inline-flex items-center gap-2">
+      {% include "components/icons/documents.html" with classes="w-4 h-4 shrink-0" %}
       {% trans 'Sections' %}
     </h2>
     <p class="text-xs text-base-content/60 mb-3">
