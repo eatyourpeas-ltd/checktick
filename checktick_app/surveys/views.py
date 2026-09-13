@@ -12332,6 +12332,25 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                 # No ~ phase: suffix → not in any phase (unreachable; warned).
             summary_parts.append(" Staged (longitudinal) layout applied.")
 
+        # Apply MATRIX config from the outline (see docs/survey-layouts-
+        # technical.md §Matrix (free navigation) layout §Outline grammar).
+        # No ``~`` suffixes — every section is in the matrix by default.
+        matrix_cfg = parsed.get("matrix")
+        if matrix_cfg:
+            survey.layout = Survey.Layout.MATRIX
+            survey.save(update_fields=["layout"])
+            menu, _created = MatrixMenu.objects.get_or_create(survey=survey)
+            menu.prompt_text = matrix_cfg.get(
+                "prompt_text",
+                "Click a section to begin. You can complete them in any order.",
+            )[:255]
+            order_mode = matrix_cfg.get("order_mode", MatrixMenu.OrderMode.AUTHORED)
+            if order_mode in {choice[0] for choice in MatrixMenu.OrderMode.choices}:
+                menu.order_mode = order_mode
+            menu.allow_revisit = bool(matrix_cfg.get("allow_revisit", True))
+            menu.save()
+            summary_parts.append(" Matrix (free navigation) layout applied.")
+
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)
     return render(request, "surveys/bulk_upload.html", context)
@@ -12440,6 +12459,20 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             ):
                 for grp in phase.groups.all():
                     staged_phases_by_group.setdefault(grp.id, []).append(phase.name)
+
+    # MATRIX block (see docs/survey-layouts-technical.md §Matrix (free
+    # navigation) layout §Outline grammar). No ``~`` suffixes — every
+    # section is in the matrix by default. The block only carries config
+    # lines (prompt, order_mode, allow_revisit).
+    if survey.layout == Survey.Layout.MATRIX:
+        mmenu = getattr(survey, "matrix_menu", None)
+        if mmenu is None:
+            mmenu = MatrixMenu.objects.create(survey=survey)
+        lines.append("MATRIX")
+        lines.append(f'  prompt: "{mmenu.prompt_text}"')
+        lines.append(f"  order: {mmenu.order_mode}")
+        lines.append(f"  allow_revisit: {'true' if mmenu.allow_revisit else 'false'}")
+        lines.append("")
 
     for group in groups:
         # Check if this group is part of a collection
