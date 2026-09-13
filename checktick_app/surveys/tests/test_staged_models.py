@@ -159,3 +159,12 @@ def test_linear_survey_has_no_staged_menu(owner, org):
     s = Survey.objects.create(owner=owner, organization=org, name="L", slug="l")
     assert not hasattr(s, "staged_menu") or s.staged_menu is None
     assert not StagedMenu.objects.filter(survey=s).exists()
+
+
+@pytest.mark.django_db
+def test_admin_registration():
+    """The models are registered in admin (smoke test via admin.site)."""
+    from django.contrib import admin
+
+    assert StagedMenu in admin.site._registry
+    assert StagedPhase in admin.site._registry
