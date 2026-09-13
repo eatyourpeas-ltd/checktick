@@ -908,12 +908,21 @@ class Survey(models.Model):
     # open phases on each access and resolves selected_group_ids from the
     # currently-open phases, reusing the same runtime hook as section_menu
     # and rct. StagedPhase is the precedent for a future DelphiRound model.
+    # "matrix" shows all sections as cards on a landing page; the participant
+    # jumps in and out of any section in any order with completion indicators
+    # (see docs/survey-layouts-technical.md §Matrix (free navigation) layout).
+    # Unlike the other layouts (which filter selected_group_ids and render a
+    # single take page), matrix has a landing page + per-section take pages +
+    # a final submit. SurveyProgress.completed_group_ids tracks which sections
+    # the participant has marked complete — the reusable ingredient for a
+    # future DelphiRound's within-round completion tracking.
     class Layout(models.TextChoices):
         LINEAR = "linear", "Linear"
         SECTION_MENU = "section_menu", "Section menu"
         RCT = "rct", "Randomised (RCT)"
         GUIDED = "guided", "Guided"
         STAGED = "staged", "Staged (longitudinal)"
+        MATRIX = "matrix", "Matrix (free navigation)"
 
     layout = models.CharField(
         max_length=20,
@@ -925,7 +934,9 @@ class Survey(models.Model):
             'sections to complete; "rct" system-assigns the participant to '
             'an arm whose group set they complete; "guided" shows one '
             'question per screen with Next/Back navigation; "staged" unlocks '
-            "sections over time in defined phase windows."
+            "sections over time in defined phase windows; "
+            '"matrix" shows all sections as cards with free navigation '
+            "and completion indicators."
         ),
     )
     # Resume + redaction toggles (see docs/survey-progress-tracking.md and
@@ -3777,6 +3788,27 @@ class SurveyProgress(models.Model):
         help_text="When the participant submitted the survey (status=COMPLETED)",
     )
 
+    # [Planned] Matrix layout: sections the participant has marked complete
+    # (see docs/survey-layouts-technical.md §Matrix (free navigation) layout).
+    # Only populated for surveys with layout = "matrix". Empty list for other
+    # layouts. A section is added to this list by the ``complete_section``
+    # action (which validates the section's required questions first) and
+    # removed when the participant edits a completed section (save_draft on a
+    # completed section un-marks it so the landing page shows "in progress"
+    # again). Final ``submit_survey`` re-validates all required questions
+    # regardless of this list — it is a soft UX indicator, not a hard gate.
+    # Designed to be reusable as the precedent for a future Delphi
+    # ``delphi_completed_rounds`` field: within-round completion tracking is
+    # the same shape.
+    completed_group_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Section IDs the participant has marked complete in a matrix "
+            "survey (soft indicator; final submit re-validates)."
+        ),
+    )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -4145,6 +4177,61 @@ class StagedPhase(models.Model):
     def __str__(self) -> str:
         end = self.end_offset_days if self.end_offset_days is not None else "\u221e"
         return f"{self.name} (days {self.start_offset_days}\u2013{end})"
+
+
+class MatrixMenu(models.Model):
+    """Configuration for a survey with ``layout = matrix``.
+
+    A MatrixMenu is a OneToOne related to ``Survey`` and holds the
+    landing-page-level settings (prompt text, order mode, whether completed
+    sections can be revisited). Unlike the other layout menus
+    (``SectionMenu``, ``RandomisedMenu``, ``StagedMenu``), there is no
+    per-section config model — every section in the survey is a card on the
+    matrix landing page by default. The participant navigates freely between
+    sections and marks each complete when done.
+
+    See docs/survey-layouts-technical.md §Matrix (free navigation) layout.
+    A ``linear`` / ``section_menu`` / ``rct`` / ``guided`` / ``staged`` survey
+    has no ``MatrixMenu`` row.
+    """
+
+    survey = models.OneToOneField(
+        Survey,
+        related_name="matrix_menu",
+        on_delete=models.CASCADE,
+    )
+    prompt_text = models.CharField(
+        max_length=255,
+        default="Click a section to begin. You can complete them in any order.",
+        help_text="Prompt shown to the participant on the matrix landing page.",
+    )
+
+    class OrderMode(models.TextChoices):
+        AUTHORED = "authored", "As authored"
+        PARTICIPANT = "participant", "In visit order"
+
+    order_mode = models.CharField(
+        max_length=20,
+        choices=OrderMode.choices,
+        default=OrderMode.AUTHORED,
+        help_text=(
+            "How section cards are ordered on the landing page. 'authored' "
+            "uses the Organise page order; 'participant' orders by the order "
+            "the participant first visited each section (most-recently-visited "
+            "last)."
+        ),
+    )
+    allow_revisit = models.BooleanField(
+        default=True,
+        help_text=(
+            "Allow participants to revisit and edit completed sections before "
+            "final submission. Editing a completed section un-marks it as "
+            "complete so the landing page shows 'in progress' again."
+        ),
+    )
+
+    def __str__(self) -> str:
+        return f"MatrixMenu for {self.survey.name}"
 
 
 def validate_markdown_survey(md_text: str) -> list[dict]:
