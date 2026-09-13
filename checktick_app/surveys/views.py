@@ -6976,9 +6976,147 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         phase.id: set(phase.groups.values_list("id", flat=True))
         for phase in staged_phases
     }
-    # Staged warnings are populated in step 5; empty list here so the
-    # template renders cleanly during the config-card step.
+    # Staged warnings (step 5). Non-blocking — surfaced on the Organise
+    # page configuration card so the author can fix the configuration
+    # before publishing.
     staged_warnings: list[str] = []
+    if survey.layout == Survey.Layout.STAGED and staged_menu is not None:
+        phases = staged_phases
+        all_group_ids = {g.id for g in groups}
+        # No phases configured.
+        if not phases:
+            staged_warnings.append(
+                _(
+                    "No phases are configured. Add at least one phase and "
+                    "assign sections to it."
+                )
+            )
+        # Single phase — a longitudinal survey with one phase is
+        # degenerate (structurally identical to linear).
+        if len(phases) == 1:
+            staged_warnings.append(
+                _(
+                    "Only one phase is configured. A staged survey with a "
+                    "single phase is structurally identical to a linear "
+                    "survey — add a second phase."
+                )
+            )
+        # survey_open anchor with no Survey.start_at: anchor is None, so
+        # nothing ever opens.
+        if (
+            staged_menu.anchor == StagedMenu.Anchor.SURVEY_OPEN
+            and survey.start_at is None
+        ):
+            staged_warnings.append(
+                _(
+                    "Phase windows are measured from the survey open date, "
+                    "but this survey has no start date. Set a start date or "
+                    "switch the anchor to 'From participant enrolment'."
+                )
+            )
+        # Unreachable sections: groups not in any phase.
+        if phases:
+            reachable: set[int] = set()
+            for p in phases:
+                reachable.update(p.groups.values_list("id", flat=True))
+            unreachable = all_group_ids - reachable
+            if unreachable:
+                unreachable_names = sorted(
+                    g.name for g in groups if g.id in unreachable
+                )
+                for name in unreachable_names:
+                    staged_warnings.append(
+                        _(
+                            "Section '%(section)s' is not in any phase — no "
+                            "participant will see it."
+                        )
+                        % {"section": name}
+                    )
+        # Overlapping phase windows for the same group: a group in two
+        # phases whose windows overlap is ambiguous (the runtime unions
+        # them, so it stays open across both — usually fine, but worth
+        # flagging so the author knows the windows overlap).
+        if len(phases) >= 2:
+            # Build group → list of (phase, start, end) for overlap checks.
+            group_phases: dict[int, list[tuple[StagedPhase, int, int | None]]] = {}
+            for p in phases:
+                for gid in p.groups.values_list("id", flat=True):
+                    group_phases.setdefault(gid, []).append(
+                        (p, p.start_offset_days, p.end_offset_days)
+                    )
+            for gid, entries in group_phases.items():
+                if len(entries) < 2:
+                    continue
+                # Check pairwise overlap of [start, end) windows. end=None
+                # is treated as infinity.
+                for i in range(len(entries)):
+                    for j in range(i + 1, len(entries)):
+                        _pa, s1, e1 = entries[i]
+                        _pb, s2, e2 = entries[j]
+                        # Overlap unless one ends before the other starts.
+                        e1_eff = e1 if e1 is not None else float("inf")
+                        e2_eff = e2 if e2 is not None else float("inf")
+                        if s1 < e2_eff and s2 < e1_eff:
+                            group_name = next(
+                                (g.name for g in groups if g.id == gid),
+                                "unknown",
+                            )
+                            staged_warnings.append(
+                                _(
+                                    "Section '%(section)s' is in two phases "
+                                    "whose windows overlap — it will stay "
+                                    "open across both. Merge the phases or "
+                                    "adjust the windows if this is "
+                                    "unintended."
+                                )
+                                % {"section": group_name}
+                            )
+                            break
+                    else:
+                        continue
+                    break
+        # Branching targets a section that is only in a phase that isn't
+        # currently open (a dead branch at this moment). We flag jumps into
+        # any phased section — the runtime will skip them when the phase
+        # is closed. Non-blocking; links to Survey Map for review.
+        if phases:
+            phased_group_ids: set[int] = set()
+            for p in phases:
+                phased_group_ids.update(p.groups.values_list("id", flat=True))
+            if phased_group_ids:
+                dead_branches = (
+                    SurveyQuestionCondition.objects.filter(
+                        action=SurveyQuestionCondition.Action.JUMP_TO,
+                    )
+                    .filter(
+                        Q(target_group_id__in=phased_group_ids)
+                        | Q(target_question__group_id__in=phased_group_ids)
+                    )
+                    .select_related(
+                        "target_group", "question", "target_question__group"
+                    )
+                )
+                for cond in dead_branches:
+                    target_name = (
+                        cond.target_group.name
+                        if cond.target_group
+                        else (
+                            cond.target_question.group.name
+                            if cond.target_question and cond.target_question.group
+                            else "unknown"
+                        )
+                    )
+                    staged_warnings.append(
+                        _(
+                            "Branching condition on '%(question)s' targets "
+                            "the phased section '%(section)s' — it will be "
+                            "skipped when that phase is closed."
+                        )
+                        % {
+                            "question": cond.question.text[:50],
+                            "section": target_name,
+                        }
+                    )
 
     ctx = {
         "survey": survey,
