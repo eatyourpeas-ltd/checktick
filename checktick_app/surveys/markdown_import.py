@@ -545,6 +545,9 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
             elif t in {"image", "image choice", "image-choice"}:
                 q["final_type"] = "image"
                 q["final_options"] = _convert_options_to_dicts(q["options"])
+            elif t in {"long_text", "long text", "textarea", "paragraph"}:
+                q["final_type"] = "long_text"
+                q["final_options"] = []
             elif t in {
                 "template_patient",
                 "patient details",

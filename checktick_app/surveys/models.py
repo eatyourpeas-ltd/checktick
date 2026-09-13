@@ -2557,6 +2557,7 @@ class SurveyQuestion(models.Model):
         YESNO = "yesno", "Yes/No"
         DROPDOWN = "dropdown", "Dropdown"
         IMAGE_CHOICE = "image", "Image choice"
+        LONG_TEXT = "long_text", "Long text (textarea)"
         TEMPLATE_PATIENT = "template_patient", "Patient details template"
         TEMPLATE_PROFESSIONAL = "template_professional", "Professional details template"
 
