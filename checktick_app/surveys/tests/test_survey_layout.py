@@ -53,6 +53,8 @@ def test_survey_layout_choices_exist():
     choices = dict(Survey.Layout.choices)
     assert choices["linear"] == "Linear"
     assert choices["section_menu"] == "Section menu"
+    assert choices["rct"] == "Randomised (RCT)"
+    assert choices["guided"] == "Guided"
 
 
 @pytest.mark.django_db
@@ -65,6 +67,18 @@ def test_survey_layout_can_be_set_to_section_menu(survey_owner):
     )
     survey.refresh_from_db()
     assert survey.layout == "section_menu"
+
+
+@pytest.mark.django_db
+def test_survey_layout_can_be_set_to_guided(survey_owner):
+    survey = Survey.objects.create(
+        owner=survey_owner,
+        name="Guided Survey",
+        slug="guided-survey",
+        layout=Survey.Layout.GUIDED,
+    )
+    survey.refresh_from_db()
+    assert survey.layout == "guided"
 
 
 @pytest.mark.django_db
