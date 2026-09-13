@@ -111,3 +111,43 @@ def test_create_long_text_question(client, django_user_model):
     assert question.text == "Please describe what happened"
     assert question.required is True
     assert question.options == []
+
+
+# --- Rendering ---
+
+
+@pytest.mark.django_db
+def test_long_text_renders_textarea(client, django_user_model):
+    """The take page renders a <textarea> for long_text questions."""
+    from checktick_app.surveys.models import QuestionGroup
+
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    respondent = django_user_model.objects.create_user(
+        username="respondent", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(
+        owner=user,
+        name="LongTextRender",
+        slug="long-text-render",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.PUBLIC,
+    )
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    question = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Any other comments",
+        type=SurveyQuestion.Types.LONG_TEXT,
+        options=[],
+        order=0,
+    )
+
+    client.force_login(respondent)
+    resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    assert "<textarea" in content
+    assert f'name="q_{question.id}"' in content

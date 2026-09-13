@@ -471,6 +471,8 @@
               <input class="input input-bordered w-full" type="text" name="q_{{ q.id }}" id="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true" required{% endif %} />
             {% endif %}
           {% endwith %}
+        {% elif q.type == 'long_text' %}
+          <textarea class="textarea textarea-bordered w-full" name="q_{{ q.id }}" id="q_{{ q.id }}" rows="4" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true" required{% endif %}></textarea>
         {% elif q.type == 'mc_single' %}
           <div role="radiogroup" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true"{% endif %}>
           {% for opt in q.options|as_list %}

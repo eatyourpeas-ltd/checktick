@@ -135,6 +135,8 @@
         <p class="text-sm opacity-60 italic">No images uploaded yet. Click "Upload/Edit Images" to add images.</p>
       {% endif %}
     </div>
+  {% elif q.type == 'long_text' %}
+    <textarea class="textarea textarea-bordered w-full" rows="3" disabled></textarea>
   {% else %}
     <input class="input input-bordered w-full" type="text" disabled />
   {% endif %}

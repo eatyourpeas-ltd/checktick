@@ -842,6 +842,7 @@
       "likert number": "SCALE",
       "likert categories": "SCALE",
       image: "IMG",
+      long_text: "LONG",
       template_patient: "TPL",
       template_professional: "TPL",
     };
