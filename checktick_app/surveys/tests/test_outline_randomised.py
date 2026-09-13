@@ -168,6 +168,23 @@ def rct_survey_for_upload(owner, org):
 
 
 @pytest.mark.django_db
+def test_bulk_upload_page_documents_randomised_syntax(
+    client, rct_survey_for_upload, owner
+):
+    """The bulk upload outline syntax explainer documents the RANDOMISED block."""
+    from django.urls import reverse
+
+    client.force_login(owner)
+    url = reverse("surveys:bulk_upload", kwargs={"slug": rct_survey_for_upload.slug})
+    res = client.get(url)
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "RANDOMISED" in html
+    assert "arm:intervention" in html
+    assert "strategy: balanced" in html or "strategy: balanced</code>" in html
+
+
+@pytest.mark.django_db
 def test_bulk_upload_applies_randomised_config(client, rct_survey_for_upload, owner):
     from django.urls import reverse
 

@@ -235,6 +235,33 @@ HIDDEN
                   <li>{% trans "See <a href='/docs/survey-layouts.md' class='link'>Survey Layouts</a> for the full guide." %}</li>
                 </ul>
               </div>
+              <div>
+                <h3 class="font-semibold">{% trans "Optional: Randomised (RCT) layout" %}</h3>
+                <p class="text-sm text-base-content/80">{% trans "Add a <code>RANDOMISED</code> block at the top of the outline to switch the survey to the randomised trial layout, where the system assigns each participant to an arm. Each arm sees only its own sections. Mark which sections belong to which arm with <code>~ arm:&lt;name&gt;</code> on the section heading; a section can be in multiple arms (e.g. a shared demographics section). Sections without <code>~ arm:</code> are reachable by all arms." %}</p>
+                <pre class="mt-2 rounded bg-base-200/60 p-3 text-sm"><code>RANDOMISED
+  strategy: balanced
+  seed: 7
+
+# Demographics {demographics}    ~ arm:intervention, arm:control
+## Name {name}
+(text)
+
+# Intervention {intervention}    ~ arm:intervention
+## Dose {dose}
+(text)
+
+# Control {control}    ~ arm:control
+## Placebo {placebo}
+(text)</code></pre>
+                <ul class="list-disc pl-5 space-y-1 text-sm">
+                  <li>{% trans "Config lines are indented under <code>RANDOMISED</code>: <code>strategy</code> (<code>balanced</code> for permuted blocks or <code>simple</code> for weighted random), <code>seed</code> (optional integer for reproducible dry-runs; leave blank for real trials)." %}</li>
+                  <li>{% trans "Place <code>~ arm:&lt;name&gt;</code> after the section heading (and after the <code>{id}</code> if present). Comma-separate multiple arms: <code>~ arm:intervention, arm:control</code>." %}</li>
+                  <li>{% trans "Sections without <code>~ arm:</code> are reachable by every arm (the union of all arm group sets)." %}</li>
+                  <li>{% trans "Arms are created in the order their names first appear in the outline. Allocation ratios default to 1; adjust them on the Organise page after import." %}</li>
+                  <li>{% trans "A blank line ends the config block. Section headings below it are the actual survey content." %}</li>
+                  <li>{% trans "See <a href='/docs/survey-layouts.md' class='link'>Survey Layouts</a> for the full guide." %}</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
