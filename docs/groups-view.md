@@ -41,9 +41,10 @@ The **Organise** page (`/surveys/<slug>/groups/`) is for bulk section operations
 - **Create repeats (collections)** - Select multiple sections and make them repeatable together (single-section repeats can be done from the Builder rail)
 - **Nest repeats** - Create one level of nesting (e.g., "People" containing "Visits")
 - **Remove from repeats** - Unlink sections from collections
-- **Set survey layout** - Choose between **Default (linear)** and **Section menu** layouts. The Section menu layout lets participants pick which sections to complete (see [Survey Layouts](survey-layouts.md)).
+- **Set survey layout** - Choose between **Default (linear)**, **Section menu**, and **Randomised (RCT)** layouts. The Section menu layout lets participants pick which sections to complete; the Randomised (RCT) layout system-assigns each participant to an arm (see [Survey Layouts](survey-layouts.md)).
 - **Configure section menu** - When using the Section menu layout, mark sections as mandatory or pickable, set min/max selection, and configure the picker prompt.
-- **Visualise the survey** - View the survey as a flow diagram on the **Survey Map** page (`/surveys/<slug>/survey-map/`), linked from the quick-nav toolbar. The Survey Map shows pickable/mandatory badges when using the Section menu layout.
+- **Configure RCT** - When using the Randomised (RCT) layout, define arms, set allocation ratios and strategy, assign sections to arms, and optionally set a seed for reproducible dry-runs.
+- **Visualise the survey** - View the survey as a flow diagram on the **Survey Map** page (`/surveys/<slug>/survey-map/`), linked from the quick-nav toolbar. The Survey Map shows pickable/mandatory badges when using the Section menu layout, and arm composition badges when using the RCT layout.
 - **Publish sections as templates** - Share validated questionnaires
 
 Renaming, deleting, and single-section repeats are done in the **Builder** rail. The Organise page focuses on bulk operations that affect multiple sections at once.
