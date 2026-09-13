@@ -11865,6 +11865,63 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                         arm.groups.add(grp)
             summary_parts.append(" Randomised (RCT) layout applied.")
 
+        # Apply STAGED config from the outline (step 7).
+        staged_cfg = parsed.get("staged")
+        if staged_cfg:
+            survey.layout = Survey.Layout.STAGED
+            survey.save(update_fields=["layout"])
+            menu, _created = StagedMenu.objects.get_or_create(survey=survey)
+            anchor = staged_cfg.get("anchor", StagedMenu.Anchor.ENROLMENT)
+            if anchor in {choice[0] for choice in StagedMenu.Anchor.choices}:
+                menu.anchor = anchor
+            menu.save()
+            # Create phases by name (ordered by first appearance in the
+            # outline). Phase windows come from the ``phase <name>:`` config
+            # lines; phases referenced only via ``~ phase:`` suffixes (no
+            # config line) default to start=0, end=None.
+            phase_order = staged_cfg.get("phase_order", [])
+            phase_windows = staged_cfg.get("phase_windows", {})
+            phases_by_name: dict[str, StagedPhase] = {}
+            for idx, phase_name in enumerate(phase_order, start=1):
+                window = phase_windows.get(phase_name, {})
+                phase, _ = StagedPhase.objects.get_or_create(
+                    menu=menu,
+                    name=phase_name,
+                    defaults={
+                        "order": idx,
+                        "start_offset_days": window.get("start_offset_days", 0),
+                        "end_offset_days": window.get("end_offset_days"),
+                    },
+                )
+                if phase.order != idx:
+                    phase.order = idx
+                    phase.save(update_fields=["order"])
+                # Apply window from config if present.
+                if window:
+                    phase.start_offset_days = window.get("start_offset_days", 0)
+                    phase.end_offset_days = window.get("end_offset_days")
+                    phase.save(update_fields=["start_offset_days", "end_offset_days"])
+                phases_by_name[phase_name] = phase
+            # Drop phases that are no longer in the outline.
+            menu.phases.exclude(name__in=phase_order).delete()
+            # Assign groups to phases by name.
+            for g in parsed["groups"]:
+                grp = group_ref_map.get(g.get("ref"))
+                if grp is None:
+                    grp = next(
+                        (gg for gg in created_groups_in_order if gg.name == g["name"]),
+                        None,
+                    )
+                if grp is None:
+                    continue
+                phase_names_for_group = g.get("staged_phases", [])
+                for pn in phase_names_for_group:
+                    phase = phases_by_name.get(pn)
+                    if phase is not None:
+                        phase.groups.add(grp)
+                # No ~ phase: suffix → not in any phase (unreachable; warned).
+            summary_parts.append(" Staged (longitudinal) layout applied.")
+
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)
     return render(request, "surveys/bulk_upload.html", context)
@@ -11948,6 +12005,32 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                 for grp in arm.groups.all():
                     randomised_arms_by_group.setdefault(grp.id, []).append(arm.name)
 
+    # STAGED block (see docs/survey-layouts-technical.md §Staged (longitudinal)
+    # layout §Outline grammar). Emitted at the top when the survey uses the
+    # staged layout. The ``~ phase:<name>`` suffix is placed on the actual
+    # content group headings below.
+    staged_phases_by_group: dict[int, list[str]] = {}
+    if survey.layout == Survey.Layout.STAGED:
+        smenu = getattr(survey, "staged_menu", None)
+        if smenu is not None:
+            lines.append("STAGED")
+            lines.append(f"  anchor: {smenu.anchor}")
+            # Emit phase window config lines (``phase <name>: <start> [.. <end>]``).
+            for phase in smenu.phases.order_by("order", "id"):
+                if phase.end_offset_days is not None:
+                    lines.append(
+                        f"  phase {phase.name}: {phase.start_offset_days} .. {phase.end_offset_days}"
+                    )
+                else:
+                    lines.append(f"  phase {phase.name}: {phase.start_offset_days}")
+            lines.append("")
+            # Build a lookup: group_id → list of phase names.
+            for phase in smenu.phases.order_by("order", "id").prefetch_related(
+                "groups"
+            ):
+                for grp in phase.groups.all():
+                    staged_phases_by_group.setdefault(grp.id, []).append(phase.name)
+
     for group in groups:
         # Check if this group is part of a collection
         parent_coll_item = (
@@ -12010,6 +12093,11 @@ def _export_survey_to_markdown(survey: Survey) -> str:
         if rct_arms:
             arm_suffix = ", ".join(f"arm:{name}" for name in rct_arms)
             heading = f"{heading}    ~ {arm_suffix}"
+        # Append ``~ phase:<name>`` suffixes for staged layout
+        staged_phases = staged_phases_by_group.get(group.id)
+        if staged_phases:
+            phase_suffix = ", ".join(f"phase:{name}" for name in staged_phases)
+            heading = f"{heading}    ~ {phase_suffix}"
         lines.append(heading)
         if group.description:
             lines.append(f"{indent}{group.description}")

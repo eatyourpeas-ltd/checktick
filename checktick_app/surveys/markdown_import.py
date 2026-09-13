@@ -767,6 +767,26 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
     # Ordered list of arm names seen in the outline (for arm creation order).
     randomised_arm_order: List[str] = []
 
+    # STAGED block parsing (see docs/survey-layouts-technical.md §Staged
+    # (longitudinal) layout §Outline grammar). Analogous to RANDOMISED: the
+    # block appears before any group headings and contains only config lines
+    # (anchor). The ``~ phase:<name>`` suffix is placed on the actual
+    # content group headings, e.g.::
+    #
+    #     # Baseline {baseline}    ~ phase:baseline
+    #
+    # A group may be in multiple phases:
+    # ``~ phase:baseline, phase:followup``.
+    staged: Dict[str, Any] | None = None
+    in_staged_block = False
+    # Map group name -> list of phase names collected from ``~ phase:`` suffixes.
+    staged_phase_items: Dict[str, List[str]] = {}
+    # Ordered list of phase names seen in the outline (for phase creation order).
+    staged_phase_order: List[str] = []
+    # Map phase name -> {start_offset_days, end_offset_days} from the
+    # optional ``phase:`` config lines in the STAGED block.
+    staged_phase_windows: Dict[str, Dict[str, Any]] = {}
+
     for raw in raw_lines:
         # Count leading '>' as depth
         s = raw
@@ -895,6 +915,62 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
             in_randomised_block = False
             # Fall through to regular parsing for this line
 
+        # STAGED block start (see docs/survey-layouts-technical.md §Staged
+        # (longitudinal) layout §Outline grammar).
+        if _re.match(r"^STAGED$", stripped, flags=_re.IGNORECASE):
+            in_staged_block = True
+            staged = {
+                "anchor": "enrolment",
+            }
+            continue
+
+        # STAGED config lines (indented under the block header). Two forms:
+        #   anchor: enrolment|survey_open
+        #   phase <name>: <start> [.. <end>]   (day offsets; end optional)
+        if in_staged_block and (depth > 0 or raw[:1].isspace()):
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            if cfg_match and staged is not None:
+                key = cfg_match.group(1).lower()
+                val_raw = cfg_match.group(2).strip()
+                if key == "anchor":
+                    if val_raw in ("enrolment", "survey_open"):
+                        staged["anchor"] = val_raw
+                continue
+            # Phase window definition: ``phase <name>: <start> [.. <end>]``.
+            phase_match = _re.match(
+                r"^phase\s+([\w\s-]+?)\s*:\s*(.+)$", stripped, flags=_re.IGNORECASE
+            )
+            if phase_match and staged is not None:
+                pname = phase_match.group(1).strip()
+                window_raw = phase_match.group(2).strip()
+                # ``<start>`` or ``<start> .. <end>``.
+                range_match = _re.match(r"^(\d+)\s*(?:\.\.)?\s*(\d*)$", window_raw)
+                if range_match:
+                    start_off = int(range_match.group(1))
+                    end_off_raw = range_match.group(2)
+                    end_off = int(end_off_raw) if end_off_raw else None
+                    staged_phase_windows[pname] = {
+                        "start_offset_days": start_off,
+                        "end_offset_days": end_off,
+                    }
+                    if pname not in staged_phase_order:
+                        staged_phase_order.append(pname)
+                continue
+            # Blank line inside indented block — skip
+            if not stripped:
+                continue
+            continue
+
+        # Blank line ends the STAGED config block
+        if in_staged_block and not stripped:
+            in_staged_block = False
+            continue
+
+        # Unknown non-indented line inside STAGED block also ends it
+        if in_staged_block and depth == 0 and not raw[:1].isspace():
+            in_staged_block = False
+            # Fall through to regular parsing for this line
+
         # REPEAT marker?
         m = _re.match(r"^REPEAT(?:-(\d+))?$", content.strip(), flags=_re.IGNORECASE)
         if m:
@@ -948,6 +1024,25 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                     if an not in randomised_arm_order:
                         randomised_arm_order.append(an)
                 content = heading_content
+            elif tilde_idx != -1 and staged is not None:
+                # ``~ phase:<name>[, phase:<name>...]`` for staged layout.
+                suffix = heading_content[tilde_idx + 1 :].strip()
+                heading_content = heading_content[:tilde_idx].rstrip()
+                # Extract all phase: tokens (comma-separated).
+                phase_matches = _re.findall(
+                    r"phase:([\w\s-]+?)\s*(?:,|$)", suffix, flags=_re.IGNORECASE
+                )
+                phase_names = [p.strip() for p in phase_matches if p.strip()]
+                # Extract group name from the cleaned heading
+                heading_text = heading_content.strip()[2:]  # remove "# "
+                ref_match = _re.search(r"\{([^{}]+)\}\s*$", heading_text)
+                if ref_match:
+                    heading_text = heading_text[: ref_match.start()].rstrip()
+                staged_phase_items[heading_text] = phase_names
+                for pn in phase_names:
+                    if pn not in staged_phase_order:
+                        staged_phase_order.append(pn)
+                content = heading_content
             elif section_menu is not None:
                 # Group without ~ suffix under section_menu → mandatory
                 heading_text = content.strip()[2:]
@@ -967,6 +1062,14 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 if ref_match:
                     heading_text = heading_text[: ref_match.start()].rstrip()
                 randomised_arm_items[heading_text] = []  # all arms
+            elif staged is not None:
+                # Group without ~ suffix under STAGED → not in any phase
+                # (unreachable; the Organise-page warnings flag this).
+                heading_text = content.strip()[2:]
+                ref_match = _re.search(r"\{([^{}]+)\}\s*$", heading_text)
+                if ref_match:
+                    heading_text = heading_text[: ref_match.start()].rstrip()
+                staged_phase_items[heading_text] = []  # no phases
             # Trim or expand repeat_stack to current depth
             while len(repeat_stack) > depth:
                 repeat_stack.pop()
@@ -1022,9 +1125,23 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 # Groups not in the RANDOMISED block default to all arms.
                 g["randomised_arms"] = []
 
+    # Apply staged phase items to parsed groups by name.
+    if staged is not None:
+        staged["phase_order"] = staged_phase_order
+        staged["phase_windows"] = staged_phase_windows
+        for g in groups:
+            phase_names = staged_phase_items.get(g["name"])
+            if phase_names is not None:
+                g["staged_phases"] = phase_names
+            else:
+                # Groups not in the STAGED block default to no phases
+                # (unreachable; warned on the Organise page).
+                g["staged_phases"] = []
+
     return {
         "groups": groups,
         "repeats": repeats,
         "section_menu": section_menu,
         "randomised": randomised,
+        "staged": staged,
     }
