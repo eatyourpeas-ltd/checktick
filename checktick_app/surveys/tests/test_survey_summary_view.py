@@ -76,16 +76,29 @@ def plaintext_survey(owner, db):
     q_text = SurveyQuestion.objects.create(
         survey=s, group=group, text="Comments", type="text", order=1
     )
+    q_long = SurveyQuestion.objects.create(
+        survey=s, group=group, text="Detailed comments", type="long_text", order=2
+    )
     q_num = SurveyQuestion.objects.create(
-        survey=s, group=group, text="Age", type="number", order=2
+        survey=s, group=group, text="Age", type="number", order=3
     )
     SurveyResponse.objects.create(
         survey=s,
-        answers={str(q_yn.id): "yes", str(q_text.id): "good", str(q_num.id): 30},
+        answers={
+            str(q_yn.id): "yes",
+            str(q_text.id): "good",
+            str(q_long.id): "very good experience",
+            str(q_num.id): 30,
+        },
     )
     SurveyResponse.objects.create(
         survey=s,
-        answers={str(q_yn.id): "no", str(q_text.id): "bad", str(q_num.id): 40},
+        answers={
+            str(q_yn.id): "no",
+            str(q_text.id): "bad",
+            str(q_long.id): "poor experience",
+            str(q_num.id): 40,
+        },
     )
     return s
 
@@ -283,6 +296,29 @@ class TestSummaryThemesEndpoint:
             data={"question_id": yesno_q.id},
         )
         assert r.status_code == 400
+
+    def test_long_text_question_accepted(self, plaintext_survey, owner, settings):
+        """long_text questions are eligible for theme analysis (regression)."""
+        settings.LLM_ENABLED = True
+        long_q = plaintext_survey.questions.filter(type="long_text").first()
+        c = Client()
+        c.login(username="summary_owner", password=TEST_PASSWORD)
+        with mock.patch(
+            "checktick_app.surveys.theme_analyzer.ConversationalSurveyLLM"
+        ) as MockLLM:
+            instance = MockLLM.return_value
+            instance.chat_with_custom_system_prompt.return_value = "Themes found"
+            MockLLM.sanitize_markdown.side_effect = lambda s: s
+            r = c.post(
+                reverse(
+                    "surveys:survey_summary_themes",
+                    kwargs={"slug": plaintext_survey.slug},
+                ),
+                data={"question_id": long_q.id},
+            )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["success"] is True
 
     def test_no_responses_returns_graceful(self, owner):
         s = Survey.objects.create(name="Empty", slug="theme-empty", owner=owner)

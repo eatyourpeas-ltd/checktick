@@ -459,9 +459,12 @@ reuse its ingredients:
   future `_assign_round_for_progress` sits next to it without touching
   RCT.
 - The `?simulate_arm=` preview path is the precedent for Delphi's
-  "show me round N aggregate" inter-round feedback view. A small
+  round preview (`?simulate_round=`). A small
   `_aggregate_responses_by_group(survey, group_ids)` helper added for
   the arm-preview panel is reusable for Delphi's median/IQR/themes.
+  Inter-round aggregate feedback itself is rendered via content blocks
+  (see §Content blocks) whose body is substituted from the previous
+  round's responses — no new feedback model in Delphi.
 - RCT does **not** introduce scheduling, anonymity-beyond-aggregation,
   or convergence tracking — those are Delphi-only and stay out of this
   PR to keep RCT scope tight.
@@ -734,10 +737,12 @@ can reuse its ingredients:
   round-scheduling helpers. A future `delphi.py` sits next to it without
   touching staged.
 - The `?simulate_phase=` preview path is the precedent for Delphi's
-  "show me round N aggregate" inter-round feedback view.
-- Staged does **not** introduce anonymity-beyond-aggregation, convergence
-  tracking, or inter-round feedback — those are Delphi-only and stay out
-  of this PR to keep Staged scope tight.
+  round preview (`?simulate_round=`). Inter-round aggregate feedback
+  is rendered via content blocks (see §Content blocks) — no new
+  feedback model in Delphi.
+- Staged does **not** introduce anonymity-beyond-aggregation or
+  convergence tracking — those are Delphi-only and stay out of this
+  PR to keep Staged scope tight.
 
 ## Matrix (free navigation) layout
 
@@ -928,24 +933,166 @@ reuse its ingredients:
   precedent for Delphi's round-state helpers. A future `delphi.py` sits
   next to it without touching matrix.
 - The `?simulate_section=` preview path is the precedent for Delphi's
-  "show me round N aggregate" inter-round feedback view.
-- Matrix does **not** introduce inter-round feedback, convergence
-  tracking, or anonymity-beyond-aggregation — those are Delphi-only and
-  stay out of this PR to keep Matrix scope tight.
+  round preview (`?simulate_round=`). Inter-round aggregate feedback
+  is rendered via content blocks (see §Content blocks) — no new
+  feedback model in Delphi.
+- Matrix does **not** introduce convergence tracking or
+  anonymity-beyond-aggregation — those are Delphi-only and stay out
+  of this PR to keep Matrix scope tight.
 
-### Open questions
+## Content blocks (cross-layout)
 
-- **Generalized landing page across layouts.** The matrix card component
-  (`_section_card.html` pattern) could be extracted so other layouts
-  (e.g. section_menu) get a landing page with a positionable picker card.
-  Deferred to a follow-up PR — matrix's landing page is structured for
-  future reuse but the abstraction should wait until Delphi's needs are
-  clear.
-- **Section_menu positionable picker.** The section_menu picker is
-  currently a fixed pre-step. Two follow-up options: (A) picker as a card
-  on a shared landing page (UX layering change); (B) picker inline
-  mid-survey at an authored insertion point (runtime pipeline change).
-  Both are non-trivial and deserve their own design pass.
+Content blocks are a `SurveyQuestion` type (`content_block`) that renders
+static content — heading, Markdown body, image, and hyperlinks — with no
+answer input. They go anywhere a question goes: any group, any position,
+multiple per group, any layout. A content block placed first in the first
+section is a landing page; one placed between substantive sections is an
+interstitial disclosure; one placed last is a closing acknowledgement.
+
+### Data model
+
+```python
+class SurveyQuestion(models.Model):
+    class Types(models.TextChoices):
+        ...
+        CONTENT_BLOCK = "content_block", "Content block"
+```
+
+A `content_block` question's `options` JSONField holds:
+
+```python
+{
+    "heading": str,           # optional block heading
+    "body_md": str,           # Markdown body (multiline)
+    "image_id": int | None,   # FK to QuestionImage (non-medical imagery only)
+    "links": [                # reference / disclosure links
+        {"label": str, "url": str},
+        ...
+    ],
+}
+```
+
+`QuestionImage` is reused for the image (see its existing warning: images
+are NOT encrypted and are for non-medical, non-patient-identifying content
+only — appropriate for landing/disclosure imagery).
+
+A content block is **never `required`** — it has no answer. The builder
+form validates this; `missing_required_question_ids` skips
+`content_block` questions.
+
+### Consent
+
+Consent is handled as separate `yesno` questions in the same group as the
+content block, not as a content-block feature. Each consent statement is
+its own `SurveyQuestion` row → its own answer row → clean audit trail
+("who agreed to X?"), clean export, clean data-protection defence. The
+author labels the `yesno` options "I agree" / "I do not agree" and sets
+`required=True`.
+
+The `yesno` type already supports custom labels and an optional "Don't
+know" answer (see `markdown_import.py`). A `boolean` checkbox type is
+not added — an unticked checkbox is ambiguous (didn't see it vs. actively
+declined), which is exactly what a medical app should avoid for consent.
+The parser's existing `boolean` alias maps to `yesno`; if a real boolean
+type is ever added, that alias needs forking.
+
+### Rendering
+
+`detail.html` renders a `content_block` question as a single block:
+heading, image, rendered Markdown body, link list. No answer input. The
+matrix landing page composes with it — a content block as the first
+question in the first section renders as the landing header.
+
+### Outline grammar
+
+```text
+## Introduction
+(content_block)
+heading: Welcome
+image: intro-photo.png
+link: Privacy notice|https://example.com/privacy
+link: Study protocol|https://example.com/protocol
+
+Welcome to the study. Please read the privacy notice and links above
+before continuing.
+```
+
+- `heading` is optional (quoted if it contains colons).
+- `image` is optional (filename of an uploaded `QuestionImage`).
+- `link:` lines are one per reference, `Label|URL` format.
+- The body is everything after the config lines (multiline Markdown).
+- A blank line after the config block starts the body; a new `#`/`##`
+  heading ends it.
+
+The export side emits the `(content_block)` type and config lines, and
+the body survives export → import round-trips.
+
+### Builder
+
+The builder form for `content_block` uses a **multiline textarea** for
+`body_md` (Markdown). This is intrinsic to the content block — the body
+is authored content, not a one-line config value. The textarea builder
+component is shared with the `long_text` question type (see §Long text
+below), which landed in v0.16.1.
+
+`body_md` is structurally distinct from question labels:
+`SurveyQuestion.text` and `QuestionGroup.description` are already
+`TextField` (multiline at the DB level); `body_md` is the primary authored
+content of the block, rendered as Markdown → HTML, and can be multiple
+paragraphs. Labels are short; `body_md` is long-form.
+
+## Long text (textarea)
+
+A `long_text` question type — a textarea version of `text` — gives
+authors a "please describe..." / "any other comments" question with a
+multi-line input. It landed in v0.16.1 (migration `0065_long_text`).
+
+### Data model
+
+```python
+class SurveyQuestion(models.Model):
+    class Types(models.TextChoices):
+        ...
+        LONG_TEXT = "long_text", "Long text (textarea)"
+```
+
+`long_text` is a new type, not a `text` variant — the existing pattern
+is one type per rendering shape (see `template_patient` /
+`template_professional`), and the builder, template, and export are all
+type-dispatched already. The answer is stored as a string, same as
+`text`. CSV export reuses the existing string answer path
+(`_format_answer_for_export`).
+
+### Builder
+
+The builder form renders a `<textarea>` for `long_text` questions
+(rows=4). No config section is shown (no options, no format variants).
+
+### Outline grammar
+
+```text
+## Any other comments
+(long_text)
+```
+
+- Aliases: `textarea`, `paragraph`, `long_text`.
+- The question text is the label; the answer is a multi-line string.
+- Round-trips through export → import like the other types.
+
+### Migration
+
+`0065_long_text` adds the `LONG_TEXT` choice to `SurveyQuestion.type`.
+No new model, no new `SurveyProgress` field — just the type and the
+builder/template/parser branches.
+
+### Delphi compatibility
+
+A content block whose `body_md` is rendered from aggregate data (medians,
+IQRs, themes) instead of authored Markdown is Delphi's inter-round
+feedback view. Same model, different body source — the author marks the
+block as "aggregate feedback" and the runtime substitutes the body from
+the previous round's responses. No new model, no new `SurveyProgress`
+field.
 
 ## Planned layouts
 
@@ -966,8 +1113,10 @@ descriptions. Technical notes:
     `delphi_completed_rounds` (within-round completion tracking).
   - `matrix.py` / `staged.py` pure helpers → `delphi.py` round-state
     helpers.
-  - `?simulate_section=` / `?simulate_phase=` preview → inter-round
-    aggregate feedback view.
+  - `?simulate_section=` / `?simulate_phase=` preview → round preview
+    (`?simulate_round=`). Inter-round aggregate feedback is rendered
+    via content blocks (see §Content blocks) whose body is substituted
+    from the previous round's responses.
 - Priority: high — the stretch goal this matrix work is part of.
 
 ## Related documentation

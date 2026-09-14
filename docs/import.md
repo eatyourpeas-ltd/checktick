@@ -100,6 +100,7 @@ Spacing is flexible, but keep the relative order (heading → optional descripti
 | `orderable` | Rank the provided items |
 | `yesno` | Yes/No toggle |
 | `image` | Image choice |
+| `long_text` | Long text (textarea). Aliases: `textarea`, `paragraph` |
 | `likert categories` | Likert scale with category labels (one per `-` line) |
 | `likert number` | Likert scale defined by number range |
 
@@ -378,6 +379,44 @@ Config lines are indented under `STAGED`:
 - A blank line ends the config block.
 
 See [Survey Layouts](survey-layouts.md) for the full guide to when to use the Staged (longitudinal) layout.
+
+### Guided layout
+
+The Guided layout shows one question per screen with Next/Back navigation, instead of scrolling through all questions on a single page. It is a **rendering change** — it composes with the other layouts (a Section menu or RCT survey in guided layout still shows the picker / assigns the arm first, then walks the chosen sections one question at a time).
+
+The Guided layout has **no outline grammar** — it is set on the [Organise](groups-view.md) page, not via the outline. Branching, repeats, follow-ups, autosave, and save-and-resume all work unchanged.
+
+See [Survey Layouts](survey-layouts.md) for the full guide to when to use the Guided layout.
+
+### Matrix (free navigation) layout
+
+Add a `MATRIX` block at the top of the outline to switch the survey to the matrix (free navigation) layout, where all sections appear as cards on a landing page. The participant jumps in and out of any section in any order, with completion indicators showing which sections are done. No `~` suffixes are needed — every section in the survey is a card on the matrix landing page by default.
+
+```markdown
+MATRIX
+  prompt: "Choose a section to begin"
+  order: participant
+  allow_revisit: false
+
+# Demographics {demographics}
+## Name {name}
+(text)
+
+# History {history}
+## Condition {condition}
+(text)
+```
+
+Config lines are indented under `MATRIX`:
+
+- `prompt` — the landing-page prompt text (quoted).
+- `order` — `authored` (use the Organise page order) or `participant` (order by the order the participant first visited each section).
+- `allow_revisit` — `true` / `false`; whether participants can revisit and edit completed sections before final submission.
+- A blank line ends the config block.
+
+The grammar is **optional** — the Organise page UI is the primary config path. The grammar exists so the AI builder and power users can import/export matrix surveys via the outline.
+
+See [Survey Layouts](survey-layouts.md) for the full guide to when to use the Matrix (free navigation) layout.
 
 ## Error handling and validation
 
