@@ -2558,6 +2558,7 @@ class SurveyQuestion(models.Model):
         DROPDOWN = "dropdown", "Dropdown"
         IMAGE_CHOICE = "image", "Image choice"
         LONG_TEXT = "long_text", "Long text (textarea)"
+        CONTENT_BLOCK = "content_block", "Content block"
         TEMPLATE_PATIENT = "template_patient", "Patient details template"
         TEMPLATE_PROFESSIONAL = "template_professional", "Professional details template"
 
@@ -2590,6 +2591,21 @@ class SurveyQuestion(models.Model):
 
     class Meta:
         ordering = ["order", "id"]
+
+    def clean(self):
+        """Validate question-level constraints.
+
+        Content blocks have no answer input, so ``required`` is meaningless
+        and must always be ``False``. Enforced here as the last line of
+        defence (the parser and builder form also force it).
+        """
+        from django.core.exceptions import ValidationError
+
+        super().clean()
+        if self.type == self.Types.CONTENT_BLOCK and self.required:
+            raise ValidationError(
+                {"required": "Content blocks cannot be required (they have no answer)."}
+            )
 
 
 def question_image_upload_path(instance, filename):
