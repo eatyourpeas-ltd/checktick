@@ -383,6 +383,8 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                 "branches": [],
                 "required": is_required,
                 "hidden_by_default": False,
+                "links": [],
+                "body_lines": [],
             }
             current_group["questions"].append(current_question)
         else:
@@ -413,9 +415,22 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                                 last_option,
                                 followup_label,
                             )
+                elif line.startswith("link:") or line.lower().startswith("link:"):
+                    # Content-block reference link: "link: Label|URL"
+                    raw = line.split(":", 1)[1].strip()
+                    if "|" in raw:
+                        label, url = raw.split("|", 1)
+                        current_question["links"].append(
+                            {"label": label.strip(), "url": url.strip()}
+                        )
+                    else:
+                        # URL only, no label
+                        current_question["links"].append(
+                            {"label": raw.strip(), "url": raw.strip()}
+                        )
                 else:
                     m = re.match(
-                        r"^(min|max|left|right|dataset|address_lookup)\s*:\s*(.*)$",
+                        r"^(min|max|left|right|dataset|address_lookup|variant|render_once)\s*:\s*(.*)$",
                         line,
                         re.IGNORECASE,
                     )
@@ -423,7 +438,11 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                         key = m.group(1).lower()
                         val = m.group(2).strip()
                         current_question["kv"][key] = val
-            # else ignore stray text
+                    elif current_question["type"] == "content_block":
+                        # Content-block body: capture non-config lines as Markdown body.
+                        # Blank lines are preserved so paragraph breaks survive.
+                        current_question["body_lines"].append(line)
+                    # else ignore stray text
         i += 1
 
     group_lookup = {g["ref"]: g for g in groups}
@@ -548,6 +567,39 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
             elif t in {"long_text", "long text", "textarea", "paragraph"}:
                 q["final_type"] = "long_text"
                 q["final_options"] = []
+            elif t in {"content_block", "content block", "contentblock"}:
+                q["final_type"] = "content_block"
+                # Content blocks are never required — they have no answer.
+                q["required"] = False
+                variant = str(q["kv"].get("variant", "text")).strip().lower()
+                if variant not in {
+                    "text",
+                    "text_image",
+                    "consent_info",
+                    "disclosure",
+                    "closing",
+                }:
+                    variant = "text"
+                render_once_raw = (
+                    str(q["kv"].get("render_once", "true")).strip().lower()
+                )
+                render_once = render_once_raw not in {"false", "no", "off", "0"}
+                # Body: strip leading/trailing blank lines, preserve internal.
+                body = "\n".join(q["body_lines"]).strip("\n")
+                # Sanitise link URLs at parse time so bad schemes never persist.
+                from checktick_app.core.markdown_safety import sanitise_link_url
+
+                links = []
+                for link in q["links"]:
+                    url = sanitise_link_url(link.get("url", ""))
+                    if url:
+                        links.append({"label": link.get("label", ""), "url": url})
+                q["final_options"] = {
+                    "body_md": body,
+                    "links": links,
+                    "variant": variant,
+                    "render_once": render_once,
+                }
             elif t in {
                 "template_patient",
                 "patient details",
