@@ -2427,6 +2427,43 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
             if text_max:
                 option["max"] = text_max
         options = [option]
+    elif qtype == SurveyQuestion.Types.CONTENT_BLOCK:
+        from checktick_app.core.markdown_safety import sanitise_link_url
+
+        body_md = (data.get("body_md") or "").strip()
+        variant = (data.get("content_block_variant") or "text").strip().lower()
+        if variant not in {
+            "text",
+            "text_image",
+            "consent_info",
+            "disclosure",
+            "closing",
+        }:
+            variant = "text"
+        render_once = (data.get("render_once") or "").lower() not in {
+            "",
+            "false",
+            "no",
+            "off",
+            "0",
+        }
+        # Parse link pairs from the form. Links are submitted as parallel
+        # lists: link_label[] and link_url[]. Empty labels or URLs are dropped.
+        labels = data.getlist("link_label")
+        urls = data.getlist("link_url")
+        links = []
+        for i in range(max(len(labels), len(urls))):
+            label = (labels[i] if i < len(labels) else "").strip()
+            url = (urls[i] if i < len(urls) else "").strip()
+            url = sanitise_link_url(url)
+            if label and url:
+                links.append({"label": label, "url": url})
+        options = {
+            "body_md": body_md,
+            "links": links,
+            "variant": variant,
+            "render_once": render_once,
+        }
     else:
         options = []
 
@@ -2434,6 +2471,10 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
     dataset_key = None
     if qtype == SurveyQuestion.Types.DROPDOWN:
         dataset_key = (data.get("prefilled_dataset") or "").strip() or None
+
+    # Content blocks have no answer — required is meaningless and must be False.
+    if qtype == SurveyQuestion.Types.CONTENT_BLOCK:
+        required = False
 
     return {
         "text": text,

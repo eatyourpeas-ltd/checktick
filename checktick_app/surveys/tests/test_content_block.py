@@ -548,3 +548,104 @@ def test_content_block_renders_sanitised_html(client, django_user_model):
     assert "alert(1)" not in content
     # Safe Markdown is rendered
     assert "<strong>safe</strong>" in content
+
+
+# --- Builder form ---
+
+
+@pytest.mark.django_db
+def test_builder_creates_content_block(client, django_user_model):
+    """The builder form creates a content_block with body, links, variant."""
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(owner=user, name="BuilderCB", slug="builder-cb")
+
+    client.force_login(user)
+    url = reverse("surveys:builder_question_create", kwargs={"slug": survey.slug})
+    response = client.post(
+        url,
+        {
+            "text": "Welcome",
+            "type": "content_block",
+            "body_md": "Welcome to the study.",
+            "content_block_variant": "disclosure",
+            "render_once": "on",
+            "link_label": ["Privacy", "Protocol"],
+            "link_url": [
+                "https://example.com/privacy",
+                "https://example.com/protocol",
+            ],
+            # required=on should be ignored for content blocks
+            "required": "on",
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    q = SurveyQuestion.objects.get(survey=survey, text="Welcome")
+    assert q.type == SurveyQuestion.Types.CONTENT_BLOCK
+    assert q.required is False  # forced False despite required=on
+    assert q.options["body_md"] == "Welcome to the study."
+    assert q.options["variant"] == "disclosure"
+    assert q.options["render_once"] is True
+    assert len(q.options["links"]) == 2
+    assert q.options["links"][0] == {
+        "label": "Privacy",
+        "url": "https://example.com/privacy",
+    }
+
+
+@pytest.mark.django_db
+def test_builder_content_block_strips_javascript_link(client, django_user_model):
+    """Dangerous URL schemes in builder links are stripped at save time."""
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(owner=user, name="BuilderXSS", slug="builder-xss")
+
+    client.force_login(user)
+    url = reverse("surveys:builder_question_create", kwargs={"slug": survey.slug})
+    response = client.post(
+        url,
+        {
+            "text": "Intro",
+            "type": "content_block",
+            "body_md": "Body.",
+            "link_label": ["Evil"],
+            "link_url": ["javascript:alert(1)"],
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    q = SurveyQuestion.objects.get(survey=survey, text="Intro")
+    # The dangerous link is dropped
+    assert q.options["links"] == []
+
+
+@pytest.mark.django_db
+def test_builder_content_block_defaults(client, django_user_model):
+    """A content block with no config defaults to text variant, render_once True."""
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(owner=user, name="BuilderDef", slug="builder-def")
+
+    client.force_login(user)
+    url = reverse("surveys:builder_question_create", kwargs={"slug": survey.slug})
+    response = client.post(
+        url,
+        {
+            "text": "Simple",
+            "type": "content_block",
+            "body_md": "Just text.",
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    q = SurveyQuestion.objects.get(survey=survey, text="Simple")
+    assert q.options["variant"] == "text"
+    assert q.options["render_once"] is False  # not checked -> False
+    assert q.options["links"] == []
