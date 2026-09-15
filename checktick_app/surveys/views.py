@@ -5653,11 +5653,33 @@ def _render_matrix_landing(
     for card in cards:
         card["group"] = groups_map.get(card["group_id"])
     all_complete = _matrix_all_complete(progress, survey.id, group_ids)
+    # Content block landing: if the first question in the first group (by
+    # authored order) is a content_block, render it above the cards as a
+    # landing header. See docs/survey-layouts-technical.md §Content blocks.
+    landing_block = None
+    if group_ids:
+        first_group_questions = SurveyQuestion.objects.filter(
+            survey_id=survey.id, group_id=group_ids[0]
+        ).order_by("order", "id")[:1]
+        for q in first_group_questions:
+            if q.type == SurveyQuestion.Types.CONTENT_BLOCK:
+                from checktick_app.core.markdown_safety import (
+                    render_content_block_markdown,
+                )
+
+                opts = q.options if isinstance(q.options, dict) else {}
+                landing_block = {
+                    "text": q.text,
+                    "html": render_content_block_markdown(opts.get("body_md", "")),
+                    "links": opts.get("links", []),
+                }
+            break
     ctx = {
         "survey": survey,
         "matrix_menu": menu,
         "matrix_cards": cards,
         "all_sections_complete": all_complete,
+        "landing_block": landing_block,
         "is_preview": False,
         # Progress tracking
         "show_progress": progress is not None,

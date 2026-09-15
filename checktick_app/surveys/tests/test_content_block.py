@@ -649,3 +649,72 @@ def test_builder_content_block_defaults(client, django_user_model):
     assert q.options["variant"] == "text"
     assert q.options["render_once"] is False  # not checked -> False
     assert q.options["links"] == []
+
+
+# --- Matrix landing composition ---
+
+
+@pytest.mark.django_db
+def test_matrix_landing_renders_content_block(client, django_user_model):
+    """A content block as the first question in the first section renders
+    above the matrix cards as a landing header."""
+    from checktick_app.surveys.models import MatrixMenu, QuestionGroup
+
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    respondent = django_user_model.objects.create_user(
+        username="respondent", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(
+        owner=user,
+        name="MatrixCB",
+        slug="matrix-cb",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.AUTHENTICATED,
+        allow_any_authenticated=True,
+        layout=Survey.Layout.MATRIX,
+        respondent_audience=Survey.RespondentAudience.STAFF,
+        audience_confirmed=True,
+    )
+    MatrixMenu.objects.create(survey=survey)
+    group1 = QuestionGroup.objects.create(name="Intro", owner=user)
+    group2 = QuestionGroup.objects.create(name="Questions", owner=user)
+    survey.question_groups.add(group1, group2)
+    # Content block as first question in first group
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group1,
+        text="Welcome",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "body_md": "Welcome to the **study**.",
+            "links": [{"label": "Privacy", "url": "https://example.com/privacy"}],
+            "variant": "text",
+            "render_once": True,
+        },
+        required=False,
+        order=0,
+    )
+    # A normal question in the second group (so the cards have content)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group2,
+        text="Your name",
+        type=SurveyQuestion.Types.TEXT,
+        required=False,
+        order=0,
+    )
+
+    client.force_login(respondent)
+    resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    # Landing block heading is rendered
+    assert "Welcome" in content
+    # Markdown body is rendered
+    assert "<strong>study</strong>" in content
+    # Link is rendered
+    assert 'href="https://example.com/privacy"' in content
+    # Matrix cards are still rendered (the section names appear)
+    assert "Questions" in content
