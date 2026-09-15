@@ -21,8 +21,8 @@
               <span class="q-number text-sm opacity-70 mr-2 select-none">{{ forloop.counter }}</span>
               {{ q.text }}{% if q.required %}<span class="text-error ml-1">*</span>{% endif %}
             </div>
-            {% if q.type == 'template_patient' or q.type == 'template_professional' %}
-              <div class="text-xs opacity-70 flex items-center gap-1 flex-wrap">{% include "surveys/partials/question_type_icon.html" with qtype=q.type %}<span>Template • {{ q.get_type_display }}{% if q.required %} • <span class="text-error font-medium">(required)</span>{% endif %}</span></div>
+            {% if q.type == 'template_patient' or q.type == 'template_professional' or q.type == 'content_block' %}
+              <div class="text-xs opacity-70 flex items-center gap-1 flex-wrap">{% include "surveys/partials/question_type_icon.html" with qtype=q.type %}<span>{% if q.type == 'content_block' %}Content block • {{ q.get_type_display }}{% else %}Template • {{ q.get_type_display }}{% endif %}{% if q.required %} • <span class="text-error font-medium">(required)</span>{% endif %}</span></div>
             {% else %}
               <div class="text-xs opacity-70 flex items-center gap-1 flex-wrap">
                 {% include "surveys/partials/question_type_icon.html" with qtype=q.type fmt=q.options.0.format %}
@@ -51,13 +51,13 @@
             {% include 'surveys/partials/question_preview.html' %}
           </div>
           <div class="flex items-center gap-2 ml-auto pr-1">
-            {% if group and q.type != 'template_patient' and q.type != 'template_professional' %}
+            {% if group and q.type != 'template_patient' and q.type != 'template_professional' and q.type != 'content_block' %}
               <button type="button" class="btn btn-xs btn-accent builder-edit-button" data-drag-ignore data-action="edit-question" data-payload-id="{{ payload_id }}" data-edit-url="/surveys/{{ q.survey.slug }}/builder/groups/{{ group.id }}/questions/{{ q.id }}/edit">{% if q.type == 'image' %}Upload/Edit Images{% else %}Edit{% endif %}</button>
               <form method="post" hx-post="/surveys/{{ q.survey.slug }}/builder/groups/{{ group.id }}/questions/{{ q.id }}/copy" hx-target="#questions-list" hx-swap="outerHTML">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-xs btn-outline" data-drag-ignore>Copy</button>
               </form>
-            {% elif not group and q.type != 'template_patient' and q.type != 'template_professional' %}
+            {% elif not group and q.type != 'template_patient' and q.type != 'template_professional' and q.type != 'content_block' %}
               <form method="post" hx-post="/surveys/{{ q.survey.slug }}/builder/questions/{{ q.id }}/copy" hx-target="#questions-list" hx-swap="outerHTML">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-xs btn-outline" data-drag-ignore>Copy</button>
@@ -169,6 +169,7 @@
                 <option value="yesno" {% if q.type == 'yesno' %}selected{% endif %}>Yes/No</option>
                 <option value="dropdown" {% if q.type == 'dropdown' %}selected{% endif %}>Dropdown</option>
                 <option value="image" {% if q.type == 'image' %}selected{% endif %}>Image choice</option>
+                <option value="content_block" {% if q.type == 'content_block' %}selected{% endif %}>Content block</option>
               </select>
               <label class="label mt-2">Text format</label>
               <select name="text_format" class="select select-bordered w-full" {% if q.type != 'text' %}disabled{% endif %}>

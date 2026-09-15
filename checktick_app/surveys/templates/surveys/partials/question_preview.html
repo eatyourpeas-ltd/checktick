@@ -137,6 +137,17 @@
     </div>
   {% elif q.type == 'long_text' %}
     <textarea class="textarea textarea-bordered w-full" rows="3" disabled></textarea>
+  {% elif q.type == 'content_block' %}
+    <div class="content-block prose max-w-none text-sm opacity-80">
+      {% if q.content_block_html %}{{ q.content_block_html|safe }}{% endif %}
+      {% if q.content_block_links %}
+        <ul class="list-none pl-0 mt-2">
+          {% for link in q.content_block_links %}
+            <li><a href="{{ link.url }}" rel="noopener noreferrer" target="_blank" class="link link-primary">{{ link.label }}</a></li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
   {% else %}
     <input class="input input-bordered w-full" type="text" disabled />
   {% endif %}
