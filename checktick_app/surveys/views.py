@@ -12640,6 +12640,28 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             if question.hidden_by_default:
                 lines.append(f"{indent}HIDDEN")
 
+            # Content block: emit variant/render_once config, links, then body.
+            # The body is multiline Markdown; a blank line separates config from body.
+            if question.type == "content_block" and isinstance(question.options, dict):
+                opts = question.options or {}
+                variant = opts.get("variant", "text")
+                if variant and variant != "text":
+                    lines.append(f"{indent}variant: {variant}")
+                render_once = opts.get("render_once", True)
+                if render_once is False:
+                    lines.append(f"{indent}render_once: false")
+                for link in opts.get("links", []):
+                    label = link.get("label", "")
+                    url = link.get("url", "")
+                    if label and url:
+                        lines.append(f"{indent}link: {label}|{url}")
+                    elif url:
+                        lines.append(f"{indent}link: {url}")
+                body = opts.get("body_md", "")
+                if body:
+                    lines.append("")  # blank line starts the body
+                    lines.extend(body.splitlines())
+
             # Handle likert type (which can be categories or number)
             if question.type == "likert" and question.options:
                 # Check if it's categories or number type
@@ -14042,6 +14064,28 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                     lines.append(f"min: {first_option['min']}")
                 if first_option.get("max"):
                     lines.append(f"max: {first_option['max']}")
+
+        # Content block: emit variant/render_once config, links, then body.
+        # The body is multiline Markdown; a blank line separates config from body.
+        if question.type == "content_block" and isinstance(question.options, dict):
+            opts = question.options or {}
+            variant = opts.get("variant", "text")
+            if variant and variant != "text":
+                lines.append(f"variant: {variant}")
+            render_once = opts.get("render_once", True)
+            if render_once is False:
+                lines.append("render_once: false")
+            for link in opts.get("links", []):
+                label = link.get("label", "")
+                url = link.get("url", "")
+                if label and url:
+                    lines.append(f"link: {label}|{url}")
+                elif url:
+                    lines.append(f"link: {url}")
+            body = opts.get("body_md", "")
+            if body:
+                lines.append("")  # blank line starts the body
+                lines.extend(body.splitlines())
 
         # Handle likert type (which can be categories or number)
         if question.type == "likert" and question.options:

@@ -260,3 +260,118 @@ def test_bulk_import_creates_content_block_question(client, django_user_model):
     assert q.options["links"][0]["url"] == "https://example.com/privacy"
     assert q.options["variant"] == "text"
     assert q.options["render_once"] is True
+
+
+# --- Export round-trip ---
+
+
+@pytest.mark.django_db
+def test_export_content_block_round_trip(client, django_user_model):
+    """Export a content_block question to markdown and re-import it."""
+    from checktick_app.surveys.models import QuestionGroup
+    from checktick_app.surveys.views import _export_survey_to_markdown
+
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(owner=user, name="ExportCB", slug="export-cb")
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Introduction",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "body_md": "Welcome to the study.\n\nPlease read the privacy notice.",
+            "links": [
+                {"label": "Privacy", "url": "https://example.com/privacy"},
+                {"label": "Protocol", "url": "https://example.com/protocol"},
+            ],
+            "variant": "disclosure",
+            "render_once": False,
+        },
+        required=False,
+        order=0,
+    )
+
+    exported = _export_survey_to_markdown(survey)
+    # The export contains the content_block type and config
+    assert "(content_block)" in exported
+    assert "variant: disclosure" in exported
+    assert "render_once: false" in exported
+    assert "link: Privacy|https://example.com/privacy" in exported
+    assert "link: Protocol|https://example.com/protocol" in exported
+    assert "Welcome to the study." in exported
+    assert "Please read the privacy notice." in exported
+
+    # Re-import into a fresh survey
+    survey2 = Survey.objects.create(owner=user, name="Reimport", slug="reimport-cb")
+    client.login(username="author", password=TEST_PASSWORD)
+    response = client.post(
+        reverse("surveys:bulk_upload", kwargs={"slug": survey2.slug}),
+        {"markdown": exported},
+        follow=False,
+    )
+    assert response.status_code == 302
+
+    q = SurveyQuestion.objects.get(survey=survey2, text="Introduction")
+    assert q.type == SurveyQuestion.Types.CONTENT_BLOCK
+    assert q.required is False
+    assert q.options["variant"] == "disclosure"
+    assert q.options["render_once"] is False
+    assert len(q.options["links"]) == 2
+    assert q.options["links"][0]["url"] == "https://example.com/privacy"
+    assert "Welcome to the study." in q.options["body_md"]
+    assert "Please read the privacy notice." in q.options["body_md"]
+
+
+@pytest.mark.django_db
+def test_export_content_block_minimal_round_trip(client, django_user_model):
+    """A minimal content_block (body only) round-trips."""
+    from checktick_app.surveys.models import QuestionGroup
+    from checktick_app.surveys.views import _export_survey_to_markdown
+
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(owner=user, name="MinCB", slug="min-cb")
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Intro",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "body_md": "Just a body.",
+            "links": [],
+            "variant": "text",
+            "render_once": True,
+        },
+        required=False,
+        order=0,
+    )
+
+    exported = _export_survey_to_markdown(survey)
+    assert "(content_block)" in exported
+    assert "Just a body." in exported
+    # Default variant/render_once are not emitted
+    assert "variant:" not in exported
+    assert "render_once:" not in exported
+
+    survey2 = Survey.objects.create(owner=user, name="MinCB2", slug="min-cb2")
+    client.login(username="author", password=TEST_PASSWORD)
+    response = client.post(
+        reverse("surveys:bulk_upload", kwargs={"slug": survey2.slug}),
+        {"markdown": exported},
+        follow=False,
+    )
+    assert response.status_code == 302
+
+    q = SurveyQuestion.objects.get(survey=survey2, text="Intro")
+    assert q.type == SurveyQuestion.Types.CONTENT_BLOCK
+    assert q.options["body_md"] == "Just a body."
+    assert q.options["variant"] == "text"
+    assert q.options["render_once"] is True
+    assert q.options["links"] == []
