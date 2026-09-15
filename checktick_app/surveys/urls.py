@@ -365,6 +365,16 @@ urlpatterns = [
         name="builder_group_question_template_professional_update",
     ),
     path(
+        "<slug:slug>/builder/questions/<int:qid>/template/content_block",
+        views.builder_question_content_block_update,
+        name="builder_question_content_block_update",
+    ),
+    path(
+        "<slug:slug>/builder/groups/<int:gid>/questions/<int:qid>/template/content_block",
+        views.builder_group_question_content_block_update,
+        name="builder_group_question_content_block_update",
+    ),
+    path(
         "<slug:slug>/builder/questions/<int:qid>/edit",
         views.builder_question_edit,
         name="builder_question_edit",

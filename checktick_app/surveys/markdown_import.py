@@ -430,7 +430,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                         )
                 else:
                     m = re.match(
-                        r"^(min|max|left|right|dataset|address_lookup|variant|render_once)\s*:\s*(.*)$",
+                        r"^(min|max|left|right|dataset|address_lookup|variant|render_once|heading)\s*:\s*(.*)$",
                         line,
                         re.IGNORECASE,
                     )
@@ -584,6 +584,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                     str(q["kv"].get("render_once", "true")).strip().lower()
                 )
                 render_once = render_once_raw not in {"false", "no", "off", "0"}
+                heading = str(q["kv"].get("heading", "")).strip()
                 # Body: strip leading/trailing blank lines, preserve internal.
                 body = "\n".join(q["body_lines"]).strip("\n")
                 # Sanitise link URLs at parse time so bad schemes never persist.
@@ -595,6 +596,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                     if url:
                         links.append({"label": link.get("label", ""), "url": url})
                 q["final_options"] = {
+                    "heading": heading,
                     "body_md": body,
                     "links": links,
                     "variant": variant,

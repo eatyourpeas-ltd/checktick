@@ -2003,7 +2003,7 @@ def _annotate_question_render_sequence(
         setattr(q, "group_end", bool(curr_gid and curr_gid != next_gid))
         setattr(q, "has_show_condition", q.id in questions_with_show_conditions)
         # Content block: pre-render the Markdown body to sanitised HTML and
-        # extract links so the template emits them without |safe on raw content.
+        # extract heading/links so the template emits them without |safe on raw content.
         if q.type == SurveyQuestion.Types.CONTENT_BLOCK:
             from checktick_app.core.markdown_safety import (
                 render_content_block_markdown,
@@ -2015,9 +2015,11 @@ def _annotate_question_render_sequence(
                 "content_block_html",
                 render_content_block_markdown(opts.get("body_md", "")),
             )
+            setattr(q, "content_block_heading", opts.get("heading", ""))
             setattr(q, "content_block_links", opts.get("links", []))
         else:
             setattr(q, "content_block_html", None)
+            setattr(q, "content_block_heading", None)
             setattr(q, "content_block_links", None)
 
     return questions
@@ -2427,43 +2429,6 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
             if text_max:
                 option["max"] = text_max
         options = [option]
-    elif qtype == SurveyQuestion.Types.CONTENT_BLOCK:
-        from checktick_app.core.markdown_safety import sanitise_link_url
-
-        body_md = (data.get("body_md") or "").strip()
-        variant = (data.get("content_block_variant") or "text").strip().lower()
-        if variant not in {
-            "text",
-            "text_image",
-            "consent_info",
-            "disclosure",
-            "closing",
-        }:
-            variant = "text"
-        render_once = (data.get("render_once") or "").lower() not in {
-            "",
-            "false",
-            "no",
-            "off",
-            "0",
-        }
-        # Parse link pairs from the form. Links are submitted as parallel
-        # lists: link_label[] and link_url[]. Empty labels or URLs are dropped.
-        labels = data.getlist("link_label")
-        urls = data.getlist("link_url")
-        links = []
-        for i in range(max(len(labels), len(urls))):
-            label = (labels[i] if i < len(labels) else "").strip()
-            url = (urls[i] if i < len(urls) else "").strip()
-            url = sanitise_link_url(url)
-            if label and url:
-                links.append({"label": label, "url": url})
-        options = {
-            "body_md": body_md,
-            "links": links,
-            "variant": variant,
-            "render_once": render_once,
-        }
     else:
         options = []
 
@@ -5670,6 +5635,7 @@ def _render_matrix_landing(
                 opts = q.options if isinstance(q.options, dict) else {}
                 landing_block = {
                     "text": q.text,
+                    "heading": opts.get("heading", ""),
                     "html": render_content_block_markdown(opts.get("body_md", "")),
                     "links": opts.get("links", []),
                 }
@@ -10540,6 +10506,26 @@ def builder_group_template_add(
                 required=required,
                 order=order,
             )
+    elif template_key == "content_block":
+        order = (
+            survey.questions.aggregate(models.Max("order")).get("order__max") or 0
+        ) + 1
+        SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Content block",
+            type=SurveyQuestion.Types.CONTENT_BLOCK,
+            options={
+                "heading": "",
+                "body_md": "",
+                "links": [],
+                "variant": "text",
+                "render_once": True,
+            },
+            required=False,
+            order=order,
+        )
+        message = "Content block added."
     else:
         message = "Unknown template."
         messages.error(request, "Unknown template.")
@@ -10756,6 +10742,93 @@ def builder_group_question_template_professional_update(
     )
     question.save(update_fields=["options"])
 
+    return _render_template_question_row(
+        request, survey, question, group=group, keep_open=True
+    )
+
+
+def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) -> None:
+    """Parse the content block configure form and update ``question.options``.
+
+    Shared by the group-scoped and survey-scoped update views. Reads:
+    - ``heading``: rendered heading (optional)
+    - ``body_md``: Markdown body
+    - ``content_block_variant``: variant type
+    - ``render_once``: render once toggle
+    - ``link_label[]`` / ``link_url[]``: parallel lists of link pairs
+    """
+    from checktick_app.core.markdown_safety import sanitise_link_url
+
+    heading = (request.POST.get("heading") or "").strip()
+    body_md = (request.POST.get("body_md") or "").strip()
+    variant = (request.POST.get("content_block_variant") or "text").strip().lower()
+    if variant not in {
+        "text",
+        "text_image",
+        "consent_info",
+        "disclosure",
+        "closing",
+    }:
+        variant = "text"
+    render_once = (request.POST.get("render_once") or "").lower() not in {
+        "",
+        "false",
+        "no",
+        "off",
+        "0",
+    }
+    labels = request.POST.getlist("link_label")
+    urls = request.POST.getlist("link_url")
+    links = []
+    for i in range(max(len(labels), len(urls))):
+        label = (labels[i] if i < len(labels) else "").strip()
+        url = (urls[i] if i < len(urls) else "").strip()
+        url = sanitise_link_url(url)
+        if label and url:
+            links.append({"label": label, "url": url})
+    question.options = {
+        "heading": heading,
+        "body_md": body_md,
+        "links": links,
+        "variant": variant,
+        "render_once": render_once,
+    }
+    question.save(update_fields=["options"])
+
+
+@login_required
+@require_http_methods(["POST"])
+def builder_question_content_block_update(
+    request: HttpRequest, slug: str, qid: int
+) -> HttpResponse:
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    question = get_object_or_404(
+        SurveyQuestion,
+        id=qid,
+        survey=survey,
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+    )
+    _parse_content_block_form(request, question)
+    return _render_template_question_row(request, survey, question, keep_open=True)
+
+
+@login_required
+@require_http_methods(["POST"])
+def builder_group_question_content_block_update(
+    request: HttpRequest, slug: str, gid: int, qid: int
+) -> HttpResponse:
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)
+    question = get_object_or_404(
+        SurveyQuestion,
+        id=qid,
+        survey=survey,
+        group=group,
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+    )
+    _parse_content_block_form(request, question)
     return _render_template_question_row(
         request, survey, question, group=group, keep_open=True
     )
@@ -12759,10 +12832,13 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             if question.hidden_by_default:
                 lines.append(f"{indent}HIDDEN")
 
-            # Content block: emit variant/render_once config, links, then body.
+            # Content block: emit heading/variant/render_once config, links, then body.
             # The body is multiline Markdown; a blank line separates config from body.
             if question.type == "content_block" and isinstance(question.options, dict):
                 opts = question.options or {}
+                heading = opts.get("heading", "")
+                if heading:
+                    lines.append(f"{indent}heading: {heading}")
                 variant = opts.get("variant", "text")
                 if variant and variant != "text":
                     lines.append(f"{indent}variant: {variant}")
@@ -14184,10 +14260,13 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                 if first_option.get("max"):
                     lines.append(f"max: {first_option['max']}")
 
-        # Content block: emit variant/render_once config, links, then body.
+        # Content block: emit heading/variant/render_once config, links, then body.
         # The body is multiline Markdown; a blank line separates config from body.
         if question.type == "content_block" and isinstance(question.options, dict):
             opts = question.options or {}
+            heading = opts.get("heading", "")
+            if heading:
+                lines.append(f"heading: {heading}")
             variant = opts.get("variant", "text")
             if variant and variant != "text":
                 lines.append(f"variant: {variant}")

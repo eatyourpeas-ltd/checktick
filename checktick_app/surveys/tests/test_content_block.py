@@ -85,6 +85,7 @@ def test_parse_content_block_type():
         # Section {sec}
         ## Introduction
         (content_block)
+        heading: Welcome
 
         Welcome to the study.
         """).strip()
@@ -92,6 +93,7 @@ def test_parse_content_block_type():
     groups = parse_bulk_markdown(md)
     q = groups[0]["questions"][0]
     assert q["final_type"] == "content_block"
+    assert q["final_options"]["heading"] == "Welcome"
     assert q["final_options"]["body_md"] == "Welcome to the study."
     assert q["final_options"]["variant"] == "text"
     assert q["final_options"]["render_once"] is True
@@ -255,6 +257,7 @@ def test_bulk_import_creates_content_block_question(client, django_user_model):
     q = SurveyQuestion.objects.get(survey=survey, text="Introduction")
     assert q.type == SurveyQuestion.Types.CONTENT_BLOCK
     assert q.required is False
+    assert q.options["heading"] == ""
     assert q.options["body_md"] == "Welcome to the study."
     assert len(q.options["links"]) == 1
     assert q.options["links"][0]["url"] == "https://example.com/privacy"
@@ -283,6 +286,7 @@ def test_export_content_block_round_trip(client, django_user_model):
         text="Introduction",
         type=SurveyQuestion.Types.CONTENT_BLOCK,
         options={
+            "heading": "Welcome",
             "body_md": "Welcome to the study.\n\nPlease read the privacy notice.",
             "links": [
                 {"label": "Privacy", "url": "https://example.com/privacy"},
@@ -298,6 +302,7 @@ def test_export_content_block_round_trip(client, django_user_model):
     exported = _export_survey_to_markdown(survey)
     # The export contains the content_block type and config
     assert "(content_block)" in exported
+    assert "heading: Welcome" in exported
     assert "variant: disclosure" in exported
     assert "render_once: false" in exported
     assert "link: Privacy|https://example.com/privacy" in exported
@@ -318,6 +323,7 @@ def test_export_content_block_round_trip(client, django_user_model):
     q = SurveyQuestion.objects.get(survey=survey2, text="Introduction")
     assert q.type == SurveyQuestion.Types.CONTENT_BLOCK
     assert q.required is False
+    assert q.options["heading"] == "Welcome"
     assert q.options["variant"] == "disclosure"
     assert q.options["render_once"] is False
     assert len(q.options["links"]) == 2
@@ -344,6 +350,7 @@ def test_export_content_block_minimal_round_trip(client, django_user_model):
         text="Intro",
         type=SurveyQuestion.Types.CONTENT_BLOCK,
         options={
+            "heading": "",
             "body_md": "Just a body.",
             "links": [],
             "variant": "text",
@@ -359,6 +366,8 @@ def test_export_content_block_minimal_round_trip(client, django_user_model):
     # Default variant/render_once are not emitted
     assert "variant:" not in exported
     assert "render_once:" not in exported
+    # Empty heading is not emitted
+    assert "heading:" not in exported
 
     survey2 = Survey.objects.create(owner=user, name="MinCB2", slug="min-cb2")
     client.login(username="author", password=TEST_PASSWORD)
@@ -371,6 +380,7 @@ def test_export_content_block_minimal_round_trip(client, django_user_model):
 
     q = SurveyQuestion.objects.get(survey=survey2, text="Intro")
     assert q.type == SurveyQuestion.Types.CONTENT_BLOCK
+    assert q.options["heading"] == ""
     assert q.options["body_md"] == "Just a body."
     assert q.options["variant"] == "text"
     assert q.options["render_once"] is True
@@ -476,9 +486,10 @@ def test_content_block_renders_in_take_view(client, django_user_model):
     question = SurveyQuestion.objects.create(
         survey=survey,
         group=group,
-        text="Welcome",
+        text="Introduction block",
         type=SurveyQuestion.Types.CONTENT_BLOCK,
         options={
+            "heading": "Welcome",
             "body_md": "Welcome to the **study**.",
             "links": [
                 {"label": "Privacy", "url": "https://example.com/privacy"},
@@ -494,8 +505,17 @@ def test_content_block_renders_in_take_view(client, django_user_model):
     resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
     assert resp.status_code == 200
     content = resp.content.decode()
-    # Heading is rendered
+    # The rendered heading comes from options.heading, not q.text
     assert "Welcome" in content
+    # The internal label (q.text) is NOT rendered visibly to participants
+    # (it may appear in HTML comments for debugging, which is fine)
+    assert "<h2" in content
+    # The q.text should not appear inside an h2 or visible heading element
+    import re
+
+    visible_headings = re.findall(r"<h[12][^>]*>(.*?)</h[12]>", content, re.DOTALL)
+    for heading in visible_headings:
+        assert "Introduction block" not in heading
     # Markdown body is rendered (bold -> <strong>)
     assert "<strong>study</strong>" in content
     # Link is rendered with rel="noopener noreferrer"
@@ -531,6 +551,7 @@ def test_content_block_renders_sanitised_html(client, django_user_model):
         text="Intro",
         type=SurveyQuestion.Types.CONTENT_BLOCK,
         options={
+            "heading": "",
             "body_md": "<script>alert(1)</script>**safe**",
             "links": [],
             "variant": "text",
@@ -550,24 +571,80 @@ def test_content_block_renders_sanitised_html(client, django_user_model):
     assert "<strong>safe</strong>" in content
 
 
-# --- Builder form ---
+# --- Builder (special template path) ---
 
 
 @pytest.mark.django_db
-def test_builder_creates_content_block(client, django_user_model):
-    """The builder form creates a content_block with body, links, variant."""
+def test_builder_adds_content_block_template(client, django_user_model):
+    """The special template path creates a content_block with defaults."""
+    from checktick_app.surveys.models import QuestionGroup
+
     user = django_user_model.objects.create_user(
         username="author", password=TEST_PASSWORD
     )
     survey = Survey.objects.create(owner=user, name="BuilderCB", slug="builder-cb")
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
 
     client.force_login(user)
-    url = reverse("surveys:builder_question_create", kwargs={"slug": survey.slug})
+    url = reverse(
+        "surveys:builder_group_template_add",
+        kwargs={"slug": survey.slug, "gid": group.id},
+    )
+    response = client.post(
+        url,
+        {"template": "content_block"},
+    )
+
+    assert response.status_code == 200
+    q = SurveyQuestion.objects.get(
+        survey=survey, type=SurveyQuestion.Types.CONTENT_BLOCK
+    )
+    assert q.text == "Content block"
+    assert q.required is False
+    assert q.options["heading"] == ""
+    assert q.options["body_md"] == ""
+    assert q.options["links"] == []
+    assert q.options["variant"] == "text"
+    assert q.options["render_once"] is True
+
+
+@pytest.mark.django_db
+def test_builder_configures_content_block(client, django_user_model):
+    """The content block configure form updates heading, body, links, variant."""
+    from checktick_app.surveys.models import QuestionGroup
+
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(owner=user, name="ConfigCB", slug="config-cb")
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    q = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Content block",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "heading": "",
+            "body_md": "",
+            "links": [],
+            "variant": "text",
+            "render_once": True,
+        },
+        required=False,
+        order=0,
+    )
+
+    client.force_login(user)
+    url = reverse(
+        "surveys:builder_group_question_content_block_update",
+        kwargs={"slug": survey.slug, "gid": group.id, "qid": q.id},
+    )
     response = client.post(
         url,
         {
-            "text": "Welcome",
-            "type": "content_block",
+            "heading": "Welcome",
             "body_md": "Welcome to the study.",
             "content_block_variant": "disclosure",
             "render_once": "on",
@@ -576,16 +653,12 @@ def test_builder_creates_content_block(client, django_user_model):
                 "https://example.com/privacy",
                 "https://example.com/protocol",
             ],
-            # required=on should be ignored for content blocks
-            "required": "on",
         },
-        HTTP_HX_REQUEST="true",
     )
 
     assert response.status_code == 200
-    q = SurveyQuestion.objects.get(survey=survey, text="Welcome")
-    assert q.type == SurveyQuestion.Types.CONTENT_BLOCK
-    assert q.required is False  # forced False despite required=on
+    q.refresh_from_db()
+    assert q.options["heading"] == "Welcome"
     assert q.options["body_md"] == "Welcome to the study."
     assert q.options["variant"] == "disclosure"
     assert q.options["render_once"] is True
@@ -598,56 +671,49 @@ def test_builder_creates_content_block(client, django_user_model):
 
 @pytest.mark.django_db
 def test_builder_content_block_strips_javascript_link(client, django_user_model):
-    """Dangerous URL schemes in builder links are stripped at save time."""
+    """Dangerous URL schemes in configure form links are stripped at save time."""
+    from checktick_app.surveys.models import QuestionGroup
+
     user = django_user_model.objects.create_user(
         username="author", password=TEST_PASSWORD
     )
     survey = Survey.objects.create(owner=user, name="BuilderXSS", slug="builder-xss")
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    q = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Content block",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "heading": "",
+            "body_md": "",
+            "links": [],
+            "variant": "text",
+            "render_once": True,
+        },
+        required=False,
+        order=0,
+    )
 
     client.force_login(user)
-    url = reverse("surveys:builder_question_create", kwargs={"slug": survey.slug})
+    url = reverse(
+        "surveys:builder_group_question_content_block_update",
+        kwargs={"slug": survey.slug, "gid": group.id, "qid": q.id},
+    )
     response = client.post(
         url,
         {
-            "text": "Intro",
-            "type": "content_block",
+            "heading": "Intro",
             "body_md": "Body.",
             "link_label": ["Evil"],
             "link_url": ["javascript:alert(1)"],
         },
-        HTTP_HX_REQUEST="true",
     )
 
     assert response.status_code == 200
-    q = SurveyQuestion.objects.get(survey=survey, text="Intro")
+    q.refresh_from_db()
     # The dangerous link is dropped
-    assert q.options["links"] == []
-
-
-@pytest.mark.django_db
-def test_builder_content_block_defaults(client, django_user_model):
-    """A content block with no config defaults to text variant, render_once True."""
-    user = django_user_model.objects.create_user(
-        username="author", password=TEST_PASSWORD
-    )
-    survey = Survey.objects.create(owner=user, name="BuilderDef", slug="builder-def")
-
-    client.force_login(user)
-    url = reverse("surveys:builder_question_create", kwargs={"slug": survey.slug})
-    response = client.post(
-        url,
-        {
-            "text": "Simple",
-            "type": "content_block",
-            "body_md": "Just text.",
-        },
-        HTTP_HX_REQUEST="true",
-    )
-
-    assert response.status_code == 200
-    q = SurveyQuestion.objects.get(survey=survey, text="Simple")
-    assert q.options["variant"] == "text"
-    assert q.options["render_once"] is False  # not checked -> False
     assert q.options["links"] == []
 
 
@@ -688,6 +754,7 @@ def test_matrix_landing_renders_content_block(client, django_user_model):
         text="Welcome",
         type=SurveyQuestion.Types.CONTENT_BLOCK,
         options={
+            "heading": "Welcome",
             "body_md": "Welcome to the **study**.",
             "links": [{"label": "Privacy", "url": "https://example.com/privacy"}],
             "variant": "text",

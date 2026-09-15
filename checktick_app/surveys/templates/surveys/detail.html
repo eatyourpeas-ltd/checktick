@@ -453,10 +453,12 @@
 
     {# Render question inside the group card - wrapped for branching #}
     <div class="mb-4" data-question-id="{{ q.id }}"{% if q.has_show_condition %} style="display: none;"{% endif %} role="group" aria-labelledby="q_label_{{ q.id }}">
+      {% if q.type != 'content_block' %}
       <h2 class="font-semibold inline-flex items-center gap-2" id="q_label_{{ q.id }}">
         {% include "components/icons/document.html" with classes="w-4 h-4 opacity-70" aria_hidden="true" %}
         <span><span class="text-sm opacity-70 mr-2 select-none" aria-hidden="true">{{ q.idx }}.</span> {{ q.text }}{% if q.required %} <span class="text-error" aria-hidden="true">*</span><span class="sr-only">{% trans "(required)" %}</span>{% endif %}</span>
       </h2>
+      {% endif %}
         {% if q.type == 'text' %}
           {% with q.options|options_meta as meta %}
             {% if meta and meta.format == 'number' %}
@@ -752,8 +754,11 @@
             {% endfor %}
           </div>
         {% elif q.type == 'content_block' %}
-          {# Content block: static heading + Markdown body + links. No answer input. #}
+          {# Content block: static heading (from options.heading) + Markdown body + links. No answer input. #}
           <div class="content-block prose max-w-none" data-content-block-id="{{ q.id }}">
+            {% if q.content_block_heading %}
+              <h2 class="text-xl font-semibold">{{ q.content_block_heading }}</h2>
+            {% endif %}
             {% if q.content_block_html %}
               {{ q.content_block_html|safe }}
             {% endif %}

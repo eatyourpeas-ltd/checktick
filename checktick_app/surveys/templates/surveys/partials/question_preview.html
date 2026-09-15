@@ -139,6 +139,7 @@
     <textarea class="textarea textarea-bordered w-full" rows="3" disabled></textarea>
   {% elif q.type == 'content_block' %}
     <div class="content-block prose max-w-none text-sm opacity-80">
+      {% if q.content_block_heading %}<h3 class="text-base font-semibold">{{ q.content_block_heading }}</h3>{% endif %}
       {% if q.content_block_html %}{{ q.content_block_html|safe }}{% endif %}
       {% if q.content_block_links %}
         <ul class="list-none pl-0 mt-2">
