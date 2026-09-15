@@ -448,3 +448,103 @@ def test_csv_export_skips_content_block_column(client, django_user_model):
     assert len(question_columns) == 1
     assert question_columns[0].id == text_q.id
     assert cb_q.id not in [q.id for q in question_columns]
+
+
+# --- Rendering ---
+
+
+@pytest.mark.django_db
+def test_content_block_renders_in_take_view(client, django_user_model):
+    """The take page renders a content block with heading, body, and links."""
+    from checktick_app.surveys.models import QuestionGroup
+
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    respondent = django_user_model.objects.create_user(
+        username="respondent", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(
+        owner=user,
+        name="CBRender",
+        slug="cb-render",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.PUBLIC,
+    )
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    question = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Welcome",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "body_md": "Welcome to the **study**.",
+            "links": [
+                {"label": "Privacy", "url": "https://example.com/privacy"},
+            ],
+            "variant": "text",
+            "render_once": True,
+        },
+        required=False,
+        order=0,
+    )
+
+    client.force_login(respondent)
+    resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    # Heading is rendered
+    assert "Welcome" in content
+    # Markdown body is rendered (bold -> <strong>)
+    assert "<strong>study</strong>" in content
+    # Link is rendered with rel="noopener noreferrer"
+    assert 'href="https://example.com/privacy"' in content
+    assert 'rel="noopener noreferrer"' in content
+    # No answer input is rendered for a content block
+    assert f'name="q_{question.id}"' not in content
+
+
+@pytest.mark.django_db
+def test_content_block_renders_sanitised_html(client, django_user_model):
+    """Dangerous HTML in the body_md is stripped before rendering."""
+    from checktick_app.surveys.models import QuestionGroup
+
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    respondent = django_user_model.objects.create_user(
+        username="respondent2", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(
+        owner=user,
+        name="CBXSS",
+        slug="cb-xss",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.PUBLIC,
+    )
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Intro",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "body_md": "<script>alert(1)</script>**safe**",
+            "links": [],
+            "variant": "text",
+            "render_once": True,
+        },
+        required=False,
+        order=0,
+    )
+
+    client.force_login(respondent)
+    resp = client.get(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    # The malicious script from body_md is stripped (not the page's own scripts)
+    assert "alert(1)" not in content
+    # Safe Markdown is rendered
+    assert "<strong>safe</strong>" in content

@@ -2002,6 +2002,23 @@ def _annotate_question_render_sequence(
         setattr(q, "group_start", bool(curr_gid and curr_gid != prev_gid))
         setattr(q, "group_end", bool(curr_gid and curr_gid != next_gid))
         setattr(q, "has_show_condition", q.id in questions_with_show_conditions)
+        # Content block: pre-render the Markdown body to sanitised HTML and
+        # extract links so the template emits them without |safe on raw content.
+        if q.type == SurveyQuestion.Types.CONTENT_BLOCK:
+            from checktick_app.core.markdown_safety import (
+                render_content_block_markdown,
+            )
+
+            opts = q.options if isinstance(q.options, dict) else {}
+            setattr(
+                q,
+                "content_block_html",
+                render_content_block_markdown(opts.get("body_md", "")),
+            )
+            setattr(q, "content_block_links", opts.get("links", []))
+        else:
+            setattr(q, "content_block_html", None)
+            setattr(q, "content_block_links", None)
 
     return questions
 

@@ -751,6 +751,22 @@
               <p class="text-sm opacity-60 col-span-full">No images configured for this question.</p>
             {% endfor %}
           </div>
+        {% elif q.type == 'content_block' %}
+          {# Content block: static heading + Markdown body + links. No answer input. #}
+          <div class="content-block prose max-w-none" data-content-block-id="{{ q.id }}">
+            {% if q.content_block_html %}
+              {{ q.content_block_html|safe }}
+            {% endif %}
+            {% if q.content_block_links %}
+              <ul class="list-none pl-0 mt-2">
+                {% for link in q.content_block_links %}
+                  <li class="mt-1">
+                    <a href="{{ link.url }}" rel="noopener noreferrer" target="_blank" class="link link-primary">{{ link.label }}</a>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </div>
         {% else %}
           <input class="input input-bordered w-full" type="text" name="q_{{ q.id }}" id="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true" required{% endif %} />
         {% endif %}
