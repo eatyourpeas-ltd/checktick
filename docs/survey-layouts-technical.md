@@ -963,22 +963,29 @@ A `content_block` question's `options` JSONField holds:
 ```python
 {
     "heading": str,           # rendered heading (optional — block can have no heading)
-    "body_md": str,           # Markdown body (multiline)
-    "links": [                # reference / disclosure links
+    "subtitle": str,          # rendered subtitle (optional)
+    "body_md": str,           # Markdown body (optional)
+    "image_id": int | None,   # FK to QuestionImage (optional, builder-only upload)
+    "links": [                # reference / disclosure links (optional, zero or more)
         {"label": str, "url": str},
         ...
     ],
-    "variant": str,           # "text" | "text_image" | "consent_info" | "disclosure" | "closing"
+    "consent": {              # consent checkbox (optional)
+        "question_id": int,   # FK to a linked yesno question
+        "statement": str,     # consent statement text
+        "required": bool,     # if True, participant must agree to progress
+    } | None,
     "render_once": bool,      # default True; render once even in repeatable groups
 }
 ```
+
+All components are optional — the author includes only what they need.
 
 `SurveyQuestion.text` is the **internal builder label** (e.g. "Content
 block", "Introduction") — it is NOT rendered to participants. This mirrors
 the `template_patient` / `template_professional` pattern, where
 `question.text` is the builder label and the rendered content comes from
-`options`. The rendered heading is `options.heading`; the body is
-`options.body_md`, rendered as Markdown → sanitised HTML at view time.
+`options`.
 
 Image upload is **builder-only** — the outline grammar does not carry
 image references. Authors upload images via the builder; the outline only
@@ -1012,25 +1019,32 @@ at save time via `sanitise_link_url` (builder form and parser).
 
 ### Consent
 
-Consent is handled as separate `yesno` questions in the same group as the
-content block, not as a content-block feature. Each consent statement is
-its own `SurveyQuestion` row → its own answer row → clean audit trail
-("who agreed to X?"), clean export, clean data-protection defence. The
-author labels the `yesno` options "I agree" / "I do not agree" and sets
-`required=True`.
+Consent is an optional component of a content block. When the author
+configures consent (via the content block's configure panel), a linked
+`yesno` question is created in the same group, hidden from the builder
+list via a `_content_block_parent` marker in its options. The answer is
+stored on the yesno question ("yes"/"no") — clean audit trail ("who
+agreed to X?"), clean export, clean data-protection defence. The content
+block renders the consent checkbox inline using the yesno question's form
+field name. When the author sets "required", the participant cannot
+progress until they agree (`missing_required_question_ids` validates it).
 
-The `yesno` type already supports custom labels and an optional "Don't
-know" answer (see `markdown_import.py`). A `boolean` checkbox type is
-not added — an unticked checkbox is ambiguous (didn't see it vs. actively
-declined), which is exactly what a medical app should avoid for consent.
-The parser's existing `boolean` alias maps to `yesno`; if a real boolean
-type is ever added, that alias needs forking.
+Clearing the consent statement in the configure panel deletes the linked
+yesno question.
+
+The `yesno` type already supports custom labels (see `markdown_import.py`).
+A `boolean` checkbox type is not added — an unticked checkbox is ambiguous
+(didn't see it vs. actively declined), which is exactly what a medical
+app should avoid for consent. The parser's existing `boolean` alias maps
+to `yesno`; if a real boolean type is ever added, that alias needs
+forking.
 
 ### Rendering
 
-`detail.html` renders a `content_block` question as a single block:
-heading (from `options.heading`, optional), rendered Markdown body, link
-list. No answer input. The standard `q.text` H2 is suppressed for content
+`detail.html` renders a `content_block` question as a single block with
+optional components in order: heading, subtitle, image, body, links,
+consent checkbox. No standard answer input (except the consent checkbox
+when configured). The standard `q.text` H2 is suppressed for content
 blocks — the internal label is not shown to participants. The matrix
 landing page composes with it — a content block as the first question in
 the first section renders above the cards as a landing header (see
@@ -1072,15 +1086,17 @@ the body survives export → import round-trips.
 Content blocks are a **Special Template** option in the builder (alongside
 patient and professional details), not a regular question type. The author
 adds a content block via the "Special Templates" tab, which creates a
-question with `text="Content block"` and default options. A "Configure
-content block" panel (in the question row, like the patient/professional
-configure panels) provides:
+question with `text="Content block"` and default (empty) options. A
+"Configure content block" panel (in the question row, like the
+patient/professional configure panels) provides all optional components:
 
 - **Heading** input (the rendered heading, `options.heading`)
+- **Subtitle** input (the rendered subtitle, `options.subtitle`)
 - **Body** textarea (Markdown, `options.body_md`)
-- **Variant** selector (`options.variant`)
+- **Image** upload (reuses `QuestionImage`, non-medical warning)
+- **Links** repeater (parallel `link_label[]` / `link_url[]` lists, zero or more)
+- **Consent** section (statement text + required toggle; creates a linked yesno question)
 - **Render once** toggle (`options.render_once`)
-- **Links** repeater (parallel `link_label[]` / `link_url[]` lists)
 
 `SurveyQuestion.text` is the internal builder label (e.g. "Content
 block"), not rendered to participants. `options.heading` is the rendered

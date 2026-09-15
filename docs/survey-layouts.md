@@ -454,21 +454,26 @@ multiple per section, any layout.
 Content blocks are a **Special Template** in the builder (alongside
 patient and professional details), not a regular question type. The author
 adds a content block via the "Special Templates" tab, then configures it
-via a "Configure content block" panel:
+via a "Configure content block" panel. All components are optional — include
+only what you need:
 
-- **Heading** (the rendered heading, optional — the block can have no heading)
-- **Body** (multiline Markdown, rendered to sanitised HTML)
-- **Links** (label + URL pairs, rendered as a list)
-- **Variant** (`text`, `text_image`, `consent_info`, `disclosure`,
-  `closing` — drives the builder label and icon)
+- **Heading** (the rendered heading, optional)
+- **Subtitle** (a short description or tagline, optional)
+- **Body** (multiline Markdown, rendered to sanitised HTML, optional)
+- **Image / logo** (uploaded via the builder; NOT encrypted — only use for
+  non-medical, non-patient-identifying content)
+- **Links** (label + URL pairs, zero or more, rendered as a list)
+- **Consent** (a consent checkbox with a custom statement; when "required"
+  is on, participants must agree to progress)
 - **Render once** (default on — render once even in repeatable groups)
 
 The question text (the internal label, e.g. "Content block") is not
-rendered to participants — only the heading and body are shown.
+rendered to participants — only the heading, subtitle, body, image,
+links, and consent checkbox are shown.
 
-Content blocks are **never required** — they have no answer. Consent is
-handled as separate `yesno` questions ("I agree" / "I do not agree") in
-the same section, not as a content-block feature.
+Content blocks themselves are **never required** — they have no answer
+(except the optional consent checkbox, which is a separate yesno question
+behind the scenes for a clean audit trail).
 
 ### Markdown safety
 
