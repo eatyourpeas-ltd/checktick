@@ -718,3 +718,122 @@ def test_matrix_landing_renders_content_block(client, django_user_model):
     assert 'href="https://example.com/privacy"' in content
     # Matrix cards are still rendered (the section names appear)
     assert "Questions" in content
+
+
+# --- Branching warnings ---
+
+
+@pytest.mark.django_db
+def test_show_hide_on_content_block_warns(client, django_user_model):
+    """A SHOW/HIDE condition targeting a content block produces an Organise-page warning."""
+    from checktick_app.surveys.models import (
+        QuestionGroup,
+        SurveyQuestionCondition,
+    )
+
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(owner=user, name="WarnCB", slug="warn-cb")
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    # A source question
+    src_q = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Source",
+        type=SurveyQuestion.Types.YESNO,
+        options=[
+            {"label": "Yes", "value": "yes"},
+            {"label": "No", "value": "no"},
+        ],
+        required=False,
+        order=0,
+    )
+    # A content block target
+    cb_q = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Target block",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "body_md": "Body.",
+            "links": [],
+            "variant": "text",
+            "render_once": True,
+        },
+        required=False,
+        order=1,
+    )
+    # SHOW condition targeting the content block
+    SurveyQuestionCondition.objects.create(
+        question=src_q,
+        target_question=cb_q,
+        action=SurveyQuestionCondition.Action.SHOW,
+        operator=SurveyQuestionCondition.Operator.EQUALS,
+        value="yes",
+    )
+
+    client.force_login(user)
+    resp = client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    # The warning is surfaced
+    assert "content block" in content.lower()
+    assert "Target block" in content
+
+
+@pytest.mark.django_db
+def test_jump_to_content_block_no_warning(client, django_user_model):
+    """JUMP_TO a content block is fine — no warning."""
+    from checktick_app.surveys.models import (
+        QuestionGroup,
+        SurveyQuestionCondition,
+    )
+
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(owner=user, name="JumpCB", slug="jump-cb")
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    src_q = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Source",
+        type=SurveyQuestion.Types.YESNO,
+        options=[
+            {"label": "Yes", "value": "yes"},
+            {"label": "No", "value": "no"},
+        ],
+        required=False,
+        order=0,
+    )
+    cb_q = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Target block",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "body_md": "Body.",
+            "links": [],
+            "variant": "text",
+            "render_once": True,
+        },
+        required=False,
+        order=1,
+    )
+    SurveyQuestionCondition.objects.create(
+        question=src_q,
+        target_question=cb_q,
+        action=SurveyQuestionCondition.Action.JUMP_TO,
+        operator=SurveyQuestionCondition.Operator.EQUALS,
+        value="yes",
+    )
+
+    client.force_login(user)
+    resp = client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    # No content block warning (JUMP_TO is fine)
+    assert "Content block warnings" not in content

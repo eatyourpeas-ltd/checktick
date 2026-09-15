@@ -7267,6 +7267,41 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             ),
         )
 
+    # Content block warnings (all layouts). Non-blocking — surfaced on the
+    # Organise page. A SHOW/HIDE condition targeting a content block is odd
+    # (content blocks have no answer and can't trigger conditions), so warn
+    # the author. JUMP_TO a content block is fine (just renders the block).
+    content_block_warnings: list[str] = []
+    content_block_ids = set(
+        survey.questions.filter(type=SurveyQuestion.Types.CONTENT_BLOCK).values_list(
+            "id", flat=True
+        )
+    )
+    if content_block_ids:
+        show_hide_on_content_blocks = SurveyQuestionCondition.objects.filter(
+            target_question_id__in=content_block_ids,
+            action__in=[
+                SurveyQuestionCondition.Action.SHOW,
+                SurveyQuestionCondition.Action.HIDE,
+            ],
+        ).select_related("question", "target_question")
+        for cond in show_hide_on_content_blocks:
+            action_label = (
+                "show" if cond.action == SurveyQuestionCondition.Action.SHOW else "hide"
+            )
+            content_block_warnings.append(
+                _(
+                    "Branching condition on '%(source)s' uses %(action)s on "
+                    "the content block '%(target)s'. Content blocks have no "
+                    "answer — consider using jump_to instead."
+                )
+                % {
+                    "source": cond.question.text[:50],
+                    "action": action_label,
+                    "target": cond.target_question.text[:50],
+                }
+            )
+
     # Section menu configuration (only for section_menu layout). Sync items
     # so the config card shows one row per current survey group.
     section_menu = None
@@ -7669,6 +7704,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "section_menu_items_by_group": section_menu_items_by_group,
         "section_menu_order_modes": SectionMenu.OrderMode.choices,
         "section_menu_warnings": section_menu_warnings,
+        "content_block_warnings": content_block_warnings,
         # RCT config (step 5). None for non-RCT surveys.
         "randomised_menu": randomised_menu,
         "randomised_arms": randomised_arms,
