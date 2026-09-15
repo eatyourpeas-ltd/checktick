@@ -534,14 +534,13 @@ def generate_round_feedback(
 
 
 # ---------------------------------------------------------------------------
-# Round scheduling (used by the runtime hook — models not yet built)
+# Round scheduling (used by the runtime hook)
 # ---------------------------------------------------------------------------
 
-# The functions below reference ``DelphiMenu`` and ``DelphiRound`` which
-# do not exist yet. They are included here as the design specification
-# and will be activated when the models are added. The runtime hook
-# (``_handle_participant_submission``) will call ``assign_round_for_progress``
-# in the same way it calls ``_assign_arm_for_progress`` for RCT.
+# These functions operate on ``DelphiMenu`` and ``DelphiRound`` (now in
+# models.py). The runtime hook (``_handle_participant_submission``) calls
+# ``assign_round_for_progress`` in the same way it calls
+# ``_assign_arm_for_progress`` for RCT.
 
 
 def current_round(menu, *, enrolment, survey_start, now) -> Any:
@@ -620,8 +619,20 @@ def assign_round_for_progress(progress, menu, *, now=None) -> Any:
 
     current = getattr(progress, "delphi_round", None)
     if current is not None:
-        # Check if the assigned round is still open.
-        if current.closed_at:
+        # Check if the assigned round is still open. A round is closed if:
+        # - ``closed_at`` is set (manual close), or
+        # - the window has passed (``end_offset_days`` is set and now >= anchor + end)
+        #   and the round was not manually opened (``opened_at`` is None).
+        is_closed = bool(current.closed_at)
+        if not is_closed and not current.opened_at:
+            anchor = _anchor_time(
+                menu, enrolment=enrolment, survey_start=survey_start
+            )
+            if anchor is not None and current.end_offset_days is not None:
+                end = anchor + timedelta(days=int(current.end_offset_days))
+                if now >= end:
+                    is_closed = True
+        if is_closed:
             # Advance to the next open round.
             nxt = next_round(menu, progress)
             if nxt is not None:
