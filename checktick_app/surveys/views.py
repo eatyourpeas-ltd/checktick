@@ -9579,6 +9579,9 @@ def survey_export_csv(
         for q in questions:
             if q.type in ("template_patient", "template_professional"):
                 continue
+            # Content blocks have no answer — skip them in CSV export.
+            if q.type == "content_block":
+                continue
             # Use question text as header, truncated if too long
             q_header = q.text[:100] + "..." if len(q.text) > 100 else q.text
             # Clean up for CSV header (remove newlines)

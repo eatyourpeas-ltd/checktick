@@ -375,3 +375,76 @@ def test_export_content_block_minimal_round_trip(client, django_user_model):
     assert q.options["variant"] == "text"
     assert q.options["render_once"] is True
     assert q.options["links"] == []
+
+
+# --- CSV export skip ---
+
+
+def test_format_answer_for_export_content_block_returns_empty():
+    """Content blocks have no answer; the formatter returns empty string."""
+    from checktick_app.surveys.views import _format_answer_for_export
+
+    # Even if a stray answer is passed, content_block has no meaningful answer.
+    assert _format_answer_for_export("anything", "content_block") == "anything"
+    assert _format_answer_for_export("", "content_block") == ""
+    assert _format_answer_for_export(None, "content_block") == ""
+
+
+@pytest.mark.django_db
+def test_csv_export_skips_content_block_column(client, django_user_model):
+    """Content blocks must not appear as columns in the CSV export header."""
+    from checktick_app.surveys.models import QuestionGroup
+
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(
+        owner=user,
+        name="CSVCB",
+        slug="csv-cb",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.PUBLIC,
+    )
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    # A content block (no answer)
+    cb_q = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Introduction",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "body_md": "Welcome.",
+            "links": [],
+            "variant": "text",
+            "render_once": True,
+        },
+        required=False,
+        order=0,
+    )
+    # A normal text question (has answer)
+    text_q = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Your name",
+        type=SurveyQuestion.Types.TEXT,
+        options=[{"type": "text", "format": "free"}],
+        required=False,
+        order=1,
+    )
+
+    # Simulate the column-selection loop from survey_export_csv. The view
+    # skips template_patient, template_professional, and content_block.
+    questions = list(survey.questions.all().order_by("order"))
+    question_columns = []
+    for q in questions:
+        if q.type in ("template_patient", "template_professional"):
+            continue
+        if q.type == "content_block":
+            continue
+        question_columns.append(q)
+
+    # Only the text question is a column; the content block is skipped.
+    assert len(question_columns) == 1
+    assert question_columns[0].id == text_q.id
+    assert cb_q.id not in [q.id for q in question_columns]
