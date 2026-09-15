@@ -451,15 +451,20 @@ multiple per section, any layout.
 
 ### Authoring
 
-The builder provides a "Content block" option alongside the other
-question types. The author supplies:
+Content blocks are a **Special Template** in the builder (alongside
+patient and professional details), not a regular question type. The author
+adds a content block via the "Special Templates" tab, then configures it
+via a "Configure content block" panel:
 
-- **Heading** (the question text)
+- **Heading** (the rendered heading, optional — the block can have no heading)
 - **Body** (multiline Markdown, rendered to sanitised HTML)
 - **Links** (label + URL pairs, rendered as a list)
 - **Variant** (`text`, `text_image`, `consent_info`, `disclosure`,
   `closing` — drives the builder label and icon)
 - **Render once** (default on — render once even in repeatable groups)
+
+The question text (the internal label, e.g. "Content block") is not
+rendered to participants — only the heading and body are shown.
 
 Content blocks are **never required** — they have no answer. Consent is
 handled as separate `yesno` questions ("I agree" / "I do not agree") in
@@ -481,12 +486,15 @@ builder and power users):
 ```text
 ## Introduction
 (content_block)
+heading: Welcome
 variant: disclosure
 link: Privacy notice|https://example.com/privacy
 
 Welcome to the study. Please read the privacy notice before continuing.
 ```
 
+The `## Introduction` heading is the internal label (not rendered to
+participants). The `heading:` config line sets the rendered heading.
 Image upload is builder-only — the outline grammar does not carry image
 references.
 

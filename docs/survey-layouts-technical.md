@@ -962,6 +962,7 @@ A `content_block` question's `options` JSONField holds:
 
 ```python
 {
+    "heading": str,           # rendered heading (optional — block can have no heading)
     "body_md": str,           # Markdown body (multiline)
     "links": [                # reference / disclosure links
         {"label": str, "url": str},
@@ -972,9 +973,12 @@ A `content_block` question's `options` JSONField holds:
 }
 ```
 
-The heading is `SurveyQuestion.text` (the question label), consistent with
-all other question types. The body is `options.body_md`, rendered as
-Markdown → sanitised HTML at view time.
+`SurveyQuestion.text` is the **internal builder label** (e.g. "Content
+block", "Introduction") — it is NOT rendered to participants. This mirrors
+the `template_patient` / `template_professional` pattern, where
+`question.text` is the builder label and the rendered content comes from
+`options`. The rendered heading is `options.heading`; the body is
+`options.body_md`, rendered as Markdown → sanitised HTML at view time.
 
 Image upload is **builder-only** — the outline grammar does not carry
 image references. Authors upload images via the builder; the outline only
@@ -985,8 +989,8 @@ enforced in three places (defence in depth):
 
 1. **Parser** (`markdown_import.py`): forces `required=False` regardless
    of the `*` suffix.
-2. **Builder form** (`_parse_builder_question_form`): forces
-   `required=False` regardless of the POST value.
+2. **Special template creation** (`builder_group_template_add`): creates
+   with `required=False`.
 3. **Model** (`SurveyQuestion.clean()`): raises `ValidationError` if
    `required=True`.
 
@@ -1025,10 +1029,12 @@ type is ever added, that alias needs forking.
 ### Rendering
 
 `detail.html` renders a `content_block` question as a single block:
-heading (from `q.text`), rendered Markdown body, link list. No answer
-input. The matrix landing page composes with it — a content block as the
-first question in the first section renders above the cards as a landing
-header (see §Matrix layout).
+heading (from `options.heading`, optional), rendered Markdown body, link
+list. No answer input. The standard `q.text` H2 is suppressed for content
+blocks — the internal label is not shown to participants. The matrix
+landing page composes with it — a content block as the first question in
+the first section renders above the cards as a landing header (see
+§Matrix layout).
 
 For non-matrix layouts, a "landing page" or "section intro" is simply a
 `QuestionGroup` whose only question is a `content_block` — the runtime
@@ -1040,6 +1046,7 @@ a static page between question sections.
 ```text
 ## Introduction
 (content_block)
+heading: Welcome
 variant: disclosure
 link: Privacy notice|https://example.com/privacy
 link: Study protocol|https://example.com/protocol
@@ -1048,6 +1055,8 @@ Welcome to the study. Please read the privacy notice and links above
 before continuing.
 ```
 
+- `heading` is optional (the rendered heading; `## Introduction` is the
+  internal label, not rendered to participants).
 - `variant` is optional (defaults to `text`).
 - `render_once` is optional (defaults to `true`).
 - `link:` lines are one per reference, `Label|URL` format.
@@ -1060,17 +1069,23 @@ the body survives export → import round-trips.
 
 ### Builder
 
-The builder form for `content_block` uses a **multiline textarea** for
-`body_md` (Markdown), a variant selector, a render_once toggle, and a
-links repeater (parallel `link_label[]` / `link_url[]` lists). This is a
-new "Special templates" option in the builder, alongside patient and
-professional details.
+Content blocks are a **Special Template** option in the builder (alongside
+patient and professional details), not a regular question type. The author
+adds a content block via the "Special Templates" tab, which creates a
+question with `text="Content block"` and default options. A "Configure
+content block" panel (in the question row, like the patient/professional
+configure panels) provides:
 
-`body_md` is structurally distinct from question labels:
-`SurveyQuestion.text` and `QuestionGroup.description` are already
-`TextField` (multiline at the DB level); `body_md` is the primary authored
-content of the block, rendered as Markdown → HTML, and can be multiple
-paragraphs. Labels are short; `body_md` is long-form.
+- **Heading** input (the rendered heading, `options.heading`)
+- **Body** textarea (Markdown, `options.body_md`)
+- **Variant** selector (`options.variant`)
+- **Render once** toggle (`options.render_once`)
+- **Links** repeater (parallel `link_label[]` / `link_url[]` lists)
+
+`SurveyQuestion.text` is the internal builder label (e.g. "Content
+block"), not rendered to participants. `options.heading` is the rendered
+heading. `body_md` is the primary authored content of the block, rendered
+as Markdown → HTML, and can be multiple paragraphs.
 
 ### Branching
 
@@ -1089,12 +1104,15 @@ workflow (not in `CHARTABLE_TYPES` / `TEXT_TYPES` / `NUMERIC_TYPES`).
 
 ### Delphi compatibility
 
-A content block whose `body_md` is rendered from aggregate data (medians,
-IQRs, themes) instead of authored Markdown is Delphi's inter-round
-feedback view. Same model, different body source — the author marks the
-block as "aggregate feedback" and the runtime substitutes the body from
-the previous round's responses. No new model, no new `SurveyProgress`
-field. The `options` JSONField can carry this flag without a migration.
+A content block whose `body_md` (and optionally `heading`) is rendered
+from aggregate data (medians, IQRs, themes) instead of authored Markdown
+is Delphi's inter-round feedback view. Same model, different body source
+— the author marks the block as "aggregate feedback" (a flag in
+`options`, no migration needed since `options` is a JSONField) and the
+runtime substitutes `options.body_md` / `options.heading` from the
+previous round's responses at view time. `question.text` (the internal
+label) stays stable across rounds. No new model, no new `SurveyProgress`
+field.
 
 ## Long text (textarea)
 
