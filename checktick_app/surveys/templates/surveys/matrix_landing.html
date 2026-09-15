@@ -16,6 +16,9 @@
     {% if landing_block.heading %}
     <h2 class="text-xl font-semibold">{{ landing_block.heading }}</h2>
     {% endif %}
+    {% if landing_block.subtitle %}
+    <p class="text-base opacity-70 -mt-2">{{ landing_block.subtitle }}</p>
+    {% endif %}
     {% if landing_block.html %}{{ landing_block.html|safe }}{% endif %}
     {% if landing_block.links %}
     <ul class="list-none pl-0 mt-2">

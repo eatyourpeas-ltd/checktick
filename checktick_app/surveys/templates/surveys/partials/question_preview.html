@@ -140,6 +140,8 @@
   {% elif q.type == 'content_block' %}
     <div class="content-block prose max-w-none text-sm opacity-80">
       {% if q.content_block_heading %}<h3 class="text-base font-semibold">{{ q.content_block_heading }}</h3>{% endif %}
+      {% if q.content_block_subtitle %}<p class="text-sm opacity-70 -mt-1">{{ q.content_block_subtitle }}</p>{% endif %}
+      {% if q.content_block_image %}<img src="{{ q.content_block_image.image.url }}" alt="{{ q.content_block_image.label|default:'' }}" class="rounded-lg max-w-full mb-2" />{% endif %}
       {% if q.content_block_html %}{{ q.content_block_html|safe }}{% endif %}
       {% if q.content_block_links %}
         <ul class="list-none pl-0 mt-2">
@@ -147,6 +149,14 @@
             <li><a href="{{ link.url }}" rel="noopener noreferrer" target="_blank" class="link link-primary">{{ link.label }}</a></li>
           {% endfor %}
         </ul>
+      {% endif %}
+      {% if q.content_block_consent and q.content_block_consent.question %}
+        <div class="not-prose mt-2">
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" disabled class="checkbox checkbox-sm checkbox-primary mt-0.5" />
+            <span class="text-xs">{{ q.content_block_consent.statement }}{% if q.content_block_consent.required %} <span class="text-error">*</span>{% endif %}</span>
+          </label>
+        </div>
       {% endif %}
     </div>
   {% else %}

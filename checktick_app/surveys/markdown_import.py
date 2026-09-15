@@ -430,7 +430,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                         )
                 else:
                     m = re.match(
-                        r"^(min|max|left|right|dataset|address_lookup|variant|render_once|heading)\s*:\s*(.*)$",
+                        r"^(min|max|left|right|dataset|address_lookup|render_once|heading|subtitle)\s*:\s*(.*)$",
                         line,
                         re.IGNORECASE,
                     )
@@ -571,20 +571,12 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                 q["final_type"] = "content_block"
                 # Content blocks are never required — they have no answer.
                 q["required"] = False
-                variant = str(q["kv"].get("variant", "text")).strip().lower()
-                if variant not in {
-                    "text",
-                    "text_image",
-                    "consent_info",
-                    "disclosure",
-                    "closing",
-                }:
-                    variant = "text"
                 render_once_raw = (
                     str(q["kv"].get("render_once", "true")).strip().lower()
                 )
                 render_once = render_once_raw not in {"false", "no", "off", "0"}
                 heading = str(q["kv"].get("heading", "")).strip()
+                subtitle = str(q["kv"].get("subtitle", "")).strip()
                 # Body: strip leading/trailing blank lines, preserve internal.
                 body = "\n".join(q["body_lines"]).strip("\n")
                 # Sanitise link URLs at parse time so bad schemes never persist.
@@ -597,9 +589,11 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                         links.append({"label": link.get("label", ""), "url": url})
                 q["final_options"] = {
                     "heading": heading,
+                    "subtitle": subtitle,
                     "body_md": body,
+                    "image_id": None,
                     "links": links,
-                    "variant": variant,
+                    "consent": None,
                     "render_once": render_once,
                 }
             elif t in {

@@ -14,6 +14,7 @@ import pytest
 
 from checktick_app.surveys.markdown_import import parse_bulk_markdown
 from checktick_app.surveys.models import Survey, SurveyQuestion
+from checktick_app.surveys.views import _is_linked_consent_question
 
 TEST_PASSWORD = "x"
 
@@ -95,7 +96,6 @@ def test_parse_content_block_type():
     assert q["final_type"] == "content_block"
     assert q["final_options"]["heading"] == "Welcome"
     assert q["final_options"]["body_md"] == "Welcome to the study."
-    assert q["final_options"]["variant"] == "text"
     assert q["final_options"]["render_once"] is True
     assert q["final_options"]["links"] == []
     assert q["required"] is False
@@ -140,12 +140,12 @@ def test_parse_content_block_with_links():
     }
 
 
-def test_parse_content_block_variant_and_render_once():
+def test_parse_content_block_subtitle_and_render_once():
     md = textwrap.dedent("""
         # Section {sec}
         ## Disclosure
         (content_block)
-        variant: disclosure
+        subtitle: A short description
         render_once: false
 
         Please read this disclosure.
@@ -153,7 +153,7 @@ def test_parse_content_block_variant_and_render_once():
 
     groups = parse_bulk_markdown(md)
     q = groups[0]["questions"][0]
-    assert q["final_options"]["variant"] == "disclosure"
+    assert q["final_options"]["subtitle"] == "A short description"
     assert q["final_options"]["render_once"] is False
 
 
@@ -213,18 +213,20 @@ def test_parse_content_block_strips_javascript_link():
 
 
 def test_parse_content_block_invalid_variant_defaults_to_text():
+    """Unknown config keys are ignored (not stored in options)."""
     md = textwrap.dedent("""
         # Section {sec}
         ## Introduction
         (content_block)
-        variant: nonsense_variant
+        unknown_key: nonsense
 
         Body.
         """).strip()
 
     groups = parse_bulk_markdown(md)
     q = groups[0]["questions"][0]
-    assert q["final_options"]["variant"] == "text"
+    # Unknown keys are not stored
+    assert "unknown_key" not in q["final_options"]
 
 
 # --- Full bulk upload import ---
@@ -261,7 +263,6 @@ def test_bulk_import_creates_content_block_question(client, django_user_model):
     assert q.options["body_md"] == "Welcome to the study."
     assert len(q.options["links"]) == 1
     assert q.options["links"][0]["url"] == "https://example.com/privacy"
-    assert q.options["variant"] == "text"
     assert q.options["render_once"] is True
 
 
@@ -292,7 +293,9 @@ def test_export_content_block_round_trip(client, django_user_model):
                 {"label": "Privacy", "url": "https://example.com/privacy"},
                 {"label": "Protocol", "url": "https://example.com/protocol"},
             ],
-            "variant": "disclosure",
+            "subtitle": "A disclosure",
+            "image_id": None,
+            "consent": None,
             "render_once": False,
         },
         required=False,
@@ -303,7 +306,7 @@ def test_export_content_block_round_trip(client, django_user_model):
     # The export contains the content_block type and config
     assert "(content_block)" in exported
     assert "heading: Welcome" in exported
-    assert "variant: disclosure" in exported
+    assert "subtitle: A disclosure" in exported
     assert "render_once: false" in exported
     assert "link: Privacy|https://example.com/privacy" in exported
     assert "link: Protocol|https://example.com/protocol" in exported
@@ -324,7 +327,6 @@ def test_export_content_block_round_trip(client, django_user_model):
     assert q.type == SurveyQuestion.Types.CONTENT_BLOCK
     assert q.required is False
     assert q.options["heading"] == "Welcome"
-    assert q.options["variant"] == "disclosure"
     assert q.options["render_once"] is False
     assert len(q.options["links"]) == 2
     assert q.options["links"][0]["url"] == "https://example.com/privacy"
@@ -353,7 +355,9 @@ def test_export_content_block_minimal_round_trip(client, django_user_model):
             "heading": "",
             "body_md": "Just a body.",
             "links": [],
-            "variant": "text",
+            "subtitle": "",
+            "image_id": None,
+            "consent": None,
             "render_once": True,
         },
         required=False,
@@ -364,7 +368,7 @@ def test_export_content_block_minimal_round_trip(client, django_user_model):
     assert "(content_block)" in exported
     assert "Just a body." in exported
     # Default variant/render_once are not emitted
-    assert "variant:" not in exported
+    assert "subtitle:" not in exported
     assert "render_once:" not in exported
     # Empty heading is not emitted
     assert "heading:" not in exported
@@ -382,7 +386,6 @@ def test_export_content_block_minimal_round_trip(client, django_user_model):
     assert q.type == SurveyQuestion.Types.CONTENT_BLOCK
     assert q.options["heading"] == ""
     assert q.options["body_md"] == "Just a body."
-    assert q.options["variant"] == "text"
     assert q.options["render_once"] is True
     assert q.options["links"] == []
 
@@ -426,7 +429,9 @@ def test_csv_export_skips_content_block_column(client, django_user_model):
         options={
             "body_md": "Welcome.",
             "links": [],
-            "variant": "text",
+            "subtitle": "",
+            "image_id": None,
+            "consent": None,
             "render_once": True,
         },
         required=False,
@@ -494,7 +499,9 @@ def test_content_block_renders_in_take_view(client, django_user_model):
             "links": [
                 {"label": "Privacy", "url": "https://example.com/privacy"},
             ],
-            "variant": "text",
+            "subtitle": "",
+            "image_id": None,
+            "consent": None,
             "render_once": True,
         },
         required=False,
@@ -554,7 +561,9 @@ def test_content_block_renders_sanitised_html(client, django_user_model):
             "heading": "",
             "body_md": "<script>alert(1)</script>**safe**",
             "links": [],
-            "variant": "text",
+            "subtitle": "",
+            "image_id": None,
+            "consent": None,
             "render_once": True,
         },
         required=False,
@@ -605,7 +614,6 @@ def test_builder_adds_content_block_template(client, django_user_model):
     assert q.options["heading"] == ""
     assert q.options["body_md"] == ""
     assert q.options["links"] == []
-    assert q.options["variant"] == "text"
     assert q.options["render_once"] is True
 
 
@@ -629,7 +637,9 @@ def test_builder_configures_content_block(client, django_user_model):
             "heading": "",
             "body_md": "",
             "links": [],
-            "variant": "text",
+            "subtitle": "",
+            "image_id": None,
+            "consent": None,
             "render_once": True,
         },
         required=False,
@@ -645,8 +655,8 @@ def test_builder_configures_content_block(client, django_user_model):
         url,
         {
             "heading": "Welcome",
+            "subtitle": "A study intro",
             "body_md": "Welcome to the study.",
-            "content_block_variant": "disclosure",
             "render_once": "on",
             "link_label": ["Privacy", "Protocol"],
             "link_url": [
@@ -659,14 +669,147 @@ def test_builder_configures_content_block(client, django_user_model):
     assert response.status_code == 200
     q.refresh_from_db()
     assert q.options["heading"] == "Welcome"
+    assert q.options["subtitle"] == "A study intro"
     assert q.options["body_md"] == "Welcome to the study."
-    assert q.options["variant"] == "disclosure"
     assert q.options["render_once"] is True
     assert len(q.options["links"]) == 2
     assert q.options["links"][0] == {
         "label": "Privacy",
         "url": "https://example.com/privacy",
     }
+
+
+@pytest.mark.django_db
+def test_builder_content_block_with_consent(client, django_user_model):
+    """Configuring consent creates a linked yesno question for the audit trail."""
+    from checktick_app.surveys.models import QuestionGroup
+
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(owner=user, name="ConsentCB", slug="consent-cb")
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    q = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Content block",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "heading": "",
+            "subtitle": "",
+            "body_md": "",
+            "image_id": None,
+            "links": [],
+            "consent": None,
+            "render_once": True,
+        },
+        required=False,
+        order=0,
+    )
+
+    client.force_login(user)
+    url = reverse(
+        "surveys:builder_group_question_content_block_update",
+        kwargs={"slug": survey.slug, "gid": group.id, "qid": q.id},
+    )
+    response = client.post(
+        url,
+        {
+            "heading": "Privacy",
+            "body_md": "Please read the privacy notice.",
+            "consent_statement": "I have read and understand the privacy notice",
+            "consent_required": "on",
+        },
+    )
+
+    assert response.status_code == 200
+    q.refresh_from_db()
+    assert q.options["consent"] is not None
+    assert (
+        q.options["consent"]["statement"]
+        == "I have read and understand the privacy notice"
+    )
+    assert q.options["consent"]["required"] is True
+    # A linked yesno question was created
+    linked_q = SurveyQuestion.objects.get(id=q.options["consent"]["question_id"])
+    assert linked_q.type == SurveyQuestion.Types.YESNO
+    assert linked_q.required is True
+    # The linked question is hidden from the builder list
+    assert _is_linked_consent_question(linked_q)
+
+
+@pytest.mark.django_db
+def test_builder_content_block_removes_consent_when_cleared(client, django_user_model):
+    """Clearing the consent statement deletes the linked yesno question."""
+    from checktick_app.surveys.models import QuestionGroup
+
+    user = django_user_model.objects.create_user(
+        username="author", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(
+        owner=user, name="ClearConsent", slug="clear-consent"
+    )
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    # Start with a content block that has consent
+    linked_q = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Consent (content block: Intro)",
+        type=SurveyQuestion.Types.YESNO,
+        options=[
+            {"label": "I agree", "value": "yes"},
+            {"label": "I do not agree", "value": "no"},
+            {"_content_block_parent": 999},  # placeholder, will be updated
+        ],
+        required=True,
+        order=1,
+    )
+    q = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Intro",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "heading": "",
+            "subtitle": "",
+            "body_md": "",
+            "image_id": None,
+            "links": [],
+            "consent": {
+                "question_id": linked_q.id,
+                "statement": "I agree",
+                "required": True,
+            },
+            "render_once": True,
+        },
+        required=False,
+        order=0,
+    )
+    # Fix the parent reference
+    linked_q.options[2]["_content_block_parent"] = q.id
+    linked_q.save(update_fields=["options"])
+
+    client.force_login(user)
+    url = reverse(
+        "surveys:builder_group_question_content_block_update",
+        kwargs={"slug": survey.slug, "gid": group.id, "qid": q.id},
+    )
+    response = client.post(
+        url,
+        {
+            "heading": "Intro",
+            "body_md": "Body.",
+            "consent_statement": "",  # cleared
+        },
+    )
+
+    assert response.status_code == 200
+    q.refresh_from_db()
+    assert q.options["consent"] is None
+    # The linked question was deleted
+    assert not SurveyQuestion.objects.filter(id=linked_q.id).exists()
 
 
 @pytest.mark.django_db
@@ -689,7 +832,9 @@ def test_builder_content_block_strips_javascript_link(client, django_user_model)
             "heading": "",
             "body_md": "",
             "links": [],
-            "variant": "text",
+            "subtitle": "",
+            "image_id": None,
+            "consent": None,
             "render_once": True,
         },
         required=False,
@@ -757,7 +902,9 @@ def test_matrix_landing_renders_content_block(client, django_user_model):
             "heading": "Welcome",
             "body_md": "Welcome to the **study**.",
             "links": [{"label": "Privacy", "url": "https://example.com/privacy"}],
-            "variant": "text",
+            "subtitle": "",
+            "image_id": None,
+            "consent": None,
             "render_once": True,
         },
         required=False,
@@ -826,7 +973,9 @@ def test_show_hide_on_content_block_warns(client, django_user_model):
         options={
             "body_md": "Body.",
             "links": [],
-            "variant": "text",
+            "subtitle": "",
+            "image_id": None,
+            "consent": None,
             "render_once": True,
         },
         required=False,
@@ -884,7 +1033,9 @@ def test_jump_to_content_block_no_warning(client, django_user_model):
         options={
             "body_md": "Body.",
             "links": [],
-            "variant": "text",
+            "subtitle": "",
+            "image_id": None,
+            "consent": None,
             "render_once": True,
         },
         required=False,

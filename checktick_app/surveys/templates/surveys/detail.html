@@ -754,10 +754,18 @@
             {% endfor %}
           </div>
         {% elif q.type == 'content_block' %}
-          {# Content block: static heading (from options.heading) + Markdown body + links. No answer input. #}
+          {# Content block: optional heading, subtitle, image, body, links, consent. No answer input (except consent checkbox). #}
           <div class="content-block prose max-w-none" data-content-block-id="{{ q.id }}">
             {% if q.content_block_heading %}
               <h2 class="text-xl font-semibold">{{ q.content_block_heading }}</h2>
+            {% endif %}
+            {% if q.content_block_subtitle %}
+              <p class="text-base opacity-70 -mt-2">{{ q.content_block_subtitle }}</p>
+            {% endif %}
+            {% if q.content_block_image %}
+              <div class="not-prose mb-4">
+                <img src="{{ q.content_block_image.image.url }}" alt="{{ q.content_block_image.label|default:'' }}" class="rounded-lg max-w-full" />
+              </div>
             {% endif %}
             {% if q.content_block_html %}
               {{ q.content_block_html|safe }}
@@ -770,6 +778,14 @@
                   </li>
                 {% endfor %}
               </ul>
+            {% endif %}
+            {% if q.content_block_consent and q.content_block_consent.question %}
+              <div class="not-prose mt-4">
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" name="q_{{ q.content_block_consent.question.id }}" value="yes" class="checkbox checkbox-primary mt-1"{% if q.content_block_consent.required %} aria-required="true" required{% endif %} />
+                  <span class="text-sm">{{ q.content_block_consent.statement }}{% if q.content_block_consent.required %} <span class="text-error">*</span>{% endif %}</span>
+                </label>
+              </div>
             {% endif %}
           </div>
         {% else %}

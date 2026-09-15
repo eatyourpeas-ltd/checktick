@@ -2003,7 +2003,8 @@ def _annotate_question_render_sequence(
         setattr(q, "group_end", bool(curr_gid and curr_gid != next_gid))
         setattr(q, "has_show_condition", q.id in questions_with_show_conditions)
         # Content block: pre-render the Markdown body to sanitised HTML and
-        # extract heading/links so the template emits them without |safe on raw content.
+        # extract heading/subtitle/links/consent so the template emits them
+        # without |safe on raw content.
         if q.type == SurveyQuestion.Types.CONTENT_BLOCK:
             from checktick_app.core.markdown_safety import (
                 render_content_block_markdown,
@@ -2016,11 +2017,43 @@ def _annotate_question_render_sequence(
                 render_content_block_markdown(opts.get("body_md", "")),
             )
             setattr(q, "content_block_heading", opts.get("heading", ""))
+            setattr(q, "content_block_subtitle", opts.get("subtitle", ""))
             setattr(q, "content_block_links", opts.get("links", []))
+            # Resolve the image if one is set.
+            image_id = opts.get("image_id")
+            if image_id:
+                from checktick_app.surveys.models import QuestionImage
+
+                img = QuestionImage.objects.filter(
+                    id=image_id, question_id=q.id
+                ).first()
+                setattr(q, "content_block_image", img)
+            else:
+                setattr(q, "content_block_image", None)
+            # Resolve the consent linked question.
+            consent = opts.get("consent")
+            if isinstance(consent, dict) and consent.get("question_id"):
+                consent_q = SurveyQuestion.objects.filter(
+                    id=consent["question_id"], survey_id=q.survey_id
+                ).first()
+                setattr(
+                    q,
+                    "content_block_consent",
+                    {
+                        "question": consent_q,
+                        "statement": consent.get("statement", ""),
+                        "required": consent.get("required", False),
+                    },
+                )
+            else:
+                setattr(q, "content_block_consent", None)
         else:
             setattr(q, "content_block_html", None)
             setattr(q, "content_block_heading", None)
+            setattr(q, "content_block_subtitle", None)
             setattr(q, "content_block_links", None)
+            setattr(q, "content_block_image", None)
+            setattr(q, "content_block_consent", None)
 
     return questions
 
@@ -2036,6 +2069,10 @@ def _order_questions_by_group(
     not in the selection are dropped — see ``_resolved_group_order_ids``.
     """
     group_order = _resolved_group_order_ids(survey, selected_group_ids)
+
+    # Filter out linked consent yesno questions — they are rendered inline by
+    # their parent content block, not as standalone questions.
+    questions = [q for q in questions if not _is_linked_consent_question(q)]
 
     # Separate questions by group
     grouped_questions: dict[int | None, list[SurveyQuestion]] = {}
@@ -2143,6 +2180,22 @@ def _inject_dataset_options(questions: list) -> None:
             pass
 
 
+def _is_linked_consent_question(q: SurveyQuestion) -> bool:
+    """Return True if ``q`` is a yesno question linked to a content block.
+
+    These questions are created by the content block configure panel to store
+    consent answers. They are hidden from the builder question list — managed
+    via the content block's configure panel. Identified by the
+    ``_content_block_parent`` marker in their options list.
+    """
+    if q.type != SurveyQuestion.Types.YESNO:
+        return False
+    opts = q.options
+    if not isinstance(opts, list):
+        return False
+    return any(isinstance(o, dict) and "_content_block_parent" in o for o in opts)
+
+
 def _prepare_question_rendering(
     survey: Survey, questions: Iterable[SurveyQuestion] | None = None
 ) -> list[SurveyQuestion]:
@@ -2180,6 +2233,12 @@ def _prepare_question_rendering(
             questions_iter = list(questions)
         else:
             questions_iter = [q for q in questions if isinstance(q, SurveyQuestion)]
+
+    # Filter out linked consent yesno questions (created by content blocks).
+    # They are hidden from the builder list — managed via the content block's
+    # configure panel. Identified by the ``_content_block_parent`` marker in
+    # their options list.
+    questions_iter = [q for q in questions_iter if not _is_linked_consent_question(q)]
 
     all_questions_meta: list[dict[str, Any]] = []
     try:
@@ -5636,6 +5695,7 @@ def _render_matrix_landing(
                 landing_block = {
                     "text": q.text,
                     "heading": opts.get("heading", ""),
+                    "subtitle": opts.get("subtitle", ""),
                     "html": render_content_block_markdown(opts.get("body_md", "")),
                     "links": opts.get("links", []),
                 }
@@ -10517,9 +10577,11 @@ def builder_group_template_add(
             type=SurveyQuestion.Types.CONTENT_BLOCK,
             options={
                 "heading": "",
+                "subtitle": "",
                 "body_md": "",
+                "image_id": None,
                 "links": [],
-                "variant": "text",
+                "consent": None,
                 "render_once": True,
             },
             required=False,
@@ -10752,24 +10814,24 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
 
     Shared by the group-scoped and survey-scoped update views. Reads:
     - ``heading``: rendered heading (optional)
-    - ``body_md``: Markdown body
-    - ``content_block_variant``: variant type
-    - ``render_once``: render once toggle
+    - ``subtitle``: rendered subtitle (optional)
+    - ``body_md``: Markdown body (optional)
+    - ``image_id``: FK to an uploaded QuestionImage (optional, builder-only)
     - ``link_label[]`` / ``link_url[]``: parallel lists of link pairs
+    - ``consent_statement``: consent statement text (optional)
+    - ``consent_required``: if on, participant must agree to progress
+    - ``render_once``: render once toggle
+
+    When consent is configured, a linked ``yesno`` question is created (or
+    updated) in the same group, hidden from the builder list via a marker in
+    its ``options``. The answer is stored on the yesno question for a clean
+    audit trail.
     """
     from checktick_app.core.markdown_safety import sanitise_link_url
 
     heading = (request.POST.get("heading") or "").strip()
+    subtitle = (request.POST.get("subtitle") or "").strip()
     body_md = (request.POST.get("body_md") or "").strip()
-    variant = (request.POST.get("content_block_variant") or "text").strip().lower()
-    if variant not in {
-        "text",
-        "text_image",
-        "consent_info",
-        "disclosure",
-        "closing",
-    }:
-        variant = "text"
     render_once = (request.POST.get("render_once") or "").lower() not in {
         "",
         "false",
@@ -10786,11 +10848,85 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
         url = sanitise_link_url(url)
         if label and url:
             links.append({"label": label, "url": url})
+
+    # Image: keep the existing image_id unless a new one is provided.
+    existing_opts = question.options if isinstance(question.options, dict) else {}
+    image_id = existing_opts.get("image_id")
+    # (Image upload is handled by a separate endpoint, like image choice.)
+
+    # Consent: if a consent statement is provided, create or update a linked
+    # yesno question. If the statement is cleared, delete the linked question.
+    consent_statement = (request.POST.get("consent_statement") or "").strip()
+    consent_required = request.POST.get("consent_required") in {
+        "on",
+        "true",
+        "1",
+        "yes",
+    }
+    consent = existing_opts.get("consent")
+    linked_qid = consent.get("question_id") if isinstance(consent, dict) else None
+
+    if consent_statement:
+        # Create or update the linked yesno question.
+        if linked_qid:
+            linked_q = SurveyQuestion.objects.filter(
+                id=linked_qid, survey=question.survey
+            ).first()
+        else:
+            linked_q = None
+
+        if linked_q is None:
+            # Create a new yesno question in the same group.
+            order = (
+                question.survey.questions.aggregate(models.Max("order")).get(
+                    "order__max"
+                )
+                or 0
+            ) + 1
+            linked_q = SurveyQuestion.objects.create(
+                survey=question.survey,
+                group=question.group,
+                text=f"Consent (content block: {question.text[:50]})",
+                type=SurveyQuestion.Types.YESNO,
+                options=[
+                    {"label": "I agree", "value": "yes"},
+                    {"label": "I do not agree", "value": "no"},
+                ],
+                required=consent_required,
+                order=order,
+            )
+            # Mark it as hidden from the builder list (linked to this content block).
+            linked_q.options = [
+                {"label": "I agree", "value": "yes"},
+                {"label": "I do not agree", "value": "no"},
+                {"_content_block_parent": question.id},
+            ]
+            linked_q.save(update_fields=["options", "required"])
+        else:
+            # Update the existing linked question.
+            linked_q.required = consent_required
+            linked_q.save(update_fields=["required"])
+
+        consent = {
+            "question_id": linked_q.id,
+            "statement": consent_statement,
+            "required": consent_required,
+        }
+    else:
+        # No consent statement — delete the linked question if it exists.
+        if linked_qid:
+            SurveyQuestion.objects.filter(
+                id=linked_qid, survey=question.survey
+            ).delete()
+        consent = None
+
     question.options = {
         "heading": heading,
+        "subtitle": subtitle,
         "body_md": body_md,
+        "image_id": image_id,
         "links": links,
-        "variant": variant,
+        "consent": consent,
         "render_once": render_once,
     }
     question.save(update_fields=["options"])
@@ -11132,9 +11268,12 @@ def _handle_image_upload(
     """Common handler for image uploads."""
     from .models import QuestionImage
 
-    if question.type != SurveyQuestion.Types.IMAGE_CHOICE:
+    if question.type not in (
+        SurveyQuestion.Types.IMAGE_CHOICE,
+        SurveyQuestion.Types.CONTENT_BLOCK,
+    ):
         return JsonResponse(
-            {"success": False, "error": _("Question is not an image choice type.")},
+            {"success": False, "error": _("Question does not support image upload.")},
             status=400,
         )
 
@@ -12832,16 +12971,16 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             if question.hidden_by_default:
                 lines.append(f"{indent}HIDDEN")
 
-            # Content block: emit heading/variant/render_once config, links, then body.
+            # Content block: emit heading/subtitle/render_once config, links, then body.
             # The body is multiline Markdown; a blank line separates config from body.
             if question.type == "content_block" and isinstance(question.options, dict):
                 opts = question.options or {}
                 heading = opts.get("heading", "")
                 if heading:
                     lines.append(f"{indent}heading: {heading}")
-                variant = opts.get("variant", "text")
-                if variant and variant != "text":
-                    lines.append(f"{indent}variant: {variant}")
+                subtitle = opts.get("subtitle", "")
+                if subtitle:
+                    lines.append(f"{indent}subtitle: {subtitle}")
                 render_once = opts.get("render_once", True)
                 if render_once is False:
                     lines.append(f"{indent}render_once: false")
@@ -14260,16 +14399,16 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                 if first_option.get("max"):
                     lines.append(f"max: {first_option['max']}")
 
-        # Content block: emit heading/variant/render_once config, links, then body.
+        # Content block: emit heading/subtitle/render_once config, links, then body.
         # The body is multiline Markdown; a blank line separates config from body.
         if question.type == "content_block" and isinstance(question.options, dict):
             opts = question.options or {}
             heading = opts.get("heading", "")
             if heading:
                 lines.append(f"heading: {heading}")
-            variant = opts.get("variant", "text")
-            if variant and variant != "text":
-                lines.append(f"variant: {variant}")
+            subtitle = opts.get("subtitle", "")
+            if subtitle:
+                lines.append(f"subtitle: {subtitle}")
             render_once = opts.get("render_once", True)
             if render_once is False:
                 lines.append("render_once: false")
