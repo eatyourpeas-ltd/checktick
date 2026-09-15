@@ -1501,10 +1501,48 @@ isolation with synthetic responses. It reads decrypted answers via the
 existing answer-access layer (the same path the CSV export and summary
 report use), so the unlock gate is the caller's responsibility.
 
-### LLM thematic analysis (the second commit)
+### Inter-round feedback generation (the second commit)
 
-Qualitative aggregation reuses the existing
-`theme_analyzer.summarise_themes()` function, which is already:
+Inter-round feedback has two components: **quantitative** (medians,
+IQRs, distributions — pure Python, always computed) and **qualitative**
+(thematic summary of free-text responses). The qualitative component
+supports two approaches, and the author chooses which to use:
+
+#### Manual thematic analysis (always available, default)
+
+Researchers often prefer to code themes manually in NVivo, Excel, or
+SPSS — particularly for regulatory or publication-grade work where the
+LLM's paraphrasing is not auditable enough. The `collate_round_comments`
+function collects all free-text responses for a round's questions into a
+structured dict suitable for CSV/JSON export:
+
+```python
+def collate_round_comments(
+    survey_id: int,
+    group_ids: list[int],
+    *,
+    survey_key: bytes | None = None,
+    responses: QuerySet | list | None = None,
+) -> dict[int, dict]:
+    """Collate free-text responses per question for manual thematic analysis.
+
+    Returns {question_id: {question_text, question_type, responses: [str]}}.
+    Only text/long_text questions are included. The view serialises this
+    to CSV (one row per response, columns for question text and response)
+    or JSON for download.
+    """
+```
+
+The download is always available — it does not require the LLM, does not
+require a specific tier, and does not require opt-in. It is the default
+path for researchers who want to do their own analysis.
+
+#### LLM thematic analysis (opt-in, tier-gated)
+
+When the author wants the LLM to generate a thematic summary, they click
+a separate "Generate LLM theme summary" button (opt-in, tier-gated,
+unlock-gated). This reuses the existing `theme_analyzer.summarise_themes()`
+function, which is already:
 
 - **Opt-in**: a button, never automatic.
 - **Unlock-gated**: only decrypted content is sent to the LLM.
@@ -1518,30 +1556,43 @@ pre-computed** at round close, not per-participant-view. This preserves
 the opt-in principle while avoiding re-running the LLM for every
 participant who views round N+1.
 
-The flow:
+#### The flow
 
 1. Author closes round N (sets the round's `closed_at`).
-2. The organise page shows a "Generate inter-round feedback" button
-   (opt-in, tier-gated, unlock-gated).
-3. Author clicks → the view calls `aggregate_responses_by_group()` for
-   the round's groups, then calls `summarise_themes()` per long-text
-   question.
-4. The result (quantitative stats + sanitised qualitative theme
-   markdown) is cached on a `DelphiRoundFeedback` model.
-5. Participants in round N+1 see the cached feedback via content blocks
+2. The organise page shows two buttons:
+   - **"Download comments"** (always available) — calls
+     `collate_round_comments()` and returns a CSV/JSON file.
+   - **"Generate inter-round feedback"** (opt-in, tier-gated, unlock-gated)
+     — calls `aggregate_responses_by_group()` for the round's groups,
+     then calls `summarise_themes()` per long-text question.
+3. The result (quantitative stats + sanitised qualitative theme markdown,
+   if the LLM path was taken) is cached on a `DelphiRoundFeedback` model.
+4. Participants in round N+1 see the cached feedback via content blocks
    whose `options.body_md` is substituted from the cached markdown at
    view time.
 
 The cached content is aggregate, sanitised, and non-identifiable — safe
 to store. Raw responses are never stored in the feedback; only the
-LLM's paraphrased themes and the quantitative distributions. If the LLM
-is unavailable, quantitative feedback still renders; qualitative shows
-a graceful "themes unavailable" message.
+LLM's paraphrased themes (when that path is taken) and the quantitative
+distributions. If the LLM is unavailable or not opted into,
+quantitative feedback still renders; qualitative content blocks show a
+graceful "download the comments to review manually" message linking to
+the download button.
 
 Audit logging records metadata only (round id, question id, response
 count, token count, model name, success/failure, duration) — never the
 free-text input or the LLM output verbatim, per the medical-app logging
 rules in `AGENTS.md`.
+
+#### Why both paths
+
+The dual approach respects that thematic analysis is a research method,
+not just a feature. Researchers who publish Delphi results in
+peer-reviewed journals are often required to describe their coding
+process; an LLM-generated summary cannot be audited or reproduced with
+the same rigour as manual coding. By making the download always
+available and the LLM explicitly opt-in, CheckTick supports both
+workflows without forcing one on the researcher.
 
 ### Data model
 
@@ -1614,10 +1665,16 @@ class DelphiRoundFeedback(models.Model):
     """Pre-computed inter-round feedback cache.
 
     Created when the author clicks "Generate inter-round feedback" after
-    closing a round. Stores the aggregated quantitative stats and the
-    sanitised qualitative theme markdown so participant views don't
-    re-run the LLM. One row per round per question (or one row per
-    round with a JSON blob — see implementation note below).
+    closing a round. Stores the aggregated quantitative stats (always
+    computed) and, optionally, the sanitised qualitative theme markdown
+    (only when the author opts into the LLM thematic analysis path).
+
+    The quantitative stats (``stats_json``) are always populated — they
+    are pure Python and require no LLM. The qualitative fields
+    (``theme_markdown``, ``llm_*``) are only populated when the author
+    clicks the "Generate LLM theme summary" button; they are blank when
+    the author chooses manual thematic analysis only (via the
+    "Download comments" button).
     """
     round = models.ForeignKey(
         DelphiRound, related_name="feedback", on_delete=models.CASCADE,
@@ -1626,9 +1683,17 @@ class DelphiRoundFeedback(models.Model):
         "SurveyQuestion", on_delete=models.CASCADE,
     )
     stats_json = models.JSONField(default=dict)
+    # LLM thematic analysis fields — only populated when the author opts
+    # into the LLM path. Blank when the author uses manual download only.
     theme_markdown = models.TextField(
         blank=True,
-        help_text="Sanitised LLM theme summary (qualitative questions only).",
+        help_text="Sanitised LLM theme summary (qualitative questions, "
+                  "opt-in only).",
+    )
+    llm_generated = models.BooleanField(
+        default=False,
+        help_text="True if the LLM theme summary was generated for this "
+                  "question. False if the author chose manual analysis only.",
     )
     generated_at = models.DateTimeField(auto_now_add=True)
     llm_model = models.CharField(max_length=100, blank=True)
@@ -1762,7 +1827,7 @@ the other layouts.
 | Overlapping round windows | Rounds are meant to be sequential. | Warn if two rounds' windows overlap; non-blocking. |
 | Group in no round | A group not assigned to any round is unreachable. | Warn on Organise page (like Staged). |
 | Feedback not generated | Round N+1 opens but round N has no `DelphiRoundFeedback`. | Warn on Organise page; participants see content blocks with empty body (graceful). |
-| LLM unavailable for themes | Qualitative feedback can't be generated. | Quantitative feedback still renders; qualitative shows "themes unavailable". Non-blocking. |
+| LLM unavailable for themes | Qualitative LLM feedback can't be generated. | Quantitative feedback still renders; qualitative content blocks show "download comments to review manually". The manual download is always available. Non-blocking. |
 | Participant hasn't completed round N | Advancing to round N+1 without completing N loses revision context. | Gate round advancement on `delphi_completed_rounds` containing the current round. |
 | Revision disabled | `allow_revision=False` but round N+1 re-shows round N's questions. | Hide previous-round answers in round N+1 (render blank). Warn the author. |
 

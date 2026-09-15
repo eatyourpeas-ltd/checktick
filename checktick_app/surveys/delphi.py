@@ -9,26 +9,34 @@ design) uses for:
   distributions, free-text collation). This is the one Delphi-critical
   pattern that no earlier layout exercised; it is tested in isolation
   here before any Delphi-specific model or runtime hook is added.
+- **Inter-round feedback generation** — combining the quantitative
+  aggregation with LLM thematic analysis (via the existing
+  ``theme_analyzer.summarise_themes()``) to produce the cached feedback
+  that participants see between rounds.
 - **Round scheduling** — ``current_round``, ``next_round``,
   ``assign_round_for_progress``. These mirror ``staged.py``'s phase
   helpers and sit next to them without touching staged.
 
 The module is deliberately free of side effects (except
 ``assign_round_for_progress`` which persists the round FK on
-``SurveyProgress``). It never calls the LLM directly — qualitative
-thematic analysis is done by the view layer via
-``theme_analyzer.summarise_themes()`` after ``aggregate_responses_by_group``
-has collected the free-text responses.
+``SurveyProgress``). The LLM thematic analysis is done by
+``generate_round_feedback`` which delegates to ``summarise_themes`` —
+the existing opt-in, unlock-gated, sanitised, gracefully-degrading
+theme analysis service.
 
 Security notes:
-- ``aggregate_responses_by_group`` receives decrypted answers via the
-  ``survey_key`` parameter. The caller (the view) is responsible for the
-  unlock gate — this function must only be called after the survey has
-  been unlocked.
-- The function never logs answer content. It logs metadata only
-  (question id, response count) per the medical-app logging rules.
-- Free-text responses collected for LLM thematic analysis are returned
-  to the caller; they are never persisted by this module.
+- ``aggregate_responses_by_group`` and ``generate_round_feedback``
+  receive decrypted answers via the ``survey_key`` parameter. The caller
+  (the view) is responsible for the unlock gate — these functions must
+  only be called after the survey has been unlocked.
+- The functions never log answer content. They log metadata only
+  (question id, response count, LLM success/failure) per the medical-app
+  logging rules.
+- Free-text responses collected for LLM thematic analysis are passed to
+  ``summarise_themes`` which sanitises the LLM output before returning.
+  The raw responses are never persisted by this module; only the
+  sanitised theme markdown is returned to the caller for caching on
+  ``DelphiRoundFeedback``.
 """
 
 from __future__ import annotations
@@ -309,6 +317,105 @@ def _percentile(sorted_values: list[float], pct: float) -> float:
     upper = min(lower + 1, n - 1)
     frac = rank - lower
     return sorted_values[lower] + (sorted_values[upper] - sorted_values[lower]) * frac
+
+
+# ---------------------------------------------------------------------------
+# Manual thematic analysis — comment collation for download
+# ---------------------------------------------------------------------------
+
+
+def collate_round_comments(
+    survey_id: int,
+    group_ids: list[int],
+    *,
+    survey_key: bytes | None = None,
+    responses: QuerySet | list | None = None,
+) -> dict[int, dict[str, Any]]:
+    """Collate free-text responses per question for manual thematic analysis.
+
+    Returns ``{question_id: {question_text, question_type, responses: [str]}}``.
+    Only ``text`` and ``long_text`` questions are included — quantitative
+    question types are excluded because they are handled by the aggregate
+    stats in ``aggregate_responses_by_group``.
+
+    This is the **manual analysis path** — always available, no LLM required,
+    no tier gate. The view serialises the result to CSV (one row per
+    response, columns for question text and response text) or JSON for
+    download. Researchers use this to code themes manually in NVivo, Excel,
+    or SPSS.
+
+    ``survey_key`` is the survey's decryption key. Required when responses
+    are encrypted; ``None`` for plaintext-only surveys. The caller is
+    responsible for the unlock gate.
+
+    ``responses`` is an optional pre-filtered queryset or list of
+    ``SurveyResponse`` objects. When ``None``, all completed responses
+    for the survey are used. Delphi passes a round-scoped subset.
+    """
+    from .models import SurveyQuestion, SurveyResponse
+
+    if not group_ids:
+        return {}
+
+    if responses is None:
+        responses = SurveyResponse.objects.filter(survey_id=survey_id)
+    response_list = list(responses)
+
+    questions = SurveyQuestion.objects.filter(
+        group_id__in=group_ids,
+        survey_id=survey_id,
+        type__in=_TEXT_TYPES,
+    ).order_by("group_id", "order", "id")
+
+    result: dict[int, dict[str, Any]] = {}
+    for q in questions:
+        q_id = str(q.id)
+        collected: list[str] = []
+        for response in response_list:
+            answers = _resolve_response_answers(response, survey_key)
+            if answers is None:
+                continue
+            answer = answers.get(q_id)
+            if _is_blank_answer(answer):
+                continue
+            if isinstance(answer, list):
+                for instance in answer:
+                    if _is_blank_answer(instance):
+                        continue
+                    collected.append(str(instance))
+            else:
+                collected.append(str(answer))
+        if collected:
+            result[q.id] = {
+                "question_text": q.text,
+                "question_type": q.type,
+                "responses": collected,
+            }
+    return result
+
+
+def round_comments_to_csv(
+    collated: dict[int, dict[str, Any]],
+) -> str:
+    """Serialise ``collate_round_comments`` output to CSV.
+
+    Produces a two-column CSV (``question``, ``response``) with one row
+    per response. Suitable for import into NVivo, Excel, or SPSS for
+    manual thematic coding.
+
+    ``collated`` is the dict returned by ``collate_round_comments``.
+    """
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["question", "response"])
+    for q_data in collated.values():
+        question_text = q_data["question_text"]
+        for response in q_data["responses"]:
+            writer.writerow([question_text, response])
+    return output.getvalue()
 
 
 # ---------------------------------------------------------------------------

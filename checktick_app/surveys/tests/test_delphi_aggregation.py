@@ -21,6 +21,8 @@ from checktick_app.surveys.delphi import (
     _aggregate_text,
     _percentile,
     aggregate_responses_by_group,
+    collate_round_comments,
+    round_comments_to_csv,
 )
 
 # ---------------------------------------------------------------------------
@@ -428,3 +430,247 @@ class TestAggregateResponsesByGroup:
         result = aggregate_responses_by_group(survey.id, [group.id])
         stats = result[group.id][q.id]
         assert stats["count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# collate_round_comments (manual thematic analysis path)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestCollateRoundComments:
+    """Tests for the manual comment collation / download path."""
+
+    TEST_PASSWORD = "x"
+
+    @pytest.fixture
+    def owner(self, django_user_model):
+        return django_user_model.objects.create_user(
+            username="delphi_comments@example.com", password=self.TEST_PASSWORD
+        )
+
+    @pytest.fixture
+    def org(self, owner):
+        from checktick_app.surveys.models import Organization
+
+        return Organization.objects.create(name="Org", owner=owner)
+
+    @pytest.fixture
+    def survey(self, owner, org):
+        from checktick_app.surveys.models import Survey
+
+        return Survey.objects.create(
+            owner=owner,
+            organization=org,
+            name="Comments Test",
+            slug="comments-test",
+        )
+
+    @pytest.fixture
+    def group(self, survey, owner):
+        from checktick_app.surveys.models import QuestionGroup
+
+        g = QuestionGroup.objects.create(name="G", owner=owner)
+        survey.question_groups.add(g)
+        return g
+
+    def test_empty_group_ids(self, survey):
+        result = collate_round_comments(survey.id, [])
+        assert result == {}
+
+    def test_no_text_questions(self, survey, group, owner):
+        """Non-text questions should be excluded from the collation."""
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Rate",
+            type="likert",
+            order=0,
+        )
+        SurveyResponse.objects.create(survey=survey, answers={str(q.id): 3})
+
+        result = collate_round_comments(survey.id, [group.id])
+        assert result == {}
+
+    def test_long_text_collected(self, survey, group, owner):
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Explain",
+            type="long_text",
+            order=0,
+        )
+        texts = ["first", "second", "third"]
+        for t in texts:
+            SurveyResponse.objects.create(survey=survey, answers={str(q.id): t})
+
+        result = collate_round_comments(survey.id, [group.id])
+        assert q.id in result
+        assert result[q.id]["question_text"] == "Explain"
+        assert result[q.id]["question_type"] == "long_text"
+        assert result[q.id]["responses"] == texts
+
+    def test_short_text_collected(self, survey, group, owner):
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Name",
+            type="text",
+            order=0,
+        )
+        SurveyResponse.objects.create(survey=survey, answers={str(q.id): "Alice"})
+
+        result = collate_round_comments(survey.id, [group.id])
+        assert q.id in result
+        assert result[q.id]["responses"] == ["Alice"]
+
+    def test_blank_answers_excluded(self, survey, group, owner):
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Q",
+            type="long_text",
+            order=0,
+        )
+        SurveyResponse.objects.create(survey=survey, answers={str(q.id): "real"})
+        SurveyResponse.objects.create(survey=survey, answers={str(q.id): ""})
+        SurveyResponse.objects.create(survey=survey, answers={str(q.id): "  "})
+        SurveyResponse.objects.create(survey=survey, answers={})
+
+        result = collate_round_comments(survey.id, [group.id])
+        assert result[q.id]["responses"] == ["real"]
+
+    def test_repeatable_text_handled(self, survey, group, owner):
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Q",
+            type="long_text",
+            order=0,
+        )
+        SurveyResponse.objects.create(survey=survey, answers={str(q.id): ["a", "b"]})
+
+        result = collate_round_comments(survey.id, [group.id])
+        assert result[q.id]["responses"] == ["a", "b"]
+
+    def test_content_block_excluded(self, survey, group, owner):
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="CB",
+            type="content_block",
+            order=0,
+        )
+        SurveyResponse.objects.create(survey=survey, answers={})
+
+        result = collate_round_comments(survey.id, [group.id])
+        assert q.id not in result
+
+    def test_multiple_questions(self, survey, group, owner):
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q1 = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Q1",
+            type="long_text",
+            order=0,
+        )
+        q2 = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Q2",
+            type="text",
+            order=1,
+        )
+        SurveyResponse.objects.create(
+            survey=survey,
+            answers={str(q1.id): "resp1", str(q2.id): "resp2"},
+        )
+
+        result = collate_round_comments(survey.id, [group.id])
+        assert q1.id in result
+        assert q2.id in result
+        assert result[q1.id]["responses"] == ["resp1"]
+        assert result[q2.id]["responses"] == ["resp2"]
+
+    def test_filtered_responses(self, survey, group, owner):
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Q",
+            type="long_text",
+            order=0,
+        )
+        for i in range(5):
+            SurveyResponse.objects.create(survey=survey, answers={str(q.id): f"r{i}"})
+
+        subset = list(SurveyResponse.objects.all()[:2])
+        result = collate_round_comments(survey.id, [group.id], responses=subset)
+        assert len(result[q.id]["responses"]) == 2
+
+
+class TestRoundCommentsToCsv:
+    def test_basic_csv(self):
+        collated = {
+            1: {
+                "question_text": "Explain",
+                "question_type": "long_text",
+                "responses": ["first", "second"],
+            }
+        }
+        csv_output = round_comments_to_csv(collated)
+        assert "question,response" in csv_output
+        assert "Explain,first" in csv_output
+        assert "Explain,second" in csv_output
+
+    def test_multiple_questions(self):
+        collated = {
+            1: {
+                "question_text": "Q1",
+                "question_type": "long_text",
+                "responses": ["a"],
+            },
+            2: {
+                "question_text": "Q2",
+                "question_type": "text",
+                "responses": ["b", "c"],
+            },
+        }
+        csv_output = round_comments_to_csv(collated)
+        assert "Q1,a" in csv_output
+        assert "Q2,b" in csv_output
+        assert "Q2,c" in csv_output
+
+    def test_empty_collated(self):
+        csv_output = round_comments_to_csv({})
+        # Header only
+        lines = csv_output.strip().split("\n")
+        assert len(lines) == 1
+        assert lines[0] == "question,response"
+
+    def test_commas_in_responses_escaped(self):
+        collated = {
+            1: {
+                "question_text": "Q",
+                "question_type": "long_text",
+                "responses": ["hello, world"],
+            }
+        }
+        csv_output = round_comments_to_csv(collated)
+        # CSV should quote the field containing a comma
+        assert '"hello, world"' in csv_output
