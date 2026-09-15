@@ -430,6 +430,79 @@ upload](import.md#matrix-free-navigation-layout) text editor using a
 `MATRIX` block. The grammar is optional (the Organise page UI is the
 primary config path) but useful for the AI builder and power users.
 
+## Content blocks
+
+Content blocks are a special question type that renders static content —
+a heading, a Markdown body, and reference links — with **no answer
+input**. They go anywhere a question goes: any section, any position,
+multiple per section, any layout.
+
+### When to use content blocks
+
+- **Landing page**: a content block as the only question in the first
+  section renders as a welcome/intro page before the questions begin.
+- **Interstitial disclosure**: a content block between substantive
+  sections renders as a disclosure or information page.
+- **Closing acknowledgement**: a content block as the last question
+  renders as a thank-you or final acknowledgement.
+- **Matrix landing**: in a matrix layout, a content block as the first
+  question in the first section renders above the section cards as a
+  landing header.
+
+### Authoring
+
+Content blocks are a **Special Template** in the builder (alongside
+patient and professional details), not a regular question type. The author
+adds a content block via the "Special Templates" tab, then configures it
+via a "Configure content block" panel. All components are optional — include
+only what you need:
+
+- **Heading** (the rendered heading, optional)
+- **Subtitle** (a short description or tagline, optional)
+- **Body** (multiline Markdown, rendered to sanitised HTML, optional)
+- **Image / logo** (uploaded via the builder; NOT encrypted — only use for
+  non-medical, non-patient-identifying content)
+- **Links** (label + URL pairs, zero or more, rendered as a list)
+- **Consent** (a consent checkbox with a custom statement; when "required"
+  is on, participants must agree to progress)
+- **Render once** (default on — render once even in repeatable groups)
+
+The question text (the internal label, e.g. "Content block") is not
+rendered to participants — only the heading, subtitle, body, image,
+links, and consent checkbox are shown.
+
+Content blocks themselves are **never required** — they have no answer
+(except the optional consent checkbox, which is a separate yesno question
+behind the scenes for a clean audit trail).
+
+### Markdown safety
+
+The body is rendered to HTML via Python-Markdown then sanitised with
+`nh3` (an allowlist-based HTML sanitiser). No `<script>`, `<style>`,
+`<iframe>`, `<form>`, or event-handler attributes survive. Link URLs
+are restricted to `http`, `https`, and `mailto` schemes. See
+[Security Overview](/docs/security-overview/) §A03 for details.
+
+### Outline syntax
+
+Content blocks are supported in the outline grammar (used by the AI
+builder and power users):
+
+```text
+## Introduction
+(content_block)
+heading: Welcome
+variant: disclosure
+link: Privacy notice|https://example.com/privacy
+
+Welcome to the study. Please read the privacy notice before continuing.
+```
+
+The `## Introduction` heading is the internal label (not rendered to
+participants). The `heading:` config line sets the rendered heading.
+Image upload is builder-only — the outline grammar does not carry image
+references.
+
 ## Planned layouts
 
 The following layouts are planned for future releases. They are not yet

@@ -453,10 +453,12 @@
 
     {# Render question inside the group card - wrapped for branching #}
     <div class="mb-4" data-question-id="{{ q.id }}"{% if q.has_show_condition %} style="display: none;"{% endif %} role="group" aria-labelledby="q_label_{{ q.id }}">
+      {% if q.type != 'content_block' %}
       <h2 class="font-semibold inline-flex items-center gap-2" id="q_label_{{ q.id }}">
         {% include "components/icons/document.html" with classes="w-4 h-4 opacity-70" aria_hidden="true" %}
         <span><span class="text-sm opacity-70 mr-2 select-none" aria-hidden="true">{{ q.idx }}.</span> {{ q.text }}{% if q.required %} <span class="text-error" aria-hidden="true">*</span><span class="sr-only">{% trans "(required)" %}</span>{% endif %}</span>
       </h2>
+      {% endif %}
         {% if q.type == 'text' %}
           {% with q.options|options_meta as meta %}
             {% if meta and meta.format == 'number' %}
@@ -750,6 +752,41 @@
             {% empty %}
               <p class="text-sm opacity-60 col-span-full">No images configured for this question.</p>
             {% endfor %}
+          </div>
+        {% elif q.type == 'content_block' %}
+          {# Content block: optional heading, subtitle, image, body, links, consent. No answer input (except consent checkbox). #}
+          <div class="content-block prose max-w-none" data-content-block-id="{{ q.id }}">
+            {% if q.content_block_heading %}
+              <h2 class="text-xl font-semibold">{{ q.content_block_heading }}</h2>
+            {% endif %}
+            {% if q.content_block_subtitle %}
+              <p class="text-base opacity-70 -mt-2">{{ q.content_block_subtitle }}</p>
+            {% endif %}
+            {% if q.content_block_image %}
+              <div class="not-prose mb-4">
+                <img src="{{ q.content_block_image.image.url }}" alt="{{ q.content_block_image.label|default:'' }}" class="rounded-lg max-w-full" />
+              </div>
+            {% endif %}
+            {% if q.content_block_html %}
+              {{ q.content_block_html|safe }}
+            {% endif %}
+            {% if q.content_block_links %}
+              <ul class="list-none pl-0 mt-2">
+                {% for link in q.content_block_links %}
+                  <li class="mt-1">
+                    <a href="{{ link.url }}" rel="noopener noreferrer" target="_blank" class="link link-primary">{{ link.label }}</a>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+            {% if q.content_block_consent and q.content_block_consent.question %}
+              <div class="not-prose mt-4">
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" name="q_{{ q.content_block_consent.question.id }}" value="yes" class="checkbox checkbox-primary mt-1"{% if q.content_block_consent.required %} aria-required="true" required{% endif %} />
+                  <span class="text-sm">{{ q.content_block_consent.statement }}{% if q.content_block_consent.required %} <span class="text-error">*</span>{% endif %}</span>
+                </label>
+              </div>
+            {% endif %}
           </div>
         {% else %}
           <input class="input input-bordered w-full" type="text" name="q_{{ q.id }}" id="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true" required{% endif %} />

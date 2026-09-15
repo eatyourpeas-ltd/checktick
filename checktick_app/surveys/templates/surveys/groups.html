@@ -599,6 +599,26 @@
     </div>
   </section>
   {% endif %}
+
+  {# === Content block warnings (all layouts) === #}
+  {% if content_block_warnings %}
+  <section class="not-prose mb-6" aria-labelledby="content-block-warnings-heading">
+    <div class="alert alert-warning">
+      <div>
+        <h3 id="content-block-warnings-heading" class="font-semibold text-sm">{% trans 'Content block warnings' %}</h3>
+        <div class="mt-1 space-y-1">
+          {% for warning in content_block_warnings %}
+          <div class="text-xs" role="status">
+            {% include "components/icons/exclamation-triangle.html" with classes="w-4 h-4 shrink-0 inline" %}
+            <span>{{ warning }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   {# === (legacy surveys; new surveys get a default group automatically on creation via create_default_section) === #}
   {% if not groups %}
   <div class="not-prose mt-6 max-w-2xl">

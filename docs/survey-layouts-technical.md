@@ -943,11 +943,11 @@ reuse its ingredients:
 ## Content blocks (cross-layout)
 
 Content blocks are a `SurveyQuestion` type (`content_block`) that renders
-static content — heading, Markdown body, image, and hyperlinks — with no
-answer input. They go anywhere a question goes: any group, any position,
-multiple per group, any layout. A content block placed first in the first
-section is a landing page; one placed between substantive sections is an
-interstitial disclosure; one placed last is a closing acknowledgement.
+static content — heading, Markdown body, and hyperlinks — with no answer
+input. They go anywhere a question goes: any group, any position, multiple
+per group, any layout. A content block placed first in the first section is
+a landing page; one placed between substantive sections is an interstitial
+disclosure; one placed last is a closing acknowledgement.
 
 ### Data model
 
@@ -962,46 +962,98 @@ A `content_block` question's `options` JSONField holds:
 
 ```python
 {
-    "heading": str,           # optional block heading
-    "body_md": str,           # Markdown body (multiline)
-    "image_id": int | None,   # FK to QuestionImage (non-medical imagery only)
-    "links": [                # reference / disclosure links
+    "heading": str,           # rendered heading (optional — block can have no heading)
+    "subtitle": str,          # rendered subtitle (optional)
+    "body_md": str,           # Markdown body (optional)
+    "image_id": int | None,   # FK to QuestionImage (optional, builder-only upload)
+    "links": [                # reference / disclosure links (optional, zero or more)
         {"label": str, "url": str},
         ...
     ],
+    "consent": {              # consent checkbox (optional)
+        "question_id": int,   # FK to a linked yesno question
+        "statement": str,     # consent statement text
+        "required": bool,     # if True, participant must agree to progress
+    } | None,
+    "render_once": bool,      # default True; render once even in repeatable groups
 }
 ```
 
-`QuestionImage` is reused for the image (see its existing warning: images
-are NOT encrypted and are for non-medical, non-patient-identifying content
-only — appropriate for landing/disclosure imagery).
+All components are optional — the author includes only what they need.
 
-A content block is **never `required`** — it has no answer. The builder
-form validates this; `missing_required_question_ids` skips
-`content_block` questions.
+`SurveyQuestion.text` is the **internal builder label** (e.g. "Content
+block", "Introduction") — it is NOT rendered to participants. This mirrors
+the `template_patient` / `template_professional` pattern, where
+`question.text` is the builder label and the rendered content comes from
+`options`.
+
+Image upload is **builder-only** — the outline grammar does not carry
+image references. Authors upload images via the builder; the outline only
+stores the question type and text.
+
+A content block is **never `required`** — it has no answer. This is
+enforced in three places (defence in depth):
+
+1. **Parser** (`markdown_import.py`): forces `required=False` regardless
+   of the `*` suffix.
+2. **Special template creation** (`builder_group_template_add`): creates
+   with `required=False`.
+3. **Model** (`SurveyQuestion.clean()`): raises `ValidationError` if
+   `required=True`.
+
+`missing_required_question_ids` skips `content_block` questions
+automatically (they are never `required`).
+
+### Markdown sanitisation
+
+`body_md` is rendered to HTML via
+`checktick_app/core/markdown_safety.py:render_content_block_markdown`,
+which runs Python-Markdown (``extra``, ``nl2br``, ``sane_lists``) then
+`nh3.clean` with an explicit tag/attribute allowlist. No `<script>`,
+`<style>`, `<iframe>`, `<form>`, or event-handler attributes survive.
+Link `href`/`img src` URLs are restricted to `http`, `https`, and `mailto`
+schemes. See `docs/security-overview.md` §A03 (S16/S17).
+
+Content-block link URLs are validated against the same scheme allowlist
+at save time via `sanitise_link_url` (builder form and parser).
 
 ### Consent
 
-Consent is handled as separate `yesno` questions in the same group as the
-content block, not as a content-block feature. Each consent statement is
-its own `SurveyQuestion` row → its own answer row → clean audit trail
-("who agreed to X?"), clean export, clean data-protection defence. The
-author labels the `yesno` options "I agree" / "I do not agree" and sets
-`required=True`.
+Consent is an optional component of a content block. When the author
+configures consent (via the content block's configure panel), a linked
+`yesno` question is created in the same group, hidden from the builder
+list via a `_content_block_parent` marker in its options. The answer is
+stored on the yesno question ("yes"/"no") — clean audit trail ("who
+agreed to X?"), clean export, clean data-protection defence. The content
+block renders the consent checkbox inline using the yesno question's form
+field name. When the author sets "required", the participant cannot
+progress until they agree (`missing_required_question_ids` validates it).
 
-The `yesno` type already supports custom labels and an optional "Don't
-know" answer (see `markdown_import.py`). A `boolean` checkbox type is
-not added — an unticked checkbox is ambiguous (didn't see it vs. actively
-declined), which is exactly what a medical app should avoid for consent.
-The parser's existing `boolean` alias maps to `yesno`; if a real boolean
-type is ever added, that alias needs forking.
+Clearing the consent statement in the configure panel deletes the linked
+yesno question.
+
+The `yesno` type already supports custom labels (see `markdown_import.py`).
+A `boolean` checkbox type is not added — an unticked checkbox is ambiguous
+(didn't see it vs. actively declined), which is exactly what a medical
+app should avoid for consent. The parser's existing `boolean` alias maps
+to `yesno`; if a real boolean type is ever added, that alias needs
+forking.
 
 ### Rendering
 
-`detail.html` renders a `content_block` question as a single block:
-heading, image, rendered Markdown body, link list. No answer input. The
-matrix landing page composes with it — a content block as the first
-question in the first section renders as the landing header.
+`detail.html` renders a `content_block` question as a single block with
+optional components in order: heading, subtitle, image, body, links,
+consent checkbox. No standard answer input (except the consent checkbox
+when configured). The standard `q.text` H2 is suppressed for content
+blocks — the internal label is not shown to participants. The matrix
+landing page composes with it — a content block as the first question in
+the first section renders above the cards as a landing header (see
+§Matrix layout).
+
+For non-matrix layouts, a "landing page" or "section intro" is simply a
+`QuestionGroup` whose only question is a `content_block` — the runtime
+renders sections in order, so a single-content-block section renders as
+a static page between question sections.
 
 ### Outline grammar
 
@@ -1009,7 +1061,7 @@ question in the first section renders as the landing header.
 ## Introduction
 (content_block)
 heading: Welcome
-image: intro-photo.png
+variant: disclosure
 link: Privacy notice|https://example.com/privacy
 link: Study protocol|https://example.com/protocol
 
@@ -1017,8 +1069,10 @@ Welcome to the study. Please read the privacy notice and links above
 before continuing.
 ```
 
-- `heading` is optional (quoted if it contains colons).
-- `image` is optional (filename of an uploaded `QuestionImage`).
+- `heading` is optional (the rendered heading; `## Introduction` is the
+  internal label, not rendered to participants).
+- `variant` is optional (defaults to `text`).
+- `render_once` is optional (defaults to `true`).
 - `link:` lines are one per reference, `Label|URL` format.
 - The body is everything after the config lines (multiline Markdown).
 - A blank line after the config block starts the body; a new `#`/`##`
@@ -1029,17 +1083,52 @@ the body survives export → import round-trips.
 
 ### Builder
 
-The builder form for `content_block` uses a **multiline textarea** for
-`body_md` (Markdown). This is intrinsic to the content block — the body
-is authored content, not a one-line config value. The textarea builder
-component is shared with the `long_text` question type (see §Long text
-below), which landed in v0.16.1.
+Content blocks are a **Special Template** option in the builder (alongside
+patient and professional details), not a regular question type. The author
+adds a content block via the "Special Templates" tab, which creates a
+question with `text="Content block"` and default (empty) options. A
+"Configure content block" panel (in the question row, like the
+patient/professional configure panels) provides all optional components:
 
-`body_md` is structurally distinct from question labels:
-`SurveyQuestion.text` and `QuestionGroup.description` are already
-`TextField` (multiline at the DB level); `body_md` is the primary authored
-content of the block, rendered as Markdown → HTML, and can be multiple
-paragraphs. Labels are short; `body_md` is long-form.
+- **Heading** input (the rendered heading, `options.heading`)
+- **Subtitle** input (the rendered subtitle, `options.subtitle`)
+- **Body** textarea (Markdown, `options.body_md`)
+- **Image** upload (reuses `QuestionImage`, non-medical warning)
+- **Links** repeater (parallel `link_label[]` / `link_url[]` lists, zero or more)
+- **Consent** section (statement text + required toggle; creates a linked yesno question)
+- **Render once** toggle (`options.render_once`)
+
+`SurveyQuestion.text` is the internal builder label (e.g. "Content
+block"), not rendered to participants. `options.heading` is the rendered
+heading. `body_md` is the primary authored content of the block, rendered
+as Markdown → HTML, and can be multiple paragraphs.
+
+### Branching
+
+Content blocks cannot be condition **sources** (they have no answer). As
+condition **targets**:
+
+- `JUMP_TO` a content block is fine (just renders the block).
+- `SHOW`/`HIDE` on a content block produces a non-blocking warning on the
+  Organise page (content blocks have no answer — consider `jump_to`
+  instead).
+
+### CSV export and reporting
+
+Content blocks are skipped in CSV export (no column) and in the reporting
+workflow (not in `CHARTABLE_TYPES` / `TEXT_TYPES` / `NUMERIC_TYPES`).
+
+### Delphi compatibility
+
+A content block whose `body_md` (and optionally `heading`) is rendered
+from aggregate data (medians, IQRs, themes) instead of authored Markdown
+is Delphi's inter-round feedback view. Same model, different body source
+— the author marks the block as "aggregate feedback" (a flag in
+`options`, no migration needed since `options` is a JSONField) and the
+runtime substitutes `options.body_md` / `options.heading` from the
+previous round's responses at view time. `question.text` (the internal
+label) stays stable across rounds. No new model, no new `SurveyProgress`
+field.
 
 ## Long text (textarea)
 
@@ -1084,15 +1173,6 @@ The builder form renders a `<textarea>` for `long_text` questions
 `0065_long_text` adds the `LONG_TEXT` choice to `SurveyQuestion.type`.
 No new model, no new `SurveyProgress` field — just the type and the
 builder/template/parser branches.
-
-### Delphi compatibility
-
-A content block whose `body_md` is rendered from aggregate data (medians,
-IQRs, themes) instead of authored Markdown is Delphi's inter-round
-feedback view. Same model, different body source — the author marks the
-block as "aggregate feedback" and the runtime substitutes the body from
-the previous round's responses. No new model, no new `SurveyProgress`
-field.
 
 ## Planned layouts
 

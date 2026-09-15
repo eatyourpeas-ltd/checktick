@@ -182,6 +182,8 @@ Sanitization is applied at both **write time** (view layer, before storage) and 
 
 Survey question text, option labels, and group names are passed through `django.utils.html.strip_tags()` before storage so that HTML markup cannot be re-emitted via the `|safe` builder payload filter.
 
+Content-block question bodies (`options["body_md"]`) are authored Markdown rendered to HTML at view time via `checktick_app/core/markdown_safety.py`. The pipeline is Python-Markdown (``extra``, ``nl2br``, ``sane_lists``) → `nh3.clean` with an explicit tag/attribute allowlist (no `<script>`, `<style>`, `<iframe>`, `<form>`, or event-handler attributes). Link `href`/`img src` URLs are restricted to `http`, `https`, and `mailto` schemes; `javascript:`, `data:`, `vbscript:`, and protocol-relative `//` URLs are stripped. Content-block link URLs are validated against the same scheme allowlist at save time via `sanitise_link_url`.
+
 Font CSS URL fields reject any value that does not begin with `http://` or `https://`, blocking `javascript:` and `data:` URI injection via `<link>` elements.
 
 Survey `icon_url` and platform `SiteBranding.icon_url` / `icon_url_dark` fields reject any value that does not begin with `http://`, `https://`, or `/` (relative path), blocking `javascript:`, `data:`, `file:`, and `vbscript:` URI injection via `<img src>` / `<link rel="icon">` elements. The same check is applied at read time in `_sanitise_brand_overrides` so legacy or admin-written values that bypass the write-time validator are still neutralised before reaching respondent-facing templates.
@@ -210,6 +212,8 @@ CSV formula injection (values beginning with `=`, `@`, `+`, `-`) is blocked at e
 | S15: CSV formula injection | Spreadsheet formula execution | Formula prefix stripping in `_format_answer_for_export` |
 | F13: Survey `icon_url` | `javascript:`/`data:` URI in `<img src>` on respondent pages | Protocol allowlist at write-time + `_sanitise_brand_overrides` at read-time |
 | F16: `theme_css_*` `}` breakout | CSS rule injection → data exfiltration via `url()` | `sanitize_css_block` strips `{` `}` and `url()` references |
+| S16: Content-block `body_md` (builder) | Stored XSS via Markdown → HTML rendering | `nh3.clean` allowlist in `render_content_block_markdown`; URL scheme allowlist via `sanitise_link_url` |
+| S17: Content-block `links[].url` (builder/parser) | `javascript:`/`data:` URI injection via `<a href>` | `sanitise_link_url` scheme allowlist at save time |
 
 ---
 

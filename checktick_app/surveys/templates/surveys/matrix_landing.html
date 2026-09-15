@@ -11,6 +11,27 @@
   <p class="text-sm text-base-content/70 mb-6">{{ matrix_menu.prompt_text }}</p>
   {% endif %}
 
+  {% if landing_block %}
+  <div class="content-block prose max-w-none mb-6">
+    {% if landing_block.heading %}
+    <h2 class="text-xl font-semibold">{{ landing_block.heading }}</h2>
+    {% endif %}
+    {% if landing_block.subtitle %}
+    <p class="text-base opacity-70 -mt-2">{{ landing_block.subtitle }}</p>
+    {% endif %}
+    {% if landing_block.html %}{{ landing_block.html|safe }}{% endif %}
+    {% if landing_block.links %}
+    <ul class="list-none pl-0 mt-2">
+      {% for link in landing_block.links %}
+      <li class="mt-1">
+        <a href="{{ link.url }}" rel="noopener noreferrer" target="_blank" class="link link-primary">{{ link.label }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endif %}
+
   {# Progress indicator #}
   {% if show_progress %}
   <div class="mb-6">
