@@ -22,6 +22,7 @@ from checktick_app.surveys.delphi import (
     _percentile,
     aggregate_responses_by_group,
     collate_round_comments,
+    generate_round_feedback,
     round_comments_to_csv,
 )
 
@@ -674,3 +675,216 @@ class TestRoundCommentsToCsv:
         csv_output = round_comments_to_csv(collated)
         # CSV should quote the field containing a comma
         assert '"hello, world"' in csv_output
+
+
+# ---------------------------------------------------------------------------
+# generate_round_feedback (quantitative + opt-in LLM)
+# ---------------------------------------------------------------------------
+
+
+class _MockLLMClient:
+    """Mock LLM client for testing generate_round_feedback."""
+
+    def __init__(self, response: str = "- Theme one\n- Theme two"):
+        self._response = response
+
+    def chat_with_custom_system_prompt(
+        self, system_prompt, conversation, temperature=0.2, max_tokens=800
+    ):
+        return self._response
+
+
+class _MockFailingLLMClient:
+    """Mock LLM client that raises an exception."""
+
+    def chat_with_custom_system_prompt(
+        self, system_prompt, conversation, temperature=0.2, max_tokens=800
+    ):
+        raise ConnectionError("LLM unavailable")
+
+
+@pytest.mark.django_db
+class TestGenerateRoundFeedback:
+    """Tests for the combined quantitative + opt-in LLM feedback generation."""
+
+    TEST_PASSWORD = "x"
+
+    @pytest.fixture
+    def owner(self, django_user_model):
+        return django_user_model.objects.create_user(
+            username="delphi_fb@example.com", password=self.TEST_PASSWORD
+        )
+
+    @pytest.fixture
+    def org(self, owner):
+        from checktick_app.surveys.models import Organization
+
+        return Organization.objects.create(name="Org", owner=owner)
+
+    @pytest.fixture
+    def survey(self, owner, org):
+        from checktick_app.surveys.models import Survey
+
+        return Survey.objects.create(
+            owner=owner,
+            organization=org,
+            name="Feedback Test",
+            slug="feedback-test",
+        )
+
+    @pytest.fixture
+    def group(self, survey, owner):
+        from checktick_app.surveys.models import QuestionGroup
+
+        g = QuestionGroup.objects.create(name="G", owner=owner)
+        survey.question_groups.add(g)
+        return g
+
+    def test_quantitative_only_by_default(self, survey, group, owner):
+        """Without use_llm, only quantitative stats are computed."""
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Rate",
+            type="likert",
+            order=0,
+        )
+        for val in [3, 4, 5, 2, 3]:
+            SurveyResponse.objects.create(survey=survey, answers={str(q.id): val})
+
+        feedback = generate_round_feedback(survey.id, [group.id])
+        assert q.id in feedback
+        assert feedback[q.id]["stats"]["question_type"] == "likert"
+        assert feedback[q.id]["stats"]["count"] == 5
+        assert feedback[q.id]["theme_markdown"] == ""
+        assert feedback[q.id]["llm_generated"] is False
+        assert feedback[q.id]["llm_success"] is False
+
+    def test_llm_themes_generated_when_opted_in(self, survey, group, owner):
+        """With use_llm=True and a mock client, themes are generated."""
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Explain",
+            type="long_text",
+            order=0,
+        )
+        for text in ["first response", "second response", "third response"]:
+            SurveyResponse.objects.create(survey=survey, answers={str(q.id): text})
+
+        mock_client = _MockLLMClient(response="- Theme A\n- Theme B")
+        feedback = generate_round_feedback(
+            survey.id, [group.id], use_llm=True, llm_client=mock_client
+        )
+        assert q.id in feedback
+        assert feedback[q.id]["stats"]["question_type"] == "text"
+        assert feedback[q.id]["stats"]["count"] == 3
+        assert feedback[q.id]["theme_markdown"] == "- Theme A\n- Theme B"
+        assert feedback[q.id]["llm_generated"] is True
+        assert feedback[q.id]["llm_success"] is True
+
+    def test_llm_failure_graceful(self, survey, group, owner):
+        """When the LLM fails, quantitative stats still render."""
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Explain",
+            type="long_text",
+            order=0,
+        )
+        SurveyResponse.objects.create(survey=survey, answers={str(q.id): "a response"})
+
+        mock_client = _MockFailingLLMClient()
+        feedback = generate_round_feedback(
+            survey.id, [group.id], use_llm=True, llm_client=mock_client
+        )
+        assert q.id in feedback
+        assert feedback[q.id]["stats"]["count"] == 1
+        assert feedback[q.id]["theme_markdown"] == ""
+        assert feedback[q.id]["llm_generated"] is False
+        assert feedback[q.id]["llm_success"] is False
+
+    def test_quantitative_questions_not_sent_to_llm(self, survey, group, owner):
+        """Likert/yesno questions should not trigger LLM calls."""
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Rate",
+            type="likert",
+            order=0,
+        )
+        for val in [3, 4, 5]:
+            SurveyResponse.objects.create(survey=survey, answers={str(q.id): val})
+
+        # Even with use_llm=True, likert questions should not have themes.
+        mock_client = _MockLLMClient()
+        feedback = generate_round_feedback(
+            survey.id, [group.id], use_llm=True, llm_client=mock_client
+        )
+        assert q.id in feedback
+        assert feedback[q.id]["theme_markdown"] == ""
+        assert feedback[q.id]["llm_generated"] is False
+
+    def test_empty_group_ids(self, survey):
+        feedback = generate_round_feedback(survey.id, [])
+        assert feedback == {}
+
+    def test_no_responses(self, survey, group, owner):
+        from checktick_app.surveys.models import SurveyQuestion
+
+        q = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Q",
+            type="likert",
+            order=0,
+        )
+        feedback = generate_round_feedback(survey.id, [group.id])
+        # Question appears with count=0 (so the author sees it had no responses)
+        assert q.id in feedback
+        assert feedback[q.id]["stats"]["count"] == 0
+
+    def test_mixed_question_types(self, survey, group, owner):
+        """Both quantitative and qualitative questions in one round."""
+        from checktick_app.surveys.models import SurveyQuestion, SurveyResponse
+
+        q_likert = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Rate",
+            type="likert",
+            order=0,
+        )
+        q_text = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="Explain",
+            type="long_text",
+            order=1,
+        )
+        SurveyResponse.objects.create(
+            survey=survey,
+            answers={str(q_likert.id): 4, str(q_text.id): "my reasoning"},
+        )
+
+        mock_client = _MockLLMClient(response="- A theme")
+        feedback = generate_round_feedback(
+            survey.id, [group.id], use_llm=True, llm_client=mock_client
+        )
+
+        assert q_likert.id in feedback
+        assert feedback[q_likert.id]["stats"]["question_type"] == "likert"
+        assert feedback[q_likert.id]["llm_generated"] is False
+
+        assert q_text.id in feedback
+        assert feedback[q_text.id]["stats"]["question_type"] == "text"
+        assert feedback[q_text.id]["llm_generated"] is True
+        assert feedback[q_text.id]["theme_markdown"] == "- A theme"

@@ -419,6 +419,121 @@ def round_comments_to_csv(
 
 
 # ---------------------------------------------------------------------------
+# Inter-round feedback generation (combines quantitative + opt-in LLM)
+# ---------------------------------------------------------------------------
+
+
+def generate_round_feedback(
+    survey_id: int,
+    group_ids: list[int],
+    *,
+    survey_key: bytes | None = None,
+    responses: QuerySet | list | None = None,
+    use_llm: bool = False,
+    llm_client=None,
+) -> dict[int, dict[str, Any]]:
+    """Generate inter-round feedback for a set of groups.
+
+    Combines the quantitative aggregation (always computed) with optional
+    LLM thematic analysis (when ``use_llm=True``).
+
+    Returns ``{question_id: feedback_dict}`` where each ``feedback_dict``
+    has:
+
+    - ``stats``: the quantitative aggregate (median/IQR/distribution/etc.)
+      — always populated for aggregatable question types.
+    - ``theme_markdown``: sanitised LLM theme summary — only populated
+      when ``use_llm=True`` and the question is a text/long_text type
+      and the LLM succeeds. Empty string otherwise.
+    - ``llm_generated``: True if the LLM was used and succeeded for this
+      question. False otherwise (manual analysis only or LLM failure).
+    - ``llm_model``: the LLM model name, if the LLM was used.
+    - ``llm_token_count``: rough token estimate, if the LLM was used.
+    - ``llm_success``: True if the LLM call succeeded.
+
+    When ``use_llm=False`` (the default), only quantitative stats are
+    computed. The author can use the manual download path
+    (``collate_round_comments``) for qualitative analysis.
+
+    When ``use_llm=True``, the function calls ``summarise_themes()`` per
+    long-text/text question. The LLM path is opt-in — the caller (the
+    view) is responsible for tier-gating and unlock-gating before passing
+    ``use_llm=True``.
+
+    Security notes:
+    - This function receives decrypted answers via ``survey_key``. The
+      caller must verify the unlock gate before calling.
+    - The LLM input is constructed by ``summarise_themes()`` and never
+      logged by this function. The returned theme markdown is sanitised.
+    - Raw responses are never persisted by this function; only the
+      sanitised theme markdown is returned to the caller for caching.
+    """
+    # Compute quantitative stats for all aggregatable questions.
+    aggregated = aggregate_responses_by_group(
+        survey_id, group_ids, survey_key=survey_key, responses=responses
+    )
+
+    # Flatten into a per-question dict (losing the group_id nesting).
+    feedback: dict[int, dict[str, Any]] = {}
+    for _group_id, questions in aggregated.items():
+        for q_id, stats in questions.items():
+            feedback[q_id] = {
+                "stats": stats,
+                "theme_markdown": "",
+                "llm_generated": False,
+                "llm_model": "",
+                "llm_token_count": 0,
+                "llm_success": False,
+            }
+
+    if not use_llm:
+        return feedback
+
+    # Opt-in LLM thematic analysis for text/long_text questions.
+    # Import here to avoid a circular import at module load time.
+    from .models import SurveyQuestion
+    from .theme_analyzer import summarise_themes
+
+    # Collect the free-text responses per question (reusing the aggregation
+    # result if it already has them, otherwise collating fresh).
+    text_question_ids = set()
+    for q_id, fb in feedback.items():
+        stats = fb["stats"]
+        if stats.get("question_type") == "text" and stats.get("responses"):
+            # The aggregation already collected the responses.
+            text_question_ids.add(q_id)
+
+    # Also check for text questions that had no responses in the aggregation
+    # (they won't appear in ``feedback`` — skip them, no themes to generate).
+
+    for q_id in text_question_ids:
+        q = SurveyQuestion.objects.filter(id=q_id).first()
+        if q is None:
+            continue
+        responses_list = feedback[q_id]["stats"].get("responses", [])
+        if not responses_list:
+            continue
+
+        result = summarise_themes(
+            question_text=q.text,
+            responses=responses_list,
+            llm_client=llm_client,
+        )
+
+        feedback[q_id].update(
+            {
+                "theme_markdown": result.get("summary", ""),
+                "llm_generated": result.get("success", False),
+                "llm_model": result.get("model_name", ""),
+                "llm_token_count": result.get("token_count", 0),
+                "llm_success": result.get("success", False),
+            }
+        )
+
+    return feedback
+
+
+# ---------------------------------------------------------------------------
 # Round scheduling (used by the runtime hook — models not yet built)
 # ---------------------------------------------------------------------------
 
