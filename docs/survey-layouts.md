@@ -5,7 +5,7 @@ priority: 7
 ---
 
 A **Survey Layout** is the high-level shape of a survey — how its sections
-are offered to the participant. CheckTick supports four layouts:
+are offered to the participant. CheckTick supports six layouts:
 
 - **Default (linear)** — sections flow in the order you arrange them. Every
   respondent sees every section. This is how all surveys worked before
@@ -32,6 +32,11 @@ are offered to the participant. CheckTick supports four layouts:
   currently-open phase; future phases are hidden until their window
   opens. Builds on the progress tracking feature's lifecycle status and
   timestamps.
+- **Matrix (free navigation)** — all sections visible as cards on a
+  landing page. The participant jumps in and out of any section in any
+  order, with completion indicators showing which sections are done.
+  Different from Section menu (pick once, then linear through the chosen
+  set) — matrix is ongoing free navigation throughout the survey.
 
 The name **Layout** is deliberately distinct from **Template**, which is
 already used for published sections shared into the Question Bank (see
@@ -506,14 +511,80 @@ references.
 ## Planned layouts
 
 The following layouts are planned for future releases. They are not yet
-implemented.
+implemented. They are ordered by priority — the order CheckTick intends
+to implement them, based on how often the use case is the reason a
+research team reaches for REDCap or Qualtrics instead of a simpler tool.
 
-### Delphi (consensus rounds)
+### Delphi (consensus rounds) — next
 
 Multi-round structured consensus workflow. Participants complete rounds,
-see aggregate feedback between rounds, and revise their answers. Builds
-on the ingredients proven by the earlier layouts (RCT arms, Staged
-phases, Matrix completion tracking).
+see aggregate feedback between rounds (quantitative distributions +
+qualitative themes), and revise their answers. The classic Delphi method
+for expert consensus-building in clinical research, guideline
+development, and priority-setting.
+
+Builds on the ingredients proven by the earlier layouts (RCT arms, Staged
+phases, Matrix completion tracking, content blocks for feedback
+rendering). Inter-round qualitative feedback uses the existing LLM theme
+analysis feature (opt-in, author-triggered, sanitised).
+
+### Diary / EMA (ecological momentary assessment)
+
+Repeated short surveys triggered on a fixed schedule (daily, 4×/day) or
+by events (symptom onset). Used for pain diaries, mood tracking,
+medication adherence, and symptom monitoring in clinical trials.
+
+Different from Staged (which is phase-based: baseline → 2-week →
+6-month). Diaries are high-frequency repeated measures with burst
+scheduling, compliance tracking (missed entries), and time-stamp
+integrity for regulatory submissions.
+
+### Two-stage screening / eligibility routing
+
+A brief screener determines eligibility, then routes to the full survey,
+an exit page, or an alternative survey. Ubiquitous in clinical
+recruitment. May ship as a layout template (pre-configured branching +
+content blocks) rather than a full new runtime hook.
+
+### Computer-Adaptive Testing (CAT)
+
+The next question is selected algorithmically based on prior responses
+using item-response theory (IRT). Used for PROMIS, NIH Toolbox, and
+other validated clinical outcome measures. Enables shorter, more
+precise instruments.
+
+### Crossover / within-subject RCT
+
+Each participant experiences all conditions in sequence (AB, ABA, ABAB)
+with washout periods between. Common in clinical pharmacology and
+behavioural interventions. Different from RCT (between-subject) —
+crossover is within-subject.
+
+### Conjoint / Discrete Choice Experiment (DCE)
+
+Choice-based experiments where participants make trade-off choices
+between attribute profiles. Used in health economics, patient preference
+studies, and HTA submissions.
+
+### Stepped wedge / cluster-randomised
+
+Clusters (sites, wards, practices) cross from control to intervention
+in a randomised sequence over time. Common in implementation science
+and cluster RCTs.
+
+### 360° / multi-rater assessment
+
+Multiple respondents (peers, supervisors, patients) rate a single
+subject. Common in medical education and clinician appraisal.
+
+### Think-aloud / cognitive interview mode
+
+Qualitative interview mode for instrument validation — the researcher
+probes while the participant thinks aloud. May remain a mode flag
+rather than a full layout.
+
+See [Survey Layouts (Technical)](survey-layouts-technical.md#planned-layouts)
+for the full technical notes on each planned layout.
 
 ## Related documentation
 
