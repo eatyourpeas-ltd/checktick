@@ -430,6 +430,66 @@ upload](import.md#matrix-free-navigation-layout) text editor using a
 `MATRIX` block. The grammar is optional (the Organise page UI is the
 primary config path) but useful for the AI builder and power users.
 
+## Content blocks
+
+Content blocks are a special question type that renders static content —
+a heading, a Markdown body, and reference links — with **no answer
+input**. They go anywhere a question goes: any section, any position,
+multiple per section, any layout.
+
+### When to use content blocks
+
+- **Landing page**: a content block as the only question in the first
+  section renders as a welcome/intro page before the questions begin.
+- **Interstitial disclosure**: a content block between substantive
+  sections renders as a disclosure or information page.
+- **Closing acknowledgement**: a content block as the last question
+  renders as a thank-you or final acknowledgement.
+- **Matrix landing**: in a matrix layout, a content block as the first
+  question in the first section renders above the section cards as a
+  landing header.
+
+### Authoring
+
+The builder provides a "Content block" option alongside the other
+question types. The author supplies:
+
+- **Heading** (the question text)
+- **Body** (multiline Markdown, rendered to sanitised HTML)
+- **Links** (label + URL pairs, rendered as a list)
+- **Variant** (`text`, `text_image`, `consent_info`, `disclosure`,
+  `closing` — drives the builder label and icon)
+- **Render once** (default on — render once even in repeatable groups)
+
+Content blocks are **never required** — they have no answer. Consent is
+handled as separate `yesno` questions ("I agree" / "I do not agree") in
+the same section, not as a content-block feature.
+
+### Markdown safety
+
+The body is rendered to HTML via Python-Markdown then sanitised with
+`nh3` (an allowlist-based HTML sanitiser). No `<script>`, `<style>`,
+`<iframe>`, `<form>`, or event-handler attributes survive. Link URLs
+are restricted to `http`, `https`, and `mailto` schemes. See
+[Security Overview](/docs/security-overview/) §A03 for details.
+
+### Outline syntax
+
+Content blocks are supported in the outline grammar (used by the AI
+builder and power users):
+
+```text
+## Introduction
+(content_block)
+variant: disclosure
+link: Privacy notice|https://example.com/privacy
+
+Welcome to the study. Please read the privacy notice before continuing.
+```
+
+Image upload is builder-only — the outline grammar does not carry image
+references.
+
 ## Planned layouts
 
 The following layouts are planned for future releases. They are not yet
