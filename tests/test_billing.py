@@ -1625,6 +1625,109 @@ class TestSurveyReopenOnUpgrade:
 
 
 @pytest.mark.django_db
+class TestReopenOnCheckoutResubscribe:
+    """Test that create_subscription_for_user re-opens auto-closed surveys.
+
+    Covers the GoCardless checkout re-subscribe path: a user who was
+    previously downgraded (surveys auto-closed) and then re-subscribes
+    via the checkout flow should have their auto-closed surveys
+    re-opened by create_subscription_for_user.
+    """
+
+    @pytest.fixture
+    def lapsed_user_with_closed_surveys(self, db):
+        """A free user with 2 auto-closed surveys from a previous downgrade."""
+        user = User.objects.create_user(
+            username="lapsed-resub@example.com",
+            email="lapsed-resub@example.com",
+            password="TestPass123!",
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
+        user.profile.payment_provider = "gocardless"
+        user.profile.payment_mandate_id = "MD_lapsed_resub"
+        user.profile.save()
+        for i in range(5):
+            Survey.objects.create(
+                name=f"Survey {i + 1}",
+                owner=user,
+                slug=f"resub-survey-{i + 1}",
+            )
+        # Downgrade closes 2 surveys.
+        user.profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+        assert (
+            Survey.objects.filter(
+                owner=user, status=Survey.Status.CLOSED, closed_by_downgrade=True
+            ).count()
+            == 2
+        )
+        return user
+
+    @patch("checktick_app.core.billing.payment_client")
+    def test_create_subscription_reopens_auto_closed_surveys(
+        self, mock_payment_client, lapsed_user_with_closed_surveys
+    ):
+        """create_subscription_for_user re-opens surveys closed by downgrade."""
+        from checktick_app.core.billing import create_subscription_for_user
+
+        mock_payment_client.create_subscription.return_value = {
+            "id": "sub_new_resub",
+            "links": {"mandate": "MD_lapsed_resub"},
+        }
+
+        user = lapsed_user_with_closed_surveys
+        create_subscription_for_user(
+            user=user,
+            tier=UserProfile.AccountTier.PRO,
+            mandate_id="MD_lapsed_resub",
+            billing_cycle="monthly",
+        )
+
+        # All auto-closed surveys should be re-opened.
+        assert (
+            Survey.objects.filter(
+                owner=user, status=Survey.Status.CLOSED, closed_by_downgrade=True
+            ).count()
+            == 0
+        )
+        # Re-opened surveys are in DRAFT.
+        assert (
+            Survey.objects.filter(owner=user, status=Survey.Status.DRAFT).count() == 5
+        )
+
+    @patch("checktick_app.core.billing.payment_client")
+    def test_create_subscription_no_op_for_first_time_subscriber(
+        self, mock_payment_client, db
+    ):
+        """create_subscription_for_user is a no-op when no surveys to re-open."""
+        from checktick_app.core.billing import create_subscription_for_user
+
+        user = User.objects.create_user(
+            username="newsub@example.com",
+            email="newsub@example.com",
+            password="TestPass123!",
+        )
+        user.profile.payment_provider = "gocardless"
+        user.profile.payment_mandate_id = "MD_new"
+        user.profile.save()
+
+        mock_payment_client.create_subscription.return_value = {
+            "id": "sub_new",
+            "links": {"mandate": "MD_new"},
+        }
+
+        create_subscription_for_user(
+            user=user,
+            tier=UserProfile.AccountTier.PRO,
+            mandate_id="MD_new",
+            billing_cycle="monthly",
+        )
+
+        # No surveys exist, so nothing to re-open; no error.
+        assert Survey.objects.filter(owner=user).count() == 0
+
+
+@pytest.mark.django_db
 class TestPreExpiryWarningCommand:
     """Test the process_expiring_subscriptions management command.
 
