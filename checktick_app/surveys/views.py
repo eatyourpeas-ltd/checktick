@@ -74,6 +74,7 @@ from .models import (
     CollectionItem,
     DataSet,
     DelphiMenu,
+    DelphiRound,
     LLMConversationSession,
     MatrixMenu,
     Organization,
@@ -12804,6 +12805,68 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
             menu.save()
             summary_parts.append(" Matrix (free navigation) layout applied.")
 
+        # Apply DELPHI config from the outline (see docs/survey-layouts-
+        # technical.md §Delphi (consensus rounds) §Outline grammar).
+        delphi_cfg = parsed.get("delphi")
+        if delphi_cfg:
+            survey.layout = Survey.Layout.DELPHI
+            survey.save(update_fields=["layout"])
+            menu, _created = DelphiMenu.objects.get_or_create(survey=survey)
+            anchor = delphi_cfg.get("anchor", DelphiMenu.Anchor.ENROLMENT)
+            if anchor in {choice[0] for choice in DelphiMenu.Anchor.choices}:
+                menu.anchor = anchor
+            menu.min_rounds = int(delphi_cfg.get("min_rounds", 2))
+            menu.max_rounds = int(delphi_cfg.get("max_rounds", 3))
+            menu.show_progress = bool(delphi_cfg.get("show_progress", True))
+            menu.allow_revision = bool(delphi_cfg.get("allow_revision", True))
+            menu.save()
+            # Create rounds by name (ordered by first appearance in the
+            # outline). Round windows come from the ``round <name>:`` config
+            # lines; rounds referenced only via ``~ round:`` suffixes (no
+            # config line) default to start=0, end=None.
+            round_order = delphi_cfg.get("round_order", [])
+            round_windows = delphi_cfg.get("round_windows", {})
+            rounds_by_name: dict[str, DelphiRound] = {}
+            for idx, round_name in enumerate(round_order, start=0):
+                window = round_windows.get(round_name, {})
+                rnd, _ = DelphiRound.objects.get_or_create(
+                    menu=menu,
+                    order=idx,
+                    defaults={
+                        "name": round_name,
+                        "start_offset_days": window.get("start_offset_days", 0),
+                        "end_offset_days": window.get("end_offset_days"),
+                    },
+                )
+                if rnd.name != round_name:
+                    rnd.name = round_name
+                    rnd.save(update_fields=["name"])
+                # Apply window from config if present.
+                if window:
+                    rnd.start_offset_days = window.get("start_offset_days", 0)
+                    rnd.end_offset_days = window.get("end_offset_days")
+                    rnd.save(update_fields=["start_offset_days", "end_offset_days"])
+                rounds_by_name[round_name] = rnd
+            # Drop rounds that are no longer in the outline.
+            menu.rounds.exclude(order__in=range(len(round_order))).delete()
+            # Assign groups to rounds by name.
+            for g in parsed["groups"]:
+                grp = group_ref_map.get(g.get("ref"))
+                if grp is None:
+                    grp = next(
+                        (gg for gg in created_groups_in_order if gg.name == g["name"]),
+                        None,
+                    )
+                if grp is None:
+                    continue
+                round_names_for_group = g.get("delphi_rounds", [])
+                for rn in round_names_for_group:
+                    rnd = rounds_by_name.get(rn)
+                    if rnd is not None:
+                        rnd.groups.add(grp)
+                # No ~ round: suffix → not in any round (unreachable; warned).
+            summary_parts.append(" Delphi (consensus rounds) layout applied.")
+
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)
     return render(request, "surveys/bulk_upload.html", context)
@@ -12927,6 +12990,38 @@ def _export_survey_to_markdown(survey: Survey) -> str:
         lines.append(f"  allow_revisit: {'true' if mmenu.allow_revisit else 'false'}")
         lines.append("")
 
+    # DELPHI block (see docs/survey-layouts-technical.md §Delphi (consensus
+    # rounds) §Outline grammar). Emitted at the top when the survey uses the
+    # delphi layout. The ``~ round:<name>`` suffix is placed on the actual
+    # content group headings below.
+    delphi_rounds_by_group: dict[int, list[str]] = {}
+    if survey.layout == Survey.Layout.DELPHI:
+        dmenu = getattr(survey, "delphi_menu", None)
+        if dmenu is not None:
+            lines.append("DELPHI")
+            lines.append(f"  anchor: {dmenu.anchor}")
+            lines.append(f"  min_rounds: {dmenu.min_rounds}")
+            lines.append(f"  max_rounds: {dmenu.max_rounds}")
+            lines.append(
+                f"  show_progress: {'true' if dmenu.show_progress else 'false'}"
+            )
+            lines.append(
+                f"  allow_revision: {'true' if dmenu.allow_revision else 'false'}"
+            )
+            # Emit round window config lines (``round <name>: <start> [.. <end>]``).
+            for rnd in dmenu.rounds.order_by("order", "id"):
+                if rnd.end_offset_days is not None:
+                    lines.append(
+                        f"  round {rnd.name}: {rnd.start_offset_days} .. {rnd.end_offset_days}"
+                    )
+                else:
+                    lines.append(f"  round {rnd.name}: {rnd.start_offset_days}")
+            lines.append("")
+            # Build a lookup: group_id → list of round names.
+            for rnd in dmenu.rounds.order_by("order", "id").prefetch_related("groups"):
+                for grp in rnd.groups.all():
+                    delphi_rounds_by_group.setdefault(grp.id, []).append(rnd.name)
+
     for group in groups:
         # Check if this group is part of a collection
         parent_coll_item = (
@@ -12994,6 +13089,11 @@ def _export_survey_to_markdown(survey: Survey) -> str:
         if staged_phases:
             phase_suffix = ", ".join(f"phase:{name}" for name in staged_phases)
             heading = f"{heading}    ~ {phase_suffix}"
+        # Append ``~ round:<name>`` suffixes for delphi layout
+        delphi_rounds = delphi_rounds_by_group.get(group.id)
+        if delphi_rounds:
+            round_suffix = ", ".join(f"round:{name}" for name in delphi_rounds)
+            heading = f"{heading}    ~ {round_suffix}"
         lines.append(heading)
         if group.description:
             lines.append(f"{indent}{group.description}")

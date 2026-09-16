@@ -847,6 +847,28 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
     matrix: Dict[str, Any] | None = None
     in_matrix_block = False
 
+    # DELPHI block parsing (see docs/survey-layouts-technical.md §Delphi
+    # (consensus rounds) §Outline grammar). Analogous to STAGED: the block
+    # appears before any group headings and contains config lines (anchor,
+    # min_rounds, max_rounds, show_progress, allow_revision) plus round
+    # window definitions (``round <name>: <start> [.. <end>]``). The
+    # ``~ round:<name>`` suffix is placed on the actual content group
+    # headings, e.g.::
+    #
+    #     # Round 1 questions {r1}    ~ round:Round 1
+    #
+    # A group may be in multiple rounds:
+    # ``~ round:Round 1, round:Round 2``.
+    delphi: Dict[str, Any] | None = None
+    in_delphi_block = False
+    # Map group name -> list of round names collected from ``~ round:`` suffixes.
+    delphi_round_items: Dict[str, List[str]] = {}
+    # Ordered list of round names seen in the outline (for round creation order).
+    delphi_round_order: List[str] = []
+    # Map round name -> {start_offset_days, end_offset_days} from the
+    # optional ``round <name>:`` config lines in the DELPHI block.
+    delphi_round_windows: Dict[str, Dict[str, Any]] = {}
+
     for raw in raw_lines:
         # Count leading '>' as depth
         s = raw
@@ -1080,6 +1102,92 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
             in_matrix_block = False
             # Fall through to regular parsing for this line
 
+        # DELPHI block start (see docs/survey-layouts-technical.md §Delphi
+        # (consensus rounds) §Outline grammar).
+        if _re.match(r"^DELPHI$", stripped, flags=_re.IGNORECASE):
+            in_delphi_block = True
+            delphi = {
+                "anchor": "enrolment",
+                "min_rounds": 2,
+                "max_rounds": 3,
+                "show_progress": True,
+                "allow_revision": True,
+            }
+            continue
+
+        # DELPHI config lines (indented under the block header). Two forms:
+        #   anchor: enrolment|survey_open
+        #   min_rounds: 2
+        #   max_rounds: 3
+        #   show_progress: true|false
+        #   allow_revision: true|false
+        #   round <name>: <start> [.. <end>]   (day offsets; end optional)
+        if in_delphi_block and (depth > 0 or raw[:1].isspace()):
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            if cfg_match and delphi is not None:
+                key = cfg_match.group(1).lower()
+                val_raw = cfg_match.group(2).strip()
+                if key == "anchor":
+                    if val_raw in ("enrolment", "survey_open"):
+                        delphi["anchor"] = val_raw
+                elif key == "min_rounds":
+                    try:
+                        delphi["min_rounds"] = int(val_raw)
+                    except ValueError:
+                        pass
+                elif key == "max_rounds":
+                    try:
+                        delphi["max_rounds"] = int(val_raw)
+                    except ValueError:
+                        pass
+                elif key == "show_progress":
+                    delphi["show_progress"] = val_raw.lower() in (
+                        "true",
+                        "yes",
+                        "on",
+                    )
+                elif key == "allow_revision":
+                    delphi["allow_revision"] = val_raw.lower() in (
+                        "true",
+                        "yes",
+                        "on",
+                    )
+                continue
+            # Round window definition: ``round <name>: <start> [.. <end>]``.
+            round_match = _re.match(
+                r"^round\s+([\w\s-]+?)\s*:\s*(.+)$", stripped, flags=_re.IGNORECASE
+            )
+            if round_match and delphi is not None:
+                rname = round_match.group(1).strip()
+                window_raw = round_match.group(2).strip()
+                # ``<start>`` or ``<start> .. <end>``.
+                range_match = _re.match(r"^(\d+)\s*(?:\.\.)?\s*(\d*)$", window_raw)
+                if range_match:
+                    start_off = int(range_match.group(1))
+                    end_off_raw = range_match.group(2)
+                    end_off = int(end_off_raw) if end_off_raw else None
+                    delphi_round_windows[rname] = {
+                        "start_offset_days": start_off,
+                        "end_offset_days": end_off,
+                    }
+                    if rname not in delphi_round_order:
+                        delphi_round_order.append(rname)
+                continue
+            # Blank line inside indented block — skip
+            if not stripped:
+                continue
+            continue
+
+        # Blank line ends the DELPHI config block
+        if in_delphi_block and not stripped:
+            in_delphi_block = False
+            continue
+
+        # Unknown non-indented line inside DELPHI block also ends it
+        if in_delphi_block and depth == 0 and not raw[:1].isspace():
+            in_delphi_block = False
+            # Fall through to regular parsing for this line
+
         # REPEAT marker?
         m = _re.match(r"^REPEAT(?:-(\d+))?$", content.strip(), flags=_re.IGNORECASE)
         if m:
@@ -1152,6 +1260,25 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                     if pn not in staged_phase_order:
                         staged_phase_order.append(pn)
                 content = heading_content
+            elif tilde_idx != -1 and delphi is not None:
+                # ``~ round:<name>[, round:<name>...]`` for delphi layout.
+                suffix = heading_content[tilde_idx + 1 :].strip()
+                heading_content = heading_content[:tilde_idx].rstrip()
+                # Extract all round: tokens (comma-separated).
+                round_matches = _re.findall(
+                    r"round:([\w\s-]+?)\s*(?:,|$)", suffix, flags=_re.IGNORECASE
+                )
+                round_names = [r.strip() for r in round_matches if r.strip()]
+                # Extract group name from the cleaned heading
+                heading_text = heading_content.strip()[2:]  # remove "# "
+                ref_match = _re.search(r"\{([^{}]+)\}\s*$", heading_text)
+                if ref_match:
+                    heading_text = heading_text[: ref_match.start()].rstrip()
+                delphi_round_items[heading_text] = round_names
+                for rn in round_names:
+                    if rn not in delphi_round_order:
+                        delphi_round_order.append(rn)
+                content = heading_content
             elif section_menu is not None:
                 # Group without ~ suffix under section_menu → mandatory
                 heading_text = content.strip()[2:]
@@ -1179,6 +1306,14 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 if ref_match:
                     heading_text = heading_text[: ref_match.start()].rstrip()
                 staged_phase_items[heading_text] = []  # no phases
+            elif delphi is not None:
+                # Group without ~ suffix under DELPHI → not in any round
+                # (unreachable; the Organise-page warnings flag this).
+                heading_text = content.strip()[2:]
+                ref_match = _re.search(r"\{([^{}]+)\}\s*$", heading_text)
+                if ref_match:
+                    heading_text = heading_text[: ref_match.start()].rstrip()
+                delphi_round_items[heading_text] = []  # no rounds
             # Trim or expand repeat_stack to current depth
             while len(repeat_stack) > depth:
                 repeat_stack.pop()
@@ -1247,6 +1382,19 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 # (unreachable; warned on the Organise page).
                 g["staged_phases"] = []
 
+    # Apply delphi round items to parsed groups by name.
+    if delphi is not None:
+        delphi["round_order"] = delphi_round_order
+        delphi["round_windows"] = delphi_round_windows
+        for g in groups:
+            round_names = delphi_round_items.get(g["name"])
+            if round_names is not None:
+                g["delphi_rounds"] = round_names
+            else:
+                # Groups not in the DELPHI block default to no rounds
+                # (unreachable; warned on the Organise page).
+                g["delphi_rounds"] = []
+
     return {
         "groups": groups,
         "repeats": repeats,
@@ -1254,4 +1402,5 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
         "randomised": randomised,
         "staged": staged,
         "matrix": matrix,
+        "delphi": delphi,
     }
