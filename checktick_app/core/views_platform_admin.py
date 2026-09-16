@@ -947,6 +947,51 @@ def organization_create(request: HttpRequest) -> HttpResponse:
                 elif tier != UserProfile.AccountTier.FREE:
                     profile.reopen_surveys_on_upgrade(tier)
 
+                # Audit log: record who upgraded whom, to what tier, and
+                # when the access expires. This is the only trace of manual
+                # tier changes (GoCardless changes are traced via Payment
+                # records and webhook events).
+                from checktick_app.surveys.models import AuditLog
+
+                AuditLog.log_security_event(
+                    action=AuditLog.Action.UPDATE,
+                    actor=request.user,
+                    target_user=account,
+                    message=(
+                        f"Manual tier change: {account.email} "
+                        f"{old_tier} → {tier}"
+                        + (
+                            f", valid until {valid_until:%Y-%m-%d}"
+                            if valid_until
+                            else ""
+                        )
+                    ),
+                    metadata={
+                        "old_tier": old_tier,
+                        "new_tier": tier,
+                        "valid_until": valid_until.isoformat() if valid_until else None,
+                    },
+                )
+
+                # Send email notification to the user when upgraded to a
+                # paid tier (not when downgraded to free).
+                if tier != UserProfile.AccountTier.FREE:
+                    try:
+                        from checktick_app.core.email_utils import (
+                            send_manual_upgrade_email,
+                        )
+
+                        send_manual_upgrade_email(
+                            user=account,
+                            tier=tier,
+                            valid_until=valid_until,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to send manual upgrade email to "
+                            f"{account.email}: {e}"
+                        )
+
                 if apply_promotion:
                     promotion = Promotion(
                         name=promotion_name,

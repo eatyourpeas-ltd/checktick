@@ -224,6 +224,13 @@
         </div>
         {% endif %}
 
+        {% if subscription_info.subscription_current_period_end %}
+        <div>
+          <p class="text-sm text-base-content">{% trans "Access Valid Until" %}</p>
+          <p class="text-base">{{ subscription_info.subscription_current_period_end|date:"F j, Y" }}</p>
+        </div>
+        {% endif %}
+
         <div>
           <p class="text-sm text-base-content">{% trans "Member Since" %}</p>
           <p class="text-base">{{ subscription_info.created_at|date:"F j, Y" }}</p>
