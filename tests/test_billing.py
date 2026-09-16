@@ -1458,6 +1458,172 @@ class TestSubscriptionExpiryCommand:
         )
 
 
+@pytest.mark.django_db
+class TestSurveyReopenOnUpgrade:
+    """Test UserProfile.reopen_surveys_on_upgrade and the closed_by_downgrade flag.
+
+    Covers the re-open-on-resubscribe workflow:
+    - force_downgrade_tier sets closed_by_downgrade=True on auto-closed surveys.
+    - reopen_surveys_on_upgrade reopens only auto-closed surveys, up to the
+      new tier's max_surveys limit, in newest-first order.
+    - User-closed surveys are left untouched.
+    - Re-opened surveys return to DRAFT (not auto-published).
+    """
+
+    @pytest.fixture
+    def pro_user(db):
+        user = User.objects.create_user(
+            username="reopen-pro@example.com",
+            email="reopen-pro@example.com",
+            password="TestPass123!",
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
+        user.profile.save()
+        return user
+
+    def test_force_downgrade_sets_closed_by_downgrade_flag(self, pro_user):
+        """Auto-closed surveys are flagged closed_by_downgrade=True."""
+        for i in range(5):
+            Survey.objects.create(
+                name=f"Survey {i + 1}",
+                owner=pro_user,
+                slug=f"reopen-survey-{i + 1}",
+            )
+
+        pro_user.profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+
+        closed = Survey.objects.filter(owner=pro_user, status=Survey.Status.CLOSED)
+        assert closed.count() == 2  # 5 - 3 free limit
+        assert all(s.closed_by_downgrade for s in closed)
+
+    def test_reopen_on_upgrade_reopens_auto_closed_surveys(self, pro_user):
+        """Re-subscribing to Pro reopens all auto-closed surveys."""
+        for i in range(5):
+            Survey.objects.create(
+                name=f"Survey {i + 1}",
+                owner=pro_user,
+                slug=f"reopen-survey-{i + 1}",
+            )
+        pro_user.profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+        assert (
+            Survey.objects.filter(owner=pro_user, status=Survey.Status.CLOSED).count()
+            == 2
+        )
+
+        reopened = pro_user.profile.reopen_surveys_on_upgrade(
+            UserProfile.AccountTier.PRO
+        )
+
+        assert reopened == 2
+        assert (
+            Survey.objects.filter(owner=pro_user, status=Survey.Status.CLOSED).count()
+            == 0
+        )
+        # Re-opened surveys return to DRAFT, not PUBLISHED.
+        reopened_surveys = Survey.objects.filter(
+            owner=pro_user, status=Survey.Status.DRAFT
+        )
+        assert reopened_surveys.count() == 5
+
+    def test_reopen_does_not_touch_user_closed_surveys(self, pro_user):
+        """Surveys the user closed manually stay closed on re-subscription."""
+        for i in range(5):
+            Survey.objects.create(
+                name=f"Survey {i + 1}",
+                owner=pro_user,
+                slug=f"reopen-survey-{i + 1}",
+            )
+        # User manually closes one survey (not via downgrade).
+        manual = Survey.objects.filter(owner=pro_user).first()
+        manual.status = Survey.Status.CLOSED
+        manual.closed_by_downgrade = False
+        manual.save(update_fields=["status", "closed_by_downgrade"])
+
+        # Downgrade closes 2 more (4 active - 3 free limit = 1, but we have
+        # 4 active after manual close, so 1 auto-closed).
+        pro_user.profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+        auto_closed = Survey.objects.filter(
+            owner=pro_user, status=Survey.Status.CLOSED, closed_by_downgrade=True
+        )
+        assert auto_closed.count() == 1
+
+        reopened = pro_user.profile.reopen_surveys_on_upgrade(
+            UserProfile.AccountTier.PRO
+        )
+        assert reopened == 1
+
+        # Manual closure stays closed.
+        manual.refresh_from_db()
+        assert manual.status == Survey.Status.CLOSED
+        assert manual.closed_by_downgrade is False
+
+    def test_reopen_respects_new_tier_limit(self, pro_user):
+        """Reopen caps at the new tier's max_surveys limit."""
+        # Pro has unlimited surveys, but free has 3. Downgrade from pro with
+        # 7 surveys closes 4. Re-subscribing to free (limit 3) reopens 0
+        # because the 3 active surveys already fill the limit.
+        for i in range(7):
+            Survey.objects.create(
+                name=f"Survey {i + 1}",
+                owner=pro_user,
+                slug=f"reopen-survey-{i + 1}",
+            )
+        pro_user.profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+        assert (
+            Survey.objects.filter(
+                owner=pro_user,
+                status=Survey.Status.CLOSED,
+                closed_by_downgrade=True,
+            ).count()
+            == 4
+        )
+
+        # Re-subscribe to free (limit 3). 3 active surveys already, so 0
+        # can be re-opened.
+        reopened = pro_user.profile.reopen_surveys_on_upgrade(
+            UserProfile.AccountTier.FREE
+        )
+        assert reopened == 0
+        assert (
+            Survey.objects.filter(
+                owner=pro_user,
+                status=Survey.Status.CLOSED,
+                closed_by_downgrade=True,
+            ).count()
+            == 4
+        )
+
+    def test_reopen_no_auto_closed_surveys_returns_zero(self, pro_user):
+        """reopen_surveys_on_upgrade returns 0 when nothing to re-open."""
+        reopened = pro_user.profile.reopen_surveys_on_upgrade(
+            UserProfile.AccountTier.PRO
+        )
+        assert reopened == 0
+
+    def test_reopen_invalid_tier_returns_zero(self, pro_user):
+        """reopen_surveys_on_upgrade returns 0 for an invalid tier."""
+        reopened = pro_user.profile.reopen_surveys_on_upgrade("not_a_tier")
+        assert reopened == 0
+
+    def test_reopen_clears_closed_at_and_closed_by(self, pro_user):
+        """Re-opening clears the closed_at/closed_by fields (closure undone)."""
+        for i in range(5):
+            Survey.objects.create(
+                name=f"Survey {i + 1}",
+                owner=pro_user,
+                slug=f"reopen-survey-{i + 1}",
+            )
+        pro_user.profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+
+        pro_user.profile.reopen_surveys_on_upgrade(UserProfile.AccountTier.PRO)
+        reopened = Survey.objects.filter(owner=pro_user, status=Survey.Status.DRAFT)
+        for s in reopened:
+            assert s.closed_at is None
+            assert s.closed_by is None
+            assert s.closed_by_downgrade is False
+
+
 class TestPromotionLifecycleCommand:
     """Test the process_promotion_lifecycle management command."""
 
