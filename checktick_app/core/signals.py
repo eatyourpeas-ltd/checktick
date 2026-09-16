@@ -13,6 +13,7 @@ from django.contrib.auth.signals import (
 )
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 from .models import UserProfile
 
@@ -177,7 +178,19 @@ def log_user_creation(sender, instance, created, **kwargs):
 
 @receiver(user_logged_in)
 def log_successful_login(sender, request, user, **kwargs):
-    """Log successful login events."""
+    """Log successful login events and surface a lapsed-subscription signpost.
+
+    Writes an AuditLog row for every login (existing behaviour) and, when
+    the user's profile indicates a recent tier lapse (CANCELED + FREE +
+    tier_changed_at within the last 14 days), sets a one-time Django
+    messages.warning() so the user sees a flash message on next login.
+    After 14 days the signpost stops firing and the user is treated as a
+    regular free user (the lapsed badge in base.html still shows).
+    """
+    from datetime import timedelta
+
+    from django.contrib import messages
+
     from checktick_app.surveys.models import AuditLog
 
     AuditLog.log_security_event(
@@ -186,6 +199,30 @@ def log_successful_login(sender, request, user, **kwargs):
         request=request,
         message=f"Successful login for {user.email}",
     )
+
+    profile = getattr(user, "profile", None)
+    if (
+        profile is not None
+        and profile.subscription_status == UserProfile.SubscriptionStatus.CANCELED
+        and profile.account_tier == UserProfile.AccountTier.FREE
+        and profile.tier_changed_at is not None
+        and profile.tier_changed_at > timezone.now() - timedelta(days=14)
+    ):
+        try:
+            messages.warning(
+                request,
+                "Your paid subscription has ended and your account has been "
+                "downgraded to Free. Some surveys may have been closed. "
+                "Upgrade again to restore full access.",
+            )
+        except Exception:
+            # The messages framework requires MessageMiddleware; if the
+            # signal fires outside a middleware-wrapped request (e.g.
+            # client.login() in tests), fail silently rather than crash.
+            logger.debug(
+                "Could not set lapsed-subscription warning message "
+                "(messages middleware not available on request)"
+            )
 
 
 @receiver(user_logged_out)

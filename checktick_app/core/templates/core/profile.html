@@ -206,6 +206,9 @@
               <span class="badge badge-lg {% if subscription_info.tier == 'pro' %}badge-primary{% elif subscription_info.tier == 'enterprise' %}badge-secondary{% else %}badge-neutral{% endif %}">
                 {{ subscription_info.tier_display|upper }}
               </span>
+              {% if subscription_info.subscription_status == 'canceled' and subscription_info.tier == 'free' and subscription_info.tier_changed_at %}
+                <span class="badge badge-lg badge-warning ml-2" title="{% trans 'Your paid subscription has ended' %}">{% trans "LAPSED" %}</span>
+              {% endif %}
             </p>
           </div>
         </div>
