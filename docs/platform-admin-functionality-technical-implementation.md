@@ -56,6 +56,21 @@ Platform admin supports operational workflows across account types and tiers:
 2. Pricing override management for supported tiers.
 3. Billing timeline/reconciliation views.
 4. Controlled refund actions linked to payment records.
+5. Manual tier upgrades with configurable renewal dates (see below).
+
+### Manual Tier Upgrades
+
+Platform admins can create or update a tier-scoped account (Pro, Team, Organisation, Enterprise) via the `organization_create` view when `create_target == 'account'`. The form includes:
+
+- **Tier dropdown**: overrides the `scope` query param, allowing any tier.
+- **Renewal date**: preset buttons (1 year, 2 years, 5 years) or a custom date picker. Sanity cap: max 5 years, must be in the future.
+- **Tier-specific rules**: Free ignores expiry; Pro/Team require a renewal date; Organisation/Enterprise default to no expiry but allow optional renewal.
+
+The view sets `subscription_current_period_end` on the profile so the existing `process_expired_subscriptions` cron auto-downgrades the account when the date passes. Pre-expiry warning tracking fields (`last_expiry_warning_sent_at`, `last_expiry_warning_stage`) are reset on each save.
+
+Downgrading to free via the form closes excess surveys immediately (via `force_downgrade_tier`). Upgrading re-opens surveys auto-closed by a previous downgrade (via `reopen_surveys_on_upgrade`).
+
+See `docs/billing-and-subscriptions.md` § Manual Tier Upgrades and Expiry for the user-facing behaviour.
 
 Refund action constraints (hosted reference flow):
 

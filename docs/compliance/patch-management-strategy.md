@@ -49,6 +49,9 @@ In addition to software patching, {{ platform_name }} executes automated mainten
 | `process_recovery_time_delays` | 5 Mins | Processes ethical key recovery | **Resilience & Business Continuity** |
 | `sync_nhs_dd_datasets` | Weekly | Scrapes NHS Data Dictionary | **Clinical Data Accuracy** |
 | `cleanup_survey_progress` | Daily | Purges stale session drafts (>30d) | **Storage Optimization / Security** |
+| `process_expired_subscriptions` | Daily | Downgrades expired/past-due subscriptions to Free | **Billing Accuracy** |
+| `process_expiring_subscriptions` | Daily | Sends pre-expiry warning emails (1 month/week/day) | **User Notification** |
+| `process_promotion_lifecycle` | Daily | Reconciles promotion state with provider | **Billing Accuracy** |
 
 ### Monitoring & Failure Response
 
