@@ -385,9 +385,14 @@ Each warning is sent at most once per expiry cycle (idempotent via `UserProfile.
 
 When the expiry date passes, the daily `process_expired_subscriptions` cron:
 
-1. Downgrades the account to Free.
-2. Auto-closes excess surveys beyond the Free tier limit (3), oldest first. Closed surveys are read-only (not deleted).
-3. Sends a "Subscription Expired" email.
+1. **Grace period**: For manually upgraded accounts (no GoCardless subscription), a 7-day grace period is applied before downgrade, matching the GoCardless past-due grace period. GoCardless subscriptions are downgraded immediately (the provider has already notified the user).
+2. Downgrades the account to Free.
+3. Auto-closes excess surveys beyond the Free tier limit (3), oldest first. Closed surveys are read-only (not deleted).
+4. Sends a "Subscription Expired" email.
+
+### Audit and Notification
+
+Manual tier changes are logged via `AuditLog` (recording the admin who made the change, the target user, old/new tier, and expiry date). A notification email is sent to the user via `send_manual_upgrade_email` when upgraded to a paid tier. The expiry date is shown on the profile page and in the subscription portal.
 
 ### After Expiry — Lapsed User Signposting
 
