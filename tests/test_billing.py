@@ -1359,9 +1359,11 @@ class TestSubscriptionExpiryCommand:
             email="expired@example.com",
             password="TestPass123!",
         )
-        # Subscription ended 2 days ago
+        # Subscription ended 2 days ago (GoCardless — no grace period)
         user.profile.account_tier = UserProfile.AccountTier.PRO
         user.profile.subscription_status = UserProfile.SubscriptionStatus.CANCELED
+        user.profile.payment_subscription_id = "sub_expired_test"
+        user.profile.payment_provider = "gocardless"
         user.profile.subscription_current_period_end = timezone.now() - timedelta(
             days=2
         )
