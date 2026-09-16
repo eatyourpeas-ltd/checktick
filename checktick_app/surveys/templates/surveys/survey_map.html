@@ -149,6 +149,37 @@
   </div>
   {% endif %}
 
+  {# === Delphi round badges === #}
+  {% if delphi_info %}
+  <div class="not-prose mb-6">
+    <div class="card bg-base-100 border border-base-300 max-w-4xl">
+      <div class="card-body p-4">
+        <h3 class="text-sm font-semibold text-base-content/80 mb-1">{% trans 'Delphi — round composition' %}</h3>
+        <p class="text-xs text-base-content/60 mb-2">{% trans 'Multi-round consensus workflow. Each round has a window (days from the anchor); a section may appear in multiple rounds. Participants see aggregate feedback between rounds.' %}</p>
+        <div class="space-y-2">
+          {% for rnd in delphi_info.rounds %}
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="badge badge-secondary badge-sm shrink-0">{{ rnd.name }}</span>
+            <span class="text-xs text-base-content/60 shrink-0">{% if rnd.end_offset_days is None %}{% blocktrans with start=rnd.start_offset_days %}days {{ start }}+{% endblocktrans %}{% else %}{% blocktrans with start=rnd.start_offset_days end=rnd.end_offset_days %}days {{ start }}–{{ end }}{% endblocktrans %}{% endif %}</span>
+            <div class="flex flex-wrap gap-1">
+              {% for grp in rnd.groups.all %}
+              <span class="badge badge-outline badge-sm">{{ grp.name }}</span>
+              {% endfor %}
+              {% if not rnd.groups.all %}
+              <span class="text-xs text-warning">{% trans 'no sections' %}</span>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+          {% if not delphi_info.rounds %}
+          <span class="text-xs text-warning">{% trans 'no rounds configured' %}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   {# === Visualiser (reused from the Organise page; now in its own space) === #}
   {% if has_questions %}
   <div>

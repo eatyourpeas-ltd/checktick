@@ -73,6 +73,7 @@ from .models import (
     CollectionDefinition,
     CollectionItem,
     DataSet,
+    DelphiMenu,
     LLMConversationSession,
     MatrixMenu,
     Organization,
@@ -1551,6 +1552,32 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
             if sim_section_id in survey_group_ids:
                 simulated_group_ids = [sim_section_id]
 
+    # Delphi: simulate round. If ``?simulate_round=<round_id>`` is present,
+    # the questions are filtered to that round's groups (ordered by
+    # _resolved_group_order_ids) regardless of whether the round is
+    # currently open. A "Simulate round" panel on the preview page lets the
+    # author preview a future round without waiting for its window.
+    delphi_preview = None
+    if survey.layout == Survey.Layout.DELPHI:
+        dmenu = getattr(survey, "delphi_menu", None)
+        if dmenu is None:
+            dmenu = DelphiMenu.objects.create(survey=survey)
+        delphi_rounds = list(
+            dmenu.rounds.order_by("order", "id").prefetch_related("groups")
+        )
+        delphi_preview = {"menu": dmenu, "rounds": delphi_rounds}
+        sim_round_raw = request.GET.get("simulate_round", "")
+        if sim_round_raw.isdigit():
+            sim_round_id = int(sim_round_raw)
+            sim_round = next((r for r in delphi_rounds if r.id == sim_round_id), None)
+            if sim_round is not None:
+                round_group_ids = set(sim_round.groups.values_list("id", flat=True))
+                if round_group_ids:
+                    ordered = _resolved_group_order_ids(survey)
+                    simulated_group_ids = [g for g in ordered if g in round_group_ids]
+                else:
+                    simulated_group_ids = []
+
     _prepare_question_rendering(survey)
     all_questions = list(
         survey.questions.select_related("group", "dataset")
@@ -1627,6 +1654,8 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "staged_preview": staged_preview,
         # Matrix simulate section panel (step 6).
         "matrix_preview": matrix_preview,
+        # Delphi simulate round panel.
+        "delphi_preview": delphi_preview,
         # Guided layout: preview also renders one question per screen so the
         # author can test the flow without a real participant.
         "is_guided": survey.layout == Survey.Layout.GUIDED,
@@ -10131,6 +10160,21 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
             mmenu = MatrixMenu.objects.create(survey=survey)
         matrix_info = {"menu": mmenu}
 
+    # Delphi info for round badges. Lists each round, its window, and its
+    # sections so the Survey Map can show which sections belong to which
+    # round. Also shows whether inter-round feedback has been generated.
+    delphi_info = None
+    if survey.layout == Survey.Layout.DELPHI:
+        dmenu = getattr(survey, "delphi_menu", None)
+        if dmenu is None:
+            dmenu = DelphiMenu.objects.create(survey=survey)
+        delphi_info = {
+            "menu": dmenu,
+            "rounds": list(
+                dmenu.rounds.order_by("order", "id").prefetch_related("groups")
+            ),
+        }
+
     ctx = {
         "survey": survey,
         "has_questions": survey.questions.exists(),
@@ -10138,6 +10182,7 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
         "rct_info": rct_info,
         "staged_info": staged_info,
         "matrix_info": matrix_info,
+        "delphi_info": delphi_info,
     }
     return render(request, "surveys/survey_map.html", ctx)
 
