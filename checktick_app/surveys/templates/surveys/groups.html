@@ -53,7 +53,7 @@
       {% trans 'How sections are offered to the participant.' %}
     </p>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-4xl">
-      {# Linear card #}
+      {# Linear card — always available #}
       <div class="card bg-base-100 border {% if survey.layout == 'linear' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
         <div class="card-body gap-2 p-4">
           <div class="flex items-center justify-between">
@@ -62,7 +62,6 @@
               <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
             {% endif %}
           </div>
-          {# Layout wireframe — CSP-safe, inherits daisyUI theme tokens. Same viewBox/box-size/stroke-width as the section menu icon so the two cards match. #}
           {% include "components/icons/layout_linear.html" with classes="w-full h-24 text-base-content/70" %}
           <p class="text-xs text-base-content/70">{% trans 'Sections flow in order. Every respondent sees every section.' %}</p>
           {% if can_edit and survey.layout != 'linear' %}
@@ -77,12 +76,14 @@
       </div>
 
       {# Section menu card #}
-      <div class="card bg-base-100 border {% if survey.layout == 'section_menu' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+      <div class="card bg-base-100 border {% if survey.layout == 'section_menu' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} {% if 'section_menu' not in allowed_layouts %}opacity-50{% else %}hover:shadow-md{% endif %} transition-all">
         <div class="card-body gap-2 p-4">
           <div class="flex items-center justify-between">
             <h4 class="font-semibold text-base-content">{% trans 'Section menu' %}</h4>
             {% if survey.layout == 'section_menu' %}
               <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% elif 'section_menu' not in allowed_layouts %}
+              <span class="badge badge-ghost badge-sm">{% trans 'Pro' %}</span>
             {% endif %}
           </div>
           {% include "components/icons/layout_section_menu.html" with classes="w-full h-24 text-base-content/70" %}
@@ -90,24 +91,28 @@
           {% if section_count < 2 %}
             <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>
           {% endif %}
-          {% if can_edit and survey.layout != 'section_menu' %}
+          {% if 'section_menu' in allowed_layouts and can_edit and survey.layout != 'section_menu' %}
             <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
               {% csrf_token %}
               <input type="hidden" name="action" value="set_layout" />
               <input type="hidden" name="layout" value="section_menu" />
               <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
             </form>
+          {% elif 'section_menu' not in allowed_layouts %}
+            <a href="{% url 'core:pricing' %}" class="btn btn-sm btn-ghost w-full text-primary">{% trans 'Upgrade to use' %}</a>
           {% endif %}
         </div>
       </div>
 
       {# RCT card #}
-      <div class="card bg-base-100 border {% if survey.layout == 'rct' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+      <div class="card bg-base-100 border {% if survey.layout == 'rct' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} {% if 'rct' not in allowed_layouts %}opacity-50{% else %}hover:shadow-md{% endif %} transition-all">
         <div class="card-body gap-2 p-4">
           <div class="flex items-center justify-between">
             <h4 class="font-semibold text-base-content">{% trans 'Randomised (RCT)' %}</h4>
             {% if survey.layout == 'rct' %}
               <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% elif 'rct' not in allowed_layouts %}
+              <span class="badge badge-ghost badge-sm">{% trans 'Pro' %}</span>
             {% endif %}
           </div>
           {% include "components/icons/layout_rct.html" with classes="w-full h-24 text-base-content/70" %}
@@ -115,46 +120,54 @@
           {% if section_count < 2 %}
             <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>
           {% endif %}
-          {% if can_edit and survey.layout != 'rct' %}
+          {% if 'rct' in allowed_layouts and can_edit and survey.layout != 'rct' %}
             <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
               {% csrf_token %}
               <input type="hidden" name="action" value="set_layout" />
               <input type="hidden" name="layout" value="rct" />
               <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
             </form>
+          {% elif 'rct' not in allowed_layouts %}
+            <a href="{% url 'core:pricing' %}" class="btn btn-sm btn-ghost w-full text-primary">{% trans 'Upgrade to use' %}</a>
           {% endif %}
         </div>
       </div>
 
       {# Guided card (one question at a time) #}
-      <div class="card bg-base-100 border {% if survey.layout == 'guided' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+      <div class="card bg-base-100 border {% if survey.layout == 'guided' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} {% if 'guided' not in allowed_layouts %}opacity-50{% else %}hover:shadow-md{% endif %} transition-all">
         <div class="card-body gap-2 p-4">
           <div class="flex items-center justify-between">
             <h4 class="font-semibold text-base-content">{% trans 'Guided' %}</h4>
             {% if survey.layout == 'guided' %}
               <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% elif 'guided' not in allowed_layouts %}
+              <span class="badge badge-ghost badge-sm">{% trans 'Pro' %}</span>
             {% endif %}
           </div>
           {% include "components/icons/layout_guided.html" with classes="w-full h-24 text-base-content/70" %}
           <p class="text-xs text-base-content/70">{% trans 'One question per screen with Next/Back. Reduces scroll fatigue on long or mobile-first surveys.' %}</p>
-          {% if can_edit and survey.layout != 'guided' %}
+          {% if 'guided' in allowed_layouts and can_edit and survey.layout != 'guided' %}
             <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
               {% csrf_token %}
               <input type="hidden" name="action" value="set_layout" />
               <input type="hidden" name="layout" value="guided" />
               <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
             </form>
+          {% elif 'guided' not in allowed_layouts %}
+            <a href="{% url 'core:pricing' %}" class="btn btn-sm btn-ghost w-full text-primary">{% trans 'Upgrade to use' %}</a>
           {% endif %}
         </div>
       </div>
 
       {# Staged (longitudinal) card #}
-      <div class="card bg-base-100 border {% if survey.layout == 'staged' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+      <div class="card bg-base-100 border {% if survey.layout == 'staged' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} {% if 'staged' not in allowed_layouts %}opacity-50{% else %}hover:shadow-md{% endif %} transition-all">
         <div class="card-body gap-2 p-4">
           <div class="flex items-center justify-between">
             <h4 class="font-semibold text-base-content">{% trans 'Staged (longitudinal)' %}</h4>
             {% if survey.layout == 'staged' %}
               <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% elif 'staged' not in allowed_layouts %}
+              <span class="badge badge-ghost badge-sm">{% trans 'Pro' %}</span>
             {% endif %}
           </div>
           {% include "components/icons/layout_staged.html" with classes="w-full h-24 text-base-content/70" %}
@@ -162,24 +175,28 @@
           {% if section_count < 2 %}
             <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>
           {% endif %}
-          {% if can_edit and survey.layout != 'staged' %}
+          {% if 'staged' in allowed_layouts and can_edit and survey.layout != 'staged' %}
             <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
               {% csrf_token %}
               <input type="hidden" name="action" value="set_layout" />
               <input type="hidden" name="layout" value="staged" />
               <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
             </form>
+          {% elif 'staged' not in allowed_layouts %}
+            <a href="{% url 'core:pricing' %}" class="btn btn-sm btn-ghost w-full text-primary">{% trans 'Upgrade to use' %}</a>
           {% endif %}
         </div>
       </div>
 
       {# Matrix (free navigation) card #}
-      <div class="card bg-base-100 border {% if survey.layout == 'matrix' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+      <div class="card bg-base-100 border {% if survey.layout == 'matrix' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} {% if 'matrix' not in allowed_layouts %}opacity-50{% else %}hover:shadow-md{% endif %} transition-all">
         <div class="card-body gap-2 p-4">
           <div class="flex items-center justify-between">
             <h4 class="font-semibold text-base-content">{% trans 'Matrix (free navigation)' %}</h4>
             {% if survey.layout == 'matrix' %}
               <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% elif 'matrix' not in allowed_layouts %}
+              <span class="badge badge-ghost badge-sm">{% trans 'Pro' %}</span>
             {% endif %}
           </div>
           {% include "components/icons/layout_matrix.html" with classes="w-full h-24 text-base-content/70" %}
@@ -187,24 +204,28 @@
           {% if section_count < 2 %}
             <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>
           {% endif %}
-          {% if can_edit and survey.layout != 'matrix' %}
+          {% if 'matrix' in allowed_layouts and can_edit and survey.layout != 'matrix' %}
             <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
               {% csrf_token %}
               <input type="hidden" name="action" value="set_layout" />
               <input type="hidden" name="layout" value="matrix" />
               <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
             </form>
+          {% elif 'matrix' not in allowed_layouts %}
+            <a href="{% url 'core:pricing' %}" class="btn btn-sm btn-ghost w-full text-primary">{% trans 'Upgrade to use' %}</a>
           {% endif %}
         </div>
       </div>
 
       {# Delphi (consensus rounds) card #}
-      <div class="card bg-base-100 border {% if survey.layout == 'delphi' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+      <div class="card bg-base-100 border {% if survey.layout == 'delphi' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} {% if 'delphi' not in allowed_layouts %}opacity-50{% else %}hover:shadow-md{% endif %} transition-all">
         <div class="card-body gap-2 p-4">
           <div class="flex items-center justify-between">
             <h4 class="font-semibold text-base-content">{% trans 'Delphi (consensus rounds)' %}</h4>
             {% if survey.layout == 'delphi' %}
               <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% elif 'delphi' not in allowed_layouts %}
+              <span class="badge badge-ghost badge-sm">{% trans 'Pro' %}</span>
             {% endif %}
           </div>
           {% include "components/icons/layout_staged.html" with classes="w-full h-24 text-base-content/70" %}
@@ -213,13 +234,15 @@
           {% if section_count < 2 %}
             <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>
           {% endif %}
-          {% if can_edit and survey.layout != 'delphi' %}
+          {% if 'delphi' in allowed_layouts and can_edit and survey.layout != 'delphi' %}
             <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
               {% csrf_token %}
               <input type="hidden" name="action" value="set_layout" />
               <input type="hidden" name="layout" value="delphi" />
               <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
             </form>
+          {% elif 'delphi' not in allowed_layouts %}
+            <a href="{% url 'core:pricing' %}" class="btn btn-sm btn-ghost w-full text-primary">{% trans 'Upgrade to use' %}</a>
           {% endif %}
         </div>
       </div>
