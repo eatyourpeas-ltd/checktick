@@ -625,9 +625,7 @@ def assign_round_for_progress(progress, menu, *, now=None) -> Any:
         #   and the round was not manually opened (``opened_at`` is None).
         is_closed = bool(current.closed_at)
         if not is_closed and not current.opened_at:
-            anchor = _anchor_time(
-                menu, enrolment=enrolment, survey_start=survey_start
-            )
+            anchor = _anchor_time(menu, enrolment=enrolment, survey_start=survey_start)
             if anchor is not None and current.end_offset_days is not None:
                 end = anchor + timedelta(days=int(current.end_offset_days))
                 if now >= end:

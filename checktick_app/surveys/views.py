@@ -47,6 +47,7 @@ from checktick_app.core.theme_utils import is_safe_url, sanitize_font_family
 
 from .allocation import MAX_SEED, pick_arm
 from .color import hex_to_oklch
+from .delphi import assign_round_for_progress as _delphi_assign_round
 from .doc_extract import (
     MESSAGE_BY_CODE,
     DocImportError,
@@ -6458,6 +6459,49 @@ def _handle_participant_submission(
             return _render_matrix_landing(request, survey, progress)
         # Filter to just this one section.
         selected_group_ids = [section_id]
+    # Delphi (consensus rounds) layout (see docs/survey-layouts-technical.md
+    # §Delphi (consensus rounds)). Like staged, the open set is recomputed
+    # on each access — but instead of phases, the participant is assigned to
+    # a round (FK on SurveyProgress). The round's group set becomes their
+    # selected_group_ids. When no round is open, a friendly "check back
+    # later" page renders. When the assigned round has closed, the
+    # participant advances to the next open round. Reuses the same
+    # _resolved_group_order_ids filtering hook as the other layouts.
+    if survey.layout == Survey.Layout.DELPHI and progress is not None:
+        menu = getattr(survey, "delphi_menu", None)
+        if menu is None:
+            # No DelphiMenu configured — block with a clear error.
+            messages.error(
+                request,
+                _(
+                    "This survey is configured as a Delphi consensus round "
+                    "but has no rounds set up. Please contact the survey author."
+                ),
+            )
+            return redirect("surveys:detail", slug=survey.slug)
+        rnd = _delphi_assign_round(progress, menu, now=timezone.now())
+        if rnd is None:
+            # No round is currently open. Render a friendly "check back
+            # later" page. The participant's progress row is preserved so
+            # resume works when a round opens later.
+            return render(
+                request,
+                "surveys/delphi_no_round.html",
+                {"survey": survey, "is_preview": False},
+            )
+        round_group_ids = set(rnd.groups.values_list("id", flat=True))
+        if round_group_ids:
+            ordered_ids = _resolved_group_order_ids(survey)
+            selected_group_ids = [g for g in ordered_ids if g in round_group_ids]
+            progress.selected_group_ids = selected_group_ids
+            progress.save(update_fields=["selected_group_ids"])
+        else:
+            # Round with no groups — render the no-round page (graceful).
+            return render(
+                request,
+                "surveys/delphi_no_round.html",
+                {"survey": survey, "is_preview": False},
+            )
     show_picker = survey.layout == Survey.Layout.SECTION_MENU and not selected_group_ids
     if show_picker:
         return _render_section_menu_picker(request, survey, progress)
@@ -6471,6 +6515,8 @@ def _handle_participant_submission(
     # empty selection renders everything (linear) or is gated by the
     # picker (section_menu) / arm fallback (rct).
     if survey.layout == Survey.Layout.STAGED:
+        filter_ids: list[int] | None = selected_group_ids
+    elif survey.layout == Survey.Layout.DELPHI:
         filter_ids: list[int] | None = selected_group_ids
     else:
         filter_ids = selected_group_ids or None
