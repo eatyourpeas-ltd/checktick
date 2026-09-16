@@ -773,6 +773,74 @@ def organization_create(request: HttpRequest) -> HttpResponse:
             if not owner_email:
                 errors.append("Account email is required.")
 
+            # Tier dropdown — overrides the scope query param. Allows the
+            # admin to pick any tier (free, pro, team_*, organization,
+            # enterprise) regardless of the scope they navigated from.
+            tier = request.POST.get("tier", scope).strip().lower()
+            valid_tiers = {value for value, _label in TIER_SCOPE_CHOICES}
+            if tier not in valid_tiers:
+                errors.append("A valid tier is required.")
+                tier = scope  # fallback for re-render
+
+            # Validity controls. For free, no expiry. For organization /
+            # enterprise, expiry is optional (defaults to none). For pro /
+            # team_*, expiry is required.
+            validity_preset = request.POST.get("validity_preset", "1_year").strip()
+            valid_until_raw = request.POST.get("valid_until", "").strip()
+            valid_until = None
+
+            tier_requires_expiry = tier in {
+                "pro",
+                "team_small",
+                "team_medium",
+                "team_large",
+            }
+
+            if tier != "free":
+                if validity_preset == "custom":
+                    if not valid_until_raw:
+                        if tier_requires_expiry:
+                            errors.append(
+                                "A renewal date is required for this tier. "
+                                "Select a preset or enter a custom date."
+                            )
+                    else:
+                        try:
+                            valid_until = timezone.datetime.fromisoformat(
+                                valid_until_raw
+                            )
+                            valid_until = timezone.make_aware(valid_until)
+                        except ValueError:
+                            errors.append("Renewal date must be a valid date.")
+                else:
+                    # Preset: 1_year, 2_years, 5_years, none (org/enterprise only)
+                    if validity_preset == "none":
+                        if tier_requires_expiry:
+                            errors.append(
+                                "A renewal date is required for this tier. "
+                                "Select 1/2/5 years or enter a custom date."
+                            )
+                        else:
+                            valid_until = None
+                    elif validity_preset in {"1_year", "2_years", "5_years"}:
+                        years = int(validity_preset.split("_")[0])
+                        valid_until = timezone.now() + timezone.timedelta(
+                            days=365 * years
+                        )
+                    else:
+                        errors.append("A valid renewal preset is required.")
+
+                # Sanity cap: expiry must be within 5 years and in the future.
+                if valid_until is not None:
+                    if valid_until <= timezone.now():
+                        errors.append("Renewal date must be in the future.")
+                    elif valid_until > timezone.now() + timezone.timedelta(
+                        days=365 * 5
+                    ):
+                        errors.append(
+                            "Renewal date cannot be more than 5 years from now."
+                        )
+
             apply_promotion = request.POST.get("apply_promotion") == "on"
             promotion_name = request.POST.get("promotion_name", "").strip()
             promotion_effect_type = request.POST.get(
@@ -841,21 +909,43 @@ def organization_create(request: HttpRequest) -> HttpResponse:
                     created = True
 
                 profile = UserProfile.get_or_create_for_user(account)
-                profile.account_tier = scope
+                old_tier = profile.account_tier
+                profile.account_tier = tier
                 profile.subscription_status = (
                     UserProfile.SubscriptionStatus.NONE
-                    if scope == UserProfile.AccountTier.FREE
+                    if tier == UserProfile.AccountTier.FREE
                     else UserProfile.SubscriptionStatus.ACTIVE
                 )
                 profile.tier_changed_at = timezone.now()
+                profile.subscription_current_period_end = valid_until
+                # Reset pre-expiry warning tracking so warnings restart for
+                # the new expiry date (if any).
+                profile.last_expiry_warning_sent_at = None
+                profile.last_expiry_warning_stage = ""
                 profile.save(
                     update_fields=[
                         "account_tier",
                         "subscription_status",
                         "tier_changed_at",
+                        "subscription_current_period_end",
+                        "last_expiry_warning_sent_at",
+                        "last_expiry_warning_stage",
                         "updated_at",
                     ]
                 )
+
+                # If downgrading to free via the form, close excess surveys
+                # immediately rather than waiting for the cron. Skip if the
+                # user was already free (no-op).
+                if (
+                    tier == UserProfile.AccountTier.FREE
+                    and old_tier != UserProfile.AccountTier.FREE
+                ):
+                    profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+                # If upgrading to a paid tier, re-open surveys auto-closed by
+                # a previous downgrade.
+                elif tier != UserProfile.AccountTier.FREE:
+                    profile.reopen_surveys_on_upgrade(tier)
 
                 if apply_promotion:
                     promotion = Promotion(
@@ -886,12 +976,12 @@ def organization_create(request: HttpRequest) -> HttpResponse:
             if created:
                 messages.success(
                     request,
-                    f"Account '{account.email}' created in {dict(TIER_SCOPE_CHOICES).get(scope, scope)} tier.",
+                    f"Account '{account.email}' created in {dict(TIER_SCOPE_CHOICES).get(tier, tier)} tier.",
                 )
             else:
                 messages.success(
                     request,
-                    f"Account '{account.email}' updated to {dict(TIER_SCOPE_CHOICES).get(scope, scope)} tier.",
+                    f"Account '{account.email}' updated to {dict(TIER_SCOPE_CHOICES).get(tier, tier)} tier.",
                 )
 
             if apply_promotion:
@@ -901,7 +991,7 @@ def organization_create(request: HttpRequest) -> HttpResponse:
                 )
 
             return redirect(
-                f"{reverse('core:platform_admin_org_list')}?mode=tier&scope={scope}"
+                f"{reverse('core:platform_admin_org_list')}?mode=tier&scope={tier}"
             )
 
         # Extract organization form data
