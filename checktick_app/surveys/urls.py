@@ -213,6 +213,17 @@ urlpatterns = [
         views.survey_summary_themes,
         name="survey_summary_themes",
     ),
+    # Delphi inter-round feedback endpoints
+    path(
+        "<slug:slug>/delphi/feedback/generate/",
+        views.delphi_generate_feedback,
+        name="delphi_generate_feedback",
+    ),
+    path(
+        "<slug:slug>/delphi/feedback/comments/",
+        views.delphi_download_comments,
+        name="delphi_download_comments",
+    ),
     path("<slug:slug>/update-title/", views.update_survey_title, name="update_title"),
     path("<slug:slug>/delete/", views.survey_delete, name="delete"),
     path(

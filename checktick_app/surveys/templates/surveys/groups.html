@@ -741,6 +741,37 @@
             <button type="submit" name="action" value="add_round" formmethod="post" class="btn btn-sm btn-outline">{% trans 'Add round' %}</button>
           </div>
         </form>
+
+        {# Inter-round feedback actions (per closed round) #}
+        {% if delphi_rounds %}
+        <div class="mt-4 pt-3 border-t border-base-200">
+          <h4 class="text-sm font-semibold text-base-content/80 mb-2">{% trans 'Inter-round feedback' %}</h4>
+          <p class="text-xs text-base-content/60 mb-3">{% trans 'After closing a round, generate aggregate feedback (medians, distributions, optional LLM themes) for participants to see in the next round. You can also download the free-text comments for manual thematic analysis in NVivo, Excel, or SPSS.' %}</p>
+          <div class="space-y-2">
+            {% for rnd in delphi_rounds %}
+            <div class="flex flex-wrap items-center gap-2 text-sm">
+              <span class="font-medium">{{ rnd.name }}</span>
+              {% if rnd.closed_at %}
+                <span class="badge badge-success badge-xs">{% trans 'closed' %}</span>
+                <form method="post" action="{% url 'surveys:delphi_generate_feedback' slug=survey.slug %}" class="inline" id="delphi-feedback-form-{{ rnd.id }}">
+                  {% csrf_token %}
+                  <input type="hidden" name="round_id" value="{{ rnd.id }}" />
+                  <button type="submit" class="btn btn-xs btn-outline btn-primary" name="use_llm" value="0">{% trans 'Generate feedback' %}</button>
+                  <label class="flex items-center gap-1 text-xs ml-1">
+                    <input type="checkbox" name="use_llm" value="1" class="checkbox checkbox-xs" />
+                    {% trans 'with LLM themes' %}
+                  </label>
+                </form>
+                <a href="{% url 'surveys:delphi_download_comments' slug=survey.slug %}?round_id={{ rnd.id }}" class="btn btn-xs btn-ghost">{% trans 'Download comments' %}</a>
+              {% else %}
+                <span class="badge badge-ghost badge-xs">{% trans 'open' %}</span>
+                <span class="text-xs text-base-content/50">{% trans 'Close the round to generate feedback' %}</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
         {% else %}
         {# Read-only view #}
         <dl class="text-sm space-y-1">

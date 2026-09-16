@@ -75,6 +75,7 @@ from .models import (
     DataSet,
     DelphiMenu,
     DelphiRound,
+    DelphiRoundFeedback,
     LLMConversationSession,
     MatrixMenu,
     Organization,
@@ -2014,16 +2015,115 @@ def _resolved_group_order_ids(
     return [gid for gid in ordered if gid in selected_set]
 
 
+def _render_delphi_feedback_body(feedback) -> str:
+    """Render a single ``DelphiRoundFeedback`` row as Markdown.
+
+    Produces a human-readable summary of the quantitative stats (median,
+    IQR, distribution) and, if generated, the LLM theme markdown. The
+    output is Markdown (rendered to sanitised HTML by the caller via
+    ``render_content_block_markdown``).
+    """
+    stats = feedback.stats_json if isinstance(feedback.stats_json, dict) else {}
+    parts: list[str] = []
+
+    q_type = stats.get("question_type", "")
+    count = stats.get("count", 0)
+
+    if count == 0:
+        parts.append(
+            "*No responses were submitted for this question in the previous round.*"
+        )
+    elif q_type in ("likert", "number"):
+        median = stats.get("median", "—")
+        q1 = stats.get("q1", "—")
+        q3 = stats.get("q3", "—")
+        parts.append(
+            f"**Median:** {median}  \n**IQR:** {q1}–{q3}  \n**Responses:** {count}"
+        )
+        dist = stats.get("distribution", {})
+        if dist:
+            parts.append("\n**Distribution:**")
+            for value, cnt in sorted(dist.items()):
+                parts.append(f"- {value}: {cnt}")
+    elif q_type == "yesno":
+        yes = stats.get("yes_count", 0)
+        no = stats.get("no_count", 0)
+        dk = stats.get("dont_know_count", 0)
+        pct = stats.get("yes_pct", 0)
+        parts.append(
+            f"**Yes:** {yes} ({pct}%)  \n**No:** {no}  \n**Don't know:** {dk}  \n**Responses:** {count}"
+        )
+    elif q_type in ("mc_single", "mc_multi", "dropdown"):
+        dist = stats.get("distribution", {})
+        parts.append(f"**Responses:** {count}\n\n**Distribution:**")
+        for label, cnt in dist.items():
+            parts.append(f"- {label}: {cnt}")
+    elif q_type == "text":
+        # Qualitative: if LLM themes were generated, show them. Otherwise
+        # prompt the participant to download the comments manually.
+        if feedback.llm_generated and feedback.theme_markdown:
+            parts.append(feedback.theme_markdown)
+        else:
+            parts.append(
+                "*Free-text responses were collected. Download the comments "
+                "from the survey dashboard to review them manually.*"
+            )
+    else:
+        parts.append(f"**Responses:** {count}")
+
+    return "\n".join(parts)
+
+
+def _render_delphi_feedback_summary(feedback_rows: list) -> str:
+    """Render all ``DelphiRoundFeedback`` rows for a round as a combined Markdown summary.
+
+    Each question's feedback is rendered as a section with its question
+    text as the heading. Used by the content block aggregate feedback
+    substitution so a single content block shows the full inter-round
+    feedback summary.
+    """
+    if not feedback_rows:
+        return "*No inter-round feedback has been generated yet.*"
+    parts: list[str] = []
+    for fb in feedback_rows:
+        q_text = fb.question.text if fb.question else "Unknown question"
+        parts.append(f"### {q_text}\n")
+        parts.append(_render_delphi_feedback_body(fb))
+        parts.append("")
+    return "\n".join(parts)
+
+
 def _annotate_question_render_sequence(
     survey: Survey, questions: list[SurveyQuestion]
 ) -> list[SurveyQuestion]:
-    """Attach rendering helper attrs consumed by ``surveys/detail.html``."""
+    """Attach rendering helper attrs consumed by ``surveys/detail.html``.
+
+    For Delphi surveys, content blocks marked as aggregate feedback
+    (``options.is_delphi_feedback = True``) have their ``body_md`` and
+    ``heading`` substituted from the ``DelphiRoundFeedback`` cache for
+    the previous round at view time. See docs/survey-layouts-technical.md
+    §Delphi §Inter-round feedback rendering.
+    """
     questions_with_show_conditions = set(
         SurveyQuestionCondition.objects.filter(
             target_question__survey=survey,
             action=SurveyQuestionCondition.Action.SHOW,
         ).values_list("target_question_id", flat=True)
     )
+
+    # Delphi: prefetch the previous round's feedback cache so content blocks
+    # marked as aggregate feedback can substitute their body_md/heading.
+    delphi_feedback_rows: list[DelphiRoundFeedback] = []
+    if survey.layout == Survey.Layout.DELPHI:
+        from .delphi import _previous_round_for_survey
+
+        prev_round = _previous_round_for_survey(survey)
+        if prev_round is not None:
+            delphi_feedback_rows = list(
+                DelphiRoundFeedback.objects.filter(round=prev_round)
+                .select_related("question")
+                .order_by("question__order", "question__id")
+            )
 
     for i, q in enumerate(questions, start=1):
         setattr(q, "idx", i)
@@ -2042,6 +2142,32 @@ def _annotate_question_render_sequence(
             )
 
             opts = q.options if isinstance(q.options, dict) else {}
+            # Delphi aggregate feedback substitution: if this content block is
+            # marked as aggregate feedback (``is_delphi_feedback = True``),
+            # substitute the body_md with a combined summary of all feedback
+            # rows from the previous round. The author marks a content block
+            # as feedback via the builder's content block configure panel.
+            if (
+                survey.layout == Survey.Layout.DELPHI
+                and opts.get("is_delphi_feedback")
+                and delphi_feedback_rows
+            ):
+                feedback_body = _render_delphi_feedback_summary(delphi_feedback_rows)
+                setattr(
+                    q,
+                    "content_block_html",
+                    render_content_block_markdown(feedback_body),
+                )
+                setattr(
+                    q,
+                    "content_block_heading",
+                    opts.get("heading", "Inter-round feedback"),
+                )
+                setattr(q, "content_block_subtitle", opts.get("subtitle", ""))
+                setattr(q, "content_block_links", opts.get("links", []))
+                setattr(q, "content_block_image", None)
+                setattr(q, "content_block_consent", None)
+                continue
             setattr(
                 q,
                 "content_block_html",
@@ -3542,6 +3668,224 @@ def survey_summary_themes(request: HttpRequest, slug: str) -> JsonResponse:
         },
         status=200 if result.get("success") else 503,
     )
+
+
+@login_required
+@email_confirmed_required
+@require_http_methods(["POST"])
+@ratelimit(key="user", rate="10/h", block=True)
+def delphi_generate_feedback(request: HttpRequest, slug: str) -> JsonResponse:
+    """Generate inter-round feedback for a closed Delphi round.
+
+    ``POST /surveys/{slug}/delphi/feedback/generate/``
+
+    Called by the "Generate inter-round feedback" button on the Organise
+    page. Aggregates the closed round's responses (quantitative stats +
+    optional LLM themes) and caches the result on ``DelphiRoundFeedback``
+    rows so participant views don't re-run the aggregation or the LLM.
+
+    Access: ``require_can_edit`` (only the survey owner / org admin can
+    generate feedback). Unlock gate: the survey must be unlocked if it
+    has encrypted responses (the aggregation needs decrypted answers).
+
+    POST params:
+      - ``round_id``: the ID of the closed round to generate feedback for.
+      - ``use_llm``: "1" to opt into LLM thematic analysis (default: off).
+
+    Audit-logged with metadata only (round id, question count, response
+    count, LLM success/failure). Never the free-text input or the LLM
+    output verbatim, per AGENTS.md.
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+
+    if survey.layout != Survey.Layout.DELPHI:
+        return JsonResponse({"error": "Not a Delphi survey."}, status=400)
+
+    survey_key = get_survey_key_from_session(request, slug)
+    has_encrypted_responses = survey.responses.filter(
+        enc_answers__isnull=False
+    ).exists()
+    if has_encrypted_responses and not survey_key:
+        return JsonResponse(
+            {"error": "Unlock the survey first to generate feedback."},
+            status=403,
+        )
+
+    round_id = request.POST.get("round_id")
+    if not round_id:
+        return JsonResponse({"error": "round_id is required."}, status=400)
+    try:
+        round_id_int = int(round_id)
+    except ValueError:
+        return JsonResponse({"error": "Invalid round_id."}, status=400)
+
+    menu = getattr(survey, "delphi_menu", None)
+    if menu is None:
+        return JsonResponse({"error": "No Delphi menu configured."}, status=400)
+
+    try:
+        rnd = menu.rounds.get(id=round_id_int)
+    except DelphiRound.DoesNotExist:
+        return JsonResponse({"error": "Round not found."}, status=404)
+
+    # The round must be closed before feedback can be generated.
+    if rnd.closed_at is None:
+        return JsonResponse(
+            {"error": "Close the round before generating feedback."},
+            status=400,
+        )
+
+    use_llm = request.POST.get("use_llm") == "1"
+
+    # Collect the round's group IDs.
+    group_ids = list(rnd.groups.values_list("id", flat=True))
+    if not group_ids:
+        return JsonResponse(
+            {"error": "This round has no sections assigned."},
+            status=400,
+        )
+
+    # Generate the feedback (quantitative + optional LLM themes).
+    from .delphi import generate_round_feedback
+
+    feedback_data = generate_round_feedback(
+        survey.id,
+        group_ids,
+        survey_key=survey_key,
+        use_llm=use_llm,
+    )
+
+    # Cache the feedback on DelphiRoundFeedback rows (replace existing).
+    DelphiRoundFeedback.objects.filter(round=rnd).delete()
+    llm_success_count = 0
+    for q_id, fb in feedback_data.items():
+        DelphiRoundFeedback.objects.create(
+            round=rnd,
+            question_id=q_id,
+            stats_json=fb.get("stats", {}),
+            theme_markdown=fb.get("theme_markdown", ""),
+            llm_generated=fb.get("llm_generated", False),
+            llm_model=fb.get("llm_model", ""),
+            llm_token_count=fb.get("llm_token_count", 0),
+            llm_success=fb.get("llm_success", False),
+        )
+        if fb.get("llm_success"):
+            llm_success_count += 1
+
+    # Audit-log with metadata only.
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.SURVEY,
+        survey=survey,
+        action=AuditLog.Action.UPDATE,
+        severity=AuditLog.Severity.INFO,
+        message="Delphi inter-round feedback generated",
+        metadata={
+            "survey_id": str(survey.id),
+            "survey_slug": survey.slug,
+            "round_id": str(rnd.id),
+            "round_name": rnd.name,
+            "question_count": len(feedback_data),
+            "llm_used": use_llm,
+            "llm_success_count": llm_success_count,
+        },
+    )
+
+    return JsonResponse(
+        {
+            "success": True,
+            "round_id": str(rnd.id),
+            "question_count": len(feedback_data),
+            "llm_used": use_llm,
+            "llm_success_count": llm_success_count,
+        }
+    )
+
+
+@login_required
+@email_confirmed_required
+@require_http_methods(["GET"])
+def delphi_download_comments(request: HttpRequest, slug: str):
+    """Download free-text comments for a Delphi round as CSV.
+
+    ``GET /surveys/{slug}/delphi/feedback/comments/``
+
+    Called by the "Download comments" button on the Organise page. Always
+    available — no LLM required, no tier gate. Returns a CSV file with one
+    row per response (columns: question, response) for manual thematic
+    analysis in NVivo, Excel, or SPSS.
+
+    Access: ``require_can_edit``. Unlock gate: the survey must be unlocked
+    if it has encrypted responses.
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+
+    if survey.layout != Survey.Layout.DELPHI:
+        return JsonResponse({"error": "Not a Delphi survey."}, status=400)
+
+    survey_key = get_survey_key_from_session(request, slug)
+    has_encrypted_responses = survey.responses.filter(
+        enc_answers__isnull=False
+    ).exists()
+    if has_encrypted_responses and not survey_key:
+        messages.error(request, _("Unlock the survey first to download comments."))
+        return redirect("surveys:unlock", slug=slug)
+
+    round_id = request.GET.get("round_id")
+    if not round_id:
+        return JsonResponse({"error": "round_id is required."}, status=400)
+    try:
+        round_id_int = int(round_id)
+    except ValueError:
+        return JsonResponse({"error": "Invalid round_id."}, status=400)
+
+    menu = getattr(survey, "delphi_menu", None)
+    if menu is None:
+        return JsonResponse({"error": "No Delphi menu configured."}, status=400)
+
+    try:
+        rnd = menu.rounds.get(id=round_id_int)
+    except DelphiRound.DoesNotExist:
+        return JsonResponse({"error": "Round not found."}, status=404)
+
+    group_ids = list(rnd.groups.values_list("id", flat=True))
+    if not group_ids:
+        return JsonResponse(
+            {"error": "This round has no sections assigned."},
+            status=400,
+        )
+
+    from .delphi import collate_round_comments, round_comments_to_csv
+
+    collated = collate_round_comments(survey.id, group_ids, survey_key=survey_key)
+    csv_content = round_comments_to_csv(collated)
+
+    # Audit-log with metadata only.
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.SURVEY,
+        survey=survey,
+        action=AuditLog.Action.UPDATE,
+        severity=AuditLog.Severity.INFO,
+        message="Delphi comments downloaded",
+        metadata={
+            "survey_id": str(survey.id),
+            "survey_slug": survey.slug,
+            "round_id": str(rnd.id),
+            "round_name": rnd.name,
+            "question_count": len(collated),
+        },
+    )
+
+    from django.http import HttpResponse
+
+    response = HttpResponse(csv_content, content_type="text/csv")
+    response["Content-Disposition"] = (
+        f'attachment; filename="delphi-comments-{survey.slug}-round-{rnd.order}.csv"'
+    )
+    return response
 
 
 @login_required

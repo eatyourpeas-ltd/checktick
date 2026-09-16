@@ -661,3 +661,17 @@ def _anchor_time(menu, *, enrolment, survey_start):
     if anchor_attr == "survey_open":
         return survey_start
     return enrolment or survey_start
+
+
+def _previous_round_for_survey(survey) -> Any:
+    """Return the most recently closed round for a Delphi survey, or None.
+
+    Used by the inter-round feedback rendering to find the previous round's
+    ``DelphiRoundFeedback`` cache. "Most recently closed" means the round
+    with the highest order that has ``closed_at`` set. If no round is
+    closed, returns None (no feedback to show yet).
+    """
+    menu = getattr(survey, "delphi_menu", None)
+    if menu is None:
+        return None
+    return menu.rounds.filter(closed_at__isnull=False).order_by("-order", "-id").first()
