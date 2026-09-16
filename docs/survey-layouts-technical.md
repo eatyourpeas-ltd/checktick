@@ -459,12 +459,20 @@ reuse its ingredients:
   future `_assign_round_for_progress` sits next to it without touching
   RCT.
 - The `?simulate_arm=` preview path is the precedent for Delphi's
-  round preview (`?simulate_round=`). A small
-  `_aggregate_responses_by_group(survey, group_ids)` helper added for
-  the arm-preview panel is reusable for Delphi's median/IQR/themes.
-  Inter-round aggregate feedback itself is rendered via content blocks
-  (see §Content blocks) whose body is substituted from the previous
-  round's responses — no new feedback model in Delphi.
+  round preview (`?simulate_round=`). The RCT arm preview only *filters*
+  questions by arm group IDs — it does not aggregate responses. A
+  response-aggregation helper (`aggregate_responses_by_group` in a future
+  `delphi.py`) is **not yet built**; it is the one Delphi-critical pattern
+  that no earlier layout exercised, and is the first thing the Delphi
+  build adds (see §Delphi (consensus rounds) below). Inter-round
+  aggregate feedback itself is rendered via content blocks (see
+  §Content blocks) whose `options.body_md` is substituted from the
+  previous round's aggregated responses at view time.
+- Qualitative aggregation (thematic summary of free-text responses) is
+  handled by the existing `theme_analyzer.summarise_themes()` function,
+  which is already opt-in, unlock-gated, sanitised, and gracefully
+  degrades. Delphi reuses it per long-text question when the author
+  generates inter-round feedback.
 - RCT does **not** introduce scheduling, anonymity-beyond-aggregation,
   or convergence tracking — those are Delphi-only and stay out of this
   PR to keep RCT scope tight.
@@ -1176,28 +1184,687 @@ builder/template/parser branches.
 
 ## Planned layouts
 
-The following layouts are still planned for future releases. See
+The following layouts are planned for future releases. See
 [Survey Layouts](survey-layouts.md#planned-layouts) for the user-facing
-descriptions. Technical notes:
+descriptions. They are ordered by priority — the order CheckTick intends
+to implement them, based on how often the use case is the reason a
+research team reaches for REDCap or Qualtrics instead of a simpler tool.
 
-### Delphi (consensus rounds)
+### Delphi (consensus rounds) — priority: high (next)
 
-- Multi-round structured consensus workflow. Participants complete
-  rounds, see aggregate feedback between rounds, and revise.
-- Builds on the ingredients proven by the earlier layouts:
-  - `SurveyProgress.assigned_arm` (RCT) → `delphi_round` FK to a future
-    `DelphiRound` model.
-  - `StagedPhase` (start/end offsets, M2M to groups) → `DelphiRound`
-    (round windows, group membership).
-  - `SurveyProgress.completed_group_ids` (Matrix) →
-    `delphi_completed_rounds` (within-round completion tracking).
-  - `matrix.py` / `staged.py` pure helpers → `delphi.py` round-state
-    helpers.
-  - `?simulate_section=` / `?simulate_phase=` preview → round preview
-    (`?simulate_round=`). Inter-round aggregate feedback is rendered
-    via content blocks (see §Content blocks) whose body is substituted
-    from the previous round's responses.
-- Priority: high — the stretch goal this matrix work is part of.
+Multi-round structured consensus workflow. Participants complete rounds,
+see aggregate feedback between rounds, and revise their answers. The
+classic Delphi method for expert consensus-building in clinical
+research, guideline development, and priority-setting.
+
+Builds on the ingredients proven by the earlier layouts:
+
+- `SurveyProgress.assigned_arm` (RCT) → `delphi_round` FK to a
+  `DelphiRound` model. Same shape, separate field — arms and rounds are
+  orthogonal dimensions.
+- `StagedPhase` (start/end offsets, M2M to groups) → `DelphiRound`
+  (round windows, group membership). Same shape, separate model.
+- `SurveyProgress.completed_group_ids` (Matrix) →
+  `delphi_completed_rounds` (within-round completion tracking). Same
+  shape (list of IDs, soft indicator, hard gate on final submit).
+- `matrix.py` / `staged.py` pure helpers → `delphi.py` round-state
+  helpers. Sits next to them without touching them.
+- `?simulate_section=` / `?simulate_phase=` preview → round preview
+  (`?simulate_round=`).
+- Inter-round aggregate feedback is rendered via content blocks (see
+  §Content blocks) whose `options.body_md` is substituted from the
+  previous round's aggregated responses at view time. No new feedback
+  *rendering* model — but a `DelphiRoundFeedback` cache model stores the
+  pre-computed aggregate (see below).
+- Qualitative aggregation (thematic summary of free-text responses)
+  reuses the existing `theme_analyzer.summarise_themes()` function,
+  which is already opt-in, unlock-gated, sanitised, and gracefully
+  degrades. The LLM thematic analysis is **author-triggered and
+  pre-computed** at round close, not per-participant-view — see the
+  full design below.
+
+**The one ingredient not yet proven by an earlier layout** is
+response aggregation. The RCT arm preview only *filters* questions by
+arm group IDs; no layout has needed to collect responses across
+participants and compute medians/IQRs/distributions. The Delphi build
+therefore starts with a pure `aggregate_responses_by_group()` helper in
+`delphi.py`, tested in isolation before any Delphi-specific model or
+runtime hook is added.
+
+Priority: high — this is the next layout to implement. The full
+technical design is in §Delphi (consensus rounds) — full design below.
+
+### Diary / EMA (ecological momentary assessment) — priority: high
+
+Repeated short surveys triggered on a fixed schedule (daily, 4×/day) or
+by events (symptom onset). Used for pain diaries, mood tracking,
+medication adherence, and symptom monitoring in clinical trials.
+
+Distinct from Staged (which is phase-based: baseline → 2-week →
+6-month). Diaries are high-frequency repeated measures with burst
+scheduling, compliance tracking (missed entries), and time-stamp
+integrity for regulatory submissions. The scheduling semantics are
+fundamentally different from phase windows.
+
+Builds on: Staged phase windows + repeats + progress tracking, but
+needs a scheduling engine (cron-like trigger windows) and a compliance
+dashboard. Substantial new runtime logic.
+
+Technical notes:
+- New `DiaryMenu` model (OneToOne to `Survey`) holding the schedule
+  type (`fixed_interval`, `event_triggered`, `burst`), the interval
+  (e.g. every 6 hours), the burst schedule (e.g. 7 days on, 7 days off),
+  and a compliance threshold (e.g. warn if < 80% of expected entries).
+- New `DiaryEntry` model (one per participant per scheduled window)
+  tracking the expected time, the actual submission time, and a link to
+  the `SurveyProgress` row. This is the compliance audit trail.
+- The runtime hook reuses `_resolved_group_order_ids` — a diary entry
+  is just a short survey with the same group set each time. The
+  difference is the *trigger*, not the *selection*.
+- `?simulate_window=` preview path for authors to test the schedule.
+- Does **not** introduce real-time push notifications in the first
+  iteration — participants receive a reminder email/SMS at the window
+  start, and the diary landing page shows the current window's status.
+
+### Two-stage screening / eligibility routing — priority: medium
+
+A brief screener determines eligibility, then routes to the full
+survey, an exit page, or an alternative survey. Ubiquitous in clinical
+recruitment (e.g. "Are you 18+? Have you had symptoms for >2 weeks?").
+
+Could be done with branching today, but the eligibility → consent →
+survey → exit pattern is so common that a dedicated layout gives
+researchers a structured template, automatic CONSORT-style flow
+diagram data, and clean screen-fail tracking.
+
+Builds on: Branching + content blocks (for consent). Low effort, high
+usability payoff. May ship as a layout *template* (pre-configured
+branching + content blocks) rather than a full new runtime hook.
+
+Technical notes:
+- New `ScreeningMenu` model (OneToOne to `Survey`) holding the
+  eligibility rule (a branching expression evaluated against the
+  screener answers), the eligible redirect (the full survey slug or
+  `"inline"` to continue in the same survey), and the ineligible
+  redirect (an exit content block or a separate survey slug).
+- New `ScreeningResult` model (one per participant) recording the
+  screener answers, the eligibility decision, and the redirect taken.
+  This is the CONSORT flow diagram data source.
+- The runtime hook is a pre-step in `_handle_participant_submission`
+  (like the section_menu picker): if the screener is incomplete, render
+  the screener; if complete, evaluate eligibility and redirect.
+- `?simulate_eligible=` / `?simulate_ineligible=` preview paths.
+
+### Computer-Adaptive Testing (CAT) — priority: medium
+
+The next question is selected algorithmically based on prior responses
+using item-response theory (IRT). Used for PROMIS, NIH Toolbox, and
+other validated clinical outcome measures. Enables shorter, more
+precise instruments.
+
+Distinct from branching (which is rule-based: if Q3=yes, show Q5). CAT
+is statistical — the engine estimates a latent trait (e.g. depression
+severity) and selects the next item to minimise uncertainty. This is a
+fundamentally different selection mechanism.
+
+Builds on: Guided (one-question-per-screen rendering), but needs an
+IRT scoring engine and an item bank with difficulty/discrimination
+parameters. Substantial new domain logic.
+
+Technical notes:
+- New `CatBank` model (OneToOne to `Survey`) holding the IRT model
+  type (`rasch`, `2pl`, `grm`), the stopping rule (SE threshold, max
+  items, or both), and the prior distribution parameters.
+- New `CatItemParam` model (one per question in the bank) holding the
+  difficulty (`b`), discrimination (`a`), and guessing (`c`, 3PL only)
+  parameters.
+- The runtime hook replaces `_resolved_group_order_ids` for CAT
+  surveys: instead of a fixed order, the next question is selected by
+  the IRT engine after each response. This is the first layout that
+  does **not** reuse the fixed-order pipeline — it is a genuine
+  alternative selection mechanism.
+- `?simulate_theta=` preview path for authors to test the engine at a
+  given trait level.
+- High effort. Worth it if CheckTick wants to attract clinical outcomes
+  researchers who need PROMIS-capable instruments.
+
+### Crossover / within-subject RCT — priority: medium
+
+Each participant experiences all conditions in sequence (AB, ABA, ABAB)
+with washout periods between. Common in clinical pharmacology and
+behavioural interventions.
+
+Distinct from RCT (between-subject: one arm per participant). Crossover
+is within-subject: all conditions, sequenced. Requires carryover
+control, period scheduling, and sequence-balanced allocation (Latin
+squares, Williams designs).
+
+Builds on: RCT allocation engine + Staged phase windows, but the
+allocation logic (sequence assignment, not arm assignment) and the
+per-period analysis are distinct.
+
+Technical notes:
+- New `CrossoverMenu` model (OneToOne to `Survey`) holding the design
+  type (`latin_square`, `williams`, `counterbalanced`), the number of
+  periods, and the washout duration.
+- New `CrossoverSequence` model (one per possible sequence) holding the
+  ordered list of condition labels.
+- `SurveyProgress` gets a `crossover_sequence` FK (like
+  `assigned_arm`) and a `crossover_period` integer (current period).
+- The runtime hook resolves `selected_group_ids` from the current
+  period's condition in the participant's assigned sequence — same
+  hook, different allocator.
+- `?simulate_sequence=` / `?simulate_period=` preview paths.
+
+### Conjoint / Discrete Choice Experiment (DCE) — priority: low
+
+Choice-based experiments where participants make trade-off choices
+between attribute profiles. Used in health economics, patient
+preference studies, and HTA submissions.
+
+Requires a fractional-factorial experimental design engine, choice-card
+rendering (profile A vs profile B), and specialised analysis
+(conditional/mixed logit). None of the current layouts touch this.
+
+Technical notes:
+- New `ConjointDesign` model (OneToOne to `Survey`) holding the
+  attributes, levels, and the fractional-factorial design matrix.
+- New question type `choice_card` rendering two profiles side by side.
+- The runtime hook generates choice cards from the design matrix —
+  each participant sees a different subset determined by their
+  `randomisation_seed` (reusing the RCT seed field).
+- Niche but high-value for health economics teams. Significant new
+  rendering + design logic.
+
+### Stepped wedge / cluster-randomised — priority: low
+
+Clusters (sites, wards, practices) cross from control to intervention
+in a randomised sequence over time. Common in implementation science
+and cluster RCTs.
+
+Randomisation is at cluster level, not individual. Participants within
+a cluster receive the arm the cluster is currently in. Requires
+cluster-level scheduling and a cluster registry.
+
+Builds on: RCT + Staged, but the cluster entity and cluster-level
+scheduling are new.
+
+Technical notes:
+- New `Cluster` model (one per site/ward/practice) with a
+  `cluster_arm` FK that changes over time per the stepped wedge
+  schedule.
+- New `SteppedWedgeMenu` model (OneToOne to `Survey`) holding the
+  number of steps, the step interval, and the randomisation sequence
+  of clusters.
+- Participants are linked to a cluster (via a profile field or a
+  survey-level question); their `selected_group_ids` is resolved from
+  the cluster's current arm.
+- `?simulate_step=` / `?simulate_cluster=` preview paths.
+
+### 360° / multi-rater assessment — priority: low
+
+Multiple respondents (peers, supervisors, patients) rate a single
+subject. Common in medical education and clinician appraisal.
+
+Requires a subject identifier, role-based routing (each rater sees a
+different question set about the same subject), and aggregation across
+raters. Could be a section_menu variant with a subject-linking step,
+but the role-based question routing is distinct.
+
+Technical notes:
+- New `MultiRaterMenu` model (OneToOne to `Survey`) holding the rater
+  roles (e.g. `self`, `peer`, `supervisor`, `patient`).
+- The runtime hook resolves `selected_group_ids` from the rater's role
+  (each role sees a different subset of sections about the same
+  subject).
+- A subject identifier is collected at the start (or via an invite
+  token) so responses can be grouped for aggregation.
+- Could ship as a section_menu variant with role-based item flags
+  rather than a full new model.
+
+### Think-aloud / cognitive interview mode — priority: low
+
+Qualitative interview mode for instrument validation — the researcher
+probes while the participant thinks aloud. Usually audio-recorded.
+
+This is interview-mediated, not self-administered. Probably better as a
+"mode" flag on the survey than a full layout, but noted here for
+completeness.
+
+Technical notes:
+- A `mode` field on `Survey` (`self_administered` vs `interview_mediated`).
+- In interview mode, the take page renders a simplified view for the
+  researcher to drive, with a probe field per question and an optional
+  audio recording link.
+- Low effort, but narrow use case. May remain a pattern rather than a
+  first-class layout.
+
+## Delphi (consensus rounds) — full design
+
+This section is the full technical design for the Delphi layout, the
+next layout to be implemented. It is written ahead of implementation so
+the design can be reviewed before code is written. Each subsection maps
+to a planned commit.
+
+### Overview
+
+The Delphi layout implements a structured multi-round consensus
+workflow. Participants complete a series of rounds; between rounds they
+see aggregate feedback from the previous round (quantitative
+distributions + qualitative themes) and revise their answers. The
+author controls the number of rounds, the section set per round, the
+round windows, and when to generate inter-round feedback.
+
+The design reuses the runtime hook proven by section_menu / rct /
+staged / matrix: `_resolved_group_order_ids` filtering by
+`selected_group_ids`. Delphi resolves `selected_group_ids` from the
+current round's section set — same hook, different allocator.
+
+### Response aggregation (the first commit)
+
+No earlier layout has needed to collect responses across participants
+and compute aggregate statistics. This is the one Delphi-critical
+pattern that is unproven, so the Delphi build starts with it in
+isolation.
+
+A new `checktick_app/surveys/delphi.py` module exposes pure functions:
+
+```python
+def aggregate_responses_by_group(
+    survey_id: int,
+    group_ids: list[int],
+    *,
+    submission_filter: Callable[[QuerySet], QuerySet] | None = None,
+) -> dict[int, dict[int, dict]]:
+    """Collect and aggregate responses for the given groups.
+
+    Returns a nested dict: {group_id: {question_id: stats}}.
+
+    Per question type:
+    - likert / numeric: median, IQR (Q1/Q3), min, max, count,
+      distribution (value -> count).
+    - mc_single / dropdown: frequency distribution, mode, count.
+    - mc_multi: frequency per option, co-occurrence top-3, count.
+    - yesno: yes_count, no_count, yes_pct, count.
+    - long_text: list of response strings (for LLM thematic analysis).
+    - text: list of response strings (short, for collation only).
+    - content_block: skipped (no answer).
+
+    ``submission_filter`` is an optional callable that filters the
+    SurveyProgress/Submission queryset — used by Delphi to scope to a
+    specific round's submissions. Defaults to all completed submissions.
+    """
+```
+
+The function is pure (no side effects, no LLM calls) and tested in
+isolation with synthetic responses. It reads decrypted answers via the
+existing answer-access layer (the same path the CSV export and summary
+report use), so the unlock gate is the caller's responsibility.
+
+### Inter-round feedback generation (the second commit)
+
+Inter-round feedback has two components: **quantitative** (medians,
+IQRs, distributions — pure Python, always computed) and **qualitative**
+(thematic summary of free-text responses). The qualitative component
+supports two approaches, and the author chooses which to use:
+
+#### Manual thematic analysis (always available, default)
+
+Researchers often prefer to code themes manually in NVivo, Excel, or
+SPSS — particularly for regulatory or publication-grade work where the
+LLM's paraphrasing is not auditable enough. The `collate_round_comments`
+function collects all free-text responses for a round's questions into a
+structured dict suitable for CSV/JSON export:
+
+```python
+def collate_round_comments(
+    survey_id: int,
+    group_ids: list[int],
+    *,
+    survey_key: bytes | None = None,
+    responses: QuerySet | list | None = None,
+) -> dict[int, dict]:
+    """Collate free-text responses per question for manual thematic analysis.
+
+    Returns {question_id: {question_text, question_type, responses: [str]}}.
+    Only text/long_text questions are included. The view serialises this
+    to CSV (one row per response, columns for question text and response)
+    or JSON for download.
+    """
+```
+
+The download is always available — it does not require the LLM, does not
+require a specific tier, and does not require opt-in. It is the default
+path for researchers who want to do their own analysis.
+
+#### LLM thematic analysis (opt-in, tier-gated)
+
+When the author wants the LLM to generate a thematic summary, they click
+a separate "Generate LLM theme summary" button (opt-in, tier-gated,
+unlock-gated). This reuses the existing `theme_analyzer.summarise_themes()`
+function, which is already:
+
+- **Opt-in**: a button, never automatic.
+- **Unlock-gated**: only decrypted content is sent to the LLM.
+- **Per-question**: bounded token volume, one question at a time.
+- **Sanitised** through `sanitize_markdown()` before rendering.
+- **Graceful degradation**: if the LLM is unavailable, the caller falls
+  back to plain collation.
+
+For Delphi, the LLM thematic analysis is **author-triggered and
+pre-computed** at round close, not per-participant-view. This preserves
+the opt-in principle while avoiding re-running the LLM for every
+participant who views round N+1.
+
+#### The flow
+
+1. Author closes round N (sets the round's `closed_at`).
+2. The organise page shows two buttons:
+   - **"Download comments"** (always available) — calls
+     `collate_round_comments()` and returns a CSV/JSON file.
+   - **"Generate inter-round feedback"** (opt-in, tier-gated, unlock-gated)
+     — calls `aggregate_responses_by_group()` for the round's groups,
+     then calls `summarise_themes()` per long-text question.
+3. The result (quantitative stats + sanitised qualitative theme markdown,
+   if the LLM path was taken) is cached on a `DelphiRoundFeedback` model.
+4. Participants in round N+1 see the cached feedback via content blocks
+   whose `options.body_md` is substituted from the cached markdown at
+   view time.
+
+The cached content is aggregate, sanitised, and non-identifiable — safe
+to store. Raw responses are never stored in the feedback; only the
+LLM's paraphrased themes (when that path is taken) and the quantitative
+distributions. If the LLM is unavailable or not opted into,
+quantitative feedback still renders; qualitative content blocks show a
+graceful "download the comments to review manually" message linking to
+the download button.
+
+Audit logging records metadata only (round id, question id, response
+count, token count, model name, success/failure, duration) — never the
+free-text input or the LLM output verbatim, per the medical-app logging
+rules in `AGENTS.md`.
+
+#### Why both paths
+
+The dual approach respects that thematic analysis is a research method,
+not just a feature. Researchers who publish Delphi results in
+peer-reviewed journals are often required to describe their coding
+process; an LLM-generated summary cannot be audited or reproduced with
+the same rigour as manual coding. By making the download always
+available and the LLM explicitly opt-in, CheckTick supports both
+workflows without forcing one on the researcher.
+
+### Data model
+
+```python
+class Survey(models.Model):
+    ...
+    layout = models.CharField(
+        max_length=20,
+        choices=[
+            ("linear", "Linear"),
+            ("section_menu", "Section menu"),
+            ("rct", "Randomised (RCT)"),
+            ("guided", "Guided"),
+            ("staged", "Staged (longitudinal)"),
+            ("matrix", "Matrix (free navigation)"),
+            ("delphi", "Delphi (consensus rounds)"),
+        ],
+        default="linear",
+    )
+
+
+class DelphiMenu(models.Model):
+    """Configuration for a survey with ``layout = delphi``."""
+    survey = models.OneToOneField(
+        Survey, related_name="delphi_menu", on_delete=models.CASCADE,
+    )
+    anchor = models.CharField(
+        max_length=20,
+        choices=[("enrolment", "Participant enrolment"),
+                 ("survey_open", "Survey open")],
+        default="enrolment",
+    )
+    min_rounds = models.PositiveIntegerField(default=2)
+    max_rounds = models.PositiveIntegerField(default=3)
+    show_progress = models.BooleanField(
+        default=True,
+        help_text="Show participants which round they are in.",
+    )
+    allow_revision = models.BooleanField(
+        default=True,
+        help_text="Allow participants to revise previous-round answers "
+                  "in the current round.",
+    )
+
+
+class DelphiRound(models.Model):
+    """A single round of a Delphi survey.
+
+    Like ``StagedPhase`` (start/end offsets, M2M to groups) but for
+    consensus rounds. Each round has a window and a section set. The
+    author opens and closes rounds manually (or via the window offsets).
+    """
+    menu = models.ForeignKey(
+        DelphiMenu, related_name="rounds", on_delete=models.CASCADE,
+    )
+    order = models.PositiveIntegerField(default=0)
+    name = models.CharField(max_length=100, default="Round 1")
+    start_offset_days = models.PositiveIntegerField(default=0)
+    end_offset_days = models.PositiveIntegerField(null=True, blank=True)
+    groups = models.ManyToManyField(QuestionGroup, blank=True)
+    opened_at = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ("menu", "order")
+        ordering = ["order", "id"]
+
+
+class DelphiRoundFeedback(models.Model):
+    """Pre-computed inter-round feedback cache.
+
+    Created when the author clicks "Generate inter-round feedback" after
+    closing a round. Stores the aggregated quantitative stats (always
+    computed) and, optionally, the sanitised qualitative theme markdown
+    (only when the author opts into the LLM thematic analysis path).
+
+    The quantitative stats (``stats_json``) are always populated — they
+    are pure Python and require no LLM. The qualitative fields
+    (``theme_markdown``, ``llm_*``) are only populated when the author
+    clicks the "Generate LLM theme summary" button; they are blank when
+    the author chooses manual thematic analysis only (via the
+    "Download comments" button).
+    """
+    round = models.ForeignKey(
+        DelphiRound, related_name="feedback", on_delete=models.CASCADE,
+    )
+    question = models.ForeignKey(
+        "SurveyQuestion", on_delete=models.CASCADE,
+    )
+    stats_json = models.JSONField(default=dict)
+    # LLM thematic analysis fields — only populated when the author opts
+    # into the LLM path. Blank when the author uses manual download only.
+    theme_markdown = models.TextField(
+        blank=True,
+        help_text="Sanitised LLM theme summary (qualitative questions, "
+                  "opt-in only).",
+    )
+    llm_generated = models.BooleanField(
+        default=False,
+        help_text="True if the LLM theme summary was generated for this "
+                  "question. False if the author chose manual analysis only.",
+    )
+    generated_at = models.DateTimeField(auto_now_add=True)
+    llm_model = models.CharField(max_length=100, blank=True)
+    llm_token_count = models.PositiveIntegerField(default=0)
+    llm_success = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ("round", "question")
+
+
+class SurveyProgress(models.Model):
+    ...
+    # [Planned] Delphi round assignment. Only populated for surveys with
+    # layout = "delphi". Null for other layouts. The precedent is
+    # ``assigned_arm`` (RCT) — same shape, separate field.
+    delphi_round = models.ForeignKey(
+        "DelphiRound", null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="progress_rows",
+    )
+    # [Planned] Delphi within-round completion tracking. The precedent is
+    # ``completed_group_ids`` (Matrix) — same shape (list of IDs).
+    delphi_completed_rounds = models.JSONField(default=list, blank=True)
+```
+
+**Migration:** `0067_delphi_layout` (adds the `delphi` choice to
+`Survey.layout`, the `DelphiMenu` / `DelphiRound` /
+`DelphiRoundFeedback` models, and the `SurveyProgress` fields).
+
+### Allocation strategy
+
+Delphi round assignment is simpler than RCT arm allocation: there is no
+randomisation. The participant is assigned to the **current open round**
+on first access, and advances to the next round when the current round
+closes and the next opens. The assignment is stable across resume
+(`delphi_round` FK is preserved).
+
+```python
+def current_round(menu: DelphiMenu, *, enrolment, survey_start, now) -> DelphiRound | None:
+    """Return the currently-open round, or None if no round is open."""
+
+
+def next_round(menu: DelphiMenu, progress: SurveyProgress) -> DelphiRound | None:
+    """Return the next round the participant should advance to."""
+
+
+def assign_round_for_progress(
+    progress: SurveyProgress, menu: DelphiMenu, *, now
+) -> DelphiRound | None:
+    """Assign and persist the current round for ``progress``.
+
+    Idempotent: if ``progress.delphi_round`` is already set and still
+    open, returns it. If the assigned round has closed, advances to the
+    next open round. If no round is open, returns None (participant sees
+    a "check back later" page, like Staged).
+    """
+```
+
+These sit in `delphi.py` next to `staged.py` and `matrix.py` — pure
+functions, no side effects except `assign_round_for_progress` which
+persists the FK.
+
+### Runtime hook
+
+The runtime hook is a new branch in `_handle_participant_submission`,
+analogous to the staged branch:
+
+```python
+if survey.layout == Survey.Layout.DELPHI and progress is not None:
+    menu = getattr(survey, "delphi_menu", None)
+    current = assign_round_for_progress(progress, menu, now=timezone.now())
+    if current is None:
+        # No round open — render "check back later" page.
+        return _render_delphi_waiting(request, survey, progress)
+    # Resolve selected_group_ids from the current round's groups.
+    round_group_ids = set(current.groups.values_list("id", flat=True))
+    selected_group_ids = [
+        g for g in _resolved_group_order_ids(survey)
+        if g in round_group_ids
+    ]
+```
+
+The inter-round feedback is rendered via content blocks whose
+`options.body_md` is substituted from the `DelphiRoundFeedback` cache
+at view time — no new feedback rendering model, just a body source
+swap in `_annotate_question_render_sequence`.
+
+### Outline grammar
+
+```text
+DELPHI
+  anchor: enrolment
+  min_rounds: 2
+  max_rounds: 3
+  show_progress: true
+  allow_revision: true
+
+  round: Round 1
+    start: 0
+    end: 14
+
+  round: Round 2
+    start: 14
+    end: 28
+
+# Demographics {demographics}    ~ round:1, round:2
+## Name {name}
+(text)
+
+# Round 1 questions {r1-questions}    ~ round:1
+## Importance {importance}
+(likert) 1-5
+
+# Round 2 questions {r2-questions}    ~ round:2
+## Revised importance {revised-importance}
+(likert) 1-5
+```
+
+The `~ round:<N>` suffix on group headings assigns a group to a round.
+A group can appear in multiple rounds (e.g. demographics in every
+round). The `round:` config lines inside the `DELPHI` block define the
+round windows. The grammar round-trips through export → import like
+the other layouts.
+
+### Warnings
+
+| Issue | Why it matters | Handling |
+|---|---|---|
+| No rounds configured | A Delphi survey with no rounds is unrunnable. | Block take view with a clear error; warn on Organise page. |
+| Round with no groups | A round with an empty group set renders nothing. | Warn on Organise page; block take view. |
+| Overlapping round windows | Rounds are meant to be sequential. | Warn if two rounds' windows overlap; non-blocking. |
+| Group in no round | A group not assigned to any round is unreachable. | Warn on Organise page (like Staged). |
+| Feedback not generated | Round N+1 opens but round N has no `DelphiRoundFeedback`. | Warn on Organise page; participants see content blocks with empty body (graceful). |
+| LLM unavailable for themes | Qualitative LLM feedback can't be generated. | Quantitative feedback still renders; qualitative content blocks show "download comments to review manually". The manual download is always available. Non-blocking. |
+| Participant hasn't completed round N | Advancing to round N+1 without completing N loses revision context. | Gate round advancement on `delphi_completed_rounds` containing the current round. |
+| Revision disabled | `allow_revision=False` but round N+1 re-shows round N's questions. | Hide previous-round answers in round N+1 (render blank). Warn the author. |
+
+### Preview
+
+`?simulate_round=<round_id>` filters the questions to that round's
+groups (ordered by `_resolved_group_order_ids`). A "Simulate round"
+panel on the preview page lets the author pick a round without a real
+participant. `?simulate_round=<id>&with_feedback=1` also substitutes
+the `DelphiRoundFeedback` body into content blocks so the author can
+preview the inter-round feedback view.
+
+### Survey Map
+
+The Survey Map shows the full authored survey with round badges per
+group (like the phase badges in Staged and the arm badges in RCT). A
+round-summary card above the visualiser lists the rounds, their
+windows, and whether feedback has been generated.
+
+### Issues and edge cases
+
+| Issue | Why it matters | Handling |
+|---|---|---|
+| Round windows vs manual open/close | The author can both set window offsets and manually open/close. | Manual open/close overrides the window. If `opened_at` is set, the window is ignored for that round. |
+| Participant mid-round when round closes | The round closes while the participant is still answering. | Grace period: the participant can submit for 24h after `closed_at`. After that, their progress is frozen for that round. |
+| Last round | No next round to advance to. | After the last round closes, the survey is complete for that participant. `SurveyProgress.status` → `completed`. |
+| Min/max rounds drift | Author changes `max_rounds` after participants have completed 3 rounds. | Clamp to the new max; warn the author. Existing progress is preserved. |
+| Feedback regeneration | Author regenerates feedback after more responses come in. | Delete the old `DelphiRoundFeedback` rows and recreate. Participants in round N+1 see the updated feedback on next view. |
+| Anonymity | Delphi often requires anonymous responses. | Aggregation never reveals individual responses. The LLM prompt explicitly forbids verbatim quotes. Authors can mark a survey as "anonymous" (existing field) to hide participant identity from the author too. |
+
+### Delphi compatibility
+
+Delphi is the destination layout — the earlier layouts were shaped to
+reuse their ingredients here. Delphi does **not** need to be compatible
+with a future layout; it is the consumer of the patterns proven by
+RCT, Staged, Matrix, and Content blocks.
+
 
 ## Related documentation
 

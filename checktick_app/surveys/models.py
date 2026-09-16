@@ -923,6 +923,7 @@ class Survey(models.Model):
         GUIDED = "guided", "Guided"
         STAGED = "staged", "Staged (longitudinal)"
         MATRIX = "matrix", "Matrix (free navigation)"
+        DELPHI = "delphi", "Delphi (consensus rounds)"
 
     layout = models.CharField(
         max_length=20,
@@ -936,7 +937,9 @@ class Survey(models.Model):
             'question per screen with Next/Back navigation; "staged" unlocks '
             "sections over time in defined phase windows; "
             '"matrix" shows all sections as cards with free navigation '
-            "and completion indicators."
+            'and completion indicators; "delphi" runs multi-round '
+            "consensus workflows where participants complete rounds, see "
+            "aggregate feedback between rounds, and revise their answers."
         ),
     )
     # Resume + redaction toggles (see docs/survey-progress-tracking.md and
@@ -3826,6 +3829,37 @@ class SurveyProgress(models.Model):
         ),
     )
 
+    # Delphi layout: the round the participant is currently on (FK to
+    # DelphiRound). Only populated for surveys with layout = "delphi". Null
+    # for other layouts. The precedent is ``assigned_arm`` (RCT) — same
+    # shape, separate field. Arms and rounds are orthogonal dimensions.
+    # Set at first access by ``assign_round_for_progress`` in delphi.py and
+    # advanced when the current round closes and the next opens.
+    delphi_round = models.ForeignKey(
+        "DelphiRound",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="progress_rows",
+        help_text=(
+            "The Delphi round this participant is currently on. Null for "
+            "non-Delphi surveys."
+        ),
+    )
+    # Delphi layout: rounds the participant has completed (list of round
+    # IDs). The precedent is ``completed_group_ids`` (Matrix) — same shape
+    # (list of IDs, soft indicator). Used to gate round advancement: a
+    # participant must complete the current round before advancing to the
+    # next.
+    delphi_completed_rounds = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Round IDs the participant has completed in a Delphi survey "
+            "(soft indicator; round advancement gates on this)."
+        ),
+    )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -4249,6 +4283,200 @@ class MatrixMenu(models.Model):
 
     def __str__(self) -> str:
         return f"MatrixMenu for {self.survey.name}"
+
+
+class DelphiMenu(models.Model):
+    """Configuration for a survey with ``layout = delphi``.
+
+    A DelphiMenu is a OneToOne related to ``Survey`` and holds the
+    consensus-round-level settings (anchor for round windows, min/max
+    rounds, progress visibility, revision toggle). Per-round settings
+    (name, window offsets, group membership) live on ``DelphiRound`` rows.
+
+    See docs/survey-layouts-technical.md §Delphi (consensus rounds).
+    A ``linear`` / ``section_menu`` / ``rct`` / ``guided`` / ``staged`` /
+    ``matrix`` survey has no ``DelphiMenu`` row.
+    """
+
+    survey = models.OneToOneField(
+        Survey,
+        related_name="delphi_menu",
+        on_delete=models.CASCADE,
+    )
+
+    class Anchor(models.TextChoices):
+        ENROLMENT = "enrolment", "From participant enrolment"
+        SURVEY_OPEN = "survey_open", "From survey open date"
+
+    anchor = models.CharField(
+        max_length=20,
+        choices=Anchor.choices,
+        default=Anchor.ENROLMENT,
+        help_text=(
+            "Reference point for round windows. 'enrolment' offsets from "
+            "the participant's first access (SurveyProgress.created_at); "
+            "'survey_open' offsets from Survey.start_at. Use 'survey_open' "
+            "when all participants should move through rounds on the same "
+            "calendar schedule."
+        ),
+    )
+    min_rounds = models.PositiveIntegerField(
+        default=2,
+        help_text="Minimum number of rounds before the survey can complete.",
+    )
+    max_rounds = models.PositiveIntegerField(
+        default=3,
+        help_text="Maximum number of rounds. After the last round closes, the survey is complete.",
+    )
+    show_progress = models.BooleanField(
+        default=True,
+        help_text="Show participants which round they are in and how many remain.",
+    )
+    allow_revision = models.BooleanField(
+        default=True,
+        help_text=(
+            "Allow participants to revise their previous-round answers in "
+            "the current round. When False, previous-round questions render "
+            "blank in subsequent rounds."
+        ),
+    )
+
+    def __str__(self) -> str:
+        return f"DelphiMenu for {self.survey.name}"
+
+
+class DelphiRound(models.Model):
+    """A single round of a Delphi survey.
+
+    Like ``StagedPhase`` (start/end offsets, M2M to groups) but for
+    consensus rounds. Each round has a window and a section set. The
+    author opens and closes rounds manually (via ``opened_at`` /
+    ``closed_at``) or via the window offsets. A group may appear in
+    multiple rounds (e.g. a demographics section open in every round).
+    """
+
+    menu = models.ForeignKey(
+        DelphiMenu,
+        related_name="rounds",
+        on_delete=models.CASCADE,
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Display order. Round 1, Round 2, etc.",
+    )
+    name = models.CharField(
+        max_length=100,
+        default="Round 1",
+        help_text="Round name (e.g. 'Round 1', 'Initial survey', 'Revision round').",
+    )
+    start_offset_days = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Days after the anchor when this round opens. 0 = opens at the "
+            "anchor time."
+        ),
+    )
+    end_offset_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Days after the anchor when this round closes (exclusive). "
+            "Blank = open-ended (never closes automatically)."
+        ),
+    )
+    groups = models.ManyToManyField(
+        QuestionGroup,
+        related_name="delphi_rounds",
+        blank=True,
+        help_text=(
+            "Sections that are active during this round. A group may appear "
+            "in multiple rounds (e.g. a demographics section open in every "
+            "round). Groups not in any round are unreachable \u2014 warned "
+            "on the Organise page."
+        ),
+    )
+    opened_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "When the author manually opened this round. Overrides the "
+            "window offset. Null = use the window offset."
+        ),
+    )
+    closed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "When the author manually closed this round. Once set, the "
+            "round is closed regardless of the window offset."
+        ),
+    )
+
+    class Meta:
+        unique_together = ("menu", "order")
+        ordering = ["order", "id"]
+
+    def __str__(self) -> str:
+        end = self.end_offset_days if self.end_offset_days is not None else "\u221e"
+        return f"{self.name} (days {self.start_offset_days}\u2013{end})"
+
+
+class DelphiRoundFeedback(models.Model):
+    """Pre-computed inter-round feedback cache.
+
+    Created when the author clicks "Generate inter-round feedback" after
+    closing a round. Stores the aggregated quantitative stats (always
+    computed) and, optionally, the sanitised qualitative theme markdown
+    (only when the author opts into the LLM thematic analysis path).
+
+    The quantitative stats (``stats_json``) are always populated \u2014 they
+    are pure Python and require no LLM. The qualitative fields
+    (``theme_markdown``, ``llm_*``) are only populated when the author
+    clicks the "Generate LLM theme summary" button; they are blank when
+    the author chooses manual thematic analysis only (via the
+    "Download comments" button).
+
+    See docs/survey-layouts-technical.md §Delphi \u00a7Inter-round feedback
+    generation.
+    """
+
+    round = models.ForeignKey(
+        DelphiRound,
+        related_name="feedback",
+        on_delete=models.CASCADE,
+    )
+    question = models.ForeignKey(
+        "SurveyQuestion",
+        on_delete=models.CASCADE,
+    )
+    stats_json = models.JSONField(
+        default=dict,
+        help_text="Aggregated quantitative stats (median/IQR/distribution/etc.).",
+    )
+    theme_markdown = models.TextField(
+        blank=True,
+        help_text=(
+            "Sanitised LLM theme summary (qualitative questions, opt-in "
+            "only). Blank when the author chose manual analysis only."
+        ),
+    )
+    llm_generated = models.BooleanField(
+        default=False,
+        help_text=(
+            "True if the LLM theme summary was generated for this question. "
+            "False if the author chose manual analysis only or the LLM failed."
+        ),
+    )
+    generated_at = models.DateTimeField(auto_now_add=True)
+    llm_model = models.CharField(max_length=100, blank=True)
+    llm_token_count = models.PositiveIntegerField(default=0)
+    llm_success = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ("round", "question")
+
+    def __str__(self) -> str:
+        return f"Feedback for {self.question.text[:50]} in {self.round}"
 
 
 def validate_markdown_survey(md_text: str) -> list[dict]:

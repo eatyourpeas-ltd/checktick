@@ -8,6 +8,9 @@ from .models import (
     CollectionItem,
     DataExport,
     DataSet,
+    DelphiMenu,
+    DelphiRound,
+    DelphiRoundFeedback,
     IdentityVerification,
     MatrixMenu,
     Organization,
@@ -717,6 +720,57 @@ class MatrixMenuAdmin(admin.ModelAdmin):
     list_display = ("survey", "order_mode", "allow_revisit")
     list_filter = ("order_mode", "allow_revisit")
     search_fields = ("survey__name", "survey__slug")
+
+
+class DelphiRoundInline(admin.TabularInline):
+    model = DelphiRound
+    extra = 0
+
+
+@admin.register(DelphiMenu)
+class DelphiMenuAdmin(admin.ModelAdmin):
+    list_display = (
+        "survey",
+        "anchor",
+        "min_rounds",
+        "max_rounds",
+        "show_progress",
+        "allow_revision",
+    )
+    list_filter = ("anchor", "show_progress", "allow_revision")
+    search_fields = ("survey__name", "survey__slug")
+    inlines = [DelphiRoundInline]
+
+
+@admin.register(DelphiRound)
+class DelphiRoundAdmin(admin.ModelAdmin):
+    list_display = (
+        "menu",
+        "name",
+        "order",
+        "start_offset_days",
+        "end_offset_days",
+        "opened_at",
+        "closed_at",
+    )
+    list_filter = ("menu__anchor",)
+    search_fields = ("menu__survey__name", "name")
+    ordering = ("menu", "order", "id")
+    filter_horizontal = ("groups",)
+
+
+@admin.register(DelphiRoundFeedback)
+class DelphiRoundFeedbackAdmin(admin.ModelAdmin):
+    list_display = (
+        "round",
+        "question",
+        "llm_generated",
+        "llm_success",
+        "generated_at",
+    )
+    list_filter = ("llm_generated", "llm_success")
+    search_fields = ("round__menu__survey__name", "question__text")
+    ordering = ("round", "question")
 
 
 class CollectionItemInline(admin.TabularInline):

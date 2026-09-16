@@ -47,6 +47,7 @@ from checktick_app.core.theme_utils import is_safe_url, sanitize_font_family
 
 from .allocation import MAX_SEED, pick_arm
 from .color import hex_to_oklch
+from .delphi import assign_round_for_progress as _delphi_assign_round
 from .doc_extract import (
     MESSAGE_BY_CODE,
     DocImportError,
@@ -72,6 +73,9 @@ from .models import (
     CollectionDefinition,
     CollectionItem,
     DataSet,
+    DelphiMenu,
+    DelphiRound,
+    DelphiRoundFeedback,
     LLMConversationSession,
     MatrixMenu,
     Organization,
@@ -1550,6 +1554,32 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
             if sim_section_id in survey_group_ids:
                 simulated_group_ids = [sim_section_id]
 
+    # Delphi: simulate round. If ``?simulate_round=<round_id>`` is present,
+    # the questions are filtered to that round's groups (ordered by
+    # _resolved_group_order_ids) regardless of whether the round is
+    # currently open. A "Simulate round" panel on the preview page lets the
+    # author preview a future round without waiting for its window.
+    delphi_preview = None
+    if survey.layout == Survey.Layout.DELPHI:
+        dmenu = getattr(survey, "delphi_menu", None)
+        if dmenu is None:
+            dmenu = DelphiMenu.objects.create(survey=survey)
+        delphi_rounds = list(
+            dmenu.rounds.order_by("order", "id").prefetch_related("groups")
+        )
+        delphi_preview = {"menu": dmenu, "rounds": delphi_rounds}
+        sim_round_raw = request.GET.get("simulate_round", "")
+        if sim_round_raw.isdigit():
+            sim_round_id = int(sim_round_raw)
+            sim_round = next((r for r in delphi_rounds if r.id == sim_round_id), None)
+            if sim_round is not None:
+                round_group_ids = set(sim_round.groups.values_list("id", flat=True))
+                if round_group_ids:
+                    ordered = _resolved_group_order_ids(survey)
+                    simulated_group_ids = [g for g in ordered if g in round_group_ids]
+                else:
+                    simulated_group_ids = []
+
     _prepare_question_rendering(survey)
     all_questions = list(
         survey.questions.select_related("group", "dataset")
@@ -1626,6 +1656,8 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "staged_preview": staged_preview,
         # Matrix simulate section panel (step 6).
         "matrix_preview": matrix_preview,
+        # Delphi simulate round panel.
+        "delphi_preview": delphi_preview,
         # Guided layout: preview also renders one question per screen so the
         # author can test the flow without a real participant.
         "is_guided": survey.layout == Survey.Layout.GUIDED,
@@ -1983,16 +2015,115 @@ def _resolved_group_order_ids(
     return [gid for gid in ordered if gid in selected_set]
 
 
+def _render_delphi_feedback_body(feedback) -> str:
+    """Render a single ``DelphiRoundFeedback`` row as Markdown.
+
+    Produces a human-readable summary of the quantitative stats (median,
+    IQR, distribution) and, if generated, the LLM theme markdown. The
+    output is Markdown (rendered to sanitised HTML by the caller via
+    ``render_content_block_markdown``).
+    """
+    stats = feedback.stats_json if isinstance(feedback.stats_json, dict) else {}
+    parts: list[str] = []
+
+    q_type = stats.get("question_type", "")
+    count = stats.get("count", 0)
+
+    if count == 0:
+        parts.append(
+            "*No responses were submitted for this question in the previous round.*"
+        )
+    elif q_type in ("likert", "number"):
+        median = stats.get("median", "—")
+        q1 = stats.get("q1", "—")
+        q3 = stats.get("q3", "—")
+        parts.append(
+            f"**Median:** {median}  \n**IQR:** {q1}–{q3}  \n**Responses:** {count}"
+        )
+        dist = stats.get("distribution", {})
+        if dist:
+            parts.append("\n**Distribution:**")
+            for value, cnt in sorted(dist.items()):
+                parts.append(f"- {value}: {cnt}")
+    elif q_type == "yesno":
+        yes = stats.get("yes_count", 0)
+        no = stats.get("no_count", 0)
+        dk = stats.get("dont_know_count", 0)
+        pct = stats.get("yes_pct", 0)
+        parts.append(
+            f"**Yes:** {yes} ({pct}%)  \n**No:** {no}  \n**Don't know:** {dk}  \n**Responses:** {count}"
+        )
+    elif q_type in ("mc_single", "mc_multi", "dropdown"):
+        dist = stats.get("distribution", {})
+        parts.append(f"**Responses:** {count}\n\n**Distribution:**")
+        for label, cnt in dist.items():
+            parts.append(f"- {label}: {cnt}")
+    elif q_type == "text":
+        # Qualitative: if LLM themes were generated, show them. Otherwise
+        # prompt the participant to download the comments manually.
+        if feedback.llm_generated and feedback.theme_markdown:
+            parts.append(feedback.theme_markdown)
+        else:
+            parts.append(
+                "*Free-text responses were collected. Download the comments "
+                "from the survey dashboard to review them manually.*"
+            )
+    else:
+        parts.append(f"**Responses:** {count}")
+
+    return "\n".join(parts)
+
+
+def _render_delphi_feedback_summary(feedback_rows: list) -> str:
+    """Render all ``DelphiRoundFeedback`` rows for a round as a combined Markdown summary.
+
+    Each question's feedback is rendered as a section with its question
+    text as the heading. Used by the content block aggregate feedback
+    substitution so a single content block shows the full inter-round
+    feedback summary.
+    """
+    if not feedback_rows:
+        return "*No inter-round feedback has been generated yet.*"
+    parts: list[str] = []
+    for fb in feedback_rows:
+        q_text = fb.question.text if fb.question else "Unknown question"
+        parts.append(f"### {q_text}\n")
+        parts.append(_render_delphi_feedback_body(fb))
+        parts.append("")
+    return "\n".join(parts)
+
+
 def _annotate_question_render_sequence(
     survey: Survey, questions: list[SurveyQuestion]
 ) -> list[SurveyQuestion]:
-    """Attach rendering helper attrs consumed by ``surveys/detail.html``."""
+    """Attach rendering helper attrs consumed by ``surveys/detail.html``.
+
+    For Delphi surveys, content blocks marked as aggregate feedback
+    (``options.is_delphi_feedback = True``) have their ``body_md`` and
+    ``heading`` substituted from the ``DelphiRoundFeedback`` cache for
+    the previous round at view time. See docs/survey-layouts-technical.md
+    §Delphi §Inter-round feedback rendering.
+    """
     questions_with_show_conditions = set(
         SurveyQuestionCondition.objects.filter(
             target_question__survey=survey,
             action=SurveyQuestionCondition.Action.SHOW,
         ).values_list("target_question_id", flat=True)
     )
+
+    # Delphi: prefetch the previous round's feedback cache so content blocks
+    # marked as aggregate feedback can substitute their body_md/heading.
+    delphi_feedback_rows: list[DelphiRoundFeedback] = []
+    if survey.layout == Survey.Layout.DELPHI:
+        from .delphi import _previous_round_for_survey
+
+        prev_round = _previous_round_for_survey(survey)
+        if prev_round is not None:
+            delphi_feedback_rows = list(
+                DelphiRoundFeedback.objects.filter(round=prev_round)
+                .select_related("question")
+                .order_by("question__order", "question__id")
+            )
 
     for i, q in enumerate(questions, start=1):
         setattr(q, "idx", i)
@@ -2011,6 +2142,32 @@ def _annotate_question_render_sequence(
             )
 
             opts = q.options if isinstance(q.options, dict) else {}
+            # Delphi aggregate feedback substitution: if this content block is
+            # marked as aggregate feedback (``is_delphi_feedback = True``),
+            # substitute the body_md with a combined summary of all feedback
+            # rows from the previous round. The author marks a content block
+            # as feedback via the builder's content block configure panel.
+            if (
+                survey.layout == Survey.Layout.DELPHI
+                and opts.get("is_delphi_feedback")
+                and delphi_feedback_rows
+            ):
+                feedback_body = _render_delphi_feedback_summary(delphi_feedback_rows)
+                setattr(
+                    q,
+                    "content_block_html",
+                    render_content_block_markdown(feedback_body),
+                )
+                setattr(
+                    q,
+                    "content_block_heading",
+                    opts.get("heading", "Inter-round feedback"),
+                )
+                setattr(q, "content_block_subtitle", opts.get("subtitle", ""))
+                setattr(q, "content_block_links", opts.get("links", []))
+                setattr(q, "content_block_image", None)
+                setattr(q, "content_block_consent", None)
+                continue
             setattr(
                 q,
                 "content_block_html",
@@ -3511,6 +3668,224 @@ def survey_summary_themes(request: HttpRequest, slug: str) -> JsonResponse:
         },
         status=200 if result.get("success") else 503,
     )
+
+
+@login_required
+@email_confirmed_required
+@require_http_methods(["POST"])
+@ratelimit(key="user", rate="10/h", block=True)
+def delphi_generate_feedback(request: HttpRequest, slug: str) -> JsonResponse:
+    """Generate inter-round feedback for a closed Delphi round.
+
+    ``POST /surveys/{slug}/delphi/feedback/generate/``
+
+    Called by the "Generate inter-round feedback" button on the Organise
+    page. Aggregates the closed round's responses (quantitative stats +
+    optional LLM themes) and caches the result on ``DelphiRoundFeedback``
+    rows so participant views don't re-run the aggregation or the LLM.
+
+    Access: ``require_can_edit`` (only the survey owner / org admin can
+    generate feedback). Unlock gate: the survey must be unlocked if it
+    has encrypted responses (the aggregation needs decrypted answers).
+
+    POST params:
+      - ``round_id``: the ID of the closed round to generate feedback for.
+      - ``use_llm``: "1" to opt into LLM thematic analysis (default: off).
+
+    Audit-logged with metadata only (round id, question count, response
+    count, LLM success/failure). Never the free-text input or the LLM
+    output verbatim, per AGENTS.md.
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+
+    if survey.layout != Survey.Layout.DELPHI:
+        return JsonResponse({"error": "Not a Delphi survey."}, status=400)
+
+    survey_key = get_survey_key_from_session(request, slug)
+    has_encrypted_responses = survey.responses.filter(
+        enc_answers__isnull=False
+    ).exists()
+    if has_encrypted_responses and not survey_key:
+        return JsonResponse(
+            {"error": "Unlock the survey first to generate feedback."},
+            status=403,
+        )
+
+    round_id = request.POST.get("round_id")
+    if not round_id:
+        return JsonResponse({"error": "round_id is required."}, status=400)
+    try:
+        round_id_int = int(round_id)
+    except ValueError:
+        return JsonResponse({"error": "Invalid round_id."}, status=400)
+
+    menu = getattr(survey, "delphi_menu", None)
+    if menu is None:
+        return JsonResponse({"error": "No Delphi menu configured."}, status=400)
+
+    try:
+        rnd = menu.rounds.get(id=round_id_int)
+    except DelphiRound.DoesNotExist:
+        return JsonResponse({"error": "Round not found."}, status=404)
+
+    # The round must be closed before feedback can be generated.
+    if rnd.closed_at is None:
+        return JsonResponse(
+            {"error": "Close the round before generating feedback."},
+            status=400,
+        )
+
+    use_llm = request.POST.get("use_llm") == "1"
+
+    # Collect the round's group IDs.
+    group_ids = list(rnd.groups.values_list("id", flat=True))
+    if not group_ids:
+        return JsonResponse(
+            {"error": "This round has no sections assigned."},
+            status=400,
+        )
+
+    # Generate the feedback (quantitative + optional LLM themes).
+    from .delphi import generate_round_feedback
+
+    feedback_data = generate_round_feedback(
+        survey.id,
+        group_ids,
+        survey_key=survey_key,
+        use_llm=use_llm,
+    )
+
+    # Cache the feedback on DelphiRoundFeedback rows (replace existing).
+    DelphiRoundFeedback.objects.filter(round=rnd).delete()
+    llm_success_count = 0
+    for q_id, fb in feedback_data.items():
+        DelphiRoundFeedback.objects.create(
+            round=rnd,
+            question_id=q_id,
+            stats_json=fb.get("stats", {}),
+            theme_markdown=fb.get("theme_markdown", ""),
+            llm_generated=fb.get("llm_generated", False),
+            llm_model=fb.get("llm_model", ""),
+            llm_token_count=fb.get("llm_token_count", 0),
+            llm_success=fb.get("llm_success", False),
+        )
+        if fb.get("llm_success"):
+            llm_success_count += 1
+
+    # Audit-log with metadata only.
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.SURVEY,
+        survey=survey,
+        action=AuditLog.Action.UPDATE,
+        severity=AuditLog.Severity.INFO,
+        message="Delphi inter-round feedback generated",
+        metadata={
+            "survey_id": str(survey.id),
+            "survey_slug": survey.slug,
+            "round_id": str(rnd.id),
+            "round_name": rnd.name,
+            "question_count": len(feedback_data),
+            "llm_used": use_llm,
+            "llm_success_count": llm_success_count,
+        },
+    )
+
+    return JsonResponse(
+        {
+            "success": True,
+            "round_id": str(rnd.id),
+            "question_count": len(feedback_data),
+            "llm_used": use_llm,
+            "llm_success_count": llm_success_count,
+        }
+    )
+
+
+@login_required
+@email_confirmed_required
+@require_http_methods(["GET"])
+def delphi_download_comments(request: HttpRequest, slug: str):
+    """Download free-text comments for a Delphi round as CSV.
+
+    ``GET /surveys/{slug}/delphi/feedback/comments/``
+
+    Called by the "Download comments" button on the Organise page. Always
+    available — no LLM required, no tier gate. Returns a CSV file with one
+    row per response (columns: question, response) for manual thematic
+    analysis in NVivo, Excel, or SPSS.
+
+    Access: ``require_can_edit``. Unlock gate: the survey must be unlocked
+    if it has encrypted responses.
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+
+    if survey.layout != Survey.Layout.DELPHI:
+        return JsonResponse({"error": "Not a Delphi survey."}, status=400)
+
+    survey_key = get_survey_key_from_session(request, slug)
+    has_encrypted_responses = survey.responses.filter(
+        enc_answers__isnull=False
+    ).exists()
+    if has_encrypted_responses and not survey_key:
+        messages.error(request, _("Unlock the survey first to download comments."))
+        return redirect("surveys:unlock", slug=slug)
+
+    round_id = request.GET.get("round_id")
+    if not round_id:
+        return JsonResponse({"error": "round_id is required."}, status=400)
+    try:
+        round_id_int = int(round_id)
+    except ValueError:
+        return JsonResponse({"error": "Invalid round_id."}, status=400)
+
+    menu = getattr(survey, "delphi_menu", None)
+    if menu is None:
+        return JsonResponse({"error": "No Delphi menu configured."}, status=400)
+
+    try:
+        rnd = menu.rounds.get(id=round_id_int)
+    except DelphiRound.DoesNotExist:
+        return JsonResponse({"error": "Round not found."}, status=404)
+
+    group_ids = list(rnd.groups.values_list("id", flat=True))
+    if not group_ids:
+        return JsonResponse(
+            {"error": "This round has no sections assigned."},
+            status=400,
+        )
+
+    from .delphi import collate_round_comments, round_comments_to_csv
+
+    collated = collate_round_comments(survey.id, group_ids, survey_key=survey_key)
+    csv_content = round_comments_to_csv(collated)
+
+    # Audit-log with metadata only.
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.SURVEY,
+        survey=survey,
+        action=AuditLog.Action.UPDATE,
+        severity=AuditLog.Severity.INFO,
+        message="Delphi comments downloaded",
+        metadata={
+            "survey_id": str(survey.id),
+            "survey_slug": survey.slug,
+            "round_id": str(rnd.id),
+            "round_name": rnd.name,
+            "question_count": len(collated),
+        },
+    )
+
+    from django.http import HttpResponse
+
+    response = HttpResponse(csv_content, content_type="text/csv")
+    response["Content-Disposition"] = (
+        f'attachment; filename="delphi-comments-{survey.slug}-round-{rnd.order}.csv"'
+    )
+    return response
 
 
 @login_required
@@ -6458,6 +6833,49 @@ def _handle_participant_submission(
             return _render_matrix_landing(request, survey, progress)
         # Filter to just this one section.
         selected_group_ids = [section_id]
+    # Delphi (consensus rounds) layout (see docs/survey-layouts-technical.md
+    # §Delphi (consensus rounds)). Like staged, the open set is recomputed
+    # on each access — but instead of phases, the participant is assigned to
+    # a round (FK on SurveyProgress). The round's group set becomes their
+    # selected_group_ids. When no round is open, a friendly "check back
+    # later" page renders. When the assigned round has closed, the
+    # participant advances to the next open round. Reuses the same
+    # _resolved_group_order_ids filtering hook as the other layouts.
+    if survey.layout == Survey.Layout.DELPHI and progress is not None:
+        menu = getattr(survey, "delphi_menu", None)
+        if menu is None:
+            # No DelphiMenu configured — block with a clear error.
+            messages.error(
+                request,
+                _(
+                    "This survey is configured as a Delphi consensus round "
+                    "but has no rounds set up. Please contact the survey author."
+                ),
+            )
+            return redirect("surveys:detail", slug=survey.slug)
+        rnd = _delphi_assign_round(progress, menu, now=timezone.now())
+        if rnd is None:
+            # No round is currently open. Render a friendly "check back
+            # later" page. The participant's progress row is preserved so
+            # resume works when a round opens later.
+            return render(
+                request,
+                "surveys/delphi_no_round.html",
+                {"survey": survey, "is_preview": False},
+            )
+        round_group_ids = set(rnd.groups.values_list("id", flat=True))
+        if round_group_ids:
+            ordered_ids = _resolved_group_order_ids(survey)
+            selected_group_ids = [g for g in ordered_ids if g in round_group_ids]
+            progress.selected_group_ids = selected_group_ids
+            progress.save(update_fields=["selected_group_ids"])
+        else:
+            # Round with no groups — render the no-round page (graceful).
+            return render(
+                request,
+                "surveys/delphi_no_round.html",
+                {"survey": survey, "is_preview": False},
+            )
     show_picker = survey.layout == Survey.Layout.SECTION_MENU and not selected_group_ids
     if show_picker:
         return _render_section_menu_picker(request, survey, progress)
@@ -6471,6 +6889,8 @@ def _handle_participant_submission(
     # empty selection renders everything (linear) or is gated by the
     # picker (section_menu) / arm fallback (rct).
     if survey.layout == Survey.Layout.STAGED:
+        filter_ids: list[int] | None = selected_group_ids
+    elif survey.layout == Survey.Layout.DELPHI:
         filter_ids: list[int] | None = selected_group_ids
     else:
         filter_ids = selected_group_ids or None
@@ -6932,6 +7352,18 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                         "useful. Add more sections first."
                     ),
                 )
+        # Same guard for delphi — a consensus-round survey with < 2
+        # sections is degenerate.
+        if chosen == Survey.Layout.DELPHI:
+            section_count = survey.question_groups.count()
+            if section_count < 2:
+                messages.warning(
+                    request,
+                    _(
+                        "Delphi surveys need at least 2 sections to be "
+                        "useful. Add more sections first."
+                    ),
+                )
         survey.layout = chosen
         survey.save(update_fields=["layout"])
         messages.success(
@@ -7246,6 +7678,120 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         menu.allow_revisit = bool(request.POST.get("allow_revisit"))
         menu.save()
         messages.success(request, _("Matrix configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Delphi configuration save. Only meaningful when the survey is in
+    # delphi layout. Saves the anchor, min/max rounds, show_progress,
+    # allow_revision, and per-round name / start_offset_days /
+    # end_offset_days / group membership.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_delphi_menu"
+        and survey.layout == Survey.Layout.DELPHI
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = DelphiMenu.objects.get_or_create(survey=survey)
+        anchor = request.POST.get("anchor", DelphiMenu.Anchor.ENROLMENT)
+        if anchor in {choice[0] for choice in DelphiMenu.Anchor.choices}:
+            menu.anchor = anchor
+        try:
+            menu.min_rounds = max(1, int(request.POST.get("min_rounds", 2)))
+        except ValueError:
+            menu.min_rounds = 2
+        try:
+            menu.max_rounds = max(
+                menu.min_rounds, int(request.POST.get("max_rounds", 3))
+            )
+        except ValueError:
+            menu.max_rounds = 3
+        menu.show_progress = bool(request.POST.get("show_progress"))
+        menu.allow_revision = bool(request.POST.get("allow_revision"))
+        menu.save()
+        # Per-round: name, start, end, groups. round_ids is the list of
+        # existing round IDs submitted from the form.
+        round_ids = [
+            int(x) for x in request.POST.getlist("round_ids") if str(x).isdigit()
+        ]
+        for round_id in round_ids:
+            try:
+                rnd = menu.rounds.get(id=round_id)
+            except DelphiRound.DoesNotExist:
+                continue
+            rnd.name = (
+                request.POST.get(f"round_name_{round_id}", rnd.name) or rnd.name
+            )[:100]
+            try:
+                rnd.start_offset_days = max(
+                    0, int(request.POST.get(f"round_start_{round_id}", 0))
+                )
+            except ValueError:
+                rnd.start_offset_days = 0
+            end_raw = (request.POST.get(f"round_end_{round_id}", "") or "").strip()
+            if end_raw:
+                try:
+                    rnd.end_offset_days = max(1, int(end_raw))
+                except ValueError:
+                    rnd.end_offset_days = None
+            else:
+                rnd.end_offset_days = None
+            rnd.save(
+                update_fields=[
+                    "name",
+                    "start_offset_days",
+                    "end_offset_days",
+                ]
+            )
+            group_ids = [
+                int(x)
+                for x in request.POST.getlist(f"round_groups_{round_id}")
+                if str(x).isdigit()
+            ]
+            rnd.groups.set(group_ids)
+        messages.success(request, _("Delphi configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Add round. Creates a new empty round at the end of the order.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "add_round"
+        and survey.layout == Survey.Layout.DELPHI
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = DelphiMenu.objects.get_or_create(survey=survey)
+        next_order = (menu.rounds.aggregate(m=models.Max("order"))["m"] or 0) + 1
+        DelphiRound.objects.create(
+            menu=menu, name=f"Round {next_order}", order=next_order
+        )
+        messages.success(request, _("Round added."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Remove round. Deletes the round. Participants keep their
+    # delphi_round FK (SET_NULL) and selected_group_ids (recomputed on
+    # next access anyway).
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "remove_round"
+        and survey.layout == Survey.Layout.DELPHI
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        round_id_raw = request.POST.get("round_id", "")
+        if round_id_raw.isdigit():
+            menu = getattr(survey, "delphi_menu", None)
+            if menu is not None:
+                menu.rounds.filter(id=int(round_id_raw)).delete()
+                messages.success(request, _("Round removed."))
         return redirect("surveys:groups", slug=slug)
 
     groups_qs = survey.question_groups.annotate(
@@ -7714,6 +8260,152 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                     }
                 )
 
+    # Delphi configuration (only for delphi layout). Ensure the menu exists
+    # so a freshly-switched survey is configurable.
+    delphi_menu = None
+    delphi_rounds: list[DelphiRound] = []
+    delphi_anchor_choices = DelphiMenu.Anchor.choices
+    if survey.layout == Survey.Layout.DELPHI:
+        delphi_menu, _created = DelphiMenu.objects.get_or_create(survey=survey)
+        delphi_rounds = list(
+            delphi_menu.rounds.order_by("order", "id").prefetch_related("groups")
+        )
+    # Precompute round → set of group IDs for the template's checkbox
+    # membership check.
+    delphi_round_group_ids: dict[int, set[int]] = {
+        rnd.id: set(rnd.groups.values_list("id", flat=True)) for rnd in delphi_rounds
+    }
+    # Delphi warnings. Non-blocking — surfaced on the Organise page
+    # configuration card.
+    delphi_warnings: list[str] = []
+    if survey.layout == Survey.Layout.DELPHI and delphi_menu is not None:
+        rounds = delphi_rounds
+        all_group_ids = {g.id for g in groups}
+        # No rounds configured.
+        if not rounds:
+            delphi_warnings.append(
+                _(
+                    "No rounds are configured. Add at least one round and "
+                    "assign sections to it."
+                )
+            )
+        # Single round — a Delphi survey with one round is degenerate
+        # (structurally identical to linear).
+        if len(rounds) == 1:
+            delphi_warnings.append(
+                _(
+                    "Only one round is configured. A Delphi survey with a "
+                    "single round is structurally identical to a linear "
+                    "survey — add a second round."
+                )
+            )
+        # survey_open anchor with no Survey.start_at.
+        if (
+            delphi_menu.anchor == DelphiMenu.Anchor.SURVEY_OPEN
+            and survey.start_at is None
+        ):
+            delphi_warnings.append(
+                _(
+                    "Round windows are measured from the survey open date, "
+                    "but this survey has no start date. Set a start date or "
+                    "switch the anchor to 'From participant enrolment'."
+                )
+            )
+        # Unreachable sections: groups not in any round.
+        if rounds:
+            reachable: set[int] = set()
+            for r in rounds:
+                reachable.update(r.groups.values_list("id", flat=True))
+            unreachable = all_group_ids - reachable
+            if unreachable:
+                unreachable_names = sorted(
+                    g.name for g in groups if g.id in unreachable
+                )
+                for name in unreachable_names:
+                    delphi_warnings.append(
+                        _(
+                            "Section '%(section)s' is not in any round — no "
+                            "participant will see it."
+                        )
+                        % {"section": name}
+                    )
+        # Overlapping round windows for the same group.
+        if len(rounds) >= 2:
+            group_rounds: dict[int, list[tuple[DelphiRound, int, int | None]]] = {}
+            for r in rounds:
+                for gid in r.groups.values_list("id", flat=True):
+                    group_rounds.setdefault(gid, []).append(
+                        (r, r.start_offset_days, r.end_offset_days)
+                    )
+            for gid, entries in group_rounds.items():
+                if len(entries) < 2:
+                    continue
+                for i in range(len(entries)):
+                    for j in range(i + 1, len(entries)):
+                        _ra, s1, e1 = entries[i]
+                        _rb, s2, e2 = entries[j]
+                        e1_eff = e1 if e1 is not None else float("inf")
+                        e2_eff = e2 if e2 is not None else float("inf")
+                        if s1 < e2_eff and s2 < e1_eff:
+                            group_name = next(
+                                (g.name for g in groups if g.id == gid),
+                                "unknown",
+                            )
+                            delphi_warnings.append(
+                                _(
+                                    "Section '%(section)s' is in two rounds "
+                                    "whose windows overlap — it will stay "
+                                    "open across both. Merge the rounds or "
+                                    "adjust the windows if this is "
+                                    "unintended."
+                                )
+                                % {"section": group_name}
+                            )
+                            break
+                    else:
+                        continue
+                    break
+        # Branching targets a section that is only in a round that isn't
+        # currently open (a dead branch at this moment).
+        if rounds:
+            rounded_group_ids: set[int] = set()
+            for r in rounds:
+                rounded_group_ids.update(r.groups.values_list("id", flat=True))
+            if rounded_group_ids:
+                dead_branches = (
+                    SurveyQuestionCondition.objects.filter(
+                        action=SurveyQuestionCondition.Action.JUMP_TO,
+                    )
+                    .filter(
+                        Q(target_group_id__in=rounded_group_ids)
+                        | Q(target_question__group_id__in=rounded_group_ids)
+                    )
+                    .select_related(
+                        "target_group", "question", "target_question__group"
+                    )
+                )
+                for cond in dead_branches:
+                    target_name = (
+                        cond.target_group.name
+                        if cond.target_group
+                        else (
+                            cond.target_question.group.name
+                            if cond.target_question and cond.target_question.group
+                            else "unknown"
+                        )
+                    )
+                    delphi_warnings.append(
+                        _(
+                            "Branching condition on '%(question)s' targets "
+                            "the round section '%(section)s' — it will be "
+                            "skipped when that round is closed."
+                        )
+                        % {
+                            "question": cond.question.text[:50],
+                            "section": target_name,
+                        }
+                    )
+
     ctx = {
         "survey": survey,
         "groups": groups,
@@ -7747,6 +8439,12 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "matrix_menu": matrix_menu,
         "matrix_order_mode_choices": matrix_order_mode_choices,
         "matrix_warnings": matrix_warnings,
+        # Delphi config. None for non-delphi surveys.
+        "delphi_menu": delphi_menu,
+        "delphi_rounds": delphi_rounds,
+        "delphi_anchor_choices": delphi_anchor_choices,
+        "delphi_round_group_ids": delphi_round_group_ids,
+        "delphi_warnings": delphi_warnings,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
@@ -10085,6 +10783,21 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
             mmenu = MatrixMenu.objects.create(survey=survey)
         matrix_info = {"menu": mmenu}
 
+    # Delphi info for round badges. Lists each round, its window, and its
+    # sections so the Survey Map can show which sections belong to which
+    # round. Also shows whether inter-round feedback has been generated.
+    delphi_info = None
+    if survey.layout == Survey.Layout.DELPHI:
+        dmenu = getattr(survey, "delphi_menu", None)
+        if dmenu is None:
+            dmenu = DelphiMenu.objects.create(survey=survey)
+        delphi_info = {
+            "menu": dmenu,
+            "rounds": list(
+                dmenu.rounds.order_by("order", "id").prefetch_related("groups")
+            ),
+        }
+
     ctx = {
         "survey": survey,
         "has_questions": survey.questions.exists(),
@@ -10092,6 +10805,7 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
         "rct_info": rct_info,
         "staged_info": staged_info,
         "matrix_info": matrix_info,
+        "delphi_info": delphi_info,
     }
     return render(request, "surveys/survey_map.html", ctx)
 
@@ -10821,6 +11535,9 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
     - ``consent_statement``: consent statement text (optional)
     - ``consent_required``: if on, participant must agree to progress
     - ``render_once``: render once toggle
+    - ``is_delphi_feedback``: mark this content block as Delphi inter-round
+      feedback (body is substituted from the previous round's aggregate
+      feedback at view time; only relevant for Delphi layout surveys)
 
     When consent is configured, a linked ``yesno`` question is created (or
     updated) in the same group, hidden from the builder list via a marker in
@@ -10838,6 +11555,12 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
         "no",
         "off",
         "0",
+    }
+    is_delphi_feedback = request.POST.get("is_delphi_feedback") in {
+        "on",
+        "true",
+        "1",
+        "yes",
     }
     labels = request.POST.getlist("link_label")
     urls = request.POST.getlist("link_url")
@@ -10928,6 +11651,7 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
         "links": links,
         "consent": consent,
         "render_once": render_once,
+        "is_delphi_feedback": is_delphi_feedback,
     }
     question.save(update_fields=["options"])
 
@@ -12713,6 +13437,68 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
             menu.save()
             summary_parts.append(" Matrix (free navigation) layout applied.")
 
+        # Apply DELPHI config from the outline (see docs/survey-layouts-
+        # technical.md §Delphi (consensus rounds) §Outline grammar).
+        delphi_cfg = parsed.get("delphi")
+        if delphi_cfg:
+            survey.layout = Survey.Layout.DELPHI
+            survey.save(update_fields=["layout"])
+            menu, _created = DelphiMenu.objects.get_or_create(survey=survey)
+            anchor = delphi_cfg.get("anchor", DelphiMenu.Anchor.ENROLMENT)
+            if anchor in {choice[0] for choice in DelphiMenu.Anchor.choices}:
+                menu.anchor = anchor
+            menu.min_rounds = int(delphi_cfg.get("min_rounds", 2))
+            menu.max_rounds = int(delphi_cfg.get("max_rounds", 3))
+            menu.show_progress = bool(delphi_cfg.get("show_progress", True))
+            menu.allow_revision = bool(delphi_cfg.get("allow_revision", True))
+            menu.save()
+            # Create rounds by name (ordered by first appearance in the
+            # outline). Round windows come from the ``round <name>:`` config
+            # lines; rounds referenced only via ``~ round:`` suffixes (no
+            # config line) default to start=0, end=None.
+            round_order = delphi_cfg.get("round_order", [])
+            round_windows = delphi_cfg.get("round_windows", {})
+            rounds_by_name: dict[str, DelphiRound] = {}
+            for idx, round_name in enumerate(round_order, start=0):
+                window = round_windows.get(round_name, {})
+                rnd, _ = DelphiRound.objects.get_or_create(
+                    menu=menu,
+                    order=idx,
+                    defaults={
+                        "name": round_name,
+                        "start_offset_days": window.get("start_offset_days", 0),
+                        "end_offset_days": window.get("end_offset_days"),
+                    },
+                )
+                if rnd.name != round_name:
+                    rnd.name = round_name
+                    rnd.save(update_fields=["name"])
+                # Apply window from config if present.
+                if window:
+                    rnd.start_offset_days = window.get("start_offset_days", 0)
+                    rnd.end_offset_days = window.get("end_offset_days")
+                    rnd.save(update_fields=["start_offset_days", "end_offset_days"])
+                rounds_by_name[round_name] = rnd
+            # Drop rounds that are no longer in the outline.
+            menu.rounds.exclude(order__in=range(len(round_order))).delete()
+            # Assign groups to rounds by name.
+            for g in parsed["groups"]:
+                grp = group_ref_map.get(g.get("ref"))
+                if grp is None:
+                    grp = next(
+                        (gg for gg in created_groups_in_order if gg.name == g["name"]),
+                        None,
+                    )
+                if grp is None:
+                    continue
+                round_names_for_group = g.get("delphi_rounds", [])
+                for rn in round_names_for_group:
+                    rnd = rounds_by_name.get(rn)
+                    if rnd is not None:
+                        rnd.groups.add(grp)
+                # No ~ round: suffix → not in any round (unreachable; warned).
+            summary_parts.append(" Delphi (consensus rounds) layout applied.")
+
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)
     return render(request, "surveys/bulk_upload.html", context)
@@ -12836,6 +13622,38 @@ def _export_survey_to_markdown(survey: Survey) -> str:
         lines.append(f"  allow_revisit: {'true' if mmenu.allow_revisit else 'false'}")
         lines.append("")
 
+    # DELPHI block (see docs/survey-layouts-technical.md §Delphi (consensus
+    # rounds) §Outline grammar). Emitted at the top when the survey uses the
+    # delphi layout. The ``~ round:<name>`` suffix is placed on the actual
+    # content group headings below.
+    delphi_rounds_by_group: dict[int, list[str]] = {}
+    if survey.layout == Survey.Layout.DELPHI:
+        dmenu = getattr(survey, "delphi_menu", None)
+        if dmenu is not None:
+            lines.append("DELPHI")
+            lines.append(f"  anchor: {dmenu.anchor}")
+            lines.append(f"  min_rounds: {dmenu.min_rounds}")
+            lines.append(f"  max_rounds: {dmenu.max_rounds}")
+            lines.append(
+                f"  show_progress: {'true' if dmenu.show_progress else 'false'}"
+            )
+            lines.append(
+                f"  allow_revision: {'true' if dmenu.allow_revision else 'false'}"
+            )
+            # Emit round window config lines (``round <name>: <start> [.. <end>]``).
+            for rnd in dmenu.rounds.order_by("order", "id"):
+                if rnd.end_offset_days is not None:
+                    lines.append(
+                        f"  round {rnd.name}: {rnd.start_offset_days} .. {rnd.end_offset_days}"
+                    )
+                else:
+                    lines.append(f"  round {rnd.name}: {rnd.start_offset_days}")
+            lines.append("")
+            # Build a lookup: group_id → list of round names.
+            for rnd in dmenu.rounds.order_by("order", "id").prefetch_related("groups"):
+                for grp in rnd.groups.all():
+                    delphi_rounds_by_group.setdefault(grp.id, []).append(rnd.name)
+
     for group in groups:
         # Check if this group is part of a collection
         parent_coll_item = (
@@ -12903,6 +13721,11 @@ def _export_survey_to_markdown(survey: Survey) -> str:
         if staged_phases:
             phase_suffix = ", ".join(f"phase:{name}" for name in staged_phases)
             heading = f"{heading}    ~ {phase_suffix}"
+        # Append ``~ round:<name>`` suffixes for delphi layout
+        delphi_rounds = delphi_rounds_by_group.get(group.id)
+        if delphi_rounds:
+            round_suffix = ", ".join(f"round:{name}" for name in delphi_rounds)
+            heading = f"{heading}    ~ {round_suffix}"
         lines.append(heading)
         if group.description:
             lines.append(f"{indent}{group.description}")

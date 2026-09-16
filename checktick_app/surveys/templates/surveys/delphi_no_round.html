@@ -1,0 +1,38 @@
+{% extends 'base_minimal.html' %}
+{% load i18n %}
+{% load static %}
+{% block title %}{{ survey.name }} - CheckTick{% endblock %}
+{% block content %}
+<div class="hero min-h-[60vh] bg-base-100 rounded-box">
+  <div class="hero-content text-center">
+    <div class="max-w-xl">
+      <div class="mb-6 flex justify-center">
+        {% if brand.icon_url %}
+          <a href="{% url 'core:home' %}">
+            <img src="{{ brand.icon_url }}" alt="{{ brand.icon_alt|default:brand.title }}" class="{{ brand.icon_size_class|default:'w-16 h-16' }}" />
+          </a>
+        {% else %}
+          <a href="{% url 'core:home' %}">
+            {% include "components/icons/checktick.html" with classes=brand.icon_size_class|default:'w-16 h-16' aria_label=brand.icon_alt|default:brand.title title=brand.icon_title|default:brand.title %}
+          </a>
+        {% endif %}
+      </div>
+
+      <div class="alert alert-info mb-6">
+        {% include "components/icons/exclamation-triangle.html" with classes="w-6 h-6 shrink-0" %}
+        <span class="font-semibold">{% trans "No round available right now" %}</span>
+      </div>
+
+      <h1 class="text-3xl font-bold mb-4">{{ survey.name }}</h1>
+
+      <p class="py-4 opacity-80">
+        {% trans "This is a multi-round consensus survey. No round is currently open — please check back when the next round is due." %}
+      </p>
+
+      <p class="text-sm opacity-60 mt-6">
+        {% trans "If you believe this is an error, please contact the survey organiser." %}
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
