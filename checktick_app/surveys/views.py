@@ -7008,6 +7008,18 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                         "useful. Add more sections first."
                     ),
                 )
+        # Same guard for delphi — a consensus-round survey with < 2
+        # sections is degenerate.
+        if chosen == Survey.Layout.DELPHI:
+            section_count = survey.question_groups.count()
+            if section_count < 2:
+                messages.warning(
+                    request,
+                    _(
+                        "Delphi surveys need at least 2 sections to be "
+                        "useful. Add more sections first."
+                    ),
+                )
         survey.layout = chosen
         survey.save(update_fields=["layout"])
         messages.success(
@@ -7322,6 +7334,120 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         menu.allow_revisit = bool(request.POST.get("allow_revisit"))
         menu.save()
         messages.success(request, _("Matrix configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Delphi configuration save. Only meaningful when the survey is in
+    # delphi layout. Saves the anchor, min/max rounds, show_progress,
+    # allow_revision, and per-round name / start_offset_days /
+    # end_offset_days / group membership.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_delphi_menu"
+        and survey.layout == Survey.Layout.DELPHI
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = DelphiMenu.objects.get_or_create(survey=survey)
+        anchor = request.POST.get("anchor", DelphiMenu.Anchor.ENROLMENT)
+        if anchor in {choice[0] for choice in DelphiMenu.Anchor.choices}:
+            menu.anchor = anchor
+        try:
+            menu.min_rounds = max(1, int(request.POST.get("min_rounds", 2)))
+        except ValueError:
+            menu.min_rounds = 2
+        try:
+            menu.max_rounds = max(
+                menu.min_rounds, int(request.POST.get("max_rounds", 3))
+            )
+        except ValueError:
+            menu.max_rounds = 3
+        menu.show_progress = bool(request.POST.get("show_progress"))
+        menu.allow_revision = bool(request.POST.get("allow_revision"))
+        menu.save()
+        # Per-round: name, start, end, groups. round_ids is the list of
+        # existing round IDs submitted from the form.
+        round_ids = [
+            int(x) for x in request.POST.getlist("round_ids") if str(x).isdigit()
+        ]
+        for round_id in round_ids:
+            try:
+                rnd = menu.rounds.get(id=round_id)
+            except DelphiRound.DoesNotExist:
+                continue
+            rnd.name = (
+                request.POST.get(f"round_name_{round_id}", rnd.name) or rnd.name
+            )[:100]
+            try:
+                rnd.start_offset_days = max(
+                    0, int(request.POST.get(f"round_start_{round_id}", 0))
+                )
+            except ValueError:
+                rnd.start_offset_days = 0
+            end_raw = (request.POST.get(f"round_end_{round_id}", "") or "").strip()
+            if end_raw:
+                try:
+                    rnd.end_offset_days = max(1, int(end_raw))
+                except ValueError:
+                    rnd.end_offset_days = None
+            else:
+                rnd.end_offset_days = None
+            rnd.save(
+                update_fields=[
+                    "name",
+                    "start_offset_days",
+                    "end_offset_days",
+                ]
+            )
+            group_ids = [
+                int(x)
+                for x in request.POST.getlist(f"round_groups_{round_id}")
+                if str(x).isdigit()
+            ]
+            rnd.groups.set(group_ids)
+        messages.success(request, _("Delphi configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Add round. Creates a new empty round at the end of the order.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "add_round"
+        and survey.layout == Survey.Layout.DELPHI
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = DelphiMenu.objects.get_or_create(survey=survey)
+        next_order = (menu.rounds.aggregate(m=models.Max("order"))["m"] or 0) + 1
+        DelphiRound.objects.create(
+            menu=menu, name=f"Round {next_order}", order=next_order
+        )
+        messages.success(request, _("Round added."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Remove round. Deletes the round. Participants keep their
+    # delphi_round FK (SET_NULL) and selected_group_ids (recomputed on
+    # next access anyway).
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "remove_round"
+        and survey.layout == Survey.Layout.DELPHI
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        round_id_raw = request.POST.get("round_id", "")
+        if round_id_raw.isdigit():
+            menu = getattr(survey, "delphi_menu", None)
+            if menu is not None:
+                menu.rounds.filter(id=int(round_id_raw)).delete()
+                messages.success(request, _("Round removed."))
         return redirect("surveys:groups", slug=slug)
 
     groups_qs = survey.question_groups.annotate(
@@ -7790,6 +7916,152 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                     }
                 )
 
+    # Delphi configuration (only for delphi layout). Ensure the menu exists
+    # so a freshly-switched survey is configurable.
+    delphi_menu = None
+    delphi_rounds: list[DelphiRound] = []
+    delphi_anchor_choices = DelphiMenu.Anchor.choices
+    if survey.layout == Survey.Layout.DELPHI:
+        delphi_menu, _created = DelphiMenu.objects.get_or_create(survey=survey)
+        delphi_rounds = list(
+            delphi_menu.rounds.order_by("order", "id").prefetch_related("groups")
+        )
+    # Precompute round → set of group IDs for the template's checkbox
+    # membership check.
+    delphi_round_group_ids: dict[int, set[int]] = {
+        rnd.id: set(rnd.groups.values_list("id", flat=True)) for rnd in delphi_rounds
+    }
+    # Delphi warnings. Non-blocking — surfaced on the Organise page
+    # configuration card.
+    delphi_warnings: list[str] = []
+    if survey.layout == Survey.Layout.DELPHI and delphi_menu is not None:
+        rounds = delphi_rounds
+        all_group_ids = {g.id for g in groups}
+        # No rounds configured.
+        if not rounds:
+            delphi_warnings.append(
+                _(
+                    "No rounds are configured. Add at least one round and "
+                    "assign sections to it."
+                )
+            )
+        # Single round — a Delphi survey with one round is degenerate
+        # (structurally identical to linear).
+        if len(rounds) == 1:
+            delphi_warnings.append(
+                _(
+                    "Only one round is configured. A Delphi survey with a "
+                    "single round is structurally identical to a linear "
+                    "survey — add a second round."
+                )
+            )
+        # survey_open anchor with no Survey.start_at.
+        if (
+            delphi_menu.anchor == DelphiMenu.Anchor.SURVEY_OPEN
+            and survey.start_at is None
+        ):
+            delphi_warnings.append(
+                _(
+                    "Round windows are measured from the survey open date, "
+                    "but this survey has no start date. Set a start date or "
+                    "switch the anchor to 'From participant enrolment'."
+                )
+            )
+        # Unreachable sections: groups not in any round.
+        if rounds:
+            reachable: set[int] = set()
+            for r in rounds:
+                reachable.update(r.groups.values_list("id", flat=True))
+            unreachable = all_group_ids - reachable
+            if unreachable:
+                unreachable_names = sorted(
+                    g.name for g in groups if g.id in unreachable
+                )
+                for name in unreachable_names:
+                    delphi_warnings.append(
+                        _(
+                            "Section '%(section)s' is not in any round — no "
+                            "participant will see it."
+                        )
+                        % {"section": name}
+                    )
+        # Overlapping round windows for the same group.
+        if len(rounds) >= 2:
+            group_rounds: dict[int, list[tuple[DelphiRound, int, int | None]]] = {}
+            for r in rounds:
+                for gid in r.groups.values_list("id", flat=True):
+                    group_rounds.setdefault(gid, []).append(
+                        (r, r.start_offset_days, r.end_offset_days)
+                    )
+            for gid, entries in group_rounds.items():
+                if len(entries) < 2:
+                    continue
+                for i in range(len(entries)):
+                    for j in range(i + 1, len(entries)):
+                        _ra, s1, e1 = entries[i]
+                        _rb, s2, e2 = entries[j]
+                        e1_eff = e1 if e1 is not None else float("inf")
+                        e2_eff = e2 if e2 is not None else float("inf")
+                        if s1 < e2_eff and s2 < e1_eff:
+                            group_name = next(
+                                (g.name for g in groups if g.id == gid),
+                                "unknown",
+                            )
+                            delphi_warnings.append(
+                                _(
+                                    "Section '%(section)s' is in two rounds "
+                                    "whose windows overlap — it will stay "
+                                    "open across both. Merge the rounds or "
+                                    "adjust the windows if this is "
+                                    "unintended."
+                                )
+                                % {"section": group_name}
+                            )
+                            break
+                    else:
+                        continue
+                    break
+        # Branching targets a section that is only in a round that isn't
+        # currently open (a dead branch at this moment).
+        if rounds:
+            rounded_group_ids: set[int] = set()
+            for r in rounds:
+                rounded_group_ids.update(r.groups.values_list("id", flat=True))
+            if rounded_group_ids:
+                dead_branches = (
+                    SurveyQuestionCondition.objects.filter(
+                        action=SurveyQuestionCondition.Action.JUMP_TO,
+                    )
+                    .filter(
+                        Q(target_group_id__in=rounded_group_ids)
+                        | Q(target_question__group_id__in=rounded_group_ids)
+                    )
+                    .select_related(
+                        "target_group", "question", "target_question__group"
+                    )
+                )
+                for cond in dead_branches:
+                    target_name = (
+                        cond.target_group.name
+                        if cond.target_group
+                        else (
+                            cond.target_question.group.name
+                            if cond.target_question and cond.target_question.group
+                            else "unknown"
+                        )
+                    )
+                    delphi_warnings.append(
+                        _(
+                            "Branching condition on '%(question)s' targets "
+                            "the round section '%(section)s' — it will be "
+                            "skipped when that round is closed."
+                        )
+                        % {
+                            "question": cond.question.text[:50],
+                            "section": target_name,
+                        }
+                    )
+
     ctx = {
         "survey": survey,
         "groups": groups,
@@ -7823,6 +8095,12 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "matrix_menu": matrix_menu,
         "matrix_order_mode_choices": matrix_order_mode_choices,
         "matrix_warnings": matrix_warnings,
+        # Delphi config. None for non-delphi surveys.
+        "delphi_menu": delphi_menu,
+        "delphi_rounds": delphi_rounds,
+        "delphi_anchor_choices": delphi_anchor_choices,
+        "delphi_round_group_ids": delphi_round_group_ids,
+        "delphi_warnings": delphi_warnings,
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"

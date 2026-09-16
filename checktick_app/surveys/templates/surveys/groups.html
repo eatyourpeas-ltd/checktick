@@ -197,6 +197,31 @@
           {% endif %}
         </div>
       </div>
+
+      {# Delphi (consensus rounds) card #}
+      <div class="card bg-base-100 border {% if survey.layout == 'delphi' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} hover:shadow-md transition-all">
+        <div class="card-body gap-2 p-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-semibold text-base-content">{% trans 'Delphi (consensus rounds)' %}</h4>
+            {% if survey.layout == 'delphi' %}
+              <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% endif %}
+          </div>
+          {% include "components/icons/layout_staged.html" with classes="w-full h-24 text-base-content/70" %}
+          <p class="text-xs text-base-content/70">{% trans 'Multi-round consensus workflow. Participants complete rounds, see aggregate feedback between rounds, and revise their answers. Used for expert consensus in clinical research and guideline development.' %}</p>
+          {% if section_count < 2 %}
+            <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>
+          {% endif %}
+          {% if can_edit and survey.layout != 'delphi' %}
+            <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_layout" />
+              <input type="hidden" name="layout" value="delphi" />
+              <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </section>
 
@@ -600,7 +625,155 @@
   </section>
   {% endif %}
 
-  {# === Content block warnings (all layouts) === #}
+  {# === Delphi (consensus rounds) configuration card === #}
+  {% if survey.layout == 'delphi' %}
+  <section class="not-prose mb-6" aria-labelledby="delphi-config-heading">
+    <div class="card bg-base-100 border border-base-300 max-w-4xl">
+      <div class="card-body gap-3 p-4">
+        <h3 id="delphi-config-heading" class="font-semibold text-base-content">
+          {% trans 'Delphi (consensus rounds) configuration' %}
+        </h3>
+        {% if can_edit %}
+        <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="space-y-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_delphi_menu" />
+
+          <fieldset class="flex flex-wrap gap-x-6 gap-y-2 items-end">
+            <div>
+              <span class="label text-xs">{% trans 'Round windows measured from' %}</span>
+              <div class="flex gap-3">
+                {% for value, label in delphi_anchor_choices %}
+                <label class="flex items-center gap-1 cursor-pointer text-sm">
+                  <input type="radio" name="anchor" value="{{ value }}"
+                         class="radio radio-sm"
+                         {% if delphi_menu.anchor == value or forloop.first and not delphi_menu.anchor %}checked{% endif %} />
+                  {{ label }}
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            <label class="flex items-center gap-1 text-sm">
+              <span class="text-xs text-base-content/60">{% trans 'Min rounds' %}</span>
+              <input type="number" name="min_rounds" value="{{ delphi_menu.min_rounds }}"
+                     class="input input-bordered input-sm w-16" min="1" max="10" />
+            </label>
+            <label class="flex items-center gap-1 text-sm">
+              <span class="text-xs text-base-content/60">{% trans 'Max rounds' %}</span>
+              <input type="number" name="max_rounds" value="{{ delphi_menu.max_rounds }}"
+                     class="input input-bordered input-sm w-16" min="1" max="20" />
+            </label>
+          </fieldset>
+
+          <fieldset class="flex flex-wrap gap-x-6 gap-y-2">
+            <label class="flex items-center gap-1 cursor-pointer text-sm">
+              <input type="checkbox" name="show_progress" value="1"
+                     class="checkbox checkbox-sm"
+                     {% if delphi_menu.show_progress %}checked{% endif %} />
+              {% trans 'Show participants which round they are in' %}
+            </label>
+            <label class="flex items-center gap-1 cursor-pointer text-sm">
+              <input type="checkbox" name="allow_revision" value="1"
+                     class="checkbox checkbox-sm"
+                     {% if delphi_menu.allow_revision %}checked{% endif %} />
+              {% trans 'Allow participants to revise previous-round answers' %}
+            </label>
+          </fieldset>
+
+          {# Rounds list #}
+          <div>
+            <span class="label text-xs">{% trans 'Rounds' %}</span>
+            <ul class="mt-1 space-y-3">
+              {% for rnd in delphi_rounds %}
+              <li class="border border-base-200 rounded-lg p-3 space-y-2">
+                <input type="hidden" name="round_ids" value="{{ rnd.id }}" />
+                <div class="flex items-center gap-3 flex-wrap">
+                  <label class="flex items-center gap-1 text-sm">
+                    <span class="text-xs text-base-content/60">{% trans 'Name' %}</span>
+                    <input type="text" name="round_name_{{ rnd.id }}" value="{{ rnd.name }}"
+                           class="input input-bordered input-sm w-40" maxlength="100" />
+                  </label>
+                  <label class="flex items-center gap-1 text-sm">
+                    <span class="text-xs text-base-content/60">{% trans 'Start (days)' %}</span>
+                    <input type="number" name="round_start_{{ rnd.id }}" value="{{ rnd.start_offset_days }}"
+                           class="input input-bordered input-sm w-16" min="0" />
+                  </label>
+                  <label class="flex items-center gap-1 text-sm">
+                    <span class="text-xs text-base-content/60">{% trans 'End (days)' %}</span>
+                    <input type="number" name="round_end_{{ rnd.id }}" value="{% if rnd.end_offset_days is not None %}{{ rnd.end_offset_days }}{% endif %}"
+                           class="input input-bordered input-sm w-16" min="1" placeholder="{% trans 'open' %}" />
+                  </label>
+                  {% if can_edit %}
+                  <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="remove_round" />
+                    <input type="hidden" name="round_id" value="{{ rnd.id }}" />
+                    <button type="submit" class="btn btn-xs btn-ghost btn-error">{% trans 'Remove' %}</button>
+                  </form>
+                  {% endif %}
+                </div>
+                {# Section assignment checkboxes #}
+                <div>
+                  <span class="text-xs text-base-content/60">{% trans 'Sections in this round' %}</span>
+                  <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                    {% for g in groups %}
+                    <label class="flex items-center gap-1 cursor-pointer text-xs">
+                      <input type="checkbox" name="round_groups_{{ rnd.id }}" value="{{ g.id }}"
+                             class="checkbox checkbox-xs"
+                             {% if g.id in delphi_round_group_ids|get_item:rnd.id %}checked{% endif %} />
+                      {{ g.name }}
+                    </label>
+                    {% endfor %}
+                    {% if not groups %}
+                    <span class="text-xs text-warning">{% trans 'No sections yet — add sections in the Builder.' %}</span>
+                    {% endif %}
+                  </div>
+                </div>
+              </li>
+              {% endfor %}
+              {% if not delphi_rounds %}
+              <li class="text-xs text-warning">{% trans 'No rounds configured. Add a round to get started.' %}</li>
+              {% endif %}
+            </ul>
+          </div>
+
+          <div class="flex gap-2">
+            <button type="submit" class="btn btn-sm btn-primary">{% trans 'Save configuration' %}</button>
+            <button type="submit" name="action" value="add_round" formmethod="post" class="btn btn-sm btn-outline">{% trans 'Add round' %}</button>
+          </div>
+        </form>
+        {% else %}
+        {# Read-only view #}
+        <dl class="text-sm space-y-1">
+          <dt class="text-xs text-base-content/60">{% trans 'Anchor' %}</dt>
+          <dd>{{ delphi_menu.get_anchor_display }}</dd>
+          <dt class="text-xs text-base-content/60">{% trans 'Min / max rounds' %}</dt>
+          <dd>{{ delphi_menu.min_rounds }} / {{ delphi_menu.max_rounds }}</dd>
+          <dt class="text-xs text-base-content/60">{% trans 'Rounds' %}</dt>
+          <dd>
+            <ul class="list-disc list-inside">
+              {% for rnd in delphi_rounds %}
+              <li>{{ rnd.name }} (days {{ rnd.start_offset_days }}{% if rnd.end_offset_days is not None %}–{{ rnd.end_offset_days }}{% else %}+{% endif %}) — {% for g in rnd.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</li>
+              {% endfor %}
+            </ul>
+          </dd>
+        </dl>
+        {% endif %}
+
+        {# Delphi warnings #}
+        {% if delphi_warnings %}
+        <div class="mt-2 space-y-1">
+          {% for warning in delphi_warnings %}
+          <div class="alert alert-warning py-2 px-3 text-xs" role="status">
+            {% include "components/icons/exclamation-triangle.html" with classes="w-4 h-4 shrink-0" %}
+            <span>{{ warning }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
   {% if content_block_warnings %}
   <section class="not-prose mb-6" aria-labelledby="content-block-warnings-heading">
     <div class="alert alert-warning">
