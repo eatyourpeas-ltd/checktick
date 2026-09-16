@@ -209,6 +209,7 @@
           </div>
           {% include "components/icons/layout_staged.html" with classes="w-full h-24 text-base-content/70" %}
           <p class="text-xs text-base-content/70">{% trans 'Multi-round consensus workflow. Participants complete rounds, see aggregate feedback between rounds, and revise their answers. Used for expert consensus in clinical research and guideline development.' %}</p>
+          <a href="{% url 'core:docs_page' slug='delphi' %}" class="link link-hover text-xs text-primary">{% trans 'Delphi guide' %}</a>
           {% if section_count < 2 %}
             <p class="text-xs text-warning">{% trans 'Needs at least 2 sections to be useful.' %}</p>
           {% endif %}

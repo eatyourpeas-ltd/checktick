@@ -11535,6 +11535,9 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
     - ``consent_statement``: consent statement text (optional)
     - ``consent_required``: if on, participant must agree to progress
     - ``render_once``: render once toggle
+    - ``is_delphi_feedback``: mark this content block as Delphi inter-round
+      feedback (body is substituted from the previous round's aggregate
+      feedback at view time; only relevant for Delphi layout surveys)
 
     When consent is configured, a linked ``yesno`` question is created (or
     updated) in the same group, hidden from the builder list via a marker in
@@ -11552,6 +11555,12 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
         "no",
         "off",
         "0",
+    }
+    is_delphi_feedback = request.POST.get("is_delphi_feedback") in {
+        "on",
+        "true",
+        "1",
+        "yes",
     }
     labels = request.POST.getlist("link_label")
     urls = request.POST.getlist("link_url")
@@ -11642,6 +11651,7 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
         "links": links,
         "consent": consent,
         "render_once": render_once,
+        "is_delphi_feedback": is_delphi_feedback,
     }
     question.save(update_fields=["options"])
 

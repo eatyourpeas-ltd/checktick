@@ -5,7 +5,7 @@ priority: 7
 ---
 
 A **Survey Layout** is the high-level shape of a survey — how its sections
-are offered to the participant. CheckTick supports six layouts:
+are offered to the participant. CheckTick supports seven layouts:
 
 - **Default (linear)** — sections flow in the order you arrange them. Every
   respondent sees every section. This is how all surveys worked before
@@ -37,6 +37,11 @@ are offered to the participant. CheckTick supports six layouts:
   order, with completion indicators showing which sections are done.
   Different from Section menu (pick once, then linear through the chosen
   set) — matrix is ongoing free navigation throughout the survey.
+- **Delphi (consensus rounds)** — multi-round structured consensus
+  workflow. Participants complete rounds, see aggregate feedback between
+  rounds, and revise their answers. Used for expert consensus-building
+  in clinical research, guideline development, and priority-setting.
+  See the [Delphi guide](delphi.md) for a full walkthrough.
 
 The name **Layout** is deliberately distinct from **Template**, which is
 already used for published sections shared into the Question Bank (see
@@ -115,6 +120,29 @@ phase opens later. Participants never see future-phase sections.
 
 Staged composes with Guided: a staged survey in guided layout walks the
 currently-open phase's sections one question at a time.
+
+### Delphi (consensus rounds)
+
+Use the Delphi layout when:
+
+- **Expert consensus-building** — you need a panel of experts to reach
+  agreement on clinical guidelines, diagnostic criteria, or priority
+  areas.
+- **Modified Delphi studies** — you want structured multi-round input
+  with quantitative feedback (medians, distributions) between rounds.
+- **Nominal group technique variants** — you want participants to
+  revise their answers after seeing the group's aggregate response.
+
+Delphi is a selection mechanism like Section menu and RCT, but the
+selection changes over rounds. Each round has a set of sections; the
+participant sees only the current round's sections. Between rounds,
+the author generates aggregate feedback (quantitative distributions +
+optional LLM thematic summaries) which participants see in the next
+round via a content block marked as feedback. When no round is open,
+the participant sees a friendly "check back later" page.
+
+See the [Delphi guide](delphi.md) for a full walkthrough of the creator
+workflow and participant experience.
 
 ## Choosing a layout
 
@@ -515,19 +543,6 @@ implemented. They are ordered by priority — the order CheckTick intends
 to implement them, based on how often the use case is the reason a
 research team reaches for REDCap or Qualtrics instead of a simpler tool.
 
-### Delphi (consensus rounds) — next
-
-Multi-round structured consensus workflow. Participants complete rounds,
-see aggregate feedback between rounds (quantitative distributions +
-qualitative themes), and revise their answers. The classic Delphi method
-for expert consensus-building in clinical research, guideline
-development, and priority-setting.
-
-Builds on the ingredients proven by the earlier layouts (RCT arms, Staged
-phases, Matrix completion tracking, content blocks for feedback
-rendering). Inter-round qualitative feedback uses the existing LLM theme
-analysis feature (opt-in, author-triggered, sanitised).
-
 ### Diary / EMA (ecological momentary assessment)
 
 Repeated short surveys triggered on a fixed schedule (daily, 4×/day) or
@@ -588,6 +603,8 @@ for the full technical notes on each planned layout.
 
 ## Related documentation
 
+- [Delphi guide](delphi.md) — full walkthrough of the Delphi consensus
+  rounds layout (creator workflow + participant experience).
 - [Organise](groups-view.md) — the page where layout is configured.
 - [Branching & Repeats](branching-and-repeats.md) — branching is a
   sibling feature; a `jump to` into a non-selected section is a no-op at

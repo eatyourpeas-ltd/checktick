@@ -218,6 +218,15 @@
                     <span class="label-text">Render once (even in repeatable groups)</span>
                   </label>
                 </div>
+                {% if q.survey.layout == 'delphi' %}
+                <div class="p-3 bg-info/10 border border-info/30 rounded-lg">
+                  <label class="label cursor-pointer flex items-center gap-2">
+                    <input type="checkbox" name="is_delphi_feedback" class="checkbox" {% if q.options.is_delphi_feedback %}checked{% endif %} />
+                    <span class="label-text">Delphi inter-round feedback</span>
+                  </label>
+                  <p class="text-xs opacity-60 mt-1">When enabled, this content block's body is replaced with the aggregate feedback summary from the previous round (medians, distributions, optional LLM themes). See the <a href="{% url 'core:docs_page' slug='delphi' %}" class="link">Delphi guide</a> for details.</p>
+                </div>
+                {% endif %}
                 <button type="submit" class="btn btn-sm btn-primary">Save changes</button>
               </form>
             </div>
