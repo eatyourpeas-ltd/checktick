@@ -1148,6 +1148,85 @@ def send_subscription_expired_email(
     )
 
 
+def send_subscription_expiring_email(
+    user,
+    tier: str,
+    expiry_date,
+    days_until_expiry: int,
+    survey_count: int = 0,
+    surveys_to_close: int = 0,
+    free_tier_limit: int = 3,
+) -> bool:
+    """Send a pre-expiry warning email.
+
+    Sent by the daily ``process_expiring_subscriptions`` command at the
+    1-month, 1-week, and 1-day windows before a manually upgraded or
+    time-limited subscription ends. Idempotency is enforced by the
+    command via ``UserProfile.last_expiry_warning_stage``.
+
+    Args:
+        user: Django User instance.
+        tier: Account tier the user is currently on.
+        expiry_date: When the subscription ends (datetime or date).
+        days_until_expiry: Whole days remaining until expiry (for the body).
+        survey_count: Number of surveys the user currently owns.
+        surveys_to_close: How many would be auto-closed on downgrade.
+        free_tier_limit: Max surveys allowed on the free tier.
+
+    Returns:
+        True if the email sent successfully, False otherwise.
+    """
+    from django.utils.formats import date_format
+
+    logger.info(
+        f"Sending pre-expiry warning email to {user.email} "
+        f"(tier: {tier}, days_until_expiry: {days_until_expiry})"
+    )
+
+    branding = get_platform_branding()
+    tier_display = tier.replace("_", " ").title()
+    expiry_display = date_format(expiry_date, "F j, Y") if expiry_date else "soon"
+
+    if days_until_expiry <= 1:
+        subject = f"Your {tier_display} access ends tomorrow - {branding['title']}"
+    elif days_until_expiry <= 7:
+        subject = f"Your {tier_display} access ends in {days_until_expiry} days - {branding['title']}"
+    else:
+        subject = (
+            f"Your {tier_display} access ends on {expiry_display} - {branding['title']}"
+        )
+
+    markdown_content = render_to_string(
+        "emails/subscription_expiring.md",
+        {
+            "user": user,
+            "brand_title": branding["title"],
+            "tier": tier,
+            "tier_name": tier_display,
+            "expiry_date": expiry_display,
+            "days_until_expiry": days_until_expiry,
+            "survey_count": survey_count,
+            "surveys_to_close": surveys_to_close,
+            "free_tier_limit": free_tier_limit,
+            "site_url": getattr(settings, "SITE_URL", "http://localhost:8000"),
+        },
+    )
+
+    return send_branded_email(
+        to_email=user.email,
+        subject=subject,
+        markdown_content=markdown_content,
+        branding=branding,
+        context={
+            "user": user,
+            "tier": tier,
+            "tier_name": tier_display,
+            "expiry_date": expiry_display,
+            "days_until_expiry": days_until_expiry,
+        },
+    )
+
+
 def send_payment_failed_email(
     user,
     tier: str,

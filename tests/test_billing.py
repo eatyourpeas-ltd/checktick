@@ -1624,6 +1624,203 @@ class TestSurveyReopenOnUpgrade:
             assert s.closed_by_downgrade is False
 
 
+@pytest.mark.django_db
+class TestPreExpiryWarningCommand:
+    """Test the process_expiring_subscriptions management command.
+
+    Verifies the three warning windows (1 month, 1 week, 1 day) fire and
+    that idempotency via last_expiry_warning_stage prevents re-sends.
+    """
+
+    @pytest.fixture
+    def expiring_user(self, db):
+        """Pro user with subscription ending in 30 days."""
+        user = User.objects.create_user(
+            username="expiring@example.com",
+            email="expiring@example.com",
+            password="TestPass123!",
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
+        user.profile.subscription_current_period_end = timezone.now() + timedelta(
+            days=30
+        )
+        user.profile.save()
+        return user
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_one_month_warning_fires(self, mock_email, expiring_user):
+        """1-month warning fires when 30 days remain."""
+        from django.core.management import call_command
+
+        call_command("process_expiring_subscriptions")
+
+        expiring_user.profile.refresh_from_db()
+        assert expiring_user.profile.last_expiry_warning_stage == "1month"
+        mock_email.assert_called_once()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_one_week_warning_fires(self, mock_email, expiring_user):
+        """1-week warning fires when 7 days remain and 1month already sent."""
+        from django.core.management import call_command
+
+        # Simulate 1month already sent, now 7 days out.
+        expiring_user.profile.last_expiry_warning_stage = "1month"
+        expiring_user.profile.subscription_current_period_end = (
+            timezone.now() + timedelta(days=7)
+        )
+        expiring_user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        expiring_user.profile.refresh_from_db()
+        assert expiring_user.profile.last_expiry_warning_stage == "1week"
+        mock_email.assert_called_once()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_one_day_warning_fires(self, mock_email, expiring_user):
+        """1-day warning fires when 1 day remains and earlier stages sent."""
+        from django.core.management import call_command
+
+        expiring_user.profile.last_expiry_warning_stage = "1week"
+        expiring_user.profile.subscription_current_period_end = (
+            timezone.now() + timedelta(days=1)
+        )
+        expiring_user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        expiring_user.profile.refresh_from_db()
+        assert expiring_user.profile.last_expiry_warning_stage == "1day"
+        mock_email.assert_called_once()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_idempotent_no_resend_within_stage(self, mock_email, expiring_user):
+        """Running twice in the same window does not re-send."""
+        from django.core.management import call_command
+
+        call_command("process_expiring_subscriptions")
+        call_command("process_expiring_subscriptions")
+
+        mock_email.assert_called_once()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_skips_already_in_later_stage(self, mock_email, expiring_user):
+        """If 1week was sent, 1month is not re-sent even if within 30 days."""
+        from django.core.management import call_command
+
+        expiring_user.profile.last_expiry_warning_stage = "1week"
+        expiring_user.profile.subscription_current_period_end = (
+            timezone.now() + timedelta(days=20)
+        )
+        expiring_user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        mock_email.assert_not_called()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_skips_free_tier(self, mock_email, expiring_user):
+        """Free tier users are skipped even with a period end set."""
+        from django.core.management import call_command
+
+        expiring_user.profile.account_tier = UserProfile.AccountTier.FREE
+        expiring_user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        mock_email.assert_not_called()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_skips_past_expiry(self, mock_email, expiring_user):
+        """Profiles with period end in the past are skipped (handled by
+        process_expired_subscriptions, not this command)."""
+        from django.core.management import call_command
+
+        expiring_user.profile.subscription_current_period_end = (
+            timezone.now() - timedelta(days=1)
+        )
+        expiring_user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        mock_email.assert_not_called()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_dry_run_sends_no_emails(self, mock_email, expiring_user):
+        """--dry-run does not send emails or update the profile."""
+        from django.core.management import call_command
+
+        call_command("process_expiring_subscriptions", dry_run=True)
+
+        expiring_user.profile.refresh_from_db()
+        assert expiring_user.profile.last_expiry_warning_stage == ""
+        mock_email.assert_not_called()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_skips_when_no_period_end(self, mock_email, db):
+        """Profiles with no subscription_current_period_end are skipped."""
+        from django.core.management import call_command
+
+        user = User.objects.create_user(
+            username="noexpiry@example.com",
+            email="noexpiry@example.com",
+            password="TestPass123!",
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
+        user.profile.subscription_current_period_end = None
+        user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        mock_email.assert_not_called()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_canceled_still_active_gets_warning(self, mock_email, expiring_user):
+        """CANCELED (cancel-at-period-end) users still get warnings."""
+        from django.core.management import call_command
+
+        expiring_user.profile.subscription_status = (
+            UserProfile.SubscriptionStatus.CANCELED
+        )
+        expiring_user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        mock_email.assert_called_once()
+
+
 class TestPromotionLifecycleCommand:
     """Test the process_promotion_lifecycle management command."""
 
