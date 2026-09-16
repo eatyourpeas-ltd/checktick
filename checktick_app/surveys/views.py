@@ -13288,12 +13288,14 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
         ):
             summary_parts.append(" Previous survey content was replaced.")
 
+        # Tier gate for layout-specific outline blocks: free tier can only
+        # use linear. Import once here so all layout blocks below can use it.
+        from checktick_app.core.tier_limits import check_layout_permission
+
         # Apply SECTION_MENU config from the outline (step 7).
         section_menu_cfg = parsed.get("section_menu")
         if section_menu_cfg:
             # Tier gate: free tier cannot use non-linear layouts.
-            from checktick_app.core.tier_limits import check_layout_permission
-
             can_use, reason = check_layout_permission(
                 request.user, Survey.Layout.SECTION_MENU
             )
