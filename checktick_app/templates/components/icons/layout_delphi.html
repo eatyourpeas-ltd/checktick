@@ -1,0 +1,24 @@
+{% comment %} {# Delphi (consensus rounds) layout icon: two rounds with a feedback loop arrow between them, representing the revise-after-seeing-aggregate-feedback cycle. Usage: {% include "components/icons/layout_delphi.html" with classes="w-6 h-6" %} #} {% endcomment %}
+<svg xmlns="http://www.w3.org/2000/svg" class="{{ classes|default:'w-6 h-6' }}" viewBox="0 0 800 450" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Round 1 card (completed — solid) -->
+  <rect x="80" y="80" width="200" height="130" rx="16" ry="16" />
+  <path d="M 110,120 L 250,120 M 110,155 L 220,155 M 110,185 L 200,185" stroke-width="10" />
+  <text x="180" y="70" text-anchor="middle" font-size="28" fill="currentColor" stroke="none" font-family="sans-serif">R1</text>
+
+  <!-- Round 2 card (future — dashed) -->
+  <rect x="520" y="80" width="200" height="130" rx="16" ry="16" stroke-dasharray="20 16" />
+  <path d="M 550,120 L 690,120 M 550,155 L 660,155 M 550,185 L 640,185" stroke-width="10" />
+  <text x="620" y="70" text-anchor="middle" font-size="28" fill="currentColor" stroke="none" font-family="sans-serif">R2</text>
+
+  <!-- Feedback loop arrow: from R1 down, across, up to R2 -->
+  <path d="M 180,210 L 180,270 L 620,270 L 620,210" stroke-width="10" />
+  <path d="M 605,225 L 620,210 L 635,225" stroke-width="10" />
+
+  <!-- "Feedback" label area (small dot on the arrow) -->
+  <circle cx="400" cy="270" r="16" fill="currentColor" stroke="none" />
+  <path d="M 393,270 L 407,270" stroke="white" stroke-width="6" />
+
+  <!-- Second feedback loop arrow: from R2 back to R1 (revision cycle) -->
+  <path d="M 620,340 L 180,340 L 180,300" stroke-width="8" stroke-dasharray="12 8" opacity="0.5" />
+  <path d="M 165,315 L 180,300 L 195,315" stroke-width="8" opacity="0.5" />
+</svg>

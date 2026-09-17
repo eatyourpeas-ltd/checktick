@@ -8096,6 +8096,53 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                 messages.success(request, _("Round removed."))
         return redirect("surveys:groups", slug=slug)
 
+    # Save diary menu configuration.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_diary_menu"
+        and survey.layout == Survey.Layout.DIARY
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = DiaryMenu.objects.get_or_create(survey=survey)
+        schedule_type = request.POST.get(
+            "schedule_type", DiaryMenu.ScheduleType.FIXED_INTERVAL
+        )
+        if schedule_type in {c[0] for c in DiaryMenu.ScheduleType.choices}:
+            menu.schedule_type = schedule_type
+        anchor = request.POST.get("anchor", DiaryMenu.Anchor.ENROLMENT)
+        if anchor in {c[0] for c in DiaryMenu.Anchor.choices}:
+            menu.anchor = anchor
+        try:
+            menu.interval_hours = int(request.POST.get("interval_hours") or 0) or None
+        except ValueError:
+            menu.interval_hours = None
+        try:
+            menu.burst_on_days = int(request.POST.get("burst_on_days") or 0) or None
+        except ValueError:
+            menu.burst_on_days = None
+        try:
+            menu.burst_off_days = int(request.POST.get("burst_off_days") or 0) or None
+        except ValueError:
+            menu.burst_off_days = None
+        try:
+            menu.compliance_threshold_pct = max(
+                1, min(100, int(request.POST.get("compliance_threshold_pct", 80)))
+            )
+        except ValueError:
+            menu.compliance_threshold_pct = 80
+        try:
+            menu.grace_minutes = max(0, int(request.POST.get("grace_minutes", 30)))
+        except ValueError:
+            menu.grace_minutes = 30
+        menu.show_progress = bool(request.POST.get("show_progress"))
+        menu.save()
+        messages.success(request, _("Diary configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
     groups_qs = survey.question_groups.annotate(
         q_count=models.Count(
             "surveyquestion", filter=models.Q(surveyquestion__survey=survey)
@@ -8708,6 +8755,86 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                         }
                     )
 
+    # Diary configuration (only for diary layout). Ensure the menu exists
+    # so a freshly-switched survey is configurable.
+    diary_menu = None
+    diary_schedule_choices = DiaryMenu.ScheduleType.choices
+    diary_anchor_choices = DiaryMenu.Anchor.choices
+    if survey.layout == Survey.Layout.DIARY:
+        diary_menu, _created = DiaryMenu.objects.get_or_create(survey=survey)
+    # Diary warnings. Non-blocking — surfaced on the Organise page
+    # configuration card.
+    diary_warnings: list[str] = []
+    if survey.layout == Survey.Layout.DIARY and diary_menu is not None:
+        # fixed_interval with no interval_hours.
+        if (
+            diary_menu.schedule_type == DiaryMenu.ScheduleType.FIXED_INTERVAL
+            and not diary_menu.interval_hours
+        ):
+            diary_warnings.append(
+                _(
+                    "Fixed interval schedule has no interval set. Enter the "
+                    "hours between windows (e.g. 6 for 4×/day)."
+                )
+            )
+        # burst with no on_days.
+        if (
+            diary_menu.schedule_type == DiaryMenu.ScheduleType.BURST
+            and not diary_menu.burst_on_days
+        ):
+            diary_warnings.append(
+                _(
+                    "Burst schedule has no on-days set. Enter the number of "
+                    "on-days in each cycle (e.g. 7)."
+                )
+            )
+        # survey_open anchor with no Survey.start_at.
+        if (
+            diary_menu.anchor == DiaryMenu.Anchor.SURVEY_OPEN
+            and survey.start_at is None
+        ):
+            diary_warnings.append(
+                _(
+                    "Window times are measured from the survey open date, "
+                    "but this survey has no start date. Set a start date or "
+                    "switch the anchor to 'From participant enrolment'."
+                )
+            )
+        # Branching targets a diary section (meaningless across entries).
+        diary_group_ids = {g.id for g in groups}
+        if diary_group_ids:
+            dead_branches = (
+                SurveyQuestionCondition.objects.filter(
+                    action=SurveyQuestionCondition.Action.JUMP_TO,
+                )
+                .filter(
+                    Q(target_group_id__in=diary_group_ids)
+                    | Q(target_question__group_id__in=diary_group_ids)
+                )
+                .select_related("target_group", "question", "target_question__group")
+            )
+            for cond in dead_branches:
+                target_name = (
+                    cond.target_group.name
+                    if cond.target_group
+                    else (
+                        cond.target_question.group.name
+                        if cond.target_question and cond.target_question.group
+                        else "unknown"
+                    )
+                )
+                diary_warnings.append(
+                    _(
+                        "Branching condition on '%(question)s' targets "
+                        "section '%(section)s' — branching across diary "
+                        "entries has no effect."
+                    )
+                    % {
+                        "question": cond.question.text[:50],
+                        "section": target_name,
+                    }
+                )
+
     ctx = {
         "survey": survey,
         "groups": groups,
@@ -8747,6 +8874,11 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "delphi_anchor_choices": delphi_anchor_choices,
         "delphi_round_group_ids": delphi_round_group_ids,
         "delphi_warnings": delphi_warnings,
+        # Diary config. None for non-diary surveys.
+        "diary_menu": diary_menu,
+        "diary_schedule_choices": diary_schedule_choices,
+        "diary_anchor_choices": diary_anchor_choices,
+        "diary_warnings": diary_warnings,
         # Layout tier gating (see tier_limits.py allowed_layouts).
         "allowed_layouts": get_allowed_layouts(request.user),
     }
