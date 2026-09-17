@@ -2553,3 +2553,85 @@ The {safe_brand_title} Team
             "signup_link": signup_link,
         },
     )
+
+
+# =============================================================================
+# Diary / EMA Reminder Email Functions
+# =============================================================================
+
+
+def send_diary_reminder_email(
+    to_email: str,
+    survey_name: str,
+    survey_url: str,
+    window_end: str,
+) -> bool:
+    """Send a diary window reminder to a participant.
+
+    Called by the ``process_diary_reminders`` management command when a
+    new diary window opens for a participant who has not yet submitted.
+    The email contains only the survey name, the survey link, and the
+    window end time — no answers, no question text, no compliance data.
+
+    Privacy contract (mirrors send_token_email):
+    - The email address is NOT stored server-side beyond the user account.
+    - The email contains no patient data or survey content.
+
+    Renders ``emails/diary_reminder.md`` (see the pattern in
+    ``checktick_app/templates/emails/``). Falls back to inline markdown
+    if the template is missing.
+
+    Args:
+        to_email: Recipient email address.
+        survey_name: Survey name for context in the email body.
+        survey_url: The URL to the diary survey take page.
+        window_end: Formatted window end time (e.g. "18:00").
+
+    Returns:
+        True if email sent successfully, False otherwise.
+    """
+    subject = f"New diary entry available for {survey_name}"
+
+    branding = get_platform_branding()
+    context = {
+        "survey_name": survey_name,
+        "survey_url": survey_url,
+        "window_end": window_end,
+        "brand_title": branding.get("title", "CheckTick"),
+    }
+
+    try:
+        content = render_to_string("emails/diary_reminder.md", context)
+    except TemplateDoesNotExist:
+        # F5 convention: escape cross-user controlled values (survey name
+        # is author-controlled, sent to a participant) in f-string fallbacks.
+        safe_survey_name = escape(survey_name)
+        safe_survey_url = escape(survey_url)
+        safe_window_end = escape(window_end)
+        safe_brand_title = escape(branding.get("title", "CheckTick"))
+        content = f"""## New Diary Entry Available
+
+A new diary entry window is now open for **{safe_survey_name}**.
+
+### Entry Details
+
+- **Survey:** {safe_survey_name}
+- **Window closes at:** {safe_window_end}
+
+### Complete Your Entry
+
+[**Complete Your Diary Entry**]({safe_survey_url})
+
+If you already submitted this entry, you can ignore this email. If you
+believe this is an error, please contact the survey organiser.
+
+---
+
+The {safe_brand_title} Team
+"""
+
+    return send_branded_email(
+        to_email=to_email,
+        subject=subject,
+        markdown_content=content,
+    )
