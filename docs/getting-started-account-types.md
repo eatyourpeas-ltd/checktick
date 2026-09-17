@@ -16,11 +16,14 @@ CheckTick offers seven account tiers: **FREE**, **PRO**, **TEAM** (Small/Medium/
 | --- | --- | --- | --- | --- | --- |
 | **Active Surveys** | 3 | Unlimited | 50 | Unlimited | Unlimited |
 | **Survey Responses** | Unlimited | Unlimited | Unlimited | Unlimited | Unlimited |
+| **Survey Layouts** | Linear only | All 7 layouts | All 7 layouts | All 7 layouts | All 7 layouts |
 | **Team Members** | 1 | 1 | 5/10/20 | Unlimited | Unlimited |
 | **Team Collaboration** | ✗ | ✗ | Full | Full | Full |
 | **Encryption** | Self-managed | Self-managed | Team-managed | Organisation-managed | Organisation-managed |
 | **Role-Based Access** | ✗ | ✗ | Admin/Creator/Viewer | Admin/Creator/Viewer | Full + Data Custodian |
 | **Private Datasets** | ✗ | ✗ | ✗ | ✓ | ✓ |
+| **Patient Data Templates** | ✗ | ✓ | ✓ | ✓ | ✓ |
+| **Custom Datasets** | ✗ | ✓ | ✓ | ✓ | ✓ |
 | **Custom Branding** | ✗ | ✗ | ✗ | ✗ | ✓ |
 | **Self-Hosted Option** | ✗ | ✗ | ✗ | ✗ | ✓ |
 | **SSO/OIDC** | ✗ | ✗ | ✗ | Contact sales | ✓ |
@@ -47,6 +50,14 @@ CheckTick offers seven account tiers: **FREE**, **PRO**, **TEAM** (Small/Medium/
 - Import surveys from Word documents (AI-assisted conversion)
 - Can be invited to collaborate on other surveys
 
+***Limitations***
+
+- **Linear layout only** — advanced survey layouts (section menu, RCT, guided, staged, matrix, Delphi) require a paid subscription
+- **3 survey limit** — must close or delete a survey to create a new one
+- **No collaboration** — cannot invite others to your surveys
+- **No patient data templates** — all surveys are encrypted, but specialised patient data templates require a paid tier
+- **No custom datasets** — cannot create custom dropdown datasets
+
 ***Key Characteristics***
 
 - **Data ownership:** You own all surveys and responses
@@ -68,6 +79,9 @@ CheckTick offers seven account tiers: **FREE**, **PRO**, **TEAM** (Small/Medium/
 
 - Everything in FREE, plus:
 - **No survey limit** - create as many surveys as you need
+- **All survey layouts** — section menu, randomised (RCT), guided, staged (longitudinal), matrix (free navigation), and Delphi (consensus rounds)
+- **Patient data templates** — specialised templates for NHS numbers and clinical data with whole-response encryption
+- **Custom datasets** — create and manage custom dropdown datasets
 - Personal survey management
 - Full API access
 
@@ -198,7 +212,7 @@ Teams support three roles:
 
 ***Features***
 
-- Everything in ORganisaTION, plus:
+- Everything in ORGANISATION, plus:
 - **Custom branding** - configure logo, themes, and fonts
 - **Self-hosted option** - run on your own infrastructure
 - **SSO/OIDC integration** - enterprise authentication
@@ -236,6 +250,7 @@ When running CheckTick in self-hosted mode (with `SELF_HOSTED=true` in settings)
 - You need 3 or fewer active surveys at a time
 - You work independently
 - You don't need collaboration features
+- You only need the linear survey layout
 - You want to try CheckTick with no cost
 
 **Example use cases:**
@@ -250,6 +265,8 @@ When running CheckTick in self-hosted mode (with `SELF_HOSTED=true` in settings)
 - You need more than 3 active surveys
 - You work independently
 - You need unlimited survey capacity
+- You need advanced survey layouts (RCT, Delphi, staged, matrix, etc.)
+- You need patient data templates or custom datasets
 - You're comfortable managing your own keys
 - You don't need collaboration features
 
@@ -385,7 +402,8 @@ You can upgrade from one tier to another as your needs grow:
 ### FREE → PRO
 
 - Removes the 3 survey limit
-- Enables basic collaboration (editors only)
+- Unlocks all 7 survey layouts (section menu, RCT, guided, staged, matrix, Delphi)
+- Enables patient data templates and custom datasets
 - All existing surveys are preserved
 - Keys remain self-managed
 
@@ -397,7 +415,7 @@ You can upgrade from one tier to another as your needs grow:
 - Administrative key recovery options
 - All existing surveys transfer to organisation
 
-### ORganisaTION → ENTERPRISE
+### ORGANISATION → ENTERPRISE
 
 - Available for self-hosted deployments
 - Adds custom branding capabilities
@@ -419,14 +437,14 @@ You can upgrade from one tier to another as your needs grow:
 - All existing surveys are preserved
 - Survey data and responses remain intact
 - You maintain full access
-- Encryption keys are migrated if moving to ORganisaTION tier
+- Encryption keys are migrated if moving to ORGANISATION tier
 
 **Your access:**
 
 - New tier features become available immediately
 - You can start using collaboration features (if applicable)
-- You can invite team members (ORganisaTION/ENTERPRISE)
-- You get administrative key recovery options (ORganisaTION/ENTERPRISE)
+- You can invite team members (ORGANISATION/ENTERPRISE)
+- You get administrative key recovery options (ORGANISATION/ENTERPRISE)
 
 **Team building (ORGANISATION/ENTERPRISE):**
 
@@ -437,10 +455,10 @@ You can upgrade from one tier to another as your needs grow:
 
 ### Important Notes About Upgrading
 
-- ⚠️ **Some upgrades are permanent** - moving to ORganisaTION tier changes key management
+- ⚠️ **Some upgrades are permanent** - moving to ORGANISATION tier changes key management
 - **No data loss** - all your surveys and responses are preserved
-- **Enhanced security** - organisation key management is more robust (ORganisaTION/ENTERPRISE)
-- **Better compliance** - audit trails and administrative oversight (ORganisaTION/ENTERPRISE)
+- **Enhanced security** - organisation key management is more robust (ORGANISATION/ENTERPRISE)
+- **Better compliance** - audit trails and administrative oversight (ORGANISATION/ENTERPRISE)
 - **FREE → PRO is reversible** if you reduce your survey count to 3 or fewer
 
 ## Getting Help
@@ -469,7 +487,7 @@ You can upgrade from one tier to another as your needs grow:
 - **Audit trails:** Limited to basic system logs
 - **Key management:** No institutional oversight
 
-### ORganisaTION and ENTERPRISE Tiers
+### ORGANISATION and ENTERPRISE Tiers
 
 - **HIPAA/GDPR:** Organisation-level compliance support
 - **Data retention:** Administrative controls and policies
@@ -492,7 +510,7 @@ You can upgrade from one tier to another as your needs grow:
 2. Upgrade to PRO from your Profile page
 3. Create unlimited surveys
 
-**For ORganisaTION Tier:**
+**For ORGANISATION Tier:**
 
 1. Contact sales or upgrade from PRO
 2. Set up your organisation name
