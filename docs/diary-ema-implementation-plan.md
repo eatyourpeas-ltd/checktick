@@ -617,6 +617,10 @@ use the gated layouts.
 - Update `README.md`, `docs/getting-started.md`, `home.html`,
   `pricing.html`, `subscription_portal.html`, and the surveys list
   template per §14.
+- **Fix the extra column in the "Detailed Feature Comparison" table
+  in `pricing.html`** — the table currently has a layout mismatch
+  (an extra column that doesn't correspond to a tier). Audit the
+  `<thead>`/`<tbody>` column counts and remove the stray column.
 - Tests: `s/test --no-a11y` (template rendering smoke tests already
   cover these pages); add a test asserting the home page lists all
   eight layouts and the pricing page names Diary/EMA.

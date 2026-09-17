@@ -13986,6 +13986,36 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                     # No ~ round: suffix → not in any round (unreachable; warned).
                 summary_parts.append(" Delphi (consensus rounds) layout applied.")
 
+        # Apply DIARY config from the outline (see docs/diary-ema-
+        # implementation-plan.md §6 Outline grammar).
+        diary_cfg = parsed.get("diary")
+        if diary_cfg:
+            can_use, reason = check_layout_permission(request.user, Survey.Layout.DIARY)
+            if not can_use:
+                messages.error(request, reason)
+            else:
+                survey.layout = Survey.Layout.DIARY
+                survey.save(update_fields=["layout"])
+                menu, _created = DiaryMenu.objects.get_or_create(survey=survey)
+                schedule_type = diary_cfg.get(
+                    "schedule_type", DiaryMenu.ScheduleType.FIXED_INTERVAL
+                )
+                if schedule_type in {c[0] for c in DiaryMenu.ScheduleType.choices}:
+                    menu.schedule_type = schedule_type
+                anchor = diary_cfg.get("anchor", DiaryMenu.Anchor.ENROLMENT)
+                if anchor in {c[0] for c in DiaryMenu.Anchor.choices}:
+                    menu.anchor = anchor
+                menu.interval_hours = diary_cfg.get("interval_hours")
+                menu.burst_on_days = diary_cfg.get("burst_on_days")
+                menu.burst_off_days = diary_cfg.get("burst_off_days")
+                menu.compliance_threshold_pct = int(
+                    diary_cfg.get("compliance_threshold_pct", 80)
+                )
+                menu.grace_minutes = int(diary_cfg.get("grace_minutes", 30))
+                menu.show_progress = bool(diary_cfg.get("show_progress", True))
+                menu.save()
+                summary_parts.append(" Diary (EMA) layout applied.")
+
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)
     return render(request, "surveys/bulk_upload.html", context)
@@ -14140,6 +14170,28 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             for rnd in dmenu.rounds.order_by("order", "id").prefetch_related("groups"):
                 for grp in rnd.groups.all():
                     delphi_rounds_by_group.setdefault(grp.id, []).append(rnd.name)
+
+    # DIARY block (see docs/diary-ema-implementation-plan.md §6 Outline
+    # grammar). Emitted at the top when the survey uses the diary layout.
+    # No ``~`` suffixes — a diary entry uses the full group set.
+    if survey.layout == Survey.Layout.DIARY:
+        dmenu = getattr(survey, "diary_menu", None)
+        if dmenu is not None:
+            lines.append("DIARY")
+            lines.append(f"  schedule: {dmenu.schedule_type}")
+            if dmenu.interval_hours is not None:
+                lines.append(f"  interval_hours: {dmenu.interval_hours}")
+            if dmenu.burst_on_days is not None:
+                lines.append(f"  burst_on_days: {dmenu.burst_on_days}")
+            if dmenu.burst_off_days is not None:
+                lines.append(f"  burst_off_days: {dmenu.burst_off_days}")
+            lines.append(f"  anchor: {dmenu.anchor}")
+            lines.append(f"  compliance_threshold: {dmenu.compliance_threshold_pct}")
+            lines.append(f"  grace_minutes: {dmenu.grace_minutes}")
+            lines.append(
+                f"  show_progress: {'true' if dmenu.show_progress else 'false'}"
+            )
+            lines.append("")
 
     for group in groups:
         # Check if this group is part of a collection
