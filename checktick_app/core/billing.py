@@ -717,6 +717,17 @@ def create_subscription_for_user(
         ]
     )
 
+    # Re-open surveys auto-closed by a previous downgrade. Only fires if
+    # the user was previously downgraded (closed_by_downgrade=True surveys
+    # exist). No-op for first-time subscribers. See
+    # UserProfile.reopen_surveys_on_upgrade.
+    reopened = profile.reopen_surveys_on_upgrade(tier)
+    if reopened:
+        logger.info(
+            f"Re-opened {reopened} auto-closed survey(s) for "
+            f"{user.username} on upgrade to {tier}"
+        )
+
     logger.info(
         f"Created subscription for user {user.username}: {subscription_id} (tier: {tier})"
     )

@@ -69,6 +69,21 @@
             </div>
           </div>
         {% endif %}
+
+        {% if not payment_subscription_id and current_tier != 'free' %}
+          {# Manually upgraded account (no GoCardless subscription) #}
+          <div class="mt-4">
+            <h3 class="font-bold mb-2">{% trans "Account Details" %}</h3>
+            <div class="text-sm space-y-1">
+              {% if subscription_current_period_end %}
+                <p><strong>{% trans "Access Valid Until:" %}</strong> {{ subscription_current_period_end|date:"F j, Y" }}</p>
+                <p class="text-base-content/70">{% trans "You will receive reminder emails before your access expires. To continue with automatic renewals, set up a subscription below." %}</p>
+              {% else %}
+                <p class="text-base-content/70">{% trans "Your account was manually upgraded by an administrator. No expiry date is set." %}</p>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
       </div>
     </div>
 
@@ -160,6 +175,21 @@
             {% else %}
               <p>{% trans "Cancel your subscription. You'll retain access until the end of your billing period, then be downgraded to the Free tier." %}</p>
             {% endif %}
+
+            {# What you'll lose: layout features #}
+            <div class="alert alert-info mt-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              <div class="text-sm">
+                <p class="font-semibold">{% trans "What you'll lose on the Free tier:" %}</p>
+                <ul class="list-disc list-inside mt-1 space-y-0.5">
+                  <li>{% trans "Advanced survey layouts (section menu, RCT, guided, staged, matrix, Delphi)" %}</li>
+                  <li>{% trans "Unlimited surveys (Free tier: 3 surveys max)" %}</li>
+                  <li>{% trans "Collaboration features" %}</li>
+                  <li>{% trans "Patient data templates" %}</li>
+                  <li>{% trans "Custom datasets" %}</li>
+                </ul>
+              </div>
+            </div>
 
             <div class="card-actions justify-end">
               <form method="post" action="{% url 'core:cancel_subscription' %}"

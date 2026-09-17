@@ -27,9 +27,13 @@ def disable_rate_limiting(settings):
 
 @pytest.fixture
 def owner(django_user_model):
-    return django_user_model.objects.create_user(
+    user = django_user_model.objects.create_user(
         username="owner@example.com", password=TEST_PASSWORD
     )
+    user.profile.account_tier = "pro"
+    user.profile.subscription_status = "active"
+    user.profile.save()
+    return user
 
 
 @pytest.fixture

@@ -139,6 +139,21 @@ Security controls in this implementation include:
 5. Webhook replay protection via `WebhookEvent` event-id idempotency (F14).
 6. CSRF protection on administrative form actions.
 
+## Manual Tier Upgrades and Expiry
+
+Platform admins can manually upgrade a free account to a paid tier with a configurable renewal date via the `organization_create` view (when `create_target == 'account'`). The renewal date is stored on `UserProfile.subscription_current_period_end`, so the existing `process_expired_subscriptions` cron auto-downgrades the account when the date passes.
+
+Key behaviours:
+
+1. **Tier dropdown** overrides the `scope` query param, allowing any tier.
+2. **Validity presets** (1/2/5 years) or a custom date (max 5 years, must be future).
+3. **Tier-specific rules**: Free ignores expiry; Pro/Team require a renewal date; Organisation/Enterprise default to no expiry but allow optional renewal.
+4. **Pre-expiry warnings** sent by the daily `process_expiring_subscriptions` command at 1 month, 1 week, and 1 day before expiry (idempotent via `UserProfile.last_expiry_warning_stage`).
+5. **Re-open on re-subscription**: `UserProfile.reopen_surveys_on_upgrade` re-opens surveys auto-closed by a previous downgrade (flagged via `Survey.closed_by_downgrade`), up to the new tier's `max_surveys` limit. User-closed surveys stay closed.
+6. **Lapsed signposting**: a `messages.warning()` flash on login (within 14 days of lapse) and a LAPSED badge in the navbar/profile.
+
+See `docs/billing-and-subscriptions.md` § Manual Tier Upgrades and Expiry for the user-facing guide.
+
 ## Self-Hosted Behavior
 
 For `SELF_HOSTED=true` deployments, billing is disabled by default. Promotion and refund integrations are only applicable where operators explicitly implement and configure an external billing provider.

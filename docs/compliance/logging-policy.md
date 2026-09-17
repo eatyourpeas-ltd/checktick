@@ -100,6 +100,7 @@ Audit events are categorised as:
 - **Account**
   - User creation and deletion
   - Profile changes
+  - Manual tier changes (admin-initiated upgrades/downgrades with expiry date)
 
 - **Data Governance**
   - Data exports

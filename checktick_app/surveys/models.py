@@ -1079,6 +1079,15 @@ class Survey(models.Model):
         related_name="closed_surveys",
         help_text="User who closed the survey",
     )
+    # True when the survey was auto-closed by a tier downgrade (via
+    # UserProfile.force_downgrade_tier). Used by reopen_surveys_on_upgrade
+    # to re-open only auto-closed surveys on re-subscription, leaving
+    # user-initiated closures untouched.
+    closed_by_downgrade = models.BooleanField(
+        default=False,
+        help_text="True if this survey was auto-closed by a tier downgrade "
+        "(not by a user action). Re-opened on re-subscription.",
+    )
 
     # Retention
     retention_months = models.IntegerField(

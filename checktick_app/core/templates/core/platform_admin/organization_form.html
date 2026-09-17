@@ -58,6 +58,48 @@
       </div>
 
       {% if create_target == 'account' %}
+      <h3 class="text-lg font-medium mt-6 mb-4">{% trans "Tier and Renewal" %}</h3>
+
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">{% trans "Tier" %} *</span>
+        </label>
+        <select name="tier" id="tier_select" class="select select-bordered">
+          {% for value, label in tier_choices %}
+          {% if value != 'organization' and value != 'enterprise' %}
+          <option value="{{ value }}" {% if form_data.tier|default:scope == value %}selected{% endif %}>{{ label }}</option>
+          {% endif %}
+          {% endfor %}
+          <option value="organization" {% if form_data.tier|default:scope == 'organization' %}selected{% endif %}>{% trans "Organization" %}</option>
+          <option value="enterprise" {% if form_data.tier|default:scope == 'enterprise' %}selected{% endif %}>{% trans "Enterprise" %}</option>
+        </select>
+        <label class="label">
+          <span class="label-text-alt text-base-content/60">
+            {% trans "Free requires no renewal. Pro/Team require a renewal date. Organization/Enterprise default to no expiry (optional renewal)." %}
+          </span>
+        </label>
+      </div>
+
+      <div id="validity_controls" class="mb-4">
+        <label class="label">
+          <span class="label-text">{% trans "Renewal Date" %}</span>
+        </label>
+        <div class="flex flex-wrap gap-2 mb-2" role="group" aria-label="{% trans 'Renewal preset' %}">
+          <button type="button" data-preset="1_year" class="btn btn-sm validity-preset-btn">{% trans "1 year" %}</button>
+          <button type="button" data-preset="2_years" class="btn btn-sm validity-preset-btn">{% trans "2 years" %}</button>
+          <button type="button" data-preset="5_years" class="btn btn-sm validity-preset-btn">{% trans "5 years" %}</button>
+          <button type="button" data-preset="custom" class="btn btn-sm validity-preset-btn">{% trans "Custom" %}</button>
+          <button type="button" data-preset="none" class="btn btn-sm validity-preset-btn" id="none_preset_btn">{% trans "No expiry" %}</button>
+        </div>
+        <input type="date" name="valid_until" id="valid_until_input" class="input input-bordered" value="{{ form_data.valid_until|default:'' }}" />
+        <input type="hidden" name="validity_preset" id="validity_preset_input" value="{{ form_data.validity_preset|default:'1_year' }}" />
+        <label class="label">
+          <span class="label-text-alt text-base-content/60" id="validity_hint">
+            {% trans "Select a preset or choose Custom to enter a date. Max 5 years." %}
+          </span>
+        </label>
+      </div>
+
       <h3 class="text-lg font-medium mt-6 mb-4">{% trans "Optional Promotion" %}</h3>
 
       <div class="form-control mb-4">
@@ -261,5 +303,101 @@ if (billingTypeSelect) {
   billingTypeSelect.addEventListener('change', updateBillingFields);
 }
 document.addEventListener('DOMContentLoaded', updateBillingFields);
+
+// --- Tier and validity controls ---
+function updateValidityControls() {
+  const tierSelect = document.getElementById('tier_select');
+  if (!tierSelect) {
+    return;
+  }
+  const tier = tierSelect.value;
+  const validityControls = document.getElementById('validity_controls');
+  const noneBtn = document.getElementById('none_preset_btn');
+  const hint = document.getElementById('validity_hint');
+
+  if (tier === 'free') {
+    // Free has no expiry; hide the controls.
+    validityControls.classList.add('hidden');
+    return;
+  }
+  validityControls.classList.remove('hidden');
+
+  // Organization/Enterprise: "No expiry" is allowed and is the default.
+  // Pro/Team: "No expiry" is hidden (expiry is required).
+  if (tier === 'organization' || tier === 'enterprise') {
+    noneBtn.classList.remove('hidden');
+    if (hint) {
+      hint.textContent = '{% trans "Defaults to no expiry. Select a preset or Custom to set a renewal date. Max 5 years." %}';
+    }
+  } else {
+    noneBtn.classList.add('hidden');
+    if (hint) {
+      hint.textContent = '{% trans "Select a preset or choose Custom to enter a date. Max 5 years." %}';
+    }
+    // If "No expiry" was selected, reset to 1_year.
+    const presetInput = document.getElementById('validity_preset_input');
+    if (presetInput && presetInput.value === 'none') {
+      presetInput.value = '1_year';
+      selectPreset('1_year');
+    }
+  }
+}
+
+function selectPreset(preset) {
+  const presetInput = document.getElementById('validity_preset_input');
+  const dateInput = document.getElementById('valid_until_input');
+  if (!presetInput || !dateInput) {
+    return;
+  }
+  presetInput.value = preset;
+
+  // Highlight the active button.
+  document.querySelectorAll('.validity-preset-btn').forEach(function (btn) {
+    btn.classList.remove('btn-primary');
+    if (btn.dataset.preset === preset) {
+      btn.classList.add('btn-primary');
+    }
+  });
+
+  if (preset === 'custom') {
+    dateInput.disabled = false;
+    dateInput.focus();
+    return;
+  }
+  if (preset === 'none') {
+    dateInput.value = '';
+    dateInput.disabled = true;
+    return;
+  }
+  // 1_year / 2_years / 5_years: compute the date client-side.
+  const years = parseInt(preset.split('_')[0], 10);
+  const today = new Date();
+  const target = new Date(today);
+  target.setFullYear(today.getFullYear() + years);
+  // Format as YYYY-MM-DD for the date input.
+  const yyyy = target.getFullYear();
+  const mm = String(target.getMonth() + 1).padStart(2, '0');
+  const dd = String(target.getDate()).padStart(2, '0');
+  dateInput.value = yyyy + '-' + mm + '-' + dd;
+  dateInput.disabled = true;
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  const tierSelect = document.getElementById('tier_select');
+  if (tierSelect) {
+    tierSelect.addEventListener('change', updateValidityControls);
+  }
+  document.querySelectorAll('.validity-preset-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      selectPreset(btn.dataset.preset);
+    });
+  });
+  // Initialize: apply the default preset and update controls.
+  updateValidityControls();
+  const initialPreset = document.getElementById('validity_preset_input');
+  if (initialPreset && initialPreset.value) {
+    selectPreset(initialPreset.value);
+  }
+});
 </script>
 {% endblock %}

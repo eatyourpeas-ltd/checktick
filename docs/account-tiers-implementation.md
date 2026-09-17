@@ -120,6 +120,14 @@ class Survey(models.Model):
 | Conditional Logic/Branching | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Question Groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Repeating Groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Survey Layouts** |
+| Linear (default) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Section menu | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Randomised (RCT) | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Guided | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Staged (longitudinal) | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Matrix (free navigation) | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Delphi (consensus rounds) | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **AI Features** |
 | AI Survey Assistant | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | AI-Generated Survey Translations | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |

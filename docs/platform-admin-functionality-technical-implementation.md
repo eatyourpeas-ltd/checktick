@@ -56,6 +56,27 @@ Platform admin supports operational workflows across account types and tiers:
 2. Pricing override management for supported tiers.
 3. Billing timeline/reconciliation views.
 4. Controlled refund actions linked to payment records.
+5. Manual tier upgrades with configurable renewal dates (see below).
+
+### Manual Tier Upgrades
+
+Platform admins can create or update a tier-scoped account (Pro, Team, Organisation, Enterprise) via the `organization_create` view when `create_target == 'account'`. The form includes:
+
+- **Tier dropdown**: overrides the `scope` query param, allowing any tier.
+- **Renewal date**: preset buttons (1 year, 2 years, 5 years) or a custom date picker. Sanity cap: max 5 years, must be in the future.
+- **Tier-specific rules**: Free ignores expiry; Pro/Team require a renewal date; Organisation/Enterprise default to no expiry but allow optional renewal.
+
+The view sets `subscription_current_period_end` on the profile so the existing `process_expired_subscriptions` cron auto-downgrades the account when the date passes. Pre-expiry warning tracking fields (`last_expiry_warning_sent_at`, `last_expiry_warning_stage`) are reset on each save so warnings restart for the new expiry date.
+
+Manually upgraded accounts (no `payment_subscription_id`) receive a 7-day grace period before downgrade, matching the GoCardless past-due grace period. GoCardless subscriptions are downgraded immediately (the provider has already notified the user).
+
+Manual tier changes are logged via `AuditLog` (recording the admin actor, target user, old/new tier, and `valid_until` date). A notification email is sent to the user via `send_manual_upgrade_email` when upgraded to a paid tier. The expiry date is shown on the profile page and in the subscription portal.
+
+Downgrading to free via the form closes excess surveys immediately (via `force_downgrade_tier`). Upgrading re-opens surveys auto-closed by a previous downgrade (via `reopen_surveys_on_upgrade`).
+
+The tier selected determines which survey layouts the user can access (see `tier_limits.py` `allowed_layouts`). Free tier: linear only. All paid tiers: all 7 layouts (section menu, RCT, guided, staged, matrix, Delphi).
+
+See `docs/billing-and-subscriptions.md` § Manual Tier Upgrades and Expiry for the user-facing behaviour.
 
 Refund action constraints (hosted reference flow):
 
@@ -83,6 +104,7 @@ Coverage includes:
 1. Promotion lifecycle events.
 2. Refund request and webhook-reconciled state transitions.
 3. Operator attribution and references required for finance/audit traceability.
+4. Manual tier changes (actor, target user, old/new tier, valid_until date).
 
 See also: [Audit Logging and Notifications](/docs/audit-logging-and-notifications/).
 
@@ -111,8 +133,11 @@ Representative suites:
 
 1. `tests/test_platform_admin_permissions.py`
 2. `tests/test_platform_admin_regressions.py`
-3. `tests/test_billing.py`
-4. `tests/test_organisation_checkout.py`
+3. `tests/test_platform_admin_tier_validity.py`
+4. `tests/test_manual_upgrade_lifecycle.py`
+5. `tests/test_billing.py`
+6. `tests/test_layout_gating.py`
+7. `tests/test_organisation_checkout.py`
 
 ## Self-Hosted Considerations
 

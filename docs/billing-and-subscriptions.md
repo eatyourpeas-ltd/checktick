@@ -352,6 +352,65 @@ If you cancel and change your mind before the period ends:
 
 After the period ends, simply sign up for a new subscription to restore paid features.
 
+## Manual Tier Upgrades and Expiry
+
+Platform admins can manually upgrade a free account to a paid tier (Pro, Team, Organisation, Enterprise) via the Platform Admin dashboard, with a configurable renewal date. This is useful for trial extensions, partner accounts, and internal users.
+
+### How It Works
+
+1. A platform admin navigates to **Platform Admin** > **Tier** > **Add Account**.
+2. They select a tier from the dropdown and a renewal date (1 year, 2 years, 5 years, or a custom date up to 5 years out).
+3. The profile's `subscription_current_period_end` is set to the chosen date.
+4. The account is active until that date.
+
+### Tier-Specific Rules
+
+| Tier | Expiry |
+|---|---|
+| Free | No expiry (ignored) |
+| Pro, Team Small/Medium/Large | Expiry required (1/2/5 years or custom date) |
+| Organisation, Enterprise | Defaults to no expiry; optional renewal date |
+
+### Pre-Expiry Warnings
+
+The daily `process_expiring_subscriptions` cron sends warning emails at three windows before the expiry date:
+
+- **1 month** before (30 days)
+- **1 week** before (7 days)
+- **1 day** before (1 day)
+
+Each warning is sent at most once per expiry cycle (idempotent via `UserProfile.last_expiry_warning_stage`).
+
+### At Expiry
+
+When the expiry date passes, the daily `process_expired_subscriptions` cron:
+
+1. **Grace period**: For manually upgraded accounts (no GoCardless subscription), a 7-day grace period is applied before downgrade, matching the GoCardless past-due grace period. GoCardless subscriptions are downgraded immediately (the provider has already notified the user).
+2. Downgrades the account to Free.
+3. Auto-closes excess surveys beyond the Free tier limit (3), oldest first. Closed surveys are read-only (not deleted).
+4. Sends a "Subscription Expired" email.
+
+### Audit and Notification
+
+Manual tier changes are logged via `AuditLog` (recording the admin who made the change, the target user, old/new tier, and expiry date). A notification email is sent to the user via `send_manual_upgrade_email` when upgraded to a paid tier. The expiry date is shown on the profile page and in the subscription portal.
+
+### After Expiry — Lapsed User Signposting
+
+Users who have lapsed see:
+
+- A **LAPSED** warning badge in the navbar and on the profile page (instead of the plain FREE badge).
+- A one-time `messages.warning()` flash on their next login (within 14 days of the lapse).
+
+After 14 days, the login signpost stops firing and the user is treated as a regular free user (the LAPSED badge remains).
+
+### Re-Subscribing After Lapse
+
+If a lapsed user re-subscribes (via the checkout flow or a manual upgrade):
+
+- Surveys auto-closed by the previous downgrade (`closed_by_downgrade=True`) are re-opened, up to the new tier's survey limit, in newest-first order.
+- Re-opened surveys return to DRAFT status (not auto-published — the author should re-confirm readiness).
+- Surveys the user closed manually stay closed.
+
 ## Failed Payments & Past Due Accounts
 
 ### What Happens with Failed Payments

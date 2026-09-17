@@ -354,6 +354,27 @@ class UserProfile(models.Model):
         blank=True,
         help_text="When the account tier was last changed",
     )
+    # Idempotency flag for pre-expiry warning emails. Each of the three
+    # warning windows (1 month, 1 week, 1 day before expiry) records the
+    # timestamp of the most recent warning sent, so the daily
+    # process_expiring_subscriptions command does not re-send within a
+    # window. Reset to NULL when the subscription is renewed or extended.
+    last_expiry_warning_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the most recent pre-expiry warning email was sent. "
+        "Used for idempotency by process_expiring_subscriptions.",
+    )
+    # Tracks which expiry-warning window has been sent ("1month", "1week",
+    # "1day", or blank). Cleared on renewal/extension so warnings restart
+    # for the new expiry date.
+    last_expiry_warning_stage = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        help_text="Most recent pre-expiry warning stage sent "
+        "(1month / 1week / 1day). Blank when none sent yet.",
+    )
 
     class Meta:
         verbose_name = "User Profile"
@@ -530,7 +551,8 @@ class UserProfile(models.Model):
 
                 for survey in surveys_to_close:
                     survey.status = Survey.Status.CLOSED
-                    survey.save(update_fields=["status"])
+                    survey.closed_by_downgrade = True
+                    survey.save(update_fields=["status", "closed_by_downgrade"])
                     surveys_closed += 1
 
         # Perform the downgrade
@@ -545,6 +567,76 @@ class UserProfile(models.Model):
                 f"data from closed surveys."
             )
         return True, f"Successfully downgraded to {new_tier.title()} tier"
+
+    def reopen_surveys_on_upgrade(self, new_tier: str) -> int:
+        """Re-open surveys auto-closed by a previous downgrade.
+
+        Called when a user re-subscribes (via GoCardless webhook or manual
+        upgrade). Only surveys with ``closed_by_downgrade=True`` are
+        considered; surveys the user closed manually stay closed. Surveys
+        are re-opened in newest-first order up to the new tier's
+        ``max_surveys`` limit. If the new tier has no survey limit
+        (``max_surveys is None``), all auto-closed surveys are re-opened.
+
+        The survey is returned to its pre-closure state: DRAFT. We do not
+        auto-publish because the author should re-confirm the survey is
+        ready to receive responses.
+
+        Args:
+            new_tier: The tier the user has been upgraded to.
+
+        Returns:
+            The number of surveys re-opened.
+        """
+        if new_tier not in self.AccountTier.values:
+            return 0
+
+        from checktick_app.core.tier_limits import get_tier_limits
+        from checktick_app.surveys.models import Survey
+
+        target_limits = get_tier_limits(new_tier)
+
+        # Auto-closed surveys, newest first (re-open the most recent first).
+        closed_surveys = Survey.objects.filter(
+            owner=self.user,
+            status=Survey.Status.CLOSED,
+            closed_by_downgrade=True,
+        ).order_by("-created_at")
+
+        if not closed_surveys.exists():
+            return 0
+
+        # Count currently active (non-closed) surveys to respect the limit.
+        active_count = (
+            Survey.objects.filter(owner=self.user)
+            .exclude(status=Survey.Status.CLOSED)
+            .count()
+        )
+
+        reopened = 0
+        for survey in closed_surveys:
+            if (
+                target_limits.max_surveys is not None
+                and active_count >= target_limits.max_surveys
+            ):
+                break
+            survey.status = Survey.Status.DRAFT
+            survey.closed_by_downgrade = False
+            # Clear closed_at/closed_by since the closure is being undone.
+            survey.closed_at = None
+            survey.closed_by = None
+            survey.save(
+                update_fields=[
+                    "status",
+                    "closed_by_downgrade",
+                    "closed_at",
+                    "closed_by",
+                ]
+            )
+            reopened += 1
+            active_count += 1
+
+        return reopened
 
     def update_subscription(
         self,

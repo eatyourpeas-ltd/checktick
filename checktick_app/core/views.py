@@ -691,6 +691,8 @@ def profile(request):
         "subscription_status": profile.subscription_status,
         "created_at": profile.created_at,
         "payment_provider": profile.payment_provider,
+        "tier_changed_at": profile.tier_changed_at,
+        "subscription_current_period_end": profile.subscription_current_period_end,
     }
 
     # 2FA status for password users

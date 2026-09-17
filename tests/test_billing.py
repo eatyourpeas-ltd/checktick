@@ -1359,9 +1359,11 @@ class TestSubscriptionExpiryCommand:
             email="expired@example.com",
             password="TestPass123!",
         )
-        # Subscription ended 2 days ago
+        # Subscription ended 2 days ago (GoCardless — no grace period)
         user.profile.account_tier = UserProfile.AccountTier.PRO
         user.profile.subscription_status = UserProfile.SubscriptionStatus.CANCELED
+        user.profile.payment_subscription_id = "sub_expired_test"
+        user.profile.payment_provider = "gocardless"
         user.profile.subscription_current_period_end = timezone.now() - timedelta(
             days=2
         )
@@ -1456,6 +1458,472 @@ class TestSubscriptionExpiryCommand:
         assert (
             past_due_expired_user.profile.account_tier == UserProfile.AccountTier.FREE
         )
+
+
+@pytest.mark.django_db
+class TestSurveyReopenOnUpgrade:
+    """Test UserProfile.reopen_surveys_on_upgrade and the closed_by_downgrade flag.
+
+    Covers the re-open-on-resubscribe workflow:
+    - force_downgrade_tier sets closed_by_downgrade=True on auto-closed surveys.
+    - reopen_surveys_on_upgrade reopens only auto-closed surveys, up to the
+      new tier's max_surveys limit, in newest-first order.
+    - User-closed surveys are left untouched.
+    - Re-opened surveys return to DRAFT (not auto-published).
+    """
+
+    @pytest.fixture
+    def pro_user(db):
+        user = User.objects.create_user(
+            username="reopen-pro@example.com",
+            email="reopen-pro@example.com",
+            password="TestPass123!",
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
+        user.profile.save()
+        return user
+
+    def test_force_downgrade_sets_closed_by_downgrade_flag(self, pro_user):
+        """Auto-closed surveys are flagged closed_by_downgrade=True."""
+        for i in range(5):
+            Survey.objects.create(
+                name=f"Survey {i + 1}",
+                owner=pro_user,
+                slug=f"reopen-survey-{i + 1}",
+            )
+
+        pro_user.profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+
+        closed = Survey.objects.filter(owner=pro_user, status=Survey.Status.CLOSED)
+        assert closed.count() == 2  # 5 - 3 free limit
+        assert all(s.closed_by_downgrade for s in closed)
+
+    def test_reopen_on_upgrade_reopens_auto_closed_surveys(self, pro_user):
+        """Re-subscribing to Pro reopens all auto-closed surveys."""
+        for i in range(5):
+            Survey.objects.create(
+                name=f"Survey {i + 1}",
+                owner=pro_user,
+                slug=f"reopen-survey-{i + 1}",
+            )
+        pro_user.profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+        assert (
+            Survey.objects.filter(owner=pro_user, status=Survey.Status.CLOSED).count()
+            == 2
+        )
+
+        reopened = pro_user.profile.reopen_surveys_on_upgrade(
+            UserProfile.AccountTier.PRO
+        )
+
+        assert reopened == 2
+        assert (
+            Survey.objects.filter(owner=pro_user, status=Survey.Status.CLOSED).count()
+            == 0
+        )
+        # Re-opened surveys return to DRAFT, not PUBLISHED.
+        reopened_surveys = Survey.objects.filter(
+            owner=pro_user, status=Survey.Status.DRAFT
+        )
+        assert reopened_surveys.count() == 5
+
+    def test_reopen_does_not_touch_user_closed_surveys(self, pro_user):
+        """Surveys the user closed manually stay closed on re-subscription."""
+        for i in range(5):
+            Survey.objects.create(
+                name=f"Survey {i + 1}",
+                owner=pro_user,
+                slug=f"reopen-survey-{i + 1}",
+            )
+        # User manually closes one survey (not via downgrade).
+        manual = Survey.objects.filter(owner=pro_user).first()
+        manual.status = Survey.Status.CLOSED
+        manual.closed_by_downgrade = False
+        manual.save(update_fields=["status", "closed_by_downgrade"])
+
+        # Downgrade closes 2 more (4 active - 3 free limit = 1, but we have
+        # 4 active after manual close, so 1 auto-closed).
+        pro_user.profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+        auto_closed = Survey.objects.filter(
+            owner=pro_user, status=Survey.Status.CLOSED, closed_by_downgrade=True
+        )
+        assert auto_closed.count() == 1
+
+        reopened = pro_user.profile.reopen_surveys_on_upgrade(
+            UserProfile.AccountTier.PRO
+        )
+        assert reopened == 1
+
+        # Manual closure stays closed.
+        manual.refresh_from_db()
+        assert manual.status == Survey.Status.CLOSED
+        assert manual.closed_by_downgrade is False
+
+    def test_reopen_respects_new_tier_limit(self, pro_user):
+        """Reopen caps at the new tier's max_surveys limit."""
+        # Pro has unlimited surveys, but free has 3. Downgrade from pro with
+        # 7 surveys closes 4. Re-subscribing to free (limit 3) reopens 0
+        # because the 3 active surveys already fill the limit.
+        for i in range(7):
+            Survey.objects.create(
+                name=f"Survey {i + 1}",
+                owner=pro_user,
+                slug=f"reopen-survey-{i + 1}",
+            )
+        pro_user.profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+        assert (
+            Survey.objects.filter(
+                owner=pro_user,
+                status=Survey.Status.CLOSED,
+                closed_by_downgrade=True,
+            ).count()
+            == 4
+        )
+
+        # Re-subscribe to free (limit 3). 3 active surveys already, so 0
+        # can be re-opened.
+        reopened = pro_user.profile.reopen_surveys_on_upgrade(
+            UserProfile.AccountTier.FREE
+        )
+        assert reopened == 0
+        assert (
+            Survey.objects.filter(
+                owner=pro_user,
+                status=Survey.Status.CLOSED,
+                closed_by_downgrade=True,
+            ).count()
+            == 4
+        )
+
+    def test_reopen_no_auto_closed_surveys_returns_zero(self, pro_user):
+        """reopen_surveys_on_upgrade returns 0 when nothing to re-open."""
+        reopened = pro_user.profile.reopen_surveys_on_upgrade(
+            UserProfile.AccountTier.PRO
+        )
+        assert reopened == 0
+
+    def test_reopen_invalid_tier_returns_zero(self, pro_user):
+        """reopen_surveys_on_upgrade returns 0 for an invalid tier."""
+        reopened = pro_user.profile.reopen_surveys_on_upgrade("not_a_tier")
+        assert reopened == 0
+
+    def test_reopen_clears_closed_at_and_closed_by(self, pro_user):
+        """Re-opening clears the closed_at/closed_by fields (closure undone)."""
+        for i in range(5):
+            Survey.objects.create(
+                name=f"Survey {i + 1}",
+                owner=pro_user,
+                slug=f"reopen-survey-{i + 1}",
+            )
+        pro_user.profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+
+        pro_user.profile.reopen_surveys_on_upgrade(UserProfile.AccountTier.PRO)
+        reopened = Survey.objects.filter(owner=pro_user, status=Survey.Status.DRAFT)
+        for s in reopened:
+            assert s.closed_at is None
+            assert s.closed_by is None
+            assert s.closed_by_downgrade is False
+
+
+@pytest.mark.django_db
+class TestReopenOnCheckoutResubscribe:
+    """Test that create_subscription_for_user re-opens auto-closed surveys.
+
+    Covers the GoCardless checkout re-subscribe path: a user who was
+    previously downgraded (surveys auto-closed) and then re-subscribes
+    via the checkout flow should have their auto-closed surveys
+    re-opened by create_subscription_for_user.
+    """
+
+    @pytest.fixture
+    def lapsed_user_with_closed_surveys(self, db):
+        """A free user with 2 auto-closed surveys from a previous downgrade."""
+        user = User.objects.create_user(
+            username="lapsed-resub@example.com",
+            email="lapsed-resub@example.com",
+            password="TestPass123!",
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
+        user.profile.payment_provider = "gocardless"
+        user.profile.payment_mandate_id = "MD_lapsed_resub"
+        user.profile.save()
+        for i in range(5):
+            Survey.objects.create(
+                name=f"Survey {i + 1}",
+                owner=user,
+                slug=f"resub-survey-{i + 1}",
+            )
+        # Downgrade closes 2 surveys.
+        user.profile.force_downgrade_tier(UserProfile.AccountTier.FREE)
+        assert (
+            Survey.objects.filter(
+                owner=user, status=Survey.Status.CLOSED, closed_by_downgrade=True
+            ).count()
+            == 2
+        )
+        return user
+
+    @patch("checktick_app.core.billing.payment_client")
+    def test_create_subscription_reopens_auto_closed_surveys(
+        self, mock_payment_client, lapsed_user_with_closed_surveys
+    ):
+        """create_subscription_for_user re-opens surveys closed by downgrade."""
+        from checktick_app.core.billing import create_subscription_for_user
+
+        mock_payment_client.create_subscription.return_value = {
+            "id": "sub_new_resub",
+            "links": {"mandate": "MD_lapsed_resub"},
+        }
+
+        user = lapsed_user_with_closed_surveys
+        create_subscription_for_user(
+            user=user,
+            tier=UserProfile.AccountTier.PRO,
+            mandate_id="MD_lapsed_resub",
+            billing_cycle="monthly",
+        )
+
+        # All auto-closed surveys should be re-opened.
+        assert (
+            Survey.objects.filter(
+                owner=user, status=Survey.Status.CLOSED, closed_by_downgrade=True
+            ).count()
+            == 0
+        )
+        # Re-opened surveys are in DRAFT.
+        assert (
+            Survey.objects.filter(owner=user, status=Survey.Status.DRAFT).count() == 5
+        )
+
+    @patch("checktick_app.core.billing.payment_client")
+    def test_create_subscription_no_op_for_first_time_subscriber(
+        self, mock_payment_client, db
+    ):
+        """create_subscription_for_user is a no-op when no surveys to re-open."""
+        from checktick_app.core.billing import create_subscription_for_user
+
+        user = User.objects.create_user(
+            username="newsub@example.com",
+            email="newsub@example.com",
+            password="TestPass123!",
+        )
+        user.profile.payment_provider = "gocardless"
+        user.profile.payment_mandate_id = "MD_new"
+        user.profile.save()
+
+        mock_payment_client.create_subscription.return_value = {
+            "id": "sub_new",
+            "links": {"mandate": "MD_new"},
+        }
+
+        create_subscription_for_user(
+            user=user,
+            tier=UserProfile.AccountTier.PRO,
+            mandate_id="MD_new",
+            billing_cycle="monthly",
+        )
+
+        # No surveys exist, so nothing to re-open; no error.
+        assert Survey.objects.filter(owner=user).count() == 0
+
+
+@pytest.mark.django_db
+class TestPreExpiryWarningCommand:
+    """Test the process_expiring_subscriptions management command.
+
+    Verifies the three warning windows (1 month, 1 week, 1 day) fire and
+    that idempotency via last_expiry_warning_stage prevents re-sends.
+    """
+
+    @pytest.fixture
+    def expiring_user(self, db):
+        """Pro user with subscription ending in 30 days."""
+        user = User.objects.create_user(
+            username="expiring@example.com",
+            email="expiring@example.com",
+            password="TestPass123!",
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
+        user.profile.subscription_current_period_end = timezone.now() + timedelta(
+            days=30
+        )
+        user.profile.save()
+        return user
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_one_month_warning_fires(self, mock_email, expiring_user):
+        """1-month warning fires when 30 days remain."""
+        from django.core.management import call_command
+
+        call_command("process_expiring_subscriptions")
+
+        expiring_user.profile.refresh_from_db()
+        assert expiring_user.profile.last_expiry_warning_stage == "1month"
+        mock_email.assert_called_once()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_one_week_warning_fires(self, mock_email, expiring_user):
+        """1-week warning fires when 7 days remain and 1month already sent."""
+        from django.core.management import call_command
+
+        # Simulate 1month already sent, now 7 days out.
+        expiring_user.profile.last_expiry_warning_stage = "1month"
+        expiring_user.profile.subscription_current_period_end = (
+            timezone.now() + timedelta(days=7)
+        )
+        expiring_user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        expiring_user.profile.refresh_from_db()
+        assert expiring_user.profile.last_expiry_warning_stage == "1week"
+        mock_email.assert_called_once()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_one_day_warning_fires(self, mock_email, expiring_user):
+        """1-day warning fires when 1 day remains and earlier stages sent."""
+        from django.core.management import call_command
+
+        expiring_user.profile.last_expiry_warning_stage = "1week"
+        expiring_user.profile.subscription_current_period_end = (
+            timezone.now() + timedelta(days=1)
+        )
+        expiring_user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        expiring_user.profile.refresh_from_db()
+        assert expiring_user.profile.last_expiry_warning_stage == "1day"
+        mock_email.assert_called_once()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_idempotent_no_resend_within_stage(self, mock_email, expiring_user):
+        """Running twice in the same window does not re-send."""
+        from django.core.management import call_command
+
+        call_command("process_expiring_subscriptions")
+        call_command("process_expiring_subscriptions")
+
+        mock_email.assert_called_once()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_skips_already_in_later_stage(self, mock_email, expiring_user):
+        """If 1week was sent, 1month is not re-sent even if within 30 days."""
+        from django.core.management import call_command
+
+        expiring_user.profile.last_expiry_warning_stage = "1week"
+        expiring_user.profile.subscription_current_period_end = (
+            timezone.now() + timedelta(days=20)
+        )
+        expiring_user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        mock_email.assert_not_called()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_skips_free_tier(self, mock_email, expiring_user):
+        """Free tier users are skipped even with a period end set."""
+        from django.core.management import call_command
+
+        expiring_user.profile.account_tier = UserProfile.AccountTier.FREE
+        expiring_user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        mock_email.assert_not_called()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_skips_past_expiry(self, mock_email, expiring_user):
+        """Profiles with period end in the past are skipped (handled by
+        process_expired_subscriptions, not this command)."""
+        from django.core.management import call_command
+
+        expiring_user.profile.subscription_current_period_end = (
+            timezone.now() - timedelta(days=1)
+        )
+        expiring_user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        mock_email.assert_not_called()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_dry_run_sends_no_emails(self, mock_email, expiring_user):
+        """--dry-run does not send emails or update the profile."""
+        from django.core.management import call_command
+
+        call_command("process_expiring_subscriptions", dry_run=True)
+
+        expiring_user.profile.refresh_from_db()
+        assert expiring_user.profile.last_expiry_warning_stage == ""
+        mock_email.assert_not_called()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_skips_when_no_period_end(self, mock_email, db):
+        """Profiles with no subscription_current_period_end are skipped."""
+        from django.core.management import call_command
+
+        user = User.objects.create_user(
+            username="noexpiry@example.com",
+            email="noexpiry@example.com",
+            password="TestPass123!",
+        )
+        user.profile.account_tier = UserProfile.AccountTier.PRO
+        user.profile.subscription_status = UserProfile.SubscriptionStatus.ACTIVE
+        user.profile.subscription_current_period_end = None
+        user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        mock_email.assert_not_called()
+
+    @pytest.mark.django_db
+    @patch(
+        "checktick_app.core.management.commands.process_expiring_subscriptions.send_subscription_expiring_email"
+    )
+    def test_canceled_still_active_gets_warning(self, mock_email, expiring_user):
+        """CANCELED (cancel-at-period-end) users still get warnings."""
+        from django.core.management import call_command
+
+        expiring_user.profile.subscription_status = (
+            UserProfile.SubscriptionStatus.CANCELED
+        )
+        expiring_user.profile.save()
+
+        call_command("process_expiring_subscriptions")
+
+        mock_email.assert_called_once()
 
 
 class TestPromotionLifecycleCommand:

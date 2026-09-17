@@ -125,6 +125,7 @@ All key management and recovery events must create immutable audit entries.
 | `org_admin_recovery` | WARNING | org_id, admin_id, target_user_id, survey_id |
 | `custodian_component_accessed` | CRITICAL | admin_id, reason, request_id |
 | `vault_key_rotated` | WARNING | key_type, rotated_by |
+| `manual_tier_change` | INFO | actor_id, target_user_id, old_tier, new_tier, valid_until |
 
 #### Billing and Promotion Adjustment Events
 
@@ -370,6 +371,13 @@ CheckTick Security Team
 ```
 
 ### Administrative Notifications
+
+#### To User on Manual Tier Upgrade
+
+**To**: The upgraded user
+**Subject**: `Your {{ brand_title }} Account Has Been Upgraded to {{ tier_name }}`
+
+Sent when a platform admin manually upgrades an account to a paid tier via the Platform Admin dashboard. Includes the tier name, expiry date (if set), and a link to the subscription portal. Not sent when downgrading to free.
 
 #### To Primary Approver When Request Awaits
 

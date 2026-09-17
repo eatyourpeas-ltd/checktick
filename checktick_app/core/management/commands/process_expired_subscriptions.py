@@ -97,10 +97,17 @@ class Command(BaseCommand):
         This handles:
         - Cancelled subscriptions that reached their end date
         - Subscriptions with a set end date that has passed
+        - Manually upgraded accounts whose valid_until date has passed
+
+        For manually upgraded accounts (no payment_subscription_id), a
+        7-day grace period is applied before downgrade, matching the
+        GoCardless past-due grace period. This gives the user time to set
+        up a subscription before losing access.
         """
         self.stdout.write(self.style.HTTP_INFO("\n--- Expired Subscriptions ---"))
 
         now = timezone.now()
+        grace_cutoff = now - timedelta(days=DEFAULT_GRACE_PERIOD_DAYS)
 
         # Find profiles with:
         # - subscription_current_period_end in the past
@@ -123,6 +130,26 @@ class Command(BaseCommand):
         for profile in expired_profiles:
             user = profile.user
             old_tier = profile.account_tier
+
+            # Grace period for manually upgraded accounts (no GoCardless
+            # subscription). These accounts get a 7-day grace period after
+            # their valid_until date passes, matching the GoCardless
+            # past-due grace period. GoCardless subscriptions are cancelled
+            # by the provider before the period end, so by the time the
+            # period end passes the user has already had notice.
+            if (
+                not profile.payment_subscription_id
+                and profile.subscription_current_period_end
+                and profile.subscription_current_period_end > grace_cutoff
+            ):
+                days_into_grace = (now - profile.subscription_current_period_end).days
+                if verbose:
+                    self.stdout.write(
+                        f"\n  User: {user.username} ({user.email}) "
+                        f"— in grace period ({days_into_grace} days, "
+                        f"cutoff {DEFAULT_GRACE_PERIOD_DAYS} days)"
+                    )
+                continue
 
             # Count surveys that will be closed
             survey_count = (

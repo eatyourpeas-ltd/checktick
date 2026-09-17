@@ -7290,6 +7290,13 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
     require_can_edit(request.user, survey)
     can_edit = can_edit_survey(request.user, survey)
 
+    # Layout tier gating: free tier can only use linear; all paid tiers
+    # get every layout (see tier_limits.py allowed_layouts).
+    from checktick_app.core.tier_limits import (
+        check_layout_permission,
+        get_allowed_layouts,
+    )
+
     # Layout switching (see docs/survey-layouts.md step 3). Only the layout
     # field itself is changed here; the SectionMenu configuration card is
     # wired up in step 4. Switching back to "linear" leaves any existing
@@ -7304,6 +7311,12 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         chosen = request.POST.get("layout", "")
         if chosen not in {choice[0] for choice in Survey.Layout.choices}:
             messages.error(request, _("Unknown layout."))
+            return redirect("surveys:groups", slug=slug)
+        # Tier gate: free tier can only use linear. All paid tiers get
+        # every layout (see tier_limits.py allowed_layouts).
+        can_use, reason = check_layout_permission(request.user, chosen)
+        if not can_use:
+            messages.error(request, reason)
             return redirect("surveys:groups", slug=slug)
         # Single-section guard: a section menu with < 2 sections is pointless.
         # We do not block the switch (the author may be mid-build) but we warn.
@@ -8445,6 +8458,8 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "delphi_anchor_choices": delphi_anchor_choices,
         "delphi_round_group_ids": delphi_round_group_ids,
         "delphi_warnings": delphi_warnings,
+        # Layout tier gating (see tier_limits.py allowed_layouts).
+        "allowed_layouts": get_allowed_layouts(request.user),
     }
     if any(
         v for k, v in brand_overrides.items() if k != "primary_hex"
@@ -13273,231 +13288,282 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
         ):
             summary_parts.append(" Previous survey content was replaced.")
 
+        # Tier gate for layout-specific outline blocks: free tier can only
+        # use linear. Import once here so all layout blocks below can use it.
+        from checktick_app.core.tier_limits import check_layout_permission
+
         # Apply SECTION_MENU config from the outline (step 7).
         section_menu_cfg = parsed.get("section_menu")
         if section_menu_cfg:
-            survey.layout = Survey.Layout.SECTION_MENU
-            survey.save(update_fields=["layout"])
-            menu, _created = SectionMenu.objects.get_or_create(survey=survey)
-            menu.prompt_text = section_menu_cfg.get(
-                "prompt_text", "Which sections would you like to complete?"
+            # Tier gate: free tier cannot use non-linear layouts.
+            can_use, reason = check_layout_permission(
+                request.user, Survey.Layout.SECTION_MENU
             )
-            menu.min_selected = section_menu_cfg.get("min_selected", 1)
-            menu.max_selected = section_menu_cfg.get("max_selected")
-            menu.order_mode = section_menu_cfg.get("order_mode", "authored")
-            menu.show_select_all = section_menu_cfg.get("show_select_all", False)
-            menu.show_estimated_time = section_menu_cfg.get(
-                "show_estimated_time", False
-            )
-            menu.save()
-            # Sync items and apply per-group flags from the parsed outline.
-            _sync_section_menu_items(menu, survey)
-            for g in parsed["groups"]:
-                grp = group_ref_map.get(g.get("ref"))  # may be None if no ref
-                if grp is None:
-                    # Fall back to name match
-                    grp = next(
-                        (gg for gg in created_groups_in_order if gg.name == g["name"]),
-                        None,
-                    )
-                if grp is None:
-                    continue
-                item = menu.items.filter(group=grp).first()
-                if item:
-                    item.is_pickable = g.get("section_menu_pickable", True)
-                    item.estimated_minutes = g.get("section_menu_estimated_minutes")
-                    item.save(update_fields=["is_pickable", "estimated_minutes"])
-            summary_parts.append(" Section menu layout applied.")
+            if not can_use:
+                messages.error(request, reason)
+            else:
+                survey.layout = Survey.Layout.SECTION_MENU
+                survey.save(update_fields=["layout"])
+                menu, _created = SectionMenu.objects.get_or_create(survey=survey)
+                menu.prompt_text = section_menu_cfg.get(
+                    "prompt_text", "Which sections would you like to complete?"
+                )
+                menu.min_selected = section_menu_cfg.get("min_selected", 1)
+                menu.max_selected = section_menu_cfg.get("max_selected")
+                menu.order_mode = section_menu_cfg.get("order_mode", "authored")
+                menu.show_select_all = section_menu_cfg.get("show_select_all", False)
+                menu.show_estimated_time = section_menu_cfg.get(
+                    "show_estimated_time", False
+                )
+                menu.save()
+                # Sync items and apply per-group flags from the parsed outline.
+                _sync_section_menu_items(menu, survey)
+                for g in parsed["groups"]:
+                    grp = group_ref_map.get(g.get("ref"))  # may be None if no ref
+                    if grp is None:
+                        # Fall back to name match
+                        grp = next(
+                            (
+                                gg
+                                for gg in created_groups_in_order
+                                if gg.name == g["name"]
+                            ),
+                            None,
+                        )
+                    if grp is None:
+                        continue
+                    item = menu.items.filter(group=grp).first()
+                    if item:
+                        item.is_pickable = g.get("section_menu_pickable", True)
+                        item.estimated_minutes = g.get("section_menu_estimated_minutes")
+                        item.save(update_fields=["is_pickable", "estimated_minutes"])
+                summary_parts.append(" Section menu layout applied.")
 
         # Apply RANDOMISED config from the outline (step 6).
         randomised_cfg = parsed.get("randomised")
         if randomised_cfg:
-            survey.layout = Survey.Layout.RCT
-            survey.save(update_fields=["layout"])
-            menu, _created = RandomisedMenu.objects.get_or_create(survey=survey)
-            menu.allocation_strategy = randomised_cfg.get(
-                "allocation_strategy", RandomisedMenu.AllocationStrategy.BALANCED
-            )
-            if randomised_cfg.get("seed") is not None:
-                menu.seed = randomised_cfg["seed"]
+            can_use, reason = check_layout_permission(request.user, Survey.Layout.RCT)
+            if not can_use:
+                messages.error(request, reason)
             else:
-                menu.seed = None
-            menu.save()
-            # Create arms by name (ordered by first appearance in the outline).
-            arm_order = randomised_cfg.get("arm_order", [])
-            arms_by_name: dict[str, RandomisedArm] = {}
-            for idx, arm_name in enumerate(arm_order, start=1):
-                arm, _ = RandomisedArm.objects.get_or_create(
-                    menu=menu,
-                    name=arm_name,
-                    defaults={"order": idx, "allocation_ratio": 1},
+                survey.layout = Survey.Layout.RCT
+                survey.save(update_fields=["layout"])
+                menu, _created = RandomisedMenu.objects.get_or_create(survey=survey)
+                menu.allocation_strategy = randomised_cfg.get(
+                    "allocation_strategy", RandomisedMenu.AllocationStrategy.BALANCED
                 )
-                if arm.order != idx:
-                    arm.order = idx
-                    arm.save(update_fields=["order"])
-                arms_by_name[arm_name] = arm
-            # Drop arms that are no longer in the outline.
-            menu.arms.exclude(name__in=arm_order).delete()
-            # Assign groups to arms by name.
-            for g in parsed["groups"]:
-                grp = group_ref_map.get(g.get("ref"))
-                if grp is None:
-                    grp = next(
-                        (gg for gg in created_groups_in_order if gg.name == g["name"]),
-                        None,
-                    )
-                if grp is None:
-                    continue
-                arm_names_for_group = g.get("randomised_arms", [])
-                if arm_names_for_group:
-                    # Specific arms
-                    for an in arm_names_for_group:
-                        arm = arms_by_name.get(an)
-                        if arm is not None:
-                            arm.groups.add(grp)
+                if randomised_cfg.get("seed") is not None:
+                    menu.seed = randomised_cfg["seed"]
                 else:
-                    # No ~ arm: suffix → reachable by all arms
-                    for arm in arms_by_name.values():
-                        arm.groups.add(grp)
-            summary_parts.append(" Randomised (RCT) layout applied.")
+                    menu.seed = None
+                menu.save()
+                # Create arms by name (ordered by first appearance in the outline).
+                arm_order = randomised_cfg.get("arm_order", [])
+                arms_by_name: dict[str, RandomisedArm] = {}
+                for idx, arm_name in enumerate(arm_order, start=1):
+                    arm, _ = RandomisedArm.objects.get_or_create(
+                        menu=menu,
+                        name=arm_name,
+                        defaults={"order": idx, "allocation_ratio": 1},
+                    )
+                    if arm.order != idx:
+                        arm.order = idx
+                        arm.save(update_fields=["order"])
+                    arms_by_name[arm_name] = arm
+                # Drop arms that are no longer in the outline.
+                menu.arms.exclude(name__in=arm_order).delete()
+                # Assign groups to arms by name.
+                for g in parsed["groups"]:
+                    grp = group_ref_map.get(g.get("ref"))
+                    if grp is None:
+                        grp = next(
+                            (
+                                gg
+                                for gg in created_groups_in_order
+                                if gg.name == g["name"]
+                            ),
+                            None,
+                        )
+                    if grp is None:
+                        continue
+                    arm_names_for_group = g.get("randomised_arms", [])
+                    if arm_names_for_group:
+                        # Specific arms
+                        for an in arm_names_for_group:
+                            arm = arms_by_name.get(an)
+                            if arm is not None:
+                                arm.groups.add(grp)
+                    else:
+                        # No ~ arm: suffix → reachable by all arms
+                        for arm in arms_by_name.values():
+                            arm.groups.add(grp)
+                summary_parts.append(" Randomised (RCT) layout applied.")
 
         # Apply STAGED config from the outline (step 7).
         staged_cfg = parsed.get("staged")
         if staged_cfg:
-            survey.layout = Survey.Layout.STAGED
-            survey.save(update_fields=["layout"])
-            menu, _created = StagedMenu.objects.get_or_create(survey=survey)
-            anchor = staged_cfg.get("anchor", StagedMenu.Anchor.ENROLMENT)
-            if anchor in {choice[0] for choice in StagedMenu.Anchor.choices}:
-                menu.anchor = anchor
-            menu.save()
-            # Create phases by name (ordered by first appearance in the
-            # outline). Phase windows come from the ``phase <name>:`` config
-            # lines; phases referenced only via ``~ phase:`` suffixes (no
-            # config line) default to start=0, end=None.
-            phase_order = staged_cfg.get("phase_order", [])
-            phase_windows = staged_cfg.get("phase_windows", {})
-            phases_by_name: dict[str, StagedPhase] = {}
-            for idx, phase_name in enumerate(phase_order, start=1):
-                window = phase_windows.get(phase_name, {})
-                phase, _ = StagedPhase.objects.get_or_create(
-                    menu=menu,
-                    name=phase_name,
-                    defaults={
-                        "order": idx,
-                        "start_offset_days": window.get("start_offset_days", 0),
-                        "end_offset_days": window.get("end_offset_days"),
-                    },
-                )
-                if phase.order != idx:
-                    phase.order = idx
-                    phase.save(update_fields=["order"])
-                # Apply window from config if present.
-                if window:
-                    phase.start_offset_days = window.get("start_offset_days", 0)
-                    phase.end_offset_days = window.get("end_offset_days")
-                    phase.save(update_fields=["start_offset_days", "end_offset_days"])
-                phases_by_name[phase_name] = phase
-            # Drop phases that are no longer in the outline.
-            menu.phases.exclude(name__in=phase_order).delete()
-            # Assign groups to phases by name.
-            for g in parsed["groups"]:
-                grp = group_ref_map.get(g.get("ref"))
-                if grp is None:
-                    grp = next(
-                        (gg for gg in created_groups_in_order if gg.name == g["name"]),
-                        None,
+            can_use, reason = check_layout_permission(
+                request.user, Survey.Layout.STAGED
+            )
+            if not can_use:
+                messages.error(request, reason)
+            else:
+                survey.layout = Survey.Layout.STAGED
+                survey.save(update_fields=["layout"])
+                menu, _created = StagedMenu.objects.get_or_create(survey=survey)
+                anchor = staged_cfg.get("anchor", StagedMenu.Anchor.ENROLMENT)
+                if anchor in {choice[0] for choice in StagedMenu.Anchor.choices}:
+                    menu.anchor = anchor
+                menu.save()
+                # Create phases by name (ordered by first appearance in the
+                # outline). Phase windows come from the ``phase <name>:`` config
+                # lines; phases referenced only via ``~ phase:`` suffixes (no
+                # config line) default to start=0, end=None.
+                phase_order = staged_cfg.get("phase_order", [])
+                phase_windows = staged_cfg.get("phase_windows", {})
+                phases_by_name: dict[str, StagedPhase] = {}
+                for idx, phase_name in enumerate(phase_order, start=1):
+                    window = phase_windows.get(phase_name, {})
+                    phase, _ = StagedPhase.objects.get_or_create(
+                        menu=menu,
+                        name=phase_name,
+                        defaults={
+                            "order": idx,
+                            "start_offset_days": window.get("start_offset_days", 0),
+                            "end_offset_days": window.get("end_offset_days"),
+                        },
                     )
-                if grp is None:
-                    continue
-                phase_names_for_group = g.get("staged_phases", [])
-                for pn in phase_names_for_group:
-                    phase = phases_by_name.get(pn)
-                    if phase is not None:
-                        phase.groups.add(grp)
-                # No ~ phase: suffix → not in any phase (unreachable; warned).
-            summary_parts.append(" Staged (longitudinal) layout applied.")
+                    if phase.order != idx:
+                        phase.order = idx
+                        phase.save(update_fields=["order"])
+                    # Apply window from config if present.
+                    if window:
+                        phase.start_offset_days = window.get("start_offset_days", 0)
+                        phase.end_offset_days = window.get("end_offset_days")
+                        phase.save(
+                            update_fields=["start_offset_days", "end_offset_days"]
+                        )
+                    phases_by_name[phase_name] = phase
+                # Drop phases that are no longer in the outline.
+                menu.phases.exclude(name__in=phase_order).delete()
+                # Assign groups to phases by name.
+                for g in parsed["groups"]:
+                    grp = group_ref_map.get(g.get("ref"))
+                    if grp is None:
+                        grp = next(
+                            (
+                                gg
+                                for gg in created_groups_in_order
+                                if gg.name == g["name"]
+                            ),
+                            None,
+                        )
+                    if grp is None:
+                        continue
+                    phase_names_for_group = g.get("staged_phases", [])
+                    for pn in phase_names_for_group:
+                        phase = phases_by_name.get(pn)
+                        if phase is not None:
+                            phase.groups.add(grp)
+                    # No ~ phase: suffix → not in any phase (unreachable; warned).
+                summary_parts.append(" Staged (longitudinal) layout applied.")
 
         # Apply MATRIX config from the outline (see docs/survey-layouts-
         # technical.md §Matrix (free navigation) layout §Outline grammar).
         # No ``~`` suffixes — every section is in the matrix by default.
         matrix_cfg = parsed.get("matrix")
         if matrix_cfg:
-            survey.layout = Survey.Layout.MATRIX
-            survey.save(update_fields=["layout"])
-            menu, _created = MatrixMenu.objects.get_or_create(survey=survey)
-            menu.prompt_text = matrix_cfg.get(
-                "prompt_text",
-                "Click a section to begin. You can complete them in any order.",
-            )[:255]
-            order_mode = matrix_cfg.get("order_mode", MatrixMenu.OrderMode.AUTHORED)
-            if order_mode in {choice[0] for choice in MatrixMenu.OrderMode.choices}:
-                menu.order_mode = order_mode
-            menu.allow_revisit = bool(matrix_cfg.get("allow_revisit", True))
-            menu.save()
-            summary_parts.append(" Matrix (free navigation) layout applied.")
+            can_use, reason = check_layout_permission(
+                request.user, Survey.Layout.MATRIX
+            )
+            if not can_use:
+                messages.error(request, reason)
+            else:
+                survey.layout = Survey.Layout.MATRIX
+                survey.save(update_fields=["layout"])
+                menu, _created = MatrixMenu.objects.get_or_create(survey=survey)
+                menu.prompt_text = matrix_cfg.get(
+                    "prompt_text",
+                    "Click a section to begin. You can complete them in any order.",
+                )[:255]
+                order_mode = matrix_cfg.get("order_mode", MatrixMenu.OrderMode.AUTHORED)
+                if order_mode in {choice[0] for choice in MatrixMenu.OrderMode.choices}:
+                    menu.order_mode = order_mode
+                menu.allow_revisit = bool(matrix_cfg.get("allow_revisit", True))
+                menu.save()
+                summary_parts.append(" Matrix (free navigation) layout applied.")
 
         # Apply DELPHI config from the outline (see docs/survey-layouts-
         # technical.md §Delphi (consensus rounds) §Outline grammar).
         delphi_cfg = parsed.get("delphi")
         if delphi_cfg:
-            survey.layout = Survey.Layout.DELPHI
-            survey.save(update_fields=["layout"])
-            menu, _created = DelphiMenu.objects.get_or_create(survey=survey)
-            anchor = delphi_cfg.get("anchor", DelphiMenu.Anchor.ENROLMENT)
-            if anchor in {choice[0] for choice in DelphiMenu.Anchor.choices}:
-                menu.anchor = anchor
-            menu.min_rounds = int(delphi_cfg.get("min_rounds", 2))
-            menu.max_rounds = int(delphi_cfg.get("max_rounds", 3))
-            menu.show_progress = bool(delphi_cfg.get("show_progress", True))
-            menu.allow_revision = bool(delphi_cfg.get("allow_revision", True))
-            menu.save()
-            # Create rounds by name (ordered by first appearance in the
-            # outline). Round windows come from the ``round <name>:`` config
-            # lines; rounds referenced only via ``~ round:`` suffixes (no
-            # config line) default to start=0, end=None.
-            round_order = delphi_cfg.get("round_order", [])
-            round_windows = delphi_cfg.get("round_windows", {})
-            rounds_by_name: dict[str, DelphiRound] = {}
-            for idx, round_name in enumerate(round_order, start=0):
-                window = round_windows.get(round_name, {})
-                rnd, _ = DelphiRound.objects.get_or_create(
-                    menu=menu,
-                    order=idx,
-                    defaults={
-                        "name": round_name,
-                        "start_offset_days": window.get("start_offset_days", 0),
-                        "end_offset_days": window.get("end_offset_days"),
-                    },
-                )
-                if rnd.name != round_name:
-                    rnd.name = round_name
-                    rnd.save(update_fields=["name"])
-                # Apply window from config if present.
-                if window:
-                    rnd.start_offset_days = window.get("start_offset_days", 0)
-                    rnd.end_offset_days = window.get("end_offset_days")
-                    rnd.save(update_fields=["start_offset_days", "end_offset_days"])
-                rounds_by_name[round_name] = rnd
-            # Drop rounds that are no longer in the outline.
-            menu.rounds.exclude(order__in=range(len(round_order))).delete()
-            # Assign groups to rounds by name.
-            for g in parsed["groups"]:
-                grp = group_ref_map.get(g.get("ref"))
-                if grp is None:
-                    grp = next(
-                        (gg for gg in created_groups_in_order if gg.name == g["name"]),
-                        None,
+            can_use, reason = check_layout_permission(
+                request.user, Survey.Layout.DELPHI
+            )
+            if not can_use:
+                messages.error(request, reason)
+            else:
+                survey.layout = Survey.Layout.DELPHI
+                survey.save(update_fields=["layout"])
+                menu, _created = DelphiMenu.objects.get_or_create(survey=survey)
+                anchor = delphi_cfg.get("anchor", DelphiMenu.Anchor.ENROLMENT)
+                if anchor in {choice[0] for choice in DelphiMenu.Anchor.choices}:
+                    menu.anchor = anchor
+                menu.min_rounds = int(delphi_cfg.get("min_rounds", 2))
+                menu.max_rounds = int(delphi_cfg.get("max_rounds", 3))
+                menu.show_progress = bool(delphi_cfg.get("show_progress", True))
+                menu.allow_revision = bool(delphi_cfg.get("allow_revision", True))
+                menu.save()
+                # Create rounds by name (ordered by first appearance in the
+                # outline). Round windows come from the ``round <name>:`` config
+                # lines; rounds referenced only via ``~ round:`` suffixes (no
+                # config line) default to start=0, end=None.
+                round_order = delphi_cfg.get("round_order", [])
+                round_windows = delphi_cfg.get("round_windows", {})
+                rounds_by_name: dict[str, DelphiRound] = {}
+                for idx, round_name in enumerate(round_order, start=0):
+                    window = round_windows.get(round_name, {})
+                    rnd, _ = DelphiRound.objects.get_or_create(
+                        menu=menu,
+                        order=idx,
+                        defaults={
+                            "name": round_name,
+                            "start_offset_days": window.get("start_offset_days", 0),
+                            "end_offset_days": window.get("end_offset_days"),
+                        },
                     )
-                if grp is None:
-                    continue
-                round_names_for_group = g.get("delphi_rounds", [])
-                for rn in round_names_for_group:
-                    rnd = rounds_by_name.get(rn)
-                    if rnd is not None:
-                        rnd.groups.add(grp)
-                # No ~ round: suffix → not in any round (unreachable; warned).
-            summary_parts.append(" Delphi (consensus rounds) layout applied.")
+                    if rnd.name != round_name:
+                        rnd.name = round_name
+                        rnd.save(update_fields=["name"])
+                    # Apply window from config if present.
+                    if window:
+                        rnd.start_offset_days = window.get("start_offset_days", 0)
+                        rnd.end_offset_days = window.get("end_offset_days")
+                        rnd.save(update_fields=["start_offset_days", "end_offset_days"])
+                    rounds_by_name[round_name] = rnd
+                # Drop rounds that are no longer in the outline.
+                menu.rounds.exclude(order__in=range(len(round_order))).delete()
+                # Assign groups to rounds by name.
+                for g in parsed["groups"]:
+                    grp = group_ref_map.get(g.get("ref"))
+                    if grp is None:
+                        grp = next(
+                            (
+                                gg
+                                for gg in created_groups_in_order
+                                if gg.name == g["name"]
+                            ),
+                            None,
+                        )
+                    if grp is None:
+                        continue
+                    round_names_for_group = g.get("delphi_rounds", [])
+                    for rn in round_names_for_group:
+                        rnd = rounds_by_name.get(rn)
+                        if rnd is not None:
+                            rnd.groups.add(grp)
+                    # No ~ round: suffix → not in any round (unreachable; warned).
+                summary_parts.append(" Delphi (consensus rounds) layout applied.")
 
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)

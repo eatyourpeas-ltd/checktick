@@ -156,6 +156,8 @@
                 <span class="text-sm font-medium">{{ user.username }}</span>
                 {% if user.is_superuser %}
                   <span class="badge badge-xs badge-error">{% trans "SUPERUSER" %}</span>
+                {% elif user.profile.subscription_status == 'canceled' and user.profile.tier_changed_at and user.profile.account_tier == 'free' %}
+                  <span class="badge badge-xs badge-warning" title="{% trans 'Your paid subscription has ended' %}">{% trans "LAPSED" %}</span>
                 {% else %}
                   <span class="badge badge-xs badge-ghost">{{ user.profile.get_account_tier_display|upper }}</span>
                 {% endif %}

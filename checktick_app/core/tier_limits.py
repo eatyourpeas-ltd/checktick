@@ -62,6 +62,12 @@ class TierLimits:
     # Datasets
     can_create_datasets: bool  # FREE tier cannot create custom datasets
 
+    # Survey layouts (see docs/survey-layouts.md). Free tier is restricted
+    # to linear; all paid tiers get every layout. The list contains
+    # Survey.Layout values ("linear", "section_menu", "rct", "guided",
+    # "staged", "matrix", "delphi").
+    allowed_layouts: list[str]
+
     # Support level
     support_level: str  # "community", "email", "priority"
 
@@ -88,6 +94,7 @@ TIER_LIMITS_CONFIG = {
         can_use_webhooks=False,
         can_collect_patient_data=False,  # FREE tier cannot use patient_details_encrypted templates (but all surveys are encrypted)
         can_create_datasets=False,  # FREE tier cannot create custom datasets
+        allowed_layouts=["linear"],  # Free tier: linear only
         support_level="community",
     ),
     "pro": TierLimits(
@@ -108,6 +115,15 @@ TIER_LIMITS_CONFIG = {
         can_use_webhooks=False,
         can_collect_patient_data=True,
         can_create_datasets=True,
+        allowed_layouts=[
+            "linear",
+            "section_menu",
+            "rct",
+            "guided",
+            "staged",
+            "matrix",
+            "delphi",
+        ],
         support_level="email",
     ),
     "team_small": TierLimits(
@@ -128,6 +144,15 @@ TIER_LIMITS_CONFIG = {
         can_use_webhooks=False,
         can_collect_patient_data=True,
         can_create_datasets=True,
+        allowed_layouts=[
+            "linear",
+            "section_menu",
+            "rct",
+            "guided",
+            "staged",
+            "matrix",
+            "delphi",
+        ],
         support_level="email",
     ),
     "team_medium": TierLimits(
@@ -148,6 +173,15 @@ TIER_LIMITS_CONFIG = {
         can_use_webhooks=False,
         can_collect_patient_data=True,
         can_create_datasets=True,
+        allowed_layouts=[
+            "linear",
+            "section_menu",
+            "rct",
+            "guided",
+            "staged",
+            "matrix",
+            "delphi",
+        ],
         support_level="email",
     ),
     "team_large": TierLimits(
@@ -168,6 +202,15 @@ TIER_LIMITS_CONFIG = {
         can_use_webhooks=False,
         can_collect_patient_data=True,
         can_create_datasets=True,
+        allowed_layouts=[
+            "linear",
+            "section_menu",
+            "rct",
+            "guided",
+            "staged",
+            "matrix",
+            "delphi",
+        ],
         support_level="email",
     ),
     "organization": TierLimits(
@@ -188,6 +231,15 @@ TIER_LIMITS_CONFIG = {
         can_use_webhooks=True,
         can_collect_patient_data=True,
         can_create_datasets=True,
+        allowed_layouts=[
+            "linear",
+            "section_menu",
+            "rct",
+            "guided",
+            "staged",
+            "matrix",
+            "delphi",
+        ],
         support_level="email",
     ),
     "enterprise": TierLimits(
@@ -211,6 +263,15 @@ TIER_LIMITS_CONFIG = {
         can_use_webhooks=True,
         can_collect_patient_data=True,
         can_create_datasets=True,
+        allowed_layouts=[
+            "linear",
+            "section_menu",
+            "rct",
+            "guided",
+            "staged",
+            "matrix",
+            "delphi",
+        ],
         support_level="priority",
     ),
 }
@@ -462,6 +523,45 @@ def check_patient_data_permission(user) -> tuple[bool, str]:
     return True, ""
 
 
+def check_layout_permission(user, layout: str) -> tuple[bool, str]:
+    """Check if user's tier allows a specific survey layout.
+
+    Args:
+        user: User object with profile
+        layout: Survey.Layout value ("linear", "section_menu", "rct",
+            "guided", "staged", "matrix", "delphi")
+
+    Returns:
+        (can_use, reason) - Boolean and error message if not allowed
+    """
+    if not hasattr(user, "profile"):
+        return False, "User profile not found"
+
+    effective_tier = user.profile.get_effective_tier()
+    limits = get_tier_limits(effective_tier)
+
+    if layout not in limits.allowed_layouts:
+        return False, (
+            f"The {layout.replace('_', ' ').title()} layout requires a paid subscription. "
+            f"Upgrade to Pro ({_tier_price_pounds('pro')}/mo) or higher "
+            "to use advanced survey layouts."
+        )
+
+    return True, ""
+
+
+def get_allowed_layouts(user) -> list[str]:
+    """Return the list of layout names the user's tier allows.
+
+    Convenience wrapper for templates.
+    """
+    if not hasattr(user, "profile"):
+        return ["linear"]
+    effective_tier = user.profile.get_effective_tier()
+    limits = get_tier_limits(effective_tier)
+    return limits.allowed_layouts
+
+
 def check_dataset_creation_permission(user) -> tuple[bool, str]:
     """Check if user's tier allows creating custom datasets.
 
@@ -562,6 +662,10 @@ def get_feature_availability(user) -> dict[str, Any]:
         },
         "datasets": {
             "can_create": limits.can_create_datasets,
+        },
+        "layouts": {
+            "allowed": limits.allowed_layouts,
+            "linear_only": limits.allowed_layouts == ["linear"],
         },
         "support": {
             "level": limits.support_level,
