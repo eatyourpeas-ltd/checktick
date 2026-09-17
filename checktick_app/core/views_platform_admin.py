@@ -2,6 +2,7 @@
 
 from decimal import Decimal, InvalidOperation
 import logging
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -1035,8 +1036,9 @@ def organization_create(request: HttpRequest) -> HttpResponse:
                     f"Promotion '{promotion_name}' applied to account '{account.email}'.",
                 )
 
+            safe_scope = tier if tier in TIER_SCOPE_VALUES else "pro"
             return redirect(
-                f"{reverse('core:platform_admin_org_list')}?mode=tier&scope={tier}"
+                f"{reverse('core:platform_admin_org_list')}?{urlencode({'mode': 'tier', 'scope': safe_scope})}"
             )
 
         # Extract organization form data
