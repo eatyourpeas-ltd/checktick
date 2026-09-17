@@ -16,20 +16,15 @@
     <h2 class="mt-0 text-base-content/80">{{ survey.name }}</h2>
   </div>
 
-  {# === Layout label — dismissible, links to Organise page (docs/survey-layouts.md step 6) === #}
-  {% if has_questions %}
+  {# === Layout label — links to Organise page (docs/survey-layouts.md step 6) === #}
+  {# Shown even when there are no questions yet, so first-time users know layouts exist. #}
   <div class="alert alert-info py-2 px-3 text-sm flex items-center gap-2" role="status">
-    {% comment %} A single layout concept icon represents all layouts here — the detailed
-       wireframe icons (layout_linear, layout_section_menu, layout_rct,
-       layout_guided) are designed for the Organise page tiles and don't reduce
-       well to icon size. {% endcomment %}
     {% include "components/icons/layout_panel.html" with classes="w-5 h-5 shrink-0" %}
-    <span>{% if survey.layout == 'section_menu' %}{% trans "Layout: Section menu" %}{% elif survey.layout == 'rct' %}{% trans "Layout: Randomised (RCT)" %}{% elif survey.layout == 'guided' %}{% trans "Layout: Guided" %}{% else %}{% trans "Layout: Default (linear)" %}{% endif %}</span>
+    <span>{% if survey.layout == 'section_menu' %}{% trans "Layout: Section menu" %}{% elif survey.layout == 'rct' %}{% trans "Layout: Randomised (RCT)" %}{% elif survey.layout == 'guided' %}{% trans "Layout: Guided" %}{% elif survey.layout == 'staged' %}{% trans "Layout: Staged (longitudinal)" %}{% elif survey.layout == 'matrix' %}{% trans "Layout: Matrix (free navigation)" %}{% elif survey.layout == 'delphi' %}{% trans "Layout: Delphi (consensus rounds)" %}{% elif survey.layout == 'diary' %}{% trans "Layout: Diary (EMA)" %}{% else %}{% trans "Layout: Default (linear)" %}{% endif %}</span>
     <a href="/surveys/{{ survey.slug }}/groups/" class="link link-hover underline text-primary ml-auto">
       {% trans "Need a different layout?" %}
     </a>
   </div>
-  {% endif %}
 
   {# === Builder toolbar — links to related survey workflows === #}
   {% if has_questions %}
