@@ -46,6 +46,20 @@
             </span>
           {% endif %}
 
+          {# Layout badge — show which layout the survey uses #}
+          {% if s.layout != 'linear' %}
+            <span class="badge badge-outline badge-sm whitespace-nowrap" title="{% trans 'Survey layout' %}">
+              {% if s.layout == 'section_menu' %}{% trans 'Section menu' %}
+              {% elif s.layout == 'rct' %}{% trans 'RCT' %}
+              {% elif s.layout == 'guided' %}{% trans 'Guided' %}
+              {% elif s.layout == 'staged' %}{% trans 'Staged' %}
+              {% elif s.layout == 'matrix' %}{% trans 'Matrix' %}
+              {% elif s.layout == 'delphi' %}{% trans 'Delphi' %}
+              {% elif s.layout == 'diary' %}{% trans 'Diary (EMA)' %}
+              {% endif %}
+            </span>
+          {% endif %}
+
           {# Draft translations badge #}
           {% if s.status == 'published' %}
             {% regroup item.translations by status as translations_by_status %}

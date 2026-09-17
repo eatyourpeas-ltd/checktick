@@ -30,6 +30,13 @@ CheckTick is a secure, privacy-focused survey platform designed for:
 
 - **Secure**: Optional encryption, audit trails, GDPR-compliant
 - **Flexible**: Custom questions, conditional logic, multi-language
+- **Survey Layouts**: Eight layouts for different research designs —
+  linear (default), section menu (participant picks sections),
+  randomised/RCT (system-assigned arms), guided (one question per
+  screen), staged (longitudinal phases), matrix (free navigation),
+  Delphi (consensus rounds), and Diary/EMA (repeated measures with
+  compliance tracking). Advanced layouts are a paid-tier feature — see
+  [Survey Layouts](survey-layouts.md) and the [pricing page](https://checktick.uk/pricing).
 - **Data governance**: Automatic retention policies, access controls
 - **API access**: Programmatic survey creation and data export
 - **Self-hosted**: Run on your own infrastructure (optional)
