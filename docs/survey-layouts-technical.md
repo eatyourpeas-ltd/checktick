@@ -1196,8 +1196,9 @@ technical reference is now in §Delphi (consensus rounds) layout below,
 alongside the other live layouts.
 
 Diary / EMA (ecological momentary assessment) was the most recent layout
-to ship; its full technical reference is in `docs/diary-ema-implementation-
-plan.md`.
+to ship; its full technical reference is in [Diary / EMA — Technical
+Reference](diary-ema-implementation-plan.md) and the user-facing guide is
+[Diary / EMA](diary-ema.md).
 
 ### Two-stage screening / eligibility routing — priority: medium
 

@@ -1,16 +1,14 @@
 ---
-title: Diary / EMA — Implementation Plan
+title: Diary / EMA — Technical Reference
 category: development
 priority: 18
 ---
 
-Status: **Planning**. This document is the implementation plan for the
-Diary / EMA (ecological momentary assessment) survey layout. It will
-become the developer reference for the feature as commits land, mirroring
-the structure of `survey-layouts-technical.md` §Delphi (consensus rounds)
-layout.
+Status: **Implemented** (v0.19.0). This document is the developer
+reference for the Diary / EMA (ecological momentary assessment) survey
+layout. For the user-facing guide, see [Diary / EMA](diary-ema.md).
 
-Branch: `diary-ema` (fresh branch off `main` after the Delphi merge).
+Branch: `diary-ema`.
 
 ## 1. Overview
 
@@ -442,10 +440,10 @@ use" link for free-tier users, mirroring the other layout cards.
 
 ## 13. Commit plan
 
-Each commit ends with `s/lint` and `s/test --no-a11y` passing. Commits
-are small and independently testable, mirroring the Delphi build shape.
+All 11 commits are complete. Each commit ended with `s/lint` and
+`s/test --no-a11y` passing.
 
-### Commit 1 — Pure helpers + tests (`diary.py`)
+### Commit 1 — Pure helpers + tests (`diary.py`) ✅ `23464d6`
 
 - Add `checktick_app/surveys/diary.py` with the pure functions in §4
   (anchor_time, window_for_order, current_window, next_window,
@@ -457,7 +455,7 @@ are small and independently testable, mirroring the Delphi build shape.
   marking, compliance calculation.
 - `s/lint && s/test --no-a11y`.
 
-### Commit 2 — Data model + migration
+### Commit 2 — Data model + migration ✅ `9a47126`
 
 - Add `DiaryMenu`, `DiaryEntry` models and the `diary` choice on
   `Survey.Layout`.
@@ -469,7 +467,7 @@ are small and independently testable, mirroring the Delphi build shape.
   round-trip.
 - `s/lint && s/test --no-a11y`.
 
-### Commit 3 — Tier gating
+### Commit 3 — Tier gating ✅ `194bb08`
 
 - Add `"diary"` to `allowed_layouts` for Pro/Team/Organisation/Enterprise
   in `tier_limits.py`.
@@ -477,7 +475,7 @@ are small and independently testable, mirroring the Delphi build shape.
 - Tests: `test_tier_limits.py` — free tier denied, paid tiers allowed.
 - `s/lint && s/test --no-a11y`.
 
-### Commit 4 — Runtime hook + take view
+### Commit 4 — Runtime hook + take view ✅ `ad07515`
 
 - Add the diary branch in `_handle_participant_submission` (§5).
 - Add `ensure_entry_for_current_window` (moves from pure helper to
@@ -492,7 +490,7 @@ are small and independently testable, mirroring the Delphi build shape.
   enrolment anchor.
 - `s/lint && s/test --no-a11y`.
 
-### Commit 5 — Organise page config + warnings
+### Commit 5 — Organise page config + warnings ✅ `bea2bfd`
 
 - Add the Diary layout card and config card to `groups.html`.
 - Add the `set_layout` / `save_diary_config` handlers to the
@@ -503,7 +501,7 @@ are small and independently testable, mirroring the Delphi build shape.
   misconfigurations, free-tier user sees "Upgrade to use".
 - `s/lint && s/test --no-a11y`.
 
-### Commit 6 — Outline grammar + export round-trip
+### Commit 6 — Outline grammar + export round-trip ✅ `8dfc097`
 
 - Parse the `DIARY` block in `parse_bulk_markdown_with_collections`
   (`markdown_import.py`).
@@ -514,7 +512,7 @@ are small and independently testable, mirroring the Delphi build shape.
   interval_hours, invalid schedule_type).
 - `s/lint && s/test --no-a11y`.
 
-### Commit 7 — Preview path
+### Commit 7 — Preview path ✅ `8a5d0ac`
 
 - Add `?simulate_window=` and `?simulate_window=&at=` to
   `survey_preview`.
@@ -523,7 +521,7 @@ are small and independently testable, mirroring the Delphi build shape.
   simulate at-time renders landing state.
 - `s/lint && s/test --no-a11y`.
 
-### Commit 8 — Compliance dashboard + CSV export
+### Commit 8 — Compliance dashboard + CSV export ✅ `6607928`
 
 - Add the compliance dashboard section to the survey detail page
   (author-facing).
@@ -532,7 +530,7 @@ are small and independently testable, mirroring the Delphi build shape.
   stats, CSV export columns and rows, threshold highlighting.
 - `s/lint && s/test --no-a11y`.
 
-### Commit 9 — Reminder email + scheduled command
+### Commit 9 — Reminder email + scheduled command ✅ `eedd88b`
 
 - Add the diary reminder email template.
 - Add a daily scheduled command (alongside
@@ -542,7 +540,7 @@ are small and independently testable, mirroring the Delphi build shape.
   not sent for already-submitted, not sent for missed, idempotent.
 - `s/lint && s/test --no-a11y`.
 
-### Commit 10 — Docs sweep (user-facing)
+### Commit 10 — Docs sweep (user-facing) ✅ `397ce0a`
 
 - Write `docs/diary-ema.md` (user-facing guide: when to use, creator
   workflow, participant experience, compliance dashboard, outline
@@ -612,7 +610,7 @@ use the gated layouts.
 - On the surveys list: the Layout badge is informational only; no
   gating UI needed there (gating happens on the Organise page).
 
-### Commit 11 — Layouts-as-USP refocus
+### Commit 11 — Layouts-as-USP refocus ✅ `d25ff80`
 
 - Update `README.md`, `docs/getting-started.md`, `home.html`,
   `pricing.html`, `subscription_portal.html`, and the surveys list
@@ -627,6 +625,9 @@ use the gated layouts.
 - `s/lint && s/test --no-a11y`.
 
 ## 15. Version bump
+
+**Pending** — to be done by the CTO/maintainer per `AGENTS.md`
+§Versioning after the PR is merged to `main`.
 
 After Commit 11 passes `s/lint && s/test --no-a11y` (and `--a11y-only`
 if the USP refocus touched template structure — recommended since
@@ -646,30 +647,43 @@ if the USP refocus touched template structure — recommended since
   yes (matches the existing save-and-resume semantics — the
   `DiaryEntry.submitted_at` is set on first submit, but the
   `SurveyProgress` row stays editable until the window + grace closes).
-  Confirm in Commit 4.
+  **Resolved in Commit 4:** the current implementation sets
+  `submitted_at` on submit and marks progress as completed. Re-submission
+  within the same window is not supported in v1 — the participant sees
+  the thank-you page after submitting. This can be revisited if needed.
 - **Entry cap.** Should there be a max number of windows per
   participant (e.g. to bound the `DiaryEntry` table for a 2-year
   diary)? Default: no cap; the survey's `closed_at` ends the schedule.
-  Revisit if table growth becomes a concern.
+  **Resolved:** no cap in v1. Revisit if table growth becomes a concern.
 - **Time zone handling.** Window times are stored UTC. The participant
-  sees them in their locale (existing pattern). Confirm the
-  `expected_start` / `expected_end` are rendered via the existing
-  timezone-aware template tags.
+  sees them in their locale (existing pattern). **Resolved in Commit 4:**
+  `expected_start` / `expected_end` are stored as UTC `DateTimeField`s
+  and rendered via the existing timezone-aware template tags in
+  `diary_landing.html`.
+- **Reminder idempotency.** The `process_diary_reminders` command does
+  not store a `reminder_sent_at` timestamp on `DiaryEntry` (would
+  require a migration). Instead, it relies on the daily command cadence
+  — one reminder per day per open window. Re-running the command within
+  the same day may re-send. **Resolved in Commit 9:** acceptable for a
+  daily command. A `reminder_sent_at` field can be added in a follow-up
+  if duplicate suppression becomes a concern.
 
 ## 17. Related documentation
 
+- [Diary / EMA](diary-ema.md) — user-facing guide (creator workflow,
+  participant experience, compliance dashboard, outline syntax).
 - [Survey Layouts](survey-layouts.md) — user-facing guide to all
-  layouts (Diary/EMA entry added in Commit 10).
+  layouts.
 - [Survey Layouts (Technical)](survey-layouts-technical.md) — developer
-  reference; the Diary/EMA entry in §Planned layouts is promoted to a
-  full live-layout section in Commit 10.
-- [Delphi (Consensus Rounds)](delphi.md) — the most recent layout to
-  ship; its dev-doc cleanup (marking Delphi as live) is the prerequisite
-  for this branch.
+  reference for the data model, runtime pipeline, and implementation
+  details of all layouts.
+- [Delphi (Consensus Rounds)](delphi.md) — the previous layout to ship;
+  its dev-doc cleanup (marking Delphi as live) was the prerequisite for
+  this branch.
 - [Organise](groups-view.md) — the page where Diary/EMA is configured.
 - [Survey Progress Tracking](survey-progress-tracking.md) — save-and-resume
   carries the diary enrolment anchor and entry state.
 - [Email Notifications](email-notifications.md) — the reminder email
-  infrastructure reused in Commit 9.
+  infrastructure.
 - [Billing & Subscriptions](billing-and-subscriptions.md) — tier gating
   for layouts (Free: linear only; paid: all eight).
