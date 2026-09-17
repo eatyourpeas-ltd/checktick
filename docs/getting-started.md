@@ -640,9 +640,10 @@ Full API documentation available at:
 - **Survey Layouts**: Choose the shape of your survey — linear, section
   menu (participant picks sections), randomised/RCT (system-assigned
   arms), guided (one question per screen), staged (longitudinal phases),
-  matrix (free navigation), or Delphi (consensus rounds). Diary/EMA
-  is planned. See [Survey Layouts](survey-layouts.md) and the
-  [Delphi guide](delphi.md).
+  matrix (free navigation), Delphi (consensus rounds), or Diary (EMA —
+  repeated measures with compliance tracking). See
+  [Survey Layouts](survey-layouts.md), the [Delphi guide](delphi.md), and
+  the [Diary / EMA guide](diary-ema.md).
 - **Prefilled Data**: Import datasets for prepopulated surveys
 - **Multi-language**: Create surveys in multiple languages
 - **Email Notifications**: Get notified of new responses

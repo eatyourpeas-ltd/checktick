@@ -1195,37 +1195,9 @@ Delphi (consensus rounds) was the most recent layout to ship; its full
 technical reference is now in §Delphi (consensus rounds) layout below,
 alongside the other live layouts.
 
-### Diary / EMA (ecological momentary assessment) — priority: high (next)
-
-Repeated short surveys triggered on a fixed schedule (daily, 4×/day) or
-by events (symptom onset). Used for pain diaries, mood tracking,
-medication adherence, and symptom monitoring in clinical trials.
-
-Distinct from Staged (which is phase-based: baseline → 2-week →
-6-month). Diaries are high-frequency repeated measures with burst
-scheduling, compliance tracking (missed entries), and time-stamp
-integrity for regulatory submissions. The scheduling semantics are
-fundamentally different from phase windows.
-
-Builds on: Staged phase windows + repeats + progress tracking, but
-needs a scheduling engine (cron-like trigger windows) and a compliance
-dashboard. Substantial new runtime logic.
-
-Technical notes:
-- New `DiaryMenu` model (OneToOne to `Survey`) holding the schedule
-  type (`fixed_interval`, `event_triggered`, `burst`), the interval
-  (e.g. every 6 hours), the burst schedule (e.g. 7 days on, 7 days off),
-  and a compliance threshold (e.g. warn if < 80% of expected entries).
-- New `DiaryEntry` model (one per participant per scheduled window)
-  tracking the expected time, the actual submission time, and a link to
-  the `SurveyProgress` row. This is the compliance audit trail.
-- The runtime hook reuses `_resolved_group_order_ids` — a diary entry
-  is just a short survey with the same group set each time. The
-  difference is the *trigger*, not the *selection*.
-- `?simulate_window=` preview path for authors to test the schedule.
-- Does **not** introduce real-time push notifications in the first
-  iteration — participants receive a reminder email/SMS at the window
-  start, and the diary landing page shows the current window's status.
+Diary / EMA (ecological momentary assessment) was the most recent layout
+to ship; its full technical reference is in `docs/diary-ema-implementation-
+plan.md`.
 
 ### Two-stage screening / eligibility routing — priority: medium
 
