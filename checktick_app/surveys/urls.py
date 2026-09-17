@@ -224,6 +224,12 @@ urlpatterns = [
         views.delphi_download_comments,
         name="delphi_download_comments",
     ),
+    # Diary compliance CSV export endpoint
+    path(
+        "<slug:slug>/diary/compliance/export/",
+        views.diary_export_compliance_csv,
+        name="diary_export_compliance_csv",
+    ),
     path("<slug:slug>/update-title/", views.update_survey_title, name="update_title"),
     path("<slug:slug>/delete/", views.survey_delete, name="delete"),
     path(

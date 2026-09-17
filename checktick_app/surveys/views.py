@@ -83,6 +83,7 @@ from .models import (
     DelphiMenu,
     DelphiRound,
     DelphiRoundFeedback,
+    DiaryEntry,
     DiaryMenu,
     LLMConversationSession,
     MatrixMenu,
@@ -3416,6 +3417,44 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         else compute_response_analytics(survey, survey_key=survey_key)
     )
 
+    # Diary compliance dashboard (only for diary layout). Shows per-participant
+    # expected/submitted/missed/compliance % so the author can monitor adherence.
+    # See docs/diary-ema-implementation-plan.md §10 Compliance dashboard.
+    diary_compliance_rows: list[dict] = []
+    diary_menu_obj = None
+    if survey.layout == Survey.Layout.DIARY:
+        diary_menu_obj = getattr(survey, "diary_menu", None)
+        if diary_menu_obj is not None:
+            now_ts = timezone.now()
+            for progress in SurveyProgress.objects.filter(
+                survey=survey, diary_enrolled_at__isnull=False
+            ).order_by("diary_enrolled_at"):
+                anchor = progress.diary_enrolled_at
+                entries = list(
+                    progress.diary_entries.filter(menu=diary_menu_obj).order_by(
+                        "order", "id"
+                    )
+                )
+                stats = _diary_compliance(
+                    diary_menu_obj, entries, anchor=anchor, now=now_ts
+                )
+                participant_label = (
+                    progress.user.get_username()
+                    if progress.user
+                    else f"Participant #{progress.id}"
+                )
+                diary_compliance_rows.append(
+                    {
+                        "participant": participant_label,
+                        "enrolled_at": progress.diary_enrolled_at,
+                        **stats,
+                        "below_threshold": (
+                            stats["compliance_pct"]
+                            < diary_menu_obj.compliance_threshold_pct
+                        ),
+                    }
+                )
+
     ctx = {
         "survey": survey,
         "total": total,
@@ -3462,6 +3501,9 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         # Response insights
         "analytics": analytics,
         "insights_locked": insights_locked,
+        # Diary compliance dashboard (only for diary layout).
+        "diary_compliance_rows": diary_compliance_rows,
+        "diary_menu_obj": diary_menu_obj,
         # Security upgrade banner (planning doc §4.3 phase 3)
         "needs_encryption_migration": (
             survey.requires_whole_response_encryption()
@@ -3910,6 +3952,73 @@ def delphi_download_comments(request: HttpRequest, slug: str):
         f'attachment; filename="delphi-comments-{survey.slug}-round-{rnd.order}.csv"'
     )
     return response
+
+
+@login_required
+@email_confirmed_required
+def diary_export_compliance_csv(request: HttpRequest, slug: str) -> HttpResponse:
+    """Export the DiaryEntry audit trail as CSV.
+
+    ``GET /surveys/{slug}/diary/compliance/export/``
+
+    Called by the "Export compliance CSV" button on the dashboard. Returns
+    a CSV file with one row per DiaryEntry (columns: participant, window
+    order, expected_start, expected_end, submitted_at, is_missed) —
+    suitable for regulatory submissions and data monitoring committee
+    reports.
+
+    Access: ``require_can_edit``.
+    """
+    import csv
+    import io
+
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+
+    if survey.layout != Survey.Layout.DIARY:
+        return HttpResponse("Not a diary survey.", status=400)
+
+    menu = getattr(survey, "diary_menu", None)
+    if menu is None:
+        return HttpResponse("No diary menu configured.", status=400)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "participant",
+            "window_order",
+            "expected_start",
+            "expected_end",
+            "submitted_at",
+            "is_missed",
+        ]
+    )
+    for entry in (
+        DiaryEntry.objects.filter(menu=menu)
+        .select_related("progress", "progress__user")
+        .order_by("progress__user__username", "order", "id")
+    ):
+        participant = (
+            entry.progress.user.get_username()
+            if entry.progress.user
+            else f"Participant #{entry.progress.id}"
+        )
+        writer.writerow(
+            [
+                participant,
+                entry.order,
+                entry.expected_start.isoformat() if entry.expected_start else "",
+                entry.expected_end.isoformat() if entry.expected_end else "",
+                entry.submitted_at.isoformat() if entry.submitted_at else "",
+                "yes" if entry.is_missed else "no",
+            ]
+        )
+    resp = HttpResponse(output.getvalue(), content_type="text/csv")
+    resp["Content-Disposition"] = (
+        f'attachment; filename="diary-compliance-{survey.slug}.csv"'
+    )
+    return resp
 
 
 @login_required
