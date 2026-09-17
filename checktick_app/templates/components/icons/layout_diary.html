@@ -1,0 +1,35 @@
+{% comment %} {# Diary / EMA layout icon: a calendar with repeated small entry cards, representing scheduled repeated measures. Usage: {% include "components/icons/layout_diary.html" with classes="w-6 h-6" %} #} {% endcomment %}
+<svg xmlns="http://www.w3.org/2000/svg" class="{{ classes|default:'w-6 h-6' }}" viewBox="0 0 800 450" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Calendar header bar -->
+  <rect x="100" y="60" width="600" height="50" rx="8" ry="8" />
+  <path d="M 100,110 L 100,90 M 700,110 L 700,90" stroke-width="10" />
+
+  <!-- Calendar grid lines (7 days) -->
+  <path d="M 100,180 L 700,180 M 100,250 L 700,250 M 100,320 L 700,320" stroke-width="8" opacity="0.4" />
+  <path d="M 200,110 L 200,320 M 300,110 L 300,320 M 400,110 L 400,320 M 500,110 L 500,320 M 600,110 L 600,320" stroke-width="8" opacity="0.4" />
+
+  <!-- Entry card 1 (completed — solid, with checkmark) -->
+  <rect x="120" y="130" width="60" height="30" rx="6" ry="6" />
+  <path d="M 135,145 L 145,155 L 165,138" stroke-width="6" />
+
+  <!-- Entry card 2 (completed — solid, with checkmark) -->
+  <rect x="220" y="130" width="60" height="30" rx="6" ry="6" />
+  <path d="M 235,145 L 245,155 L 265,138" stroke-width="6" />
+
+  <!-- Entry card 3 (pending — dashed, current window) -->
+  <rect x="320" y="130" width="60" height="30" rx="6" ry="6" stroke-dasharray="8 6" />
+
+  <!-- Entry card 4 (future — dashed, faded) -->
+  <rect x="420" y="130" width="60" height="30" rx="6" ry="6" stroke-dasharray="8 6" opacity="0.4" />
+
+  <!-- Entry card 5 (future — dashed, faded) -->
+  <rect x="520" y="130" width="60" height="30" rx="6" ry="6" stroke-dasharray="8 6" opacity="0.4" />
+
+  <!-- Clock icon (bottom right, representing scheduled timing) -->
+  <circle cx="620" cy="370" r="40" stroke-width="10" />
+  <path d="M 620,350 L 620,370 L 635,380" stroke-width="8" />
+
+  <!-- Compliance bar (bottom left) -->
+  <rect x="120" y="350" width="200" height="14" rx="7" ry="7" stroke-width="8" opacity="0.4" />
+  <rect x="120" y="350" width="140" height="14" rx="7" ry="7" fill="currentColor" stroke="none" />
+</svg>

@@ -301,7 +301,7 @@ class RandomisedArm(models.Model):
 
 class SurveyProgress(models.Model):
     ...
-    # [Planned] RCT arm assignment. Only populated for surveys with
+    # RCT arm assignment. Only populated for surveys with
     # layout = rct (see docs/survey-layouts.md). Null for other layouts.
     randomisation_seed = models.BigIntegerField(
         null=True, blank=True,
@@ -324,8 +324,9 @@ both models, the M2M through table, and both `SurveyProgress` fields).
 ### Allocation strategy
 
 `_assign_arm_for_progress(progress, menu)` is a standalone pluggable
-allocator in `views.py` (kept separate from the runtime pipeline so a
-future Delphi `RoundAllocator` can sit next to it without touching RCT).
+allocator in `views.py` (kept separate from the runtime pipeline so the
+Delphi `RoundAllocator` could sit next to it without touching RCT — which
+it now does, as `_assign_round_for_progress` in `delphi.py`).
 
 - **Balanced (blocked):** builds permuted blocks of size
   `sum(arm.allocation_ratio)`, walks the block by allocation count for
@@ -441,41 +442,40 @@ the author can see at a glance which sections are arm-exclusive.
 
 ### Delphi compatibility
 
-The RCT design is deliberately shaped so the planned Delphi workflow can
-reuse its ingredients:
+The RCT design was deliberately shaped so the Delphi workflow could
+reuse its ingredients. Delphi now reuses them:
 
 - `SurveyProgress.assigned_arm` (FK, set at first access, queryable for
   analysis) is the direct precedent for `SurveyProgress.delphi_round`
-  (FK to a future `DelphiRound` model). Same shape, separate field —
-  arms and rounds are orthogonal dimensions.
+  (FK to `DelphiRound`). Same shape, separate field — arms and rounds
+  are orthogonal dimensions.
 - `SurveyProgress.randomisation_seed` is the precedent for Delphi's
   per-participant stable identifier used to keep round-N+1 assignment
   stable across resume.
 - The runtime hook (`_resolved_group_order_ids` filtering by
-  `selected_group_ids`) is unchanged. Delphi will resolve
+  `selected_group_ids`) is unchanged. Delphi resolves
   `selected_group_ids` from the current round's section set instead of
   an arm's group set — same hook, different allocator.
-- `_assign_arm_for_progress` is a standalone pluggable function; a
-  future `_assign_round_for_progress` sits next to it without touching
-  RCT.
+- `_assign_arm_for_progress` is a standalone pluggable function;
+  `_assign_round_for_progress` sits next to it without touching RCT.
 - The `?simulate_arm=` preview path is the precedent for Delphi's
   round preview (`?simulate_round=`). The RCT arm preview only *filters*
-  questions by arm group IDs — it does not aggregate responses. A
-  response-aggregation helper (`aggregate_responses_by_group` in a future
-  `delphi.py`) is **not yet built**; it is the one Delphi-critical pattern
-  that no earlier layout exercised, and is the first thing the Delphi
-  build adds (see §Delphi (consensus rounds) below). Inter-round
-  aggregate feedback itself is rendered via content blocks (see
-  §Content blocks) whose `options.body_md` is substituted from the
-  previous round's aggregated responses at view time.
+  questions by arm group IDs — it does not aggregate responses. The
+  response-aggregation helper (`aggregate_responses_by_group` in
+  `delphi.py`) was the one Delphi-critical pattern that no earlier
+  layout exercised, and was the first thing the Delphi build added
+  (see §Delphi (consensus rounds) layout). Inter-round aggregate
+  feedback itself is rendered via content blocks (see §Content blocks)
+  whose `options.body_md` is substituted from the previous round's
+  aggregated responses at view time.
 - Qualitative aggregation (thematic summary of free-text responses) is
   handled by the existing `theme_analyzer.summarise_themes()` function,
   which is already opt-in, unlock-gated, sanitised, and gracefully
   degrades. Delphi reuses it per long-text question when the author
   generates inter-round feedback.
 - RCT does **not** introduce scheduling, anonymity-beyond-aggregation,
-  or convergence tracking — those are Delphi-only and stay out of this
-  PR to keep RCT scope tight.
+  or convergence tracking — those are Delphi-only and were kept out of
+  the RCT PR to keep RCT scope tight.
 
 ## Guided layout
 
@@ -519,12 +519,12 @@ branching-hidden questions so the participant never lands on one.
 ### Orthogonality and Delphi compatibility
 
 Guided is orthogonal to the selection mechanism (linear,
-section_menu, rct, or a future Delphi round allocator): it operates on
+section_menu, rct, or the Delphi round allocator): it operates on
 whatever `[data-question-id]` / `[data-guided-extra]` elements the
 pipeline produced, regardless of how `selected_group_ids` was
 populated. This means:
 
-- A future Delphi round allocator can reuse `guided.js` unchanged —
+- The Delphi round allocator reuses `guided.js` unchanged —
   it just renders a different subset of questions per round, and the
   guided nav walks them one at a time.
 - Guided composes with section_menu and rct: a section_menu survey in
@@ -729,28 +729,28 @@ see at a glance which sections belong to which phase.
 
 ### Delphi compatibility
 
-The Staged design is deliberately shaped so the planned Delphi workflow
-can reuse its ingredients:
+The Staged design was deliberately shaped so the Delphi workflow could
+reuse its ingredients. Delphi now reuses them:
 
 - `StagedPhase` (with `start_offset_days` / `end_offset_days` and an M2M
-  to `QuestionGroup`) is the direct precedent for a future `DelphiRound`
+  to `QuestionGroup`) is the direct precedent for the `DelphiRound`
   model. Same shape, separate model — phases and rounds are orthogonal
   dimensions.
 - The runtime hook (`_resolved_group_order_ids` filtering by
-  `selected_group_ids`) is unchanged. Delphi will resolve
+  `selected_group_ids`) is unchanged. Delphi resolves
   `selected_group_ids` from the current round's section set instead of
   the open phases' union — same hook, different scheduler.
 - `staged.py`'s pure functions (`anchor_time`, `is_phase_open`,
   `open_phases`, `open_group_ids`) are the precedent for Delphi's
-  round-scheduling helpers. A future `delphi.py` sits next to it without
+  round-scheduling helpers. `delphi.py` sits next to it without
   touching staged.
 - The `?simulate_phase=` preview path is the precedent for Delphi's
   round preview (`?simulate_round=`). Inter-round aggregate feedback
   is rendered via content blocks (see §Content blocks) — no new
   feedback model in Delphi.
 - Staged does **not** introduce anonymity-beyond-aggregation or
-  convergence tracking — those are Delphi-only and stay out of this
-  PR to keep Staged scope tight.
+  convergence tracking — those are Delphi-only and were kept out of
+  the Staged PR to keep Staged scope tight.
 
 ## Matrix (free navigation) layout
 
@@ -839,8 +839,9 @@ throwaway progress row handling.
 ### Section states
 
 `checktick_app/surveys/matrix.py` holds pure, testable functions used by
-the take view. Kept separate from the runtime pipeline so a future Delphi
-round scheduler can sit next to it without touching the take view.
+the take view. Kept separate from the runtime pipeline so the Delphi
+round scheduler could sit next to it without touching the take view —
+which it now does, as `delphi.py`.
 
 - `section_state(progress, survey_id, group_id)` — returns `complete`,
   `in_progress`, or `not_started`.
@@ -924,29 +925,29 @@ prompt text, order mode, and revisit toggle.
 
 ### Delphi compatibility
 
-The Matrix design is deliberately shaped so the planned Delphi workflow can
-reuse its ingredients:
+The Matrix design was deliberately shaped so the Delphi workflow could
+reuse its ingredients. Delphi now reuses them:
 
 - `SurveyProgress.completed_group_ids` is the reusable ingredient for
-  Delphi's within-round completion tracking. A future
-  `delphi_completed_rounds` field would have the same shape (list of IDs,
-  soft indicator, hard gate on final submit). Matrix proves the pattern:
-  accumulate → validate → submit.
+  Delphi's within-round completion tracking. The `delphi_completed_rounds`
+  field has the same shape (list of IDs, soft indicator, hard gate on
+  final submit). Matrix proves the pattern: accumulate → validate →
+  submit.
 - The per-section take + `complete_section` pattern is the precedent for
   Delphi's per-round take + `complete_round`. The runtime hook
   (`_handle_participant_submission` branching on layout) is unchanged —
-  Delphi will add another branch, not modify matrix's.
+  Delphi added another branch, not a modification to matrix's.
 - `matrix.py`'s pure functions (`section_state`,
   `missing_required_question_ids`, `landing_card_states`) are the
-  precedent for Delphi's round-state helpers. A future `delphi.py` sits
-  next to it without touching matrix.
+  precedent for Delphi's round-state helpers. `delphi.py` sits next to
+  it without touching matrix.
 - The `?simulate_section=` preview path is the precedent for Delphi's
   round preview (`?simulate_round=`). Inter-round aggregate feedback
   is rendered via content blocks (see §Content blocks) — no new
   feedback model in Delphi.
 - Matrix does **not** introduce convergence tracking or
-  anonymity-beyond-aggregation — those are Delphi-only and stay out
-  of this PR to keep Matrix scope tight.
+  anonymity-beyond-aggregation — those are Delphi-only and were kept
+  out of the Matrix PR to keep Matrix scope tight.
 
 ## Content blocks (cross-layout)
 
@@ -1131,12 +1132,12 @@ workflow (not in `CHARTABLE_TYPES` / `TEXT_TYPES` / `NUMERIC_TYPES`).
 A content block whose `body_md` (and optionally `heading`) is rendered
 from aggregate data (medians, IQRs, themes) instead of authored Markdown
 is Delphi's inter-round feedback view. Same model, different body source
-— the author marks the block as "aggregate feedback" (a flag in
-`options`, no migration needed since `options` is a JSONField) and the
-runtime substitutes `options.body_md` / `options.heading` from the
-previous round's responses at view time. `question.text` (the internal
-label) stays stable across rounds. No new model, no new `SurveyProgress`
-field.
+— the author marks the block as "Delphi feedback" (the
+`is_delphi_feedback` flag in `options`, no migration needed since
+`options` is a JSONField) and the runtime substitutes `options.body_md`
+/ `options.heading` from the previous round's `DelphiRoundFeedback`
+cache at view time. `question.text` (the internal label) stays stable
+across rounds. No new model, no new `SurveyProgress` field.
 
 ## Long text (textarea)
 
@@ -1190,81 +1191,14 @@ descriptions. They are ordered by priority — the order CheckTick intends
 to implement them, based on how often the use case is the reason a
 research team reaches for REDCap or Qualtrics instead of a simpler tool.
 
-### Delphi (consensus rounds) — priority: high (next)
+Delphi (consensus rounds) was the most recent layout to ship; its full
+technical reference is now in §Delphi (consensus rounds) layout below,
+alongside the other live layouts.
 
-Multi-round structured consensus workflow. Participants complete rounds,
-see aggregate feedback between rounds, and revise their answers. The
-classic Delphi method for expert consensus-building in clinical
-research, guideline development, and priority-setting.
-
-Builds on the ingredients proven by the earlier layouts:
-
-- `SurveyProgress.assigned_arm` (RCT) → `delphi_round` FK to a
-  `DelphiRound` model. Same shape, separate field — arms and rounds are
-  orthogonal dimensions.
-- `StagedPhase` (start/end offsets, M2M to groups) → `DelphiRound`
-  (round windows, group membership). Same shape, separate model.
-- `SurveyProgress.completed_group_ids` (Matrix) →
-  `delphi_completed_rounds` (within-round completion tracking). Same
-  shape (list of IDs, soft indicator, hard gate on final submit).
-- `matrix.py` / `staged.py` pure helpers → `delphi.py` round-state
-  helpers. Sits next to them without touching them.
-- `?simulate_section=` / `?simulate_phase=` preview → round preview
-  (`?simulate_round=`).
-- Inter-round aggregate feedback is rendered via content blocks (see
-  §Content blocks) whose `options.body_md` is substituted from the
-  previous round's aggregated responses at view time. No new feedback
-  *rendering* model — but a `DelphiRoundFeedback` cache model stores the
-  pre-computed aggregate (see below).
-- Qualitative aggregation (thematic summary of free-text responses)
-  reuses the existing `theme_analyzer.summarise_themes()` function,
-  which is already opt-in, unlock-gated, sanitised, and gracefully
-  degrades. The LLM thematic analysis is **author-triggered and
-  pre-computed** at round close, not per-participant-view — see the
-  full design below.
-
-**The one ingredient not yet proven by an earlier layout** is
-response aggregation. The RCT arm preview only *filters* questions by
-arm group IDs; no layout has needed to collect responses across
-participants and compute medians/IQRs/distributions. The Delphi build
-therefore starts with a pure `aggregate_responses_by_group()` helper in
-`delphi.py`, tested in isolation before any Delphi-specific model or
-runtime hook is added.
-
-Priority: high — this is the next layout to implement. The full
-technical design is in §Delphi (consensus rounds) — full design below.
-
-### Diary / EMA (ecological momentary assessment) — priority: high
-
-Repeated short surveys triggered on a fixed schedule (daily, 4×/day) or
-by events (symptom onset). Used for pain diaries, mood tracking,
-medication adherence, and symptom monitoring in clinical trials.
-
-Distinct from Staged (which is phase-based: baseline → 2-week →
-6-month). Diaries are high-frequency repeated measures with burst
-scheduling, compliance tracking (missed entries), and time-stamp
-integrity for regulatory submissions. The scheduling semantics are
-fundamentally different from phase windows.
-
-Builds on: Staged phase windows + repeats + progress tracking, but
-needs a scheduling engine (cron-like trigger windows) and a compliance
-dashboard. Substantial new runtime logic.
-
-Technical notes:
-- New `DiaryMenu` model (OneToOne to `Survey`) holding the schedule
-  type (`fixed_interval`, `event_triggered`, `burst`), the interval
-  (e.g. every 6 hours), the burst schedule (e.g. 7 days on, 7 days off),
-  and a compliance threshold (e.g. warn if < 80% of expected entries).
-- New `DiaryEntry` model (one per participant per scheduled window)
-  tracking the expected time, the actual submission time, and a link to
-  the `SurveyProgress` row. This is the compliance audit trail.
-- The runtime hook reuses `_resolved_group_order_ids` — a diary entry
-  is just a short survey with the same group set each time. The
-  difference is the *trigger*, not the *selection*.
-- `?simulate_window=` preview path for authors to test the schedule.
-- Does **not** introduce real-time push notifications in the first
-  iteration — participants receive a reminder email/SMS at the window
-  start, and the diary landing page shows the current window's status.
+Diary / EMA (ecological momentary assessment) was the most recent layout
+to ship; its full technical reference is in [Diary / EMA — Technical
+Reference](diary-ema-implementation-plan.md) and the user-facing guide is
+[Diary / EMA](diary-ema.md).
 
 ### Two-stage screening / eligibility routing — priority: medium
 
@@ -1439,12 +1373,11 @@ Technical notes:
 - Low effort, but narrow use case. May remain a pattern rather than a
   first-class layout.
 
-## Delphi (consensus rounds) — full design
+## Delphi (consensus rounds) layout
 
-This section is the full technical design for the Delphi layout, the
-next layout to be implemented. It is written ahead of implementation so
-the design can be reviewed before code is written. Each subsection maps
-to a planned commit.
+This section is the full technical reference for the Delphi layout, the
+most recent layout to ship. Each subsection mirrors the structure used
+by the other live layouts (RCT, Guided, Staged, Matrix).
 
 ### Overview
 
@@ -1706,7 +1639,7 @@ class DelphiRoundFeedback(models.Model):
 
 class SurveyProgress(models.Model):
     ...
-    # [Planned] Delphi round assignment. Only populated for surveys with
+    # Delphi round assignment. Only populated for surveys with
     # layout = "delphi". Null for other layouts. The precedent is
     # ``assigned_arm`` (RCT) — same shape, separate field.
     delphi_round = models.ForeignKey(
@@ -1714,7 +1647,7 @@ class SurveyProgress(models.Model):
         on_delete=models.SET_NULL,
         related_name="progress_rows",
     )
-    # [Planned] Delphi within-round completion tracking. The precedent is
+    # Delphi within-round completion tracking. The precedent is
     # ``completed_group_ids`` (Matrix) — same shape (list of IDs).
     delphi_completed_rounds = models.JSONField(default=list, blank=True)
 ```

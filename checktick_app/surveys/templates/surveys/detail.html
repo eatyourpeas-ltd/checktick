@@ -372,6 +372,30 @@
 </div>
 {% endif %}
 
+{% if is_preview and diary_preview %}
+{# Simulate window panel #}
+<div class="card bg-info/10 border border-info/30 mb-6">
+  <div class="card-body p-4">
+    <h3 class="text-sm font-semibold text-base-content/80 mb-2">{% trans 'Diary / EMA preview' %}</h3>
+    <p class="text-xs text-base-content/60 mb-3">{% trans 'A diary entry uses all sections in the survey. The preview below shows what a participant would see when a window is open.' %}</p>
+    <dl class="text-xs space-y-1">
+      <dt class="text-base-content/60">{% trans 'Schedule type' %}</dt>
+      <dd>{{ diary_preview.menu.get_schedule_type_display }}</dd>
+      <dt class="text-base-content/60">{% trans 'Anchor' %}</dt>
+      <dd>{{ diary_preview.menu.get_anchor_display }}</dd>
+      {% if diary_preview.menu.interval_hours %}
+      <dt class="text-base-content/60">{% trans 'Interval' %}</dt>
+      <dd>{{ diary_preview.menu.interval_hours }}h</dd>
+      {% endif %}
+      {% if diary_preview.menu.burst_on_days %}
+      <dt class="text-base-content/60">{% trans 'Burst cycle' %}</dt>
+      <dd>{{ diary_preview.menu.burst_on_days }} on / {{ diary_preview.menu.burst_off_days }} off</dd>
+      {% endif %}
+    </dl>
+  </div>
+</div>
+{% endif %}
+
 {% if show_progress and not is_preview %}
 {# Progress bar - show at top of survey for participants #}
 <div class="card bg-base-200 shadow-sm mb-6">

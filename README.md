@@ -8,7 +8,7 @@
 
 <p align="center">
  <a href="https://github.com/eatyourpeas/checktick/releases">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.18.1-5fcfdd?style=flat-square">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.19.0-5fcfdd?style=flat-square">
  </a>
  <a href="https://github.com/eatyourpeas/checktick/blob/main/LICENSE">
   <img alt="GitHub License" src="https://img.shields.io/github/license/eatyourpeas/checktick?style=flat-square&color=5fcfdd">
@@ -32,6 +32,7 @@
 CheckTick is an open source secure survey platform for medical audit and research, created for the NHS. Features include:
 
 - **Survey Creation**: Survey creators build questions from a library of question types, either as drag and drop in a builder, or they can import them written in markdown. Users can also create surveys using natural language and the LLM will generate the markdown.
+- **Survey Layouts**: Eight layouts for different research designs — linear, section menu (participant picks sections), randomised/RCT (system-assigned arms), guided (one question per screen), staged (longitudinal phases), matrix (free navigation), Delphi (consensus rounds), and Diary/EMA (repeated measures with compliance tracking). See [Survey Layouts](docs/survey-layouts.md).
 - **Security**: All data and AI hosted on secure servers in the UK. Every survey encrypted by default with AES-256-GCM, Role-based access control, audit logs, and single sign-on, GDPR, NHS DSPT, and Caldicott compliant. It has been penetration tested.
 - **Language Support**: Surveys can be published in a range of languages for multilingual audiences, using an LLM.
 - **Publication**: Fully controlled by the survey creator including access (open links vs login required for sensitive data)

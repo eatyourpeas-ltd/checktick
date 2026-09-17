@@ -16,7 +16,7 @@ windows, and when to generate inter-round feedback.
 
 This guide covers the creator workflow and the participant experience.
 For the technical data model and runtime pipeline, see
-[Survey Layouts (Technical)](survey-layouts-technical.md#delphi-consensus-rounds--full-design).
+[Survey Layouts (Technical)](survey-layouts-technical.md#delphi-consensus-rounds-layout).
 
 ## When to use Delphi
 

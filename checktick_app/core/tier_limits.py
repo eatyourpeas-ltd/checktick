@@ -65,7 +65,7 @@ class TierLimits:
     # Survey layouts (see docs/survey-layouts.md). Free tier is restricted
     # to linear; all paid tiers get every layout. The list contains
     # Survey.Layout values ("linear", "section_menu", "rct", "guided",
-    # "staged", "matrix", "delphi").
+    # "staged", "matrix", "delphi", "diary").
     allowed_layouts: list[str]
 
     # Support level
@@ -123,6 +123,7 @@ TIER_LIMITS_CONFIG = {
             "staged",
             "matrix",
             "delphi",
+            "diary",
         ],
         support_level="email",
     ),
@@ -152,6 +153,7 @@ TIER_LIMITS_CONFIG = {
             "staged",
             "matrix",
             "delphi",
+            "diary",
         ],
         support_level="email",
     ),
@@ -181,6 +183,7 @@ TIER_LIMITS_CONFIG = {
             "staged",
             "matrix",
             "delphi",
+            "diary",
         ],
         support_level="email",
     ),
@@ -210,6 +213,7 @@ TIER_LIMITS_CONFIG = {
             "staged",
             "matrix",
             "delphi",
+            "diary",
         ],
         support_level="email",
     ),
@@ -239,6 +243,7 @@ TIER_LIMITS_CONFIG = {
             "staged",
             "matrix",
             "delphi",
+            "diary",
         ],
         support_level="email",
     ),
@@ -271,6 +276,7 @@ TIER_LIMITS_CONFIG = {
             "staged",
             "matrix",
             "delphi",
+            "diary",
         ],
         support_level="priority",
     ),
@@ -529,7 +535,7 @@ def check_layout_permission(user, layout: str) -> tuple[bool, str]:
     Args:
         user: User object with profile
         layout: Survey.Layout value ("linear", "section_menu", "rct",
-            "guided", "staged", "matrix", "delphi")
+            "guided", "staged", "matrix", "delphi", "diary")
 
     Returns:
         (can_use, reason) - Boolean and error message if not allowed

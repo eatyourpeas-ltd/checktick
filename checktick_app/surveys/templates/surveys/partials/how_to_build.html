@@ -7,6 +7,7 @@
    1. Create a survey
    2. Add questions (3 ways: Builder, Outline, AI Assistant)
    3. Organise (optional) — sections, layout, branching/repeats/sharing
+   4. Choose a layout (optional) — linear, section menu, RCT, guided, staged, matrix, Delphi, Diary/EMA
 
    Context: none required (all strings are static).
 {% endcomment %}
@@ -45,12 +46,27 @@
         <span class="badge badge-accent badge-sm">3</span>
         <span class="font-semibold text-sm text-base-content">{% trans "Organise (optional)" %}</span>
       </div>
-      <p class="text-xs text-base-content/70">{% trans "Group questions into sections, choose a layout (linear or section menu), and set up branching, repeats, or sharing as templates. Sections appear automatically when you need them." %}</p>
+      <p class="text-xs text-base-content/70">{% trans "Group questions into sections, and set up branching, repeats, or sharing as templates. Sections appear automatically when you need them." %}</p>
+    </div>
+
+    <div class="flex sm:flex-col items-center justify-center px-1 py-2 text-base-content/30 select-none">
+      <span class="hidden sm:block text-lg leading-none">›</span>
+      <span class="sm:hidden text-lg leading-none rotate-90">›</span>
+    </div>
+
+    <div class="flex-1 rounded-b-box sm:rounded-r-box sm:rounded-bl-none bg-primary/10 border border-primary/30 p-4">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="badge badge-primary badge-sm">4</span>
+        <span class="font-semibold text-sm text-base-content">{% trans "Choose a layout (optional)" %}</span>
+      </div>
+      <p class="text-xs text-base-content/70">{% trans "Pick from eight layouts — linear, section menu, randomised (RCT), guided, staged, matrix, Delphi, or Diary (EMA). Available on the Organise page." %}</p>
     </div>
 
   </div>
   <p class="text-xs text-base-content/60 mt-3">
     {% trans "Learn more in the" %}
-    <a href="/docs/groups-view/" class="link underline" target="_blank" rel="noopener noreferrer">{% trans "Sections guide" %}</a>.
+    <a href="/docs/groups-view/" class="link underline" target="_blank" rel="noopener noreferrer">{% trans "Sections guide" %}</a>
+    {% trans "or the" %}
+    <a href="/docs/survey-layouts.md" class="link underline" target="_blank" rel="noopener noreferrer">{% trans "Survey Layouts guide" %}</a>.
   </p>
 </div>

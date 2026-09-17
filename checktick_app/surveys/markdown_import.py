@@ -869,6 +869,15 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
     # optional ``round <name>:`` config lines in the DELPHI block.
     delphi_round_windows: Dict[str, Dict[str, Any]] = {}
 
+    # DIARY block parsing (see docs/diary-ema-implementation-plan.md §6
+    # Outline grammar). Analogous to the other layout blocks: appears
+    # before any group headings and contains only config lines
+    # (schedule_type, interval_hours, burst_on_days, burst_off_days,
+    # anchor, compliance_threshold, grace_minutes, show_progress). No
+    # ``~`` suffixes are needed — a diary entry uses the full group set.
+    diary: Dict[str, Any] | None = None
+    in_diary_block = False
+
     for raw in raw_lines:
         # Count leading '>' as depth
         s = raw
@@ -1188,6 +1197,89 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
             in_delphi_block = False
             # Fall through to regular parsing for this line
 
+        # DIARY block start (see docs/diary-ema-implementation-plan.md §6
+        # Outline grammar).
+        if _re.match(r"^DIARY$", stripped, flags=_re.IGNORECASE):
+            in_diary_block = True
+            diary = {
+                "schedule_type": "fixed_interval",
+                "interval_hours": None,
+                "burst_on_days": None,
+                "burst_off_days": None,
+                "anchor": "enrolment",
+                "compliance_threshold_pct": 80,
+                "grace_minutes": 30,
+                "show_progress": True,
+            }
+            continue
+
+        # DIARY config lines (indented under the block header).
+        #   schedule: fixed_interval|event_triggered|burst
+        #   interval_hours: 6
+        #   burst_on_days: 7
+        #   burst_off_days: 7
+        #   anchor: enrolment|survey_open
+        #   compliance_threshold: 80
+        #   grace_minutes: 30
+        #   show_progress: true|false
+        if in_diary_block and (depth > 0 or raw[:1].isspace()):
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            if cfg_match and diary is not None:
+                key = cfg_match.group(1).lower()
+                val_raw = cfg_match.group(2).strip()
+                if key == "schedule":
+                    if val_raw in ("fixed_interval", "event_triggered", "burst"):
+                        diary["schedule_type"] = val_raw
+                elif key == "interval_hours":
+                    try:
+                        diary["interval_hours"] = int(val_raw)
+                    except ValueError:
+                        pass
+                elif key == "burst_on_days":
+                    try:
+                        diary["burst_on_days"] = int(val_raw)
+                    except ValueError:
+                        pass
+                elif key == "burst_off_days":
+                    try:
+                        diary["burst_off_days"] = int(val_raw)
+                    except ValueError:
+                        pass
+                elif key == "anchor":
+                    if val_raw in ("enrolment", "survey_open"):
+                        diary["anchor"] = val_raw
+                elif key == "compliance_threshold":
+                    try:
+                        diary["compliance_threshold_pct"] = int(val_raw)
+                    except ValueError:
+                        pass
+                elif key == "grace_minutes":
+                    try:
+                        diary["grace_minutes"] = int(val_raw)
+                    except ValueError:
+                        pass
+                elif key == "show_progress":
+                    diary["show_progress"] = val_raw.lower() in (
+                        "true",
+                        "yes",
+                        "on",
+                    )
+                continue
+            # Blank line inside indented block — skip
+            if not stripped:
+                continue
+            continue
+
+        # Blank line ends the DIARY config block
+        if in_diary_block and not stripped:
+            in_diary_block = False
+            continue
+
+        # Unknown non-indented line inside DIARY block also ends it
+        if in_diary_block and depth == 0 and not raw[:1].isspace():
+            in_diary_block = False
+            # Fall through to regular parsing for this line
+
         # REPEAT marker?
         m = _re.match(r"^REPEAT(?:-(\d+))?$", content.strip(), flags=_re.IGNORECASE)
         if m:
@@ -1403,4 +1495,5 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
         "staged": staged,
         "matrix": matrix,
         "delphi": delphi,
+        "diary": diary,
     }

@@ -901,21 +901,30 @@ class Survey(models.Model):
     # screen with Next/Back navigation — a rendering change layered on
     # top of the existing ordering pipeline (see docs/survey-layouts-
     # technical.md §Guided layout). The guided JS is layout-agnostic so
-    # a future Delphi round allocator can reuse it unchanged. "staged"
+    # the Delphi round allocator reuses it unchanged. "staged"
     # unlocks sections over time in defined phase windows (baseline now,
     # follow-up in 2 weeks, 6-month review later) — see docs/survey-layouts-
     # technical.md §Staged (longitudinal) layout. Staged recomputes the
     # open phases on each access and resolves selected_group_ids from the
     # currently-open phases, reusing the same runtime hook as section_menu
-    # and rct. StagedPhase is the precedent for a future DelphiRound model.
+    # and rct. StagedPhase is the precedent for the DelphiRound model.
     # "matrix" shows all sections as cards on a landing page; the participant
     # jumps in and out of any section in any order with completion indicators
     # (see docs/survey-layouts-technical.md §Matrix (free navigation) layout).
     # Unlike the other layouts (which filter selected_group_ids and render a
     # single take page), matrix has a landing page + per-section take pages +
     # a final submit. SurveyProgress.completed_group_ids tracks which sections
-    # the participant has marked complete — the reusable ingredient for a
-    # future DelphiRound's within-round completion tracking.
+    # the participant has marked complete — the reusable ingredient for
+    # DelphiRound's within-round completion tracking.
+    # "delphi" runs multi-round consensus workflows where participants
+    # complete rounds, see aggregate feedback between rounds, and revise
+    # their answers (see docs/survey-layouts-technical.md §Delphi (consensus
+    # rounds) layout). "diary" runs high-frequency repeated-measures
+    # surveys (diaries / ecological momentary assessment) on a fixed
+    # schedule or event-triggered, with compliance tracking — see
+    # docs/diary-ema-implementation-plan.md. A diary entry is just a
+    # short survey with the same group set each time; the difference
+    # from other layouts is the *trigger*, not the *selection*.
     class Layout(models.TextChoices):
         LINEAR = "linear", "Linear"
         SECTION_MENU = "section_menu", "Section menu"
@@ -924,6 +933,7 @@ class Survey(models.Model):
         STAGED = "staged", "Staged (longitudinal)"
         MATRIX = "matrix", "Matrix (free navigation)"
         DELPHI = "delphi", "Delphi (consensus rounds)"
+        DIARY = "diary", "Diary / EMA"
 
     layout = models.CharField(
         max_length=20,
@@ -939,7 +949,9 @@ class Survey(models.Model):
             '"matrix" shows all sections as cards with free navigation '
             'and completion indicators; "delphi" runs multi-round '
             "consensus workflows where participants complete rounds, see "
-            "aggregate feedback between rounds, and revise their answers."
+            "aggregate feedback between rounds, and revise their answers; "
+            '"diary" runs high-frequency repeated-measures surveys on a '
+            "schedule with compliance tracking."
         ),
     )
     # Resume + redaction toggles (see docs/survey-progress-tracking.md and
@@ -3869,6 +3881,23 @@ class SurveyProgress(models.Model):
         ),
     )
 
+    # Diary layout: the participant's enrolment anchor (first access
+    # time). Only populated for surveys with layout = "diary". Null for
+    # other layouts. Used to compute window start/end times when
+    # anchor = "enrolment" (the default). The precedent is
+    # ``created_at`` (used by Staged/Delphi as the enrolment anchor) —
+    # diary uses a dedicated field so the enrolment time is stable even
+    # if ``created_at`` is repurposed for other bookkeeping.
+    diary_enrolled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "When the participant first accessed a diary survey. Used as "
+            "the anchor for window calculations when DiaryMenu.anchor = "
+            "'enrolment'. Null for non-diary surveys."
+        ),
+    )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -4486,6 +4515,173 @@ class DelphiRoundFeedback(models.Model):
 
     def __str__(self) -> str:
         return f"Feedback for {self.question.text[:50]} in {self.round}"
+
+
+class DiaryMenu(models.Model):
+    """Configuration for a survey with ``layout = diary``.
+
+    A DiaryMenu is a OneToOne related to ``Survey`` and holds the
+    schedule type and parameters for a diary / EMA (ecological momentary
+    assessment) survey. Per-window state (expected time, actual
+    submission time, link to SurveyProgress) lives on ``DiaryEntry``
+    rows.
+
+    See docs/diary-ema-implementation-plan.md §3 Data model.
+    A non-diary survey has no ``DiaryMenu`` row.
+    """
+
+    survey = models.OneToOneField(
+        Survey,
+        related_name="diary_menu",
+        on_delete=models.CASCADE,
+    )
+
+    class ScheduleType(models.TextChoices):
+        FIXED_INTERVAL = "fixed_interval", "Fixed interval (e.g. every 6 hours)"
+        EVENT_TRIGGERED = "event_triggered", "Event-triggered (participant-initiated)"
+        BURST = "burst", "Burst (e.g. 7 days on, 7 days off)"
+
+    schedule_type = models.CharField(
+        max_length=20,
+        choices=ScheduleType.choices,
+        default=ScheduleType.FIXED_INTERVAL,
+        help_text=(
+            "How diary windows are scheduled. 'fixed_interval' opens a "
+            "window every `interval_hours` hours (e.g. every 6 hours = "
+            "4×/day). 'event_triggered' has no scheduled windows — the "
+            "participant initiates entries from the landing page. 'burst' "
+            "cycles between on-periods (daily entries) and off-periods "
+            "(no entries)."
+        ),
+    )
+    interval_hours = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "For fixed_interval: hours between windows (e.g. 6 = 4×/day). "
+            "For burst: hours per on-day window (default 24 = one daily "
+            "entry). Ignored for event_triggered."
+        ),
+    )
+    burst_on_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="For burst: number of on-days in each cycle (e.g. 7).",
+    )
+    burst_off_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="For burst: number of off-days in each cycle (e.g. 7).",
+    )
+
+    class Anchor(models.TextChoices):
+        ENROLMENT = "enrolment", "From participant enrolment"
+        SURVEY_OPEN = "survey_open", "From survey open date"
+
+    anchor = models.CharField(
+        max_length=20,
+        choices=Anchor.choices,
+        default=Anchor.ENROLMENT,
+        help_text=(
+            "Reference point for window start times. 'enrolment' offsets "
+            "from the participant's first access (SurveyProgress."
+            "diary_enrolled_at); 'survey_open' offsets from Survey.start_at. "
+            "Use 'survey_open' when all participants should be on the same "
+            "calendar schedule."
+        ),
+    )
+    compliance_threshold_pct = models.PositiveIntegerField(
+        default=80,
+        help_text=(
+            "Warn on the compliance dashboard if a participant submits "
+            "fewer than this percentage of expected entries."
+        ),
+    )
+    grace_minutes = models.PositiveIntegerField(
+        default=30,
+        help_text=(
+            "A window stays submittable for this many minutes after its "
+            "scheduled end. Prevents edge-case missed entries when the "
+            "participant is a few minutes late."
+        ),
+    )
+    show_progress = models.BooleanField(
+        default=True,
+        help_text=(
+            "Show participants which window they are in and their "
+            "compliance summary on the diary landing page."
+        ),
+    )
+
+    def __str__(self) -> str:
+        return f"DiaryMenu for {self.survey.name}"
+
+
+class DiaryEntry(models.Model):
+    """One scheduled window for one participant in a diary survey.
+
+    This is the compliance audit trail: the expected time the window
+    opened, the actual time the participant submitted (null if missed),
+    and a link to the SurveyProgress row carrying the responses. One
+    DiaryEntry per (participant, scheduled window).
+
+    The precedent is StagedPhase (window offsets) + SurveyProgress
+    (response carrier), combined into a per-window row. Unlike Staged
+    (which recomputes open phases on each access), DiaryEntry rows are
+    materialised lazily on first access in the window so the compliance
+    audit trail is stable and queryable.
+
+    See docs/diary-ema-implementation-plan.md §3 Data model.
+    """
+
+    menu = models.ForeignKey(
+        DiaryMenu,
+        related_name="entries",
+        on_delete=models.CASCADE,
+    )
+    progress = models.ForeignKey(
+        "SurveyProgress",
+        related_name="diary_entries",
+        on_delete=models.CASCADE,
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Window order (0 = first window from the anchor).",
+    )
+    expected_start = models.DateTimeField(
+        help_text="When the window was scheduled to open (UTC).",
+    )
+    expected_end = models.DateTimeField(
+        help_text="When the window was scheduled to close (UTC, exclusive).",
+    )
+    submitted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "When the participant submitted this entry. Null if the window "
+            "closed without a submission."
+        ),
+    )
+    is_missed = models.BooleanField(
+        default=False,
+        help_text=(
+            "True if the window closed (past grace) without a submission. "
+            "Set by the runtime when the next access finds an unsent entry "
+            "past its grace period."
+        ),
+    )
+
+    class Meta:
+        unique_together = ("menu", "progress", "order")
+        ordering = ["progress", "order", "id"]
+
+    def __str__(self) -> str:
+        status = (
+            "submitted"
+            if self.submitted_at
+            else ("missed" if self.is_missed else "pending")
+        )
+        return f"DiaryEntry #{self.order} ({status}) for {self.progress}"
 
 
 def validate_markdown_survey(md_text: str) -> list[dict]:

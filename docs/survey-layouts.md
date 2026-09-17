@@ -5,7 +5,7 @@ priority: 7
 ---
 
 A **Survey Layout** is the high-level shape of a survey — how its sections
-are offered to the participant. CheckTick supports seven layouts:
+are offered to the participant. CheckTick supports eight layouts:
 
 - **Default (linear)** — sections flow in the order you arrange them. Every
   respondent sees every section. This is how all surveys worked before
@@ -42,6 +42,11 @@ are offered to the participant. CheckTick supports seven layouts:
   rounds, and revise their answers. Used for expert consensus-building
   in clinical research, guideline development, and priority-setting.
   See the [Delphi guide](delphi.md) for a full walkthrough.
+- **Diary (EMA)** — repeated short surveys on a fixed schedule (daily,
+  4×/day) or event-triggered, with compliance tracking. Used for pain
+  diaries, mood tracking, medication adherence, and symptom monitoring
+  in clinical trials. See the [Diary / EMA guide](diary-ema.md) for a
+  full walkthrough.
 
 The name **Layout** is deliberately distinct from **Template**, which is
 already used for published sections shared into the Question Bank (see
@@ -143,6 +148,29 @@ the participant sees a friendly "check back later" page.
 
 See the [Delphi guide](delphi.md) for a full walkthrough of the creator
 workflow and participant experience.
+
+### Diary (EMA)
+
+Use the Diary layout when:
+
+- **Pain diaries** — daily or multiple-times-daily pain ratings over
+  a study period.
+- **Mood tracking** — IAPT/mental-health monitoring with repeated
+  administrations.
+- **Medication adherence** — daily check-ins confirming medication
+  was taken.
+- **Symptom monitoring in clinical trials** — high-frequency symptom
+  tracking with compliance tracking for regulatory submissions.
+
+Diary is different from Staged (which is phase-based: baseline →
+2-week → 6-month). Diaries are high-frequency repeated measures with
+burst scheduling, compliance tracking (missed entries), and
+reminder emails. Each window opens the same short instrument; the
+participant completes it and the entry is timestamped. When no window
+is open, the participant sees a friendly "check back later" page.
+
+See the [Diary / EMA guide](diary-ema.md) for a full walkthrough of
+the creator workflow and participant experience.
 
 ## Choosing a layout
 
@@ -543,17 +571,6 @@ implemented. They are ordered by priority — the order CheckTick intends
 to implement them, based on how often the use case is the reason a
 research team reaches for REDCap or Qualtrics instead of a simpler tool.
 
-### Diary / EMA (ecological momentary assessment)
-
-Repeated short surveys triggered on a fixed schedule (daily, 4×/day) or
-by events (symptom onset). Used for pain diaries, mood tracking,
-medication adherence, and symptom monitoring in clinical trials.
-
-Different from Staged (which is phase-based: baseline → 2-week →
-6-month). Diaries are high-frequency repeated measures with burst
-scheduling, compliance tracking (missed entries), and time-stamp
-integrity for regulatory submissions.
-
 ### Two-stage screening / eligibility routing
 
 A brief screener determines eligibility, then routes to the full survey,
@@ -605,6 +622,8 @@ for the full technical notes on each planned layout.
 
 - [Delphi guide](delphi.md) — full walkthrough of the Delphi consensus
   rounds layout (creator workflow + participant experience).
+- [Diary / EMA guide](diary-ema.md) — full walkthrough of the Diary / EMA
+  layout (creator workflow + participant experience).
 - [Organise](groups-view.md) — the page where layout is configured.
 - [Branching & Repeats](branching-and-repeats.md) — branching is a
   sibling feature; a `jump to` into a non-selected section is a no-op at

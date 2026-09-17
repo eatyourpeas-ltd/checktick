@@ -11,6 +11,8 @@ from .models import (
     DelphiMenu,
     DelphiRound,
     DelphiRoundFeedback,
+    DiaryEntry,
+    DiaryMenu,
     IdentityVerification,
     MatrixMenu,
     Organization,
@@ -771,6 +773,47 @@ class DelphiRoundFeedbackAdmin(admin.ModelAdmin):
     list_filter = ("llm_generated", "llm_success")
     search_fields = ("round__menu__survey__name", "question__text")
     ordering = ("round", "question")
+
+
+class DiaryEntryInline(admin.TabularInline):
+    model = DiaryEntry
+    extra = 0
+    fields = ("order", "expected_start", "expected_end", "submitted_at", "is_missed")
+    readonly_fields = ("expected_start", "expected_end")
+    ordering = ("order",)
+
+
+@admin.register(DiaryMenu)
+class DiaryMenuAdmin(admin.ModelAdmin):
+    list_display = (
+        "survey",
+        "schedule_type",
+        "anchor",
+        "interval_hours",
+        "burst_on_days",
+        "burst_off_days",
+        "compliance_threshold_pct",
+        "grace_minutes",
+        "show_progress",
+    )
+    list_filter = ("schedule_type", "anchor", "show_progress")
+    search_fields = ("survey__name", "survey__slug")
+
+
+@admin.register(DiaryEntry)
+class DiaryEntryAdmin(admin.ModelAdmin):
+    list_display = (
+        "menu",
+        "progress",
+        "order",
+        "expected_start",
+        "expected_end",
+        "submitted_at",
+        "is_missed",
+    )
+    list_filter = ("is_missed", "menu__schedule_type")
+    search_fields = ("menu__survey__name",)
+    ordering = ("progress", "order", "id")
 
 
 class CollectionItemInline(admin.TabularInline):

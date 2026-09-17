@@ -296,6 +296,56 @@
 {# Response Insights - answer distribution charts #}
 {% include "surveys/partials/response_insights.html" %}
 
+{% if diary_compliance_rows %}
+{# Diary compliance dashboard #}
+<div class="mt-6 card bg-base-100 shadow-xl">
+  <div class="card-body">
+    <h2 class="card-title">
+      {% trans "Diary Compliance" %}
+      <a href="{% url 'surveys:diary_export_compliance_csv' slug=survey.slug %}" class="btn btn-ghost btn-sm ml-auto">
+        {% trans "Export CSV" %}
+      </a>
+    </h2>
+    <p class="text-sm text-base-content/60 mb-4">
+      {% trans "Per-participant compliance with the diary schedule. Entries below the threshold are highlighted." %}
+    </p>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>{% trans "Participant" %}</th>
+            <th>{% trans "Enrolled" %}</th>
+            <th class="text-center">{% trans "Expected" %}</th>
+            <th class="text-center">{% trans "Submitted" %}</th>
+            <th class="text-center">{% trans "Missed" %}</th>
+            <th class="text-center">{% trans "Compliance" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in diary_compliance_rows %}
+          <tr class="{% if row.below_threshold %}bg-error/10{% endif %}">
+            <td>{{ row.participant }}</td>
+            <td class="text-xs">{{ row.enrolled_at|date:"Y-m-d H:i" }}</td>
+            <td class="text-center">{{ row.expected }}</td>
+            <td class="text-center text-success">{{ row.submitted }}</td>
+            <td class="text-center {% if row.missed %}text-error{% endif %}">{{ row.missed }}</td>
+            <td class="text-center font-semibold {% if row.below_threshold %}text-error{% else %}text-success{% endif %}">
+              {{ row.compliance_pct|floatformat:0 }}%
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if diary_menu_obj %}
+    <p class="text-xs text-base-content/40 mt-2">
+      {% blocktrans with threshold=diary_menu_obj.compliance_threshold_pct %}Compliance threshold: {{ threshold }}%{% endblocktrans %}
+    </p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 {% if survey.is_closed %}
 <div class="mt-6 card bg-base-100 shadow-xl">
   <div class="card-body">

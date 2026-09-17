@@ -48,6 +48,13 @@ from checktick_app.core.theme_utils import is_safe_url, sanitize_font_family
 from .allocation import MAX_SEED, pick_arm
 from .color import hex_to_oklch
 from .delphi import assign_round_for_progress as _delphi_assign_round
+from .diary import (
+    compliance_for_progress as _diary_compliance,
+    current_window as _diary_current_window,
+    ensure_entry_for_current_window as _diary_ensure_entry,
+    mark_missed_entries as _diary_mark_missed,
+    next_window as _diary_next_window,
+)
 from .doc_extract import (
     MESSAGE_BY_CODE,
     DocImportError,
@@ -76,6 +83,8 @@ from .models import (
     DelphiMenu,
     DelphiRound,
     DelphiRoundFeedback,
+    DiaryEntry,
+    DiaryMenu,
     LLMConversationSession,
     MatrixMenu,
     Organization,
@@ -1580,6 +1589,20 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
                 else:
                     simulated_group_ids = []
 
+    # Diary / EMA: simulate window (see docs/diary-ema-implementation-
+    # plan.md §8 Preview). A "Simulate window" panel on the preview page
+    # lets the author preview what a participant would see when a window
+    # is open. Since a diary entry uses the full group set, the simulation
+    # just renders all questions (no filtering needed). The panel shows
+    # the current schedule config and a note about the current window
+    # status.
+    diary_preview = None
+    if survey.layout == Survey.Layout.DIARY:
+        dmenu = getattr(survey, "diary_menu", None)
+        if dmenu is None:
+            dmenu = DiaryMenu.objects.create(survey=survey)
+        diary_preview = {"menu": dmenu}
+
     _prepare_question_rendering(survey)
     all_questions = list(
         survey.questions.select_related("group", "dataset")
@@ -1658,6 +1681,8 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "matrix_preview": matrix_preview,
         # Delphi simulate round panel.
         "delphi_preview": delphi_preview,
+        # Diary simulate window panel.
+        "diary_preview": diary_preview,
         # Guided layout: preview also renders one question per screen so the
         # author can test the flow without a real participant.
         "is_guided": survey.layout == Survey.Layout.GUIDED,
@@ -3392,6 +3417,44 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         else compute_response_analytics(survey, survey_key=survey_key)
     )
 
+    # Diary compliance dashboard (only for diary layout). Shows per-participant
+    # expected/submitted/missed/compliance % so the author can monitor adherence.
+    # See docs/diary-ema-implementation-plan.md §10 Compliance dashboard.
+    diary_compliance_rows: list[dict] = []
+    diary_menu_obj = None
+    if survey.layout == Survey.Layout.DIARY:
+        diary_menu_obj = getattr(survey, "diary_menu", None)
+        if diary_menu_obj is not None:
+            now_ts = timezone.now()
+            for progress in SurveyProgress.objects.filter(
+                survey=survey, diary_enrolled_at__isnull=False
+            ).order_by("diary_enrolled_at"):
+                anchor = progress.diary_enrolled_at
+                entries = list(
+                    progress.diary_entries.filter(menu=diary_menu_obj).order_by(
+                        "order", "id"
+                    )
+                )
+                stats = _diary_compliance(
+                    diary_menu_obj, entries, anchor=anchor, now=now_ts
+                )
+                participant_label = (
+                    progress.user.get_username()
+                    if progress.user
+                    else f"Participant #{progress.id}"
+                )
+                diary_compliance_rows.append(
+                    {
+                        "participant": participant_label,
+                        "enrolled_at": progress.diary_enrolled_at,
+                        **stats,
+                        "below_threshold": (
+                            stats["compliance_pct"]
+                            < diary_menu_obj.compliance_threshold_pct
+                        ),
+                    }
+                )
+
     ctx = {
         "survey": survey,
         "total": total,
@@ -3438,6 +3501,9 @@ def survey_dashboard(request: HttpRequest, slug: str) -> HttpResponse:
         # Response insights
         "analytics": analytics,
         "insights_locked": insights_locked,
+        # Diary compliance dashboard (only for diary layout).
+        "diary_compliance_rows": diary_compliance_rows,
+        "diary_menu_obj": diary_menu_obj,
         # Security upgrade banner (planning doc §4.3 phase 3)
         "needs_encryption_migration": (
             survey.requires_whole_response_encryption()
@@ -3886,6 +3952,73 @@ def delphi_download_comments(request: HttpRequest, slug: str):
         f'attachment; filename="delphi-comments-{survey.slug}-round-{rnd.order}.csv"'
     )
     return response
+
+
+@login_required
+@email_confirmed_required
+def diary_export_compliance_csv(request: HttpRequest, slug: str) -> HttpResponse:
+    """Export the DiaryEntry audit trail as CSV.
+
+    ``GET /surveys/{slug}/diary/compliance/export/``
+
+    Called by the "Export compliance CSV" button on the dashboard. Returns
+    a CSV file with one row per DiaryEntry (columns: participant, window
+    order, expected_start, expected_end, submitted_at, is_missed) —
+    suitable for regulatory submissions and data monitoring committee
+    reports.
+
+    Access: ``require_can_edit``.
+    """
+    import csv
+    import io
+
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+
+    if survey.layout != Survey.Layout.DIARY:
+        return HttpResponse("Not a diary survey.", status=400)
+
+    menu = getattr(survey, "diary_menu", None)
+    if menu is None:
+        return HttpResponse("No diary menu configured.", status=400)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "participant",
+            "window_order",
+            "expected_start",
+            "expected_end",
+            "submitted_at",
+            "is_missed",
+        ]
+    )
+    for entry in (
+        DiaryEntry.objects.filter(menu=menu)
+        .select_related("progress", "progress__user")
+        .order_by("progress__user__username", "order", "id")
+    ):
+        participant = (
+            entry.progress.user.get_username()
+            if entry.progress.user
+            else f"Participant #{entry.progress.id}"
+        )
+        writer.writerow(
+            [
+                participant,
+                entry.order,
+                entry.expected_start.isoformat() if entry.expected_start else "",
+                entry.expected_end.isoformat() if entry.expected_end else "",
+                entry.submitted_at.isoformat() if entry.submitted_at else "",
+                "yes" if entry.is_missed else "no",
+            ]
+        )
+    resp = HttpResponse(output.getvalue(), content_type="text/csv")
+    resp["Content-Disposition"] = (
+        f'attachment; filename="diary-compliance-{survey.slug}.csv"'
+    )
+    return resp
 
 
 @login_required
@@ -6209,6 +6342,206 @@ def _matrix_final_submit(
     return redirect("surveys:thank_you", slug=survey.slug)
 
 
+def _diary_anchor(menu: DiaryMenu, progress: SurveyProgress, survey: Survey):
+    """Return the anchor datetime for diary window calculations.
+
+    For the ``enrolment`` anchor, uses ``progress.diary_enrolled_at``
+    (set on first access), falling back to ``progress.created_at``. For
+    the ``survey_open`` anchor, uses ``survey.start_at``.
+    """
+    if menu.anchor == DiaryMenu.Anchor.SURVEY_OPEN:
+        return survey.start_at
+    return progress.diary_enrolled_at or progress.created_at
+
+
+def _render_diary_landing(
+    request: HttpRequest,
+    survey: Survey,
+    progress: SurveyProgress,
+    menu: DiaryMenu,
+    anchor,
+    now,
+) -> HttpResponse:
+    """Render the diary landing page showing the current window + compliance.
+
+    See docs/diary-ema-implementation-plan.md §5 Runtime hook. The landing
+    page shows the current window's status (open / next opens at …), the
+    participant's compliance summary, and a "Start this entry" button if a
+    window is open.
+    """
+    current = _diary_current_window(
+        menu,
+        anchor=anchor,
+        now=now,
+        grace_minutes=menu.grace_minutes,
+    )
+    nxt = _diary_next_window(menu, anchor=anchor, now=now)
+    entries = list(progress.diary_entries.filter(menu=menu).order_by("order", "id"))
+    compliance = _diary_compliance(menu, entries, anchor=anchor, now=now)
+    ctx = {
+        "survey": survey,
+        "diary_menu": menu,
+        "current_window": current,
+        "next_window": nxt,
+        "compliance": compliance,
+        "entries": entries,
+        "is_preview": False,
+        "show_progress": menu.show_progress,
+    }
+    return render(request, "surveys/diary_landing.html", ctx)
+
+
+def _render_diary_waiting(
+    request: HttpRequest,
+    survey: Survey,
+    progress: SurveyProgress,
+    menu: DiaryMenu,
+    anchor,
+    now,
+) -> HttpResponse:
+    """Render the diary landing page when no window is currently open.
+
+    Same template as the landing page, but ``current_window`` is None so
+    the template shows "next entry opens at …" instead of a start button.
+    """
+    return _render_diary_landing(request, survey, progress, menu, anchor, now)
+
+
+def _diary_submit_entry(
+    request: HttpRequest,
+    survey: Survey,
+    token_obj: SurveyAccessToken | None,
+    progress: SurveyProgress,
+    menu: DiaryMenu,
+    anchor,
+    now,
+) -> HttpResponse:
+    """Handle the ``submit_entry`` action for a diary survey.
+
+    Validates required questions, builds the SurveyResponse, marks the
+    DiaryEntry.submitted_at, and marks progress as completed for this
+    entry. Mirrors ``_matrix_final_submit`` but for a single diary entry.
+    """
+    # Ensure a DiaryEntry exists for the current window.
+    entry = _diary_ensure_entry(menu, progress, now=now, anchor=anchor)
+    if entry is None or entry.is_missed:
+        messages.error(
+            request,
+            _("No diary window is currently open for submission."),
+        )
+        return redirect(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    # Collect answers from POST (same as the standard submission path).
+    answers = {}
+    repeat_config = _build_repeat_config(survey)
+    repeatable_qids = _repeatable_question_ids(survey, repeat_config)
+    for q in survey.questions.all():
+        value = _collect_question_answer(q, request.POST, repeatable_qids)
+        if value:
+            answers[str(q.id)] = value
+        followups = _collect_question_followups(q, request.POST)
+        if followups:
+            answers[f"{q.id}_followup"] = followups
+    # Validate required questions across the full group set.
+    group_ids = _resolved_group_order_ids(survey)
+    missing_sections: list[str] = []
+    groups_map = {g.id: g for g in survey.question_groups.all()}
+    for gid in group_ids:
+        missing = _matrix_missing_required(answers, survey.id, gid)
+        if missing:
+            gname = groups_map.get(gid)
+            missing_sections.append(gname.name if gname else f"Section {gid}")
+    if missing_sections:
+        messages.error(
+            request,
+            _(
+                "Some sections still have unanswered required questions: "
+                "%(sections)s. Please complete them before submitting."
+            )
+            % {"sections": ", ".join(missing_sections)},
+        )
+        return redirect(
+            reverse("surveys:take", kwargs={"slug": survey.slug}) + "?entry=1"
+        )
+    # Validate repeat min_count on final submission.
+    min_errors = _validate_repeat_min_counts(survey, answers, repeat_config)
+    if min_errors:
+        for msg in min_errors:
+            messages.error(request, msg)
+        return redirect(
+            reverse("surveys:take", kwargs={"slug": survey.slug}) + "?entry=1"
+        )
+    # Validate date/time/datetime answers.
+    datetime_errors = _validate_text_format_answers(survey, answers)
+    if datetime_errors:
+        for msg in datetime_errors:
+            messages.error(request, msg)
+        return redirect(
+            reverse("surveys:take", kwargs={"slug": survey.slug}) + "?entry=1"
+        )
+    # Build the SurveyResponse.
+    patient_group, demographics_fields = _get_patient_group_and_fields(survey)
+    demo = {}
+    for field in demographics_fields:
+        val = request.POST.get(field)
+        if val:
+            demo[field] = val
+    demo = _enrich_demographics_with_imd(demo, patient_group)
+    _prof_group, professional_fields, professional_ods = (
+        _get_professional_group_and_fields(survey)
+    )
+    professional_payload = {}
+    for field in professional_fields:
+        val = request.POST.get(f"prof_{field}")
+        if val:
+            professional_payload[field] = val
+        if professional_ods.get(field):
+            ods_val = request.POST.get(f"prof_{field}_ods")
+            if ods_val:
+                professional_payload[f"{field}_ods"] = ods_val
+    resp = SurveyResponse(
+        survey=survey,
+        answers={
+            **answers,
+            **({"professional": professional_payload} if professional_payload else {}),
+        },
+        submitted_by=request.user if request.user.is_authenticated else None,
+        access_token=token_obj if token_obj else None,
+    )
+    if survey.has_submission_keypair() and survey.status != Survey.Status.DRAFT:
+        resp.store_submission(
+            bytes(survey.submission_public_key),
+            resp.answers,
+            demo or None,
+        )
+    elif demo:
+        survey_key = get_survey_key_from_session(request, survey.slug)
+        if survey_key:
+            resp.store_demographics(survey_key, demo)
+    try:
+        resp.save()
+    except Exception:
+        messages.error(request, "You have already submitted this survey.")
+        return redirect("surveys:take", slug=survey.slug)
+    # Mark the DiaryEntry as submitted.
+    entry.submitted_at = now
+    entry.save(update_fields=["submitted_at"])
+    # Mark token as used.
+    if token_obj:
+        token_obj.used_at = now
+        if request.user.is_authenticated:
+            token_obj.used_by = request.user
+        token_obj.save(update_fields=["used_at", "used_by"])
+    # Mark progress as completed for this entry.
+    progress.mark_completed()
+    # Store receipt token in session.
+    opted_in_redaction = bool(request.POST.get("opt_in_redaction"))
+    token = resp.generate_receipt_token(opt_in=opted_in_redaction)
+    if token:
+        request.session[f"receipt_token_{survey.slug}"] = str(token)
+    messages.success(request, _("Thank you for your diary entry."))
+    return redirect("surveys:thank_you", slug=survey.slug)
+
+
 def _handle_participant_submission(
     request: HttpRequest,
     survey: Survey,
@@ -6417,6 +6750,38 @@ def _handle_participant_submission(
         and progress is not None
     ):
         return _matrix_final_submit(request, survey, token_obj, progress)
+
+    # Diary layout: 'submit_entry' is the diary entry submission. Validates
+    # required questions, builds the SurveyResponse, marks the DiaryEntry as
+    # submitted, and marks progress as completed. See
+    # docs/diary-ema-implementation-plan.md §5 Runtime hook.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "submit_entry"
+        and survey.layout == Survey.Layout.DIARY
+        and progress is not None
+    ):
+        menu = getattr(survey, "diary_menu", None)
+        if menu is None:
+            messages.error(
+                request,
+                _(
+                    "This survey is configured as a diary / EMA survey "
+                    "but has no schedule set up. Please contact the survey author."
+                ),
+            )
+            return redirect("surveys:detail", slug=survey.slug)
+        now = timezone.now()
+        if (
+            menu.anchor == DiaryMenu.Anchor.ENROLMENT
+            and progress.diary_enrolled_at is None
+        ):
+            progress.diary_enrolled_at = now
+            progress.save(update_fields=["diary_enrolled_at"])
+        anchor = _diary_anchor(menu, progress, survey)
+        return _diary_submit_entry(
+            request, survey, token_obj, progress, menu, anchor, now
+        )
 
     if request.method == "POST":
         # Check if this is a draft save (AJAX request)
@@ -6876,6 +7241,55 @@ def _handle_participant_submission(
                 "surveys/delphi_no_round.html",
                 {"survey": survey, "is_preview": False},
             )
+    # Diary / EMA layout (see docs/diary-ema-implementation-plan.md §5
+    # Runtime hook). A diary entry is just a short survey with the same
+    # group set each time; the difference from other layouts is the
+    # *trigger*, not the *selection*. On each access:
+    # 1. Compute the anchor (enrolment or survey_open).
+    # 2. Set diary_enrolled_at on first access (enrolment anchor).
+    # 3. Mark past-unsent entries as missed (compliance audit trail).
+    # 4. Ensure a DiaryEntry exists for the current window.
+    # 5. If no window is open, render the diary landing/waiting page.
+    # 6. If a window is open, render the entry form (full group set).
+    # On submit (action=submit_entry), set entry.submitted_at and mark
+    # progress as completed for this entry.
+    if survey.layout == Survey.Layout.DIARY and progress is not None:
+        menu = getattr(survey, "diary_menu", None)
+        if menu is None:
+            messages.error(
+                request,
+                _(
+                    "This survey is configured as a diary / EMA survey "
+                    "but has no schedule set up. Please contact the survey author."
+                ),
+            )
+            return redirect("surveys:detail", slug=survey.slug)
+        now = timezone.now()
+        # Set enrolment anchor on first access.
+        if (
+            menu.anchor == DiaryMenu.Anchor.ENROLMENT
+            and progress.diary_enrolled_at is None
+        ):
+            progress.diary_enrolled_at = now
+            progress.save(update_fields=["diary_enrolled_at"])
+        anchor = _diary_anchor(menu, progress, survey)
+        # Mark past-unsent entries as missed (compliance audit trail).
+        _diary_mark_missed(menu, progress, now=now, anchor=anchor)
+        # Ensure a DiaryEntry exists for the current window.
+        entry = _diary_ensure_entry(menu, progress, now=now, anchor=anchor)
+        if entry is None or entry.is_missed:
+            # No window open, or the current window has closed (missed).
+            # Render the diary landing/waiting page.
+            return _render_diary_waiting(request, survey, progress, menu, anchor, now)
+        # A window is open. On GET without ?entry=1, render the landing page
+        # (with a "Start this entry" button). On GET with ?entry=1, render
+        # the entry form (the full group set, like a linear survey).
+        if request.method == "GET" and not request.GET.get("entry"):
+            return _render_diary_landing(request, survey, progress, menu, anchor, now)
+        # Render the entry form: a diary entry uses the full group set.
+        selected_group_ids = _resolved_group_order_ids(survey)
+        progress.selected_group_ids = selected_group_ids
+        progress.save(update_fields=["selected_group_ids"])
     show_picker = survey.layout == Survey.Layout.SECTION_MENU and not selected_group_ids
     if show_picker:
         return _render_section_menu_picker(request, survey, progress)
@@ -7807,6 +8221,53 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                 messages.success(request, _("Round removed."))
         return redirect("surveys:groups", slug=slug)
 
+    # Save diary menu configuration.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_diary_menu"
+        and survey.layout == Survey.Layout.DIARY
+    ):
+        if not can_edit:
+            messages.error(
+                request, _("You do not have permission to edit this survey.")
+            )
+            return redirect("surveys:groups", slug=slug)
+        menu, _created = DiaryMenu.objects.get_or_create(survey=survey)
+        schedule_type = request.POST.get(
+            "schedule_type", DiaryMenu.ScheduleType.FIXED_INTERVAL
+        )
+        if schedule_type in {c[0] for c in DiaryMenu.ScheduleType.choices}:
+            menu.schedule_type = schedule_type
+        anchor = request.POST.get("anchor", DiaryMenu.Anchor.ENROLMENT)
+        if anchor in {c[0] for c in DiaryMenu.Anchor.choices}:
+            menu.anchor = anchor
+        try:
+            menu.interval_hours = int(request.POST.get("interval_hours") or 0) or None
+        except ValueError:
+            menu.interval_hours = None
+        try:
+            menu.burst_on_days = int(request.POST.get("burst_on_days") or 0) or None
+        except ValueError:
+            menu.burst_on_days = None
+        try:
+            menu.burst_off_days = int(request.POST.get("burst_off_days") or 0) or None
+        except ValueError:
+            menu.burst_off_days = None
+        try:
+            menu.compliance_threshold_pct = max(
+                1, min(100, int(request.POST.get("compliance_threshold_pct", 80)))
+            )
+        except ValueError:
+            menu.compliance_threshold_pct = 80
+        try:
+            menu.grace_minutes = max(0, int(request.POST.get("grace_minutes", 30)))
+        except ValueError:
+            menu.grace_minutes = 30
+        menu.show_progress = bool(request.POST.get("show_progress"))
+        menu.save()
+        messages.success(request, _("Diary configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
     groups_qs = survey.question_groups.annotate(
         q_count=models.Count(
             "surveyquestion", filter=models.Q(surveyquestion__survey=survey)
@@ -8419,6 +8880,86 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                         }
                     )
 
+    # Diary configuration (only for diary layout). Ensure the menu exists
+    # so a freshly-switched survey is configurable.
+    diary_menu = None
+    diary_schedule_choices = DiaryMenu.ScheduleType.choices
+    diary_anchor_choices = DiaryMenu.Anchor.choices
+    if survey.layout == Survey.Layout.DIARY:
+        diary_menu, _created = DiaryMenu.objects.get_or_create(survey=survey)
+    # Diary warnings. Non-blocking — surfaced on the Organise page
+    # configuration card.
+    diary_warnings: list[str] = []
+    if survey.layout == Survey.Layout.DIARY and diary_menu is not None:
+        # fixed_interval with no interval_hours.
+        if (
+            diary_menu.schedule_type == DiaryMenu.ScheduleType.FIXED_INTERVAL
+            and not diary_menu.interval_hours
+        ):
+            diary_warnings.append(
+                _(
+                    "Fixed interval schedule has no interval set. Enter the "
+                    "hours between windows (e.g. 6 for 4×/day)."
+                )
+            )
+        # burst with no on_days.
+        if (
+            diary_menu.schedule_type == DiaryMenu.ScheduleType.BURST
+            and not diary_menu.burst_on_days
+        ):
+            diary_warnings.append(
+                _(
+                    "Burst schedule has no on-days set. Enter the number of "
+                    "on-days in each cycle (e.g. 7)."
+                )
+            )
+        # survey_open anchor with no Survey.start_at.
+        if (
+            diary_menu.anchor == DiaryMenu.Anchor.SURVEY_OPEN
+            and survey.start_at is None
+        ):
+            diary_warnings.append(
+                _(
+                    "Window times are measured from the survey open date, "
+                    "but this survey has no start date. Set a start date or "
+                    "switch the anchor to 'From participant enrolment'."
+                )
+            )
+        # Branching targets a diary section (meaningless across entries).
+        diary_group_ids = {g.id for g in groups}
+        if diary_group_ids:
+            dead_branches = (
+                SurveyQuestionCondition.objects.filter(
+                    action=SurveyQuestionCondition.Action.JUMP_TO,
+                )
+                .filter(
+                    Q(target_group_id__in=diary_group_ids)
+                    | Q(target_question__group_id__in=diary_group_ids)
+                )
+                .select_related("target_group", "question", "target_question__group")
+            )
+            for cond in dead_branches:
+                target_name = (
+                    cond.target_group.name
+                    if cond.target_group
+                    else (
+                        cond.target_question.group.name
+                        if cond.target_question and cond.target_question.group
+                        else "unknown"
+                    )
+                )
+                diary_warnings.append(
+                    _(
+                        "Branching condition on '%(question)s' targets "
+                        "section '%(section)s' — branching across diary "
+                        "entries has no effect."
+                    )
+                    % {
+                        "question": cond.question.text[:50],
+                        "section": target_name,
+                    }
+                )
+
     ctx = {
         "survey": survey,
         "groups": groups,
@@ -8458,6 +8999,11 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "delphi_anchor_choices": delphi_anchor_choices,
         "delphi_round_group_ids": delphi_round_group_ids,
         "delphi_warnings": delphi_warnings,
+        # Diary config. None for non-diary surveys.
+        "diary_menu": diary_menu,
+        "diary_schedule_choices": diary_schedule_choices,
+        "diary_anchor_choices": diary_anchor_choices,
+        "diary_warnings": diary_warnings,
         # Layout tier gating (see tier_limits.py allowed_layouts).
         "allowed_layouts": get_allowed_layouts(request.user),
     }
@@ -13565,6 +14111,36 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                     # No ~ round: suffix → not in any round (unreachable; warned).
                 summary_parts.append(" Delphi (consensus rounds) layout applied.")
 
+        # Apply DIARY config from the outline (see docs/diary-ema-
+        # implementation-plan.md §6 Outline grammar).
+        diary_cfg = parsed.get("diary")
+        if diary_cfg:
+            can_use, reason = check_layout_permission(request.user, Survey.Layout.DIARY)
+            if not can_use:
+                messages.error(request, reason)
+            else:
+                survey.layout = Survey.Layout.DIARY
+                survey.save(update_fields=["layout"])
+                menu, _created = DiaryMenu.objects.get_or_create(survey=survey)
+                schedule_type = diary_cfg.get(
+                    "schedule_type", DiaryMenu.ScheduleType.FIXED_INTERVAL
+                )
+                if schedule_type in {c[0] for c in DiaryMenu.ScheduleType.choices}:
+                    menu.schedule_type = schedule_type
+                anchor = diary_cfg.get("anchor", DiaryMenu.Anchor.ENROLMENT)
+                if anchor in {c[0] for c in DiaryMenu.Anchor.choices}:
+                    menu.anchor = anchor
+                menu.interval_hours = diary_cfg.get("interval_hours")
+                menu.burst_on_days = diary_cfg.get("burst_on_days")
+                menu.burst_off_days = diary_cfg.get("burst_off_days")
+                menu.compliance_threshold_pct = int(
+                    diary_cfg.get("compliance_threshold_pct", 80)
+                )
+                menu.grace_minutes = int(diary_cfg.get("grace_minutes", 30))
+                menu.show_progress = bool(diary_cfg.get("show_progress", True))
+                menu.save()
+                summary_parts.append(" Diary (EMA) layout applied.")
+
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)
     return render(request, "surveys/bulk_upload.html", context)
@@ -13719,6 +14295,28 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             for rnd in dmenu.rounds.order_by("order", "id").prefetch_related("groups"):
                 for grp in rnd.groups.all():
                     delphi_rounds_by_group.setdefault(grp.id, []).append(rnd.name)
+
+    # DIARY block (see docs/diary-ema-implementation-plan.md §6 Outline
+    # grammar). Emitted at the top when the survey uses the diary layout.
+    # No ``~`` suffixes — a diary entry uses the full group set.
+    if survey.layout == Survey.Layout.DIARY:
+        dmenu = getattr(survey, "diary_menu", None)
+        if dmenu is not None:
+            lines.append("DIARY")
+            lines.append(f"  schedule: {dmenu.schedule_type}")
+            if dmenu.interval_hours is not None:
+                lines.append(f"  interval_hours: {dmenu.interval_hours}")
+            if dmenu.burst_on_days is not None:
+                lines.append(f"  burst_on_days: {dmenu.burst_on_days}")
+            if dmenu.burst_off_days is not None:
+                lines.append(f"  burst_off_days: {dmenu.burst_off_days}")
+            lines.append(f"  anchor: {dmenu.anchor}")
+            lines.append(f"  compliance_threshold: {dmenu.compliance_threshold_pct}")
+            lines.append(f"  grace_minutes: {dmenu.grace_minutes}")
+            lines.append(
+                f"  show_progress: {'true' if dmenu.show_progress else 'false'}"
+            )
+            lines.append("")
 
     for group in groups:
         # Check if this group is part of a collection

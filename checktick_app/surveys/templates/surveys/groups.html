@@ -228,7 +228,7 @@
               <span class="badge badge-ghost badge-sm">{% trans 'Pro' %}</span>
             {% endif %}
           </div>
-          {% include "components/icons/layout_staged.html" with classes="w-full h-24 text-base-content/70" %}
+          {% include "components/icons/layout_delphi.html" with classes="w-full h-24 text-base-content/70" %}
           <p class="text-xs text-base-content/70">{% trans 'Multi-round consensus workflow. Participants complete rounds, see aggregate feedback between rounds, and revise their answers. Used for expert consensus in clinical research and guideline development.' %}</p>
           <a href="{% url 'core:docs_page' slug='delphi' %}" class="link link-hover text-xs text-primary">{% trans 'Delphi guide' %}</a>
           {% if section_count < 2 %}
@@ -242,6 +242,32 @@
               <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
             </form>
           {% elif 'delphi' not in allowed_layouts %}
+            <a href="{% url 'core:pricing' %}" class="btn btn-sm btn-ghost w-full text-primary">{% trans 'Upgrade to use' %}</a>
+          {% endif %}
+        </div>
+      </div>
+
+      {# Diary / EMA card #}
+      <div class="card bg-base-100 border {% if survey.layout == 'diary' %}border-primary ring-1 ring-primary/40{% else %}border-base-300{% endif %} {% if 'diary' not in allowed_layouts %}opacity-50{% else %}hover:shadow-md{% endif %} transition-all">
+        <div class="card-body gap-2 p-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-semibold text-base-content">{% trans 'Diary (EMA)' %}</h4>
+            {% if survey.layout == 'diary' %}
+              <span class="badge badge-primary badge-sm">{% trans 'Current' %}</span>
+            {% elif 'diary' not in allowed_layouts %}
+              <span class="badge badge-ghost badge-sm">{% trans 'Pro' %}</span>
+            {% endif %}
+          </div>
+          {% include "components/icons/layout_diary.html" with classes="w-full h-24 text-base-content/70" %}
+          <p class="text-xs text-base-content/70">{% trans 'Repeated short surveys on a fixed schedule (daily, 4×/day) or event-triggered. Used for pain diaries, mood tracking, medication adherence, and symptom monitoring in clinical trials. Includes compliance tracking.' %}</p>
+          {% if 'diary' in allowed_layouts and can_edit and survey.layout != 'diary' %}
+            <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="mt-1">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_layout" />
+              <input type="hidden" name="layout" value="diary" />
+              <button type="submit" class="btn btn-sm btn-outline w-full">{% trans 'Use this layout' %}</button>
+            </form>
+          {% elif 'diary' not in allowed_layouts %}
             <a href="{% url 'core:pricing' %}" class="btn btn-sm btn-ghost w-full text-primary">{% trans 'Upgrade to use' %}</a>
           {% endif %}
         </div>
@@ -818,6 +844,118 @@
         {% if delphi_warnings %}
         <div class="mt-2 space-y-1">
           {% for warning in delphi_warnings %}
+          <div class="alert alert-warning py-2 px-3 text-xs" role="status">
+            {% include "components/icons/exclamation-triangle.html" with classes="w-4 h-4 shrink-0" %}
+            <span>{{ warning }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {# === Diary / EMA configuration card === #}
+  {% if survey.layout == 'diary' %}
+  <section class="not-prose mb-6" aria-labelledby="diary-config-heading">
+    <div class="card bg-base-100 border border-base-300 max-w-4xl">
+      <div class="card-body gap-3 p-4">
+        <h3 id="diary-config-heading" class="font-semibold text-base-content">
+          {% trans 'Diary / EMA configuration' %}
+        </h3>
+        {% if can_edit %}
+        <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="space-y-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_diary_menu" />
+
+          <fieldset class="flex flex-wrap gap-x-6 gap-y-2 items-end">
+            <div>
+              <span class="label text-xs">{% trans 'Schedule type' %}</span>
+              <select name="schedule_type" class="select select-bordered select-sm">
+                {% for value, label in diary_schedule_choices %}
+                <option value="{{ value }}" {% if diary_menu.schedule_type == value or forloop.first and not diary_menu.schedule_type %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <span class="label text-xs">{% trans 'Window times measured from' %}</span>
+              <div class="flex gap-3">
+                {% for value, label in diary_anchor_choices %}
+                <label class="flex items-center gap-1 cursor-pointer text-sm">
+                  <input type="radio" name="anchor" value="{{ value }}"
+                         class="radio radio-sm"
+                         {% if diary_menu.anchor == value or forloop.first and not diary_menu.anchor %}checked{% endif %} />
+                  <span>{{ label }}</span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="flex flex-wrap gap-x-6 gap-y-2 items-end">
+            <label class="flex items-center gap-1 text-sm">
+              <span class="text-xs text-base-content/60">{% trans 'Interval (hours)' %}</span>
+              <input type="number" name="interval_hours" value="{{ diary_menu.interval_hours|default_if_none:'' }}"
+                     class="input input-bordered input-sm w-20" min="1" max="168" />
+              <span class="text-xs text-base-content/40">{% trans 'e.g. 6 = 4×/day' %}</span>
+            </label>
+            <label class="flex items-center gap-1 text-sm">
+              <span class="text-xs text-base-content/60">{% trans 'Burst on-days' %}</span>
+              <input type="number" name="burst_on_days" value="{{ diary_menu.burst_on_days|default_if_none:'' }}"
+                     class="input input-bordered input-sm w-16" min="1" max="365" />
+            </label>
+            <label class="flex items-center gap-1 text-sm">
+              <span class="text-xs text-base-content/60">{% trans 'Burst off-days' %}</span>
+              <input type="number" name="burst_off_days" value="{{ diary_menu.burst_off_days|default_if_none:'' }}"
+                     class="input input-bordered input-sm w-16" min="0" max="365" />
+            </label>
+          </fieldset>
+
+          <fieldset class="flex flex-wrap gap-x-6 gap-y-2 items-end">
+            <label class="flex items-center gap-1 text-sm">
+              <span class="text-xs text-base-content/60">{% trans 'Compliance threshold (%)' %}</span>
+              <input type="number" name="compliance_threshold_pct" value="{{ diary_menu.compliance_threshold_pct }}"
+                     class="input input-bordered input-sm w-16" min="1" max="100" />
+            </label>
+            <label class="flex items-center gap-1 text-sm">
+              <span class="text-xs text-base-content/60">{% trans 'Grace period (minutes)' %}</span>
+              <input type="number" name="grace_minutes" value="{{ diary_menu.grace_minutes }}"
+                     class="input input-bordered input-sm w-16" min="0" max="1440" />
+            </label>
+            <label class="flex items-center gap-1 text-sm">
+              <input type="checkbox" name="show_progress" value="1"
+                     class="checkbox checkbox-sm"
+                     {% if diary_menu.show_progress %}checked{% endif %} />
+              <span class="text-xs text-base-content/60">{% trans 'Show participants their compliance summary' %}</span>
+            </label>
+          </fieldset>
+
+          <button type="submit" class="btn btn-sm btn-primary">{% trans 'Save configuration' %}</button>
+        </form>
+        {% else %}
+        {# Read-only view #}
+        <dl class="text-sm space-y-1">
+          <dt class="text-xs text-base-content/60">{% trans 'Schedule type' %}</dt>
+          <dd>{{ diary_menu.get_schedule_type_display }}</dd>
+          <dt class="text-xs text-base-content/60">{% trans 'Anchor' %}</dt>
+          <dd>{{ diary_menu.get_anchor_display }}</dd>
+          <dt class="text-xs text-base-content/60">{% trans 'Interval / burst' %}</dt>
+          <dd>
+            {% if diary_menu.interval_hours %}{% trans 'Interval' %}: {{ diary_menu.interval_hours }}h{% endif %}
+            {% if diary_menu.burst_on_days %}{% trans 'Burst' %}: {{ diary_menu.burst_on_days }} on / {{ diary_menu.burst_off_days }} off{% endif %}
+          </dd>
+          <dt class="text-xs text-base-content/60">{% trans 'Compliance threshold' %}</dt>
+          <dd>{{ diary_menu.compliance_threshold_pct }}%</dd>
+          <dt class="text-xs text-base-content/60">{% trans 'Grace period' %}</dt>
+          <dd>{{ diary_menu.grace_minutes }} min</dd>
+        </dl>
+        {% endif %}
+
+        {# Diary warnings #}
+        {% if diary_warnings %}
+        <div class="mt-2 space-y-1">
+          {% for warning in diary_warnings %}
           <div class="alert alert-warning py-2 px-3 text-xs" role="status">
             {% include "components/icons/exclamation-triangle.html" with classes="w-4 h-4 shrink-0" %}
             <span>{{ warning }}</span>
