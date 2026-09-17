@@ -1588,6 +1588,20 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
                 else:
                     simulated_group_ids = []
 
+    # Diary / EMA: simulate window (see docs/diary-ema-implementation-
+    # plan.md §8 Preview). A "Simulate window" panel on the preview page
+    # lets the author preview what a participant would see when a window
+    # is open. Since a diary entry uses the full group set, the simulation
+    # just renders all questions (no filtering needed). The panel shows
+    # the current schedule config and a note about the current window
+    # status.
+    diary_preview = None
+    if survey.layout == Survey.Layout.DIARY:
+        dmenu = getattr(survey, "diary_menu", None)
+        if dmenu is None:
+            dmenu = DiaryMenu.objects.create(survey=survey)
+        diary_preview = {"menu": dmenu}
+
     _prepare_question_rendering(survey)
     all_questions = list(
         survey.questions.select_related("group", "dataset")
@@ -1666,6 +1680,8 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "matrix_preview": matrix_preview,
         # Delphi simulate round panel.
         "delphi_preview": delphi_preview,
+        # Diary simulate window panel.
+        "diary_preview": diary_preview,
         # Guided layout: preview also renders one question per screen so the
         # author can test the flow without a real participant.
         "is_guided": survey.layout == Survey.Layout.GUIDED,
