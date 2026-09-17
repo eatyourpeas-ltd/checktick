@@ -48,6 +48,13 @@ from checktick_app.core.theme_utils import is_safe_url, sanitize_font_family
 from .allocation import MAX_SEED, pick_arm
 from .color import hex_to_oklch
 from .delphi import assign_round_for_progress as _delphi_assign_round
+from .diary import (
+    compliance_for_progress as _diary_compliance,
+    current_window as _diary_current_window,
+    ensure_entry_for_current_window as _diary_ensure_entry,
+    mark_missed_entries as _diary_mark_missed,
+    next_window as _diary_next_window,
+)
 from .doc_extract import (
     MESSAGE_BY_CODE,
     DocImportError,
@@ -76,6 +83,7 @@ from .models import (
     DelphiMenu,
     DelphiRound,
     DelphiRoundFeedback,
+    DiaryMenu,
     LLMConversationSession,
     MatrixMenu,
     Organization,
@@ -6209,6 +6217,206 @@ def _matrix_final_submit(
     return redirect("surveys:thank_you", slug=survey.slug)
 
 
+def _diary_anchor(menu: DiaryMenu, progress: SurveyProgress, survey: Survey):
+    """Return the anchor datetime for diary window calculations.
+
+    For the ``enrolment`` anchor, uses ``progress.diary_enrolled_at``
+    (set on first access), falling back to ``progress.created_at``. For
+    the ``survey_open`` anchor, uses ``survey.start_at``.
+    """
+    if menu.anchor == DiaryMenu.Anchor.SURVEY_OPEN:
+        return survey.start_at
+    return progress.diary_enrolled_at or progress.created_at
+
+
+def _render_diary_landing(
+    request: HttpRequest,
+    survey: Survey,
+    progress: SurveyProgress,
+    menu: DiaryMenu,
+    anchor,
+    now,
+) -> HttpResponse:
+    """Render the diary landing page showing the current window + compliance.
+
+    See docs/diary-ema-implementation-plan.md §5 Runtime hook. The landing
+    page shows the current window's status (open / next opens at …), the
+    participant's compliance summary, and a "Start this entry" button if a
+    window is open.
+    """
+    current = _diary_current_window(
+        menu,
+        anchor=anchor,
+        now=now,
+        grace_minutes=menu.grace_minutes,
+    )
+    nxt = _diary_next_window(menu, anchor=anchor, now=now)
+    entries = list(progress.diary_entries.filter(menu=menu).order_by("order", "id"))
+    compliance = _diary_compliance(menu, entries, anchor=anchor, now=now)
+    ctx = {
+        "survey": survey,
+        "diary_menu": menu,
+        "current_window": current,
+        "next_window": nxt,
+        "compliance": compliance,
+        "entries": entries,
+        "is_preview": False,
+        "show_progress": menu.show_progress,
+    }
+    return render(request, "surveys/diary_landing.html", ctx)
+
+
+def _render_diary_waiting(
+    request: HttpRequest,
+    survey: Survey,
+    progress: SurveyProgress,
+    menu: DiaryMenu,
+    anchor,
+    now,
+) -> HttpResponse:
+    """Render the diary landing page when no window is currently open.
+
+    Same template as the landing page, but ``current_window`` is None so
+    the template shows "next entry opens at …" instead of a start button.
+    """
+    return _render_diary_landing(request, survey, progress, menu, anchor, now)
+
+
+def _diary_submit_entry(
+    request: HttpRequest,
+    survey: Survey,
+    token_obj: SurveyAccessToken | None,
+    progress: SurveyProgress,
+    menu: DiaryMenu,
+    anchor,
+    now,
+) -> HttpResponse:
+    """Handle the ``submit_entry`` action for a diary survey.
+
+    Validates required questions, builds the SurveyResponse, marks the
+    DiaryEntry.submitted_at, and marks progress as completed for this
+    entry. Mirrors ``_matrix_final_submit`` but for a single diary entry.
+    """
+    # Ensure a DiaryEntry exists for the current window.
+    entry = _diary_ensure_entry(menu, progress, now=now, anchor=anchor)
+    if entry is None or entry.is_missed:
+        messages.error(
+            request,
+            _("No diary window is currently open for submission."),
+        )
+        return redirect(reverse("surveys:take", kwargs={"slug": survey.slug}))
+    # Collect answers from POST (same as the standard submission path).
+    answers = {}
+    repeat_config = _build_repeat_config(survey)
+    repeatable_qids = _repeatable_question_ids(survey, repeat_config)
+    for q in survey.questions.all():
+        value = _collect_question_answer(q, request.POST, repeatable_qids)
+        if value:
+            answers[str(q.id)] = value
+        followups = _collect_question_followups(q, request.POST)
+        if followups:
+            answers[f"{q.id}_followup"] = followups
+    # Validate required questions across the full group set.
+    group_ids = _resolved_group_order_ids(survey)
+    missing_sections: list[str] = []
+    groups_map = {g.id: g for g in survey.question_groups.all()}
+    for gid in group_ids:
+        missing = _matrix_missing_required(answers, survey.id, gid)
+        if missing:
+            gname = groups_map.get(gid)
+            missing_sections.append(gname.name if gname else f"Section {gid}")
+    if missing_sections:
+        messages.error(
+            request,
+            _(
+                "Some sections still have unanswered required questions: "
+                "%(sections)s. Please complete them before submitting."
+            )
+            % {"sections": ", ".join(missing_sections)},
+        )
+        return redirect(
+            reverse("surveys:take", kwargs={"slug": survey.slug}) + "?entry=1"
+        )
+    # Validate repeat min_count on final submission.
+    min_errors = _validate_repeat_min_counts(survey, answers, repeat_config)
+    if min_errors:
+        for msg in min_errors:
+            messages.error(request, msg)
+        return redirect(
+            reverse("surveys:take", kwargs={"slug": survey.slug}) + "?entry=1"
+        )
+    # Validate date/time/datetime answers.
+    datetime_errors = _validate_text_format_answers(survey, answers)
+    if datetime_errors:
+        for msg in datetime_errors:
+            messages.error(request, msg)
+        return redirect(
+            reverse("surveys:take", kwargs={"slug": survey.slug}) + "?entry=1"
+        )
+    # Build the SurveyResponse.
+    patient_group, demographics_fields = _get_patient_group_and_fields(survey)
+    demo = {}
+    for field in demographics_fields:
+        val = request.POST.get(field)
+        if val:
+            demo[field] = val
+    demo = _enrich_demographics_with_imd(demo, patient_group)
+    _prof_group, professional_fields, professional_ods = (
+        _get_professional_group_and_fields(survey)
+    )
+    professional_payload = {}
+    for field in professional_fields:
+        val = request.POST.get(f"prof_{field}")
+        if val:
+            professional_payload[field] = val
+        if professional_ods.get(field):
+            ods_val = request.POST.get(f"prof_{field}_ods")
+            if ods_val:
+                professional_payload[f"{field}_ods"] = ods_val
+    resp = SurveyResponse(
+        survey=survey,
+        answers={
+            **answers,
+            **({"professional": professional_payload} if professional_payload else {}),
+        },
+        submitted_by=request.user if request.user.is_authenticated else None,
+        access_token=token_obj if token_obj else None,
+    )
+    if survey.has_submission_keypair() and survey.status != Survey.Status.DRAFT:
+        resp.store_submission(
+            bytes(survey.submission_public_key),
+            resp.answers,
+            demo or None,
+        )
+    elif demo:
+        survey_key = get_survey_key_from_session(request, survey.slug)
+        if survey_key:
+            resp.store_demographics(survey_key, demo)
+    try:
+        resp.save()
+    except Exception:
+        messages.error(request, "You have already submitted this survey.")
+        return redirect("surveys:take", slug=survey.slug)
+    # Mark the DiaryEntry as submitted.
+    entry.submitted_at = now
+    entry.save(update_fields=["submitted_at"])
+    # Mark token as used.
+    if token_obj:
+        token_obj.used_at = now
+        if request.user.is_authenticated:
+            token_obj.used_by = request.user
+        token_obj.save(update_fields=["used_at", "used_by"])
+    # Mark progress as completed for this entry.
+    progress.mark_completed()
+    # Store receipt token in session.
+    opted_in_redaction = bool(request.POST.get("opt_in_redaction"))
+    token = resp.generate_receipt_token(opt_in=opted_in_redaction)
+    if token:
+        request.session[f"receipt_token_{survey.slug}"] = str(token)
+    messages.success(request, _("Thank you for your diary entry."))
+    return redirect("surveys:thank_you", slug=survey.slug)
+
+
 def _handle_participant_submission(
     request: HttpRequest,
     survey: Survey,
@@ -6417,6 +6625,38 @@ def _handle_participant_submission(
         and progress is not None
     ):
         return _matrix_final_submit(request, survey, token_obj, progress)
+
+    # Diary layout: 'submit_entry' is the diary entry submission. Validates
+    # required questions, builds the SurveyResponse, marks the DiaryEntry as
+    # submitted, and marks progress as completed. See
+    # docs/diary-ema-implementation-plan.md §5 Runtime hook.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "submit_entry"
+        and survey.layout == Survey.Layout.DIARY
+        and progress is not None
+    ):
+        menu = getattr(survey, "diary_menu", None)
+        if menu is None:
+            messages.error(
+                request,
+                _(
+                    "This survey is configured as a diary / EMA survey "
+                    "but has no schedule set up. Please contact the survey author."
+                ),
+            )
+            return redirect("surveys:detail", slug=survey.slug)
+        now = timezone.now()
+        if (
+            menu.anchor == DiaryMenu.Anchor.ENROLMENT
+            and progress.diary_enrolled_at is None
+        ):
+            progress.diary_enrolled_at = now
+            progress.save(update_fields=["diary_enrolled_at"])
+        anchor = _diary_anchor(menu, progress, survey)
+        return _diary_submit_entry(
+            request, survey, token_obj, progress, menu, anchor, now
+        )
 
     if request.method == "POST":
         # Check if this is a draft save (AJAX request)
@@ -6876,6 +7116,55 @@ def _handle_participant_submission(
                 "surveys/delphi_no_round.html",
                 {"survey": survey, "is_preview": False},
             )
+    # Diary / EMA layout (see docs/diary-ema-implementation-plan.md §5
+    # Runtime hook). A diary entry is just a short survey with the same
+    # group set each time; the difference from other layouts is the
+    # *trigger*, not the *selection*. On each access:
+    # 1. Compute the anchor (enrolment or survey_open).
+    # 2. Set diary_enrolled_at on first access (enrolment anchor).
+    # 3. Mark past-unsent entries as missed (compliance audit trail).
+    # 4. Ensure a DiaryEntry exists for the current window.
+    # 5. If no window is open, render the diary landing/waiting page.
+    # 6. If a window is open, render the entry form (full group set).
+    # On submit (action=submit_entry), set entry.submitted_at and mark
+    # progress as completed for this entry.
+    if survey.layout == Survey.Layout.DIARY and progress is not None:
+        menu = getattr(survey, "diary_menu", None)
+        if menu is None:
+            messages.error(
+                request,
+                _(
+                    "This survey is configured as a diary / EMA survey "
+                    "but has no schedule set up. Please contact the survey author."
+                ),
+            )
+            return redirect("surveys:detail", slug=survey.slug)
+        now = timezone.now()
+        # Set enrolment anchor on first access.
+        if (
+            menu.anchor == DiaryMenu.Anchor.ENROLMENT
+            and progress.diary_enrolled_at is None
+        ):
+            progress.diary_enrolled_at = now
+            progress.save(update_fields=["diary_enrolled_at"])
+        anchor = _diary_anchor(menu, progress, survey)
+        # Mark past-unsent entries as missed (compliance audit trail).
+        _diary_mark_missed(menu, progress, now=now, anchor=anchor)
+        # Ensure a DiaryEntry exists for the current window.
+        entry = _diary_ensure_entry(menu, progress, now=now, anchor=anchor)
+        if entry is None or entry.is_missed:
+            # No window open, or the current window has closed (missed).
+            # Render the diary landing/waiting page.
+            return _render_diary_waiting(request, survey, progress, menu, anchor, now)
+        # A window is open. On GET without ?entry=1, render the landing page
+        # (with a "Start this entry" button). On GET with ?entry=1, render
+        # the entry form (the full group set, like a linear survey).
+        if request.method == "GET" and not request.GET.get("entry"):
+            return _render_diary_landing(request, survey, progress, menu, anchor, now)
+        # Render the entry form: a diary entry uses the full group set.
+        selected_group_ids = _resolved_group_order_ids(survey)
+        progress.selected_group_ids = selected_group_ids
+        progress.save(update_fields=["selected_group_ids"])
     show_picker = survey.layout == Survey.Layout.SECTION_MENU and not selected_group_ids
     if show_picker:
         return _render_section_menu_picker(request, survey, progress)

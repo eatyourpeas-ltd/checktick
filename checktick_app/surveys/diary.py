@@ -375,3 +375,71 @@ def compliance_for_progress(
         "compliance_pct": compliance_pct,
         "missed_orders": missed_orders,
     }
+
+
+def ensure_entry_for_current_window(
+    menu: Any,
+    progress: Any,
+    *,
+    now: Any,
+    anchor: Any,
+) -> Any:
+    """Idempotently create/fetch the DiaryEntry for the current window.
+
+    Called by the take view on each access. If the current window has no
+    DiaryEntry row yet, create one with ``submitted_at=None``. If the
+    window has closed (past grace) and the entry is still unsent, mark
+    ``is_missed=True``.
+
+    Returns the DiaryEntry (or None if no window is currently open).
+
+    This is the one side-effecting function in ``diary.py`` — it persists
+    the DiaryEntry row, mirroring ``assign_round_for_progress`` in
+    ``delphi.py`` which persists the round FK on SurveyProgress.
+    """
+    from .models import DiaryEntry
+
+    current = current_window(
+        menu,
+        anchor=anchor,
+        now=now,
+        grace_minutes=int(getattr(menu, "grace_minutes", DEFAULT_GRACE_MINUTES) or 0),
+    )
+    if current is None:
+        return None
+    order, expected_start, expected_end = current
+    entry, _created = DiaryEntry.objects.get_or_create(
+        menu=menu,
+        progress=progress,
+        order=order,
+        defaults={
+            "expected_start": expected_start,
+            "expected_end": expected_end,
+        },
+    )
+    return entry
+
+
+def mark_missed_entries(menu: Any, progress: Any, *, now: Any, anchor: Any) -> int:
+    """Mark DiaryEntry rows as missed if their window has closed without a submission.
+
+    Called by the take view on each access (after ensure_entry_for_current_window).
+    Returns the number of entries newly marked as missed.
+
+    A window is "missed" when ``now >= expected_end + grace`` and
+    ``submitted_at`` is None and ``is_missed`` is False. Once marked,
+    ``is_missed`` stays True (idempotent).
+    """
+    from .models import DiaryEntry
+
+    grace = timedelta(
+        minutes=int(getattr(menu, "grace_minutes", DEFAULT_GRACE_MINUTES) or 0)
+    )
+    entries = DiaryEntry.objects.filter(
+        menu=menu,
+        progress=progress,
+        submitted_at__isnull=True,
+        is_missed=False,
+        expected_end__lt=now - grace,
+    )
+    return entries.update(is_missed=True)

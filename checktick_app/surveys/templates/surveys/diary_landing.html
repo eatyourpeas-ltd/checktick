@@ -1,0 +1,104 @@
+{% extends 'base_minimal.html' %}
+{% load i18n %}
+{% load static %}
+{% block title %}{{ survey.name }} - CheckTick{% endblock %}
+{% block content %}
+<div class="hero min-h-[60vh] bg-base-100 rounded-box">
+  <div class="hero-content text-center">
+    <div class="max-w-xl">
+      <div class="mb-6 flex justify-center">
+        {% if brand.icon_url %}
+          <a href="{% url 'core:home' %}">
+            <img src="{{ brand.icon_url }}" alt="{{ brand.icon_alt|default:brand.title }}" class="{{ brand.icon_size_class|default:'w-16 h-16' }}" />
+          </a>
+        {% else %}
+          <a href="{% url 'core:home' %}">
+            {% include "components/icons/checktick.html" with classes=brand.icon_size_class|default:'w-16 h-16' aria_label=brand.icon_alt|default:brand.title title=brand.icon_title|default:brand.title %}
+          </a>
+        {% endif %}
+      </div>
+
+      <h1 class="text-3xl font-bold mb-4">{{ survey.name }}</h1>
+
+      {% if current_window %}
+        {% with order=current_window.0 start=current_window.1 end=current_window.2 %}
+          <div class="alert alert-success mb-6">
+            {% include "components/icons/check.html" with classes="w-6 h-6 shrink-0" %}
+            <span class="font-semibold">
+              {% blocktrans with window_num=order|add:1 %}Window {{ window_num }} is open now{% endblocktrans %}
+            </span>
+          </div>
+
+          <p class="py-4 opacity-80">
+            {% trans "A new diary entry is available. Click below to complete it." %}
+          </p>
+
+          <div class="card bg-base-200 mb-6">
+            <div class="card-body text-left">
+              <h3 class="font-semibold text-base-content">{% trans "Current window" %}</h3>
+              <p class="text-sm opacity-80">
+                {% blocktrans with start_time=start|time:"H:i" end_time=end|time:"H:i" %}Open from {{ start_time }} to {{ end_time }}{% endblocktrans %}
+              </p>
+            </div>
+          </div>
+
+          <a href="{% url 'surveys:take' slug=survey.slug %}?entry=1" class="btn btn-primary btn-wide">
+            {% trans "Start this entry" %}
+          </a>
+        {% endwith %}
+      {% else %}
+        <div class="alert alert-info mb-6">
+          {% include "components/icons/exclamation-triangle.html" with classes="w-6 h-6 shrink-0" %}
+          <span class="font-semibold">{% trans "No diary window open right now" %}</span>
+        </div>
+
+        <p class="py-4 opacity-80">
+          {% trans "This is a diary / EMA survey. No entry window is currently open — please check back when the next window is due." %}
+        </p>
+
+        {% if next_window %}
+          {% with next_start=next_window.1 %}
+            <p class="text-sm opacity-60 mt-2">
+              {% blocktrans with next_time=next_start|time:"H:i" %}Next entry opens at {{ next_time }}.{% endblocktrans %}
+            </p>
+          {% endwith %}
+        {% endif %}
+      {% endif %}
+
+      {% if show_progress and compliance %}
+        <div class="mt-8 text-left">
+          <h3 class="font-semibold text-base-content mb-2">{% trans "Your compliance" %}</h3>
+          <div class="stats stats-vertical shadow">
+            <div class="stat">
+              <div class="stat-title">{% trans "Submitted" %}</div>
+              <div class="stat-value text-primary">{{ compliance.submitted }}</div>
+              <div class="stat-desc">{% trans "entries completed" %}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-title">{% trans "Expected" %}</div>
+              <div class="stat-value text-base-content">{{ compliance.expected }}</div>
+              <div class="stat-desc">{% trans "entries so far" %}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-title">{% trans "Compliance" %}</div>
+              <div class="stat-value {% if compliance.compliance_pct >= 80 %}text-success{% elif compliance.compliance_pct >= 50 %}text-warning{% else %}text-error{% endif %}">
+                {{ compliance.compliance_pct|floatformat:0 }}%
+              </div>
+              <div class="stat-desc">{% trans "of expected entries" %}</div>
+            </div>
+          </div>
+          {% if compliance.missed > 0 %}
+            <p class="text-sm text-error mt-2">
+              {% blocktrans count counter=compliance.missed %}{{ compliance.missed }} missed entry{% plural %}{{ compliance.missed }} missed entries{% endblocktrans %}
+            </p>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <p class="text-sm opacity-60 mt-6">
+        {% trans "If you believe this is an error, please contact the survey organiser." %}
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
