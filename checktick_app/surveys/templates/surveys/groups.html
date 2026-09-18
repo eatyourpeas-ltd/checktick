@@ -297,58 +297,70 @@
 
           <div>
             <span class="label text-xs">{% trans 'Sections' %}</span>
+            <p class="text-xs text-base-content/60 mt-0.5 mb-2">
+              {% trans 'Tick a section to make it required (always included). Unticked sections are optional — the participant can choose whether to complete them.' %}
+            </p>
             <ul class="mt-1 divide-y divide-base-200 border border-base-200 rounded-lg">
+              <li class="flex items-center gap-3 p-2 bg-base-200/50 text-xs font-semibold text-base-content/60">
+                <span class="flex-1 min-w-0">{% trans 'Section' %}</span>
+                <span class="w-20 text-center shrink-0">{% trans 'Required?' %}</span>
+                <span class="w-10 text-center shrink-0">{% trans 'Qs' %}</span>
+                <span class="w-24 text-center shrink-0">{% trans 'Est. minutes' %}</span>
+              </li>
               {% for g in groups %}
                 {% with item=section_menu_items_by_group|get_item:g.id %}
                   <li class="flex items-center gap-3 p-2">
-                    <label class="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                    <span class="flex-1 min-w-0 truncate text-sm">{{ g.name }}</span>
+                    <label class="flex items-center justify-center gap-1 cursor-pointer w-20 shrink-0">
                       <input type="checkbox" name="mandatory_group_ids" value="{{ g.id }}"
                              class="checkbox checkbox-sm"
                              {% if item and not item.is_pickable %}checked{% endif %}
-                             aria-label="{% trans 'Mandatory' %}" />
-                      <span class="truncate">{{ g.name }}</span>
+                             aria-label="{% blocktrans %}{{ g.name }} required{% endblocktrans %}" />
                     </label>
-                    <span class="text-xs text-base-content/60 shrink-0">
-                      {% if item and not item.is_pickable %}{% trans 'Mandatory' %}{% else %}{% trans 'Pickable' %}{% endif %}
-                    </span>
-                    <span class="badge badge-neutral badge-sm shrink-0">{{ g.q_count|default:0 }}</span>
+                    <span class="badge badge-neutral badge-sm shrink-0 w-10 justify-center">{{ g.q_count|default:0 }}</span>
                     <input type="hidden" name="estimated_minutes_group_ids" value="{{ g.id }}" />
                     <input type="number" min="1" name="estimated_minutes_{{ g.id }}"
-                           class="input input-bordered input-xs w-16"
-                           placeholder="min"
+                           class="input input-bordered input-xs w-24 shrink-0"
+                           placeholder="—"
                            value="{{ item.estimated_minutes|default:'' }}"
-                           aria-label="{% trans 'Estimated minutes' %}" />
+                           aria-label="{% blocktrans %}{{ g.name }} estimated minutes{% endblocktrans %}" />
                   </li>
                 {% endwith %}
               {% endfor %}
             </ul>
+            <p class="text-xs text-base-content/50 mt-1">
+              {% trans 'Estimated minutes are optional. They are only shown to participants if “Show estimated time per section” is enabled below.' %}
+            </p>
           </div>
 
           <fieldset class="flex flex-wrap gap-x-6 gap-y-2 items-end">
             <div>
-              <label class="label text-xs" for="id_min_selected">{% trans 'Min pickable selected' %}</label>
+              <label class="label text-xs" for="id_min_selected">{% trans 'Minimum optional sections' %}</label>
               <input id="id_min_selected" type="number" min="0" name="min_selected"
                      class="input input-bordered input-sm w-20"
                      value="{{ section_menu.min_selected|default:1 }}" />
+              <p class="text-xs text-base-content/50 mt-0.5">{% trans 'Participant must select at least this many optional sections. Required sections are always included.' %}</p>
             </div>
             <div>
-              <label class="label text-xs" for="id_max_selected">{% trans 'Max (blank = no cap)' %}</label>
+              <label class="label text-xs" for="id_max_selected">{% trans 'Maximum optional sections' %}</label>
               <input id="id_max_selected" type="number" min="1" name="max_selected"
                      class="input input-bordered input-sm w-20"
                      value="{{ section_menu.max_selected|default:'' }}" />
+              <p class="text-xs text-base-content/50 mt-0.5">{% trans 'Leave blank for no limit.' %}</p>
             </div>
-            <div>
-              <span class="label text-xs">{% trans 'Order after selection' %}</span>
-              <div class="flex gap-3">
-                {% for value, label in section_menu_order_modes %}
-                  <label class="flex items-center gap-1 cursor-pointer text-sm">
-                    <input type="radio" name="order_mode" value="{{ value }}"
-                           class="radio radio-sm"
-                           {% if section_menu.order_mode == value or forloop.first and not section_menu.order_mode %}checked{% endif %} />
-                    {{ label }}
-                  </label>
-                {% endfor %}
-              </div>
+          </fieldset>
+
+          <fieldset>
+            <span class="label text-xs">{% trans 'Order after selection' %}</span>
+            <div class="flex gap-3 mt-1">
+              {% for value, label in section_menu_order_modes %}
+                <label class="flex items-center gap-1 cursor-pointer text-sm">
+                  <input type="radio" name="order_mode" value="{{ value }}"
+                         class="radio radio-sm"
+                         {% if section_menu.order_mode == value or forloop.first and not section_menu.order_mode %}checked{% endif %} />
+                  {{ label }}
+                </label>
+              {% endfor %}
             </div>
           </fieldset>
 
