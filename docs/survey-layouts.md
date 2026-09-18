@@ -571,6 +571,25 @@ implemented. They are ordered by priority — the order CheckTick intends
 to implement them, based on how often the use case is the reason a
 research team reaches for REDCap or Qualtrics instead of a simpler tool.
 
+### Respondent categories — parked
+
+Lets a survey creator categorise respondents along one or more dimensions
+(rater role, recruitment site, cohort, language, stratum, …) within a
+single published survey, so different respondents see different subsets
+of the same survey without cloning it. The category value drives which
+sections and questions each respondent sees.
+
+This is a cross-cutting feature, not a layout — it generalises the
+pattern that RCT arms and Delphi rounds already use, and it subsumes the
+360° / multi-rater use case (see Patterns and modes below).
+
+**Parked (2026-09):** a generalisation of an existing working pattern,
+not a prerequisite for any shipped or planned layout. Retained as a
+recorded design decision; revisit when a concrete use case emerges that
+the per-layout FKs cannot cover. Language / translation is explicitly
+out of scope — it is a content-level variant, not a visibility-level
+one, and the two should not be conflated.
+
 ### Two-stage screening / eligibility routing
 
 A brief screener determines eligibility, then routes to the full survey,
@@ -604,10 +623,19 @@ Clusters (sites, wards, practices) cross from control to intervention
 in a randomised sequence over time. Common in implementation science
 and cluster RCTs.
 
+## Patterns and modes
+
+Features that are not layouts but are related and worth tracking.
+
 ### 360° / multi-rater assessment
 
 Multiple respondents (peers, supervisors, patients) rate a single
 subject. Common in medical education and clinician appraisal.
+
+Previously listed as a planned layout. Now scoped as a **question-bank
+pattern built on respondent categories** (see above): a `rater_role`
+category dimension drives which question set each rater sees, and invite
+tokens carry the role value for each batch. No new layout needed.
 
 ### Think-aloud / cognitive interview mode
 
@@ -616,7 +644,7 @@ probes while the participant thinks aloud. May remain a mode flag
 rather than a full layout.
 
 See [Survey Layouts (Technical)](survey-layouts-technical.md#planned-layouts)
-for the full technical notes on each planned layout.
+for the full technical notes on each planned layout and pattern.
 
 ## Related documentation
 
