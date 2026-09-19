@@ -7,6 +7,33 @@
 {% block content %}
 <div class="max-w-2xl mx-auto px-4 py-6">
   <h1 class="text-2xl font-bold text-base-content">{{ survey.name }}</h1>
+
+  {% if intro_block %}
+  <div class="content-block prose max-w-none mt-4 mb-2">
+    {% if intro_block.image_url %}
+    <div class="not-prose mb-4">
+      <img src="{{ intro_block.image_url }}" alt="{{ intro_block.image_alt|default:'' }}" class="rounded-lg max-w-full" />
+    </div>
+    {% endif %}
+    {% if intro_block.heading %}
+    <h2 class="text-xl font-semibold">{{ intro_block.heading }}</h2>
+    {% endif %}
+    {% if intro_block.subtitle %}
+    <p class="text-base opacity-70 -mt-2">{{ intro_block.subtitle }}</p>
+    {% endif %}
+    {% if intro_block.html %}{{ intro_block.html|safe }}{% endif %}
+    {% if intro_block.links %}
+    <ul class="list-none pl-0 mt-2">
+      {% for link in intro_block.links %}
+      <li class="mt-1">
+        <a href="{{ link.url }}" rel="noopener noreferrer" target="_blank" class="link link-primary">{{ link.label }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <p class="mt-2 text-base text-base-content/80">{{ menu.prompt_text }}</p>
 
   {% if mandatory_rows %}

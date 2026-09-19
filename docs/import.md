@@ -112,10 +112,52 @@ Spacing is flexible, but keep the relative order (heading → optional descripti
   - `min: 1`
   - `max: 5`
   - Optional `left:` and `right:` labels.
+  - Optional `render: slider` (default) or `render: radio` to control how the scale is presented to respondents (see [Likert render mode](#likert-render-mode)).
+- For `likert categories`, an optional `render: radio` line after the category list switches the scale from a slider to radio buttons.
 - For `text date`, `text time` and `text datetime`, optional range lines restrict the picker:
   - `min: 2026-01-01` / `max: 2026-12-31` for dates
   - `min: 09:00` / `max: 17:00` for times
   - `min: 2026-01-01T09:00` / `max: 2026-01-31T17:00` for date & time
+
+### Likert render mode
+
+By default, Likert questions render as a **slider** (range input). Add a
+`render:` metadata line to render the same scale as **radio buttons** instead.
+This works for both `likert number` and `likert categories`.
+
+With radio buttons, no default midpoint is pre-selected — respondents must make
+an explicit choice. The submitted value is identical to the slider (the numeric
+value for `likert number`, the category label for `likert categories`), so
+branching, exports, and aggregation are unaffected.
+
+**`likert number` as radio buttons:**
+
+```markdown
+## Overall satisfaction {overall-satisfaction}
+(likert number)
+min: 1
+max: 5
+left: Very dissatisfied
+right: Very satisfied
+render: radio
+```
+
+**`likert categories` as radio buttons:**
+
+```markdown
+## Agreement with the statement {agreement}
+(likert categories)
+- Strongly disagree
+- Disagree
+- Neutral
+- Agree
+- Strongly agree
+render: radio
+```
+
+Valid values are `slider` (default) and `radio`. Unknown values are ignored and
+the slider is used. The render mode can also be changed in the visual builder
+via the "Render as" toggle in the Likert section.
 
 **Example with follow-up text:**
 

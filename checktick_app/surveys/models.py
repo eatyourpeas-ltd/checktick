@@ -4031,6 +4031,16 @@ class SectionMenu(models.Model):
         default=False,
         help_text="Show per-section estimated time on the picker page.",
     )
+    intro_content = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            "Optional landing/intro content block rendered above the picker "
+            "page. Stored as a dict with keys: heading, subtitle, "
+            "body_md (Markdown), links (list of {label, url})."
+        ),
+    )
 
     def __str__(self) -> str:
         return f"SectionMenu for {self.survey.name}"
@@ -4235,8 +4245,7 @@ class StagedPhase(models.Model):
     start_offset_days = models.PositiveIntegerField(
         default=0,
         help_text=(
-            "Days after the anchor when this phase opens. 0 = opens at the "
-            "anchor time."
+            "Days after the anchor when this phase opens. 0 = opens at the anchor time."
         ),
     )
     end_offset_days = models.PositiveIntegerField(
@@ -4410,8 +4419,7 @@ class DelphiRound(models.Model):
     start_offset_days = models.PositiveIntegerField(
         default=0,
         help_text=(
-            "Days after the anchor when this round opens. 0 = opens at the "
-            "anchor time."
+            "Days after the anchor when this round opens. 0 = opens at the anchor time."
         ),
     )
     end_offset_days = models.PositiveIntegerField(
@@ -4610,6 +4618,16 @@ class DiaryMenu(models.Model):
         help_text=(
             "Show participants which window they are in and their "
             "compliance summary on the diary landing page."
+        ),
+    )
+    intro_content = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            "Optional landing/intro content block rendered above the diary "
+            "landing page. Stored as a dict with keys: heading, subtitle, "
+            "body_md (Markdown), links (list of {label, url})."
         ),
     )
 
@@ -6667,7 +6685,9 @@ class PlatformKeyVersion(models.Model):
         status = (
             "active"
             if self.is_active()
-            else "retired" if self.retired_at else "pending"
+            else "retired"
+            if self.retired_at
+            else "pending"
         )
         return f"Platform Key {self.version} ({status})"
 

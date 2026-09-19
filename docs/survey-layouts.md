@@ -257,10 +257,25 @@ save-and-resume.
 ## Previewing a Section menu survey
 
 The preview page includes a **Simulate section selection** panel that
-lets you pre-tick a subset of pickable sections. This shows you exactly
-what a participant would see for a given selection, without needing a
-real participant. Click **Apply** to filter the preview, or **Reset** to
-show all sections.
+lets you pre-tick a subset of pickable sections. By default the preview
+shows only the **mandatory** sections — pickable sections are hidden
+until you tick them, mirroring what a participant sees before they make
+their selection. Tick the sections you want to preview and click
+**Apply** to add them, or **Reset** to return to the mandatory-only
+baseline.
+
+## Intro / landing content block
+
+You can render a content block (welcome text, consent statement,
+privacy notice, etc.) above the picker page by selecting it from the
+**Intro / landing content block** dropdown in the Section menu
+configuration card on the Organise page. Only content block questions
+in this survey appear in the dropdown. The block renders above the
+picker prompt every time the picker is shown, including when the
+participant returns via **Change sections**.
+
+To create a content block, add a question of type **Content block** in
+the builder (see [Content blocks](#content-blocks) below).
 
 ## Survey Map
 

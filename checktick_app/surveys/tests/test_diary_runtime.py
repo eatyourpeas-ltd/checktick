@@ -125,6 +125,96 @@ def test_window_open_renders_landing_page(client, owner, org, participant):
     assert "Pain level" not in html  # Questions not rendered on landing page
 
 
+# --- intro / landing content on diary landing ---
+
+
+@pytest.mark.django_db
+def test_diary_landing_shows_intro(client, owner, org, participant):
+    """When intro_content is set, it renders above the diary landing."""
+    s = _make_diary_survey(owner, org)
+    menu = _make_fixed_interval_menu(s, interval_hours=6)
+    menu.intro_content = {"heading": "Welcome", "body_md": "Please read this."}
+    menu.save(update_fields=["intro_content"])
+
+    client.force_login(participant)
+    res = client.get(reverse("surveys:take", kwargs={"slug": s.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Welcome" in html
+    assert "Please read this." in html
+
+
+@pytest.mark.django_db
+def test_diary_landing_no_intro_by_default(client, owner, org, participant):
+    """Without intro_content, the landing renders normally (no intro)."""
+    s = _make_diary_survey(owner, org)
+    _make_fixed_interval_menu(s, interval_hours=6)
+
+    client.force_login(participant)
+    res = client.get(reverse("surveys:take", kwargs={"slug": s.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert 'class="content-block prose' not in html
+
+
+@pytest.mark.django_db
+def test_diary_save_intro(client, owner, org):
+    """Saving the diary config form with intro fields persists intro_content."""
+    s = _make_diary_survey(owner, org)
+    menu = _make_fixed_interval_menu(s, interval_hours=6)
+    client.force_login(owner)
+    res = client.post(
+        reverse("surveys:groups", kwargs={"slug": s.slug}),
+        {
+            "action": "save_diary_menu",
+            "schedule_type": "fixed_interval",
+            "anchor": "enrolment",
+            "interval_hours": "6",
+            "compliance_threshold_pct": "80",
+            "grace_minutes": "30",
+            "show_progress": "1",
+            "intro_enabled": "1",
+            "intro_heading": "Welcome",
+            "intro_subtitle": "",
+            "intro_body_md": "Please read this.",
+        },
+        follow=False,
+    )
+    assert res.status_code == 302
+    menu.refresh_from_db()
+    assert menu.intro_content is not None
+    assert menu.intro_content["heading"] == "Welcome"
+    assert menu.intro_content["body_md"] == "Please read this."
+
+
+@pytest.mark.django_db
+def test_diary_save_clears_intro(client, owner, org):
+    """Unchecking intro_enabled clears intro_content."""
+    s = _make_diary_survey(owner, org)
+    menu = _make_fixed_interval_menu(s, interval_hours=6)
+    menu.intro_content = {"heading": "Old"}
+    menu.save(update_fields=["intro_content"])
+
+    client.force_login(owner)
+    res = client.post(
+        reverse("surveys:groups", kwargs={"slug": s.slug}),
+        {
+            "action": "save_diary_menu",
+            "schedule_type": "fixed_interval",
+            "anchor": "enrolment",
+            "interval_hours": "6",
+            "compliance_threshold_pct": "80",
+            "grace_minutes": "30",
+            "show_progress": "1",
+            # intro_enabled not submitted = unchecked
+        },
+        follow=False,
+    )
+    assert res.status_code == 302
+    menu.refresh_from_db()
+    assert menu.intro_content is None
+
+
 # --- window open: entry form renders with ?entry=1 ---
 
 

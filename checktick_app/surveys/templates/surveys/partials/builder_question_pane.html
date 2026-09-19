@@ -153,6 +153,14 @@ Option B" data-options-textarea></textarea>
                         <label class="label cursor-pointer gap-2"><input type="radio" name="likert_mode" value="number" class="radio radio-primary"> <span>Number scale</span></label>
                       </div>
                     </fieldset>
+                    <fieldset class="mt-3">
+                      <legend class="label">Render as</legend>
+                      <div class="flex gap-3">
+                        <label class="label cursor-pointer gap-2"><input type="radio" name="likert_render" value="slider" class="radio radio-primary" checked> <span>Slider</span></label>
+                        <label class="label cursor-pointer gap-2"><input type="radio" name="likert_render" value="radio" class="radio radio-primary"> <span>Radio buttons</span></label>
+                      </div>
+                      <p class="text-xs opacity-60 mt-1">Radio buttons force an explicit choice (no default midpoint is submitted).</p>
+                    </fieldset>
                     <div data-likert="categories" class="mt-3">
                       <label class="label">Categories (one per line)</label>
                       <textarea name="likert_categories" class="textarea textarea-bordered w-full" placeholder="Strongly disagree

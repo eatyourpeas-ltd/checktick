@@ -377,6 +377,62 @@
             </label>
           </fieldset>
 
+          <div class="border-t border-base-200 pt-3 mt-3">
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" name="intro_enabled" value="1"
+                     class="checkbox checkbox-sm"
+                     {% if section_menu.intro_content %}checked{% endif %}
+                     data-toggle="section-menu-intro" />
+              {% trans 'Include landing page before picker' %}
+            </label>
+            <div data-intro-fields="section-menu-intro" class="mt-2 space-y-2 {% if not section_menu.intro_content %}hidden{% endif %}">
+              <div>
+                <label class="label text-xs">{% trans 'Heading' %}</label>
+                <input type="text" name="intro_heading" class="input input-bordered input-sm w-full"
+                       value="{{ section_menu.intro_content.heading|default:'' }}" placeholder="e.g. Welcome to this survey" />
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Subtitle' %}</label>
+                <input type="text" name="intro_subtitle" class="input input-bordered input-sm w-full"
+                       value="{{ section_menu.intro_content.subtitle|default:'' }}" placeholder="Optional short description" />
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Body (Markdown)' %}</label>
+                <textarea name="intro_body_md" class="textarea textarea-bordered w-full text-sm" rows="4"
+                          placeholder="Welcome text, consent statement, privacy notice, etc.">{{ section_menu.intro_content.body_md|default:'' }}</textarea>
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Image' %}</label>
+                <div data-intro-image class="flex items-center gap-3">
+                  {% if section_menu.intro_content.image_url %}
+                  <img src="{{ section_menu.intro_content.image_url }}" alt="{{ section_menu.intro_content.image_alt|default:'' }}" class="w-20 h-20 object-cover rounded-lg border border-base-300" data-intro-image-preview />
+                  {% else %}
+                  <div class="w-20 h-20 rounded-lg border border-base-300 bg-base-200 flex items-center justify-center text-xs text-base-content/40" data-intro-image-placeholder>{% trans 'No image' %}</div>
+                  {% endif %}
+                  <div class="flex-1">
+                    <input type="file" accept="image/png,image/jpeg,image/webp" class="file-input file-input-sm w-full" data-intro-image-input data-upload-url="{% url 'surveys:section_menu_intro_image_upload' slug=survey.slug %}" />
+                    <input type="hidden" name="intro_image_url" value="{{ section_menu.intro_content.image_url|default:'' }}" data-intro-image-url />
+                    <input type="text" name="intro_image_alt" class="input input-bordered input-sm w-full mt-1" value="{{ section_menu.intro_content.image_alt|default:'' }}" placeholder="Alt text (optional)" />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Links' %}</label>
+                <div data-link-rows>
+                  {% if section_menu.intro_content.links %}
+                    {% for link in section_menu.intro_content.links %}
+                    <div class="flex gap-2 mb-1">
+                      <input type="text" name="intro_link_labels" class="input input-bordered input-sm flex-1" value="{{ link.label }}" placeholder="Label" />
+                      <input type="text" name="intro_link_urls" class="input input-bordered input-sm flex-1" value="{{ link.url }}" placeholder="https://..." />
+                    </div>
+                    {% endfor %}
+                  {% endif %}
+                </div>
+                <button type="button" class="btn btn-ghost btn-xs" data-add-link>{% trans '+ Add link' %}</button>
+              </div>
+            </div>
+          </div>
+
           <div class="flex gap-2 pt-1">
             <button type="submit" class="btn btn-primary btn-sm">{% trans 'Save layout' %}</button>
             <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/survey-map/">{% trans 'Review in Survey Map' %}</a>
@@ -943,6 +999,62 @@
             </label>
           </fieldset>
 
+          <div class="border-t border-base-200 pt-3 mt-3">
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" name="intro_enabled" value="1"
+                     class="checkbox checkbox-sm"
+                     {% if diary_menu.intro_content %}checked{% endif %}
+                     data-toggle="diary-intro" />
+              {% trans 'Include landing page before diary entries' %}
+            </label>
+            <div data-intro-fields="diary-intro" class="mt-2 space-y-2 {% if not diary_menu.intro_content %}hidden{% endif %}">
+              <div>
+                <label class="label text-xs">{% trans 'Heading' %}</label>
+                <input type="text" name="intro_heading" class="input input-bordered input-sm w-full"
+                       value="{{ diary_menu.intro_content.heading|default:'' }}" placeholder="e.g. Welcome to this diary study" />
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Subtitle' %}</label>
+                <input type="text" name="intro_subtitle" class="input input-bordered input-sm w-full"
+                       value="{{ diary_menu.intro_content.subtitle|default:'' }}" placeholder="Optional short description" />
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Body (Markdown)' %}</label>
+                <textarea name="intro_body_md" class="textarea textarea-bordered w-full text-sm" rows="4"
+                          placeholder="Welcome text, consent statement, privacy notice, etc.">{{ diary_menu.intro_content.body_md|default:'' }}</textarea>
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Image' %}</label>
+                <div data-intro-image class="flex items-center gap-3">
+                  {% if diary_menu.intro_content.image_url %}
+                  <img src="{{ diary_menu.intro_content.image_url }}" alt="{{ diary_menu.intro_content.image_alt|default:'' }}" class="w-20 h-20 object-cover rounded-lg border border-base-300" data-intro-image-preview />
+                  {% else %}
+                  <div class="w-20 h-20 rounded-lg border border-base-300 bg-base-200 flex items-center justify-center text-xs text-base-content/40" data-intro-image-placeholder>{% trans 'No image' %}</div>
+                  {% endif %}
+                  <div class="flex-1">
+                    <input type="file" accept="image/png,image/jpeg,image/webp" class="file-input file-input-sm w-full" data-intro-image-input data-upload-url="{% url 'surveys:diary_intro_image_upload' slug=survey.slug %}" />
+                    <input type="hidden" name="intro_image_url" value="{{ diary_menu.intro_content.image_url|default:'' }}" data-intro-image-url />
+                    <input type="text" name="intro_image_alt" class="input input-bordered input-sm w-full mt-1" value="{{ diary_menu.intro_content.image_alt|default:'' }}" placeholder="Alt text (optional)" />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Links' %}</label>
+                <div data-link-rows>
+                  {% if diary_menu.intro_content.links %}
+                    {% for link in diary_menu.intro_content.links %}
+                    <div class="flex gap-2 mb-1">
+                      <input type="text" name="intro_link_labels" class="input input-bordered input-sm flex-1" value="{{ link.label }}" placeholder="Label" />
+                      <input type="text" name="intro_link_urls" class="input input-bordered input-sm flex-1" value="{{ link.url }}" placeholder="https://..." />
+                    </div>
+                    {% endfor %}
+                  {% endif %}
+                </div>
+                <button type="button" class="btn btn-ghost btn-xs" data-add-link>{% trans '+ Add link' %}</button>
+              </div>
+            </div>
+          </div>
+
           <button type="submit" class="btn btn-sm btn-primary">{% trans 'Save configuration' %}</button>
         </form>
         {% else %}
@@ -1292,4 +1404,69 @@
   <script src="{% static cdn_assets.sortablejs.static_file %}" nonce="{{ request.csp_nonce }}" integrity="{{ cdn_assets.sortablejs.sri }}" crossorigin="anonymous"></script>
   <script src="{% static 'js/groups.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}"></script>
   <script src="{% static 'js/groups-page.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}"></script>
+  <script nonce="{{ request.csp_nonce }}">
+    // Toggle landing page fields and add/remove link rows for both
+    // the Section menu and Diary config cards.
+    document.querySelectorAll('[data-toggle]').forEach(function(toggle) {
+      toggle.addEventListener('change', function() {
+        var target = document.querySelector('[data-intro-fields="' + toggle.dataset.toggle + '"]');
+        if (target) target.classList.toggle('hidden', !toggle.checked);
+      });
+    });
+    document.querySelectorAll('[data-add-link]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var container = btn.previousElementSibling;
+        if (!container || !container.hasAttribute('data-link-rows')) return;
+        var row = document.createElement('div');
+        row.className = 'flex gap-2 mb-1';
+        row.innerHTML = '<input type="text" name="intro_link_labels" class="input input-bordered input-sm flex-1" placeholder="Label" />' +
+          '<input type="text" name="intro_link_urls" class="input input-bordered input-sm flex-1" placeholder="https://..." />';
+        container.appendChild(row);
+      });
+    });
+    // Intro image upload: upload to the endpoint, store the returned URL
+    // in a hidden field, and show a preview.
+    document.querySelectorAll('[data-intro-image-input]').forEach(function(input) {
+      input.addEventListener('change', function() {
+        var file = input.files[0];
+        if (!file) return;
+        var container = input.closest('[data-intro-image]');
+        var urlField = container.querySelector('[data-intro-image-url]');
+        var uploadUrl = input.dataset.uploadUrl;
+        var formData = new FormData();
+        formData.append('image', file);
+        var altField = container.querySelector('input[name="intro_image_alt"]');
+        if (altField) formData.append('alt', altField.value);
+        input.disabled = true;
+        fetch(uploadUrl, {
+          method: 'POST',
+          body: formData,
+          headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
+        }).then(function(r) { return r.json(); }).then(function(data) {
+          input.disabled = false;
+          if (!data.success) {
+            alert(data.error || 'Upload failed');
+            return;
+          }
+          urlField.value = data.image_url;
+          if (altField && !altField.value) altField.value = data.alt || '';
+          var preview = container.querySelector('[data-intro-image-preview]');
+          var placeholder = container.querySelector('[data-intro-image-placeholder]');
+          if (placeholder) placeholder.remove();
+          if (preview) {
+            preview.src = data.image_url;
+          } else {
+            var img = document.createElement('img');
+            img.src = data.image_url;
+            img.className = 'w-20 h-20 object-cover rounded-lg border border-base-300';
+            img.dataset.introImagePreview = '';
+            container.insertBefore(img, container.firstChild);
+          }
+        }).catch(function() {
+          input.disabled = false;
+          alert('Upload failed');
+        });
+      });
+    });
+  </script>
 {% endblock %}

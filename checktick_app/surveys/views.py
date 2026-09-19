@@ -1475,6 +1475,7 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
     # to those groups (plus mandatory ones).
     simulated_group_ids: list[int] | None = None
     section_menu_preview = None
+    section_menu_has_explicit_selection = False
     if survey.layout == Survey.Layout.SECTION_MENU:
         menu = getattr(survey, "section_menu", None)
         if menu is None:
@@ -1488,14 +1489,31 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
             .select_related("group")
             .order_by("order")
         )
+        # Default preview: only mandatory sections render (pickable sections
+        # are hidden until the author ticks them in the simulate panel).
+        # This mirrors what a participant sees before they pick anything.
+        simulated_group_ids = list(mandatory_ids)
         section_menu_preview = {
             "menu": menu,
             "pickable_items": pickable_items,
             "mandatory_ids": mandatory_ids,
         }
-        sim_raw = request.GET.get("simulate_groups", "")
-        if sim_raw:
-            sim_ids = {int(x) for x in sim_raw.split(",") if str(x).isdigit()}
+        if "simulate_groups" in request.GET:
+            section_menu_has_explicit_selection = True
+            # The simulate panel submits multiple checkboxes all named
+            # ``simulate_groups``, which the browser serialises as repeated
+            # query keys (``?simulate_groups=1&simulate_groups=3``).
+            # ``request.GET.get()`` only returns the first value, silently
+            # dropping the rest, so use ``getlist()`` and also tolerate
+            # comma-separated values for bookmarked/shareable URLs.
+            sim_values: list[str] = list(request.GET.getlist("simulate_groups"))
+            # Flatten any comma-separated entries (e.g. "1,3") into individual ids.
+            sim_ids: set[int] = set()
+            for entry in sim_values:
+                for piece in str(entry).split(","):
+                    piece = piece.strip()
+                    if piece.isdigit():
+                        sim_ids.add(int(piece))
             simulated_group_ids = list((sim_ids | mandatory_ids))
 
     # RCT: simulate arm (step 8). If ``?simulate_arm=<arm_id>`` is present,
@@ -1673,6 +1691,7 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         # Section menu simulate selection panel (step 9).
         "section_menu_preview": section_menu_preview,
         "simulated_group_ids": simulated_group_ids or [],
+        "section_menu_has_explicit_selection": section_menu_has_explicit_selection,
         # RCT simulate arm panel (step 8).
         "rct_preview": rct_preview,
         # Staged simulate phase panel (step 6).
@@ -2630,6 +2649,9 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
                 opt["followup_text"] = {"enabled": True, "label": followup_label}
     elif qtype == SurveyQuestion.Types.LIKERT:
         likert_mode = (data.get("likert_mode") or "categories").strip()
+        likert_render = (data.get("likert_render") or "slider").strip().lower()
+        if likert_render not in {"slider", "radio"}:
+            likert_render = "slider"
         if likert_mode == "number":
             try:
                 min_v = int(data.get("likert_min", "1"))
@@ -2639,18 +2661,25 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
                 max_v = int(data.get("likert_max", "5"))
             except (TypeError, ValueError):
                 max_v = 5
-            options = [
-                {
-                    "type": "number-scale",
-                    "min": min_v,
-                    "max": max_v,
-                    "left": (data.get("likert_left_label") or "").strip(),
-                    "right": (data.get("likert_right_label") or "").strip(),
-                }
-            ]
+            number_opts: dict[str, Any] = {
+                "type": "number-scale",
+                "min": min_v,
+                "max": max_v,
+                "left": (data.get("likert_left_label") or "").strip(),
+                "right": (data.get("likert_right_label") or "").strip(),
+            }
+            if likert_render != "slider":
+                number_opts["render"] = likert_render
+            options = [number_opts]
         else:
             raw = data.get("likert_categories", "")
-            options = [line.strip() for line in raw.splitlines() if line.strip()]
+            labels = [line.strip() for line in raw.splitlines() if line.strip()]
+            if likert_render != "slider":
+                options = [
+                    {"type": "categories", "labels": labels, "render": likert_render}
+                ]
+            else:
+                options = labels
     elif qtype == SurveyQuestion.Types.TEXT:
         text_format = (data.get("text_format") or "free").strip()
         if text_format not in {"number", "free", "date", "time", "datetime"}:
@@ -3108,6 +3137,18 @@ def _serialize_question_for_builder(
         if yesno_labels:
             payload["yesno_labels"] = yesno_labels
     elif question.type == SurveyQuestion.Types.LIKERT:
+        # A categories question may be stored either as a plain list of label
+        # strings (builder default) or as a single dict wrapper of the form
+        # {"type": "categories", "labels": [...], "render": ...} (markdown
+        # import, or builder when a non-default render mode is chosen).
+        categories_meta = None
+        if (
+            isinstance(options, list)
+            and options
+            and isinstance(options[0], dict)
+            and options[0].get("type") == "categories"
+        ):
+            categories_meta = options[0]
         if (
             isinstance(options, list)
             and options
@@ -3126,10 +3167,20 @@ def _serialize_question_for_builder(
                 payload["likert_max"] = 5
             payload["likert_left_label"] = str(meta.get("left") or "").strip()
             payload["likert_right_label"] = str(meta.get("right") or "").strip()
+            render_val = str(meta.get("render") or "slider").strip().lower()
+            if render_val not in {"slider", "radio"}:
+                render_val = "slider"
+            payload["likert_render"] = render_val
         else:
             payload["likert_mode"] = "categories"
             labels: list[str] = []
-            if isinstance(options, list):
+            if categories_meta is not None:
+                labels = [
+                    str(label).strip()
+                    for label in (categories_meta.get("labels") or [])
+                    if str(label).strip()
+                ]
+            elif isinstance(options, list):
                 for opt in options:
                     if isinstance(opt, str):
                         val = opt.strip()
@@ -3140,6 +3191,14 @@ def _serialize_question_for_builder(
                         if candidate:
                             labels.append(str(candidate).strip())
             payload["likert_categories"] = labels
+            render_val = (
+                str(categories_meta.get("render") or "slider").strip().lower()
+                if categories_meta is not None
+                else "slider"
+            )
+            if render_val not in {"slider", "radio"}:
+                render_val = "slider"
+            payload["likert_render"] = render_val
 
     operators_meta = list((condition_meta or {}).get("operators", []))
     if not operators_meta:
@@ -6119,6 +6178,7 @@ def _render_section_menu_picker(
         )
     mandatory_rows = [r for r in picker_rows if r["is_mandatory"]]
     pickable_rows = [r for r in picker_rows if not r["is_mandatory"]]
+    intro_block = _build_intro_content(menu.intro_content)
     ctx = {
         "survey": survey,
         "menu": menu,
@@ -6129,6 +6189,7 @@ def _render_section_menu_picker(
         "min_selected": menu.min_selected,
         "max_selected": menu.max_selected,
         "is_preview": False,
+        "intro_block": intro_block,
         "show_progress": progress is not None,
         "progress_percentage": (
             progress.calculate_progress_percentage() if progress else 0
@@ -6163,6 +6224,77 @@ def _collect_matrix_section_answers(survey: Survey, post) -> dict:
         if followups:
             answers[f"{q.id}_followup"] = followups
     return answers
+
+
+def _build_intro_content(raw: dict | None) -> dict | None:
+    """Build a landing-block context dict from an ``intro_content`` JSON field.
+
+    Returns ``None`` if no intro content is configured. Used by the
+    Section menu picker and Diary landing pages to render an optional
+    landing/intro (welcome text, consent, privacy notice) above the
+    layout-specific UI.
+    """
+    if not raw or not isinstance(raw, dict):
+        return None
+    from checktick_app.core.markdown_safety import render_content_block_markdown
+
+    return {
+        "heading": str(raw.get("heading", "") or ""),
+        "subtitle": str(raw.get("subtitle", "") or ""),
+        "html": render_content_block_markdown(raw.get("body_md", "") or ""),
+        "links": raw.get("links", []) or [],
+        "image_url": str(raw.get("image_url", "") or ""),
+        "image_alt": str(raw.get("image_alt", "") or ""),
+    }
+
+
+def _parse_intro_content_form(post) -> dict | None:
+    """Parse intro content fields from a POST form into a dict (or None).
+
+    Fields: intro_enabled (checkbox), intro_heading, intro_subtitle,
+    intro_body_md, intro_image_url, intro_image_alt,
+    intro_link_label_N / intro_link_url_N pairs.
+
+    Link URLs are sanitised via ``sanitise_link_url`` (same as content
+    block questions) so ``javascript:`` and other dangerous schemes never
+    reach the rendered page. Image URLs must be relative paths (starting
+    with ``/``) or use ``http``/``https`` — this prevents ``data:`` URI
+    phishing and ``javascript:`` injection.
+    """
+    from checktick_app.core.markdown_safety import sanitise_link_url
+
+    if not post.get("intro_enabled"):
+        return None
+    links: list[dict[str, str]] = []
+    link_labels = post.getlist("intro_link_labels")
+    link_urls = post.getlist("intro_link_urls")
+    for i, label in enumerate(link_labels):
+        url = link_urls[i] if i < len(link_urls) else ""
+        label = (label or "").strip()
+        url = sanitise_link_url((url or "").strip())
+        if label and url:
+            links.append({"label": label, "url": url})
+    # Image URL: must be a relative path (e.g. /media/...) or an
+    # http/https URL. Reject data:, javascript:, and other schemes.
+    raw_image_url = (post.get("intro_image_url", "") or "").strip()
+    image_url = ""
+    if raw_image_url:
+        if raw_image_url.startswith("/"):
+            image_url = raw_image_url
+        else:
+            image_url = sanitise_link_url(raw_image_url)
+    content: dict = {
+        "heading": (post.get("intro_heading", "") or "").strip(),
+        "subtitle": (post.get("intro_subtitle", "") or "").strip(),
+        "body_md": (post.get("intro_body_md", "") or "").strip(),
+        "links": links,
+        "image_url": image_url,
+        "image_alt": (post.get("intro_image_alt", "") or "").strip(),
+    }
+    # Return None if completely empty.
+    if not any(content.values()):
+        return None
+    return content
 
 
 def _render_matrix_landing(
@@ -6378,6 +6510,7 @@ def _render_diary_landing(
     nxt = _diary_next_window(menu, anchor=anchor, now=now)
     entries = list(progress.diary_entries.filter(menu=menu).order_by("order", "id"))
     compliance = _diary_compliance(menu, entries, anchor=anchor, now=now)
+    intro_block = _build_intro_content(menu.intro_content)
     ctx = {
         "survey": survey,
         "diary_menu": menu,
@@ -6387,6 +6520,7 @@ def _render_diary_landing(
         "entries": entries,
         "is_preview": False,
         "show_progress": menu.show_progress,
+        "intro_block": intro_block,
     }
     return render(request, "surveys/diary_landing.html", ctx)
 
@@ -7837,6 +7971,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             menu.order_mode = order_mode
         menu.show_select_all = bool(request.POST.get("show_select_all"))
         menu.show_estimated_time = bool(request.POST.get("show_estimated_time"))
+        menu.intro_content = _parse_intro_content_form(request.POST)
         menu.save()
 
         # Sync items (create new, update order) before applying per-row edits.
@@ -8264,6 +8399,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         except ValueError:
             menu.grace_minutes = 30
         menu.show_progress = bool(request.POST.get("show_progress"))
+        menu.intro_content = _parse_intro_content_form(request.POST)
         menu.save()
         messages.success(request, _("Diary configuration saved."))
         return redirect("surveys:groups", slug=slug)
@@ -11500,7 +11636,6 @@ def builder_question_create(request: HttpRequest, slug: str) -> HttpResponse:
     # Look up dataset if provided (with access control)
     dataset = None
     if dataset_key:
-
         from .models import DataSet
         from .permissions import survey_dataset_scope_q
 
@@ -11686,7 +11821,6 @@ def builder_group_question_create(
     # Look up dataset if provided (with access control)
     dataset = None
     if dataset_key:
-
         from .models import DataSet
         from .permissions import survey_dataset_scope_q
 
@@ -12277,7 +12411,6 @@ def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResp
 
     # Look up dataset if provided (with access control)
     if dataset_key:
-
         from .models import DataSet
         from .permissions import survey_dataset_scope_q
 
@@ -12317,7 +12450,6 @@ def builder_group_question_edit(
 
     # Look up dataset if provided (with access control)
     if dataset_key:
-
         from .models import DataSet
         from .permissions import survey_dataset_scope_q
 
@@ -12502,7 +12634,9 @@ def _validate_and_process_image(uploaded_file) -> tuple[bool, str]:
             img_format = (
                 "PNG"
                 if ext == ".png"
-                else "JPEG" if ext in (".jpg", ".jpeg") else "WEBP"
+                else "JPEG"
+                if ext in (".jpg", ".jpeg")
+                else "WEBP"
             )
             img.save(buffer, format=img_format, quality=85)
             buffer.seek(0)
@@ -12648,6 +12782,82 @@ def _handle_image_delete(
         {
             "success": True,
             "message": _("Image deleted successfully."),
+        }
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def section_menu_intro_image_upload(request: HttpRequest, slug: str) -> HttpResponse:
+    """Upload an image for the Section menu intro/landing content block.
+
+    Stores the image under ``intro_images/{slug}/`` and returns the URL.
+    The URL is stored in ``SectionMenu.intro_content['image_url']`` by the
+    caller (the Organise page form saves it as a hidden field).
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    if survey.layout != Survey.Layout.SECTION_MENU:
+        return JsonResponse(
+            {"success": False, "error": _("Not a section menu survey.")},
+            status=400,
+        )
+    return _handle_intro_image_upload(request, survey, "section_menu")
+
+
+@login_required
+@require_http_methods(["POST"])
+def diary_intro_image_upload(request: HttpRequest, slug: str) -> HttpResponse:
+    """Upload an image for the Diary intro/landing content block."""
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    if survey.layout != Survey.Layout.DIARY:
+        return JsonResponse(
+            {"success": False, "error": _("Not a diary survey.")},
+            status=400,
+        )
+    return _handle_intro_image_upload(request, survey, "diary")
+
+
+def _handle_intro_image_upload(
+    request: HttpRequest, survey: Survey, layout_key: str
+) -> HttpResponse:
+    """Shared handler for intro image uploads.
+
+    Stores the file in ``intro_images/{slug}/{uuid}.{ext}`` and returns
+    the URL + alt text. The caller stores these in the menu's
+    ``intro_content`` JSON dict via hidden form fields.
+    """
+    import os
+    import uuid
+
+    from django.core.files.storage import default_storage
+
+    uploaded_file = request.FILES.get("image")
+    if not uploaded_file:
+        return JsonResponse(
+            {"success": False, "error": _("No image file provided.")},
+            status=400,
+        )
+
+    success, error = _validate_and_process_image(uploaded_file)
+    if not success:
+        return JsonResponse({"success": False, "error": error}, status=400)
+
+    ext = os.path.splitext(uploaded_file.name.lower())[1]
+    filename = f"{uuid.uuid4().hex}{ext}"
+    path = f"intro_images/{survey.slug}/{filename}"
+    saved_name = default_storage.save(path, uploaded_file)
+    url = default_storage.url(saved_name)
+
+    alt = request.POST.get("alt", "").strip()
+
+    return JsonResponse(
+        {
+            "success": True,
+            "image_url": url,
+            "alt": alt,
+            "message": _("Image uploaded successfully."),
         }
     )
 
@@ -13639,7 +13849,6 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                         dataset = None
                         dataset_key = q.get("dataset_key")
                         if dataset_key:
-
                             from .models import DataSet
                             from .permissions import (
                                 survey_dataset_scope_q as _scope_q,
@@ -14496,14 +14705,21 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                         # Likert categories - export as list
                         for label in first_option["labels"]:
                             lines.append(f"{indent}- {label}")
+                        render_val = first_option.get("render")
+                        if render_val:
+                            lines.append(f"{indent}render: {render_val}")
                     elif isinstance(first_option, dict) and first_option.get(
                         "type"
                     ) in ["number", "number-scale"]:
                         # Likert number - export min/max/labels
                         min_val = first_option.get("min")
                         max_val = first_option.get("max")
-                        left_label = first_option.get("left_label", "")
-                        right_label = first_option.get("right_label", "")
+                        left_label = first_option.get(
+                            "left_label", ""
+                        ) or first_option.get("left", "")
+                        right_label = first_option.get(
+                            "right_label", ""
+                        ) or first_option.get("right", "")
                         if min_val is not None:
                             lines.append(f"{indent}min: {min_val}")
                         if max_val is not None:
@@ -14512,6 +14728,9 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                             lines.append(f"{indent}left: {left_label}")
                         if right_label:
                             lines.append(f"{indent}right: {right_label}")
+                        render_val = first_option.get("render")
+                        if render_val:
+                            lines.append(f"{indent}render: {render_val}")
 
             # Options for question types that need them
             elif question.type in [
@@ -14565,6 +14784,9 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                         lines.append(f"{indent}left: {left_label}")
                     if right_label:
                         lines.append(f"{indent}right: {right_label}")
+                    render_val = question.options.get("render")
+                    if render_val:
+                        lines.append(f"{indent}render: {render_val}")
 
             # Branching rules
             conditions = SurveyQuestionCondition.objects.filter(
@@ -15923,12 +16145,19 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                     # Likert categories - export as list
                     for label in first_option["labels"]:
                         lines.append(f"- {label}")
+                    render_val = first_option.get("render")
+                    if render_val:
+                        lines.append(f"render: {render_val}")
                 elif first_option.get("type") in ["number", "number-scale"]:
                     # Likert number - export min/max/labels
                     min_val = first_option.get("min")
                     max_val = first_option.get("max")
-                    left_label = first_option.get("left_label", "")
-                    right_label = first_option.get("right_label", "")
+                    left_label = first_option.get("left_label", "") or first_option.get(
+                        "left", ""
+                    )
+                    right_label = first_option.get(
+                        "right_label", ""
+                    ) or first_option.get("right", "")
                     if min_val is not None:
                         lines.append(f"min: {min_val}")
                     if max_val is not None:
@@ -15937,6 +16166,9 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                         lines.append(f"left: {left_label}")
                     if right_label:
                         lines.append(f"right: {right_label}")
+                    render_val = first_option.get("render")
+                    if render_val:
+                        lines.append(f"render: {render_val}")
 
         # Options for question types that need them
         elif question.type in [
@@ -15986,6 +16218,9 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                     lines.append(f"left: {left_label}")
                 if right_label:
                     lines.append(f"right: {right_label}")
+                render_val = question.options.get("render")
+                if render_val:
+                    lines.append(f"render: {render_val}")
 
         # Branching rules
         conditions = SurveyQuestionCondition.objects.filter(question=question)
