@@ -125,20 +125,22 @@ az storage blob upload \
 
 ## Media File Backups
 
-Media files are stored in the `media_data` Docker volume:
+Media files (question images, intro content images, admin icons) are stored in the `media_data` Docker volume (mounted at `/app/media`):
 
 ```bash
 # Backup media files
 docker run --rm \
-  -v census_media_data:/media \
+  -v checktick_media_data:/media \
   -v $(pwd)/backups:/backup \
   alpine tar czf /backup/media-$(date +%Y%m%d).tar.gz /media
 
 # List media volume contents
 docker run --rm \
-  -v census_media_data:/media \
+  -v checktick_media_data:/media \
   alpine ls -lah /media
 ```
+
+On Northflank, the equivalent is the persistent volume (e.g. `CheckTickImageVolume`) mounted at `/app/media`. Back up via Northflank's volume snapshot feature or by running the tar command in a shell on the service.
 
 ## Restore Procedures
 
