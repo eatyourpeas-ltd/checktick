@@ -154,3 +154,69 @@ def test_preview_simulate_estimated_time(client, owner, section_menu_survey):
     assert res.status_code == 200
     html = res.content.decode()
     assert "~3 min" in html
+
+
+@pytest.mark.django_db
+def test_preview_simulate_multiple_groups_repeated_keys(
+    client, owner, section_menu_survey
+):
+    """Selecting multiple checkboxes (repeated query keys) filters to all selected.
+
+    The simulate panel submits multiple checkboxes all named
+    ``simulate_groups``, which the browser serialises as repeated query keys
+    (``?simulate_groups=1&simulate_groups=3``). Previously the view used
+    ``request.GET.get()`` which only returned the first value, silently
+    dropping the rest.
+    """
+    client.force_login(owner)
+    # Simulate selecting both Medical (g2) and Lifestyle (g3) via repeated keys
+    res = client.get(
+        reverse("surveys:preview", kwargs={"slug": section_menu_survey.slug})
+        + f"?simulate_groups={section_menu_survey._g2.id}"
+        + f"&simulate_groups={section_menu_survey._g3.id}"
+    )
+    assert res.status_code == 200
+    html = res.content.decode()
+    # Demographics (mandatory) should appear
+    assert "Age" in html
+    # Medical (selected) should appear
+    assert "Condition" in html
+    # Lifestyle (selected) should appear
+    assert "Exercise" in html
+
+
+@pytest.mark.django_db
+def test_preview_simulate_multiple_groups_comma_separated(
+    client, owner, section_menu_survey
+):
+    """Comma-separated simulate_groups values are still supported for shareable URLs."""
+    client.force_login(owner)
+    res = client.get(
+        reverse("surveys:preview", kwargs={"slug": section_menu_survey.slug})
+        + f"?simulate_groups={section_menu_survey._g2.id},{section_menu_survey._g3.id}"
+    )
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Age" in html
+    assert "Condition" in html
+    assert "Exercise" in html
+
+
+@pytest.mark.django_db
+def test_preview_simulate_checkbox_state_reflects_selection(
+    client, owner, section_menu_survey
+):
+    """The simulate panel checkboxes stay checked for the selected groups."""
+    client.force_login(owner)
+    res = client.get(
+        reverse("surveys:preview", kwargs={"slug": section_menu_survey.slug})
+        + f"?simulate_groups={section_menu_survey._g2.id}"
+        + f"&simulate_groups={section_menu_survey._g3.id}"
+    )
+    assert res.status_code == 200
+    html = res.content.decode()
+    # Both pickable checkboxes should be checked
+    g2_checked = f'value="{section_menu_survey._g2.id}"' in html and "checked" in html.split(f'value="{section_menu_survey._g2.id}"', 1)[1].split("/>", 1)[0]
+    g3_checked = f'value="{section_menu_survey._g3.id}"' in html and "checked" in html.split(f'value="{section_menu_survey._g3.id}"', 1)[1].split("/>", 1)[0]
+    assert g2_checked, "Medical checkbox not checked after selecting it"
+    assert g3_checked, "Lifestyle checkbox not checked after selecting it"

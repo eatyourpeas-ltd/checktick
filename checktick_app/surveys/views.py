@@ -1495,7 +1495,20 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         }
         sim_raw = request.GET.get("simulate_groups", "")
         if sim_raw:
-            sim_ids = {int(x) for x in sim_raw.split(",") if str(x).isdigit()}
+            # The simulate panel submits multiple checkboxes all named
+            # ``simulate_groups``, which the browser serialises as repeated
+            # query keys (``?simulate_groups=1&simulate_groups=3``).
+            # ``request.GET.get()`` only returns the first value, silently
+            # dropping the rest, so use ``getlist()`` and also tolerate
+            # comma-separated values for bookmarked/shareable URLs.
+            sim_values: list[str] = list(request.GET.getlist("simulate_groups"))
+            # Flatten any comma-separated entries (e.g. "1,3") into individual ids.
+            sim_ids: set[int] = set()
+            for entry in sim_values:
+                for piece in str(entry).split(","):
+                    piece = piece.strip()
+                    if piece.isdigit():
+                        sim_ids.add(int(piece))
             simulated_group_ids = list((sim_ids | mandatory_ids))
 
     # RCT: simulate arm (step 8). If ``?simulate_arm=<arm_id>`` is present,
