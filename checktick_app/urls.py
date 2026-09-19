@@ -127,8 +127,8 @@ else:
     # This is fine for the small number of uploaded images (question
     # images, intro content images, admin icons). The volume must be
     # mounted at MEDIA_ROOT (/app/media) in the hosting provider.
-    from django.views.static import serve as _media_serve
     from django.urls import re_path as _re_path
+    from django.views.static import serve as _media_serve
 
     urlpatterns += [
         _re_path(

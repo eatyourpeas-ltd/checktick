@@ -5,6 +5,7 @@ hold an optional landing/intro content block (heading, subtitle, body
 markdown, links) stored directly on the menu model. This is edited
 inline on the Organise page config card — no separate question needed.
 """
+
 from django.db import migrations, models
 
 

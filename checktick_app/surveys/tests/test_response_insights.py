@@ -473,7 +473,11 @@ def test_reorder_preserves_likert_categories_dict_wrapper_order():
 
     class FakeQ:
         options = [
-            {"type": "categories", "labels": ["Disagree", "Neutral", "Agree"], "render": "radio"}
+            {
+                "type": "categories",
+                "labels": ["Disagree", "Neutral", "Agree"],
+                "render": "radio",
+            }
         ]
 
     options = [

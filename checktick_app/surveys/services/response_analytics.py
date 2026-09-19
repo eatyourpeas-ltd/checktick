@@ -535,11 +535,14 @@ def _reorder_by_question_options(question, options: list[dict]) -> list[dict]:
         if isinstance(opt, dict):
             if opt.get("type") == "categories" and isinstance(opt.get("labels"), list):
                 flat_labels.extend(str(label) for label in opt["labels"])
-            elif opt.get("type") == "number-scale" and opt.get("min") is not None and opt.get("max") is not None:
+            elif (
+                opt.get("type") == "number-scale"
+                and opt.get("min") is not None
+                and opt.get("max") is not None
+            ):
                 try:
                     flat_labels.extend(
-                        str(n)
-                        for n in range(int(opt["min"]), int(opt["max"]) + 1)
+                        str(n) for n in range(int(opt["min"]), int(opt["max"]) + 1)
                     )
                 except (TypeError, ValueError):
                     pass

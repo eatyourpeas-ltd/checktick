@@ -6685,9 +6685,7 @@ class PlatformKeyVersion(models.Model):
         status = (
             "active"
             if self.is_active()
-            else "retired"
-            if self.retired_at
-            else "pending"
+            else "retired" if self.retired_at else "pending"
         )
         return f"Platform Key {self.version} ({status})"
 
