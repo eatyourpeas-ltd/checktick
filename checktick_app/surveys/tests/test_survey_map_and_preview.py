@@ -129,17 +129,26 @@ def test_preview_simulate_filters_questions(client, owner, section_menu_survey):
 
 
 @pytest.mark.django_db
-def test_preview_simulate_reset_shows_all(client, owner, section_menu_survey):
-    """Without simulate_groups, all questions appear in preview."""
+def test_preview_default_shows_mandatory_only(client, owner, section_menu_survey):
+    """By default (no simulate_groups), only mandatory sections appear in preview.
+
+    Pickable sections are hidden until the author ticks them in the simulate
+    panel, mirroring what a participant sees before making a selection.
+    """
     client.force_login(owner)
     res = client.get(
         reverse("surveys:preview", kwargs={"slug": section_menu_survey.slug})
     )
     assert res.status_code == 200
     html = res.content.decode()
+    # Demographics (mandatory) should appear
     assert "Age" in html
-    assert "Condition" in html
-    assert "Exercise" in html
+    # Medical (pickable) should NOT appear by default
+    assert "Condition" not in html
+    # Lifestyle (pickable) should NOT appear by default
+    assert "Exercise" not in html
+    # Reset button should not show when no explicit selection has been made
+    assert "Reset" not in html
 
 
 @pytest.mark.django_db
@@ -220,3 +229,5 @@ def test_preview_simulate_checkbox_state_reflects_selection(
     g3_checked = f'value="{section_menu_survey._g3.id}"' in html and "checked" in html.split(f'value="{section_menu_survey._g3.id}"', 1)[1].split("/>", 1)[0]
     assert g2_checked, "Medical checkbox not checked after selecting it"
     assert g3_checked, "Lifestyle checkbox not checked after selecting it"
+    # Reset button should appear once an explicit selection is made
+    assert "Reset" in html

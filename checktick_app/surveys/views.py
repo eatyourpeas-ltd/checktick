@@ -1475,6 +1475,7 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
     # to those groups (plus mandatory ones).
     simulated_group_ids: list[int] | None = None
     section_menu_preview = None
+    section_menu_has_explicit_selection = False
     if survey.layout == Survey.Layout.SECTION_MENU:
         menu = getattr(survey, "section_menu", None)
         if menu is None:
@@ -1488,13 +1489,17 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
             .select_related("group")
             .order_by("order")
         )
+        # Default preview: only mandatory sections render (pickable sections
+        # are hidden until the author ticks them in the simulate panel).
+        # This mirrors what a participant sees before they pick anything.
+        simulated_group_ids = list(mandatory_ids)
         section_menu_preview = {
             "menu": menu,
             "pickable_items": pickable_items,
             "mandatory_ids": mandatory_ids,
         }
-        sim_raw = request.GET.get("simulate_groups", "")
-        if sim_raw:
+        if "simulate_groups" in request.GET:
+            section_menu_has_explicit_selection = True
             # The simulate panel submits multiple checkboxes all named
             # ``simulate_groups``, which the browser serialises as repeated
             # query keys (``?simulate_groups=1&simulate_groups=3``).
@@ -1686,6 +1691,7 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         # Section menu simulate selection panel (step 9).
         "section_menu_preview": section_menu_preview,
         "simulated_group_ids": simulated_group_ids or [],
+        "section_menu_has_explicit_selection": section_menu_has_explicit_selection,
         # RCT simulate arm panel (step 8).
         "rct_preview": rct_preview,
         # Staged simulate phase panel (step 6).

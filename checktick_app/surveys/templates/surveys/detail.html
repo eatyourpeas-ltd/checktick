@@ -268,7 +268,7 @@
       </label>
       {% endfor %}
       <button type="submit" class="btn btn-xs btn-primary ml-2">{% trans 'Apply' %}</button>
-      {% if simulated_group_ids %}
+      {% if section_menu_has_explicit_selection %}
       <a href="{{ request.path }}" class="btn btn-xs btn-ghost">{% trans 'Reset' %}</a>
       {% endif %}
     </form>

@@ -257,10 +257,12 @@ save-and-resume.
 ## Previewing a Section menu survey
 
 The preview page includes a **Simulate section selection** panel that
-lets you pre-tick a subset of pickable sections. This shows you exactly
-what a participant would see for a given selection, without needing a
-real participant. Click **Apply** to filter the preview, or **Reset** to
-show all sections.
+lets you pre-tick a subset of pickable sections. By default the preview
+shows only the **mandatory** sections — pickable sections are hidden
+until you tick them, mirroring what a participant sees before they make
+their selection. Tick the sections you want to preview and click
+**Apply** to add them, or **Reset** to return to the mandatory-only
+baseline.
 
 ## Survey Map
 
