@@ -6252,8 +6252,17 @@ def _parse_intro_content_form(post) -> dict | None:
     """Parse intro content fields from a POST form into a dict (or None).
 
     Fields: intro_enabled (checkbox), intro_heading, intro_subtitle,
-    intro_body_md, intro_link_label_N / intro_link_url_N pairs.
+    intro_body_md, intro_image_url, intro_image_alt,
+    intro_link_label_N / intro_link_url_N pairs.
+
+    Link URLs are sanitised via ``sanitise_link_url`` (same as content
+    block questions) so ``javascript:`` and other dangerous schemes never
+    reach the rendered page. Image URLs must be relative paths (starting
+    with ``/``) or use ``http``/``https`` — this prevents ``data:`` URI
+    phishing and ``javascript:`` injection.
     """
+    from checktick_app.core.markdown_safety import sanitise_link_url
+
     if not post.get("intro_enabled"):
         return None
     links: list[dict[str, str]] = []
@@ -6262,15 +6271,24 @@ def _parse_intro_content_form(post) -> dict | None:
     for i, label in enumerate(link_labels):
         url = link_urls[i] if i < len(link_urls) else ""
         label = (label or "").strip()
-        url = (url or "").strip()
+        url = sanitise_link_url((url or "").strip())
         if label and url:
             links.append({"label": label, "url": url})
+    # Image URL: must be a relative path (e.g. /media/...) or an
+    # http/https URL. Reject data:, javascript:, and other schemes.
+    raw_image_url = (post.get("intro_image_url", "") or "").strip()
+    image_url = ""
+    if raw_image_url:
+        if raw_image_url.startswith("/"):
+            image_url = raw_image_url
+        else:
+            image_url = sanitise_link_url(raw_image_url)
     content: dict = {
         "heading": (post.get("intro_heading", "") or "").strip(),
         "subtitle": (post.get("intro_subtitle", "") or "").strip(),
         "body_md": (post.get("intro_body_md", "") or "").strip(),
         "links": links,
-        "image_url": (post.get("intro_image_url", "") or "").strip(),
+        "image_url": image_url,
         "image_alt": (post.get("intro_image_alt", "") or "").strip(),
     }
     # Return None if completely empty.

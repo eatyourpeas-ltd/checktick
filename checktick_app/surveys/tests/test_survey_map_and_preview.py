@@ -458,3 +458,116 @@ def test_section_menu_intro_image_upload(client, owner, section_menu_survey):
     assert data["success"] is True
     assert data["image_url"].startswith("/media/intro_images/")
     assert data["alt"] == "Test logo"
+
+
+@pytest.mark.django_db
+def test_section_menu_intro_rejects_javascript_link_url(
+    client, owner, section_menu_survey
+):
+    """Link URLs with javascript: scheme are stripped at save time."""
+    client.force_login(owner)
+    res = client.post(
+        reverse("surveys:groups", kwargs={"slug": section_menu_survey.slug}),
+        {
+            "action": "save_section_menu",
+            "prompt_text": "Pick sections",
+            "min_selected": "1",
+            "max_selected": "",
+            "order_mode": "authored",
+            "intro_enabled": "1",
+            "intro_heading": "Welcome",
+            "intro_body_md": "",
+            "intro_link_labels": ["Evil"],
+            "intro_link_urls": ["javascript:alert(1)"],
+        },
+        follow=False,
+    )
+    assert res.status_code == 302
+    section_menu_survey.section_menu.refresh_from_db()
+    intro = section_menu_survey.section_menu.intro_content
+    # The javascript: URL should have been stripped — link dropped entirely
+    assert intro["links"] == []
+
+
+@pytest.mark.django_db
+def test_section_menu_intro_rejects_javascript_image_url(
+    client, owner, section_menu_survey
+):
+    """Image URLs with javascript: scheme are stripped at save time."""
+    client.force_login(owner)
+    res = client.post(
+        reverse("surveys:groups", kwargs={"slug": section_menu_survey.slug}),
+        {
+            "action": "save_section_menu",
+            "prompt_text": "Pick sections",
+            "min_selected": "1",
+            "max_selected": "",
+            "order_mode": "authored",
+            "intro_enabled": "1",
+            "intro_heading": "Welcome",
+            "intro_body_md": "",
+            "intro_image_url": "javascript:alert(1)",
+            "intro_image_alt": "",
+        },
+        follow=False,
+    )
+    assert res.status_code == 302
+    section_menu_survey.section_menu.refresh_from_db()
+    intro = section_menu_survey.section_menu.intro_content
+    assert intro["image_url"] == ""
+
+
+@pytest.mark.django_db
+def test_section_menu_intro_rejects_data_uri_image_url(
+    client, owner, section_menu_survey
+):
+    """Image URLs with data: scheme are stripped at save time."""
+    client.force_login(owner)
+    res = client.post(
+        reverse("surveys:groups", kwargs={"slug": section_menu_survey.slug}),
+        {
+            "action": "save_section_menu",
+            "prompt_text": "Pick sections",
+            "min_selected": "1",
+            "max_selected": "",
+            "order_mode": "authored",
+            "intro_enabled": "1",
+            "intro_heading": "Welcome",
+            "intro_body_md": "",
+            "intro_image_url": "data:text/html,<script>alert(1)</script>",
+            "intro_image_alt": "",
+        },
+        follow=False,
+    )
+    assert res.status_code == 302
+    section_menu_survey.section_menu.refresh_from_db()
+    intro = section_menu_survey.section_menu.intro_content
+    assert intro["image_url"] == ""
+
+
+@pytest.mark.django_db
+def test_section_menu_intro_accepts_relative_image_url(
+    client, owner, section_menu_survey
+):
+    """Relative image URLs (e.g. /media/...) are allowed."""
+    client.force_login(owner)
+    res = client.post(
+        reverse("surveys:groups", kwargs={"slug": section_menu_survey.slug}),
+        {
+            "action": "save_section_menu",
+            "prompt_text": "Pick sections",
+            "min_selected": "1",
+            "max_selected": "",
+            "order_mode": "authored",
+            "intro_enabled": "1",
+            "intro_heading": "Welcome",
+            "intro_body_md": "",
+            "intro_image_url": "/media/intro_images/test/logo.png",
+            "intro_image_alt": "Logo",
+        },
+        follow=False,
+    )
+    assert res.status_code == 302
+    section_menu_survey.section_menu.refresh_from_db()
+    intro = section_menu_survey.section_menu.intro_content
+    assert intro["image_url"] == "/media/intro_images/test/logo.png"
