@@ -20,6 +20,27 @@
 
       <h1 class="text-3xl font-bold mb-4">{{ survey.name }}</h1>
 
+      {% if intro_block %}
+      <div class="content-block prose max-w-none text-left mb-6">
+        {% if intro_block.heading %}
+        <h2 class="text-xl font-semibold">{{ intro_block.heading }}</h2>
+        {% endif %}
+        {% if intro_block.subtitle %}
+        <p class="text-base opacity-70 -mt-2">{{ intro_block.subtitle }}</p>
+        {% endif %}
+        {% if intro_block.html %}{{ intro_block.html|safe }}{% endif %}
+        {% if intro_block.links %}
+        <ul class="list-none pl-0 mt-2">
+          {% for link in intro_block.links %}
+          <li class="mt-1">
+            <a href="{{ link.url }}" rel="noopener noreferrer" target="_blank" class="link link-primary">{{ link.label }}</a>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+      {% endif %}
+
       {% if current_window %}
         {% with order=current_window.0 start=current_window.1 end=current_window.2 %}
           <div class="alert alert-success mb-6">

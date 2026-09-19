@@ -125,6 +125,111 @@ def test_window_open_renders_landing_page(client, owner, org, participant):
     assert "Pain level" not in html  # Questions not rendered on landing page
 
 
+# --- intro content block on diary landing ---
+
+
+@pytest.mark.django_db
+def test_diary_landing_shows_intro_block(client, owner, org, participant):
+    """When an intro_content_block is set, it renders above the diary landing."""
+    s = _make_diary_survey(owner, org)
+    menu = _make_fixed_interval_menu(s, interval_hours=6)
+    intro = SurveyQuestion.objects.create(
+        survey=s,
+        text="Welcome",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        order=10,
+        options={"heading": "Welcome", "body_md": "Please read this."},
+    )
+    menu.intro_content_block = intro
+    menu.save(update_fields=["intro_content_block"])
+
+    client.force_login(participant)
+    res = client.get(reverse("surveys:take", kwargs={"slug": s.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Welcome" in html
+    assert "Please read this." in html
+
+
+@pytest.mark.django_db
+def test_diary_landing_no_intro_block_by_default(client, owner, org, participant):
+    """Without an intro_content_block, the landing renders normally (no intro)."""
+    s = _make_diary_survey(owner, org)
+    _make_fixed_interval_menu(s, interval_hours=6)
+
+    client.force_login(participant)
+    res = client.get(reverse("surveys:take", kwargs={"slug": s.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert 'class="content-block prose' not in html
+
+
+@pytest.mark.django_db
+def test_diary_save_intro_block(client, owner, org):
+    """Saving the diary config form persists the intro_content_block FK."""
+    s = _make_diary_survey(owner, org)
+    menu = _make_fixed_interval_menu(s, interval_hours=6)
+    intro = SurveyQuestion.objects.create(
+        survey=s,
+        text="Consent",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        order=10,
+        options={"heading": "Consent", "body_md": "Do you agree?"},
+    )
+    client.force_login(owner)
+    res = client.post(
+        reverse("surveys:groups", kwargs={"slug": s.slug}),
+        {
+            "action": "save_diary_menu",
+            "schedule_type": "fixed_interval",
+            "anchor": "enrolment",
+            "interval_hours": "6",
+            "compliance_threshold_pct": "80",
+            "grace_minutes": "30",
+            "show_progress": "1",
+            "intro_content_block": str(intro.id),
+        },
+        follow=False,
+    )
+    assert res.status_code == 302
+    menu.refresh_from_db()
+    assert menu.intro_content_block_id == intro.id
+
+
+@pytest.mark.django_db
+def test_diary_save_clears_intro_block(client, owner, org):
+    """Setting intro_content_block to empty string clears it."""
+    s = _make_diary_survey(owner, org)
+    menu = _make_fixed_interval_menu(s, interval_hours=6)
+    intro = SurveyQuestion.objects.create(
+        survey=s,
+        text="Welcome",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        order=10,
+    )
+    menu.intro_content_block = intro
+    menu.save(update_fields=["intro_content_block"])
+
+    client.force_login(owner)
+    res = client.post(
+        reverse("surveys:groups", kwargs={"slug": s.slug}),
+        {
+            "action": "save_diary_menu",
+            "schedule_type": "fixed_interval",
+            "anchor": "enrolment",
+            "interval_hours": "6",
+            "compliance_threshold_pct": "80",
+            "grace_minutes": "30",
+            "show_progress": "1",
+            "intro_content_block": "",
+        },
+        follow=False,
+    )
+    assert res.status_code == 302
+    menu.refresh_from_db()
+    assert menu.intro_content_block_id is None
+
+
 # --- window open: entry form renders with ?entry=1 ---
 
 

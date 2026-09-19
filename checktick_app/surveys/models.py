@@ -4031,6 +4031,18 @@ class SectionMenu(models.Model):
         default=False,
         help_text="Show per-section estimated time on the picker page.",
     )
+    intro_content_block = models.ForeignKey(
+        "surveys.SurveyQuestion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="section_menu_intro",
+        help_text=(
+            "An optional content block rendered above the picker page as a "
+            "landing/intro (e.g. welcome text, consent, privacy notice). "
+            "Must be a content_block question belonging to this survey."
+        ),
+    )
 
     def __str__(self) -> str:
         return f"SectionMenu for {self.survey.name}"
@@ -4235,8 +4247,7 @@ class StagedPhase(models.Model):
     start_offset_days = models.PositiveIntegerField(
         default=0,
         help_text=(
-            "Days after the anchor when this phase opens. 0 = opens at the "
-            "anchor time."
+            "Days after the anchor when this phase opens. 0 = opens at the anchor time."
         ),
     )
     end_offset_days = models.PositiveIntegerField(
@@ -4410,8 +4421,7 @@ class DelphiRound(models.Model):
     start_offset_days = models.PositiveIntegerField(
         default=0,
         help_text=(
-            "Days after the anchor when this round opens. 0 = opens at the "
-            "anchor time."
+            "Days after the anchor when this round opens. 0 = opens at the anchor time."
         ),
     )
     end_offset_days = models.PositiveIntegerField(
@@ -4610,6 +4620,19 @@ class DiaryMenu(models.Model):
         help_text=(
             "Show participants which window they are in and their "
             "compliance summary on the diary landing page."
+        ),
+    )
+    intro_content_block = models.ForeignKey(
+        "surveys.SurveyQuestion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="diary_menu_intro",
+        help_text=(
+            "An optional content block rendered above the diary landing "
+            "page as a landing/intro (e.g. welcome text, consent, "
+            "privacy notice). Must be a content_block question belonging "
+            "to this survey."
         ),
     )
 
@@ -6667,7 +6690,9 @@ class PlatformKeyVersion(models.Model):
         status = (
             "active"
             if self.is_active()
-            else "retired" if self.retired_at else "pending"
+            else "retired"
+            if self.retired_at
+            else "pending"
         )
         return f"Platform Key {self.version} ({status})"
 

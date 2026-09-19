@@ -377,6 +377,19 @@
             </label>
           </fieldset>
 
+          {% if content_block_questions %}
+          <div>
+            <label class="label text-xs" for="id_intro_content_block">{% trans 'Intro / landing content block' %}</label>
+            <select id="id_intro_content_block" name="intro_content_block" class="select select-bordered select-sm w-full">
+              <option value="">{% trans '— None —' %}</option>
+              {% for q in content_block_questions %}
+              <option value="{{ q.id }}" {% if section_menu.intro_content_block_id == q.id %}selected{% endif %}>{{ q.text|truncatechars:60 }}</option>
+              {% endfor %}
+            </select>
+            <p class="text-xs text-base-content/50 mt-0.5">{% trans 'Rendered above the picker page as a welcome, consent, or privacy notice.' %}</p>
+          </div>
+          {% endif %}
+
           <div class="flex gap-2 pt-1">
             <button type="submit" class="btn btn-primary btn-sm">{% trans 'Save layout' %}</button>
             <a class="btn btn-ghost btn-sm" href="/surveys/{{ survey.slug }}/survey-map/">{% trans 'Review in Survey Map' %}</a>
@@ -942,6 +955,19 @@
               <span class="text-xs text-base-content/60">{% trans 'Show participants their compliance summary' %}</span>
             </label>
           </fieldset>
+
+          {% if content_block_questions %}
+          <div>
+            <label class="label text-xs" for="id_diary_intro_content_block">{% trans 'Intro / landing content block' %}</label>
+            <select id="id_diary_intro_content_block" name="intro_content_block" class="select select-bordered select-sm w-full">
+              <option value="">{% trans '— None —' %}</option>
+              {% for q in content_block_questions %}
+              <option value="{{ q.id }}" {% if diary_menu.intro_content_block_id == q.id %}selected{% endif %}>{{ q.text|truncatechars:60 }}</option>
+              {% endfor %}
+            </select>
+            <p class="text-xs text-base-content/50 mt-0.5">{% trans 'Rendered above the diary landing page as a welcome, consent, or privacy notice.' %}</p>
+          </div>
+          {% endif %}
 
           <button type="submit" class="btn btn-sm btn-primary">{% trans 'Save configuration' %}</button>
         </form>

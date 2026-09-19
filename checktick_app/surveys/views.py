@@ -6178,6 +6178,7 @@ def _render_section_menu_picker(
         )
     mandatory_rows = [r for r in picker_rows if r["is_mandatory"]]
     pickable_rows = [r for r in picker_rows if not r["is_mandatory"]]
+    intro_block = _build_intro_content_block(menu.intro_content_block)
     ctx = {
         "survey": survey,
         "menu": menu,
@@ -6188,6 +6189,7 @@ def _render_section_menu_picker(
         "min_selected": menu.min_selected,
         "max_selected": menu.max_selected,
         "is_preview": False,
+        "intro_block": intro_block,
         "show_progress": progress is not None,
         "progress_percentage": (
             progress.calculate_progress_percentage() if progress else 0
@@ -6222,6 +6224,29 @@ def _collect_matrix_section_answers(survey: Survey, post) -> dict:
         if followups:
             answers[f"{q.id}_followup"] = followups
     return answers
+
+
+def _build_intro_content_block(question: SurveyQuestion | None) -> dict | None:
+    """Build a landing-block context dict from a content_block question.
+
+    Returns ``None`` if the question is not a content block. Used by the
+    Section menu picker and Diary landing pages to render an optional
+    intro/landing content block (welcome text, consent, privacy notice)
+    above the layout-specific UI. The Matrix landing page uses the same
+    shape via its own heuristic (first question of the first group).
+    """
+    if question is None or question.type != SurveyQuestion.Types.CONTENT_BLOCK:
+        return None
+    from checktick_app.core.markdown_safety import render_content_block_markdown
+
+    opts = question.options if isinstance(question.options, dict) else {}
+    return {
+        "text": question.text,
+        "heading": opts.get("heading", ""),
+        "subtitle": opts.get("subtitle", ""),
+        "html": render_content_block_markdown(opts.get("body_md", "")),
+        "links": opts.get("links", []),
+    }
 
 
 def _render_matrix_landing(
@@ -6437,6 +6462,7 @@ def _render_diary_landing(
     nxt = _diary_next_window(menu, anchor=anchor, now=now)
     entries = list(progress.diary_entries.filter(menu=menu).order_by("order", "id"))
     compliance = _diary_compliance(menu, entries, anchor=anchor, now=now)
+    intro_block = _build_intro_content_block(menu.intro_content_block)
     ctx = {
         "survey": survey,
         "diary_menu": menu,
@@ -6446,6 +6472,7 @@ def _render_diary_landing(
         "entries": entries,
         "is_preview": False,
         "show_progress": menu.show_progress,
+        "intro_block": intro_block,
     }
     return render(request, "surveys/diary_landing.html", ctx)
 
@@ -7896,6 +7923,26 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             menu.order_mode = order_mode
         menu.show_select_all = bool(request.POST.get("show_select_all"))
         menu.show_estimated_time = bool(request.POST.get("show_estimated_time"))
+        # Intro content block: optional FK to a content_block question.
+        # Validate it belongs to this survey and is actually a content block.
+        intro_id_raw = (request.POST.get("intro_content_block", "") or "").strip()
+        if intro_id_raw:
+            try:
+                intro_q = SurveyQuestion.objects.get(
+                    id=int(intro_id_raw), survey=survey
+                )
+                if intro_q.type == SurveyQuestion.Types.CONTENT_BLOCK:
+                    menu.intro_content_block = intro_q
+                else:
+                    messages.warning(
+                        request,
+                        _("The selected intro block is not a content block — ignored."),
+                    )
+                    menu.intro_content_block = None
+            except (ValueError, SurveyQuestion.DoesNotExist):
+                menu.intro_content_block = None
+        else:
+            menu.intro_content_block = None
         menu.save()
 
         # Sync items (create new, update order) before applying per-row edits.
@@ -8323,6 +8370,25 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         except ValueError:
             menu.grace_minutes = 30
         menu.show_progress = bool(request.POST.get("show_progress"))
+        # Intro content block: optional FK to a content_block question.
+        intro_id_raw = (request.POST.get("intro_content_block", "") or "").strip()
+        if intro_id_raw:
+            try:
+                intro_q = SurveyQuestion.objects.get(
+                    id=int(intro_id_raw), survey=survey
+                )
+                if intro_q.type == SurveyQuestion.Types.CONTENT_BLOCK:
+                    menu.intro_content_block = intro_q
+                else:
+                    messages.warning(
+                        request,
+                        _("The selected intro block is not a content block — ignored."),
+                    )
+                    menu.intro_content_block = None
+            except (ValueError, SurveyQuestion.DoesNotExist):
+                menu.intro_content_block = None
+        else:
+            menu.intro_content_block = None
         menu.save()
         messages.success(request, _("Diary configuration saved."))
         return redirect("surveys:groups", slug=slug)
@@ -9063,6 +9129,12 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "diary_schedule_choices": diary_schedule_choices,
         "diary_anchor_choices": diary_anchor_choices,
         "diary_warnings": diary_warnings,
+        # Content blocks available as intro/landing for section_menu and diary.
+        "content_block_questions": list(
+            survey.questions.filter(type=SurveyQuestion.Types.CONTENT_BLOCK).order_by(
+                "order", "id"
+            )
+        ),
         # Layout tier gating (see tier_limits.py allowed_layouts).
         "allowed_layouts": get_allowed_layouts(request.user),
     }
@@ -11559,7 +11631,6 @@ def builder_question_create(request: HttpRequest, slug: str) -> HttpResponse:
     # Look up dataset if provided (with access control)
     dataset = None
     if dataset_key:
-
         from .models import DataSet
         from .permissions import survey_dataset_scope_q
 
@@ -11745,7 +11816,6 @@ def builder_group_question_create(
     # Look up dataset if provided (with access control)
     dataset = None
     if dataset_key:
-
         from .models import DataSet
         from .permissions import survey_dataset_scope_q
 
@@ -12336,7 +12406,6 @@ def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResp
 
     # Look up dataset if provided (with access control)
     if dataset_key:
-
         from .models import DataSet
         from .permissions import survey_dataset_scope_q
 
@@ -12376,7 +12445,6 @@ def builder_group_question_edit(
 
     # Look up dataset if provided (with access control)
     if dataset_key:
-
         from .models import DataSet
         from .permissions import survey_dataset_scope_q
 
@@ -12561,7 +12629,9 @@ def _validate_and_process_image(uploaded_file) -> tuple[bool, str]:
             img_format = (
                 "PNG"
                 if ext == ".png"
-                else "JPEG" if ext in (".jpg", ".jpeg") else "WEBP"
+                else "JPEG"
+                if ext in (".jpg", ".jpeg")
+                else "WEBP"
             )
             img.save(buffer, format=img_format, quality=85)
             buffer.seek(0)
@@ -13698,7 +13768,6 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                         dataset = None
                         dataset_key = q.get("dataset_key")
                         if dataset_key:
-
                             from .models import DataSet
                             from .permissions import (
                                 survey_dataset_scope_q as _scope_q,

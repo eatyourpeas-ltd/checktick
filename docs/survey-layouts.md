@@ -264,6 +264,19 @@ their selection. Tick the sections you want to preview and click
 **Apply** to add them, or **Reset** to return to the mandatory-only
 baseline.
 
+## Intro / landing content block
+
+You can render a content block (welcome text, consent statement,
+privacy notice, etc.) above the picker page by selecting it from the
+**Intro / landing content block** dropdown in the Section menu
+configuration card on the Organise page. Only content block questions
+in this survey appear in the dropdown. The block renders above the
+picker prompt every time the picker is shown, including when the
+participant returns via **Change sections**.
+
+To create a content block, add a question of type **Content block** in
+the builder (see [Content blocks](#content-blocks) below).
+
 ## Survey Map
 
 The [Survey Map](branching-and-repeats.md#the-survey-map) shows the full
