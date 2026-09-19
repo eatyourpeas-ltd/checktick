@@ -352,3 +352,109 @@ def test_section_menu_save_clears_intro(client, owner, section_menu_survey):
     assert res.status_code == 302
     section_menu_survey.section_menu.refresh_from_db()
     assert section_menu_survey.section_menu.intro_content is None
+
+
+@pytest.mark.django_db
+def test_section_menu_save_intro_with_image(client, owner, section_menu_survey):
+    """Saving with an image URL stores it in intro_content."""
+    client.force_login(owner)
+    res = client.post(
+        reverse("surveys:groups", kwargs={"slug": section_menu_survey.slug}),
+        {
+            "action": "save_section_menu",
+            "prompt_text": "Pick sections",
+            "min_selected": "1",
+            "max_selected": "",
+            "order_mode": "authored",
+            "intro_enabled": "1",
+            "intro_heading": "Welcome",
+            "intro_subtitle": "",
+            "intro_body_md": "",
+            "intro_image_url": "/media/intro_images/test/logo.png",
+            "intro_image_alt": "Logo",
+        },
+        follow=False,
+    )
+    assert res.status_code == 302
+    section_menu_survey.section_menu.refresh_from_db()
+    intro = section_menu_survey.section_menu.intro_content
+    assert intro["image_url"] == "/media/intro_images/test/logo.png"
+    assert intro["image_alt"] == "Logo"
+
+
+@pytest.mark.django_db
+def test_section_menu_picker_renders_image(client, owner, org, section_menu_survey):
+    """The intro image renders in the picker page."""
+    section_menu_survey.status = Survey.Status.PUBLISHED
+    section_menu_survey.visibility = Survey.Visibility.AUTHENTICATED
+    section_menu_survey.allow_any_authenticated = True
+    section_menu_survey.save(
+        update_fields=["status", "visibility", "allow_any_authenticated"]
+    )
+    section_menu_survey.section_menu.intro_content = {
+        "heading": "Welcome",
+        "image_url": "/media/intro_images/test/logo.png",
+        "image_alt": "Study logo",
+    }
+    section_menu_survey.section_menu.save(update_fields=["intro_content"])
+
+    from django.contrib.auth.models import User
+
+    participant = User.objects.create_user(
+        username="picker_img", password=TEST_PASSWORD
+    )
+    client.force_login(participant)
+    res = client.get(reverse("surveys:take", kwargs={"slug": section_menu_survey.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "/media/intro_images/test/logo.png" in html
+    assert "Study logo" in html
+
+
+@pytest.mark.django_db
+def test_section_menu_intro_image_upload(client, owner, section_menu_survey):
+    """The image upload endpoint stores the file and returns a URL."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    client.force_login(owner)
+    # Create a minimal valid PNG (1x1 pixel)
+    import struct
+    import zlib
+
+    def _minimal_png():
+        header = b"\x89PNG\r\n\x1a\n"
+        ihdr_data = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+        ihdr = b"IHDR" + ihdr_data
+        ihdr_chunk = (
+            struct.pack(">I", len(ihdr_data))
+            + ihdr
+            + struct.pack(">I", zlib.crc32(ihdr) & 0xFFFFFFFF)
+        )
+        idat_data = zlib.compress(b"\x00\xff\x00\x00")
+        idat = b"IDAT" + idat_data
+        idat_chunk = (
+            struct.pack(">I", len(idat_data))
+            + idat
+            + struct.pack(">I", zlib.crc32(idat) & 0xFFFFFFFF)
+        )
+        iend = b"IEND"
+        iend_chunk = (
+            struct.pack(">I", 0)
+            + iend
+            + struct.pack(">I", zlib.crc32(iend) & 0xFFFFFFFF)
+        )
+        return header + ihdr_chunk + idat_chunk + iend_chunk
+
+    img = SimpleUploadedFile("test.png", _minimal_png(), content_type="image/png")
+    res = client.post(
+        reverse(
+            "surveys:section_menu_intro_image_upload",
+            kwargs={"slug": section_menu_survey.slug},
+        ),
+        {"image": img, "alt": "Test logo"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    assert data["image_url"].startswith("/media/intro_images/")
+    assert data["alt"] == "Test logo"

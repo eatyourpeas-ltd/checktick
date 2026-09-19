@@ -6243,6 +6243,8 @@ def _build_intro_content(raw: dict | None) -> dict | None:
         "subtitle": str(raw.get("subtitle", "") or ""),
         "html": render_content_block_markdown(raw.get("body_md", "") or ""),
         "links": raw.get("links", []) or [],
+        "image_url": str(raw.get("image_url", "") or ""),
+        "image_alt": str(raw.get("image_alt", "") or ""),
     }
 
 
@@ -6268,6 +6270,8 @@ def _parse_intro_content_form(post) -> dict | None:
         "subtitle": (post.get("intro_subtitle", "") or "").strip(),
         "body_md": (post.get("intro_body_md", "") or "").strip(),
         "links": links,
+        "image_url": (post.get("intro_image_url", "") or "").strip(),
+        "image_alt": (post.get("intro_image_alt", "") or "").strip(),
     }
     # Return None if completely empty.
     if not any(content.values()):
@@ -12760,6 +12764,82 @@ def _handle_image_delete(
         {
             "success": True,
             "message": _("Image deleted successfully."),
+        }
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def section_menu_intro_image_upload(request: HttpRequest, slug: str) -> HttpResponse:
+    """Upload an image for the Section menu intro/landing content block.
+
+    Stores the image under ``intro_images/{slug}/`` and returns the URL.
+    The URL is stored in ``SectionMenu.intro_content['image_url']`` by the
+    caller (the Organise page form saves it as a hidden field).
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    if survey.layout != Survey.Layout.SECTION_MENU:
+        return JsonResponse(
+            {"success": False, "error": _("Not a section menu survey.")},
+            status=400,
+        )
+    return _handle_intro_image_upload(request, survey, "section_menu")
+
+
+@login_required
+@require_http_methods(["POST"])
+def diary_intro_image_upload(request: HttpRequest, slug: str) -> HttpResponse:
+    """Upload an image for the Diary intro/landing content block."""
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    if survey.layout != Survey.Layout.DIARY:
+        return JsonResponse(
+            {"success": False, "error": _("Not a diary survey.")},
+            status=400,
+        )
+    return _handle_intro_image_upload(request, survey, "diary")
+
+
+def _handle_intro_image_upload(
+    request: HttpRequest, survey: Survey, layout_key: str
+) -> HttpResponse:
+    """Shared handler for intro image uploads.
+
+    Stores the file in ``intro_images/{slug}/{uuid}.{ext}`` and returns
+    the URL + alt text. The caller stores these in the menu's
+    ``intro_content`` JSON dict via hidden form fields.
+    """
+    import os
+    import uuid
+
+    from django.core.files.storage import default_storage
+
+    uploaded_file = request.FILES.get("image")
+    if not uploaded_file:
+        return JsonResponse(
+            {"success": False, "error": _("No image file provided.")},
+            status=400,
+        )
+
+    success, error = _validate_and_process_image(uploaded_file)
+    if not success:
+        return JsonResponse({"success": False, "error": error}, status=400)
+
+    ext = os.path.splitext(uploaded_file.name.lower())[1]
+    filename = f"{uuid.uuid4().hex}{ext}"
+    path = f"intro_images/{survey.slug}/{filename}"
+    saved_name = default_storage.save(path, uploaded_file)
+    url = default_storage.url(saved_name)
+
+    alt = request.POST.get("alt", "").strip()
+
+    return JsonResponse(
+        {
+            "success": True,
+            "image_url": url,
+            "alt": alt,
+            "message": _("Image uploaded successfully."),
         }
     )
 

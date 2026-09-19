@@ -10,6 +10,11 @@
 
   {% if intro_block %}
   <div class="content-block prose max-w-none mt-4 mb-2">
+    {% if intro_block.image_url %}
+    <div class="not-prose mb-4">
+      <img src="{{ intro_block.image_url }}" alt="{{ intro_block.image_alt|default:'' }}" class="rounded-lg max-w-full" />
+    </div>
+    {% endif %}
     {% if intro_block.heading %}
     <h2 class="text-xl font-semibold">{{ intro_block.heading }}</h2>
     {% endif %}

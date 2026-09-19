@@ -457,6 +457,17 @@ urlpatterns = [
         views.builder_group_question_image_upload,
         name="builder_group_question_image_upload",
     ),
+    # Intro image upload for Section menu and Diary landing pages
+    path(
+        "<slug:slug>/organise/section-menu/intro-image-upload",
+        views.section_menu_intro_image_upload,
+        name="section_menu_intro_image_upload",
+    ),
+    path(
+        "<slug:slug>/organise/diary/intro-image-upload",
+        views.diary_intro_image_upload,
+        name="diary_intro_image_upload",
+    ),
     path(
         "<slug:slug>/builder/questions/<int:qid>/images/<int:img_id>/delete",
         views.builder_question_image_delete,
