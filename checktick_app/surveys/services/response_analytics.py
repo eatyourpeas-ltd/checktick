@@ -534,7 +534,7 @@ def _reorder_by_question_options(question, options: list[dict]) -> list[dict]:
     for opt in q_options:
         if isinstance(opt, dict):
             if opt.get("type") == "categories" and isinstance(opt.get("labels"), list):
-                flat_labels.extend(str(l) for l in opt["labels"])
+                flat_labels.extend(str(label) for label in opt["labels"])
             elif opt.get("type") == "number-scale" and opt.get("min") is not None and opt.get("max") is not None:
                 try:
                     flat_labels.extend(
