@@ -377,18 +377,46 @@
             </label>
           </fieldset>
 
-          {% if content_block_questions %}
-          <div>
-            <label class="label text-xs" for="id_intro_content_block">{% trans 'Intro / landing content block' %}</label>
-            <select id="id_intro_content_block" name="intro_content_block" class="select select-bordered select-sm w-full">
-              <option value="">{% trans '— None —' %}</option>
-              {% for q in content_block_questions %}
-              <option value="{{ q.id }}" {% if section_menu.intro_content_block_id == q.id %}selected{% endif %}>{{ q.text|truncatechars:60 }}</option>
-              {% endfor %}
-            </select>
-            <p class="text-xs text-base-content/50 mt-0.5">{% trans 'Rendered above the picker page as a welcome, consent, or privacy notice.' %}</p>
+          <div class="border-t border-base-200 pt-3 mt-3">
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" name="intro_enabled" value="1"
+                     class="checkbox checkbox-sm"
+                     {% if section_menu.intro_content %}checked{% endif %}
+                     data-toggle="section-menu-intro" />
+              {% trans 'Include landing page before picker' %}
+            </label>
+            <div data-intro-fields="section-menu-intro" class="mt-2 space-y-2 {% if not section_menu.intro_content %}hidden{% endif %}">
+              <div>
+                <label class="label text-xs">{% trans 'Heading' %}</label>
+                <input type="text" name="intro_heading" class="input input-bordered input-sm w-full"
+                       value="{{ section_menu.intro_content.heading|default:'' }}" placeholder="e.g. Welcome to this survey" />
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Subtitle' %}</label>
+                <input type="text" name="intro_subtitle" class="input input-bordered input-sm w-full"
+                       value="{{ section_menu.intro_content.subtitle|default:'' }}" placeholder="Optional short description" />
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Body (Markdown)' %}</label>
+                <textarea name="intro_body_md" class="textarea textarea-bordered w-full text-sm" rows="4"
+                          placeholder="Welcome text, consent statement, privacy notice, etc.">{{ section_menu.intro_content.body_md|default:'' }}</textarea>
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Links' %}</label>
+                <div data-link-rows>
+                  {% if section_menu.intro_content.links %}
+                    {% for link in section_menu.intro_content.links %}
+                    <div class="flex gap-2 mb-1">
+                      <input type="text" name="intro_link_labels" class="input input-bordered input-sm flex-1" value="{{ link.label }}" placeholder="Label" />
+                      <input type="text" name="intro_link_urls" class="input input-bordered input-sm flex-1" value="{{ link.url }}" placeholder="https://..." />
+                    </div>
+                    {% endfor %}
+                  {% endif %}
+                </div>
+                <button type="button" class="btn btn-ghost btn-xs" data-add-link>{% trans '+ Add link' %}</button>
+              </div>
+            </div>
           </div>
-          {% endif %}
 
           <div class="flex gap-2 pt-1">
             <button type="submit" class="btn btn-primary btn-sm">{% trans 'Save layout' %}</button>
@@ -956,18 +984,46 @@
             </label>
           </fieldset>
 
-          {% if content_block_questions %}
-          <div>
-            <label class="label text-xs" for="id_diary_intro_content_block">{% trans 'Intro / landing content block' %}</label>
-            <select id="id_diary_intro_content_block" name="intro_content_block" class="select select-bordered select-sm w-full">
-              <option value="">{% trans '— None —' %}</option>
-              {% for q in content_block_questions %}
-              <option value="{{ q.id }}" {% if diary_menu.intro_content_block_id == q.id %}selected{% endif %}>{{ q.text|truncatechars:60 }}</option>
-              {% endfor %}
-            </select>
-            <p class="text-xs text-base-content/50 mt-0.5">{% trans 'Rendered above the diary landing page as a welcome, consent, or privacy notice.' %}</p>
+          <div class="border-t border-base-200 pt-3 mt-3">
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" name="intro_enabled" value="1"
+                     class="checkbox checkbox-sm"
+                     {% if diary_menu.intro_content %}checked{% endif %}
+                     data-toggle="diary-intro" />
+              {% trans 'Include landing page before diary entries' %}
+            </label>
+            <div data-intro-fields="diary-intro" class="mt-2 space-y-2 {% if not diary_menu.intro_content %}hidden{% endif %}">
+              <div>
+                <label class="label text-xs">{% trans 'Heading' %}</label>
+                <input type="text" name="intro_heading" class="input input-bordered input-sm w-full"
+                       value="{{ diary_menu.intro_content.heading|default:'' }}" placeholder="e.g. Welcome to this diary study" />
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Subtitle' %}</label>
+                <input type="text" name="intro_subtitle" class="input input-bordered input-sm w-full"
+                       value="{{ diary_menu.intro_content.subtitle|default:'' }}" placeholder="Optional short description" />
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Body (Markdown)' %}</label>
+                <textarea name="intro_body_md" class="textarea textarea-bordered w-full text-sm" rows="4"
+                          placeholder="Welcome text, consent statement, privacy notice, etc.">{{ diary_menu.intro_content.body_md|default:'' }}</textarea>
+              </div>
+              <div>
+                <label class="label text-xs">{% trans 'Links' %}</label>
+                <div data-link-rows>
+                  {% if diary_menu.intro_content.links %}
+                    {% for link in diary_menu.intro_content.links %}
+                    <div class="flex gap-2 mb-1">
+                      <input type="text" name="intro_link_labels" class="input input-bordered input-sm flex-1" value="{{ link.label }}" placeholder="Label" />
+                      <input type="text" name="intro_link_urls" class="input input-bordered input-sm flex-1" value="{{ link.url }}" placeholder="https://..." />
+                    </div>
+                    {% endfor %}
+                  {% endif %}
+                </div>
+                <button type="button" class="btn btn-ghost btn-xs" data-add-link>{% trans '+ Add link' %}</button>
+              </div>
+            </div>
           </div>
-          {% endif %}
 
           <button type="submit" class="btn btn-sm btn-primary">{% trans 'Save configuration' %}</button>
         </form>
@@ -1318,4 +1374,25 @@
   <script src="{% static cdn_assets.sortablejs.static_file %}" nonce="{{ request.csp_nonce }}" integrity="{{ cdn_assets.sortablejs.sri }}" crossorigin="anonymous"></script>
   <script src="{% static 'js/groups.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}"></script>
   <script src="{% static 'js/groups-page.js' %}?v={{ build.commit|default:build.timestamp }}" nonce="{{ request.csp_nonce }}"></script>
+  <script nonce="{{ request.csp_nonce }}">
+    // Toggle landing page fields and add/remove link rows for both
+    // the Section menu and Diary config cards.
+    document.querySelectorAll('[data-toggle]').forEach(function(toggle) {
+      toggle.addEventListener('change', function() {
+        var target = document.querySelector('[data-intro-fields="' + toggle.dataset.toggle + '"]');
+        if (target) target.classList.toggle('hidden', !toggle.checked);
+      });
+    });
+    document.querySelectorAll('[data-add-link]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var container = btn.previousElementSibling;
+        if (!container || !container.hasAttribute('data-link-rows')) return;
+        var row = document.createElement('div');
+        row.className = 'flex gap-2 mb-1';
+        row.innerHTML = '<input type="text" name="intro_link_labels" class="input input-bordered input-sm flex-1" placeholder="Label" />' +
+          '<input type="text" name="intro_link_urls" class="input input-bordered input-sm flex-1" placeholder="https://..." />';
+        container.appendChild(row);
+      });
+    });
+  </script>
 {% endblock %}

@@ -241,15 +241,12 @@ def test_preview_simulate_checkbox_state_reflects_selection(
     assert "Reset" in html
 
 
-# --- Intro content block on Section menu picker ---
+# --- Intro / landing content on Section menu picker ---
 
 
 @pytest.mark.django_db
-def test_section_menu_picker_shows_intro_block(client, owner, org, section_menu_survey):
-    """When an intro_content_block is set, it renders above the picker prompt."""
-    from checktick_app.surveys.models import SurveyQuestion
-
-    # Publish the survey so an authenticated participant can access it
+def test_section_menu_picker_shows_intro(client, owner, org, section_menu_survey):
+    """When intro_content is set, it renders above the picker prompt."""
     section_menu_survey.status = Survey.Status.PUBLISHED
     section_menu_survey.visibility = Survey.Visibility.AUTHENTICATED
     section_menu_survey.allow_any_authenticated = True
@@ -257,20 +254,16 @@ def test_section_menu_picker_shows_intro_block(client, owner, org, section_menu_
         update_fields=["status", "visibility", "allow_any_authenticated"]
     )
 
-    intro = SurveyQuestion.objects.create(
-        survey=section_menu_survey,
-        text="Welcome",
-        type=SurveyQuestion.Types.CONTENT_BLOCK,
-        order=10,
-        options={"heading": "Welcome", "body_md": "Please read this."},
-    )
-    section_menu_survey.section_menu.intro_content_block = intro
-    section_menu_survey.section_menu.save(update_fields=["intro_content_block"])
+    section_menu_survey.section_menu.intro_content = {
+        "heading": "Welcome",
+        "body_md": "Please read this.",
+    }
+    section_menu_survey.section_menu.save(update_fields=["intro_content"])
 
     from django.contrib.auth.models import User
 
     participant = User.objects.create_user(
-        username="picker_tester", password=TEST_PASSWORD
+        username="picker_intro", password=TEST_PASSWORD
     )
     client.force_login(participant)
     res = client.get(reverse("surveys:take", kwargs={"slug": section_menu_survey.slug}))
@@ -281,10 +274,10 @@ def test_section_menu_picker_shows_intro_block(client, owner, org, section_menu_
 
 
 @pytest.mark.django_db
-def test_section_menu_picker_no_intro_block_by_default(
+def test_section_menu_picker_no_intro_by_default(
     client, owner, org, section_menu_survey
 ):
-    """Without an intro_content_block, the picker renders normally (no intro)."""
+    """Without intro_content, the picker renders normally (no intro)."""
     section_menu_survey.status = Survey.Status.PUBLISHED
     section_menu_survey.visibility = Survey.Visibility.AUTHENTICATED
     section_menu_survey.allow_any_authenticated = True
@@ -295,30 +288,19 @@ def test_section_menu_picker_no_intro_block_by_default(
     from django.contrib.auth.models import User
 
     participant = User.objects.create_user(
-        username="picker_none", password=TEST_PASSWORD
+        username="picker_nointro", password=TEST_PASSWORD
     )
     client.force_login(participant)
     res = client.get(reverse("surveys:take", kwargs={"slug": section_menu_survey.slug}))
     assert res.status_code == 200
     html = res.content.decode()
-    # The picker prompt should be present
     assert "Which sections" in html
-    # No content-block prose section
     assert 'class="content-block prose' not in html
 
 
 @pytest.mark.django_db
-def test_section_menu_save_intro_block(client, owner, section_menu_survey):
-    """Saving the section menu config form persists the intro_content_block FK."""
-    from checktick_app.surveys.models import SurveyQuestion
-
-    intro = SurveyQuestion.objects.create(
-        survey=section_menu_survey,
-        text="Consent",
-        type=SurveyQuestion.Types.CONTENT_BLOCK,
-        order=10,
-        options={"heading": "Consent", "body_md": "Do you agree?"},
-    )
+def test_section_menu_save_intro(client, owner, section_menu_survey):
+    """Saving the config form with intro fields persists intro_content."""
     client.force_login(owner)
     res = client.post(
         reverse("surveys:groups", kwargs={"slug": section_menu_survey.slug}),
@@ -328,53 +310,31 @@ def test_section_menu_save_intro_block(client, owner, section_menu_survey):
             "min_selected": "1",
             "max_selected": "",
             "order_mode": "authored",
-            "intro_content_block": str(intro.id),
+            "intro_enabled": "1",
+            "intro_heading": "Welcome",
+            "intro_subtitle": "",
+            "intro_body_md": "Please read this.",
+            "intro_link_labels": ["Privacy"],
+            "intro_link_urls": ["https://example.com/privacy"],
         },
         follow=False,
     )
     assert res.status_code == 302
     section_menu_survey.section_menu.refresh_from_db()
-    assert section_menu_survey.section_menu.intro_content_block_id == intro.id
+    intro = section_menu_survey.section_menu.intro_content
+    assert intro is not None
+    assert intro["heading"] == "Welcome"
+    assert intro["body_md"] == "Please read this."
+    assert intro["links"] == [
+        {"label": "Privacy", "url": "https://example.com/privacy"}
+    ]
 
 
 @pytest.mark.django_db
-def test_section_menu_save_intro_block_rejects_non_content_block(
-    client, owner, section_menu_survey
-):
-    """A non-content_block question ID is rejected (FK set to None)."""
-    # Age is a text question, not a content_block
-    age_q = section_menu_survey.questions.filter(text="Age").first()
-    client.force_login(owner)
-    res = client.post(
-        reverse("surveys:groups", kwargs={"slug": section_menu_survey.slug}),
-        {
-            "action": "save_section_menu",
-            "prompt_text": "Pick sections",
-            "min_selected": "1",
-            "max_selected": "",
-            "order_mode": "authored",
-            "intro_content_block": str(age_q.id),
-        },
-        follow=False,
-    )
-    assert res.status_code == 302
-    section_menu_survey.section_menu.refresh_from_db()
-    assert section_menu_survey.section_menu.intro_content_block_id is None
-
-
-@pytest.mark.django_db
-def test_section_menu_save_clears_intro_block(client, owner, section_menu_survey):
-    """Setting intro_content_block to empty string clears it."""
-    from checktick_app.surveys.models import SurveyQuestion
-
-    intro = SurveyQuestion.objects.create(
-        survey=section_menu_survey,
-        text="Welcome",
-        type=SurveyQuestion.Types.CONTENT_BLOCK,
-        order=10,
-    )
-    section_menu_survey.section_menu.intro_content_block = intro
-    section_menu_survey.section_menu.save(update_fields=["intro_content_block"])
+def test_section_menu_save_clears_intro(client, owner, section_menu_survey):
+    """Unchecking intro_enabled clears intro_content."""
+    section_menu_survey.section_menu.intro_content = {"heading": "Old"}
+    section_menu_survey.section_menu.save(update_fields=["intro_content"])
 
     client.force_login(owner)
     res = client.post(
@@ -385,10 +345,10 @@ def test_section_menu_save_clears_intro_block(client, owner, section_menu_survey
             "min_selected": "1",
             "max_selected": "",
             "order_mode": "authored",
-            "intro_content_block": "",
+            # intro_enabled not submitted = unchecked
         },
         follow=False,
     )
     assert res.status_code == 302
     section_menu_survey.section_menu.refresh_from_db()
-    assert section_menu_survey.section_menu.intro_content_block_id is None
+    assert section_menu_survey.section_menu.intro_content is None

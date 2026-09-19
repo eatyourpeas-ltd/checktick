@@ -125,23 +125,16 @@ def test_window_open_renders_landing_page(client, owner, org, participant):
     assert "Pain level" not in html  # Questions not rendered on landing page
 
 
-# --- intro content block on diary landing ---
+# --- intro / landing content on diary landing ---
 
 
 @pytest.mark.django_db
-def test_diary_landing_shows_intro_block(client, owner, org, participant):
-    """When an intro_content_block is set, it renders above the diary landing."""
+def test_diary_landing_shows_intro(client, owner, org, participant):
+    """When intro_content is set, it renders above the diary landing."""
     s = _make_diary_survey(owner, org)
     menu = _make_fixed_interval_menu(s, interval_hours=6)
-    intro = SurveyQuestion.objects.create(
-        survey=s,
-        text="Welcome",
-        type=SurveyQuestion.Types.CONTENT_BLOCK,
-        order=10,
-        options={"heading": "Welcome", "body_md": "Please read this."},
-    )
-    menu.intro_content_block = intro
-    menu.save(update_fields=["intro_content_block"])
+    menu.intro_content = {"heading": "Welcome", "body_md": "Please read this."}
+    menu.save(update_fields=["intro_content"])
 
     client.force_login(participant)
     res = client.get(reverse("surveys:take", kwargs={"slug": s.slug}))
@@ -152,8 +145,8 @@ def test_diary_landing_shows_intro_block(client, owner, org, participant):
 
 
 @pytest.mark.django_db
-def test_diary_landing_no_intro_block_by_default(client, owner, org, participant):
-    """Without an intro_content_block, the landing renders normally (no intro)."""
+def test_diary_landing_no_intro_by_default(client, owner, org, participant):
+    """Without intro_content, the landing renders normally (no intro)."""
     s = _make_diary_survey(owner, org)
     _make_fixed_interval_menu(s, interval_hours=6)
 
@@ -165,17 +158,10 @@ def test_diary_landing_no_intro_block_by_default(client, owner, org, participant
 
 
 @pytest.mark.django_db
-def test_diary_save_intro_block(client, owner, org):
-    """Saving the diary config form persists the intro_content_block FK."""
+def test_diary_save_intro(client, owner, org):
+    """Saving the diary config form with intro fields persists intro_content."""
     s = _make_diary_survey(owner, org)
     menu = _make_fixed_interval_menu(s, interval_hours=6)
-    intro = SurveyQuestion.objects.create(
-        survey=s,
-        text="Consent",
-        type=SurveyQuestion.Types.CONTENT_BLOCK,
-        order=10,
-        options={"heading": "Consent", "body_md": "Do you agree?"},
-    )
     client.force_login(owner)
     res = client.post(
         reverse("surveys:groups", kwargs={"slug": s.slug}),
@@ -187,28 +173,27 @@ def test_diary_save_intro_block(client, owner, org):
             "compliance_threshold_pct": "80",
             "grace_minutes": "30",
             "show_progress": "1",
-            "intro_content_block": str(intro.id),
+            "intro_enabled": "1",
+            "intro_heading": "Welcome",
+            "intro_subtitle": "",
+            "intro_body_md": "Please read this.",
         },
         follow=False,
     )
     assert res.status_code == 302
     menu.refresh_from_db()
-    assert menu.intro_content_block_id == intro.id
+    assert menu.intro_content is not None
+    assert menu.intro_content["heading"] == "Welcome"
+    assert menu.intro_content["body_md"] == "Please read this."
 
 
 @pytest.mark.django_db
-def test_diary_save_clears_intro_block(client, owner, org):
-    """Setting intro_content_block to empty string clears it."""
+def test_diary_save_clears_intro(client, owner, org):
+    """Unchecking intro_enabled clears intro_content."""
     s = _make_diary_survey(owner, org)
     menu = _make_fixed_interval_menu(s, interval_hours=6)
-    intro = SurveyQuestion.objects.create(
-        survey=s,
-        text="Welcome",
-        type=SurveyQuestion.Types.CONTENT_BLOCK,
-        order=10,
-    )
-    menu.intro_content_block = intro
-    menu.save(update_fields=["intro_content_block"])
+    menu.intro_content = {"heading": "Old"}
+    menu.save(update_fields=["intro_content"])
 
     client.force_login(owner)
     res = client.post(
@@ -221,13 +206,13 @@ def test_diary_save_clears_intro_block(client, owner, org):
             "compliance_threshold_pct": "80",
             "grace_minutes": "30",
             "show_progress": "1",
-            "intro_content_block": "",
+            # intro_enabled not submitted = unchecked
         },
         follow=False,
     )
     assert res.status_code == 302
     menu.refresh_from_db()
-    assert menu.intro_content_block_id is None
+    assert menu.intro_content is None
 
 
 # --- window open: entry form renders with ?entry=1 ---

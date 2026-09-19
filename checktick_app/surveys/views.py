@@ -6178,7 +6178,7 @@ def _render_section_menu_picker(
         )
     mandatory_rows = [r for r in picker_rows if r["is_mandatory"]]
     pickable_rows = [r for r in picker_rows if not r["is_mandatory"]]
-    intro_block = _build_intro_content_block(menu.intro_content_block)
+    intro_block = _build_intro_content(menu.intro_content)
     ctx = {
         "survey": survey,
         "menu": menu,
@@ -6226,27 +6226,53 @@ def _collect_matrix_section_answers(survey: Survey, post) -> dict:
     return answers
 
 
-def _build_intro_content_block(question: SurveyQuestion | None) -> dict | None:
-    """Build a landing-block context dict from a content_block question.
+def _build_intro_content(raw: dict | None) -> dict | None:
+    """Build a landing-block context dict from an ``intro_content`` JSON field.
 
-    Returns ``None`` if the question is not a content block. Used by the
+    Returns ``None`` if no intro content is configured. Used by the
     Section menu picker and Diary landing pages to render an optional
-    intro/landing content block (welcome text, consent, privacy notice)
-    above the layout-specific UI. The Matrix landing page uses the same
-    shape via its own heuristic (first question of the first group).
+    landing/intro (welcome text, consent, privacy notice) above the
+    layout-specific UI.
     """
-    if question is None or question.type != SurveyQuestion.Types.CONTENT_BLOCK:
+    if not raw or not isinstance(raw, dict):
         return None
     from checktick_app.core.markdown_safety import render_content_block_markdown
 
-    opts = question.options if isinstance(question.options, dict) else {}
     return {
-        "text": question.text,
-        "heading": opts.get("heading", ""),
-        "subtitle": opts.get("subtitle", ""),
-        "html": render_content_block_markdown(opts.get("body_md", "")),
-        "links": opts.get("links", []),
+        "heading": str(raw.get("heading", "") or ""),
+        "subtitle": str(raw.get("subtitle", "") or ""),
+        "html": render_content_block_markdown(raw.get("body_md", "") or ""),
+        "links": raw.get("links", []) or [],
     }
+
+
+def _parse_intro_content_form(post) -> dict | None:
+    """Parse intro content fields from a POST form into a dict (or None).
+
+    Fields: intro_enabled (checkbox), intro_heading, intro_subtitle,
+    intro_body_md, intro_link_label_N / intro_link_url_N pairs.
+    """
+    if not post.get("intro_enabled"):
+        return None
+    links: list[dict[str, str]] = []
+    link_labels = post.getlist("intro_link_labels")
+    link_urls = post.getlist("intro_link_urls")
+    for i, label in enumerate(link_labels):
+        url = link_urls[i] if i < len(link_urls) else ""
+        label = (label or "").strip()
+        url = (url or "").strip()
+        if label and url:
+            links.append({"label": label, "url": url})
+    content: dict = {
+        "heading": (post.get("intro_heading", "") or "").strip(),
+        "subtitle": (post.get("intro_subtitle", "") or "").strip(),
+        "body_md": (post.get("intro_body_md", "") or "").strip(),
+        "links": links,
+    }
+    # Return None if completely empty.
+    if not any(content.values()):
+        return None
+    return content
 
 
 def _render_matrix_landing(
@@ -6462,7 +6488,7 @@ def _render_diary_landing(
     nxt = _diary_next_window(menu, anchor=anchor, now=now)
     entries = list(progress.diary_entries.filter(menu=menu).order_by("order", "id"))
     compliance = _diary_compliance(menu, entries, anchor=anchor, now=now)
-    intro_block = _build_intro_content_block(menu.intro_content_block)
+    intro_block = _build_intro_content(menu.intro_content)
     ctx = {
         "survey": survey,
         "diary_menu": menu,
@@ -7923,26 +7949,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             menu.order_mode = order_mode
         menu.show_select_all = bool(request.POST.get("show_select_all"))
         menu.show_estimated_time = bool(request.POST.get("show_estimated_time"))
-        # Intro content block: optional FK to a content_block question.
-        # Validate it belongs to this survey and is actually a content block.
-        intro_id_raw = (request.POST.get("intro_content_block", "") or "").strip()
-        if intro_id_raw:
-            try:
-                intro_q = SurveyQuestion.objects.get(
-                    id=int(intro_id_raw), survey=survey
-                )
-                if intro_q.type == SurveyQuestion.Types.CONTENT_BLOCK:
-                    menu.intro_content_block = intro_q
-                else:
-                    messages.warning(
-                        request,
-                        _("The selected intro block is not a content block — ignored."),
-                    )
-                    menu.intro_content_block = None
-            except (ValueError, SurveyQuestion.DoesNotExist):
-                menu.intro_content_block = None
-        else:
-            menu.intro_content_block = None
+        menu.intro_content = _parse_intro_content_form(request.POST)
         menu.save()
 
         # Sync items (create new, update order) before applying per-row edits.
@@ -8370,25 +8377,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         except ValueError:
             menu.grace_minutes = 30
         menu.show_progress = bool(request.POST.get("show_progress"))
-        # Intro content block: optional FK to a content_block question.
-        intro_id_raw = (request.POST.get("intro_content_block", "") or "").strip()
-        if intro_id_raw:
-            try:
-                intro_q = SurveyQuestion.objects.get(
-                    id=int(intro_id_raw), survey=survey
-                )
-                if intro_q.type == SurveyQuestion.Types.CONTENT_BLOCK:
-                    menu.intro_content_block = intro_q
-                else:
-                    messages.warning(
-                        request,
-                        _("The selected intro block is not a content block — ignored."),
-                    )
-                    menu.intro_content_block = None
-            except (ValueError, SurveyQuestion.DoesNotExist):
-                menu.intro_content_block = None
-        else:
-            menu.intro_content_block = None
+        menu.intro_content = _parse_intro_content_form(request.POST)
         menu.save()
         messages.success(request, _("Diary configuration saved."))
         return redirect("surveys:groups", slug=slug)
@@ -9129,12 +9118,6 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "diary_schedule_choices": diary_schedule_choices,
         "diary_anchor_choices": diary_anchor_choices,
         "diary_warnings": diary_warnings,
-        # Content blocks available as intro/landing for section_menu and diary.
-        "content_block_questions": list(
-            survey.questions.filter(type=SurveyQuestion.Types.CONTENT_BLOCK).order_by(
-                "order", "id"
-            )
-        ),
         # Layout tier gating (see tier_limits.py allowed_layouts).
         "allowed_layouts": get_allowed_layouts(request.user),
     }

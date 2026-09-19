@@ -1,8 +1,9 @@
-"""Add intro_content_block FK to SectionMenu and DiaryMenu.
+"""Add intro_content JSONField to SectionMenu and DiaryMenu.
 
 Both the Section menu picker page and the Diary landing page can now
-reference a content_block question to render as a landing/intro above
-the layout-specific UI (welcome text, consent, privacy notice, etc.).
+hold an optional landing/intro content block (heading, subtitle, body
+markdown, links) stored directly on the menu model. This is edited
+inline on the Organise page config card — no separate question needed.
 """
 from django.db import migrations, models
 
@@ -16,36 +17,32 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name="sectionmenu",
-            name="intro_content_block",
-            field=models.ForeignKey(
+            name="intro_content",
+            field=models.JSONField(
                 blank=True,
+                default=None,
                 help_text=(
-                    "An optional content block rendered above the picker "
-                    "page as a landing/intro (e.g. welcome text, consent, "
-                    "privacy notice). Must be a content_block question "
-                    "belonging to this survey."
+                    "Optional landing/intro content block rendered above "
+                    "the picker page. Stored as a dict with keys: heading, "
+                    "subtitle, body_md (Markdown), links (list of "
+                    "{label, url})."
                 ),
                 null=True,
-                on_delete=models.SET_NULL,
-                related_name="section_menu_intro",
-                to="surveys.surveyquestion",
             ),
         ),
         migrations.AddField(
             model_name="diarymenu",
-            name="intro_content_block",
-            field=models.ForeignKey(
+            name="intro_content",
+            field=models.JSONField(
                 blank=True,
+                default=None,
                 help_text=(
-                    "An optional content block rendered above the diary "
-                    "landing page as a landing/intro (e.g. welcome text, "
-                    "consent, privacy notice). Must be a content_block "
-                    "question belonging to this survey."
+                    "Optional landing/intro content block rendered above "
+                    "the diary landing page. Stored as a dict with keys: "
+                    "heading, subtitle, body_md (Markdown), links (list of "
+                    "{label, url})."
                 ),
                 null=True,
-                on_delete=models.SET_NULL,
-                related_name="diary_menu_intro",
-                to="surveys.surveyquestion",
             ),
         ),
     ]

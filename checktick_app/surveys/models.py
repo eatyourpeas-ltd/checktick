@@ -4031,16 +4031,14 @@ class SectionMenu(models.Model):
         default=False,
         help_text="Show per-section estimated time on the picker page.",
     )
-    intro_content_block = models.ForeignKey(
-        "surveys.SurveyQuestion",
-        on_delete=models.SET_NULL,
+    intro_content = models.JSONField(
         null=True,
         blank=True,
-        related_name="section_menu_intro",
+        default=None,
         help_text=(
-            "An optional content block rendered above the picker page as a "
-            "landing/intro (e.g. welcome text, consent, privacy notice). "
-            "Must be a content_block question belonging to this survey."
+            "Optional landing/intro content block rendered above the picker "
+            "page. Stored as a dict with keys: heading, subtitle, "
+            "body_md (Markdown), links (list of {label, url})."
         ),
     )
 
@@ -4622,17 +4620,14 @@ class DiaryMenu(models.Model):
             "compliance summary on the diary landing page."
         ),
     )
-    intro_content_block = models.ForeignKey(
-        "surveys.SurveyQuestion",
-        on_delete=models.SET_NULL,
+    intro_content = models.JSONField(
         null=True,
         blank=True,
-        related_name="diary_menu_intro",
+        default=None,
         help_text=(
-            "An optional content block rendered above the diary landing "
-            "page as a landing/intro (e.g. welcome text, consent, "
-            "privacy notice). Must be a content_block question belonging "
-            "to this survey."
+            "Optional landing/intro content block rendered above the diary "
+            "landing page. Stored as a dict with keys: heading, subtitle, "
+            "body_md (Markdown), links (list of {label, url})."
         ),
     )
 
