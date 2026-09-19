@@ -16,6 +16,82 @@ from checktick_app.surveys.views import _bulk_upload_example_md
 
 TEST_PASSWORD = "x"
 
+
+def test_parse_likert_render_radio_number():
+    """``render: radio`` on a likert number question is stored in options."""
+    md = textwrap.dedent("""
+        # Section {sec}
+
+        ## Rating {rating}
+        (likert number)
+        min: 1
+        max: 5
+        render: radio
+        """).strip()
+    groups = parse_bulk_markdown(md)
+    q = groups[0]["questions"][0]
+    assert q["final_type"] == "likert"
+    opts = q["final_options"][0]
+    assert opts["type"] == "number-scale"
+    assert opts["render"] == "radio"
+    assert opts["min"] == 1
+    assert opts["max"] == 5
+
+
+def test_parse_likert_render_radio_categories():
+    """``render: radio`` on a likert categories question is stored in options."""
+    md = textwrap.dedent("""
+        # Section {sec}
+
+        ## Agreement {agreement}
+        (likert categories)
+        - Disagree
+        - Neutral
+        - Agree
+        render: radio
+        """).strip()
+    groups = parse_bulk_markdown(md)
+    q = groups[0]["questions"][0]
+    assert q["final_type"] == "likert"
+    opts = q["final_options"][0]
+    assert opts["type"] == "categories"
+    assert opts["labels"] == ["Disagree", "Neutral", "Agree"]
+    assert opts["render"] == "radio"
+
+
+def test_parse_likert_render_slider_omitted():
+    """Without ``render:``, no render key is stored (slider is the default)."""
+    md = textwrap.dedent("""
+        # Section {sec}
+
+        ## Rating {rating}
+        (likert number)
+        min: 1
+        max: 5
+        """).strip()
+    groups = parse_bulk_markdown(md)
+    q = groups[0]["questions"][0]
+    opts = q["final_options"][0]
+    assert "render" not in opts
+
+
+def test_parse_likert_render_invalid_ignored():
+    """Unknown render values are dropped (slider default used)."""
+    md = textwrap.dedent("""
+        # Section {sec}
+
+        ## Rating {rating}
+        (likert number)
+        min: 1
+        max: 5
+        render: nonsense
+        """).strip()
+    groups = parse_bulk_markdown(md)
+    q = groups[0]["questions"][0]
+    opts = q["final_options"][0]
+    assert "render" not in opts
+
+
 BULK_MD = textwrap.dedent("""
     # Intro {intro}
     Introduction copy

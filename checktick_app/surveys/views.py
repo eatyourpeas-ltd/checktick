@@ -2630,6 +2630,9 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
                 opt["followup_text"] = {"enabled": True, "label": followup_label}
     elif qtype == SurveyQuestion.Types.LIKERT:
         likert_mode = (data.get("likert_mode") or "categories").strip()
+        likert_render = (data.get("likert_render") or "slider").strip().lower()
+        if likert_render not in {"slider", "radio"}:
+            likert_render = "slider"
         if likert_mode == "number":
             try:
                 min_v = int(data.get("likert_min", "1"))
@@ -2639,18 +2642,25 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
                 max_v = int(data.get("likert_max", "5"))
             except (TypeError, ValueError):
                 max_v = 5
-            options = [
-                {
-                    "type": "number-scale",
-                    "min": min_v,
-                    "max": max_v,
-                    "left": (data.get("likert_left_label") or "").strip(),
-                    "right": (data.get("likert_right_label") or "").strip(),
-                }
-            ]
+            number_opts: dict[str, Any] = {
+                "type": "number-scale",
+                "min": min_v,
+                "max": max_v,
+                "left": (data.get("likert_left_label") or "").strip(),
+                "right": (data.get("likert_right_label") or "").strip(),
+            }
+            if likert_render != "slider":
+                number_opts["render"] = likert_render
+            options = [number_opts]
         else:
             raw = data.get("likert_categories", "")
-            options = [line.strip() for line in raw.splitlines() if line.strip()]
+            labels = [line.strip() for line in raw.splitlines() if line.strip()]
+            if likert_render != "slider":
+                options = [
+                    {"type": "categories", "labels": labels, "render": likert_render}
+                ]
+            else:
+                options = labels
     elif qtype == SurveyQuestion.Types.TEXT:
         text_format = (data.get("text_format") or "free").strip()
         if text_format not in {"number", "free", "date", "time", "datetime"}:
@@ -3108,6 +3118,18 @@ def _serialize_question_for_builder(
         if yesno_labels:
             payload["yesno_labels"] = yesno_labels
     elif question.type == SurveyQuestion.Types.LIKERT:
+        # A categories question may be stored either as a plain list of label
+        # strings (builder default) or as a single dict wrapper of the form
+        # {"type": "categories", "labels": [...], "render": ...} (markdown
+        # import, or builder when a non-default render mode is chosen).
+        categories_meta = None
+        if (
+            isinstance(options, list)
+            and options
+            and isinstance(options[0], dict)
+            and options[0].get("type") == "categories"
+        ):
+            categories_meta = options[0]
         if (
             isinstance(options, list)
             and options
@@ -3126,10 +3148,20 @@ def _serialize_question_for_builder(
                 payload["likert_max"] = 5
             payload["likert_left_label"] = str(meta.get("left") or "").strip()
             payload["likert_right_label"] = str(meta.get("right") or "").strip()
+            render_val = str(meta.get("render") or "slider").strip().lower()
+            if render_val not in {"slider", "radio"}:
+                render_val = "slider"
+            payload["likert_render"] = render_val
         else:
             payload["likert_mode"] = "categories"
             labels: list[str] = []
-            if isinstance(options, list):
+            if categories_meta is not None:
+                labels = [
+                    str(label).strip()
+                    for label in (categories_meta.get("labels") or [])
+                    if str(label).strip()
+                ]
+            elif isinstance(options, list):
                 for opt in options:
                     if isinstance(opt, str):
                         val = opt.strip()
@@ -3140,6 +3172,14 @@ def _serialize_question_for_builder(
                         if candidate:
                             labels.append(str(candidate).strip())
             payload["likert_categories"] = labels
+            render_val = (
+                str(categories_meta.get("render") or "slider").strip().lower()
+                if categories_meta is not None
+                else "slider"
+            )
+            if render_val not in {"slider", "radio"}:
+                render_val = "slider"
+            payload["likert_render"] = render_val
 
     operators_meta = list((condition_meta or {}).get("operators", []))
     if not operators_meta:
@@ -14496,14 +14536,21 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                         # Likert categories - export as list
                         for label in first_option["labels"]:
                             lines.append(f"{indent}- {label}")
+                        render_val = first_option.get("render")
+                        if render_val:
+                            lines.append(f"{indent}render: {render_val}")
                     elif isinstance(first_option, dict) and first_option.get(
                         "type"
                     ) in ["number", "number-scale"]:
                         # Likert number - export min/max/labels
                         min_val = first_option.get("min")
                         max_val = first_option.get("max")
-                        left_label = first_option.get("left_label", "")
-                        right_label = first_option.get("right_label", "")
+                        left_label = first_option.get(
+                            "left_label", ""
+                        ) or first_option.get("left", "")
+                        right_label = first_option.get(
+                            "right_label", ""
+                        ) or first_option.get("right", "")
                         if min_val is not None:
                             lines.append(f"{indent}min: {min_val}")
                         if max_val is not None:
@@ -14512,6 +14559,9 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                             lines.append(f"{indent}left: {left_label}")
                         if right_label:
                             lines.append(f"{indent}right: {right_label}")
+                        render_val = first_option.get("render")
+                        if render_val:
+                            lines.append(f"{indent}render: {render_val}")
 
             # Options for question types that need them
             elif question.type in [
@@ -14565,6 +14615,9 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                         lines.append(f"{indent}left: {left_label}")
                     if right_label:
                         lines.append(f"{indent}right: {right_label}")
+                    render_val = question.options.get("render")
+                    if render_val:
+                        lines.append(f"{indent}render: {render_val}")
 
             # Branching rules
             conditions = SurveyQuestionCondition.objects.filter(
@@ -15923,12 +15976,19 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                     # Likert categories - export as list
                     for label in first_option["labels"]:
                         lines.append(f"- {label}")
+                    render_val = first_option.get("render")
+                    if render_val:
+                        lines.append(f"render: {render_val}")
                 elif first_option.get("type") in ["number", "number-scale"]:
                     # Likert number - export min/max/labels
                     min_val = first_option.get("min")
                     max_val = first_option.get("max")
-                    left_label = first_option.get("left_label", "")
-                    right_label = first_option.get("right_label", "")
+                    left_label = first_option.get("left_label", "") or first_option.get(
+                        "left", ""
+                    )
+                    right_label = first_option.get(
+                        "right_label", ""
+                    ) or first_option.get("right", "")
                     if min_val is not None:
                         lines.append(f"min: {min_val}")
                     if max_val is not None:
@@ -15937,6 +15997,9 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                         lines.append(f"left: {left_label}")
                     if right_label:
                         lines.append(f"right: {right_label}")
+                    render_val = first_option.get("render")
+                    if render_val:
+                        lines.append(f"render: {render_val}")
 
         # Options for question types that need them
         elif question.type in [
@@ -15986,6 +16049,9 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                     lines.append(f"left: {left_label}")
                 if right_label:
                     lines.append(f"right: {right_label}")
+                render_val = question.options.get("render")
+                if render_val:
+                    lines.append(f"render: {render_val}")
 
         # Branching rules
         conditions = SurveyQuestionCondition.objects.filter(question=question)

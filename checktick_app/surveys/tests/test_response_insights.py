@@ -462,3 +462,62 @@ class TestResponseInsightsXSSEscaping:
         assert (
             b"' onmouseover='" not in response.content
         ), "Raw single-quote XSS payload found in dashboard HTML — attribute escaping not working"
+
+
+def test_reorder_preserves_likert_categories_dict_wrapper_order():
+    """Likert categories stored as a dict wrapper (render=radio) must still
+    reorder dashboard bars by the defined category order."""
+    from checktick_app.surveys.services.response_analytics import (
+        _reorder_by_question_options,
+    )
+
+    class FakeQ:
+        options = [
+            {"type": "categories", "labels": ["Disagree", "Neutral", "Agree"], "render": "radio"}
+        ]
+
+    options = [
+        {"label": "Agree", "count": 5},
+        {"label": "Disagree", "count": 2},
+        {"label": "Neutral", "count": 3},
+    ]
+    reordered = _reorder_by_question_options(FakeQ, options)
+    labels = [o["label"] for o in reordered]
+    assert labels == ["Disagree", "Neutral", "Agree"]
+
+
+def test_reorder_preserves_likert_number_scale_order():
+    """Likert number-scale (dict wrapper) must reorder bars by numeric order."""
+    from checktick_app.surveys.services.response_analytics import (
+        _reorder_by_question_options,
+    )
+
+    class FakeQ:
+        options = [{"type": "number-scale", "min": 1, "max": 5, "render": "radio"}]
+
+    options = [
+        {"label": "5", "count": 4},
+        {"label": "1", "count": 1},
+        {"label": "3", "count": 3},
+    ]
+    reordered = _reorder_by_question_options(FakeQ, options)
+    labels = [o["label"] for o in reordered]
+    assert labels == ["1", "3", "5"]
+
+
+def test_reorder_preserves_plain_string_list_order():
+    """Slider-default likert categories (plain string list) still reorder correctly."""
+    from checktick_app.surveys.services.response_analytics import (
+        _reorder_by_question_options,
+    )
+
+    class FakeQ:
+        options = ["Disagree", "Neutral", "Agree"]
+
+    options = [
+        {"label": "Agree", "count": 5},
+        {"label": "Disagree", "count": 2},
+    ]
+    reordered = _reorder_by_question_options(FakeQ, options)
+    labels = [o["label"] for o in reordered]
+    assert labels == ["Disagree", "Agree"]

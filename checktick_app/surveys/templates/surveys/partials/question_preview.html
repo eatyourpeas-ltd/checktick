@@ -28,19 +28,41 @@
   {% elif q.type == 'likert' %}
     {% with q.options|options_meta as meta %}
       {% if meta and meta.type == 'number-scale' %}
-        <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
-          {% if meta.left %}<span class="text-sm opacity-70 text-center sm:min-w-16 sm:text-right">{{ meta.left }}</span>{% endif %}
-          <div class="w-full sm:flex-1">
-            <input type="range" class="range range-primary w-full" min="{{ meta.min|default:1 }}" max="{{ meta.max|default:5 }}" step="1" disabled />
-            <div class="flex justify-between text-[11px] opacity-70 mt-1">
-              <span>{{ meta.min|default:1 }}</span>
-              <span>{{ meta.max|default:5 }}</span>
-            </div>
+        {% if meta.render == 'radio' %}
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {% if meta.left %}<span class="text-sm opacity-70">{{ meta.left }}</span>{% endif %}
+            {% for n in q.num_scale_values %}
+              <label class="flex items-center gap-1.5 cursor-not-allowed">
+                <input type="radio" class="radio radio-primary" disabled />
+                <span class="text-sm">{{ n }}</span>
+              </label>
+            {% endfor %}
+            {% if meta.right %}<span class="text-sm opacity-70">{{ meta.right }}</span>{% endif %}
           </div>
-          {% if meta.right %}<span class="text-sm opacity-70 text-center sm:min-w-16 sm:text-left">{{ meta.right }}</span>{% endif %}
-        </div>
+        {% else %}
+          <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
+            {% if meta.left %}<span class="text-sm opacity-70 text-center sm:min-w-16 sm:text-right">{{ meta.left }}</span>{% endif %}
+            <div class="w-full sm:flex-1">
+              <input type="range" class="range range-primary w-full" min="{{ meta.min|default:1 }}" max="{{ meta.max|default:5 }}" step="1" disabled />
+              <div class="flex justify-between text-[11px] opacity-70 mt-1">
+                <span>{{ meta.min|default:1 }}</span>
+                <span>{{ meta.max|default:5 }}</span>
+              </div>
+            </div>
+            {% if meta.right %}<span class="text-sm opacity-70 text-center sm:min-w-16 sm:text-left">{{ meta.right }}</span>{% endif %}
+          </div>
+        {% endif %}
       {% else %}
-        {% if meta.labels %}
+        {% if meta.labels and meta.render == 'radio' %}
+          <div class="flex flex-wrap items-start gap-x-4 gap-y-2">
+            {% for l in meta.labels %}
+              <label class="flex items-center gap-2 cursor-not-allowed">
+                <input type="radio" class="radio radio-primary" disabled />
+                <span class="text-sm">{{ l }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        {% elif meta.labels %}
           {% with slider=meta.labels|likert_slider %}
             <div>
               <div class="text-xs font-semibold text-primary text-center">{{ slider.mid_label }}</div>

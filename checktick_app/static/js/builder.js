@@ -330,6 +330,14 @@
         likertRadio.checked = true;
         likertRadio.dispatchEvent(new Event("change", { bubbles: true }));
       }
+      const likertRender =
+        payload.likert_render || payload.likertRender || "slider";
+      const renderRadio = form.querySelector(
+        `input[name="likert_render"][value="${likertRender}"]`,
+      );
+      if (renderRadio) {
+        renderRadio.checked = true;
+      }
       if (likertMode === "number") {
         const minField = form.querySelector('input[name="likert_min"]');
         const maxField = form.querySelector('input[name="likert_max"]');
