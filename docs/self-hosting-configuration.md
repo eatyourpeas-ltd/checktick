@@ -213,12 +213,13 @@ SNOMED CT is updated twice yearly (April and October). Set up a scheduled task t
 
 #### Volumes
 
-CheckTick requires **two persistent volumes** in addition to your PostgreSQL data directory:
+CheckTick requires **three persistent volumes** in addition to your PostgreSQL data directory:
 
 | Volume        | Suggested size | Purpose                                        |
 | ------------- | -------------- | ---------------------------------------------- |
 | `vault-data`  | 1 GB           | Vault Raft storage — **airgapped, not shared** |
 | `snomed-data` | 10 GB          | SNOMED CT SQLite database (`snomed.db`)        |
+| `media-data`  | 6 GB (min)     | Uploaded images (question images, intro content images, admin icons) |
 
 In Docker Compose these are declared as named volumes and referenced in your `docker-compose.yml`. In Northflank, Railway, Render, or other PaaS providers, create them as persistent disks and mount them at the paths shown below:
 
@@ -226,8 +227,11 @@ In Docker Compose these are declared as named volumes and referenced in your `do
 | ------------- | ----------------------- |
 | `vault-data`  | `/vault/file`           |
 | `snomed-data` | `/app/data`             |
+| `media-data`  | `/app/media`            |
 
 > ⚠️ Do not mount `snomed-data` at the same path as `vault-data`. Vault uses Raft storage in `/vault/file` and must have exclusive access to that directory.
+
+> ⚠️ The `media-data` volume must be mounted at `/app/media` (the `MEDIA_ROOT` path). In production, Django serves uploaded files from this path via `django.views.static.serve`. For high-traffic deployments, front the volume with a CDN or reverse proxy instead.
 
 See [Vault Integration](vault.md) for detailed Vault volume setup and initialisation steps.
 

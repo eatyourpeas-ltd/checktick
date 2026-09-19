@@ -96,7 +96,12 @@ urlpatterns = [
     path("oidc/", include("checktick_app.core.oidc_urls")),
 ]
 
-# Serve uploaded media (icons) in development
+# Serve uploaded media files.
+# In development, Django serves media directly. In production, Django
+# also serves media via django.views.static.serve — this is acceptable
+# for low-traffic image uploads (question images, intro content images,
+# admin icons). For high-traffic deployments, front the volume with a
+# CDN or reverse proxy and remove this block.
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     # Debug views for testing error pages
@@ -116,6 +121,21 @@ if settings.DEBUG:
         path("debug/errors/405", trigger_405, name="debug_405"),
         path("debug/errors/500", trigger_500, name="debug_500"),
         path("debug/errors/lockout", trigger_lockout, name="debug_lockout"),
+    ]
+else:
+    # Production: serve media from the persistent volume via Django.
+    # This is fine for the small number of uploaded images (question
+    # images, intro content images, admin icons). The volume must be
+    # mounted at MEDIA_ROOT (/app/media) in the hosting provider.
+    from django.urls import re_path as _re_path
+    from django.views.static import serve as _media_serve
+
+    urlpatterns += [
+        _re_path(
+            r"^media/(?P<path>.*)$",
+            _media_serve,
+            {"document_root": settings.MEDIA_ROOT},
+        ),
     ]
 
 # Custom error handlers

@@ -15,6 +15,7 @@ Before deploying to production:
 - [ ] Email service configured and tested
 - [ ] Secure passwords generated for database and Django
 - [ ] Firewall configured (ports 80, 443)
+- [ ] Persistent volumes created (database, vault, snomed, media — see [Volumes](self-hosting-configuration.md#volumes))
 - [ ] Backup strategy planned
 
 ## SSL and Nginx Setup
@@ -234,6 +235,15 @@ Nginx already configures aggressive caching for static files:
 location /static/ {
     expires 30d;
     add_header Cache-Control "public, immutable";
+}
+```
+
+For media files (uploaded images), add a similar cache rule if using nginx:
+
+```nginx
+location /media/ {
+    expires 30d;
+    add_header Cache-Control "public";
 }
 ```
 

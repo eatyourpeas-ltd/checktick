@@ -525,14 +525,39 @@ def _reorder_by_question_options(question, options: list[dict]) -> list[dict]:
     if not q_options:
         return options
 
-    # Build order map from question definition
-    order_map = {}
-    for i, opt in enumerate(q_options):
+    # Normalise the question's option definition into a flat list of label
+    # strings in display order. Likert questions may store their config as a
+    # single dict wrapper (``{"type": "categories", "labels": [...]}`` or
+    # ``{"type": "number-scale", "min": 1, "max": 5}``) rather than a plain
+    # list of option strings, so unwrap those here.
+    flat_labels: list[str] = []
+    for opt in q_options:
         if isinstance(opt, dict):
-            label = opt.get("label") or opt.get("value", "")
+            if opt.get("type") == "categories" and isinstance(opt.get("labels"), list):
+                flat_labels.extend(str(label) for label in opt["labels"])
+            elif (
+                opt.get("type") == "number-scale"
+                and opt.get("min") is not None
+                and opt.get("max") is not None
+            ):
+                try:
+                    flat_labels.extend(
+                        str(n) for n in range(int(opt["min"]), int(opt["max"]) + 1)
+                    )
+                except (TypeError, ValueError):
+                    pass
+            else:
+                label = opt.get("label") or opt.get("value", "")
+                if label:
+                    flat_labels.append(str(label))
         else:
-            label = str(opt)
-        order_map[label] = i
+            flat_labels.append(str(opt))
+
+    if not flat_labels:
+        return options
+
+    # Build order map from the normalised label list
+    order_map = {label: i for i, label in enumerate(flat_labels)}
 
     # Sort: defined options first (in order), then others by count
     def sort_key(opt):

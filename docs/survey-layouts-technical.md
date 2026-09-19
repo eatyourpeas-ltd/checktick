@@ -132,10 +132,18 @@ picker template instead of the question list:
 ### Preview
 
 The preview view (`survey_preview`) accepts a `?simulate_groups=1,3`
-query parameter. When present, the questions are filtered to those groups
-(plus mandatory ones) via `_order_questions_by_group`. A "Simulate
-section selection" panel on `detail.html` (shown only in preview mode)
-provides checkboxes for pickable sections and an Apply button.
+query parameter (also submitted as repeated keys:
+`?simulate_groups=1&simulate_groups=3`). When present, the questions are
+filtered to those groups (plus mandatory ones) via
+`_order_questions_by_group`. A "Simulate section selection" panel on
+`detail.html` (shown only in preview mode) provides checkboxes for
+pickable sections and an Apply button.
+
+By default (no `simulate_groups` parameter), the preview shows **only
+mandatory sections** — pickable sections are hidden until the author
+ticks them, mirroring what a participant sees before making a selection.
+The Reset button (which returns to the mandatory-only baseline) only
+appears after an explicit selection has been made.
 
 ### Item sync
 

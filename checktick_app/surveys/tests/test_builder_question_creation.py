@@ -188,6 +188,82 @@ class TestWebappQuestionCreation:
         assert question.type == SurveyQuestion.Types.LIKERT
         assert question.options == ["1", "2", "3", "4", "5"]
 
+    def test_create_likert_categories_radio(self, client):
+        """Likert categories with render=radio stores the render mode."""
+        user, survey = self.setup_survey(client)
+        url = reverse("surveys:builder_question_create", kwargs={"slug": survey.slug})
+
+        response = client.post(
+            url,
+            {
+                "text": "Agreement",
+                "type": "likert",
+                "likert_mode": "categories",
+                "likert_categories": "Disagree\nNeutral\nAgree",
+                "likert_render": "radio",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+
+        assert response.status_code == 200
+        question = SurveyQuestion.objects.get(survey=survey)
+        assert question.type == SurveyQuestion.Types.LIKERT
+        assert question.options == [
+            {
+                "type": "categories",
+                "labels": ["Disagree", "Neutral", "Agree"],
+                "render": "radio",
+            }
+        ]
+
+    def test_create_likert_number_radio(self, client):
+        """Likert number scale with render=radio stores the render mode."""
+        user, survey = self.setup_survey(client)
+        url = reverse("surveys:builder_question_create", kwargs={"slug": survey.slug})
+
+        response = client.post(
+            url,
+            {
+                "text": "Satisfaction 1-5",
+                "type": "likert",
+                "likert_mode": "number",
+                "likert_min": "1",
+                "likert_max": "5",
+                "likert_render": "radio",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+
+        assert response.status_code == 200
+        question = SurveyQuestion.objects.get(survey=survey)
+        assert question.type == SurveyQuestion.Types.LIKERT
+        assert question.options[0]["type"] == "number-scale"
+        assert question.options[0]["render"] == "radio"
+        assert question.options[0]["min"] == 1
+        assert question.options[0]["max"] == 5
+
+    def test_create_likert_categories_slider_omits_render(self, client):
+        """Slider is the default — no render key should be stored."""
+        user, survey = self.setup_survey(client)
+        url = reverse("surveys:builder_question_create", kwargs={"slug": survey.slug})
+
+        response = client.post(
+            url,
+            {
+                "text": "Agreement",
+                "type": "likert",
+                "likert_mode": "categories",
+                "likert_categories": "Disagree\nNeutral\nAgree",
+                "likert_render": "slider",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+
+        assert response.status_code == 200
+        question = SurveyQuestion.objects.get(survey=survey)
+        # Slider default: plain list of strings, no render key
+        assert question.options == ["Disagree", "Neutral", "Agree"]
+
     def test_create_orderable_question(self, client):
         """Test creating an orderable list question."""
         user, survey = self.setup_survey(client)

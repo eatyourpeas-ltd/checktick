@@ -268,7 +268,7 @@
       </label>
       {% endfor %}
       <button type="submit" class="btn btn-xs btn-primary ml-2">{% trans 'Apply' %}</button>
-      {% if simulated_group_ids %}
+      {% if section_menu_has_explicit_selection %}
       <a href="{{ request.path }}" class="btn btn-xs btn-ghost">{% trans 'Reset' %}</a>
       {% endif %}
     </form>
@@ -641,23 +641,45 @@
         {% elif q.type == 'likert' %}
           {% with q.options.0 as meta %}
             {% if meta and meta.type == 'number-scale' %}
-              <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4" role="group" aria-labelledby="q_label_{{ q.id }}">
-                {% if meta.left %}<span class="text-sm opacity-70 text-center sm:min-w-16 sm:text-right" id="range_left_{{ q.id }}">{{ meta.left }}</span>{% endif %}
-                <div class="w-full sm:flex-1">
-                  {% with min_val=meta.min|default:1 max_val=meta.max|default:5 %}
-                    {% widthratio min_val|add:max_val 2 1 as mid_val %}
-                    <input type="range" class="range range-primary w-full" min="{{ min_val }}" max="{{ max_val }}" step="1" value="{{ mid_val }}" name="q_{{ q.id }}" id="range_q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}{% if meta.left %} range_left_{{ q.id }}{% endif %}{% if meta.right %} range_right_{{ q.id }}{% endif %}" aria-valuemin="{{ min_val }}" aria-valuemax="{{ max_val }}" aria-valuenow="{{ mid_val }}"{% if q.required %} aria-required="true"{% endif %} />
-                    <div class="flex justify-between text-[11px] opacity-70 mt-1 nhs-likert-scale-labels" aria-hidden="true">
-                      <span>{{ min_val }}</span>
-                      <span id="range_value_q_{{ q.id }}" class="font-semibold text-primary">{{ mid_val }}</span>
-                      <span>{{ max_val }}</span>
-                    </div>
-                  {% endwith %}
+              {% if meta.render == 'radio' %}
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-2" role="group" aria-labelledby="q_label_{{ q.id }}{% if meta.left %} range_left_{{ q.id }}{% endif %}{% if meta.right %} range_right_{{ q.id }}{% endif %}"{% if q.required %} aria-required="true"{% endif %}>
+                  {% if meta.left %}<span class="text-sm opacity-70" id="range_left_{{ q.id }}">{{ meta.left }}</span>{% endif %}
+                  {% for n in q.num_scale_values %}
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                      <input type="radio" name="q_{{ q.id }}" value="{{ n }}" class="radio radio-primary"{% if q.required %} aria-required="true"{% endif %} />
+                      <span class="text-sm">{{ n }}</span>
+                    </label>
+                  {% endfor %}
+                  {% if meta.right %}<span class="text-sm opacity-70" id="range_right_{{ q.id }}">{{ meta.right }}</span>{% endif %}
                 </div>
-                {% if meta.right %}<span class="text-sm opacity-70 text-center sm:min-w-16 sm:text-left" id="range_right_{{ q.id }}">{{ meta.right }}</span>{% endif %}
-              </div>
+              {% else %}
+                <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4" role="group" aria-labelledby="q_label_{{ q.id }}">
+                  {% if meta.left %}<span class="text-sm opacity-70 text-center sm:min-w-16 sm:text-right" id="range_left_{{ q.id }}">{{ meta.left }}</span>{% endif %}
+                  <div class="w-full sm:flex-1">
+                    {% with min_val=meta.min|default:1 max_val=meta.max|default:5 %}
+                      {% widthratio min_val|add:max_val 2 1 as mid_val %}
+                      <input type="range" class="range range-primary w-full" min="{{ min_val }}" max="{{ max_val }}" step="1" value="{{ mid_val }}" name="q_{{ q.id }}" id="range_q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}{% if meta.left %} range_left_{{ q.id }}{% endif %}{% if meta.right %} range_right_{{ q.id }}{% endif %}" aria-valuemin="{{ min_val }}" aria-valuemax="{{ max_val }}" aria-valuenow="{{ mid_val }}"{% if q.required %} aria-required="true"{% endif %} />
+                      <div class="flex justify-between text-[11px] opacity-70 mt-1 nhs-likert-scale-labels" aria-hidden="true">
+                        <span>{{ min_val }}</span>
+                        <span id="range_value_q_{{ q.id }}" class="font-semibold text-primary">{{ mid_val }}</span>
+                        <span>{{ max_val }}</span>
+                      </div>
+                    {% endwith %}
+                  </div>
+                  {% if meta.right %}<span class="text-sm opacity-70 text-center sm:min-w-16 sm:text-left" id="range_right_{{ q.id }}">{{ meta.right }}</span>{% endif %}
+                </div>
+              {% endif %}
             {% else %}
-              {% if meta.labels %}
+              {% if meta.labels and meta.render == 'radio' %}
+                <div class="flex flex-wrap items-start gap-x-4 gap-y-2" role="group" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true"{% endif %}>
+                  {% for l in meta.labels %}
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input type="radio" name="q_{{ q.id }}" value="{{ l }}" class="radio radio-primary"{% if q.required %} aria-required="true"{% endif %} />
+                      <span class="text-sm">{{ l }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              {% elif meta.labels %}
                 {% with slider=meta.labels|likert_slider %}
                   <div role="group" aria-labelledby="q_label_{{ q.id }}" data-likert-group{% if q.required %} aria-required="true"{% endif %}>
                     <input type="hidden" name="q_{{ q.id }}" value="{{ slider.mid_label }}" />

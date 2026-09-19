@@ -72,6 +72,9 @@ The configuration card has:
   entries when the participant is a few minutes late.
 - **Show participants their compliance summary** — displays the
   compliance stats on the diary landing page.
+- **Intro / landing content block** — an optional content block
+  (welcome text, consent, privacy notice) rendered above the diary
+  landing page. Select from content block questions in this survey.
 
 Click **Save configuration** when done.
 

@@ -9,6 +9,26 @@ class BulkParseError(Exception):
     pass
 
 
+# Allowed render modes for Likert questions. ``slider`` is the historical
+# default (a range input); ``radio`` renders each step as a radio button.
+_LIKERT_RENDER_MODES = {"slider", "radio"}
+
+
+def _normalise_likert_render(raw: Any) -> Optional[str]:
+    """Return a normalised ``render`` value for a Likert question.
+
+    Accepts ``slider``/``radio`` (case-insensitive). Unknown or empty
+    values return ``None`` so the option is omitted and the default slider
+    rendering is used.
+    """
+    if not raw:
+        return None
+    value = _unquote_value(str(raw)).strip().lower()
+    if value in _LIKERT_RENDER_MODES:
+        return value
+    return None
+
+
 def _text_datetime_options(q: Dict[str, Any], fmt: str) -> List[Dict[str, Any]]:
     """Build the options dict for a date/time/datetime text question.
 
@@ -430,7 +450,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                         )
                 else:
                     m = re.match(
-                        r"^(min|max|left|right|dataset|address_lookup|render_once|heading|subtitle)\s*:\s*(.*)$",
+                        r"^(min|max|left|right|dataset|address_lookup|render_once|render|heading|subtitle):(.*)$",
                         line,
                         re.IGNORECASE,
                     )
@@ -625,15 +645,20 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                     options["address_lookup"] = True
                 q["final_options"] = options
             elif t.startswith("likert"):
+                render_val = _normalise_likert_render(q["kv"].get("render"))
                 if "categories" in t:
                     if not q["options"]:
                         raise BulkParseError(
                             f"Likert categories requires category lines for question '{q['title']}'"
                         )
                     q["final_type"] = "likert"
-                    q["final_options"] = [
-                        {"type": "categories", "labels": q["options"][:]}
-                    ]
+                    categories_opts: Dict[str, Any] = {
+                        "type": "categories",
+                        "labels": q["options"][:],
+                    }
+                    if render_val:
+                        categories_opts["render"] = render_val
+                    q["final_options"] = [categories_opts]
                 else:
 
                     def _parse_int_kv(key: str, default: str) -> int:
@@ -662,15 +687,16 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                             f"Likert number min must be < max for question '{q['title']}'"
                         )
                     q["final_type"] = "likert"
-                    q["final_options"] = [
-                        {
-                            "type": "number-scale",
-                            "min": min_v,
-                            "max": max_v,
-                            "left_label": q["kv"].get("left", ""),
-                            "right_label": q["kv"].get("right", ""),
-                        }
-                    ]
+                    number_opts: Dict[str, Any] = {
+                        "type": "number-scale",
+                        "min": min_v,
+                        "max": max_v,
+                        "left_label": q["kv"].get("left", ""),
+                        "right_label": q["kv"].get("right", ""),
+                    }
+                    if render_val:
+                        number_opts["render"] = render_val
+                    q["final_options"] = [number_opts]
             else:
                 raise BulkParseError(
                     f"Unsupported question type '{q['type']}' for '{q['title']}'"
