@@ -450,7 +450,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                         )
                 else:
                     m = re.match(
-                        r"^(min|max|left|right|dataset|address_lookup|render_once|render|heading|subtitle)\s*:\s*(.*)$",
+                        r"^(min|max|left|right|dataset|address_lookup|render_once|render|heading|subtitle):(.*)$",
                         line,
                         re.IGNORECASE,
                     )
