@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "checktick"
-version = "0.19.3"
+version = "0.19.4"
 description = "Secure, server-rendered survey platform for medical audit and research"
 authors = ["CheckTick Maintainers <simon@eatyourpeas.co.uk>"]
 readme = "README.md"
@@ -32,7 +32,7 @@ djangorestframework = "^3.17.2"
 django-csp = "^4.0"
 gunicorn = "^22.0.0"
 djangorestframework-simplejwt = "^5.3.1"
-pyjwt = ">=2.13.0"
+pyjwt = ">=2.14.0"
 markdown = ">=3.10.1"
 pymdown-extensions = ">=11.0.1"
 nh3 = ">=0.2.20"
@@ -47,7 +47,7 @@ pillow = "^12.3.0"
 qrcode = "^8.0"
 django-otp = "^1.6.3"
  marshmallow = "^3.26.2"
- urllib3 = ">=2.7.0"
+ urllib3 = ">=2.8.0"
 idna = ">=3.15"
 # Pinned to address pip-audit vulnerabilities (PYSEC-2026-2132 command injection in click.edit())
 click = ">=8.3.3"
@@ -70,7 +70,7 @@ black = "^26.3.1"
 isort = "^8.0.1"
 # Bumped to latest major releases to address pip-audit vulnerabilities
 django-stubs = {extras = ["compatible-mypy"], version = "^5.0.4"}
-virtualenv = "^20.36.1"
+virtualenv = ">=21.7.13"
 pip-audit = "^2.10.0"
 
 [build-system]
