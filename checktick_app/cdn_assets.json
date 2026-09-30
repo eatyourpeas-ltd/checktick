@@ -4,10 +4,10 @@
       "key": "htmx",
       "name": "HTMX",
       "npm_package": "htmx.org",
-      "version": "2.0.10",
+      "version": "2.0.11",
       "static_file": "js/htmx.min.js",
       "source_path": "dist/htmx.min.js",
-      "sri": "sha384-q2oWHKMnJry5BOtYUZkXcyieUmqzXIjdmKDYicmMspegPENZr4UrGc656JYEgJoo",
+      "sri": "sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg",
       "purpose": "Dynamic HTML updates without JavaScript"
     },
     {
@@ -34,10 +34,10 @@
       "key": "redoc",
       "name": "ReDoc",
       "npm_package": "redoc",
-      "version": "2.5.3",
+      "version": "2.5.4",
       "static_file": "js/redoc.standalone.min.js",
       "source_path": "bundles/redoc.standalone.js",
-      "sri": "sha384-wGl2vRYcqJBa50CzY6euuShOQuBMr6jGCJwEZd2GpPR6Ht+9GDtNpAPpA5QAr7GJ",
+      "sri": "sha384-w447zOpYfw/1Tv/5AK9NfHTlQIqE3RVR6KY62jCyy9zNDgO64cMwGGP1Fj0zJVf5",
       "purpose": "OpenAPI interactive documentation"
     },
     {
