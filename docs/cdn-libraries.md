@@ -34,10 +34,10 @@ Templates read SRI values from this manifest via template context (`cdn_assets.*
 <!-- CDN_LIBRARIES_TABLE:START -->
 | Library | Version | File | Purpose |
 | ------- | ------- | ---- | ------- |
-| HTMX | 2.0.10 | `checktick_app/static/js/htmx.min.js` | Dynamic HTML updates without JavaScript |
+| HTMX | 2.0.11 | `checktick_app/static/js/htmx.min.js` | Dynamic HTML updates without JavaScript |
 | SortableJS | 1.15.7 | `checktick_app/static/js/sortable.min.js` | Drag-and-drop reordering |
 | axe-core | 4.13.0 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
-| ReDoc | 2.5.3 | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation |
+| ReDoc | 2.5.4 | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation |
 | NHS Frontend | 8.1.0 | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling |
 <!-- CDN_LIBRARIES_TABLE:END -->
 
@@ -46,10 +46,10 @@ Templates read SRI values from this manifest via template context (`cdn_assets.*
 Current SHA-384 SRI values:
 
 <!-- CDN_SRI_HASHES:START -->
-### HTMX 2.0.10
+### HTMX 2.0.11
 
 ```text
-sha384-q2oWHKMnJry5BOtYUZkXcyieUmqzXIjdmKDYicmMspegPENZr4UrGc656JYEgJoo
+sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg
 ```
 
 ### SortableJS 1.15.7
@@ -64,10 +64,10 @@ sha384-pAVIuzMQbJcj7JX9XYTtp8sSNh3OvFXn0g9ldX+lANHPoXFdYVKw/2G1gS/eU62A
 sha384-jzJDdyy7z7+/I7TeoAg0Gc8k9hD8b1xRN0W18hMptWJ0cdoiebywhPpCyP9eBOgn
 ```
 
-### ReDoc 2.5.3
+### ReDoc 2.5.4
 
 ```text
-sha384-wGl2vRYcqJBa50CzY6euuShOQuBMr6jGCJwEZd2GpPR6Ht+9GDtNpAPpA5QAr7GJ
+sha384-w447zOpYfw/1Tv/5AK9NfHTlQIqE3RVR6KY62jCyy9zNDgO64cMwGGP1Fj0zJVf5
 ```
 
 ### NHS Frontend 8.1.0

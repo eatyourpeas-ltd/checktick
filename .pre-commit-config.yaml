@@ -3,7 +3,13 @@ repos:
     rev: v6.0.0
     hooks:
       - id: end-of-file-fixer
+        # Third-party minified assets are byte-exact copies of npm packages;
+        # their SRI hashes in checktick_app/cdn_assets.json are computed from
+        # the unmodified npm bytes (matching the CI update-cdn-libraries
+        # workflow). Modifying them would break Subresource Integrity.
+        exclude: ^checktick_app/static/
       - id: trailing-whitespace
+        exclude: ^checktick_app/static/
 
   - repo: https://github.com/GitGuardian/ggshield
     rev: v1.43.0
