@@ -17,7 +17,7 @@
       "version": "1.15.7",
       "static_file": "js/sortable.min.js",
       "source_path": "Sortable.min.js",
-      "sri": "sha384-pAVIuzMQbJcj7JX9XYTtp8sSNh3OvFXn0g9ldX+lANHPoXFdYVKw/2G1gS/eU62A",
+      "sri": "sha384-DgmC6Xe2bSN2WjTDXzWYbUbxyhNP+NNkGDR/g78pCXV7E7rcVTGxVg0uIVCUUcBc",
       "purpose": "Drag-and-drop reordering"
     },
     {
