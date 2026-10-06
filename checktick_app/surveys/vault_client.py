@@ -19,6 +19,7 @@ Security Model:
 
 import logging
 import os
+import threading
 from typing import Optional
 
 from cryptography.hazmat.primitives import hashes
@@ -93,10 +94,30 @@ class VaultClient:
             raise VaultConnectionError(f"Vault connection failed: {e}")
 
     def health_check(self) -> dict:
-        """Check Vault health status."""
+        """Check Vault health status.
+
+        Uses an *unauthenticated* raw client to call ``/sys/health``. Vault's
+        health endpoint is intentionally unauthenticated (it exists for load
+        balancer / readiness probes), so this must NOT go through ``_get_client()``
+        — doing so would mint a fresh AppRole token lease on every probe, which
+        caused the lease-accumulation spikes that OOM-killed and re-sealed
+        Vault (see docs/vault.md "Performance" and the healthz view).
+
+        Vault's health endpoint returns HTTP 200 when healthy but 429/472/503
+        for standby / recovery / sealed states. hvac's JSONAdapter therefore
+        returns a parsed dict only on 200 and a raw ``requests.Response`` for
+        the non-200 cases, so we normalise both into a dict here.
+        """
         try:
-            client = self._get_client()
+            verify_tls = os.getenv("VAULT_TLS_VERIFY", "true").lower() == "true"
+            client = hvac.Client(url=self.vault_addr, verify=verify_tls)
             health = client.sys.read_health_status(method="GET")
+
+            # hvac returns a dict on 200 and a requests.Response otherwise
+            # (sealed/standby/uninitialised all use non-200 status codes).
+            if hasattr(health, "json"):
+                health = health.json()
+
             return {
                 "initialized": health.get("initialized", False),
                 "sealed": health.get("sealed", True),
@@ -759,13 +780,25 @@ class VaultClient:
 
 # Global Vault client instance
 _vault_client: Optional[VaultClient] = None
+_vault_client_lock = threading.Lock()
 
 
 def get_vault_client() -> VaultClient:
-    """Get global Vault client instance (singleton)."""
+    """Get global Vault client instance (singleton, thread-safe).
+
+    Reusing a single VaultClient across requests is critical: each new
+    VaultClient performs a fresh AppRole login on first use, minting a new
+    token lease in Vault. Thousands of short-lived leases expiring together
+    trigger Vault's expiration manager to revoke them en masse, spiking RAM
+    and causing OOM kills that re-seal Vault. Always use this accessor in
+    request paths instead of constructing ``VaultClient()`` directly.
+    """
     global _vault_client
 
     if _vault_client is None:
-        _vault_client = VaultClient()
+        with _vault_client_lock:
+            # Re-check inside the lock to avoid racing another thread.
+            if _vault_client is None:
+                _vault_client = VaultClient()
 
     return _vault_client
