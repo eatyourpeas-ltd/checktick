@@ -2434,9 +2434,9 @@ Return the translation as JSON following the exact structure specified in the sy
 
         # Step 4: Purge escrowed keys from Vault (if using platform key escrow)
         try:
-            from .vault_client import VaultClient
+            from .vault_client import get_vault_client
 
-            vault_client = VaultClient()
+            vault_client = get_vault_client()
             vault_path = f"surveys/{self.id}/kek"
             vault_client.purge_survey_kek(vault_path)
             logger.info(

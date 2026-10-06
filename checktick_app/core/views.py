@@ -298,11 +298,15 @@ def healthz(request):
         status["status"] = "error"
         http_status = 503
 
-    # Vault check — sealed vault is a critical failure: survey encryption is broken
+    # Vault check — sealed vault is a critical failure: survey encryption is broken.
+    # Use the singleton accessor; health_check() itself is unauthenticated (it
+    # calls /sys/health directly) so it does NOT mint an AppRole token lease
+    # on every probe — that pattern previously caused lease-accumulation OOMs
+    # that re-sealed Vault.
     try:
-        from checktick_app.surveys.vault_client import VaultClient
+        from checktick_app.surveys.vault_client import get_vault_client
 
-        vault_health = VaultClient().health_check()
+        vault_health = get_vault_client().health_check()
         if vault_health.get("sealed"):
             logger.error("healthz: Vault is sealed")
             status["vault"] = "sealed"
