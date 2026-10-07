@@ -1165,6 +1165,7 @@ Before going live:
 - [ ] `VAULT_ROLE_ID` and `VAULT_SECRET_ID` in secure secret manager
 - [ ] VAULT_SECRET_ID rotation policy documented (90-day cycle)
 - [ ] Token TTL configured: 1h access, 8h max
+- [ ] AppRole `token_type=batch` (prevents lease-accumulation revocation storms; see `docs/compliance/security-review-august-2026.md` and the `vault_client.py` healthz fix)
 
 ### Audit & Monitoring
 
@@ -1219,7 +1220,9 @@ Before going live:
 
 ### Caching
 
-The `VaultClient` caches authenticated connections. Token TTL: 1 hour (configurable).
+The `VaultClient` caches authenticated connections via a thread-safe singleton (`get_vault_client()`). Token TTL: 1 hour (configurable).
+
+**Batch tokens:** the `checktick-app` AppRole uses `token_type=batch`. Batch tokens are stateless — they do not create leases in Vault's token store and cannot be revoked. This eliminates the lease-accumulation / revocation-storm failure mode where mass token expiry spikes Vault's expiration-manager RAM and triggers OOM kills that re-seal Vault. Trade-off: batch tokens cannot be revoked early, so the TTL bounds the compromise window (1h). The singleton ensures only one token per process at a time. See `vault/setup_vault.py` for the role definition.
 
 ---
 

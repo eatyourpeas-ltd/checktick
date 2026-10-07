@@ -48,13 +48,25 @@ def staged_survey(owner, org):
     g_review = QuestionGroup.objects.create(name="Review", owner=owner)
     s.question_groups.add(g_base, g_follow, g_review)
     SurveyQuestion.objects.create(
-        survey=s, group=g_base, text="BQ", type=SurveyQuestion.Types.TEXT, order=0
+        survey=s,
+        group=g_base,
+        text="baseline-question",
+        type=SurveyQuestion.Types.TEXT,
+        order=0,
     )
     SurveyQuestion.objects.create(
-        survey=s, group=g_follow, text="FQ", type=SurveyQuestion.Types.TEXT, order=0
+        survey=s,
+        group=g_follow,
+        text="followup-question",
+        type=SurveyQuestion.Types.TEXT,
+        order=0,
     )
     SurveyQuestion.objects.create(
-        survey=s, group=g_review, text="RQ", type=SurveyQuestion.Types.TEXT, order=0
+        survey=s,
+        group=g_review,
+        text="review-question",
+        type=SurveyQuestion.Types.TEXT,
+        order=0,
     )
     menu = StagedMenu.objects.create(survey=s)
     p1 = StagedPhase.objects.create(
@@ -97,9 +109,9 @@ def test_preview_simulate_phase_filters_questions(client, staged_survey, owner):
     res = client.get(url, {"simulate_phase": str(staged_survey._p2.id)})
     assert res.status_code == 200
     html = res.content.decode()
-    assert "FQ" in html
-    assert "BQ" not in html
-    assert "RQ" not in html
+    assert "followup-question" in html
+    assert "baseline-question" not in html
+    assert "review-question" not in html
 
 
 @pytest.mark.django_db
@@ -109,8 +121,8 @@ def test_preview_simulate_baseline_phase(client, staged_survey, owner):
     res = client.get(url, {"simulate_phase": str(staged_survey._p1.id)})
     assert res.status_code == 200
     html = res.content.decode()
-    assert "BQ" in html
-    assert "FQ" not in html
+    assert "baseline-question" in html
+    assert "followup-question" not in html
 
 
 @pytest.mark.django_db
@@ -121,9 +133,9 @@ def test_preview_without_simulate_phase_shows_all(client, staged_survey, owner):
     assert res.status_code == 200
     html = res.content.decode()
     # Without simulation, all questions appear (the union of all phases).
-    assert "BQ" in html
-    assert "FQ" in html
-    assert "RQ" in html
+    assert "baseline-question" in html
+    assert "followup-question" in html
+    assert "review-question" in html
 
 
 @pytest.mark.django_db
@@ -133,9 +145,9 @@ def test_preview_simulate_invalid_phase_shows_all(client, staged_survey, owner):
     res = client.get(url, {"simulate_phase": "99999"})
     assert res.status_code == 200
     html = res.content.decode()
-    assert "BQ" in html
-    assert "FQ" in html
-    assert "RQ" in html
+    assert "baseline-question" in html
+    assert "followup-question" in html
+    assert "review-question" in html
 
 
 # --- survey map phase badges ---

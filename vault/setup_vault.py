@@ -166,17 +166,30 @@ def enable_approle_auth(client):
             client.sys.enable_auth_method(method_type="approle", path="approle")
             print("  ✅ Enabled AppRole auth method")
 
-        # Create AppRole for CheckTick
+        # Create AppRole for CheckTick.
+        #
+        # token_type=batch: batch tokens are stateless — they are NOT stored in
+        # Vault's token store, do NOT create leases, and cannot be revoked or
+        # renewed. This eliminates the lease-accumulation / revocation-storm
+        # failure mode that OOM-killed and re-sealed Vault when the Django app
+        # minted many short-lived service tokens (see the fix in
+        # checktick_app/surveys/vault_client.py and the healthz view).
+        #
+        # Trade-off: batch tokens cannot be revoked early. If one is
+        # compromised, you must wait for token_ttl to expire. Keep token_ttl
+        # short (1h) to bound that window. token_max_ttl is retained for
+        # compatibility but is a no-op for batch tokens (they can't be renewed).
         client.auth.approle.create_or_update_approle(
             role_name="checktick-app",
             token_policies=["checktick-app"],
+            token_type="batch",
             token_ttl="1h",
-            token_max_ttl="8h",  # Reduced from 24h for security
+            token_max_ttl="8h",
             bind_secret_id=True,
             secret_id_ttl="90d",  # 90-day rotation policy
             token_num_uses=0,  # Unlimited uses
         )
-        print("  ✅ Created checktick-app AppRole")
+        print("  ✅ Created checktick-app AppRole (batch tokens)")
 
         # Get RoleID and SecretID
         role_id = client.auth.approle.read_role_id(role_name="checktick-app")["data"][
