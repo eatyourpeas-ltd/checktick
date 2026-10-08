@@ -133,3 +133,5 @@ Use this section for routine dependency/library updates where no specific CVE or
 | 30/09/2026 | Dr Simon Chapman | Updated self-hosted htmx.org (2.0.10 -> 2.0.11) and regenerated SHA-384 SRI (sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg) | Routine JavaScript dependency maintenance (no CVE remediation referenced) | Dr Serena Haywood (SIRO) | ✅ Active |
 
 | 30/09/2026 | Dr Simon Chapman | Updated self-hosted redoc (2.5.3 -> 2.5.4) and regenerated SHA-384 SRI (sha384-w447zOpYfw/1Tv/5AK9NfHTlQIqE3RVR6KY62jCyy9zNDgO64cMwGGP1Fj0zJVf5) | Routine JavaScript dependency maintenance (no CVE remediation referenced) | Dr Serena Haywood (SIRO) | ✅ Active |
+
+| 08/10/2026 | Dr Simon Chapman | Updated self-hosted axe-core (4.13.0 -> 4.14.0) and regenerated SHA-384 SRI (sha384-lFUXB8tI4BaTE1bqxH9eeAXON2NH1qsdAhs7S5L++nUNP5QOy+hwr0C3TYEJUEl0) | Routine JavaScript dependency maintenance (no CVE remediation referenced) | Dr Serena Haywood (SIRO) | ✅ Active |
