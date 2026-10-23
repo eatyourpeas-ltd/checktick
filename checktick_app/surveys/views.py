@@ -8617,6 +8617,120 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         messages.success(request, _("Diary configuration saved."))
         return redirect("surveys:groups", slug=slug)
 
+    # Respondent categories — add dimension (cross-cutting feature, not a
+    # layout). Creates a new RespondentCategory for this survey.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "add_respondent_category"
+        and can_edit
+    ):
+        name = (request.POST.get("category_name", "") or "").strip()[:50]
+        if not name:
+            messages.error(request, _("Please provide a dimension name."))
+            return redirect("surveys:groups", slug=slug)
+        # Slugify the name for the dimension key.
+        import re
+
+        slug = re.sub(r"[^a-z0-9_]+", "_", name.lower()).strip("_")
+        if not slug:
+            slug = "dimension"
+        # Ensure uniqueness within the survey.
+        existing = set(survey.respondent_categories.values_list("name", flat=True))
+        base = slug
+        i = 2
+        while slug in existing:
+            slug = f"{base}_{i}"
+            i += 1
+        next_order = (
+            survey.respondent_categories.aggregate(m=models.Max("order"))["m"] or 0
+        ) + 1
+        RespondentCategory.objects.create(
+            survey=survey,
+            name=slug,
+            label=name,
+            allowed_values=[],
+            order=next_order,
+        )
+        messages.success(request, _("Category dimension added."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Respondent categories — save dimension (name, label, allowed_values,
+    # resolution_source, source_question, profile_field).
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_respondent_category"
+        and can_edit
+    ):
+        cat_id_raw = request.POST.get("category_id", "")
+        if cat_id_raw.isdigit():
+            try:
+                cat = survey.respondent_categories.get(id=int(cat_id_raw))
+            except RespondentCategory.DoesNotExist:
+                messages.error(request, _("Category not found."))
+                return redirect("surveys:groups", slug=slug)
+            label = (request.POST.get(f"label_{cat.id}", "") or "").strip()[:100]
+            cat.label = label
+            # allowed_values: comma-separated free-text.
+            values_raw = (
+                request.POST.get(f"allowed_values_{cat.id}", "") or ""
+            ).strip()
+            cat.allowed_values = (
+                [v.strip() for v in values_raw.split(",") if v.strip()]
+                if values_raw
+                else []
+            )
+            # resolution_source.
+            source = request.POST.get(
+                f"resolution_source_{cat.id}",
+                RespondentCategory.ResolutionSource.TOKEN,
+            )
+            if source in {c[0] for c in RespondentCategory.ResolutionSource.choices}:
+                cat.resolution_source = source
+            # source_question (for self_select).
+            sq_raw = (request.POST.get(f"source_question_{cat.id}", "") or "").strip()
+            if sq_raw.isdigit():
+                cat.source_question_id = int(sq_raw)
+            else:
+                cat.source_question_id = None
+            # profile_field (for profile).
+            cat.profile_field = (
+                request.POST.get(f"profile_field_{cat.id}", "") or ""
+            ).strip()[:100]
+            cat.save()
+            messages.success(request, _("Category dimension saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Respondent categories — remove dimension.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "remove_respondent_category"
+        and can_edit
+    ):
+        cat_id_raw = request.POST.get("category_id", "")
+        if cat_id_raw.isdigit():
+            survey.respondent_categories.filter(id=int(cat_id_raw)).delete()
+            messages.success(request, _("Category dimension removed."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Respondent categories — save group required_categories (the
+    # "Visible to" control on each section). Saves required_categories on
+    # each group from the form.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_group_categories"
+        and can_edit
+    ):
+        for g in survey.question_groups.all():
+            rules: dict[str, list[str]] = {}
+            for cat in survey.respondent_categories.all():
+                checked = request.POST.getlist(f"group_{g.id}_cat_{cat.id}")
+                if checked:
+                    rules[cat.name] = [v for v in checked if v]
+            g.required_categories = rules
+            g.save(update_fields=["required_categories"])
+        messages.success(request, _("Section visibility saved."))
+        return redirect("surveys:groups", slug=slug)
+
     groups_qs = survey.question_groups.annotate(
         q_count=models.Count(
             "surveyquestion", filter=models.Q(surveyquestion__survey=survey)
@@ -9353,6 +9467,15 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "diary_schedule_choices": diary_schedule_choices,
         "diary_anchor_choices": diary_anchor_choices,
         "diary_warnings": diary_warnings,
+        # Respondent categories (cross-cutting feature, not a layout).
+        # Available for any layout; empty list for surveys with no
+        # RespondentCategory rows.
+        "respondent_categories": list(
+            survey.respondent_categories.order_by("order", "id")
+        ),
+        "respondent_category_resolution_choices": (
+            RespondentCategory.ResolutionSource.choices
+        ),
         # Layout tier gating (see tier_limits.py allowed_layouts).
         "allowed_layouts": get_allowed_layouts(request.user),
     }
