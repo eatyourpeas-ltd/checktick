@@ -14729,6 +14729,50 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                 menu.save()
                 summary_parts.append(" Diary (EMA) layout applied.")
 
+        # Apply CATEGORIES config from the outline (see docs/
+        # respondent-categories-implementation-plan.md §Outline grammar).
+        # A cross-cutting feature, not a layout — available for any
+        # layout. Creates RespondentCategory dimensions and applies
+        # required_categories to groups from ``~ cat:`` suffixes.
+        categories_cfg = parsed.get("categories")
+        categories_group_rules = parsed.get("categories_group_rules", {})
+        if categories_cfg and categories_cfg.get("dimensions"):
+            # Clear existing categories for this survey (the bulk upload
+            # replaces all content, matching the layout-block contract).
+            survey.respondent_categories.all().delete()
+            dims_by_name: dict[str, RespondentCategory] = {}
+            for i, dim in enumerate(categories_cfg["dimensions"]):
+                cat = RespondentCategory.objects.create(
+                    survey=survey,
+                    name=dim["name"],
+                    label=dim.get("label", ""),
+                    allowed_values=dim.get("allowed_values", []),
+                    resolution_source=dim.get(
+                        "resolution_source",
+                        RespondentCategory.ResolutionSource.TOKEN,
+                    ),
+                    profile_field=dim.get("profile_field", ""),
+                    order=i + 1,
+                )
+                # source_question: resolve by ref ID if provided.
+                sq_ref = dim.get("source_question")
+                if sq_ref:
+                    sq = group_ref_map.get(sq_ref) or question_ref_map.get(sq_ref)
+                    if sq is not None and isinstance(sq, SurveyQuestion):
+                        cat.source_question = sq
+                        cat.save(update_fields=["source_question"])
+                dims_by_name[cat.name] = cat
+            # Apply required_categories to groups from ``~ cat:`` suffixes.
+            for g in created_groups_in_order:
+                rules_list = categories_group_rules.get(g.name, [])
+                if rules_list:
+                    rules: dict[str, list[str]] = {}
+                    for dim_name, val in rules_list:
+                        rules.setdefault(dim_name, []).append(val)
+                    g.required_categories = rules
+                    g.save(update_fields=["required_categories"])
+            summary_parts.append(" Respondent categories applied.")
+
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)
     return render(request, "surveys/bulk_upload.html", context)
@@ -14906,6 +14950,40 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             )
             lines.append("")
 
+    # CATEGORIES block (see docs/respondent-categories-implementation-
+    # plan.md §Outline grammar). Emitted at the top when the survey has
+    # RespondentCategory rows. A cross-cutting feature, not a layout —
+    # available for any layout. The ``~ cat:<dim>:<value>`` suffix is
+    # placed on the actual content group headings below.
+    categories_group_rules_by_id: dict[int, list[tuple[str, str]]] = {}
+    if survey.respondent_categories.exists():
+        lines.append("CATEGORIES")
+        for cat in survey.respondent_categories.order_by("order", "id"):
+            lines.append(f"  {cat.name}:")
+            if cat.label:
+                lines.append(f"    label: {cat.label}")
+            if cat.allowed_values:
+                lines.append(f"    values: {', '.join(cat.allowed_values)}")
+            lines.append(f"    source: {cat.resolution_source}")
+            if cat.source_question_id is not None:
+                sq_ref = (
+                    cat.source_question.text.lower()[:30].replace(" ", "-").strip("-")
+                )
+                lines.append(f"    question: {{{sq_ref}}}")
+            if cat.profile_field:
+                lines.append(f"    profile_field: {cat.profile_field}")
+        lines.append("")
+        # Build a lookup: group_id → list of (dim, value) pairs from
+        # each group's required_categories.
+        for group in groups:
+            rules = group.required_categories or {}
+            pairs: list[tuple[str, str]] = []
+            for dim, vals in rules.items():
+                for val in vals:
+                    pairs.append((dim, val))
+            if pairs:
+                categories_group_rules_by_id[group.id] = pairs
+
     for group in groups:
         # Check if this group is part of a collection
         parent_coll_item = (
@@ -14956,28 +15034,35 @@ def _export_survey_to_markdown(survey: Survey) -> str:
         # Add group heading
         group_ref = group.name.lower().replace(" ", "-")
         heading = f"{indent}# {group.name} {{{group_ref}}}"
-        # Append ``~ pickable`` suffix for section_menu layout
+        # Collect all ``~`` suffix parts (layout-specific + categories).
+        # They are combined into a single ``~`` suffix on the heading so
+        # the parser can extract them in one pass.
+        suffix_parts: list[str] = []
+        # ``~ pickable`` suffix for section_menu layout
         sm_item = section_menu_items_by_group.get(group.id)
         if sm_item and sm_item.is_pickable:
-            suffix = "~ pickable"
+            pickable_suffix = "pickable"
             if sm_item.estimated_minutes:
-                suffix += f", {sm_item.estimated_minutes} min"
-            heading = f"{heading}    {suffix}"
-        # Append ``~ arm:<name>`` suffixes for RCT layout
+                pickable_suffix += f", {sm_item.estimated_minutes} min"
+            suffix_parts.append(pickable_suffix)
+        # ``~ arm:<name>`` suffixes for RCT layout
         rct_arms = randomised_arms_by_group.get(group.id)
         if rct_arms:
-            arm_suffix = ", ".join(f"arm:{name}" for name in rct_arms)
-            heading = f"{heading}    ~ {arm_suffix}"
-        # Append ``~ phase:<name>`` suffixes for staged layout
+            suffix_parts.extend(f"arm:{name}" for name in rct_arms)
+        # ``~ phase:<name>`` suffixes for staged layout
         staged_phases = staged_phases_by_group.get(group.id)
         if staged_phases:
-            phase_suffix = ", ".join(f"phase:{name}" for name in staged_phases)
-            heading = f"{heading}    ~ {phase_suffix}"
-        # Append ``~ round:<name>`` suffixes for delphi layout
+            suffix_parts.extend(f"phase:{name}" for name in staged_phases)
+        # ``~ round:<name>`` suffixes for delphi layout
         delphi_rounds = delphi_rounds_by_group.get(group.id)
         if delphi_rounds:
-            round_suffix = ", ".join(f"round:{name}" for name in delphi_rounds)
-            heading = f"{heading}    ~ {round_suffix}"
+            suffix_parts.extend(f"round:{name}" for name in delphi_rounds)
+        # ``~ cat:<dim>:<value>`` suffixes for respondent categories
+        cat_rules = categories_group_rules_by_id.get(group.id)
+        if cat_rules:
+            suffix_parts.extend(f"cat:{dim}:{val}" for dim, val in cat_rules)
+        if suffix_parts:
+            heading = f"{heading}    ~ {', '.join(suffix_parts)}"
         lines.append(heading)
         if group.description:
             lines.append(f"{indent}{group.description}")

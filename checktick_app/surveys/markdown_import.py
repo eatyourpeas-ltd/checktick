@@ -904,6 +904,34 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
     diary: Dict[str, Any] | None = None
     in_diary_block = False
 
+    # CATEGORIES block parsing (see docs/respondent-categories-
+    # implementation-plan.md §Outline grammar). A cross-cutting feature,
+    # not a layout — available for any layout. The block appears before
+    # any group headings and contains one or more dimension definitions:
+    #
+    #     CATEGORIES
+    #       rater_role:
+    #         values: self, peer, supervisor, patient
+    #         source: token
+    #       subject:
+    #         values: self
+    #         source: self_select
+    #         question: {subject-id}
+    #
+    # The ``~ cat:<dim>:<value>`` suffix is placed on the actual content
+    # group headings, e.g.::
+    #
+    #     # Peer rating {peer-rating}    ~ cat:rater_role:peer
+    #
+    # A group may be visible to multiple values of a dimension:
+    # ``~ cat:rater_role:peer, cat:rater_role:supervisor``.
+    categories: Dict[str, Any] | None = None
+    in_categories_block = False
+    # Current dimension being parsed (the last ``key:`` line).
+    categories_current_dim: str | None = None
+    # Map group name -> list of (dim, value) pairs from ``~ cat:`` suffixes.
+    categories_group_rules: Dict[str, List[tuple[str, str]]] = {}
+
     for raw in raw_lines:
         # Count leading '>' as depth
         s = raw
@@ -1306,6 +1334,78 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
             in_diary_block = False
             # Fall through to regular parsing for this line
 
+        # CATEGORIES block start (see docs/respondent-categories-
+        # implementation-plan.md §Outline grammar). A cross-cutting feature,
+        # not a layout — available for any layout.
+        if _re.match(r"^CATEGORIES$", stripped, flags=_re.IGNORECASE):
+            in_categories_block = True
+            categories = {"dimensions": []}
+            categories_current_dim = None
+            continue
+
+        # CATEGORIES config lines. Two shapes:
+        #   <dim>:
+        #     values: self, peer, supervisor
+        #     source: token
+        #     question: {subject-id}
+        # The ``<dim>:`` line starts a new dimension; indented ``key:``
+        # lines set its properties.
+        if in_categories_block and (depth > 0 or raw[:1].isspace()):
+            # Dimension header: ``<dim>:`` (no value after the colon).
+            dim_match = _re.match(r"^([\w-]+)\s*:\s*$", stripped)
+            if dim_match and categories is not None:
+                categories_current_dim = dim_match.group(1).strip()
+                categories["dimensions"].append(
+                    {
+                        "name": categories_current_dim,
+                        "label": "",
+                        "allowed_values": [],
+                        "resolution_source": "token",
+                        "source_question": None,
+                        "profile_field": "",
+                    }
+                )
+                continue
+            # Property line: ``key: value``
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            if (
+                cfg_match
+                and categories is not None
+                and categories_current_dim is not None
+            ):
+                key = cfg_match.group(1).lower()
+                val_raw = cfg_match.group(2).strip()
+                dim = categories["dimensions"][-1]
+                if key == "values":
+                    dim["allowed_values"] = [
+                        v.strip() for v in val_raw.split(",") if v.strip()
+                    ]
+                elif key == "source":
+                    if val_raw in ("token", "self_select", "system", "profile"):
+                        dim["resolution_source"] = val_raw
+                elif key == "question":
+                    # ``question: {question-id}`` — strip braces.
+                    ref_match = _re.search(r"\{([^{}]+)\}", val_raw)
+                    if ref_match:
+                        dim["source_question"] = ref_match.group(1).strip()
+                elif key == "label":
+                    dim["label"] = val_raw
+                elif key == "profile_field":
+                    dim["profile_field"] = val_raw
+                continue
+
+        # Blank line ends the CATEGORIES config block
+        if in_categories_block and not stripped:
+            in_categories_block = False
+            categories_current_dim = None
+            continue
+
+        # Unknown non-indented line inside CATEGORIES block also ends it
+        if in_categories_block and depth == 0 and not raw[:1].isspace():
+            in_categories_block = False
+            categories_current_dim = None
+            # Fall through to regular parsing for this line
+
         # REPEAT marker?
         m = _re.match(r"^REPEAT(?:-(\d+))?$", content.strip(), flags=_re.IGNORECASE)
         if m:
@@ -1321,6 +1421,52 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
             # the heading before it reaches the regular parser.
             heading_content = content
             tilde_idx = heading_content.find("~")
+            # CATEGORIES ``~ cat:<dim>:<value>`` suffix is extracted
+            # independently of the layout-specific suffixes so it can
+            # coexist with ``~ arm:``, ``~ phase:``, ``~ round:`` on the
+            # same heading. The cat tokens are removed from the heading
+            # before the layout-specific suffix handling runs.
+            if (
+                tilde_idx != -1
+                and categories is not None
+                and "cat:" in heading_content[tilde_idx:]
+            ):
+                suffix = heading_content[tilde_idx + 1 :].strip()
+                heading_content = heading_content[:tilde_idx].rstrip()
+                # Extract all cat:<dim>:<value> tokens (comma-separated).
+                cat_matches = _re.findall(
+                    r"cat:([\w]+):([^,]+?)(?:,|$)",
+                    suffix,
+                    flags=_re.IGNORECASE,
+                )
+                cat_pairs = [
+                    (d.strip(), v.strip())
+                    for d, v in cat_matches
+                    if d.strip() and v.strip()
+                ]
+                # Extract group name from the cleaned heading.
+                heading_text = heading_content.strip()[2:]  # remove "# "
+                ref_match = _re.search(r"\{([^{}]+)\}\s*$", heading_text)
+                if ref_match:
+                    heading_text = heading_text[: ref_match.start()].rstrip()
+                categories_group_rules[heading_text] = cat_pairs
+                # Re-add any non-cat suffixes so the layout-specific
+                # handlers below can process them.
+                non_cat = [
+                    part.strip()
+                    for part in suffix.split(",")
+                    if not part.strip().lower().startswith("cat:")
+                ]
+                if non_cat:
+                    heading_content = f"{heading_content}    ~ {', '.join(non_cat)}"
+                    tilde_idx = heading_content.find("~")
+                else:
+                    tilde_idx = -1
+                # Update content to the cleaned heading so the ~ cat:
+                # suffix is stripped even when no layout-specific handler
+                # runs (e.g. a CATEGORIES-only survey with no RANDOMISED /
+                # STAGED / DELPHI block).
+                content = heading_content
             if tilde_idx != -1 and section_menu is not None:
                 # ``~ pickable[, N min]`` for section_menu layout.
                 suffix = heading_content[tilde_idx + 1 :].strip()
@@ -1522,4 +1668,6 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
         "matrix": matrix,
         "delphi": delphi,
         "diary": diary,
+        "categories": categories,
+        "categories_group_rules": categories_group_rules,
     }
