@@ -9,7 +9,7 @@ packages = [
 ]
 
  [tool.poetry.dependencies]
-python = ">=3.10,<3.13"
+python = ">=3.11,<3.13"
 django = "~5.2.15"
 # Pinned to address pip-audit vulnerabilities (PYSEC-2026-3696/3697/3698/3699 ReDoS/DoS/code-injection).
 # Transitive dep of Django (django.db.backends SQL formatting); constrained here so the lockfile cannot drift back to 0.5.x.
@@ -28,7 +28,7 @@ nhs-number = "^1.3.6"
 # Pinned floor to address pip-audit vulnerabilities (CVE-2026-73228 request-size
 # bypass via request.data; CVE-2026-73229 AdminRenderer GET disclosure), both
 # fixed in 3.17.2. Prevents the lockfile from drifting back to vulnerable 3.16.x.
-djangorestframework = "^3.17.2"
+djangorestframework = "^3.18.2"
 django-csp = "^4.0"
 gunicorn = "^22.0.0"
 djangorestframework-simplejwt = "^5.3.1"
@@ -43,7 +43,7 @@ mozilla-django-oidc = "^4.0.1"
 beautifulsoup4 = "^4.12.0"
 requests = "^2.33.0"
 hvac = "^2.4.0"
-pillow = "^12.3.0"
+pillow = "^13.0.0"
 qrcode = "^8.0"
 django-otp = "^1.6.3"
  marshmallow = "^3.26.2"
@@ -66,11 +66,11 @@ pytest-env = "^1.1.5"
 pytest-playwright = "^0.7.0"
 axe-playwright-python = "^0.1.5"
 ruff = "^0.15.6"
-black = "^26.3.1"
+black = "^26.10.1"
 isort = "^8.0.1"
 # Bumped to latest major releases to address pip-audit vulnerabilities
 django-stubs = {extras = ["compatible-mypy"], version = "^5.0.4"}
-virtualenv = ">=21.7.13"
+virtualenv = ">=21.14.9"
 pip-audit = "^2.10.0"
 
 [build-system]
