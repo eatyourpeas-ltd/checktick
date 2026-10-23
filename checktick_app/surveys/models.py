@@ -666,6 +666,23 @@ class QuestionGroup(models.Model):
         help_text="Source published template if this was imported",
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    # [Respondent categories] Category rules gating this section
+    # (dimension -> [allowed values]), e.g.
+    # {"rater_role": ["peer", "supervisor"]} = show this section only to
+    # peer and supervisor raters. Empty/absent = visible to all. Enforced
+    # by the runtime hook as a static pre-step filter on
+    # _resolved_group_order_ids (see docs/respondent-categories-
+    # implementation-plan.md). A linear survey with no RespondentCategory
+    # rows has empty required_categories everywhere and the filter is a
+    # no-op.
+    required_categories = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Category rules gating this section (dimension -> [allowed "
+            "values]). Empty/absent = visible to all."
+        ),
+    )
 
     def __str__(self) -> str:  # pragma: no cover
         return self.name
@@ -2612,6 +2629,19 @@ class SurveyQuestion(models.Model):
         related_name="questions",
         help_text="Optional link to a shared dataset for dropdown options",
     )
+    # [Respondent categories] Category rules gating this question
+    # (dimension -> [allowed values]). Empty/absent = visible to all. The
+    # field exists on the model but is not enforced by the runtime hook in
+    # this release; group-level filtering ships first (see
+    # docs/respondent-categories-implementation-plan.md Resolved decisions 4).
+    required_categories = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Category rules gating this question (dimension -> [allowed "
+            "values]). Empty/absent = visible to all."
+        ),
+    )
 
     class Meta:
         ordering = ["order", "id"]
@@ -3690,6 +3720,20 @@ class SurveyAccessToken(models.Model):
         default=False,
         help_text="True if this token is for authenticated user invitation (not anonymous token)",
     )
+    # [Respondent categories] Category values carried by this token batch
+    # (dimension -> value), e.g. {"rater_role": "peer"} for a peer-rater
+    # batch. Blank = no token-borne values; the dimension falls back to
+    # its next resolution source (self_select > system > profile). See
+    # docs/respondent-categories-implementation-plan.md.
+    category_values = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Category values carried by this token batch (dimension -> value). "
+            "Blank = no token-borne values; the dimension falls back to its "
+            "next resolution source."
+        ),
+    )
 
     class Meta:
         indexes = [
@@ -4700,6 +4744,137 @@ class DiaryEntry(models.Model):
             else ("missed" if self.is_missed else "pending")
         )
         return f"DiaryEntry #{self.order} ({status}) for {self.progress}"
+
+
+class RespondentCategory(models.Model):
+    """One category dimension per survey (e.g. rater_role, site, cohort).
+
+    Respondent categories is a cross-cutting feature (not a layout) that lets
+    a survey author categorise respondents along one or more author-defined
+    dimensions within a single published survey, so different respondents
+    see different subsets of the same survey without cloning it. It
+    generalises the per-layout FK pattern the codebase already uses
+    (``assigned_arm`` for RCT, ``delphi_round`` for Delphi, ``access_token``
+    for token visibility) and unblocks the 360 / multi-rater assessment
+    pattern.
+
+    Dimensions are author-defined; there is no fixed enum. ``name`` is the
+    key used in ``required_categories`` rules and ``category_values`` maps.
+    ``allowed_values`` is a free-text list the author types on the Organise
+    page. ``resolution_source`` controls how the value for this dimension is
+    resolved for a participant, in priority order: token > self_select >
+    system > profile.
+
+    See docs/respondent-categories-implementation-plan.md. A survey with no
+    ``RespondentCategory`` rows behaves exactly as before —
+    ``required_categories`` defaults to ``{}`` everywhere and the runtime
+    filter is a no-op.
+    """
+
+    survey = models.ForeignKey(
+        Survey,
+        related_name="respondent_categories",
+        on_delete=models.CASCADE,
+    )
+    name = models.CharField(
+        max_length=50,
+        help_text=(
+            "Dimension key, e.g. 'rater_role', 'site', 'cohort'. Slug-like. "
+            "Used as the key in required_categories rules and category_values "
+            "maps."
+        ),
+    )
+    label = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Human label for the Organise page (defaults to name).",
+    )
+    allowed_values = models.JSONField(
+        default=list,
+        help_text=(
+            "List of allowed values for this dimension, e.g. "
+            "['self', 'peer', 'supervisor', 'patient']. Author-defined; there "
+            "is no fixed enum."
+        ),
+    )
+
+    class ResolutionSource(models.TextChoices):
+        TOKEN = "token", "Invite token"
+        SELF_SELECT = "self_select", "Self-select question"
+        SYSTEM = "system", "System assignment (RCT allocator)"
+        PROFILE = "profile", "Profile field"
+
+    resolution_source = models.CharField(
+        max_length=20,
+        choices=ResolutionSource.choices,
+        default=ResolutionSource.TOKEN,
+        help_text=(
+            "How the value for this dimension is resolved for a participant, "
+            "in priority order: token > self_select > system > profile."
+        ),
+    )
+    # For resolution_source = self_select: the question whose answer
+    # populates this dimension. For profile: the profile field key.
+    source_question = models.ForeignKey(
+        "SurveyQuestion",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="resolved_categories",
+        help_text=(
+            "For self_select resolution: the question whose answer populates "
+            "this dimension."
+        ),
+    )
+    profile_field = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text=(
+            "For profile resolution: the UserProfile/Org field key to read "
+            "the value from."
+        ),
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Display order on the Organise page.",
+    )
+
+    class Meta:
+        unique_together = ("survey", "name")
+        ordering = ["order", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.survey.name})"
+
+
+class RespondentAssignment(models.Model):
+    """The resolved category value for one participant x dimension.
+
+    Resolved once at first access and preserved on resume — same lifecycle
+    as ``assigned_arm`` (RCT) and ``delphi_round`` (Delphi). One row per
+    ``SurveyProgress`` x ``RespondentCategory``.
+    """
+
+    progress = models.ForeignKey(
+        SurveyProgress,
+        related_name="category_assignments",
+        on_delete=models.CASCADE,
+    )
+    category = models.ForeignKey(
+        RespondentCategory,
+        related_name="assignments",
+        on_delete=models.CASCADE,
+    )
+    value = models.CharField(
+        max_length=100,
+        help_text=("The resolved category value for this participant x dimension."),
+    )
+
+    class Meta:
+        unique_together = ("progress", "category")
+
+    def __str__(self) -> str:
+        return f"{self.category.name}={self.value} for {self.progress}"
 
 
 def validate_markdown_survey(md_text: str) -> list[dict]:
