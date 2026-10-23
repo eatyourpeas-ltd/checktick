@@ -7657,6 +7657,17 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
 
         expires_raw = request.POST.get("expires_at")
         expires_at = parse_datetime_aware(expires_raw)
+        # Respondent categories: category_values for this batch (see
+        # docs/respondent-categories-implementation-plan.md §Publication
+        # workflow). Each token in the batch carries the same
+        # category_values (e.g. {"rater_role": "peer"} for a peer-rater
+        # batch). Only dimensions defined on the survey are kept; others
+        # are silently dropped.
+        category_values: dict[str, str] = {}
+        for cat in survey.respondent_categories.all():
+            raw_val = (request.POST.get(f"category_{cat.name}", "") or "").strip()
+            if raw_val:
+                category_values[cat.name] = raw_val
         created = []
         for _ in range(max(0, min(count, 1000))):
             t = SurveyAccessToken(
@@ -7665,13 +7676,23 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
                 created_by=request.user,
                 expires_at=expires_at,
                 note=note,
+                category_values=category_values,
             )
             t.save()
             created.append(t)
         messages.success(request, f"Created {len(created)} tokens.")
         return redirect("surveys:tokens", slug=slug)
     tokens = survey.access_tokens.order_by("-created_at")[:500]
-    return render(request, "surveys/tokens.html", {"survey": survey, "tokens": tokens})
+    respondent_categories = list(survey.respondent_categories.order_by("order", "id"))
+    return render(
+        request,
+        "surveys/tokens.html",
+        {
+            "survey": survey,
+            "tokens": tokens,
+            "respondent_categories": respondent_categories,
+        },
+    )
 
 
 @login_required
@@ -7680,18 +7701,24 @@ def survey_tokens_export_csv(request: HttpRequest, slug: str) -> HttpResponse:
     require_can_edit(request.user, survey)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["token", "created_at", "expires_at", "used_at", "used_by", "note"])
+    cats = list(survey.respondent_categories.order_by("order", "id"))
+    header = ["token", "created_at", "expires_at", "used_at", "used_by", "note"]
+    for cat in cats:
+        header.append(f"category_{cat.name}")
+    writer.writerow(header)
     for t in survey.access_tokens.all():
-        writer.writerow(
-            [
-                t.token,
-                t.created_at.isoformat(),
-                t.expires_at.isoformat() if t.expires_at else "",
-                t.used_at.isoformat() if t.used_at else "",
-                (t.used_by_id or ""),
-                t.note,
-            ]
-        )
+        row = [
+            t.token,
+            t.created_at.isoformat(),
+            t.expires_at.isoformat() if t.expires_at else "",
+            t.used_at.isoformat() if t.used_at else "",
+            (t.used_by_id or ""),
+            t.note,
+        ]
+        cv = t.category_values or {}
+        for cat in cats:
+            row.append(cv.get(cat.name, ""))
+        writer.writerow(row)
     resp = HttpResponse(output.getvalue(), content_type="text/csv")
     resp["Content-Disposition"] = f"attachment; filename=survey_{survey.id}_tokens.csv"
     return resp
@@ -11496,6 +11523,13 @@ def survey_export_csv(
             header.append(q_header)
             question_columns.append(q)
 
+        # Respondent categories: one column per dimension (from the
+        # response's access_token.category_values). See docs/respondent-
+        # categories-implementation-plan.md §Reporting.
+        cats = list(survey.respondent_categories.order_by("order", "id"))
+        for cat in cats:
+            header.append(f"Category: {cat.label or cat.name}")
+
         s = StringIO()
         writer = csv.writer(s)
         writer.writerow(header)
@@ -11556,6 +11590,15 @@ def survey_export_csv(
                     answer, q.type, is_repeatable=q.id in repeatable_qids
                 )
                 row.append(formatted)
+
+            # Add category values from the response's access token.
+            cv = {}
+            if r.access_token_id is not None:
+                at = r.access_token
+                if at is not None and at.category_values:
+                    cv = dict(at.category_values)
+            for cat in cats:
+                row.append(cv.get(cat.name, ""))
 
             writer.writerow(row)
             yield s.getvalue()
