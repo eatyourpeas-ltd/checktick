@@ -7430,6 +7430,21 @@ def _handle_participant_submission(
     if show_picker:
         return _render_section_menu_picker(request, survey, progress)
 
+    # Respondent categories (see docs/respondent-categories-implementation-
+    # plan.md §Runtime hook). Category-based visibility is a static pre-step
+    # filter, not a branching rule — the same argument as §Runtime — why no
+    # new branching action is needed. Resolve category values for the
+    # progress record (if the survey has categories), then drop any group
+    # whose required_categories don't match the resolved values. The result
+    # is intersected with selected_group_ids (set by section_menu / rct /
+    # matrix / staged / delphi above) so the two filters compose. A survey
+    # with no RespondentCategory rows has _category_visible_group_ids
+    # return None and the filter is a no-op.
+    category_visible: set[int] | None = None
+    if progress is not None and survey.respondent_categories.exists():
+        resolved = _resolve_categories_for_progress(progress)
+        category_visible = _category_visible_group_ids(survey, resolved)
+
     _prepare_question_rendering(survey)
     all_questions = list(survey.questions.select_related("group", "dataset").all())
     # Staged: an empty open set means "no sections available right now",
@@ -7444,6 +7459,13 @@ def _handle_participant_submission(
         filter_ids: list[int] | None = selected_group_ids
     else:
         filter_ids = selected_group_ids or None
+    # Compose the category filter with the layout filter. If category_visible
+    # is None (no categories / no rules), leave filter_ids unchanged.
+    if category_visible is not None:
+        if filter_ids is None:
+            filter_ids = list(category_visible)
+        else:
+            filter_ids = [gid for gid in filter_ids if gid in category_visible]
     qs = _order_questions_by_group(survey, all_questions, filter_ids)
     _inject_dataset_options(qs)
     _annotate_question_render_sequence(survey, qs)
@@ -7978,6 +8000,49 @@ def _resolve_categories_for_progress(
             )
 
     return resolved
+
+
+def _category_visible_group_ids(
+    survey: Survey, resolved: dict[str, str]
+) -> set[int] | None:
+    """Return the set of group IDs visible under ``resolved`` category values.
+
+    A group is visible if, for every dimension in its ``required_categories``,
+    the resolved value for that dimension is in the dimension's allowed-values
+    list. If a dimension in ``required_categories`` is unresolved (absent from
+    ``resolved``), the group is **not** visible — a section requiring
+    ``rater_role=peer`` is hidden if ``rater_role`` is unresolved.
+
+    Returns ``None`` when the survey has no categories (or no group has
+    ``required_categories``), signalling "all groups visible" so the caller
+    can skip the intersection. Otherwise returns the set of visible group IDs.
+
+    Group-level only in this release (see docs/respondent-categories-
+    implementation-plan.md Resolved decisions 4). Question-level
+    ``required_categories`` exists on the model but is not enforced here.
+    """
+    if not resolved and not survey.respondent_categories.exists():
+        return None
+    visible: set[int] = set()
+    any_rules = False
+    for group in survey.question_groups.all():
+        rules = group.required_categories or {}
+        if not rules:
+            # No rules — visible to all.
+            visible.add(group.id)
+            continue
+        any_rules = True
+        keep = True
+        for dim, allowed in rules.items():
+            value = resolved.get(dim)
+            if value is None or value not in (allowed or []):
+                keep = False
+                break
+        if keep:
+            visible.add(group.id)
+    if not any_rules:
+        return None
+    return visible
 
 
 @login_required
