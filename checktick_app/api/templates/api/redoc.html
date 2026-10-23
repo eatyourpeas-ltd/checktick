@@ -14,7 +14,7 @@
     </div>
   </div>
 </div>
-<script src="{% static cdn_assets.redoc.static_file %}"
+<script type="module" src="{% static cdn_assets.redoc.static_file %}"
         integrity="{{ cdn_assets.redoc.sri }}"
         crossorigin="anonymous"></script>
 <redoc spec-url="/api/schema"></redoc>
