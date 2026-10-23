@@ -94,6 +94,8 @@ from .models import (
     RandomisedArm,
     RandomisedMenu,
     RecoveryRequest,
+    RespondentAssignment,
+    RespondentCategory,
     SectionMenu,
     SectionMenuItem,
     StagedMenu,
@@ -7830,6 +7832,152 @@ def _assign_arm_for_progress(
     progress.assigned_arm = chosen
     progress.save(update_fields=["assigned_arm"])
     return chosen
+
+
+def _resolve_categories_for_progress(
+    progress: SurveyProgress,
+    *,
+    simulated_values: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Resolve and persist respondent category values for ``progress``.
+
+    Returns a ``{dimension_name: value}`` map for the dimensions defined on
+    ``progress.survey``. Idempotent: dimensions already resolved (i.e. with
+    an existing ``RespondentAssignment`` row) are returned without
+    re-resolving, so resume preserves the participant's values — same
+    lifecycle as ``assigned_arm`` (RCT) and ``delphi_round`` (Delphi).
+
+    Resolution sources, tried in priority order per dimension:
+
+    1. **Invite token** — if ``progress.access_token`` is set and its
+       ``category_values`` contains the dimension, use that value. This is
+       the 360 rater-invite pattern: each token batch carries the role for
+       that batch.
+    2. **Self-select question** — if the dimension's ``source_question`` is
+       set, read the participant's answer to that question from
+       ``progress.partial_answers``. Works for public/unlisted visibility
+       where there is no token.
+    3. **System assignment** — reuses the RCT seed allocator
+       (``pick_arm`` over ``allowed_values`` as the "arms", ratio 1 each,
+       balanced strategy). The dimension is marked ``system`` in
+       ``resolution_source``. The per-participant
+       ``SurveyProgress.randomisation_seed`` drives the draw (set on first
+       access if absent, same as RCT).
+    4. **Profile field** — if ``profile_field`` is set, read it from
+       ``progress.user.userprofile`` (or org membership). Useful for
+       authenticated-visibility surveys.
+
+    If no source resolves a value, the dimension is left unset (absent from
+    the returned map). ``required_categories`` rules referencing an
+    unresolved dimension evaluate to "not shown" — a section requiring
+    ``rater_role=peer`` is hidden if ``rater_role`` is unresolved.
+
+    ``simulated_values`` (preview path) overrides resolution: when provided,
+    the simulated values are used directly and nothing is persisted. This is
+    the ``?simulate_category=<dim>:<value>,...`` preview path.
+
+    See docs/respondent-categories-implementation-plan.md §Resolution.
+    """
+    survey = progress.survey
+    categories = list(survey.respondent_categories.order_by("order", "id"))
+    if not categories:
+        return {}
+
+    # Preview path: use simulated values, do not persist.
+    if simulated_values is not None:
+        return {
+            cat.name: simulated_values[cat.name]
+            for cat in categories
+            if cat.name in simulated_values
+        }
+
+    # Idempotent: return already-resolved dimensions without re-resolving.
+    existing = {
+        a.category.name: a.value
+        for a in progress.category_assignments.select_related("category")
+    }
+    resolved: dict[str, str] = dict(existing)
+
+    # Token-borne values (source 1).
+    token_values: dict[str, str] = {}
+    if progress.access_token_id is not None:
+        token = progress.access_token
+        if token is not None and token.category_values:
+            token_values = dict(token.category_values)
+
+    for cat in categories:
+        if cat.name in resolved:
+            continue
+
+        value: str | None = None
+
+        # 1. Invite token.
+        if (
+            cat.resolution_source == RespondentCategory.ResolutionSource.TOKEN
+            and cat.name in token_values
+        ):
+            value = token_values[cat.name]
+
+        # 2. Self-select question.
+        elif (
+            cat.resolution_source == RespondentCategory.ResolutionSource.SELF_SELECT
+            and cat.source_question_id is not None
+        ):
+            answers = progress.partial_answers or {}
+            raw = answers.get(str(cat.source_question_id))
+            if isinstance(raw, str) and raw:
+                value = raw
+
+        # 3. System assignment (RCT allocator over allowed_values).
+        elif cat.resolution_source == RespondentCategory.ResolutionSource.SYSTEM:
+            allowed = list(cat.allowed_values or [])
+            if allowed:
+                if progress.randomisation_seed is None:
+                    progress.randomisation_seed = random.randint(0, MAX_SEED)
+                    progress.save(update_fields=["randomisation_seed"])
+                # Reuse pick_arm with ratio 1 per value, balanced strategy.
+                # allocation_count is the number of already-resolved
+                # participants for this category — same shape as RCT, with
+                # the same known race window (see §Resolved decisions 3).
+                allocation_count = (
+                    RespondentAssignment.objects.filter(
+                        category=cat,
+                    )
+                    .exclude(progress=progress)
+                    .count()
+                )
+                value = pick_arm(
+                    allowed,
+                    [1] * len(allowed),
+                    "balanced",
+                    progress.randomisation_seed,
+                    allocation_count,
+                )
+
+        # 4. Profile field.
+        elif (
+            cat.resolution_source == RespondentCategory.ResolutionSource.PROFILE
+            and cat.profile_field
+            and progress.user_id is not None
+        ):
+            # Read from the user's profile/org membership. Only UserProfile
+            # fields are supported in this release; org-membership-based
+            # resolution is a follow-up.
+            profile = getattr(progress.user, "userprofile", None)
+            if profile is not None:
+                raw = getattr(profile, cat.profile_field, None)
+                if isinstance(raw, str) and raw:
+                    value = raw
+
+        if value is not None:
+            resolved[cat.name] = value
+            RespondentAssignment.objects.update_or_create(
+                progress=progress,
+                category=cat,
+                defaults={"value": value},
+            )
+
+    return resolved
 
 
 @login_required
