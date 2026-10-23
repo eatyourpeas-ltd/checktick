@@ -34,10 +34,10 @@
       "key": "redoc",
       "name": "ReDoc",
       "npm_package": "redoc",
-      "version": "2.5.4",
+      "version": "3.0.1",
       "static_file": "js/redoc.standalone.min.js",
       "source_path": "bundles/redoc.standalone.js",
-      "sri": "sha384-w447zOpYfw/1Tv/5AK9NfHTlQIqE3RVR6KY62jCyy9zNDgO64cMwGGP1Fj0zJVf5",
+      "sri": "sha384-j07qRKHNNmcwU1/Y1elJc7pDLHXP/QfbQXTtSkbOJ7uYGJikqAzsFVbY2zR9FqOT",
       "purpose": "OpenAPI interactive documentation"
     },
     {
