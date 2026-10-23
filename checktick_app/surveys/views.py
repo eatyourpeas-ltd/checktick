@@ -1623,6 +1623,38 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
             dmenu = DiaryMenu.objects.create(survey=survey)
         diary_preview = {"menu": dmenu}
 
+    # Respondent categories: simulate category values (see docs/
+    # respondent-categories-implementation-plan.md §Preview). If
+    # ``?simulate_category=<dim>:<value>,<dim>:<value>`` is present, the
+    # category filter uses the simulated values instead of resolving from
+    # token/question/profile. A "Simulate category" panel on the preview
+    # page lets the author pick a value per dimension without a real
+    # participant. Available for any layout when the survey has
+    # RespondentCategory rows.
+    category_preview = None
+    if survey.respondent_categories.exists():
+        categories = list(survey.respondent_categories.order_by("order", "id"))
+        category_preview = {"categories": categories}
+        sim_cat_raw = request.GET.get("simulate_category", "")
+        if sim_cat_raw:
+            sim_values: dict[str, str] = {}
+            for pair in sim_cat_raw.split(","):
+                pair = pair.strip()
+                if ":" in pair:
+                    dim, val = pair.split(":", 1)
+                    sim_values[dim.strip()] = val.strip()
+            if sim_values:
+                category_visible = _category_visible_group_ids(survey, sim_values)
+                if category_visible is not None:
+                    if simulated_group_ids is None:
+                        simulated_group_ids = list(category_visible)
+                    else:
+                        simulated_group_ids = [
+                            gid
+                            for gid in simulated_group_ids
+                            if gid in category_visible
+                        ]
+
     _prepare_question_rendering(survey)
     all_questions = list(
         survey.questions.select_related("group", "dataset")
@@ -1704,6 +1736,8 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "delphi_preview": delphi_preview,
         # Diary simulate window panel.
         "diary_preview": diary_preview,
+        # Respondent categories simulate panel.
+        "category_preview": category_preview,
         # Guided layout: preview also renders one question per screen so the
         # author can test the flow without a real participant.
         "is_guided": survey.layout == Survey.Layout.GUIDED,
@@ -11816,8 +11850,8 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
             mmenu = MatrixMenu.objects.create(survey=survey)
         matrix_info = {"menu": mmenu}
 
-    # Delphi info for round badges. Lists each round, its window, and its
-    # sections so the Survey Map can show which sections belong to which
+    # Delphi info for round badges. Lists each round, its window, and
+    # its sections so the Survey Map can show which sections belong to which
     # round. Also shows whether inter-round feedback has been generated.
     delphi_info = None
     if survey.layout == Survey.Layout.DELPHI:
@@ -11831,6 +11865,16 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
             ),
         }
 
+    # Respondent categories info for the Survey Map. Lists each dimension
+    # and its allowed values so the Survey Map can show which sections are
+    # gated by which category values. Available for any layout when the
+    # survey has RespondentCategory rows.
+    category_info = None
+    if survey.respondent_categories.exists():
+        category_info = {
+            "categories": list(survey.respondent_categories.order_by("order", "id")),
+        }
+
     ctx = {
         "survey": survey,
         "has_questions": survey.questions.exists(),
@@ -11839,6 +11883,7 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
         "staged_info": staged_info,
         "matrix_info": matrix_info,
         "delphi_info": delphi_info,
+        "category_info": category_info,
     }
     return render(request, "surveys/survey_map.html", ctx)
 
