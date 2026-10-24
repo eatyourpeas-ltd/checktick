@@ -460,6 +460,49 @@ The grammar is **optional** — the Organise page UI is the primary config path.
 
 See [Survey Layouts](survey-layouts.md) for the full guide to when to use the Matrix (free navigation) layout.
 
+### Respondent categories
+
+Add a `CATEGORIES` block at the top of the outline to categorise respondents along one or more author-defined dimensions (rater role, recruitment site, cohort, …) within a single published survey, so different respondents see different subsets of the same survey without cloning it. This is a **cross-cutting feature, not a layout** — it works with any layout. Mark which sections are visible to which category values with `~ cat:<dim>:<value>` on the section heading; sections without `~ cat:` are visible to all.
+
+```markdown
+CATEGORIES
+  rater_role:
+    values: self, peer, supervisor, patient
+    source: token
+  subject:
+    values: self
+    source: self_select
+    question: {subject-id}
+
+# Demographics {demographics}
+## Name {name}
+(text)
+
+# Peer rating {peer-rating}    ~ cat:rater_role:peer
+## Clinical knowledge {clinical-knowledge}
+(text)
+
+# Self reflection {self-reflection}    ~ cat:rater_role:self
+## What went well {went-well}
+(text)
+```
+
+Each dimension is a `<dim>:` header with indented property lines:
+
+- `values` — comma-separated list of allowed values (free-text; there is no fixed enum).
+- `source` — how the value is resolved for a participant: `token` (default; the invite token carries the value), `self_select` (a question's answer populates the dimension), `system` (system-assigned, reusing the RCT allocator), or `profile` (read from the participant's profile field).
+- `question` — for `self_select` resolution: the `{question-id}` whose answer populates the dimension.
+- `label` — optional human-readable label for the Organise page (defaults to the dimension name).
+- `profile_field` — for `profile` resolution: the profile field key to read from.
+- Place `~ cat:<dim>:<value>` after the section heading (and after the `{id}` if present). Comma-separate multiple values: `~ cat:rater_role:peer, cat:rater_role:supervisor`.
+- Sections without `~ cat:` are visible to all respondents.
+- `~ cat:` suffixes can coexist with layout-specific suffixes (`~ arm:`, `~ phase:`, `~ round:`) on the same heading.
+- A blank line ends the config block.
+
+The export side emits the `CATEGORIES` block and `~ cat:` suffixes, and the config survives export → import round-trips.
+
+See [Survey Layouts](survey-layouts.md) for the full guide to respondent categories and the 360° / multi-rater assessment pattern.
+
 ## Error handling and validation
 
 The Outline provides comprehensive error detection and reporting at two levels:

@@ -1211,6 +1211,235 @@ The builder form renders a `<textarea>` for `long_text` questions
 No new model, no new `SurveyProgress` field — just the type and the
 builder/template/parser branches.
 
+## Respondent categories (cross-cutting feature)
+
+A cross-cutting feature, not a layout. Lets a survey creator categorise
+respondents along one or more author-defined dimensions (rater role,
+recruitment site, cohort, …) within a single published survey, so
+different respondents see different subsets of the same survey without
+cloning it. The category value drives item visibility at take time.
+
+This generalises a pattern the codebase already uses in per-layout form:
+`SurveyProgress.assigned_arm` (RCT), `SurveyProgress.delphi_round`
+(Delphi), and `SurveyProgress.access_token` (token visibility) are each
+a single-dimension respondent category introduced by the layout that
+needed it. The migration comment in `0061_randomised_layout.py` and the
+`delphi_round` docstring both state this explicitly: "arms and rounds
+are orthogonal dimensions." Respondent categories makes that admission
+first-class instead of incidental.
+
+The 360° / multi-rater use case (NHS 360, clinician appraisal) is a
+question-bank pattern built on respondent categories (see §Patterns and
+modes below).
+
+**Not in scope for this feature** (recorded to forestall scope creep):
+
+- **Language / translation.** Today each translation is a separate
+  `Survey` row linked by a `translation_group` UUID, with per-row
+  `language`, `is_original`, `translated_from`, and per-row publication
+  state, retention, and encryption decisions. Language is a
+  **content-level** variant (the question text differs), not a
+  **visibility-level** variant (same questions, different subset).
+  Subsuming language into respondent categories would require categories
+  to carry per-variant content, not just per-variant visibility — a
+  fundamentally bigger model. A survey can have both — e.g. an English
+  survey with `rater_role` categories and a Welsh translation of the
+  same with its own `rater_role` categories.
+- **Dynamic branching on category** ("if rater_role=supervisor AND
+  answer to Q3=yes, jump to Q7") is a possible future extension but is
+  not part of the initial design. It would require a new condition source
+  type on `SurveyQuestionCondition` and corresponding `branching.js`
+  changes. Most cross-cut cases can be expressed as static visibility by
+  splitting the survey into per-category sections. Defer until there is a
+  clear use case that static visibility cannot cover.
+
+### Data model
+
+```python
+class RespondentCategory(models.Model):
+    survey = models.ForeignKey(
+        Survey, related_name="respondent_categories", on_delete=models.CASCADE,
+    )
+    name = models.CharField(max_length=50)
+    label = models.CharField(max_length=100, blank=True)
+    allowed_values = models.JSONField(default=list)
+    resolution_source = models.CharField(
+        max_length=20,
+        choices=[
+            ("token", "Invite token"),
+            ("self_select", "Self-select question"),
+            ("system", "System assignment (RCT allocator)"),
+            ("profile", "Profile field"),
+        ],
+        default="token",
+    )
+    source_question = models.ForeignKey(
+        "SurveyQuestion", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="resolved_categories",
+    )
+    profile_field = models.CharField(max_length=100, blank=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ("survey", "name")
+        ordering = ["order", "id"]
+
+
+class RespondentAssignment(models.Model):
+    progress = models.ForeignKey(
+        SurveyProgress, related_name="category_assignments", on_delete=models.CASCADE,
+    )
+    category = models.ForeignKey(
+        RespondentCategory, related_name="assignments", on_delete=models.CASCADE,
+    )
+    value = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ("progress", "category")
+
+
+class SurveyAccessToken(models.Model):
+    ...
+    category_values = models.JSONField(
+        default=dict, blank=True,
+        help_text="Category values carried by this token batch (dim -> value).",
+    )
+
+
+class QuestionGroup(models.Model):
+    ...
+    required_categories = models.JSONField(
+        default=dict, blank=True,
+        help_text="Category rules gating this section (dim -> [allowed values]).",
+    )
+
+
+class SurveyQuestion(models.Model):
+    ...
+    required_categories = models.JSONField(
+        default=dict, blank=True,
+        help_text="Category rules gating this question (dim -> [allowed values]).",
+    )
+```
+
+A `linear` survey with no `RespondentCategory` rows behaves exactly as
+before — `required_categories` defaults to `{}` and the filter is a
+no-op.
+
+**Migration:** `0071_respondent_categories` (adds `RespondentCategory`,
+`RespondentAssignment`, and the three new JSONFields on
+`SurveyAccessToken`, `QuestionGroup`, `SurveyQuestion`).
+
+### Resolution
+
+`_resolve_categories_for_progress(progress)` in `views.py` resolves a
+`{dimension_name: value}` map per participant from four sources in
+priority order:
+
+1. **Invite token** — `progress.access_token.category_values` carries
+   the dimension values for that token batch (the 360 rater-invite
+   pattern).
+2. **Self-select question** — the dimension's `source_question` answer
+   from `progress.partial_answers`.
+3. **System assignment** — reuses the RCT seed allocator (`pick_arm`
+   over `allowed_values` as the arms, ratio 1 each, balanced strategy).
+   The per-participant `randomisation_seed` drives the draw.
+4. **Profile field** — reads from `progress.user.userprofile`.
+
+Resolved values are persisted as `RespondentAssignment` rows and
+preserved on resume — same lifecycle as `assigned_arm` (RCT) and
+`delphi_round` (Delphi). If no source resolves a value, the dimension is
+left unset and `required_categories` rules referencing it evaluate to
+"not shown".
+
+The `simulated_values` kwarg (preview path) overrides resolution without
+persisting — the `?simulate_category=<dim>:<value>,...` preview path.
+
+### Runtime hook
+
+Category-based visibility is a **static pre-step filter**, not a
+branching rule — the same argument as §Runtime — why no new branching
+action is needed. In `_handle_participant_submission`, after category
+resolution and before `_resolved_group_order_ids`:
+
+1. Resolve category values for the progress record (if not already
+   resolved).
+2. `_category_visible_group_ids(survey, resolved)` returns the set of
+   group IDs visible under the resolved values. A group is visible if,
+   for every dimension in its `required_categories`, the resolved value
+   is in the allowed-values list. An unresolved dimension hides the
+   group.
+3. Intersect with `selected_group_ids` (set by section_menu / rct /
+   matrix / staged / delphi) so the two filters compose.
+
+Group-level only in this release. The question-level `required_categories`
+field exists on the model but is not enforced by the runtime hook —
+ship group-level first, add question-level if a concrete need emerges.
+
+### Outline grammar
+
+The `CATEGORIES` block sits at the top of the outline (analogous to
+`RANDOMISED`, `STAGED`, `MATRIX`) and `~ cat:<dim>:<value>` suffixes mark
+which sections belong to which category values:
+
+```text
+CATEGORIES
+  rater_role:
+    values: self, peer, supervisor, patient
+    source: token
+  subject:
+    values: self
+    source: self_select
+    question: {subject-id}
+
+# Demographics {demographics}
+## Name {name}
+(text)
+
+# Peer rating {peer-rating}    ~ cat:rater_role:peer
+## Clinical knowledge {clinical-knowledge}
+(text)
+
+# Self reflection {self-reflection}    ~ cat:rater_role:self
+## What went well {went-well}
+(text)
+```
+
+- Each dimension is a `<dim>:` header with indented `key: value`
+  property lines (`values`, `source`, `question`, `label`,
+  `profile_field`).
+- `~ cat:<dim>:<value>` may repeat on a section (a section visible to
+  multiple values of a dimension). Sections with no `~ cat:` suffix are
+  visible to all.
+- `~ cat:` suffixes can coexist with layout-specific suffixes (`~ arm:`,
+  `~ phase:`, `~ round:`) on the same heading.
+- A blank line ends the config block.
+
+The export side emits the `CATEGORIES` block and `~ cat:` suffixes, and
+the config survives export → import round-trips.
+
+### Publication workflow
+
+Category **dimensions** are defined at design time (Organise page).
+Category **values** are assigned at publication time: when generating a
+token batch, the author specifies the category values for that batch
+("this batch of 50 tokens is for `rater_role=peer`"). The values are
+written to `SurveyAccessToken.category_values` for each token in the
+batch.
+
+### Reporting
+
+Results can be sliced/pivoted by any category dimension. This is the
+cross-rater aggregation 360 needs (group responses by `subject`, break
+down by `rater_role`), but it is also what every observational study
+wants ("break down by recruitment site").
+
+### Preview
+
+`?simulate_category=<dim>:<value>,<dim>:<value>` on the preview path.
+A "Simulate category" panel on `detail.html` (preview mode only)
+provides a dropdown per dimension.
+
 ## Planned layouts
 
 The following layouts are planned for future releases. See
@@ -1227,125 +1456,6 @@ Diary / EMA (ecological momentary assessment) was the most recent layout
 to ship; its full technical reference is in [Diary / EMA — Technical
 Reference](diary-ema-implementation-plan.md) and the user-facing guide is
 [Diary / EMA](diary-ema.md).
-
-### Respondent categories — priority: medium — PARKED
-
-> **Status (2026-09): parked.** This is a generalisation of a pattern
-> the codebase already uses in per-layout form (`assigned_arm`,
-> `delphi_round`, `access_token`), not a prerequisite for any shipped
-> or planned layout. The per-layout FKs work, and shipping more layouts
-> (screening, CAT, crossover) does not depend on it. It is retained
-> here as a recorded design decision so a future implementer doesn't
-> re-derive it from scratch; the 360° / multi-rater pattern below is
-> scoped on the assumption this feature eventually ships. Revisit when
-> there is a concrete use case that the per-layout FKs cannot cover
-> (e.g. a survey that needs *two* independent categorisation axes
-> simultaneously, neither of which is an arm or a round).
-
-A cross-cutting feature, not a layout. Lets a survey creator categorise
-respondents along one or more dimensions (rater role, recruitment site,
-cohort, language, stratum, …) within a single published survey, so
-different respondents see different subsets of the same survey without
-cloning it. The category value drives item visibility at take time.
-
-This generalises a pattern the codebase already uses in per-layout form:
-`SurveyProgress.assigned_arm` (RCT), `SurveyProgress.delphi_round`
-(Delphi), and `SurveyProgress.access_token` (token visibility) are each
-a single-dimension respondent category introduced by the layout that
-needed it. The migration comment in `0061_randomised_layout.py` and the
-`delphi_round` docstring both state this explicitly: "arms and rounds
-are orthogonal dimensions." Respondent categories makes that admission
-first-class instead of incidental.
-
-Once this feature ships, the 360° / multi-rater use case stops being a
-layout and becomes a question-bank instrument built on respondent
-categories (see §Patterns and modes below). Stepped-wedge clusters also
-become a category dimension rather than a new `Cluster` entity.
-
-**Not in scope for this feature** (recorded to forestall scope creep at
-implementation time):
-
-- **Language / translation.** Today each translation is a separate
-  `Survey` row linked by a `translation_group` UUID, with per-row
-  `language`, `is_original`, `translated_from`, and per-row publication
-  state, retention, and encryption decisions. Language is a
-  **content-level** variant (the question text differs), not a
-  **visibility-level** variant (same questions, different subset).
-  Subsuming language into respondent categories would require categories
-  to carry per-variant content, not just per-variant visibility — a
-  fundamentally bigger model (`content_variants` maps on every
-  `SurveyQuestion`, translation LLM workflow changes, per-variant
-  publication readiness, per-variant retention/encryption). The two
-  features share a UX shape (one logical survey, multiple recipient
-  types) but not a data model. A future "survey variant" layer above
-  both would be the right unifying abstraction; forcing language into
-  the category mechanism would not. A survey can have both — e.g. an
-  English survey with `rater_role` categories and a Welsh translation
-  of the same with its own `rater_role` categories.
-
-Technical notes:
-- New `RespondentCategory` model (one per dimension per survey) holding
-  the dimension name (e.g. `rater_role`, `site`, `cohort`) and the set
-  of allowed values. Dimensions are author-defined; there is no fixed
-  enum.
-- New `RespondentAssignment` model (one per `SurveyProgress` ×
-  dimension) storing the resolved value. Alternatively a JSONField on
-  `SurveyProgress` (`category_values`), but a side table is easier to
-  query and report on. Either way, the value is resolved once at first
-  access and preserved on resume — same lifecycle as `assigned_arm`.
-- Resolution sources (in priority order):
-  1. **Invite token** — `SurveyAccessToken` gains an optional
-     `category_values` JSONField. The token carries the dimension
-     values for that batch (e.g. all tokens in the "peer rater" batch
-     carry `{"rater_role": "peer"}`). This is the 360 rater-invite
-     pattern generalised, and the primary mechanism for token-visibility
-     surveys.
-  2. **Self-select question** — a question at the start of the survey
-     whose answer populates a category dimension ("which clinic are you
-     from?"). Works for public/unlisted visibility where there is no
-     token.
-  3. **System assignment** — reuses the RCT seed allocator. This is
-     just "RCT arm as a category dimension" — the existing
-     `assigned_arm` becomes the system-assigned value for an
-     `arm` dimension. No new allocator code; the dimension is marked
-     `system_assigned`.
-  4. **Profile field** — org membership, team, or a custom profile
-     field. Useful for authenticated-visibility surveys.
-- Item visibility: `QuestionGroup` and `SurveyQuestion` gain an optional
-  `required_categories` rule (JSONField, e.g.
-  `{"rater_role": ["peer", "supervisor"]}`). At take time, the runtime
-  drops any section/question whose `required_categories` don't match the
-  participant's resolved `category_values`. This is the generalisation
-  of `selected_group_ids` (section_menu) and arm-based filtering (RCT):
-  same hook (`_resolved_group_order_ids` filtering), different source of
-  the filter set.
-- **Branching stays answer-driven.** Category-based visibility is a
-  static pre-step filter, not a branching rule — the same argument as
-  §Runtime — why no new branching action is needed (L83): questions
-  filtered out by category are simply absent from the rendered list, so
-  any `jump_to` / `show` / `hide` conditions targeting them are never
-  triggered. No new branching action or condition source is needed for
-  the vast majority of use cases ("different rater types see different
-  sections" is static).
-- **Dynamic branching on category** ("if rater_role=supervisor AND
-  answer to Q3=yes, jump to Q7") is a possible future extension but is
-  not part of the initial design. It would require a new condition
-  source type on `SurveyQuestionCondition` ("category" alongside
-  "question") and corresponding `branching.js` changes. Most cross-cut
-  cases can be expressed as static visibility by splitting the survey
-  into per-category sections. Defer until there is a clear use case that
-  static visibility cannot cover.
-- Publication workflow: the category *dimensions* are defined at design
-  time (Organise page). The category *values* are assigned at
-  publication time, when generating token batches ("this batch of 50
-  tokens is for `rater_role=peer`") or declaring the self-select
-  question. See §Publication workflow below.
-- Reporting: results can be sliced/pivoted by any category dimension.
-  This is the cross-rater aggregation 360 needs, but it is also what
-  every observational study wants ("compare arms of my non-RCT survey"
-  / "break down by recruitment site").
-- `?simulate_category=rater_role:peer,site:clinic_a` preview path for
-  authors to test the filtered view.
 
 ### Two-stage screening / eligibility routing — priority: medium
 
@@ -1492,16 +1602,14 @@ expressed as cross-cutting features than as new layout enum values.
 ### 360° / multi-rater assessment — pattern (built on respondent categories)
 
 Multiple respondents (peers, supervisors, patients) rate a single
-subject. Common in medical education and clinician appraisal.
+subject. Common in medical education and clinician appraisal (NHS 360).
 
-Previously listed as a low-priority layout. Now scoped as a
-**question-bank pattern built on respondent categories** (see above):
+Built on **respondent categories** (see §Respondent categories above):
 
 - A `rater_role` category dimension with values `self`, `peer`,
   `supervisor`, `patient`.
-- A `subject` category dimension (or a `subject_ref` field on
-  `SurveyProgress`) so responses can be grouped for cross-rater
-  aggregation in reporting.
+- A `subject` category dimension so responses can be grouped for
+  cross-rater aggregation in reporting.
 - Sections tagged with `required_categories` so each rater role sees
   only its question set about the same subject.
 - Invite tokens carry the `rater_role` value for that batch.

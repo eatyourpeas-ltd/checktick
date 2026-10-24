@@ -579,31 +579,48 @@ participants). The `heading:` config line sets the rendered heading.
 Image upload is builder-only — the outline grammar does not carry image
 references.
 
+## Respondent categories
+
+Lets a survey creator categorise respondents along one or more
+author-defined dimensions (rater role, recruitment site, cohort, …)
+within a single published survey, so different respondents see different
+subsets of the same survey without cloning it. The category value drives
+which sections and questions each respondent sees.
+
+This is a **cross-cutting feature, not a layout** — it generalises the
+pattern that RCT arms and Delphi rounds already use, and it subsumes
+the 360° / multi-rater use case (see Patterns and modes below). It works
+with any layout: a Section menu + categories survey shows the picker
+first, then filters the chosen sections by category; an RCT + categories
+survey resolves the arm and the token-borne dimensions independently.
+
+Dimensions are author-defined (free-text name + allowed values); there
+is no fixed enum. Each dimension has a **resolution source** that
+determines how a participant's value is resolved: invite token (the
+default; each token batch carries the value for that dimension),
+self-select question (a question whose answer populates the dimension),
+system assignment (reusing the RCT allocator), or profile field.
+
+Sections are tagged with `required_categories` rules (dimension → list
+of allowed values) so each respondent sees only the sections relevant
+to their resolved category values. A section with no rules is visible to
+everyone.
+
+Language / translation is explicitly **out of scope** — it is a
+content-level variant (the question text differs), not a visibility-
+level one. Use the existing translation model (`translation_group`)
+for per-language surveys; each translation can have its own respondent
+categories.
+
+See [Survey Layouts (Technical)](survey-layouts-technical.md) for the
+data model, resolution logic, and runtime hook.
+
 ## Planned layouts
 
 The following layouts are planned for future releases. They are not yet
 implemented. They are ordered by priority — the order CheckTick intends
 to implement them, based on how often the use case is the reason a
 research team reaches for REDCap or Qualtrics instead of a simpler tool.
-
-### Respondent categories — parked
-
-Lets a survey creator categorise respondents along one or more dimensions
-(rater role, recruitment site, cohort, language, stratum, …) within a
-single published survey, so different respondents see different subsets
-of the same survey without cloning it. The category value drives which
-sections and questions each respondent sees.
-
-This is a cross-cutting feature, not a layout — it generalises the
-pattern that RCT arms and Delphi rounds already use, and it subsumes the
-360° / multi-rater use case (see Patterns and modes below).
-
-**Parked (2026-09):** a generalisation of an existing working pattern,
-not a prerequisite for any shipped or planned layout. Retained as a
-recorded design decision; revisit when a concrete use case emerges that
-the per-layout FKs cannot cover. Language / translation is explicitly
-out of scope — it is a content-level variant, not a visibility-level
-one, and the two should not be conflated.
 
 ### Two-stage screening / eligibility routing
 
@@ -645,12 +662,13 @@ Features that are not layouts but are related and worth tracking.
 ### 360° / multi-rater assessment
 
 Multiple respondents (peers, supervisors, patients) rate a single
-subject. Common in medical education and clinician appraisal.
+subject. Common in medical education and clinician appraisal (NHS 360).
 
-Previously listed as a planned layout. Now scoped as a **question-bank
-pattern built on respondent categories** (see above): a `rater_role`
-category dimension drives which question set each rater sees, and invite
-tokens carry the role value for each batch. No new layout needed.
+Built on **respondent categories** (see above): a `rater_role` category
+dimension drives which question set each rater sees, a `subject`
+dimension drives cross-rater aggregation in reporting, and invite
+tokens carry the role value for each batch. No new layout needed — the
+360 instrument ships in the question bank as a ready-made template.
 
 ### Think-aloud / cognitive interview mode
 

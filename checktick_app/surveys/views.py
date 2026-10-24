@@ -94,6 +94,8 @@ from .models import (
     RandomisedArm,
     RandomisedMenu,
     RecoveryRequest,
+    RespondentAssignment,
+    RespondentCategory,
     SectionMenu,
     SectionMenuItem,
     StagedMenu,
@@ -1621,6 +1623,38 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
             dmenu = DiaryMenu.objects.create(survey=survey)
         diary_preview = {"menu": dmenu}
 
+    # Respondent categories: simulate category values (see docs/
+    # respondent-categories-implementation-plan.md §Preview). If
+    # ``?simulate_category=<dim>:<value>,<dim>:<value>`` is present, the
+    # category filter uses the simulated values instead of resolving from
+    # token/question/profile. A "Simulate category" panel on the preview
+    # page lets the author pick a value per dimension without a real
+    # participant. Available for any layout when the survey has
+    # RespondentCategory rows.
+    category_preview = None
+    if survey.respondent_categories.exists():
+        categories = list(survey.respondent_categories.order_by("order", "id"))
+        category_preview = {"categories": categories}
+        sim_cat_raw = request.GET.get("simulate_category", "")
+        if sim_cat_raw:
+            sim_values: dict[str, str] = {}
+            for pair in sim_cat_raw.split(","):
+                pair = pair.strip()
+                if ":" in pair:
+                    dim, val = pair.split(":", 1)
+                    sim_values[dim.strip()] = val.strip()
+            if sim_values:
+                category_visible = _category_visible_group_ids(survey, sim_values)
+                if category_visible is not None:
+                    if simulated_group_ids is None:
+                        simulated_group_ids = list(category_visible)
+                    else:
+                        simulated_group_ids = [
+                            gid
+                            for gid in simulated_group_ids
+                            if gid in category_visible
+                        ]
+
     _prepare_question_rendering(survey)
     all_questions = list(
         survey.questions.select_related("group", "dataset")
@@ -1702,6 +1736,8 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         "delphi_preview": delphi_preview,
         # Diary simulate window panel.
         "diary_preview": diary_preview,
+        # Respondent categories simulate panel.
+        "category_preview": category_preview,
         # Guided layout: preview also renders one question per screen so the
         # author can test the flow without a real participant.
         "is_guided": survey.layout == Survey.Layout.GUIDED,
@@ -7428,6 +7464,21 @@ def _handle_participant_submission(
     if show_picker:
         return _render_section_menu_picker(request, survey, progress)
 
+    # Respondent categories (see docs/respondent-categories-implementation-
+    # plan.md §Runtime hook). Category-based visibility is a static pre-step
+    # filter, not a branching rule — the same argument as §Runtime — why no
+    # new branching action is needed. Resolve category values for the
+    # progress record (if the survey has categories), then drop any group
+    # whose required_categories don't match the resolved values. The result
+    # is intersected with selected_group_ids (set by section_menu / rct /
+    # matrix / staged / delphi above) so the two filters compose. A survey
+    # with no RespondentCategory rows has _category_visible_group_ids
+    # return None and the filter is a no-op.
+    category_visible: set[int] | None = None
+    if progress is not None and survey.respondent_categories.exists():
+        resolved = _resolve_categories_for_progress(progress)
+        category_visible = _category_visible_group_ids(survey, resolved)
+
     _prepare_question_rendering(survey)
     all_questions = list(survey.questions.select_related("group", "dataset").all())
     # Staged: an empty open set means "no sections available right now",
@@ -7442,6 +7493,13 @@ def _handle_participant_submission(
         filter_ids: list[int] | None = selected_group_ids
     else:
         filter_ids = selected_group_ids or None
+    # Compose the category filter with the layout filter. If category_visible
+    # is None (no categories / no rules), leave filter_ids unchanged.
+    if category_visible is not None:
+        if filter_ids is None:
+            filter_ids = list(category_visible)
+        else:
+            filter_ids = [gid for gid in filter_ids if gid in category_visible]
     qs = _order_questions_by_group(survey, all_questions, filter_ids)
     _inject_dataset_options(qs)
     _annotate_question_render_sequence(survey, qs)
@@ -7599,6 +7657,17 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
 
         expires_raw = request.POST.get("expires_at")
         expires_at = parse_datetime_aware(expires_raw)
+        # Respondent categories: category_values for this batch (see
+        # docs/respondent-categories-implementation-plan.md §Publication
+        # workflow). Each token in the batch carries the same
+        # category_values (e.g. {"rater_role": "peer"} for a peer-rater
+        # batch). Only dimensions defined on the survey are kept; others
+        # are silently dropped.
+        category_values: dict[str, str] = {}
+        for cat in survey.respondent_categories.all():
+            raw_val = (request.POST.get(f"category_{cat.name}", "") or "").strip()
+            if raw_val:
+                category_values[cat.name] = raw_val
         created = []
         for _ in range(max(0, min(count, 1000))):
             t = SurveyAccessToken(
@@ -7607,13 +7676,23 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
                 created_by=request.user,
                 expires_at=expires_at,
                 note=note,
+                category_values=category_values,
             )
             t.save()
             created.append(t)
         messages.success(request, f"Created {len(created)} tokens.")
         return redirect("surveys:tokens", slug=slug)
     tokens = survey.access_tokens.order_by("-created_at")[:500]
-    return render(request, "surveys/tokens.html", {"survey": survey, "tokens": tokens})
+    respondent_categories = list(survey.respondent_categories.order_by("order", "id"))
+    return render(
+        request,
+        "surveys/tokens.html",
+        {
+            "survey": survey,
+            "tokens": tokens,
+            "respondent_categories": respondent_categories,
+        },
+    )
 
 
 @login_required
@@ -7622,18 +7701,24 @@ def survey_tokens_export_csv(request: HttpRequest, slug: str) -> HttpResponse:
     require_can_edit(request.user, survey)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["token", "created_at", "expires_at", "used_at", "used_by", "note"])
+    cats = list(survey.respondent_categories.order_by("order", "id"))
+    header = ["token", "created_at", "expires_at", "used_at", "used_by", "note"]
+    for cat in cats:
+        header.append(f"category_{cat.name}")
+    writer.writerow(header)
     for t in survey.access_tokens.all():
-        writer.writerow(
-            [
-                t.token,
-                t.created_at.isoformat(),
-                t.expires_at.isoformat() if t.expires_at else "",
-                t.used_at.isoformat() if t.used_at else "",
-                (t.used_by_id or ""),
-                t.note,
-            ]
-        )
+        row = [
+            t.token,
+            t.created_at.isoformat(),
+            t.expires_at.isoformat() if t.expires_at else "",
+            t.used_at.isoformat() if t.used_at else "",
+            (t.used_by_id or ""),
+            t.note,
+        ]
+        cv = t.category_values or {}
+        for cat in cats:
+            row.append(cv.get(cat.name, ""))
+        writer.writerow(row)
     resp = HttpResponse(output.getvalue(), content_type="text/csv")
     resp["Content-Disposition"] = f"attachment; filename=survey_{survey.id}_tokens.csv"
     return resp
@@ -7830,6 +7915,195 @@ def _assign_arm_for_progress(
     progress.assigned_arm = chosen
     progress.save(update_fields=["assigned_arm"])
     return chosen
+
+
+def _resolve_categories_for_progress(
+    progress: SurveyProgress,
+    *,
+    simulated_values: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Resolve and persist respondent category values for ``progress``.
+
+    Returns a ``{dimension_name: value}`` map for the dimensions defined on
+    ``progress.survey``. Idempotent: dimensions already resolved (i.e. with
+    an existing ``RespondentAssignment`` row) are returned without
+    re-resolving, so resume preserves the participant's values — same
+    lifecycle as ``assigned_arm`` (RCT) and ``delphi_round`` (Delphi).
+
+    Resolution sources, tried in priority order per dimension:
+
+    1. **Invite token** — if ``progress.access_token`` is set and its
+       ``category_values`` contains the dimension, use that value. This is
+       the 360 rater-invite pattern: each token batch carries the role for
+       that batch.
+    2. **Self-select question** — if the dimension's ``source_question`` is
+       set, read the participant's answer to that question from
+       ``progress.partial_answers``. Works for public/unlisted visibility
+       where there is no token.
+    3. **System assignment** — reuses the RCT seed allocator
+       (``pick_arm`` over ``allowed_values`` as the "arms", ratio 1 each,
+       balanced strategy). The dimension is marked ``system`` in
+       ``resolution_source``. The per-participant
+       ``SurveyProgress.randomisation_seed`` drives the draw (set on first
+       access if absent, same as RCT).
+    4. **Profile field** — if ``profile_field`` is set, read it from
+       ``progress.user.userprofile`` (or org membership). Useful for
+       authenticated-visibility surveys.
+
+    If no source resolves a value, the dimension is left unset (absent from
+    the returned map). ``required_categories`` rules referencing an
+    unresolved dimension evaluate to "not shown" — a section requiring
+    ``rater_role=peer`` is hidden if ``rater_role`` is unresolved.
+
+    ``simulated_values`` (preview path) overrides resolution: when provided,
+    the simulated values are used directly and nothing is persisted. This is
+    the ``?simulate_category=<dim>:<value>,...`` preview path.
+
+    See docs/respondent-categories-implementation-plan.md §Resolution.
+    """
+    survey = progress.survey
+    categories = list(survey.respondent_categories.order_by("order", "id"))
+    if not categories:
+        return {}
+
+    # Preview path: use simulated values, do not persist.
+    if simulated_values is not None:
+        return {
+            cat.name: simulated_values[cat.name]
+            for cat in categories
+            if cat.name in simulated_values
+        }
+
+    # Idempotent: return already-resolved dimensions without re-resolving.
+    existing = {
+        a.category.name: a.value
+        for a in progress.category_assignments.select_related("category")
+    }
+    resolved: dict[str, str] = dict(existing)
+
+    # Token-borne values (source 1).
+    token_values: dict[str, str] = {}
+    if progress.access_token_id is not None:
+        token = progress.access_token
+        if token is not None and token.category_values:
+            token_values = dict(token.category_values)
+
+    for cat in categories:
+        if cat.name in resolved:
+            continue
+
+        value: str | None = None
+
+        # 1. Invite token.
+        if (
+            cat.resolution_source == RespondentCategory.ResolutionSource.TOKEN
+            and cat.name in token_values
+        ):
+            value = token_values[cat.name]
+
+        # 2. Self-select question.
+        elif (
+            cat.resolution_source == RespondentCategory.ResolutionSource.SELF_SELECT
+            and cat.source_question_id is not None
+        ):
+            answers = progress.partial_answers or {}
+            raw = answers.get(str(cat.source_question_id))
+            if isinstance(raw, str) and raw:
+                value = raw
+
+        # 3. System assignment (RCT allocator over allowed_values).
+        elif cat.resolution_source == RespondentCategory.ResolutionSource.SYSTEM:
+            allowed = list(cat.allowed_values or [])
+            if allowed:
+                if progress.randomisation_seed is None:
+                    progress.randomisation_seed = random.randint(0, MAX_SEED)
+                    progress.save(update_fields=["randomisation_seed"])
+                # Reuse pick_arm with ratio 1 per value, balanced strategy.
+                # allocation_count is the number of already-resolved
+                # participants for this category — same shape as RCT, with
+                # the same known race window (see §Resolved decisions 3).
+                allocation_count = (
+                    RespondentAssignment.objects.filter(
+                        category=cat,
+                    )
+                    .exclude(progress=progress)
+                    .count()
+                )
+                value = pick_arm(
+                    allowed,
+                    [1] * len(allowed),
+                    "balanced",
+                    progress.randomisation_seed,
+                    allocation_count,
+                )
+
+        # 4. Profile field.
+        elif (
+            cat.resolution_source == RespondentCategory.ResolutionSource.PROFILE
+            and cat.profile_field
+            and progress.user_id is not None
+        ):
+            # Read from the user's profile/org membership. Only UserProfile
+            # fields are supported in this release; org-membership-based
+            # resolution is a follow-up.
+            profile = getattr(progress.user, "userprofile", None)
+            if profile is not None:
+                raw = getattr(profile, cat.profile_field, None)
+                if isinstance(raw, str) and raw:
+                    value = raw
+
+        if value is not None:
+            resolved[cat.name] = value
+            RespondentAssignment.objects.update_or_create(
+                progress=progress,
+                category=cat,
+                defaults={"value": value},
+            )
+
+    return resolved
+
+
+def _category_visible_group_ids(
+    survey: Survey, resolved: dict[str, str]
+) -> set[int] | None:
+    """Return the set of group IDs visible under ``resolved`` category values.
+
+    A group is visible if, for every dimension in its ``required_categories``,
+    the resolved value for that dimension is in the dimension's allowed-values
+    list. If a dimension in ``required_categories`` is unresolved (absent from
+    ``resolved``), the group is **not** visible — a section requiring
+    ``rater_role=peer`` is hidden if ``rater_role`` is unresolved.
+
+    Returns ``None`` when the survey has no categories (or no group has
+    ``required_categories``), signalling "all groups visible" so the caller
+    can skip the intersection. Otherwise returns the set of visible group IDs.
+
+    Group-level only in this release (see docs/respondent-categories-
+    implementation-plan.md Resolved decisions 4). Question-level
+    ``required_categories`` exists on the model but is not enforced here.
+    """
+    if not resolved and not survey.respondent_categories.exists():
+        return None
+    visible: set[int] = set()
+    any_rules = False
+    for group in survey.question_groups.all():
+        rules = group.required_categories or {}
+        if not rules:
+            # No rules — visible to all.
+            visible.add(group.id)
+            continue
+        any_rules = True
+        keep = True
+        for dim, allowed in rules.items():
+            value = resolved.get(dim)
+            if value is None or value not in (allowed or []):
+                keep = False
+                break
+        if keep:
+            visible.add(group.id)
+    if not any_rules:
+        return None
+    return visible
 
 
 @login_required
@@ -8402,6 +8676,120 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         menu.intro_content = _parse_intro_content_form(request.POST)
         menu.save()
         messages.success(request, _("Diary configuration saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Respondent categories — add dimension (cross-cutting feature, not a
+    # layout). Creates a new RespondentCategory for this survey.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "add_respondent_category"
+        and can_edit
+    ):
+        name = (request.POST.get("category_name", "") or "").strip()[:50]
+        if not name:
+            messages.error(request, _("Please provide a dimension name."))
+            return redirect("surveys:groups", slug=slug)
+        # Slugify the name for the dimension key.
+        import re
+
+        slug = re.sub(r"[^a-z0-9_]+", "_", name.lower()).strip("_")
+        if not slug:
+            slug = "dimension"
+        # Ensure uniqueness within the survey.
+        existing = set(survey.respondent_categories.values_list("name", flat=True))
+        base = slug
+        i = 2
+        while slug in existing:
+            slug = f"{base}_{i}"
+            i += 1
+        next_order = (
+            survey.respondent_categories.aggregate(m=models.Max("order"))["m"] or 0
+        ) + 1
+        RespondentCategory.objects.create(
+            survey=survey,
+            name=slug,
+            label=name,
+            allowed_values=[],
+            order=next_order,
+        )
+        messages.success(request, _("Category dimension added."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Respondent categories — save dimension (name, label, allowed_values,
+    # resolution_source, source_question, profile_field).
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_respondent_category"
+        and can_edit
+    ):
+        cat_id_raw = request.POST.get("category_id", "")
+        if cat_id_raw.isdigit():
+            try:
+                cat = survey.respondent_categories.get(id=int(cat_id_raw))
+            except RespondentCategory.DoesNotExist:
+                messages.error(request, _("Category not found."))
+                return redirect("surveys:groups", slug=slug)
+            label = (request.POST.get(f"label_{cat.id}", "") or "").strip()[:100]
+            cat.label = label
+            # allowed_values: comma-separated free-text.
+            values_raw = (
+                request.POST.get(f"allowed_values_{cat.id}", "") or ""
+            ).strip()
+            cat.allowed_values = (
+                [v.strip() for v in values_raw.split(",") if v.strip()]
+                if values_raw
+                else []
+            )
+            # resolution_source.
+            source = request.POST.get(
+                f"resolution_source_{cat.id}",
+                RespondentCategory.ResolutionSource.TOKEN,
+            )
+            if source in {c[0] for c in RespondentCategory.ResolutionSource.choices}:
+                cat.resolution_source = source
+            # source_question (for self_select).
+            sq_raw = (request.POST.get(f"source_question_{cat.id}", "") or "").strip()
+            if sq_raw.isdigit():
+                cat.source_question_id = int(sq_raw)
+            else:
+                cat.source_question_id = None
+            # profile_field (for profile).
+            cat.profile_field = (
+                request.POST.get(f"profile_field_{cat.id}", "") or ""
+            ).strip()[:100]
+            cat.save()
+            messages.success(request, _("Category dimension saved."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Respondent categories — remove dimension.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "remove_respondent_category"
+        and can_edit
+    ):
+        cat_id_raw = request.POST.get("category_id", "")
+        if cat_id_raw.isdigit():
+            survey.respondent_categories.filter(id=int(cat_id_raw)).delete()
+            messages.success(request, _("Category dimension removed."))
+        return redirect("surveys:groups", slug=slug)
+
+    # Respondent categories — save group required_categories (the
+    # "Visible to" control on each section). Saves required_categories on
+    # each group from the form.
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "save_group_categories"
+        and can_edit
+    ):
+        for g in survey.question_groups.all():
+            rules: dict[str, list[str]] = {}
+            for cat in survey.respondent_categories.all():
+                checked = request.POST.getlist(f"group_{g.id}_cat_{cat.id}")
+                if checked:
+                    rules[cat.name] = [v for v in checked if v]
+            g.required_categories = rules
+            g.save(update_fields=["required_categories"])
+        messages.success(request, _("Section visibility saved."))
         return redirect("surveys:groups", slug=slug)
 
     groups_qs = survey.question_groups.annotate(
@@ -9140,6 +9528,15 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "diary_schedule_choices": diary_schedule_choices,
         "diary_anchor_choices": diary_anchor_choices,
         "diary_warnings": diary_warnings,
+        # Respondent categories (cross-cutting feature, not a layout).
+        # Available for any layout; empty list for surveys with no
+        # RespondentCategory rows.
+        "respondent_categories": list(
+            survey.respondent_categories.order_by("order", "id")
+        ),
+        "respondent_category_resolution_choices": (
+            RespondentCategory.ResolutionSource.choices
+        ),
         # Layout tier gating (see tier_limits.py allowed_layouts).
         "allowed_layouts": get_allowed_layouts(request.user),
     }
@@ -11126,6 +11523,13 @@ def survey_export_csv(
             header.append(q_header)
             question_columns.append(q)
 
+        # Respondent categories: one column per dimension (from the
+        # response's access_token.category_values). See docs/respondent-
+        # categories-implementation-plan.md §Reporting.
+        cats = list(survey.respondent_categories.order_by("order", "id"))
+        for cat in cats:
+            header.append(f"Category: {cat.label or cat.name}")
+
         s = StringIO()
         writer = csv.writer(s)
         writer.writerow(header)
@@ -11186,6 +11590,15 @@ def survey_export_csv(
                     answer, q.type, is_repeatable=q.id in repeatable_qids
                 )
                 row.append(formatted)
+
+            # Add category values from the response's access token.
+            cv = {}
+            if r.access_token_id is not None:
+                at = r.access_token
+                if at is not None and at.category_values:
+                    cv = dict(at.category_values)
+            for cat in cats:
+                row.append(cv.get(cat.name, ""))
 
             writer.writerow(row)
             yield s.getvalue()
@@ -11480,8 +11893,8 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
             mmenu = MatrixMenu.objects.create(survey=survey)
         matrix_info = {"menu": mmenu}
 
-    # Delphi info for round badges. Lists each round, its window, and its
-    # sections so the Survey Map can show which sections belong to which
+    # Delphi info for round badges. Lists each round, its window, and
+    # its sections so the Survey Map can show which sections belong to which
     # round. Also shows whether inter-round feedback has been generated.
     delphi_info = None
     if survey.layout == Survey.Layout.DELPHI:
@@ -11495,6 +11908,16 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
             ),
         }
 
+    # Respondent categories info for the Survey Map. Lists each dimension
+    # and its allowed values so the Survey Map can show which sections are
+    # gated by which category values. Available for any layout when the
+    # survey has RespondentCategory rows.
+    category_info = None
+    if survey.respondent_categories.exists():
+        category_info = {
+            "categories": list(survey.respondent_categories.order_by("order", "id")),
+        }
+
     ctx = {
         "survey": survey,
         "has_questions": survey.questions.exists(),
@@ -11503,6 +11926,7 @@ def survey_map(request: HttpRequest, slug: str) -> HttpResponse:
         "staged_info": staged_info,
         "matrix_info": matrix_info,
         "delphi_info": delphi_info,
+        "category_info": category_info,
     }
     return render(request, "surveys/survey_map.html", ctx)
 
@@ -14348,6 +14772,50 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                 menu.save()
                 summary_parts.append(" Diary (EMA) layout applied.")
 
+        # Apply CATEGORIES config from the outline (see docs/
+        # respondent-categories-implementation-plan.md §Outline grammar).
+        # A cross-cutting feature, not a layout — available for any
+        # layout. Creates RespondentCategory dimensions and applies
+        # required_categories to groups from ``~ cat:`` suffixes.
+        categories_cfg = parsed.get("categories")
+        categories_group_rules = parsed.get("categories_group_rules", {})
+        if categories_cfg and categories_cfg.get("dimensions"):
+            # Clear existing categories for this survey (the bulk upload
+            # replaces all content, matching the layout-block contract).
+            survey.respondent_categories.all().delete()
+            dims_by_name: dict[str, RespondentCategory] = {}
+            for i, dim in enumerate(categories_cfg["dimensions"]):
+                cat = RespondentCategory.objects.create(
+                    survey=survey,
+                    name=dim["name"],
+                    label=dim.get("label", ""),
+                    allowed_values=dim.get("allowed_values", []),
+                    resolution_source=dim.get(
+                        "resolution_source",
+                        RespondentCategory.ResolutionSource.TOKEN,
+                    ),
+                    profile_field=dim.get("profile_field", ""),
+                    order=i + 1,
+                )
+                # source_question: resolve by ref ID if provided.
+                sq_ref = dim.get("source_question")
+                if sq_ref:
+                    sq = group_ref_map.get(sq_ref) or question_ref_map.get(sq_ref)
+                    if sq is not None and isinstance(sq, SurveyQuestion):
+                        cat.source_question = sq
+                        cat.save(update_fields=["source_question"])
+                dims_by_name[cat.name] = cat
+            # Apply required_categories to groups from ``~ cat:`` suffixes.
+            for g in created_groups_in_order:
+                rules_list = categories_group_rules.get(g.name, [])
+                if rules_list:
+                    rules: dict[str, list[str]] = {}
+                    for dim_name, val in rules_list:
+                        rules.setdefault(dim_name, []).append(val)
+                    g.required_categories = rules
+                    g.save(update_fields=["required_categories"])
+            summary_parts.append(" Respondent categories applied.")
+
         messages.success(request, "".join(summary_parts))
         return redirect("surveys:dashboard", slug=survey.slug)
     return render(request, "surveys/bulk_upload.html", context)
@@ -14525,6 +14993,40 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             )
             lines.append("")
 
+    # CATEGORIES block (see docs/respondent-categories-implementation-
+    # plan.md §Outline grammar). Emitted at the top when the survey has
+    # RespondentCategory rows. A cross-cutting feature, not a layout —
+    # available for any layout. The ``~ cat:<dim>:<value>`` suffix is
+    # placed on the actual content group headings below.
+    categories_group_rules_by_id: dict[int, list[tuple[str, str]]] = {}
+    if survey.respondent_categories.exists():
+        lines.append("CATEGORIES")
+        for cat in survey.respondent_categories.order_by("order", "id"):
+            lines.append(f"  {cat.name}:")
+            if cat.label:
+                lines.append(f"    label: {cat.label}")
+            if cat.allowed_values:
+                lines.append(f"    values: {', '.join(cat.allowed_values)}")
+            lines.append(f"    source: {cat.resolution_source}")
+            if cat.source_question_id is not None:
+                sq_ref = (
+                    cat.source_question.text.lower()[:30].replace(" ", "-").strip("-")
+                )
+                lines.append(f"    question: {{{sq_ref}}}")
+            if cat.profile_field:
+                lines.append(f"    profile_field: {cat.profile_field}")
+        lines.append("")
+        # Build a lookup: group_id → list of (dim, value) pairs from
+        # each group's required_categories.
+        for group in groups:
+            rules = group.required_categories or {}
+            pairs: list[tuple[str, str]] = []
+            for dim, vals in rules.items():
+                for val in vals:
+                    pairs.append((dim, val))
+            if pairs:
+                categories_group_rules_by_id[group.id] = pairs
+
     for group in groups:
         # Check if this group is part of a collection
         parent_coll_item = (
@@ -14575,28 +15077,35 @@ def _export_survey_to_markdown(survey: Survey) -> str:
         # Add group heading
         group_ref = group.name.lower().replace(" ", "-")
         heading = f"{indent}# {group.name} {{{group_ref}}}"
-        # Append ``~ pickable`` suffix for section_menu layout
+        # Collect all ``~`` suffix parts (layout-specific + categories).
+        # They are combined into a single ``~`` suffix on the heading so
+        # the parser can extract them in one pass.
+        suffix_parts: list[str] = []
+        # ``~ pickable`` suffix for section_menu layout
         sm_item = section_menu_items_by_group.get(group.id)
         if sm_item and sm_item.is_pickable:
-            suffix = "~ pickable"
+            pickable_suffix = "pickable"
             if sm_item.estimated_minutes:
-                suffix += f", {sm_item.estimated_minutes} min"
-            heading = f"{heading}    {suffix}"
-        # Append ``~ arm:<name>`` suffixes for RCT layout
+                pickable_suffix += f", {sm_item.estimated_minutes} min"
+            suffix_parts.append(pickable_suffix)
+        # ``~ arm:<name>`` suffixes for RCT layout
         rct_arms = randomised_arms_by_group.get(group.id)
         if rct_arms:
-            arm_suffix = ", ".join(f"arm:{name}" for name in rct_arms)
-            heading = f"{heading}    ~ {arm_suffix}"
-        # Append ``~ phase:<name>`` suffixes for staged layout
+            suffix_parts.extend(f"arm:{name}" for name in rct_arms)
+        # ``~ phase:<name>`` suffixes for staged layout
         staged_phases = staged_phases_by_group.get(group.id)
         if staged_phases:
-            phase_suffix = ", ".join(f"phase:{name}" for name in staged_phases)
-            heading = f"{heading}    ~ {phase_suffix}"
-        # Append ``~ round:<name>`` suffixes for delphi layout
+            suffix_parts.extend(f"phase:{name}" for name in staged_phases)
+        # ``~ round:<name>`` suffixes for delphi layout
         delphi_rounds = delphi_rounds_by_group.get(group.id)
         if delphi_rounds:
-            round_suffix = ", ".join(f"round:{name}" for name in delphi_rounds)
-            heading = f"{heading}    ~ {round_suffix}"
+            suffix_parts.extend(f"round:{name}" for name in delphi_rounds)
+        # ``~ cat:<dim>:<value>`` suffixes for respondent categories
+        cat_rules = categories_group_rules_by_id.get(group.id)
+        if cat_rules:
+            suffix_parts.extend(f"cat:{dim}:{val}" for dim, val in cat_rules)
+        if suffix_parts:
+            heading = f"{heading}    ~ {', '.join(suffix_parts)}"
         lines.append(heading)
         if group.description:
             lines.append(f"{indent}{group.description}")

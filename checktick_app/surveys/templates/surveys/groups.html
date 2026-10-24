@@ -1091,6 +1091,105 @@
     </div>
   </section>
   {% endif %}
+
+  {# === Respondent categories configuration card (cross-cutting, not a layout) === #}
+  {% if can_edit %}
+  <section class="not-prose mb-6" aria-labelledby="respondent-categories-heading">
+    <div class="card bg-base-100 border border-base-300 max-w-4xl">
+      <div class="card-body gap-3 p-4">
+        <div class="flex items-center justify-between">
+          <h3 id="respondent-categories-heading" class="font-semibold text-base-content">
+            {% trans 'Respondent categories' %}
+          </h3>
+          <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_respondent_category" />
+            <input type="text" name="category_name" placeholder="{% trans 'e.g. rater_role' %}" class="input input-bordered input-sm w-40" />
+            <button type="submit" class="btn btn-sm btn-outline">{% trans 'Add dimension' %}</button>
+          </form>
+        </div>
+        <p class="text-xs text-base-content/70">
+          {% trans 'Categorise respondents along author-defined dimensions (rater role, site, cohort) so different respondents see different sections of the same survey without cloning it. Works with any layout. Used for 360° / multi-rater assessments.' %}
+        </p>
+
+        {% if respondent_categories %}
+        {# Dimensions list #}
+        <div class="space-y-3">
+          {% for cat in respondent_categories %}
+          <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="border border-base-200 rounded-lg p-3 space-y-2">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_respondent_category" />
+            <input type="hidden" name="category_id" value="{{ cat.id }}" />
+            <div class="flex items-center gap-2">
+              <code class="text-xs text-base-content/60">{{ cat.name }}</code>
+              <input type="text" name="label_{{ cat.id }}" value="{{ cat.label }}" placeholder="{% trans 'Display label' %}" class="input input-bordered input-xs flex-1" />
+              <button type="submit" class="btn btn-xs btn-ghost">{% trans 'Save' %}</button>
+              <button type="submit" name="action" value="remove_respondent_category" formaction="/surveys/{{ survey.slug }}/groups/" class="btn btn-xs btn-ghost text-error" onclick="return confirm('{% trans 'Remove this dimension?' %}')">{% trans 'Remove' %}</button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="label text-xs" for="cat-vals-{{ cat.id }}">{% trans 'Allowed values (comma-separated)' %}</label>
+                <input id="cat-vals-{{ cat.id }}" type="text" name="allowed_values_{{ cat.id }}" value="{{ cat.allowed_values|join:', ' }}" placeholder="{% trans 'e.g. self, peer, supervisor, patient' %}" class="input input-bordered input-sm w-full" />
+              </div>
+              <div>
+                <label class="label text-xs" for="cat-src-{{ cat.id }}">{% trans 'Resolution source' %}</label>
+                <select id="cat-src-{{ cat.id }}" name="resolution_source_{{ cat.id }}" class="select select-bordered select-sm w-full">
+                  {% for value, label in respondent_category_resolution_choices %}
+                  <option value="{{ value }}" {% if cat.resolution_source == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+          </form>
+          {% endfor %}
+        </div>
+
+        {# Section visibility (required_categories per group) #}
+        <div class="mt-4">
+          <h4 class="text-sm font-semibold text-base-content mb-2">{% trans 'Section visibility' %}</h4>
+          <p class="text-xs text-base-content/60 mb-2">{% trans 'Tick which values each section is visible to. Leave all unchecked for sections visible to everyone.' %}</p>
+          <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="space-y-2">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_group_categories" />
+            <table class="table table-xs">
+              <thead>
+                <tr>
+                  <th>{% trans 'Section' %}</th>
+                  {% for cat in respondent_categories %}
+                  <th class="text-center">{{ cat.label|default:cat.name }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for g in groups %}
+                <tr>
+                  <td class="font-medium">{{ g.name }}</td>
+                  {% for cat in respondent_categories %}
+                  <td class="text-center">
+                    {% with rules=g.required_categories|get_item:cat.name %}
+                    <select name="group_{{ g.id }}_cat_{{ cat.id }}" multiple class="select select-bordered select-xs" size="{{ cat.allowed_values|length|default:1 }}">
+                      {% for val in cat.allowed_values %}
+                      <option value="{{ val }}" {% if val in rules %}selected{% endif %}>{{ val }}</option>
+                      {% endfor %}
+                    </select>
+                    {% endwith %}
+                  </td>
+                  {% endfor %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            <button type="submit" class="btn btn-sm btn-primary">{% trans 'Save section visibility' %}</button>
+          </form>
+        </div>
+        {% else %}
+        <p class="text-xs text-base-content/50">{% trans 'No category dimensions yet. Add one above to start categorising respondents.' %}</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   {% if content_block_warnings %}
   <section class="not-prose mb-6" aria-labelledby="content-block-warnings-heading">
     <div class="alert alert-warning">

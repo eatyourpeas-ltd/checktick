@@ -396,6 +396,35 @@
 </div>
 {% endif %}
 
+{% if is_preview and category_preview %}
+{# Simulate category panel #}
+<div class="card bg-base-200 shadow-sm mb-6">
+  <div class="card-body p-4">
+    <h3 class="text-sm font-semibold text-base-content/80 mb-2">{% trans 'Simulate category' %}</h3>
+    <p class="text-xs text-base-content/60 mb-3">{% trans 'Pick a value per dimension to preview what a participant with those category values would see. Sections whose required categories don\'t match will be hidden.' %}</p>
+    <form method="get" action="" class="space-y-2">
+      {% for cat in category_preview.categories %}
+      <div>
+        <label class="text-xs text-base-content/70 font-medium">{{ cat.label|default:cat.name }}</label>
+        <select name="simulate_category" class="select select-bordered select-xs ml-2" onchange="this.form.submit()">
+          <option value="">—</option>
+          {% for val in cat.allowed_values %}
+          <option value="{{ cat.name }}:{{ val }}" {% if request.GET.simulate_category and cat.name|add:':'|add:val in request.GET.simulate_category %}selected{% endif %}>{{ val }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endfor %}
+      <div class="flex gap-2">
+        <button type="submit" class="btn btn-xs btn-primary">{% trans 'Apply' %}</button>
+        {% if request.GET.simulate_category %}
+        <a href="{{ request.path }}" class="btn btn-xs btn-ghost">{% trans 'Reset' %}</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 {% if show_progress and not is_preview %}
 {# Progress bar - show at top of survey for participants #}
 <div class="card bg-base-200 shadow-sm mb-6">
