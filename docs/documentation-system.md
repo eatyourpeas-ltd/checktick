@@ -40,6 +40,7 @@ Your documentation content starts here...
 - `getting-started` - Getting Started guides
 - `features` - Feature documentation
 - `self-hosting` - Self-hosting guides
+- `scheduled-tasks` - Scheduled tasks and cron job configuration
 - `configuration` - Configuration guides
 - `security` - Security documentation
 - `data-governance` - Data governance guides

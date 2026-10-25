@@ -57,6 +57,11 @@ DOC_CATEGORIES = {
         "order": 3,
         "icon": "🖥️",
     },
+    "scheduled-tasks": {
+        "title": "Scheduled Tasks",
+        "order": 3.5,
+        "icon": "⏰",
+    },
     "configuration": {
         "title": "Configuration",
         "order": 4,
