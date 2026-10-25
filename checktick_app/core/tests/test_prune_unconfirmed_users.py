@@ -50,8 +50,9 @@ class PruneUnconfirmedUsersCommandTests(TestCase):
         output = self.out.getvalue()
         self.assertIn("Starting unconfirmed user pruning", output)
         self.assertIn("Pruning completed", output)
-        self.assertIn("Deactivated: 0", output)
-        self.assertIn("Deleted:     0", output)
+        self.assertIn("Warnings sent: 0", output)
+        self.assertIn("Deactivated:   0", output)
+        self.assertIn("Deleted:       0", output)
 
     def test_dry_run_mode_makes_no_changes(self):
         """Test that dry-run mode doesn't actually delete or deactivate."""
@@ -287,8 +288,8 @@ class PruneUnconfirmedUsersCommandTests(TestCase):
         self.assertTrue(confirmed.is_active)
 
         output = self.out.getvalue()
-        self.assertIn("Deactivated: 1", output)
-        self.assertIn("Deleted:     1", output)
+        self.assertIn("Deactivated:   1", output)
+        self.assertIn("Deleted:       1", output)
 
     @override_settings(EMAIL_CONFIRMATION_CUTOFF=timezone.now() - timedelta(days=100))
     def test_feature_cutoff_setting(self):
@@ -308,7 +309,9 @@ class PruneUnconfirmedUsersCommandTests(TestCase):
 
     # --- Pre-removal warning tests ---
 
-    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    @patch(
+        "checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email"
+    )
     def test_1week_warning_sent(self, mock_send):
         """Test that a 1-week warning is sent 7 days before removal."""
         mock_send.return_value = True
@@ -330,7 +333,9 @@ class PruneUnconfirmedUsersCommandTests(TestCase):
         self.assertTrue(user.is_active)
         self.assertTrue(User.objects.filter(id=user.id).exists())
 
-    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    @patch(
+        "checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email"
+    )
     def test_1day_warning_sent(self, mock_send):
         """Test that a 1-day warning is sent 1 day before removal."""
         mock_send.return_value = True
@@ -350,7 +355,9 @@ class PruneUnconfirmedUsersCommandTests(TestCase):
         self.assertEqual(user.profile.unconfirmed_warning_stage, "1day")
         self.assertTrue(user.is_active)
 
-    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    @patch(
+        "checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email"
+    )
     def test_warning_idempotent(self, mock_send):
         """Test that a warning stage is not re-sent once recorded."""
         mock_send.return_value = True
@@ -374,7 +381,9 @@ class PruneUnconfirmedUsersCommandTests(TestCase):
         self.assertEqual(user.profile.unconfirmed_warning_stage, "1week")
         self.assertTrue(user.is_active)
 
-    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    @patch(
+        "checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email"
+    )
     def test_1day_sent_after_1week(self, mock_send):
         """Test that 1day warning fires after 1week was sent."""
         mock_send.return_value = True
@@ -395,7 +404,9 @@ class PruneUnconfirmedUsersCommandTests(TestCase):
         self.assertEqual(user.profile.unconfirmed_warning_stage, "1day")
         self.assertTrue(user.is_active)
 
-    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    @patch(
+        "checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email"
+    )
     def test_no_warning_outside_window(self, mock_send):
         """Test that no warning is sent for users outside the warning window."""
         mock_send.return_value = True
@@ -414,7 +425,9 @@ class PruneUnconfirmedUsersCommandTests(TestCase):
         self.assertEqual(user.profile.unconfirmed_warning_stage, "")
         self.assertTrue(user.is_active)
 
-    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    @patch(
+        "checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email"
+    )
     def test_dry_run_does_not_send_warnings(self, mock_send):
         """Test that dry-run mode does not send warning emails."""
         mock_send.return_value = True
@@ -425,14 +438,18 @@ class PruneUnconfirmedUsersCommandTests(TestCase):
             date_joined=timezone.now() - timedelta(days=25),
         )
 
-        call_command("prune_unconfirmed_users", "--dry-run", "--verbose", stdout=self.out)
+        call_command(
+            "prune_unconfirmed_users", "--dry-run", "--verbose", stdout=self.out
+        )
 
         mock_send.assert_not_called()
         user.refresh_from_db()
         self.assertEqual(user.profile.unconfirmed_warning_stage, "")
         self.assertTrue(user.is_active)
 
-    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    @patch(
+        "checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email"
+    )
     def test_warning_not_sent_for_confirmed_user(self, mock_send):
         """Test that confirmed users never get a warning."""
         mock_send.return_value = True

@@ -1343,9 +1343,7 @@ def send_unconfirmed_account_warning_email(
 
     branding = get_platform_branding()
     site_url = getattr(settings, "SITE_URL", "http://localhost:8000").rstrip("/")
-    support_email = getattr(
-        settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com"
-    )
+    support_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com")
     profile_url = f"{site_url}/profile"
 
     if days_until_removal <= 1:

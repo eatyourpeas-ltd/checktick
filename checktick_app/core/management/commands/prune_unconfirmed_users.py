@@ -155,9 +155,7 @@ class Command(BaseCommand):
             )
 
         # --- 1. Send pre-removal warnings to users approaching the cutoff ---
-        warnings_sent = self._send_warnings(
-            cutoff, grace_days, dry_run, verbose
-        )
+        warnings_sent = self._send_warnings(cutoff, grace_days, dry_run, verbose)
 
         # --- 2. Prune users past the grace period ---
         deactivated, deleted = self._prune_users(
