@@ -8,7 +8,7 @@ CheckTick requires scheduled tasks for data governance operations, housekeeping,
 
 ## Overview
 
-CheckTick uses eight scheduled tasks, plus one optional manual SNOMED CT maintenance task, plus one ad-hoc security task run by the CTO:
+CheckTick uses eleven scheduled tasks, plus one optional manual SNOMED CT maintenance task, plus one ad-hoc security task run by the CTO:
 
 ### 1. Data Governance (Required for GDPR)
 
@@ -259,6 +259,78 @@ Set `EMAIL_CONFIRMATION_CUTOFF` in settings to the date the email confirmation f
 ```python
 # settings.py
 EMAIL_CONFIRMATION_CUTOFF = timezone.make_aware(timezone.datetime(2025, 6, 25))
+```
+
+### 11. Pre-expiry Subscription Warnings (Required for Billing)
+
+The `process_expiring_subscriptions` management command runs daily (alongside `process_expired_subscriptions`) to send warning emails before a time-limited subscription ends:
+
+1. **1 month before** (30 days) — first warning
+2. **1 week before** (7 days) — second warning
+3. **1 day before** (1 day) — final warning
+
+**Idempotency**: Each stage is sent at most once per expiry cycle, tracked via `UserProfile.last_expiry_warning_stage` (`"1month"`, `"1week"`, `"1day"`). When the subscription is renewed or extended, both `last_expiry_warning_stage` and `last_expiry_warning_sent_at` are cleared so warnings restart for the new expiry date.
+
+**Required for Billing**: Ensures users on manually upgraded or time-limited subscriptions get advance notice before downgrade. Without it, users lose paid features with no warning.
+
+**Note**: This task is NOT needed for self-hosted instances where `SELF_HOSTED=True` (billing is disabled — the command exits immediately).
+
+**Schedule**: Run daily, typically alongside `process_expired_subscriptions` (e.g., 3 AM UTC).
+
+```bash
+# Preview what would be sent (dry-run)
+python manage.py process_expiring_subscriptions --dry-run --verbose
+
+# Send pre-expiry warnings
+python manage.py process_expiring_subscriptions --verbose
+```
+
+### 12. Promotion Lifecycle (Required for Billing)
+
+The `process_promotion_lifecycle` management command runs daily to manage promotional pricing lifecycle:
+
+1. **Activation emails** — notify users/teams/organisations when a promotion becomes active
+2. **Ending-soon emails** — warn before a promotion expires (default: 7 days before)
+3. **Expired emails** — notify when a promotion has ended
+4. **Subscription reconciliation** — reconcile GoCardless subscription amounts against the resolved promotion pricing
+
+**Required for Billing**: Ensures promotion lifecycle emails are sent and subscription amounts stay in sync with the active promotion. Without it, users won't be notified of promotion changes and subscriptions may charge the wrong amount.
+
+**Note**: This task is NOT needed for self-hosted instances where `SELF_HOSTED=True` (billing is disabled).
+
+**Schedule**: Run daily, typically alongside `process_expired_subscriptions`.
+
+```bash
+# Preview what would be sent (dry-run)
+python manage.py process_promotion_lifecycle --dry-run --verbose
+
+# Run promotion lifecycle processing
+python manage.py process_promotion_lifecycle --verbose
+
+# Custom ending-soon window (default 7 days)
+python manage.py process_promotion_lifecycle --ending-soon-days=14
+```
+
+### 13. Diary Reminders (Required if using Diary/EMA surveys)
+
+The `process_diary_reminders` management command runs daily to send reminder emails to Diary/EMA survey participants:
+
+1. **Find open diary windows** — for each published diary survey with a configured `DiaryMenu`, find the current window for each enrolled participant
+2. **Skip submitted entries** — participants who have already submitted the current window's entry are skipped
+3. **Send one reminder per window** — a single reminder email per participant per open window where no entry has been submitted
+
+**Idempotency**: A reminder is sent at most once per day per open window. Re-running within the same day may re-send, which is acceptable for a daily command.
+
+**Required for Diary/EMA**: If you run Diary or EMA surveys with scheduled windows, this command ensures participants get reminders to complete their entries. Event-triggered diary surveys (no scheduled windows) are skipped.
+
+**Schedule**: Run daily.
+
+```bash
+# Preview what would be sent (dry-run)
+python manage.py process_diary_reminders --dry-run --verbose
+
+# Send diary reminders
+python manage.py process_diary_reminders --verbose
 ```
 
 ---
@@ -901,6 +973,59 @@ Pruning completed at 2026-06-25 10:00:02+00:00
 - New signups with data → deactivated (safety fallback)
 - Confirmed users, staff, and superusers → never touched
 
+### Pre-expiry Subscription Warnings Command
+
+```bash
+# Dry-run (show what would be sent without sending emails)
+python manage.py process_expiring_subscriptions --dry-run --verbose
+
+# Verbose output (per-profile detail)
+python manage.py process_expiring_subscriptions --verbose
+```
+
+**What happens:**
+
+- Profiles with a future `subscription_current_period_end` and a paid tier are considered
+- A warning email is sent at the 1-month, 1-week, and 1-day windows before expiry
+- Each stage is sent at most once per expiry cycle (idempotent via `last_expiry_warning_stage`)
+- Self-hosted deployments (`SELF_HOSTED=True`) are skipped — billing is disabled
+
+### Promotion Lifecycle Command
+
+```bash
+# Dry-run (show what would be sent without sending emails)
+python manage.py process_promotion_lifecycle --dry-run --verbose
+
+# Verbose output
+python manage.py process_promotion_lifecycle --verbose
+
+# Custom ending-soon window (default 7 days) and recent-expiry lookback (default 2 days)
+python manage.py process_promotion_lifecycle --ending-soon-days=14 --recent-expiry-days=3
+```
+
+**What happens:**
+
+- Activation, ending-soon, and expired emails are sent for promotions affecting users, teams, and organisations
+- GoCardless subscription amounts are reconciled against the resolved promotion pricing
+- Self-hosted deployments (`SELF_HOSTED=True`) are skipped — billing is disabled
+
+### Diary Reminders Command
+
+```bash
+# Dry-run (show what would be sent without sending emails)
+python manage.py process_diary_reminders --dry-run --verbose
+
+# Verbose output (per-participant detail)
+python manage.py process_diary_reminders --verbose
+```
+
+**What happens:**
+
+- Published diary surveys with a configured `DiaryMenu` are swept for open windows
+- Enrolled participants (`SurveyProgress.diary_enrolled_at` set) with no submitted entry for the current window get one reminder email
+- Event-triggered diary surveys (no scheduled windows) are skipped
+- Participants without an email address are skipped
+
 ---
 
 ## Testing
@@ -935,6 +1060,36 @@ docker compose exec web python manage.py prune_unconfirmed_users --dry-run --ver
 
 # Test for real (only if you have test data)
 docker compose exec web python manage.py prune_unconfirmed_users --verbose
+```
+
+**Pre-expiry Subscription Warnings:**
+
+```bash
+# Test with dry-run (safe, no emails sent)
+docker compose exec web python manage.py process_expiring_subscriptions --dry-run --verbose
+
+# Test for real
+docker compose exec web python manage.py process_expiring_subscriptions --verbose
+```
+
+**Promotion Lifecycle:**
+
+```bash
+# Test with dry-run (safe, no emails sent)
+docker compose exec web python manage.py process_promotion_lifecycle --dry-run --verbose
+
+# Test for real
+docker compose exec web python manage.py process_promotion_lifecycle --verbose
+```
+
+**Diary Reminders:**
+
+```bash
+# Test with dry-run (safe, no emails sent)
+docker compose exec web python manage.py process_diary_reminders --dry-run --verbose
+
+# Test for real
+docker compose exec web python manage.py process_diary_reminders --verbose
 ```
 
 ### Test in Production

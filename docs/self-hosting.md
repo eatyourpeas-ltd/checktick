@@ -752,13 +752,21 @@ CheckTick requires several scheduled tasks for proper operation and GDPR complia
 
 ### Required Tasks
 
-CheckTick uses **five scheduled tasks**:
+CheckTick uses **several scheduled tasks** for proper operation, GDPR compliance, billing, and diary/EMA surveys:
 
 1. **Data Governance** (GDPR Required) - Daily deletion warnings and automatic survey cleanup
 2. **Survey Progress Cleanup** (Recommended) - Remove expired incomplete survey sessions
 3. **External Dataset Sync** (Recommended) - Update hospital lists and organisational data
 4. **NHS Data Dictionary Sync** (Recommended) - Scrape standardised NHS codes and values
 5. **Global Question Group Templates Sync** (Optional) - Import reusable question templates
+6. **Recovery Time Delay Processing** (Required if Recovery Enabled) - Process ethical key recovery waiting periods
+7. **Subscription Expiry Processing** (Required for Billing) - Downgrade expired subscriptions
+8. **Pre-expiry Subscription Warnings** (Required for Billing) - Send 1 month/week/day warnings before downgrade
+9. **Promotion Lifecycle** (Required for Billing) - Promotion activation/ending/expired emails and subscription reconciliation
+10. **Data Subject Request Deadlines** (Required for GDPR) - Freeze responses after 30 days and notify controllers
+11. **Diary Reminders** (Required if using Diary/EMA) - Remind participants to complete open diary windows
+
+> The `prune_unconfirmed_users` command is also available but is run ad-hoc by the CTO, not scheduled.
 
 ### Quick Setup
 
