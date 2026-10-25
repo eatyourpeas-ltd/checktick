@@ -766,7 +766,7 @@ CheckTick uses **several scheduled tasks** for proper operation, GDPR compliance
 10. **Data Subject Request Deadlines** (Required for GDPR) - Freeze responses after 30 days and notify controllers
 11. **Diary Reminders** (Required if using Diary/EMA) - Remind participants to complete open diary windows
 
-> The `prune_unconfirmed_users` command is also available but is run ad-hoc by the CTO, not scheduled.
+> The `prune_unconfirmed_users` command is also available and runs daily to send pre-removal warnings and clean up unconfirmed accounts.
 
 ### Quick Setup
 

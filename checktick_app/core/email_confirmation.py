@@ -117,11 +117,17 @@ class EmailConfirmationManager:
             # Clear the token fields after successful confirmation
             user.profile.email_confirmation_token = None
             user.profile.email_confirmation_token_expires = None
+            # Clear unconfirmed-account warning tracking so any future
+            # unconfirmed state (e.g. email change) restarts warnings.
+            user.profile.unconfirmed_warning_sent_at = None
+            user.profile.unconfirmed_warning_stage = ""
             user.profile.save(
                 update_fields=[
                     "email_confirmed",
                     "email_confirmation_token",
                     "email_confirmation_token_expires",
+                    "unconfirmed_warning_sent_at",
+                    "unconfirmed_warning_stage",
                 ]
             )
 

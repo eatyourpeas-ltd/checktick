@@ -240,6 +240,7 @@ Each email has two components:
 | `promotion_activated.md` | Promotion started | `user_name`, `promotion_name`, `effective_from`, `effective_to` |
 | `promotion_ending_soon.md` | Promotion reminder | `user_name`, `promotion_name`, `effective_to` |
 | `promotion_expired.md` | Promotion ended | `user_name`, `promotion_name`, `expired_at` |
+| `unconfirmed_account_warning.md` | Pre-removal warning for unconfirmed accounts | `user.username`, `brand_title`, `days_until_removal`, `profile_url`, `support_email` |
 | `recovery_*.md` | Recovery workflow stages | stage-specific case metadata |
 
 ### Customizing Templates

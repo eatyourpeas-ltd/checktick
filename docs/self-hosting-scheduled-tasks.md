@@ -8,7 +8,7 @@ CheckTick requires scheduled tasks for data governance operations, housekeeping,
 
 ## Overview
 
-CheckTick uses eleven scheduled tasks, plus one optional manual SNOMED CT maintenance task, plus one ad-hoc security task run by the CTO:
+CheckTick uses twelve scheduled tasks, plus one optional manual SNOMED CT maintenance task:
 
 ### 1. Data Governance (Required for GDPR)
 
@@ -214,28 +214,30 @@ The `process_dsr_deadlines` management command runs daily to:
 - the response is frozen
 - emails are sent to the controller to inform them
 
-### 10. Prune Unconfirmed Users (Ad-hoc — Run by CTO)
+### 10. Prune Unconfirmed Users (Required)
 
-> **Not scheduled.** This command is run manually by the CTO on an ad-hoc basis. Do not add it to a cron job.
+The `prune_unconfirmed_users` management command removes fake or phishing accounts that sign up with non-existent email addresses and never confirm their email. It runs daily and performs three actions:
 
-The `prune_unconfirmed_users` management command removes fake or phishing accounts that sign up with non-existent email addresses and never confirm their email:
+1. **Send pre-removal warnings** — 7 days and 1 day before the grace period expires, a warning email is sent to the unconfirmed user. The email signposts them to their profile page to resend the confirmation email, and to the platform support email (`DEFAULT_FROM_EMAIL`) if they need help.
+2. **Deactivate existing users** — Users created before the email confirmation feature who never confirm are deactivated after the grace period (default: 30 days). Their data is preserved.
+3. **Delete new signups with no data** — Users created after the feature who never confirm and have no surveys, memberships, or audit history are deleted after the grace period. This removes fake/phishing accounts that cannot access protected features.
 
-1. **Deactivate existing users** — Users created before the email confirmation feature who never confirm are deactivated after a grace period (default: 30 days). Their data is preserved.
-2. **Delete new signups with no data** — Users created after the feature who never confirm and have no surveys, memberships, or audit history are deleted after the grace period. This removes fake/phishing accounts that cannot access protected features.
-3. **Safety fallback** — If a new signup somehow has data (surveys, memberships, etc.), they are deactivated instead of deleted to prevent accidental data loss.
-4. **Audit logging** — Every deactivation and deletion is logged in `AuditLog` with full metadata.
+**Safety fallback**: If a new signup somehow has data (surveys, memberships, etc.), they are deactivated instead of deleted to prevent accidental data loss.
 
-**Why ad-hoc?** The command is intentionally not automated because:
+**Audit logging**: Every warning, deactivation, and deletion is logged in `AuditLog` with full metadata.
 
-- It affects user accounts directly (deletion is irreversible)
-- The CTO may want to review `--dry-run` output before execution
-- Grace period and cutoff dates may need adjustment based on operational context
-- It should be run after reviewing signup patterns and support tickets
+**Idempotency**: Warnings are tracked via `UserProfile.unconfirmed_warning_stage` (`"1week"`, `"1day"`), so each stage is sent at most once per grace cycle. The fields are cleared when the user confirms their email.
+
+**Why daily?** Running it daily ensures the 7-day and 1-day warnings fire on time and unconfirmed accounts are cleaned up promptly. The command is safe to run on a schedule because:
+
+- Deactivation is reversible (a platform admin can re-activate)
+- Deletion only affects accounts with no surveys, memberships, or audit history
+- The safety fallback deactivates (rather than deletes) any account that somehow has data
 
 **Usage:**
 
 ```bash
-# Preview what would happen (always run this first)
+# Preview what would happen (always run this first on a new install)
 python manage.py prune_unconfirmed_users --dry-run --verbose
 
 # Run with default 30-day grace period
@@ -247,6 +249,8 @@ python manage.py prune_unconfirmed_users --grace-days=14 --verbose
 
 **What happens:**
 
+- 7 days before removal → 1-week warning email (with profile + support links)
+- 1 day before removal → 1-day warning email (with profile + support links)
 - Existing users (pre-feature) → deactivated, data preserved
 - New signups with no data → deleted (fake/phishing accounts)
 - New signups with data → deactivated (safety fallback)
@@ -260,6 +264,8 @@ Set `EMAIL_CONFIRMATION_CUTOFF` in settings to the date the email confirmation f
 # settings.py
 EMAIL_CONFIRMATION_CUTOFF = timezone.make_aware(timezone.datetime(2025, 6, 25))
 ```
+
+The warning email signposts users to the platform support email (`DEFAULT_FROM_EMAIL`) if they need help confirming their account.
 
 ### 11. Pre-expiry Subscription Warnings (Required for Billing)
 
@@ -926,10 +932,8 @@ Cleanup completed successfully
 
 ### Prune Unconfirmed Users Command
 
-> **Ad-hoc only — run by the CTO. Not scheduled.**
-
 ```bash
-# Preview what would happen (always run this first)
+# Dry-run (show what would happen without sending emails or making changes)
 python manage.py prune_unconfirmed_users --dry-run --verbose
 
 # Run with default 30-day grace period
@@ -946,6 +950,16 @@ Starting unconfirmed user pruning at 2026-06-25 10:00:00+00:00
   Grace period: 30 days
   Feature cutoff: 2025-06-25
 
+Found 2 unconfirmed users in warning window
+
+  User: soonpruned (soon@example.com)
+    Joined: 2026-05-29
+    Days until removal: 1
+    Warning stage: 1day
+    Warning sent: soonpruned
+
+Found 2 unconfirmed users past grace period
+
   User: fakeuser123 (fake@example.com)
     Joined: 2026-04-01
     Existing user: False
@@ -961,13 +975,15 @@ Starting unconfirmed user pruning at 2026-06-25 10:00:00+00:00
     Deactivated: olduser
 
 Pruning completed at 2026-06-25 10:00:02+00:00
-  - Deactivated: 1
-  - Deleted:     1
-  - Skipped:     0
+  - Warnings sent: 1
+  - Deactivated:   1
+  - Deleted:       1
 ```
 
 **What happens:**
 
+- 7 days before removal → 1-week warning email (with profile + support links)
+- 1 day before removal → 1-day warning email (with profile + support links)
 - Existing users (joined before `EMAIL_CONFIRMATION_CUTOFF`) → deactivated, data preserved
 - New signups with no surveys/memberships/audit history → deleted
 - New signups with data → deactivated (safety fallback)

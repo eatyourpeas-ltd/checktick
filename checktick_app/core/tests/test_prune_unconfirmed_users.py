@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 from io import StringIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
@@ -304,3 +305,146 @@ class PruneUnconfirmedUsersCommandTests(TestCase):
 
         # Should be deleted (new user, no data)
         self.assertFalse(User.objects.filter(id=user.id).exists())
+
+    # --- Pre-removal warning tests ---
+
+    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    def test_1week_warning_sent(self, mock_send):
+        """Test that a 1-week warning is sent 7 days before removal."""
+        mock_send.return_value = True
+        # 23 days ago -> 7 days until removal (30 - 23 = 7)
+        user = self._create_user(
+            "weekwarn",
+            "weekwarn@example.com",
+            email_confirmed=False,
+            date_joined=timezone.now() - timedelta(days=23),
+        )
+
+        call_command("prune_unconfirmed_users", "--verbose", stdout=self.out)
+
+        user.refresh_from_db()
+        mock_send.assert_called_once()
+        self.assertEqual(user.profile.unconfirmed_warning_stage, "1week")
+        self.assertIsNotNone(user.profile.unconfirmed_warning_sent_at)
+        # User should NOT be pruned yet
+        self.assertTrue(user.is_active)
+        self.assertTrue(User.objects.filter(id=user.id).exists())
+
+    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    def test_1day_warning_sent(self, mock_send):
+        """Test that a 1-day warning is sent 1 day before removal."""
+        mock_send.return_value = True
+        # 29 days ago -> 1 day until removal (30 - 29 = 1)
+        user = self._create_user(
+            "daywarn",
+            "daywarn@example.com",
+            email_confirmed=False,
+            date_joined=timezone.now() - timedelta(days=29),
+        )
+
+        call_command("prune_unconfirmed_users", "--verbose", stdout=self.out)
+
+        user.refresh_from_db()
+        mock_send.assert_called_once()
+        # Should send the 1day stage (closest applicable)
+        self.assertEqual(user.profile.unconfirmed_warning_stage, "1day")
+        self.assertTrue(user.is_active)
+
+    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    def test_warning_idempotent(self, mock_send):
+        """Test that a warning stage is not re-sent once recorded."""
+        mock_send.return_value = True
+        user = self._create_user(
+            "idempotent",
+            "idempotent@example.com",
+            email_confirmed=False,
+            date_joined=timezone.now() - timedelta(days=25),
+        )
+        # Pre-set the 1week stage as already sent
+        user.profile.unconfirmed_warning_stage = "1week"
+        user.profile.unconfirmed_warning_sent_at = timezone.now() - timedelta(days=1)
+        user.profile.save()
+
+        call_command("prune_unconfirmed_users", "--verbose", stdout=self.out)
+
+        # 1week should not be re-sent (days_until_removal=5, within 7-day window
+        # but 1week already sent and 1day not yet applicable)
+        mock_send.assert_not_called()
+        user.refresh_from_db()
+        self.assertEqual(user.profile.unconfirmed_warning_stage, "1week")
+        self.assertTrue(user.is_active)
+
+    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    def test_1day_sent_after_1week(self, mock_send):
+        """Test that 1day warning fires after 1week was sent."""
+        mock_send.return_value = True
+        user = self._create_user(
+            "progress",
+            "progress@example.com",
+            email_confirmed=False,
+            date_joined=timezone.now() - timedelta(days=29),
+        )
+        user.profile.unconfirmed_warning_stage = "1week"
+        user.profile.unconfirmed_warning_sent_at = timezone.now() - timedelta(days=6)
+        user.profile.save()
+
+        call_command("prune_unconfirmed_users", "--verbose", stdout=self.out)
+
+        user.refresh_from_db()
+        mock_send.assert_called_once()
+        self.assertEqual(user.profile.unconfirmed_warning_stage, "1day")
+        self.assertTrue(user.is_active)
+
+    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    def test_no_warning_outside_window(self, mock_send):
+        """Test that no warning is sent for users outside the warning window."""
+        mock_send.return_value = True
+        # 10 days ago -> 20 days until removal, outside 7-day window
+        user = self._create_user(
+            "early",
+            "early@example.com",
+            email_confirmed=False,
+            date_joined=timezone.now() - timedelta(days=10),
+        )
+
+        call_command("prune_unconfirmed_users", "--verbose", stdout=self.out)
+
+        mock_send.assert_not_called()
+        user.refresh_from_db()
+        self.assertEqual(user.profile.unconfirmed_warning_stage, "")
+        self.assertTrue(user.is_active)
+
+    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    def test_dry_run_does_not_send_warnings(self, mock_send):
+        """Test that dry-run mode does not send warning emails."""
+        mock_send.return_value = True
+        user = self._create_user(
+            "drywarn",
+            "drywarn@example.com",
+            email_confirmed=False,
+            date_joined=timezone.now() - timedelta(days=25),
+        )
+
+        call_command("prune_unconfirmed_users", "--dry-run", "--verbose", stdout=self.out)
+
+        mock_send.assert_not_called()
+        user.refresh_from_db()
+        self.assertEqual(user.profile.unconfirmed_warning_stage, "")
+        self.assertTrue(user.is_active)
+
+    @patch("checktick_app.core.management.commands.prune_unconfirmed_users.send_unconfirmed_account_warning_email")
+    def test_warning_not_sent_for_confirmed_user(self, mock_send):
+        """Test that confirmed users never get a warning."""
+        mock_send.return_value = True
+        user = self._create_user(
+            "confirmed2",
+            "confirmed2@example.com",
+            email_confirmed=True,
+            date_joined=timezone.now() - timedelta(days=29),
+        )
+
+        call_command("prune_unconfirmed_users", "--verbose", stdout=self.out)
+
+        mock_send.assert_not_called()
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
