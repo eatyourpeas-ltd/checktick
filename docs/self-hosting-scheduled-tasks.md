@@ -8,7 +8,7 @@ CheckTick requires scheduled tasks for data governance operations, housekeeping,
 
 ## Overview
 
-CheckTick uses eight scheduled tasks, plus one optional manual SNOMED CT maintenance task, plus one ad-hoc security task run by the CTO:
+CheckTick uses twelve scheduled tasks, plus one optional manual SNOMED CT maintenance task:
 
 ### 1. Data Governance (Required for GDPR)
 
@@ -214,28 +214,30 @@ The `process_dsr_deadlines` management command runs daily to:
 - the response is frozen
 - emails are sent to the controller to inform them
 
-### 10. Prune Unconfirmed Users (Ad-hoc — Run by CTO)
+### 10. Prune Unconfirmed Users (Required)
 
-> **Not scheduled.** This command is run manually by the CTO on an ad-hoc basis. Do not add it to a cron job.
+The `prune_unconfirmed_users` management command removes fake or phishing accounts that sign up with non-existent email addresses and never confirm their email. It runs daily and performs three actions:
 
-The `prune_unconfirmed_users` management command removes fake or phishing accounts that sign up with non-existent email addresses and never confirm their email:
+1. **Send pre-removal warnings** — 7 days and 1 day before the grace period expires, a warning email is sent to the unconfirmed user. The email signposts them to their profile page to resend the confirmation email, and to the platform support email (`DEFAULT_FROM_EMAIL`) if they need help.
+2. **Deactivate existing users** — Users created before the email confirmation feature who never confirm are deactivated after the grace period (default: 30 days). Their data is preserved.
+3. **Delete new signups with no data** — Users created after the feature who never confirm and have no surveys, memberships, or audit history are deleted after the grace period. This removes fake/phishing accounts that cannot access protected features.
 
-1. **Deactivate existing users** — Users created before the email confirmation feature who never confirm are deactivated after a grace period (default: 30 days). Their data is preserved.
-2. **Delete new signups with no data** — Users created after the feature who never confirm and have no surveys, memberships, or audit history are deleted after the grace period. This removes fake/phishing accounts that cannot access protected features.
-3. **Safety fallback** — If a new signup somehow has data (surveys, memberships, etc.), they are deactivated instead of deleted to prevent accidental data loss.
-4. **Audit logging** — Every deactivation and deletion is logged in `AuditLog` with full metadata.
+**Safety fallback**: If a new signup somehow has data (surveys, memberships, etc.), they are deactivated instead of deleted to prevent accidental data loss.
 
-**Why ad-hoc?** The command is intentionally not automated because:
+**Audit logging**: Every warning, deactivation, and deletion is logged in `AuditLog` with full metadata.
 
-- It affects user accounts directly (deletion is irreversible)
-- The CTO may want to review `--dry-run` output before execution
-- Grace period and cutoff dates may need adjustment based on operational context
-- It should be run after reviewing signup patterns and support tickets
+**Idempotency**: Warnings are tracked via `UserProfile.unconfirmed_warning_stage` (`"1week"`, `"1day"`), so each stage is sent at most once per grace cycle. The fields are cleared when the user confirms their email.
+
+**Why daily?** Running it daily ensures the 7-day and 1-day warnings fire on time and unconfirmed accounts are cleaned up promptly. The command is safe to run on a schedule because:
+
+- Deactivation is reversible (a platform admin can re-activate)
+- Deletion only affects accounts with no surveys, memberships, or audit history
+- The safety fallback deactivates (rather than deletes) any account that somehow has data
 
 **Usage:**
 
 ```bash
-# Preview what would happen (always run this first)
+# Preview what would happen (always run this first on a new install)
 python manage.py prune_unconfirmed_users --dry-run --verbose
 
 # Run with default 30-day grace period
@@ -247,6 +249,8 @@ python manage.py prune_unconfirmed_users --grace-days=14 --verbose
 
 **What happens:**
 
+- 7 days before removal → 1-week warning email (with profile + support links)
+- 1 day before removal → 1-day warning email (with profile + support links)
 - Existing users (pre-feature) → deactivated, data preserved
 - New signups with no data → deleted (fake/phishing accounts)
 - New signups with data → deactivated (safety fallback)
@@ -259,6 +263,80 @@ Set `EMAIL_CONFIRMATION_CUTOFF` in settings to the date the email confirmation f
 ```python
 # settings.py
 EMAIL_CONFIRMATION_CUTOFF = timezone.make_aware(timezone.datetime(2025, 6, 25))
+```
+
+The warning email signposts users to the platform support email (`DEFAULT_FROM_EMAIL`) if they need help confirming their account.
+
+### 11. Pre-expiry Subscription Warnings (Required for Billing)
+
+The `process_expiring_subscriptions` management command runs daily (alongside `process_expired_subscriptions`) to send warning emails before a time-limited subscription ends:
+
+1. **1 month before** (30 days) — first warning
+2. **1 week before** (7 days) — second warning
+3. **1 day before** (1 day) — final warning
+
+**Idempotency**: Each stage is sent at most once per expiry cycle, tracked via `UserProfile.last_expiry_warning_stage` (`"1month"`, `"1week"`, `"1day"`). When the subscription is renewed or extended, both `last_expiry_warning_stage` and `last_expiry_warning_sent_at` are cleared so warnings restart for the new expiry date.
+
+**Required for Billing**: Ensures users on manually upgraded or time-limited subscriptions get advance notice before downgrade. Without it, users lose paid features with no warning.
+
+**Note**: This task is NOT needed for self-hosted instances where `SELF_HOSTED=True` (billing is disabled — the command exits immediately).
+
+**Schedule**: Run daily, typically alongside `process_expired_subscriptions` (e.g., 3 AM UTC).
+
+```bash
+# Preview what would be sent (dry-run)
+python manage.py process_expiring_subscriptions --dry-run --verbose
+
+# Send pre-expiry warnings
+python manage.py process_expiring_subscriptions --verbose
+```
+
+### 12. Promotion Lifecycle (Required for Billing)
+
+The `process_promotion_lifecycle` management command runs daily to manage promotional pricing lifecycle:
+
+1. **Activation emails** — notify users/teams/organisations when a promotion becomes active
+2. **Ending-soon emails** — warn before a promotion expires (default: 7 days before)
+3. **Expired emails** — notify when a promotion has ended
+4. **Subscription reconciliation** — reconcile GoCardless subscription amounts against the resolved promotion pricing
+
+**Required for Billing**: Ensures promotion lifecycle emails are sent and subscription amounts stay in sync with the active promotion. Without it, users won't be notified of promotion changes and subscriptions may charge the wrong amount.
+
+**Note**: This task is NOT needed for self-hosted instances where `SELF_HOSTED=True` (billing is disabled).
+
+**Schedule**: Run daily, typically alongside `process_expired_subscriptions`.
+
+```bash
+# Preview what would be sent (dry-run)
+python manage.py process_promotion_lifecycle --dry-run --verbose
+
+# Run promotion lifecycle processing
+python manage.py process_promotion_lifecycle --verbose
+
+# Custom ending-soon window (default 7 days)
+python manage.py process_promotion_lifecycle --ending-soon-days=14
+```
+
+### 13. Diary Reminders (Required if using Diary/EMA surveys)
+
+The `process_diary_reminders` management command runs daily to send reminder emails to Diary/EMA survey participants:
+
+1. **Find open diary windows** — for each published diary survey with a configured `DiaryMenu`, find the current window for each enrolled participant
+2. **Skip submitted entries** — participants who have already submitted the current window's entry are skipped
+3. **Send one reminder per window** — a single reminder email per participant per open window where no entry has been submitted
+
+**Idempotency**: A reminder is sent at most once per day per open window. Re-running within the same day may re-send, which is acceptable for a daily command.
+
+**Required for Diary/EMA**: If you run Diary or EMA surveys with scheduled windows, this command ensures participants get reminders to complete their entries. Event-triggered diary surveys (no scheduled windows) are skipped.
+
+**Schedule**: Run daily.
+
+```bash
+# Preview what would be sent (dry-run)
+python manage.py process_diary_reminders --dry-run --verbose
+
+# Send diary reminders
+python manage.py process_diary_reminders --verbose
 ```
 
 ---
@@ -346,7 +424,22 @@ python manage.py update_snomed_db --force --prune
    - **Schedule**: `*/5 * * * *` (runs every 5 minutes)
    - **Command**: `python manage.py process_recovery_time_delays`
 
-#### 8. Copy Environment Variables
+#### 8. Remaining Daily Jobs
+
+The following daily jobs follow the same Northflank cron job pattern as the sections above (same Docker image, same environment variables). Create one cron job per row:
+
+| Job name | Schedule | Command | Required for |
+| --- | --- | --- | --- |
+| `checktick-subscription-expiry` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py process_expired_subscriptions` | Billing (hosted only) |
+| `checktick-subscription-warnings` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py process_expiring_subscriptions` | Billing (hosted only) |
+| `checktick-promotion-lifecycle` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py process_promotion_lifecycle` | Billing (hosted only) |
+| `checktick-dsr-deadlines` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py process_dsr_deadlines` | GDPR (DSR requests) |
+| `checktick-prune-unconfirmed` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py prune_unconfirmed_users` | Account hygiene |
+| `checktick-diary-reminders` | `0 7 * * *` (daily 7 AM UTC) | `python manage.py process_diary_reminders` | Diary/EMA surveys |
+
+> **Self-hosted note:** The three billing jobs (`process_expired_subscriptions`, `process_expiring_subscriptions`, `process_promotion_lifecycle`) are no-ops when `SELF_HOSTED=True` — skip them if you're self-hosting without billing. `process_dsr_deadlines`, `prune_unconfirmed_users`, and `process_diary_reminders` apply to all deployments.
+
+#### 9. Copy Environment Variables
 
 All cron jobs need the same environment variables as your web service:
 
@@ -365,7 +458,7 @@ All cron jobs need the same environment variables as your web service:
 - `EXTERNAL_DATASET_API_URL`, `EXTERNAL_DATASET_API_KEY` (for dataset sync - optional, defaults to RCPCH API)
 - `TRUD_API_KEY`, `SNOMED_DB_PATH` (optional — required only if you use SNOMED CT)
 
-#### 9. Deploy and Test
+#### 10. Deploy and Test
 
 1. Deploy all cron job services
 2. Test them manually via Northflank dashboard: **Jobs** → **Run Now**
@@ -379,7 +472,7 @@ All cron jobs need the same environment variables as your web service:
 python manage.py sync_external_datasets
 ```
 
-#### 10. Set Up Job Failure Alerts (Recommended)
+#### 11. Set Up Job Failure Alerts (Recommended)
 
 Northflank does not send email alerts for cron job failures. Use [healthchecks.io](https://healthchecks.io) (free tier covers 20 checks with email alerts) to get notified when a job fails or doesn't run at all.
 
@@ -407,6 +500,12 @@ The `&&` ensures the ping only fires if the management command exits successfull
 | checktick-data-sync | `python manage.py sync_external_datasets && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
 | checktick-nhsdd-sync | `python manage.py sync_nhs_dd_datasets && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
 | checktick-templates-sync | `python manage.py sync_global_question_group_templates && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-subscription-expiry | `python manage.py process_expired_subscriptions && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-subscription-warnings | `python manage.py process_expiring_subscriptions && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-promotion-lifecycle | `python manage.py process_promotion_lifecycle && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-dsr-deadlines | `python manage.py process_dsr_deadlines && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-prune-unconfirmed | `python manage.py prune_unconfirmed_users && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-diary-reminders | `python manage.py process_diary_reminders && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
 
 > **App and Vault uptime:** Use an external uptime monitor (e.g. StatusCake, UptimeRobot) pointing at `https://your-domain/healthz`. This endpoint returns `503` if Vault is sealed, the database is unreachable, or SNOMED CT is misconfigured — giving you a single URL to monitor for all critical service health.
 
@@ -493,6 +592,78 @@ docker compose exec -T web python manage.py sync_global_question_group_templates
 exit $?
 ```
 
+Create `/usr/local/bin/checktick-subscription-expiry.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick Subscription Expiry Cron Job
+# Runs daily at 3 AM UTC
+
+cd /path/to/your/checktick-app
+docker compose exec -T web python manage.py process_expired_subscriptions >> /var/log/checktick/subscription-expiry.log 2>&1
+exit $?
+```
+
+Create `/usr/local/bin/checktick-subscription-warnings.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick Pre-expiry Subscription Warnings Cron Job
+# Runs daily at 3 AM UTC
+
+cd /path/to/your/checktick-app
+docker compose exec -T web python manage.py process_expiring_subscriptions >> /var/log/checktick/subscription-warnings.log 2>&1
+exit $?
+```
+
+Create `/usr/local/bin/checktick-promotion-lifecycle.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick Promotion Lifecycle Cron Job
+# Runs daily at 3 AM UTC
+
+cd /path/to/your/checktick-app
+docker compose exec -T web python manage.py process_promotion_lifecycle >> /var/log/checktick/promotion-lifecycle.log 2>&1
+exit $?
+```
+
+Create `/usr/local/bin/checktick-dsr-deadlines.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick DSR Deadlines Cron Job
+# Runs daily at 3 AM UTC
+
+cd /path/to/your/checktick-app
+docker compose exec -T web python manage.py process_dsr_deadlines >> /var/log/checktick/dsr-deadlines.log 2>&1
+exit $?
+```
+
+Create `/usr/local/bin/checktick-prune-unconfirmed.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick Prune Unconfirmed Users Cron Job
+# Runs daily at 3 AM UTC
+
+cd /path/to/your/checktick-app
+docker compose exec -T web python manage.py prune_unconfirmed_users >> /var/log/checktick/prune-unconfirmed.log 2>&1
+exit $?
+```
+
+Create `/usr/local/bin/checktick-diary-reminders.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick Diary Reminders Cron Job
+# Runs daily at 7 AM UTC
+
+cd /path/to/your/checktick-app
+docker compose exec -T web python manage.py process_diary_reminders >> /var/log/checktick/diary-reminders.log 2>&1
+exit $?
+```
+
 Make them executable:
 
 ```bash
@@ -500,6 +671,12 @@ chmod +x /usr/local/bin/checktick-data-governance.sh
 chmod +x /usr/local/bin/checktick-progress-cleanup.sh
 chmod +x /usr/local/bin/checktick-dataset-sync.sh
 chmod +x /usr/local/bin/checktick-templates-sync.sh
+chmod +x /usr/local/bin/checktick-subscription-expiry.sh
+chmod +x /usr/local/bin/checktick-subscription-warnings.sh
+chmod +x /usr/local/bin/checktick-promotion-lifecycle.sh
+chmod +x /usr/local/bin/checktick-dsr-deadlines.sh
+chmod +x /usr/local/bin/checktick-prune-unconfirmed.sh
+chmod +x /usr/local/bin/checktick-diary-reminders.sh
 ```
 
 #### 2. Add to System Crontab
@@ -522,6 +699,24 @@ Add these lines:
 
 # CheckTick Global Templates Sync - Daily at 6 AM UTC
 0 6 * * * /usr/local/bin/checktick-templates-sync.sh
+
+# CheckTick Subscription Expiry - Daily at 3 AM UTC (hosted only; no-op if SELF_HOSTED=True)
+0 3 * * * /usr/local/bin/checktick-subscription-expiry.sh
+
+# CheckTick Pre-expiry Subscription Warnings - Daily at 3 AM UTC (hosted only; no-op if SELF_HOSTED=True)
+0 3 * * * /usr/local/bin/checktick-subscription-warnings.sh
+
+# CheckTick Promotion Lifecycle - Daily at 3 AM UTC (hosted only; no-op if SELF_HOSTED=True)
+0 3 * * * /usr/local/bin/checktick-promotion-lifecycle.sh
+
+# CheckTick DSR Deadlines - Daily at 3 AM UTC (GDPR)
+0 3 * * * /usr/local/bin/checktick-dsr-deadlines.sh
+
+# CheckTick Prune Unconfirmed Users - Daily at 3 AM UTC
+0 3 * * * /usr/local/bin/checktick-prune-unconfirmed.sh
+
+# CheckTick Diary Reminders - Daily at 7 AM UTC (only if using Diary/EMA surveys)
+0 7 * * * /usr/local/bin/checktick-diary-reminders.sh
 ```
 
 #### 3. Create Log Directory
@@ -686,6 +881,21 @@ kubectl create job --from=cronjob/checktick-snomed-update snomed-initial-build \
   -- /bin/sh -c "python manage.py update_snomed_db --force --prune"
 ```
 
+#### Remaining Daily Jobs
+
+The remaining daily jobs follow the same CronJob manifest pattern as `checktick-data-governance` above (same image, same `envFrom`, same resource requests). Create one manifest per row:
+
+| CronJob name | Schedule | Command | Required for |
+| --- | --- | --- | --- |
+| `checktick-subscription-expiry` | `0 3 * * *` | `python manage.py process_expired_subscriptions` | Billing (hosted only) |
+| `checktick-subscription-warnings` | `0 3 * * *` | `python manage.py process_expiring_subscriptions` | Billing (hosted only) |
+| `checktick-promotion-lifecycle` | `0 3 * * *` | `python manage.py process_promotion_lifecycle` | Billing (hosted only) |
+| `checktick-dsr-deadlines` | `0 3 * * *` | `python manage.py process_dsr_deadlines` | GDPR (DSR requests) |
+| `checktick-prune-unconfirmed` | `0 3 * * *` | `python manage.py prune_unconfirmed_users` | Account hygiene |
+| `checktick-diary-reminders` | `0 7 * * *` | `python manage.py process_diary_reminders` | Diary/EMA surveys |
+
+> **Self-hosted note:** The three billing jobs are no-ops when `SELF_HOSTED=True` — skip them if you're self-hosting without billing. `process_dsr_deadlines`, `prune_unconfirmed_users`, and `process_diary_reminders` apply to all deployments.
+
 ---
 
 ### AWS ECS/Fargate
@@ -726,6 +936,21 @@ In your task definition, set the command override:
 }
 ```
 
+#### 4. Remaining Daily Jobs
+
+Create one EventBridge rule + ECS task override per row. Each follows the same pattern as the data governance job above (same cluster, same task definition, just a different command override):
+
+| Rule name | Schedule | Command override | Required for |
+| --- | --- | --- | --- |
+| `checktick-subscription-expiry-daily` | `cron(0 3 * * ? *)` | `python manage.py process_expired_subscriptions` | Billing (hosted only) |
+| `checktick-subscription-warnings-daily` | `cron(0 3 * * ? *)` | `python manage.py process_expiring_subscriptions` | Billing (hosted only) |
+| `checktick-promotion-lifecycle-daily` | `cron(0 3 * * ? *)` | `python manage.py process_promotion_lifecycle` | Billing (hosted only) |
+| `checktick-dsr-deadlines-daily` | `cron(0 3 * * ? *)` | `python manage.py process_dsr_deadlines` | GDPR (DSR requests) |
+| `checktick-prune-unconfirmed-daily` | `cron(0 3 * * ? *)` | `python manage.py prune_unconfirmed_users` | Account hygiene |
+| `checktick-diary-reminders-daily` | `cron(0 7 * * ? *)` | `python manage.py process_diary_reminders` | Diary/EMA surveys |
+
+> **Self-hosted note:** The three billing jobs are no-ops when `SELF_HOSTED=True` — skip them if you're self-hosting without billing.
+
 ---
 
 ### Heroku
@@ -748,6 +973,19 @@ In the web interface:
 
 - **Command**: `python manage.py process_data_governance`
 - **Frequency**: Daily at 2:00 AM (UTC)
+
+Add one job per row for the remaining daily tasks (same frequency, different command):
+
+| Command | Frequency | Required for |
+| --- | --- | --- |
+| `python manage.py process_expired_subscriptions` | Daily 3:00 AM UTC | Billing (hosted only) |
+| `python manage.py process_expiring_subscriptions` | Daily 3:00 AM UTC | Billing (hosted only) |
+| `python manage.py process_promotion_lifecycle` | Daily 3:00 AM UTC | Billing (hosted only) |
+| `python manage.py process_dsr_deadlines` | Daily 3:00 AM UTC | GDPR (DSR requests) |
+| `python manage.py prune_unconfirmed_users` | Daily 3:00 AM UTC | Account hygiene |
+| `python manage.py process_diary_reminders` | Daily 7:00 AM UTC | Diary/EMA surveys |
+
+> **Self-hosted note:** The three billing jobs are no-ops when `SELF_HOSTED=True` — skip them if you're self-hosting without billing.
 
 ---
 
@@ -779,6 +1017,19 @@ jobs:
             -d '{"command": "python manage.py process_data_governance"}' \
             https://backboard.railway.app/graphql/v2
 ```
+
+Create one workflow per remaining daily job (same pattern, different `cron` schedule and `command` payload):
+
+| Workflow file | Schedule | Command | Required for |
+| --- | --- | --- | --- |
+| `subscription-expiry-cron.yml` | `0 3 * * *` | `python manage.py process_expired_subscriptions` | Billing (hosted only) |
+| `subscription-warnings-cron.yml` | `0 3 * * *` | `python manage.py process_expiring_subscriptions` | Billing (hosted only) |
+| `promotion-lifecycle-cron.yml` | `0 3 * * *` | `python manage.py process_promotion_lifecycle` | Billing (hosted only) |
+| `dsr-deadlines-cron.yml` | `0 3 * * *` | `python manage.py process_dsr_deadlines` | GDPR (DSR requests) |
+| `prune-unconfirmed-cron.yml` | `0 3 * * *` | `python manage.py prune_unconfirmed_users` | Account hygiene |
+| `diary-reminders-cron.yml` | `0 7 * * *` | `python manage.py process_diary_reminders` | Diary/EMA surveys |
+
+> **Self-hosted note:** The three billing jobs are no-ops when `SELF_HOSTED=True` — skip them if you're self-hosting without billing.
 
 #### Option 2: Use EasyCron or Similar Service
 
@@ -854,10 +1105,8 @@ Cleanup completed successfully
 
 ### Prune Unconfirmed Users Command
 
-> **Ad-hoc only — run by the CTO. Not scheduled.**
-
 ```bash
-# Preview what would happen (always run this first)
+# Dry-run (show what would happen without sending emails or making changes)
 python manage.py prune_unconfirmed_users --dry-run --verbose
 
 # Run with default 30-day grace period
@@ -874,6 +1123,16 @@ Starting unconfirmed user pruning at 2026-06-25 10:00:00+00:00
   Grace period: 30 days
   Feature cutoff: 2025-06-25
 
+Found 2 unconfirmed users in warning window
+
+  User: soonpruned (soon@example.com)
+    Joined: 2026-05-29
+    Days until removal: 1
+    Warning stage: 1day
+    Warning sent: soonpruned
+
+Found 2 unconfirmed users past grace period
+
   User: fakeuser123 (fake@example.com)
     Joined: 2026-04-01
     Existing user: False
@@ -889,17 +1148,72 @@ Starting unconfirmed user pruning at 2026-06-25 10:00:00+00:00
     Deactivated: olduser
 
 Pruning completed at 2026-06-25 10:00:02+00:00
-  - Deactivated: 1
-  - Deleted:     1
-  - Skipped:     0
+  - Warnings sent: 1
+  - Deactivated:   1
+  - Deleted:       1
 ```
 
 **What happens:**
 
+- 7 days before removal → 1-week warning email (with profile + support links)
+- 1 day before removal → 1-day warning email (with profile + support links)
 - Existing users (joined before `EMAIL_CONFIRMATION_CUTOFF`) → deactivated, data preserved
 - New signups with no surveys/memberships/audit history → deleted
 - New signups with data → deactivated (safety fallback)
 - Confirmed users, staff, and superusers → never touched
+
+### Pre-expiry Subscription Warnings Command
+
+```bash
+# Dry-run (show what would be sent without sending emails)
+python manage.py process_expiring_subscriptions --dry-run --verbose
+
+# Verbose output (per-profile detail)
+python manage.py process_expiring_subscriptions --verbose
+```
+
+**What happens:**
+
+- Profiles with a future `subscription_current_period_end` and a paid tier are considered
+- A warning email is sent at the 1-month, 1-week, and 1-day windows before expiry
+- Each stage is sent at most once per expiry cycle (idempotent via `last_expiry_warning_stage`)
+- Self-hosted deployments (`SELF_HOSTED=True`) are skipped — billing is disabled
+
+### Promotion Lifecycle Command
+
+```bash
+# Dry-run (show what would be sent without sending emails)
+python manage.py process_promotion_lifecycle --dry-run --verbose
+
+# Verbose output
+python manage.py process_promotion_lifecycle --verbose
+
+# Custom ending-soon window (default 7 days) and recent-expiry lookback (default 2 days)
+python manage.py process_promotion_lifecycle --ending-soon-days=14 --recent-expiry-days=3
+```
+
+**What happens:**
+
+- Activation, ending-soon, and expired emails are sent for promotions affecting users, teams, and organisations
+- GoCardless subscription amounts are reconciled against the resolved promotion pricing
+- Self-hosted deployments (`SELF_HOSTED=True`) are skipped — billing is disabled
+
+### Diary Reminders Command
+
+```bash
+# Dry-run (show what would be sent without sending emails)
+python manage.py process_diary_reminders --dry-run --verbose
+
+# Verbose output (per-participant detail)
+python manage.py process_diary_reminders --verbose
+```
+
+**What happens:**
+
+- Published diary surveys with a configured `DiaryMenu` are swept for open windows
+- Enrolled participants (`SurveyProgress.diary_enrolled_at` set) with no submitted entry for the current window get one reminder email
+- Event-triggered diary surveys (no scheduled windows) are skipped
+- Participants without an email address are skipped
 
 ---
 
@@ -935,6 +1249,36 @@ docker compose exec web python manage.py prune_unconfirmed_users --dry-run --ver
 
 # Test for real (only if you have test data)
 docker compose exec web python manage.py prune_unconfirmed_users --verbose
+```
+
+**Pre-expiry Subscription Warnings:**
+
+```bash
+# Test with dry-run (safe, no emails sent)
+docker compose exec web python manage.py process_expiring_subscriptions --dry-run --verbose
+
+# Test for real
+docker compose exec web python manage.py process_expiring_subscriptions --verbose
+```
+
+**Promotion Lifecycle:**
+
+```bash
+# Test with dry-run (safe, no emails sent)
+docker compose exec web python manage.py process_promotion_lifecycle --dry-run --verbose
+
+# Test for real
+docker compose exec web python manage.py process_promotion_lifecycle --verbose
+```
+
+**Diary Reminders:**
+
+```bash
+# Test with dry-run (safe, no emails sent)
+docker compose exec web python manage.py process_diary_reminders --dry-run --verbose
+
+# Test for real
+docker compose exec web python manage.py process_diary_reminders --verbose
 ```
 
 ### Test in Production

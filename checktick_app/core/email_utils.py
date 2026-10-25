@@ -1311,6 +1311,77 @@ def send_subscription_expiring_email(
     )
 
 
+def send_unconfirmed_account_warning_email(
+    user,
+    days_until_removal: int,
+    grace_days: int = 30,
+) -> bool:
+    """Send a pre-removal warning email to an unconfirmed account.
+
+    Sent by the ``prune_unconfirmed_users`` command at the 1-week and 1-day
+    windows before an unconfirmed account is deactivated or deleted.
+    Idempotency is enforced by the command via
+    ``UserProfile.unconfirmed_warning_stage``.
+
+    The email signposts the user to their profile page to resend the
+    confirmation email, and to the platform support email
+    (``settings.DEFAULT_FROM_EMAIL``) if they are having difficulties.
+
+    Args:
+        user: Django User instance with an unconfirmed email.
+        days_until_removal: Whole days remaining before the account is
+            deactivated or deleted (drives the subject line and body).
+        grace_days: The configured grace period (for reference in logs).
+
+    Returns:
+        True if the email sent successfully, False otherwise.
+    """
+    logger.info(
+        f"Sending unconfirmed account warning email to {user.email} "
+        f"(days_until_removal: {days_until_removal}, grace_days: {grace_days})"
+    )
+
+    branding = get_platform_branding()
+    site_url = getattr(settings, "SITE_URL", "http://localhost:8000").rstrip("/")
+    support_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com")
+    profile_url = f"{site_url}/profile"
+
+    if days_until_removal <= 1:
+        subject = (
+            f"Action needed: your account will be removed tomorrow - "
+            f"{branding['title']}"
+        )
+    else:
+        subject = (
+            f"Action needed: your account will be removed in "
+            f"{days_until_removal} days - {branding['title']}"
+        )
+
+    markdown_content = render_to_string(
+        "emails/unconfirmed_account_warning.md",
+        {
+            "user": user,
+            "brand_title": branding["title"],
+            "days_until_removal": days_until_removal,
+            "profile_url": profile_url,
+            "support_email": support_email,
+        },
+    )
+
+    return send_branded_email(
+        to_email=user.email,
+        subject=subject,
+        markdown_content=markdown_content,
+        branding=branding,
+        context={
+            "user": user,
+            "days_until_removal": days_until_removal,
+            "profile_url": profile_url,
+            "support_email": support_email,
+        },
+    )
+
+
 def send_payment_failed_email(
     user,
     tier: str,

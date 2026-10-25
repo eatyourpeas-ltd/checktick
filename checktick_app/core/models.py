@@ -375,6 +375,24 @@ class UserProfile(models.Model):
         help_text="Most recent pre-expiry warning stage sent "
         "(1month / 1week / 1day). Blank when none sent yet.",
     )
+    # Idempotency tracking for unconfirmed-account removal warnings. The
+    # daily ``prune_unconfirmed_users`` command sends a 1-week and 1-day
+    # warning before deactivating/deleting an unconfirmed account. These
+    # fields record the most recent stage sent so warnings are not re-sent.
+    # Cleared when the user confirms their email.
+    unconfirmed_warning_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the most recent unconfirmed-account removal warning "
+        "was sent. Used for idempotency by prune_unconfirmed_users.",
+    )
+    unconfirmed_warning_stage = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        help_text="Most recent unconfirmed-account warning stage sent "
+        "(1week / 1day). Blank when none sent yet.",
+    )
 
     class Meta:
         verbose_name = "User Profile"

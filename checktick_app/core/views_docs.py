@@ -458,7 +458,6 @@ def _discover_doc_pages():
         "self-hosting-production",
         "self-hosting-database",
         "self-hosting-configuration",
-        "self-hosting-scheduled-tasks",
         "self-hosting-backup",
         "self-hosting-themes",
     ]
