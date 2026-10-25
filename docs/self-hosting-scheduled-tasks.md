@@ -424,7 +424,22 @@ python manage.py update_snomed_db --force --prune
    - **Schedule**: `*/5 * * * *` (runs every 5 minutes)
    - **Command**: `python manage.py process_recovery_time_delays`
 
-#### 8. Copy Environment Variables
+#### 8. Remaining Daily Jobs
+
+The following daily jobs follow the same Northflank cron job pattern as the sections above (same Docker image, same environment variables). Create one cron job per row:
+
+| Job name | Schedule | Command | Required for |
+| --- | --- | --- | --- |
+| `checktick-subscription-expiry` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py process_expired_subscriptions` | Billing (hosted only) |
+| `checktick-subscription-warnings` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py process_expiring_subscriptions` | Billing (hosted only) |
+| `checktick-promotion-lifecycle` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py process_promotion_lifecycle` | Billing (hosted only) |
+| `checktick-dsr-deadlines` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py process_dsr_deadlines` | GDPR (DSR requests) |
+| `checktick-prune-unconfirmed` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py prune_unconfirmed_users` | Account hygiene |
+| `checktick-diary-reminders` | `0 7 * * *` (daily 7 AM UTC) | `python manage.py process_diary_reminders` | Diary/EMA surveys |
+
+> **Self-hosted note:** The three billing jobs (`process_expired_subscriptions`, `process_expiring_subscriptions`, `process_promotion_lifecycle`) are no-ops when `SELF_HOSTED=True` — skip them if you're self-hosting without billing. `process_dsr_deadlines`, `prune_unconfirmed_users`, and `process_diary_reminders` apply to all deployments.
+
+#### 9. Copy Environment Variables
 
 All cron jobs need the same environment variables as your web service:
 
@@ -443,7 +458,7 @@ All cron jobs need the same environment variables as your web service:
 - `EXTERNAL_DATASET_API_URL`, `EXTERNAL_DATASET_API_KEY` (for dataset sync - optional, defaults to RCPCH API)
 - `TRUD_API_KEY`, `SNOMED_DB_PATH` (optional — required only if you use SNOMED CT)
 
-#### 9. Deploy and Test
+#### 10. Deploy and Test
 
 1. Deploy all cron job services
 2. Test them manually via Northflank dashboard: **Jobs** → **Run Now**
@@ -457,7 +472,7 @@ All cron jobs need the same environment variables as your web service:
 python manage.py sync_external_datasets
 ```
 
-#### 10. Set Up Job Failure Alerts (Recommended)
+#### 11. Set Up Job Failure Alerts (Recommended)
 
 Northflank does not send email alerts for cron job failures. Use [healthchecks.io](https://healthchecks.io) (free tier covers 20 checks with email alerts) to get notified when a job fails or doesn't run at all.
 
@@ -485,6 +500,12 @@ The `&&` ensures the ping only fires if the management command exits successfull
 | checktick-data-sync | `python manage.py sync_external_datasets && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
 | checktick-nhsdd-sync | `python manage.py sync_nhs_dd_datasets && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
 | checktick-templates-sync | `python manage.py sync_global_question_group_templates && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-subscription-expiry | `python manage.py process_expired_subscriptions && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-subscription-warnings | `python manage.py process_expiring_subscriptions && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-promotion-lifecycle | `python manage.py process_promotion_lifecycle && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-dsr-deadlines | `python manage.py process_dsr_deadlines && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-prune-unconfirmed | `python manage.py prune_unconfirmed_users && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
+| checktick-diary-reminders | `python manage.py process_diary_reminders && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
 
 > **App and Vault uptime:** Use an external uptime monitor (e.g. StatusCake, UptimeRobot) pointing at `https://your-domain/healthz`. This endpoint returns `503` if Vault is sealed, the database is unreachable, or SNOMED CT is misconfigured — giving you a single URL to monitor for all critical service health.
 
@@ -571,6 +592,78 @@ docker compose exec -T web python manage.py sync_global_question_group_templates
 exit $?
 ```
 
+Create `/usr/local/bin/checktick-subscription-expiry.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick Subscription Expiry Cron Job
+# Runs daily at 3 AM UTC
+
+cd /path/to/your/checktick-app
+docker compose exec -T web python manage.py process_expired_subscriptions >> /var/log/checktick/subscription-expiry.log 2>&1
+exit $?
+```
+
+Create `/usr/local/bin/checktick-subscription-warnings.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick Pre-expiry Subscription Warnings Cron Job
+# Runs daily at 3 AM UTC
+
+cd /path/to/your/checktick-app
+docker compose exec -T web python manage.py process_expiring_subscriptions >> /var/log/checktick/subscription-warnings.log 2>&1
+exit $?
+```
+
+Create `/usr/local/bin/checktick-promotion-lifecycle.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick Promotion Lifecycle Cron Job
+# Runs daily at 3 AM UTC
+
+cd /path/to/your/checktick-app
+docker compose exec -T web python manage.py process_promotion_lifecycle >> /var/log/checktick/promotion-lifecycle.log 2>&1
+exit $?
+```
+
+Create `/usr/local/bin/checktick-dsr-deadlines.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick DSR Deadlines Cron Job
+# Runs daily at 3 AM UTC
+
+cd /path/to/your/checktick-app
+docker compose exec -T web python manage.py process_dsr_deadlines >> /var/log/checktick/dsr-deadlines.log 2>&1
+exit $?
+```
+
+Create `/usr/local/bin/checktick-prune-unconfirmed.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick Prune Unconfirmed Users Cron Job
+# Runs daily at 3 AM UTC
+
+cd /path/to/your/checktick-app
+docker compose exec -T web python manage.py prune_unconfirmed_users >> /var/log/checktick/prune-unconfirmed.log 2>&1
+exit $?
+```
+
+Create `/usr/local/bin/checktick-diary-reminders.sh`:
+
+```bash
+#!/bin/bash
+# CheckTick Diary Reminders Cron Job
+# Runs daily at 7 AM UTC
+
+cd /path/to/your/checktick-app
+docker compose exec -T web python manage.py process_diary_reminders >> /var/log/checktick/diary-reminders.log 2>&1
+exit $?
+```
+
 Make them executable:
 
 ```bash
@@ -578,6 +671,12 @@ chmod +x /usr/local/bin/checktick-data-governance.sh
 chmod +x /usr/local/bin/checktick-progress-cleanup.sh
 chmod +x /usr/local/bin/checktick-dataset-sync.sh
 chmod +x /usr/local/bin/checktick-templates-sync.sh
+chmod +x /usr/local/bin/checktick-subscription-expiry.sh
+chmod +x /usr/local/bin/checktick-subscription-warnings.sh
+chmod +x /usr/local/bin/checktick-promotion-lifecycle.sh
+chmod +x /usr/local/bin/checktick-dsr-deadlines.sh
+chmod +x /usr/local/bin/checktick-prune-unconfirmed.sh
+chmod +x /usr/local/bin/checktick-diary-reminders.sh
 ```
 
 #### 2. Add to System Crontab
@@ -600,6 +699,24 @@ Add these lines:
 
 # CheckTick Global Templates Sync - Daily at 6 AM UTC
 0 6 * * * /usr/local/bin/checktick-templates-sync.sh
+
+# CheckTick Subscription Expiry - Daily at 3 AM UTC (hosted only; no-op if SELF_HOSTED=True)
+0 3 * * * /usr/local/bin/checktick-subscription-expiry.sh
+
+# CheckTick Pre-expiry Subscription Warnings - Daily at 3 AM UTC (hosted only; no-op if SELF_HOSTED=True)
+0 3 * * * /usr/local/bin/checktick-subscription-warnings.sh
+
+# CheckTick Promotion Lifecycle - Daily at 3 AM UTC (hosted only; no-op if SELF_HOSTED=True)
+0 3 * * * /usr/local/bin/checktick-promotion-lifecycle.sh
+
+# CheckTick DSR Deadlines - Daily at 3 AM UTC (GDPR)
+0 3 * * * /usr/local/bin/checktick-dsr-deadlines.sh
+
+# CheckTick Prune Unconfirmed Users - Daily at 3 AM UTC
+0 3 * * * /usr/local/bin/checktick-prune-unconfirmed.sh
+
+# CheckTick Diary Reminders - Daily at 7 AM UTC (only if using Diary/EMA surveys)
+0 7 * * * /usr/local/bin/checktick-diary-reminders.sh
 ```
 
 #### 3. Create Log Directory
@@ -764,6 +881,21 @@ kubectl create job --from=cronjob/checktick-snomed-update snomed-initial-build \
   -- /bin/sh -c "python manage.py update_snomed_db --force --prune"
 ```
 
+#### Remaining Daily Jobs
+
+The remaining daily jobs follow the same CronJob manifest pattern as `checktick-data-governance` above (same image, same `envFrom`, same resource requests). Create one manifest per row:
+
+| CronJob name | Schedule | Command | Required for |
+| --- | --- | --- | --- |
+| `checktick-subscription-expiry` | `0 3 * * *` | `python manage.py process_expired_subscriptions` | Billing (hosted only) |
+| `checktick-subscription-warnings` | `0 3 * * *` | `python manage.py process_expiring_subscriptions` | Billing (hosted only) |
+| `checktick-promotion-lifecycle` | `0 3 * * *` | `python manage.py process_promotion_lifecycle` | Billing (hosted only) |
+| `checktick-dsr-deadlines` | `0 3 * * *` | `python manage.py process_dsr_deadlines` | GDPR (DSR requests) |
+| `checktick-prune-unconfirmed` | `0 3 * * *` | `python manage.py prune_unconfirmed_users` | Account hygiene |
+| `checktick-diary-reminders` | `0 7 * * *` | `python manage.py process_diary_reminders` | Diary/EMA surveys |
+
+> **Self-hosted note:** The three billing jobs are no-ops when `SELF_HOSTED=True` — skip them if you're self-hosting without billing. `process_dsr_deadlines`, `prune_unconfirmed_users`, and `process_diary_reminders` apply to all deployments.
+
 ---
 
 ### AWS ECS/Fargate
@@ -804,6 +936,21 @@ In your task definition, set the command override:
 }
 ```
 
+#### 4. Remaining Daily Jobs
+
+Create one EventBridge rule + ECS task override per row. Each follows the same pattern as the data governance job above (same cluster, same task definition, just a different command override):
+
+| Rule name | Schedule | Command override | Required for |
+| --- | --- | --- | --- |
+| `checktick-subscription-expiry-daily` | `cron(0 3 * * ? *)` | `python manage.py process_expired_subscriptions` | Billing (hosted only) |
+| `checktick-subscription-warnings-daily` | `cron(0 3 * * ? *)` | `python manage.py process_expiring_subscriptions` | Billing (hosted only) |
+| `checktick-promotion-lifecycle-daily` | `cron(0 3 * * ? *)` | `python manage.py process_promotion_lifecycle` | Billing (hosted only) |
+| `checktick-dsr-deadlines-daily` | `cron(0 3 * * ? *)` | `python manage.py process_dsr_deadlines` | GDPR (DSR requests) |
+| `checktick-prune-unconfirmed-daily` | `cron(0 3 * * ? *)` | `python manage.py prune_unconfirmed_users` | Account hygiene |
+| `checktick-diary-reminders-daily` | `cron(0 7 * * ? *)` | `python manage.py process_diary_reminders` | Diary/EMA surveys |
+
+> **Self-hosted note:** The three billing jobs are no-ops when `SELF_HOSTED=True` — skip them if you're self-hosting without billing.
+
 ---
 
 ### Heroku
@@ -826,6 +973,19 @@ In the web interface:
 
 - **Command**: `python manage.py process_data_governance`
 - **Frequency**: Daily at 2:00 AM (UTC)
+
+Add one job per row for the remaining daily tasks (same frequency, different command):
+
+| Command | Frequency | Required for |
+| --- | --- | --- |
+| `python manage.py process_expired_subscriptions` | Daily 3:00 AM UTC | Billing (hosted only) |
+| `python manage.py process_expiring_subscriptions` | Daily 3:00 AM UTC | Billing (hosted only) |
+| `python manage.py process_promotion_lifecycle` | Daily 3:00 AM UTC | Billing (hosted only) |
+| `python manage.py process_dsr_deadlines` | Daily 3:00 AM UTC | GDPR (DSR requests) |
+| `python manage.py prune_unconfirmed_users` | Daily 3:00 AM UTC | Account hygiene |
+| `python manage.py process_diary_reminders` | Daily 7:00 AM UTC | Diary/EMA surveys |
+
+> **Self-hosted note:** The three billing jobs are no-ops when `SELF_HOSTED=True` — skip them if you're self-hosting without billing.
 
 ---
 
@@ -857,6 +1017,19 @@ jobs:
             -d '{"command": "python manage.py process_data_governance"}' \
             https://backboard.railway.app/graphql/v2
 ```
+
+Create one workflow per remaining daily job (same pattern, different `cron` schedule and `command` payload):
+
+| Workflow file | Schedule | Command | Required for |
+| --- | --- | --- | --- |
+| `subscription-expiry-cron.yml` | `0 3 * * *` | `python manage.py process_expired_subscriptions` | Billing (hosted only) |
+| `subscription-warnings-cron.yml` | `0 3 * * *` | `python manage.py process_expiring_subscriptions` | Billing (hosted only) |
+| `promotion-lifecycle-cron.yml` | `0 3 * * *` | `python manage.py process_promotion_lifecycle` | Billing (hosted only) |
+| `dsr-deadlines-cron.yml` | `0 3 * * *` | `python manage.py process_dsr_deadlines` | GDPR (DSR requests) |
+| `prune-unconfirmed-cron.yml` | `0 3 * * *` | `python manage.py prune_unconfirmed_users` | Account hygiene |
+| `diary-reminders-cron.yml` | `0 7 * * *` | `python manage.py process_diary_reminders` | Diary/EMA surveys |
+
+> **Self-hosted note:** The three billing jobs are no-ops when `SELF_HOSTED=True` — skip them if you're self-hosting without billing.
 
 #### Option 2: Use EasyCron or Similar Service
 
