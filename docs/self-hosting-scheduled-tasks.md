@@ -1,7 +1,7 @@
 ---
 title: Scheduled Tasks
-category: scheduled-tasks
-priority: 1
+category: self-hosting
+priority: 6
 ---
 
 CheckTick requires scheduled tasks for data governance operations, housekeeping, and external data syncing. This guide explains how to set up these tasks on different hosting platforms.

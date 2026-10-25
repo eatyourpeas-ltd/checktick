@@ -57,11 +57,6 @@ DOC_CATEGORIES = {
         "order": 3,
         "icon": "🖥️",
     },
-    "scheduled-tasks": {
-        "title": "Scheduled Tasks",
-        "order": 3.5,
-        "icon": "⏰",
-    },
     "configuration": {
         "title": "Configuration",
         "order": 4,
@@ -463,7 +458,6 @@ def _discover_doc_pages():
         "self-hosting-production",
         "self-hosting-database",
         "self-hosting-configuration",
-        "self-hosting-scheduled-tasks",
         "self-hosting-backup",
         "self-hosting-themes",
     ]
