@@ -1634,14 +1634,17 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
     # token/question/profile. A "Simulate category" panel on the preview
     # page lets the author pick a value per dimension without a real
     # participant. Available for any layout when the survey has
-    # RespondentCategory rows.
+    # RespondentCategory rows. The simulated values also drive {{dim}}
+    # substitution in content blocks (docs/
+    # content-block-category-substitution-implementation-plan.md
+    # §Substitution contract).
     category_preview = None
+    sim_values: dict[str, str] = {}
     if survey.respondent_categories.exists():
         categories = list(survey.respondent_categories.order_by("order", "id"))
         category_preview = {"categories": categories}
         sim_cat_raw = request.GET.get("simulate_category", "")
         if sim_cat_raw:
-            sim_values: dict[str, str] = {}
             for pair in sim_cat_raw.split(","):
                 pair = pair.strip()
                 if ":" in pair:
@@ -1665,9 +1668,25 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         .prefetch_related("images")
         .all()
     )
+    # Hint for the Simulate category panel (issue #349 edge case 3): when a
+    # content block carries a {{dim}} placeholder, the panel explains that
+    # picking simulated values is how the author sees them substituted —
+    # the author is never shown a bare placeholder with no explanation.
+    if category_preview is not None:
+        category_preview["has_placeholders"] = any(
+            q.type == SurveyQuestion.Types.CONTENT_BLOCK
+            and any(
+                _CATEGORY_PLACEHOLDER_RE.search(str((q.options or {}).get(field) or ""))
+                for field in ("heading", "subtitle", "body_md")
+            )
+            for q in all_questions
+        )
     qs = _order_questions_by_group(survey, all_questions, simulated_group_ids)
     _inject_dataset_options(qs)
-    _annotate_question_render_sequence(survey, qs)
+    # Content block {{dim}} substitution: the preview path substitutes the
+    # ?simulate_category= values (empty when absent — same semantics as the
+    # live path: known-but-unresolved renders empty).
+    _annotate_question_render_sequence(survey, qs, sim_values)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
     prof_group, professional_fields, professional_ods = (
         _get_professional_group_and_fields(survey)

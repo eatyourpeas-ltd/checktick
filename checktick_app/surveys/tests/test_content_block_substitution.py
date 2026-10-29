@@ -322,3 +322,68 @@ def test_delphi_feedback_body_not_substituted(owner, org):
     body_html = str(fb.content_block_html)
     assert "Dr Jane Smith" not in body_html
     assert "{{subject}}" not in body_html
+
+
+# --- Preview path (commit 2) ---
+
+
+@pytest.mark.django_db
+def test_preview_simulate_substitutes_placeholders(client, owner, org):
+    """The simulate panel is the documented way to see substituted values:
+    ?simulate_category= drives substitution on the preview path."""
+    s = _make_survey(owner, org)
+    client.force_login(owner)
+    res = client.get(
+        reverse("surveys:preview", kwargs={"slug": s.slug}),
+        {"simulate_category": "subject:Dr Jane Smith"},
+    )
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "360° feedback for Dr Jane Smith" in html
+    assert "You are rating Dr Jane Smith" in html
+    assert "Thank you for rating Dr Jane Smith in this round." in html
+    assert "{{subject}}" not in html
+
+
+@pytest.mark.django_db
+def test_preview_without_simulate_renders_empty(client, owner, org):
+    """Without simulated values the preview behaves like the live path:
+    known-but-unresolved placeholders render empty (issue #349 edge case 3)."""
+    s = _make_survey(owner, org)
+    client.force_login(owner)
+    res = client.get(reverse("surveys:preview", kwargs={"slug": s.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "{{subject}}" not in html
+    assert "360° feedback for " in html
+
+
+@pytest.mark.django_db
+def test_preview_shows_placeholder_hint(client, owner, org):
+    """When a content block carries a placeholder, the Simulate category
+    panel explains how to see it substituted."""
+    s = _make_survey(owner, org)
+    client.force_login(owner)
+    res = client.get(reverse("surveys:preview", kwargs={"slug": s.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Simulate category" in html
+    assert "category placeholders" in html
+
+
+@pytest.mark.django_db
+def test_preview_no_hint_without_placeholders(client, owner, org):
+    """No placeholder in any content block → no hint."""
+    s = _make_survey(
+        owner,
+        org,
+        heading="Welcome",
+        subtitle="Static subtitle",
+        body_md="Thanks for taking part.",
+    )
+    client.force_login(owner)
+    res = client.get(reverse("surveys:preview", kwargs={"slug": s.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Simulate category" in html
+    assert "category placeholders" not in html
