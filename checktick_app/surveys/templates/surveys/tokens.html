@@ -23,12 +23,12 @@
     </div>
     {% if respondent_categories %}
     <div class="md:col-span-3">
-      <h3 class="font-semibold text-sm mb-2">{% trans "Category values for this batch" %}</h3>
-      <p class="text-xs text-base-content/60 mb-2">{% trans "Set a value per dimension for every token in this batch. Leave blank for dimensions that should be resolved another way (self-select question, system assignment, or profile)." %}</p>
+      <h3 class="font-semibold text-sm mb-2">{% trans "Categories for this batch" %}</h3>
+      <p class="text-xs text-base-content/60 mb-2">{% trans "Pick each respondent's category for every token in this batch — e.g. one batch for peers, another for supervisors. Leave blank for categories decided another way (a survey question or random assignment)." %}</p>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {% for cat in respondent_categories %}
         <div>
-          <label class="label text-xs">{{ cat.label|default:cat.name }}</label>
+          <label class="label text-xs">{{ cat.display_name }}</label>
           <select name="category_{{ cat.name }}" class="select select-bordered select-sm w-full">
             <option value="">—</option>
             {% for val in cat.allowed_values %}

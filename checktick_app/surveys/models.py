@@ -4759,11 +4759,14 @@ class RespondentCategory(models.Model):
     pattern.
 
     Dimensions are author-defined; there is no fixed enum. ``name`` is the
-    key used in ``required_categories`` rules and ``category_values`` maps.
-    ``allowed_values`` is a free-text list the author types on the Organise
-    page. ``resolution_source`` controls how the value for this dimension is
-    resolved for a participant, in priority order: token > self_select >
-    system > profile.
+    key used in ``required_categories`` rules and ``category_values`` maps;
+    the UI shows ``display_name`` instead so authors never have to read the
+    underscore key. ``allowed_values`` is the free-text options list the
+    author types on the Organise page. ``resolution_source`` records how
+    each respondent is put into a category — one source per dimension (the
+    Organise page select offers the three workable ones; ``profile`` is
+    reserved for the outline grammar until profile-based resolution has
+    meaningful fields to offer).
 
     See docs/respondent-categories-implementation-plan.md. A survey with no
     ``RespondentCategory`` rows behaves exactly as before —
@@ -4799,19 +4802,22 @@ class RespondentCategory(models.Model):
     )
 
     class ResolutionSource(models.TextChoices):
-        TOKEN = "token", "Invite token"
-        SELF_SELECT = "self_select", "Self-select question"
-        SYSTEM = "system", "System assignment (RCT allocator)"
-        PROFILE = "profile", "Profile field"
+        # Values are stored in the DB and are part of the outline grammar
+        # (source: token|self_select|system|profile) — never rename them.
+        # Labels are user-facing: they read as answers to the Organise page
+        # question "How is each respondent put into a category?". PROFILE is
+        # hidden from the Organise page select (see views.survey_groups)
+        # until profile-based resolution has meaningful fields to offer.
+        TOKEN = "token", "I pick it for each batch of invitations"
+        SELF_SELECT = "self_select", "They pick it themselves in the survey"
+        SYSTEM = "system", "CheckTick assigns it at random"
+        PROFILE = "profile", "Read from their profile"
 
     resolution_source = models.CharField(
         max_length=20,
         choices=ResolutionSource.choices,
         default=ResolutionSource.TOKEN,
-        help_text=(
-            "How the value for this dimension is resolved for a participant, "
-            "in priority order: token > self_select > system > profile."
-        ),
+        help_text=("How each respondent's category is decided."),
     )
     # For resolution_source = self_select: the question whose answer
     # populates this dimension. For profile: the profile field key.
@@ -4842,6 +4848,17 @@ class RespondentCategory(models.Model):
     class Meta:
         unique_together = ("survey", "name")
         ordering = ["order", "id"]
+
+    @property
+    def display_name(self) -> str:
+        """Human-facing name: the label if set, else the key prettified.
+
+        The Organise page rows, the Tokens page, and the preview panel show
+        this instead of the underscore key (``rater_role`` renders as
+        ``Rater Role``). The raw ``name`` remains the key used in the
+        outline grammar, ``required_categories`` rules, and CSV headers.
+        """
+        return self.label or self.name.replace("_", " ").title()
 
     def __str__(self) -> str:
         return f"{self.name} ({self.survey.name})"

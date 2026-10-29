@@ -1097,19 +1097,39 @@
   <section class="not-prose mb-6" aria-labelledby="respondent-categories-heading">
     <div class="card bg-base-100 border border-base-300 max-w-4xl">
       <div class="card-body gap-3 p-4">
-        <div class="flex items-center justify-between">
-          <h3 id="respondent-categories-heading" class="font-semibold text-base-content">
-            {% trans 'Respondent categories' %}
-          </h3>
-          <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="inline">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="add_respondent_category" />
-            <input type="text" name="category_name" placeholder="{% trans 'e.g. rater_role' %}" class="input input-bordered input-sm w-40" />
-            <button type="submit" class="btn btn-sm btn-outline">{% trans 'Add dimension' %}</button>
-          </form>
-        </div>
+        <h3 id="respondent-categories-heading" class="font-semibold text-base-content">
+          {% trans 'Respondent categories' %}
+        </h3>
         <p class="text-xs text-base-content/70">
-          {% trans 'Categorise respondents along author-defined dimensions (rater role, site, cohort) so different respondents see different sections of the same survey without cloning it. Works with any layout. Used for 360° / multi-rater assessments.' %}
+          {% trans 'Split respondents into categories — by rater role, recruitment site, cohort, or anything you define — so different respondents see different sections of the same survey without cloning it. Works with any layout. Used for 360° / multi-rater assessments.' %}
+        </p>
+        <div class="alert alert-info text-xs" role="note">
+          {% include "components/icons/information-circle.html" with classes="w-4 h-4 shrink-0" %}
+          <div>
+            <p class="font-semibold">{% trans 'How to use respondent categories' %}</p>
+            <ol class="list-decimal pl-4 mt-1 space-y-0.5">
+              <li>{% trans 'Add a category — the thing you split respondents by, e.g. Rater role, Recruitment site, Cohort.' %}</li>
+              <li>{% trans 'List the options respondents can belong to, comma-separated — e.g. self, peer, supervisor, patient.' %}</li>
+              <li>{% trans 'Choose how each respondent is put into a category: you pick it per invitation batch, they answer a question in the survey, or CheckTick assigns one at random.' %}</li>
+              <li>{% trans 'Tick which options each section is visible to. Sections with nothing ticked stay visible to everyone.' %}</li>
+            </ol>
+            <p class="mt-1">
+              {% trans 'Prefer the outline? Categories can also be defined with a CATEGORIES block on the bulk upload page — see the' %}
+              <a href="{% url 'core:docs_page' slug='import' %}" class="link">{% trans 'outline reference' %}</a>.
+            </p>
+          </div>
+        </div>
+        <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="flex flex-wrap items-end gap-2">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add_respondent_category" />
+          <div>
+            <label class="label text-xs" for="add-category-name">{% trans 'New category' %}</label>
+            <input id="add-category-name" type="text" name="category_name" placeholder="{% trans 'e.g. Rater role' %}" class="input input-bordered input-sm w-44" />
+          </div>
+          <button type="submit" class="btn btn-sm btn-outline">{% trans 'Add category' %}</button>
+        </form>
+        <p class="text-xs text-base-content/50">
+          {% trans 'You can give it a clearer display label after adding.' %}
         </p>
 
         {% if respondent_categories %}
@@ -1120,25 +1140,46 @@
             {% csrf_token %}
             <input type="hidden" name="action" value="save_respondent_category" />
             <input type="hidden" name="category_id" value="{{ cat.id }}" />
-            <div class="flex items-center gap-2">
-              <code class="text-xs text-base-content/60">{{ cat.name }}</code>
-              <input type="text" name="label_{{ cat.id }}" value="{{ cat.label }}" placeholder="{% trans 'Display label' %}" class="input input-bordered input-xs flex-1" />
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-sm text-base-content/70">{{ cat.display_name }}</span>
+              <input type="text" name="label_{{ cat.id }}" value="{{ cat.label }}" placeholder="{% trans 'Display label' %}" aria-label="{% trans 'Display label' %}" class="input input-bordered input-xs flex-1 min-w-32" />
               <button type="submit" class="btn btn-xs btn-ghost">{% trans 'Save' %}</button>
-              <button type="submit" name="action" value="remove_respondent_category" formaction="/surveys/{{ survey.slug }}/groups/" class="btn btn-xs btn-ghost text-error" onclick="return confirm('{% trans 'Remove this dimension?' %}')">{% trans 'Remove' %}</button>
+              <button type="submit" name="action" value="remove_respondent_category" formaction="/surveys/{{ survey.slug }}/groups/" class="btn btn-xs btn-ghost text-error" onclick="return confirm('{% trans 'Remove this category?' %}')">{% trans 'Remove' %}</button>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
-                <label class="label text-xs" for="cat-vals-{{ cat.id }}">{% trans 'Allowed values (comma-separated)' %}</label>
+                <label class="label text-xs" for="cat-vals-{{ cat.id }}">{% trans 'Options (comma-separated)' %}</label>
                 <input id="cat-vals-{{ cat.id }}" type="text" name="allowed_values_{{ cat.id }}" value="{{ cat.allowed_values|join:', ' }}" placeholder="{% trans 'e.g. self, peer, supervisor, patient' %}" class="input input-bordered input-sm w-full" />
               </div>
               <div>
-                <label class="label text-xs" for="cat-src-{{ cat.id }}">{% trans 'Resolution source' %}</label>
+                <label class="label text-xs" for="cat-src-{{ cat.id }}">{% trans 'How is each respondent put into a category?' %}</label>
                 <select id="cat-src-{{ cat.id }}" name="resolution_source_{{ cat.id }}" class="select select-bordered select-sm w-full">
                   {% for value, label in respondent_category_resolution_choices %}
                   <option value="{{ value }}" {% if cat.resolution_source == value %}selected{% endif %}>{{ label }}</option>
                   {% endfor %}
+                  {# Keep an existing profile-source dimension (outline import) savable #}
+                  {% if cat.resolution_source == 'profile' %}
+                  <option value="profile" selected>{% trans 'Read from their profile' %}</option>
+                  {% endif %}
                 </select>
+                <p class="text-xs text-base-content/50 mt-1">
+                  {% trans 'Example — for a Rater role category: send one invitation batch to peers and another to supervisors; ask “What is your role?” in the survey; or let CheckTick split respondents evenly across the options above.' %}
+                </p>
               </div>
+              {% if cat.resolution_source == 'self_select' %}
+              <div class="sm:col-span-2">
+                <label class="label text-xs" for="cat-srcq-{{ cat.id }}">{% trans 'Which question do they answer?' %}</label>
+                <select id="cat-srcq-{{ cat.id }}" name="source_question_{{ cat.id }}" class="select select-bordered select-sm w-full">
+                  <option value="">{% trans '— pick a question —' %}</option>
+                  {% for q in respondent_category_questions %}
+                  <option value="{{ q.id }}" {% if cat.source_question_id == q.id %}selected{% endif %}>{{ q.text|truncatechars:80 }}</option>
+                  {% endfor %}
+                </select>
+                <p class="text-xs text-base-content/50 mt-1">
+                  {% trans 'Their answer puts them in a category — use a question whose answer options match the options above (dropdown, multiple choice, Likert, yes/no, image).' %}
+                </p>
+              </div>
+              {% endif %}
             </div>
           </form>
           {% endfor %}
@@ -1147,7 +1188,7 @@
         {# Section visibility (required_categories per group) #}
         <div class="mt-4">
           <h4 class="text-sm font-semibold text-base-content mb-2">{% trans 'Section visibility' %}</h4>
-          <p class="text-xs text-base-content/60 mb-2">{% trans 'Tick which values each section is visible to. Leave all unchecked for sections visible to everyone.' %}</p>
+          <p class="text-xs text-base-content/60 mb-2">{% trans 'Tick which options each section is visible to. Leave all unchecked for sections visible to everyone.' %}</p>
           <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="space-y-2">
             {% csrf_token %}
             <input type="hidden" name="action" value="save_group_categories" />
@@ -1156,7 +1197,7 @@
                 <tr>
                   <th>{% trans 'Section' %}</th>
                   {% for cat in respondent_categories %}
-                  <th class="text-center">{{ cat.label|default:cat.name }}</th>
+                  <th class="text-center">{{ cat.display_name }}</th>
                   {% endfor %}
                 </tr>
               </thead>
@@ -1183,7 +1224,7 @@
           </form>
         </div>
         {% else %}
-        <p class="text-xs text-base-content/50">{% trans 'No category dimensions yet. Add one above to start categorising respondents.' %}</p>
+        <p class="text-xs text-base-content/50">{% trans 'No categories yet. Add one above to start categorising respondents.' %}</p>
         {% endif %}
       </div>
     </div>

@@ -1266,10 +1266,10 @@ class RespondentCategory(models.Model):
     resolution_source = models.CharField(
         max_length=20,
         choices=[
-            ("token", "Invite token"),
-            ("self_select", "Self-select question"),
-            ("system", "System assignment (RCT allocator)"),
-            ("profile", "Profile field"),
+            ("token", "I pick it for each batch of invitations"),
+            ("self_select", "They pick it themselves in the survey"),
+            ("system", "CheckTick assigns it at random"),
+            ("profile", "Read from their profile"),
         ],
         default="token",
     )
@@ -1328,13 +1328,17 @@ no-op.
 
 **Migration:** `0071_respondent_categories` (adds `RespondentCategory`,
 `RespondentAssignment`, and the three new JSONFields on
-`SurveyAccessToken`, `QuestionGroup`, `SurveyQuestion`).
+`SurveyAccessToken`, `QuestionGroup`, `SurveyQuestion`);
+`0072_alter_questiongroup_required_categories_and_more` syncs
+help_texts with the models and relabels the `resolution_source` choices
+in plain English (state-only, no SQL).
 
 ### Resolution
 
 `_resolve_categories_for_progress(progress)` in `views.py` resolves a
-`{dimension_name: value}` map per participant from four sources in
-priority order:
+`{dimension_name: value}` map per participant. Each dimension has a
+**single** resolution source recorded on the row — there is no priority
+chain; the four possible sources are:
 
 1. **Invite token** — `progress.access_token.category_values` carries
    the dimension values for that token batch (the 360 rater-invite
@@ -1345,12 +1349,25 @@ priority order:
    over `allowed_values` as the arms, ratio 1 each, balanced strategy).
    The per-participant `randomisation_seed` drives the draw.
 4. **Profile field** — reads from `progress.user.userprofile`.
+   Outline-grammar only: the Organise page select does not offer this
+   source (no meaningful `UserProfile` fields to resolve from yet;
+   org-membership resolution is the documented follow-up).
+
+The Organise page select offers the first three with plain-language
+labels ("I pick it for each batch of invitations", "They pick it
+themselves in the survey", "CheckTick assigns it at random"); a
+pre-existing profile-source dimension keeps its option when rendered
+so saving does not silently flip the source. UI copy talks about
+putting each respondent into a category and the category's options
+rather than "values"; ``RespondentCategory.display_name`` (label, or
+the key prettified) is what templates render instead of the underscore
+key.
 
 Resolved values are persisted as `RespondentAssignment` rows and
 preserved on resume — same lifecycle as `assigned_arm` (RCT) and
-`delphi_round` (Delphi). If no source resolves a value, the dimension is
-left unset and `required_categories` rules referencing it evaluate to
-"not shown".
+`delphi_round` (Delphi). If the dimension's source does not resolve a
+value, the dimension is left unset and `required_categories` rules
+referencing it evaluate to "not shown".
 
 The `simulated_values` kwarg (preview path) overrides resolution without
 persisting — the `?simulate_category=<dim>:<value>,...` preview path.

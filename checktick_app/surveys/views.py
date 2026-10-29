@@ -530,6 +530,7 @@ def _render_template_question_row(
     group: QuestionGroup | None = None,
     keep_open: bool = False,
     message: str | None = None,
+    error_message: str | None = None,
 ) -> HttpResponse:
     """Re-render a single question row after an HTMX update."""
 
@@ -548,6 +549,8 @@ def _render_template_question_row(
     }
     if message:
         ctx["row_message"] = message
+    if error_message:
+        ctx["row_message_error"] = error_message
     if group is not None:
         ctx["group"] = group
     else:
@@ -2533,12 +2536,42 @@ def _prepare_question_rendering(
         "actions": actions_meta,
     }
 
+    # Content blocks: batch-resolve the referenced images (options.image_id)
+    # in one query so the builder row can show a thumbnail. Mirrors the
+    # take-side annotation in _annotate_question_render_sequence
+    # (q.content_block_image).
+    content_block_image_ids: set[Any] = set()
+    for q in questions_iter:
+        if q.type == SurveyQuestion.Types.CONTENT_BLOCK and isinstance(q.options, dict):
+            image_id = q.options.get("image_id")
+            if image_id:
+                content_block_image_ids.add(image_id)
+    content_block_images: dict[int, Any] = {}
+    if content_block_image_ids:
+        from .models import QuestionImage
+
+        for img in QuestionImage.objects.filter(id__in=content_block_image_ids):
+            content_block_images[img.id] = img
+
     for q in questions_iter:
         try:
             if q.type == SurveyQuestion.Types.TEMPLATE_PATIENT:
                 q.options = _normalize_patient_template_options(q.options)
             elif q.type == SurveyQuestion.Types.TEMPLATE_PROFESSIONAL:
                 q.options = _normalize_professional_template_options(q.options)
+            if q.type == SurveyQuestion.Types.CONTENT_BLOCK:
+                image_id = (
+                    q.options.get("image_id") if isinstance(q.options, dict) else None
+                )
+                img = content_block_images.get(image_id) if image_id else None
+                # Guard against a stale image_id pointing at another
+                # question's image — same constraint as the take-side filter
+                # (id=image_id, question_id=q.id).
+                setattr(
+                    q,
+                    "content_block_image",
+                    img if img is not None and img.question_id == q.id else None,
+                )
             if (
                 q.type == "likert"
                 and isinstance(q.options, list)
@@ -8687,32 +8720,33 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
     ):
         name = (request.POST.get("category_name", "") or "").strip()[:50]
         if not name:
-            messages.error(request, _("Please provide a dimension name."))
+            messages.error(request, _("Please provide a category name."))
             return redirect("surveys:groups", slug=slug)
-        # Slugify the name for the dimension key.
-        import re
-
-        slug = re.sub(r"[^a-z0-9_]+", "_", name.lower()).strip("_")
-        if not slug:
-            slug = "dimension"
+        # Slugify the name for the dimension key. Do not rebind ``slug`` —
+        # it is the survey slug from the URL and every redirect below
+        # needs it; shadowing it with the dimension key sends the author to
+        # /surveys/<dimension-key>/groups/ and 404s.
+        dim_key = re.sub(r"[^a-z0-9_]+", "_", name.lower()).strip("_")
+        if not dim_key:
+            dim_key = "dimension"
         # Ensure uniqueness within the survey.
         existing = set(survey.respondent_categories.values_list("name", flat=True))
-        base = slug
+        base = dim_key
         i = 2
-        while slug in existing:
-            slug = f"{base}_{i}"
+        while dim_key in existing:
+            dim_key = f"{base}_{i}"
             i += 1
         next_order = (
             survey.respondent_categories.aggregate(m=models.Max("order"))["m"] or 0
         ) + 1
         RespondentCategory.objects.create(
             survey=survey,
-            name=slug,
+            name=dim_key,
             label=name,
             allowed_values=[],
             order=next_order,
         )
-        messages.success(request, _("Category dimension added."))
+        messages.success(request, _("Category added."))
         return redirect("surveys:groups", slug=slug)
 
     # Respondent categories — save dimension (name, label, allowed_values,
@@ -8747,9 +8781,11 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             )
             if source in {c[0] for c in RespondentCategory.ResolutionSource.choices}:
                 cat.resolution_source = source
-            # source_question (for self_select).
+            # source_question (for self_select). Must belong to this survey —
+            # an id from another survey is silently ignored rather than
+            # stored, so a crafted POST cannot link a foreign question.
             sq_raw = (request.POST.get(f"source_question_{cat.id}", "") or "").strip()
-            if sq_raw.isdigit():
+            if sq_raw.isdigit() and survey.questions.filter(id=int(sq_raw)).exists():
                 cat.source_question_id = int(sq_raw)
             else:
                 cat.source_question_id = None
@@ -8758,7 +8794,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                 request.POST.get(f"profile_field_{cat.id}", "") or ""
             ).strip()[:100]
             cat.save()
-            messages.success(request, _("Category dimension saved."))
+            messages.success(request, _("Category saved."))
         return redirect("surveys:groups", slug=slug)
 
     # Respondent categories — remove dimension.
@@ -8770,7 +8806,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         cat_id_raw = request.POST.get("category_id", "")
         if cat_id_raw.isdigit():
             survey.respondent_categories.filter(id=int(cat_id_raw)).delete()
-            messages.success(request, _("Category dimension removed."))
+            messages.success(request, _("Category removed."))
         return redirect("surveys:groups", slug=slug)
 
     # Respondent categories — save group required_categories (the
@@ -9534,8 +9570,31 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "respondent_categories": list(
             survey.respondent_categories.order_by("order", "id")
         ),
-        "respondent_category_resolution_choices": (
-            RespondentCategory.ResolutionSource.choices
+        # The Organise page select only offers the three workable sources.
+        # PROFILE is hidden until profile-based resolution has meaningful
+        # fields to offer — UserProfile currently holds billing/tier fields
+        # only, and org-membership resolution is the documented follow-up.
+        # Existing profile-source dimensions (outline import) still render
+        # their option via the template so saving does not silently flip
+        # them to another source.
+        "respondent_category_resolution_choices": [
+            choice
+            for choice in RespondentCategory.ResolutionSource.choices
+            if choice[0] != RespondentCategory.ResolutionSource.PROFILE
+        ],
+        # Choice-type questions eligible as self-select sources: the
+        # participant's answer becomes the dimension value, so it must be a
+        # single discrete choice (multi-select and free-text answers cannot).
+        "respondent_category_questions": list(
+            survey.questions.filter(
+                type__in=[
+                    SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE,
+                    SurveyQuestion.Types.LIKERT,
+                    SurveyQuestion.Types.YESNO,
+                    SurveyQuestion.Types.DROPDOWN,
+                    SurveyQuestion.Types.IMAGE_CHOICE,
+                ]
+            ).order_by("order", "id")
         ),
         # Layout tier gating (see tier_limits.py allowed_layouts).
         "allowed_layouts": get_allowed_layouts(request.user),
@@ -12649,7 +12708,12 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
     - ``heading``: rendered heading (optional)
     - ``subtitle``: rendered subtitle (optional)
     - ``body_md``: Markdown body (optional)
-    - ``image_id``: FK to an uploaded QuestionImage (optional, builder-only)
+    - ``content_block_image``: uploaded image file (optional, multipart). The
+      uploaded image replaces the previously referenced one (its
+      QuestionImage row is deleted so storage does not accumulate
+      unreachable files).
+    - ``remove_image``: clear the image (deletes the referenced
+      QuestionImage row)
     - ``link_label[]`` / ``link_url[]``: parallel lists of link pairs
     - ``consent_statement``: consent statement text (optional)
     - ``consent_required``: if on, participant must agree to progress
@@ -12662,6 +12726,10 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
     updated) in the same group, hidden from the builder list via a marker in
     its ``options``. The answer is stored on the yesno question for a clean
     audit trail.
+
+    Returns an error message string if an uploaded image failed validation
+    (the rest of the form is still saved, and the existing image is kept),
+    otherwise ``None``.
     """
     from checktick_app.core.markdown_safety import sanitise_link_url
 
@@ -12691,10 +12759,42 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
         if label and url:
             links.append({"label": label, "url": url})
 
-    # Image: keep the existing image_id unless a new one is provided.
+    # Image: upload is part of this form (multipart) — the old separate
+    # endpoint was POST-only JSON with no UI, so the builder's "Upload
+    # Image" link 405'd. A new file replaces the referenced image (old row
+    # deleted); remove_image clears it. On a validation failure the rest of
+    # the form still saves and the existing image is kept.
+    from .models import QuestionImage
+
     existing_opts = question.options if isinstance(question.options, dict) else {}
     image_id = existing_opts.get("image_id")
-    # (Image upload is handled by a separate endpoint, like image choice.)
+    image_error: str | None = None
+
+    if request.POST.get("remove_image") in {"on", "true", "1", "yes"}:
+        if image_id:
+            QuestionImage.objects.filter(id=image_id, question_id=question.id).delete()
+        image_id = None
+
+    uploaded_image = request.FILES.get("content_block_image")
+    if uploaded_image is not None:
+        success, error = _validate_and_process_image(uploaded_image)
+        if success:
+            if image_id:
+                QuestionImage.objects.filter(
+                    id=image_id, question_id=question.id
+                ).delete()
+            max_order = (
+                question.images.aggregate(models.Max("order")).get("order__max") or 0
+            )
+            image = QuestionImage.objects.create(
+                question=question,
+                image=uploaded_image,
+                label="",
+                order=max_order + 1,
+            )
+            image_id = image.id
+        else:
+            image_error = error
 
     # Consent: if a consent statement is provided, create or update a linked
     # yesno question. If the statement is cleared, delete the linked question.
@@ -12773,6 +12873,7 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
         "is_delphi_feedback": is_delphi_feedback,
     }
     question.save(update_fields=["options"])
+    return image_error
 
 
 @login_required
@@ -12788,8 +12889,10 @@ def builder_question_content_block_update(
         survey=survey,
         type=SurveyQuestion.Types.CONTENT_BLOCK,
     )
-    _parse_content_block_form(request, question)
-    return _render_template_question_row(request, survey, question, keep_open=True)
+    image_error = _parse_content_block_form(request, question)
+    return _render_template_question_row(
+        request, survey, question, keep_open=True, error_message=image_error
+    )
 
 
 @login_required
@@ -12807,9 +12910,14 @@ def builder_group_question_content_block_update(
         group=group,
         type=SurveyQuestion.Types.CONTENT_BLOCK,
     )
-    _parse_content_block_form(request, question)
+    image_error = _parse_content_block_form(request, question)
     return _render_template_question_row(
-        request, survey, question, group=group, keep_open=True
+        request,
+        survey,
+        question,
+        group=group,
+        keep_open=True,
+        error_message=image_error,
     )
 
 

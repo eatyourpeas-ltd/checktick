@@ -490,7 +490,7 @@ CATEGORIES
 Each dimension is a `<dim>:` header with indented property lines:
 
 - `values` — comma-separated list of allowed values (free-text; there is no fixed enum).
-- `source` — how the value is resolved for a participant: `token` (default; the invite token carries the value), `self_select` (a question's answer populates the dimension), `system` (system-assigned, reusing the RCT allocator), or `profile` (read from the participant's profile field).
+- `source` — how each respondent is put into a category: `token` (default; you pick it per invitation batch on the Tokens page), `self_select` (they pick it themselves by answering a question), `system` (CheckTick assigns one at random), or `profile` (advanced — read from the respondent's profile field; not offered on the Organise page).
 - `question` — for `self_select` resolution: the `{question-id}` whose answer populates the dimension.
 - `label` — optional human-readable label for the Organise page (defaults to the dimension name).
 - `profile_field` — for `profile` resolution: the profile field key to read from.
