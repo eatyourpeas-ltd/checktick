@@ -100,6 +100,9 @@ def test_add_dimension_creates_category(client, survey, owner):
         {"action": "add_respondent_category", "category_name": "rater_role"},
     )
     assert res.status_code == 302
+    # Regression guard: the redirect must go back to this survey's Organise
+    # page, not to /surveys/<dimension-key>/groups/ (which 404s).
+    assert res.url == _groups_url(survey)
     cat = RespondentCategory.objects.get(survey=survey, name="rater_role")
     assert cat.label == "rater_role"
     assert cat.allowed_values == []
@@ -114,6 +117,7 @@ def test_add_dimension_slugifies_name(client, survey, owner):
         {"action": "add_respondent_category", "category_name": "Rater Role"},
     )
     assert res.status_code == 302
+    assert res.url == _groups_url(survey)
     assert RespondentCategory.objects.filter(survey=survey, name="rater_role").exists()
 
 
@@ -128,6 +132,7 @@ def test_add_dimension_unique_name(client, survey, owner):
         {"action": "add_respondent_category", "category_name": "rater_role"},
     )
     assert res.status_code == 302
+    assert res.url == _groups_url(survey)
     # The second one gets a suffix.
     assert RespondentCategory.objects.filter(
         survey=survey, name="rater_role_2"

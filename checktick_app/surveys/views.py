@@ -8689,25 +8689,26 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         if not name:
             messages.error(request, _("Please provide a dimension name."))
             return redirect("surveys:groups", slug=slug)
-        # Slugify the name for the dimension key.
-        import re
-
-        slug = re.sub(r"[^a-z0-9_]+", "_", name.lower()).strip("_")
-        if not slug:
-            slug = "dimension"
+        # Slugify the name for the dimension key. Do not rebind ``slug`` —
+        # it is the survey slug from the URL and every redirect below
+        # needs it; shadowing it with the dimension key sends the author to
+        # /surveys/<dimension-key>/groups/ and 404s.
+        dim_key = re.sub(r"[^a-z0-9_]+", "_", name.lower()).strip("_")
+        if not dim_key:
+            dim_key = "dimension"
         # Ensure uniqueness within the survey.
         existing = set(survey.respondent_categories.values_list("name", flat=True))
-        base = slug
+        base = dim_key
         i = 2
-        while slug in existing:
-            slug = f"{base}_{i}"
+        while dim_key in existing:
+            dim_key = f"{base}_{i}"
             i += 1
         next_order = (
             survey.respondent_categories.aggregate(m=models.Max("order"))["m"] or 0
         ) + 1
         RespondentCategory.objects.create(
             survey=survey,
-            name=slug,
+            name=dim_key,
             label=name,
             allowed_values=[],
             order=next_order,
