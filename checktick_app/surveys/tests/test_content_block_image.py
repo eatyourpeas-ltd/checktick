@@ -187,6 +187,25 @@ def test_builder_page_shows_thumbnail(client, owner, survey, group, block):
     html = res.content.decode()
     assert image.image.url in html
     assert "Content block image preview" in html
+    # The builder mini-preview caps the image too.
+    assert "max-h-24" in html
+
+
+@pytest.mark.django_db
+def test_take_page_renders_capped_top_right_image(client, owner, survey, group, block):
+    """The live/preview render caps the image and places it top-right
+    (heading/subtitle left) instead of letting a full-size image swamp the
+    card. The preview route renders the same detail.html as the live take
+    route."""
+    client.force_login(owner)
+    client.post(_configure_url(survey, group, block), {"content_block_image": _png()})
+    image = QuestionImage.objects.get(question=block)
+    res = client.get(f"/surveys/{survey.slug}/preview/")
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert image.image.url in html
+    assert "max-h-28" in html
+    assert "justify-between" in html
 
 
 @pytest.mark.django_db
