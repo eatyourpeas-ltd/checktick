@@ -530,6 +530,7 @@ def _render_template_question_row(
     group: QuestionGroup | None = None,
     keep_open: bool = False,
     message: str | None = None,
+    error_message: str | None = None,
 ) -> HttpResponse:
     """Re-render a single question row after an HTMX update."""
 
@@ -548,6 +549,8 @@ def _render_template_question_row(
     }
     if message:
         ctx["row_message"] = message
+    if error_message:
+        ctx["row_message_error"] = error_message
     if group is not None:
         ctx["group"] = group
     else:
@@ -12675,7 +12678,12 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
     - ``heading``: rendered heading (optional)
     - ``subtitle``: rendered subtitle (optional)
     - ``body_md``: Markdown body (optional)
-    - ``image_id``: FK to an uploaded QuestionImage (optional, builder-only)
+    - ``content_block_image``: uploaded image file (optional, multipart). The
+      uploaded image replaces the previously referenced one (its
+      QuestionImage row is deleted so storage does not accumulate
+      unreachable files).
+    - ``remove_image``: clear the image (deletes the referenced
+      QuestionImage row)
     - ``link_label[]`` / ``link_url[]``: parallel lists of link pairs
     - ``consent_statement``: consent statement text (optional)
     - ``consent_required``: if on, participant must agree to progress
@@ -12688,6 +12696,10 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
     updated) in the same group, hidden from the builder list via a marker in
     its ``options``. The answer is stored on the yesno question for a clean
     audit trail.
+
+    Returns an error message string if an uploaded image failed validation
+    (the rest of the form is still saved, and the existing image is kept),
+    otherwise ``None``.
     """
     from checktick_app.core.markdown_safety import sanitise_link_url
 
@@ -12717,10 +12729,42 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
         if label and url:
             links.append({"label": label, "url": url})
 
-    # Image: keep the existing image_id unless a new one is provided.
+    # Image: upload is part of this form (multipart) — the old separate
+    # endpoint was POST-only JSON with no UI, so the builder's "Upload
+    # Image" link 405'd. A new file replaces the referenced image (old row
+    # deleted); remove_image clears it. On a validation failure the rest of
+    # the form still saves and the existing image is kept.
+    from .models import QuestionImage
+
     existing_opts = question.options if isinstance(question.options, dict) else {}
     image_id = existing_opts.get("image_id")
-    # (Image upload is handled by a separate endpoint, like image choice.)
+    image_error: str | None = None
+
+    if request.POST.get("remove_image") in {"on", "true", "1", "yes"}:
+        if image_id:
+            QuestionImage.objects.filter(id=image_id, question_id=question.id).delete()
+        image_id = None
+
+    uploaded_image = request.FILES.get("content_block_image")
+    if uploaded_image is not None:
+        success, error = _validate_and_process_image(uploaded_image)
+        if success:
+            if image_id:
+                QuestionImage.objects.filter(
+                    id=image_id, question_id=question.id
+                ).delete()
+            max_order = (
+                question.images.aggregate(models.Max("order")).get("order__max") or 0
+            )
+            image = QuestionImage.objects.create(
+                question=question,
+                image=uploaded_image,
+                label="",
+                order=max_order + 1,
+            )
+            image_id = image.id
+        else:
+            image_error = error
 
     # Consent: if a consent statement is provided, create or update a linked
     # yesno question. If the statement is cleared, delete the linked question.
@@ -12799,6 +12843,7 @@ def _parse_content_block_form(request: HttpRequest, question: SurveyQuestion) ->
         "is_delphi_feedback": is_delphi_feedback,
     }
     question.save(update_fields=["options"])
+    return image_error
 
 
 @login_required
@@ -12814,8 +12859,10 @@ def builder_question_content_block_update(
         survey=survey,
         type=SurveyQuestion.Types.CONTENT_BLOCK,
     )
-    _parse_content_block_form(request, question)
-    return _render_template_question_row(request, survey, question, keep_open=True)
+    image_error = _parse_content_block_form(request, question)
+    return _render_template_question_row(
+        request, survey, question, keep_open=True, error_message=image_error
+    )
 
 
 @login_required
@@ -12833,9 +12880,14 @@ def builder_group_question_content_block_update(
         group=group,
         type=SurveyQuestion.Types.CONTENT_BLOCK,
     )
-    _parse_content_block_form(request, question)
+    image_error = _parse_content_block_form(request, question)
     return _render_template_question_row(
-        request, survey, question, group=group, keep_open=True
+        request,
+        survey,
+        question,
+        group=group,
+        keep_open=True,
+        error_message=image_error,
     )
 
 
