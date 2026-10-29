@@ -125,6 +125,26 @@ def test_respondent_category_str(survey):
     assert "S" in str(cat)
 
 
+@pytest.mark.django_db
+def test_respondent_category_display_name(survey):
+    """display_name is what the UI renders instead of the underscore key:
+    the label if set, else the key prettified (rater_role -> Rater Role)."""
+    no_label = RespondentCategory.objects.create(
+        survey=survey, name="rater_role", allowed_values=[]
+    )
+    assert no_label.display_name == "Rater Role"
+
+    with_label = RespondentCategory.objects.create(
+        survey=survey, name="site", label="Recruitment site", allowed_values=[]
+    )
+    assert with_label.display_name == "Recruitment site"
+
+    single_word = RespondentCategory.objects.create(
+        survey=survey, name="cohort", allowed_values=[]
+    )
+    assert single_word.display_name == "Cohort"
+
+
 # --- RespondentAssignment -----------------------------------------------
 
 

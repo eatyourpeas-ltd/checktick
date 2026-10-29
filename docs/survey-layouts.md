@@ -594,12 +594,14 @@ with any layout: a Section menu + categories survey shows the picker
 first, then filters the chosen sections by category; an RCT + categories
 survey resolves the arm and the token-borne dimensions independently.
 
-Dimensions are author-defined (free-text name + allowed values); there
-is no fixed enum. Each dimension has a **resolution source** that
-determines how a participant's value is resolved: invite token (the
-default; each token batch carries the value for that dimension),
-self-select question (a question whose answer populates the dimension),
-system assignment (reusing the RCT allocator), or profile field.
+Dimensions are author-defined (free-text name + options); there is no
+fixed enum. Each dimension records **how each respondent is put into a
+category** — one source per dimension. The Organise page offers three:
+you pick it per invitation batch on the Tokens page (the default), the
+respondent picks it themselves by answering a question in the survey,
+or CheckTick assigns one of the options at random. A fourth source —
+reading it from the respondent's profile — exists in the outline
+grammar but is not offered on the Organise page yet.
 
 Sections are tagged with `required_categories` rules (dimension → list
 of allowed values) so each respondent sees only the sections relevant

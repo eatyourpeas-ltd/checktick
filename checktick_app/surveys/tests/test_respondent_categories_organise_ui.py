@@ -86,7 +86,7 @@ def test_categories_card_shows_empty_state(client, survey, owner):
     client.force_login(owner)
     res = client.get(_groups_url(survey))
     html = res.content.decode()
-    assert "No category dimensions yet" in html
+    assert "No categories yet" in html
 
 
 @pytest.mark.django_db
@@ -103,16 +103,167 @@ def test_categories_card_shows_howto_signposting(client, survey, owner):
     html = res.content.decode()
     # How-to alert with the four setup steps.
     assert "How to use respondent categories" in html
-    assert "Add a dimension" in html
-    assert "Tick which values each section is visible to" in html
-    # Link to the outline reference.
-    assert 'href="/docs/import.md#respondent-categories"' in html
+    assert "Add a category" in html
+    assert "Tick which options each section is visible to" in html
+    # Link to the in-app outline reference.
+    assert 'href="/docs/import/"' in html
     # The add-dimension input is labelled (accessibility) and carries the
     # clearer placeholder.
     assert 'for="add-category-name"' in html
     assert 'id="add-category-name"' in html
     assert "e.g. Rater role" in html
     assert "e.g. rater_role" not in html
+
+
+@pytest.mark.django_db
+def test_resolution_source_options_are_plain_english(client, survey, owner):
+    """The category form asks how each respondent is put into a category,
+    offers the three workable sources in plain English, and hides the
+    profile source (a dead end until profile-based resolution has fields
+    to offer)."""
+    RespondentCategory.objects.create(
+        survey=survey, name="rater_role", allowed_values=[]
+    )
+    client.force_login(owner)
+    res = client.get(_groups_url(survey))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "How is each respondent put into a category?" in html
+    assert "I pick it for each batch of invitations" in html
+    assert "They pick it themselves in the survey" in html
+    assert "CheckTick assigns it at random" in html
+    assert "Read from their profile" not in html
+
+
+@pytest.mark.django_db
+def test_dimension_row_shows_display_name_not_raw_key(client, survey, owner):
+    """The row is led by the human-facing display name; the underscore key
+    is not rendered at all (it remains available in the outline export and
+    token CSV headers, where power users need it)."""
+    RespondentCategory.objects.create(
+        survey=survey, name="rater_role", allowed_values=[]
+    )
+    client.force_login(owner)
+    res = client.get(_groups_url(survey))
+    assert res.status_code == 200
+    html = res.content.decode()
+    # display_name prettifies the key when no label is set.
+    assert "Rater Role" in html
+    # The raw underscore key is not shown anywhere on the page.
+    assert "rater_role" not in html
+
+
+@pytest.mark.django_db
+def test_existing_profile_source_dimension_stays_savable(client, survey, owner):
+    """A profile-source dimension (outline import) keeps its option when
+    rendered, so saving the form does not silently flip the source."""
+    RespondentCategory.objects.create(
+        survey=survey,
+        name="rater_role",
+        allowed_values=[],
+        resolution_source=RespondentCategory.ResolutionSource.PROFILE,
+    )
+    client.force_login(owner)
+    res = client.get(_groups_url(survey))
+    html = res.content.decode()
+    assert '<option value="profile" selected>' in html
+
+
+@pytest.mark.django_db
+def test_self_select_shows_question_picker_with_choice_questions_only(
+    client, survey, owner
+):
+    """Choosing 'participant answers a survey question' reveals a question
+    picker that offers single-choice questions from this survey only."""
+    RespondentCategory.objects.create(
+        survey=survey,
+        name="site",
+        allowed_values=["clinic_a", "clinic_b"],
+        resolution_source=RespondentCategory.ResolutionSource.SELF_SELECT,
+    )
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=survey._g1,
+        text="Which site are you from?",
+        type=SurveyQuestion.Types.DROPDOWN,
+        order=1,
+    )
+    client.force_login(owner)
+    res = client.get(_groups_url(survey))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Which question do they answer?" in html
+    assert "Which site are you from?" in html
+    # The fixture's free-text questions are not eligible as sources.
+    assert "Clinical knowledge" not in html
+
+
+@pytest.mark.django_db
+def test_save_self_select_persists_source_question(client, survey, owner):
+    cat = RespondentCategory.objects.create(
+        survey=survey,
+        name="site",
+        allowed_values=["clinic_a", "clinic_b"],
+        resolution_source=RespondentCategory.ResolutionSource.TOKEN,
+    )
+    q = SurveyQuestion.objects.create(
+        survey=survey,
+        group=survey._g1,
+        text="Which site are you from?",
+        type=SurveyQuestion.Types.DROPDOWN,
+        order=1,
+    )
+    client.force_login(owner)
+    res = client.post(
+        _groups_url(survey),
+        {
+            "action": "save_respondent_category",
+            "category_id": str(cat.id),
+            f"resolution_source_{cat.id}": "self_select",
+            f"source_question_{cat.id}": str(q.id),
+        },
+    )
+    assert res.status_code == 302
+    cat.refresh_from_db()
+    assert cat.resolution_source == RespondentCategory.ResolutionSource.SELF_SELECT
+    assert cat.source_question_id == q.id
+
+
+@pytest.mark.django_db
+def test_save_self_select_rejects_question_from_other_survey(
+    client, survey, owner, org
+):
+    """A crafted POST naming another survey's question must not store it
+    as the self-select source."""
+    cat = RespondentCategory.objects.create(
+        survey=survey,
+        name="site",
+        allowed_values=[],
+        resolution_source=RespondentCategory.ResolutionSource.TOKEN,
+    )
+    other = Survey.objects.create(
+        owner=owner, organization=org, name="Other", slug="other"
+    )
+    other_q = SurveyQuestion.objects.create(
+        survey=other,
+        group=None,
+        text="Other survey question",
+        type=SurveyQuestion.Types.DROPDOWN,
+        order=0,
+    )
+    client.force_login(owner)
+    res = client.post(
+        _groups_url(survey),
+        {
+            "action": "save_respondent_category",
+            "category_id": str(cat.id),
+            f"resolution_source_{cat.id}": "self_select",
+            f"source_question_{cat.id}": str(other_q.id),
+        },
+    )
+    assert res.status_code == 302
+    cat.refresh_from_db()
+    assert cat.source_question_id is None
 
 
 # --- Add dimension ----------------------------------------------------
@@ -307,7 +458,6 @@ def test_organise_page_shows_existing_categories(client, survey, owner):
     res = client.get(_groups_url(survey))
     assert res.status_code == 200
     html = res.content.decode()
-    assert "rater_role" in html
     assert "Rater role" in html
     assert "self, peer, supervisor" in html
 

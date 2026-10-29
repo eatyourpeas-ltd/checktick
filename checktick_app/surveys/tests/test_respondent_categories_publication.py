@@ -120,7 +120,7 @@ def test_tokens_page_shows_category_field(client, survey, owner):
     res = client.get(_tokens_url(survey))
     assert res.status_code == 200
     html = res.content.decode()
-    assert "Category values for this batch" in html
+    assert "Categories for this batch" in html
     assert "rater_role" in html or "Rater role" in html
 
 

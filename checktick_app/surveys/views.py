@@ -8687,7 +8687,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
     ):
         name = (request.POST.get("category_name", "") or "").strip()[:50]
         if not name:
-            messages.error(request, _("Please provide a dimension name."))
+            messages.error(request, _("Please provide a category name."))
             return redirect("surveys:groups", slug=slug)
         # Slugify the name for the dimension key. Do not rebind ``slug`` —
         # it is the survey slug from the URL and every redirect below
@@ -8713,7 +8713,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             allowed_values=[],
             order=next_order,
         )
-        messages.success(request, _("Category dimension added."))
+        messages.success(request, _("Category added."))
         return redirect("surveys:groups", slug=slug)
 
     # Respondent categories — save dimension (name, label, allowed_values,
@@ -8748,9 +8748,11 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             )
             if source in {c[0] for c in RespondentCategory.ResolutionSource.choices}:
                 cat.resolution_source = source
-            # source_question (for self_select).
+            # source_question (for self_select). Must belong to this survey —
+            # an id from another survey is silently ignored rather than
+            # stored, so a crafted POST cannot link a foreign question.
             sq_raw = (request.POST.get(f"source_question_{cat.id}", "") or "").strip()
-            if sq_raw.isdigit():
+            if sq_raw.isdigit() and survey.questions.filter(id=int(sq_raw)).exists():
                 cat.source_question_id = int(sq_raw)
             else:
                 cat.source_question_id = None
@@ -8759,7 +8761,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
                 request.POST.get(f"profile_field_{cat.id}", "") or ""
             ).strip()[:100]
             cat.save()
-            messages.success(request, _("Category dimension saved."))
+            messages.success(request, _("Category saved."))
         return redirect("surveys:groups", slug=slug)
 
     # Respondent categories — remove dimension.
@@ -8771,7 +8773,7 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         cat_id_raw = request.POST.get("category_id", "")
         if cat_id_raw.isdigit():
             survey.respondent_categories.filter(id=int(cat_id_raw)).delete()
-            messages.success(request, _("Category dimension removed."))
+            messages.success(request, _("Category removed."))
         return redirect("surveys:groups", slug=slug)
 
     # Respondent categories — save group required_categories (the
@@ -9535,8 +9537,31 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
         "respondent_categories": list(
             survey.respondent_categories.order_by("order", "id")
         ),
-        "respondent_category_resolution_choices": (
-            RespondentCategory.ResolutionSource.choices
+        # The Organise page select only offers the three workable sources.
+        # PROFILE is hidden until profile-based resolution has meaningful
+        # fields to offer — UserProfile currently holds billing/tier fields
+        # only, and org-membership resolution is the documented follow-up.
+        # Existing profile-source dimensions (outline import) still render
+        # their option via the template so saving does not silently flip
+        # them to another source.
+        "respondent_category_resolution_choices": [
+            choice
+            for choice in RespondentCategory.ResolutionSource.choices
+            if choice[0] != RespondentCategory.ResolutionSource.PROFILE
+        ],
+        # Choice-type questions eligible as self-select sources: the
+        # participant's answer becomes the dimension value, so it must be a
+        # single discrete choice (multi-select and free-text answers cannot).
+        "respondent_category_questions": list(
+            survey.questions.filter(
+                type__in=[
+                    SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE,
+                    SurveyQuestion.Types.LIKERT,
+                    SurveyQuestion.Types.YESNO,
+                    SurveyQuestion.Types.DROPDOWN,
+                    SurveyQuestion.Types.IMAGE_CHOICE,
+                ]
+            ).order_by("order", "id")
         ),
         # Layout tier gating (see tier_limits.py allowed_layouts).
         "allowed_layouts": get_allowed_layouts(request.user),
