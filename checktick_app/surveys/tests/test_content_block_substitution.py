@@ -387,3 +387,73 @@ def test_preview_no_hint_without_placeholders(client, owner, org):
     html = res.content.decode()
     assert "Simulate category" in html
     assert "category placeholders" not in html
+
+
+# --- Thank-you echo (commit 3) ---
+
+
+def _submit_via_token(client, survey, token, answer="Excellent"):
+    """Walk the take flow: GET (creates progress + resolves categories),
+    then POST the single text answer. Returns the POST response."""
+    url = _take_token_url(survey, token)
+    assert client.get(url).status_code == 200
+    text_q = survey.questions.filter(type=SurveyQuestion.Types.TEXT).first()
+    return client.post(url, {f"q_{text_q.id}": answer})
+
+
+@pytest.mark.django_db
+def test_thank_you_echoes_resolved_categories(client, owner, org):
+    """After submitting, the thank-you page echoes the resolved values (the
+    rater's own context) next to the receipt token — one-time display."""
+    s = _make_survey(owner, org)
+    token = SurveyAccessToken.objects.create(
+        survey=s,
+        token="tok-sub-thanks",
+        created_by=owner,
+        category_values={"subject": "Dr Jane Smith"},
+    )
+    res = _submit_via_token(client, s, token)
+    assert res.status_code == 302
+    assert "/thank-you/" in res.url
+
+    res = client.get(reverse("surveys:thank_you", kwargs={"slug": s.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Subject: Dr Jane Smith" in html
+
+    # One-time display — a second visit does not echo again.
+    res = client.get(reverse("surveys:thank_you", kwargs={"slug": s.slug}))
+    assert res.status_code == 200
+    assert "Dr Jane Smith" not in res.content.decode()
+
+
+@pytest.mark.django_db
+def test_thank_you_echo_is_escaped(client, owner, org):
+    """The echoed values are author-entered category values — the badges
+    must be auto-escaped."""
+    s = _make_survey(owner, org)
+    token = SurveyAccessToken.objects.create(
+        survey=s,
+        token="tok-sub-thanks-esc",
+        created_by=owner,
+        category_values={"subject": 'Dr <b>"Smith"</b>'},
+    )
+    res = _submit_via_token(client, s, token)
+    assert res.status_code == 302
+    res = client.get(reverse("surveys:thank_you", kwargs={"slug": s.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Subject: Dr &lt;b&gt;&quot;Smith&quot;&lt;/b&gt;" in html
+    assert 'Dr <b>"Smith"</b>' not in html
+
+
+@pytest.mark.django_db
+def test_thank_you_no_echo_without_submission(client, owner, org):
+    """A direct GET of the thank-you page (no submission in this session)
+    shows no category echo."""
+    s = _make_survey(owner, org)
+    res = client.get(reverse("surveys:thank_you", kwargs={"slug": s.slug}))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Your response was recorded with the following details" not in html
+    assert "Dr Jane Smith" not in html

@@ -6668,6 +6668,7 @@ def _matrix_final_submit(
     token = resp.generate_receipt_token(opt_in=opted_in_redaction)
     if token:
         request.session[f"receipt_token_{survey.slug}"] = str(token)
+    _stash_category_snapshot(request, survey, progress)
     messages.success(request, "Thank you for your response.")
     return redirect("surveys:thank_you", slug=survey.slug)
 
@@ -6870,6 +6871,7 @@ def _diary_submit_entry(
     token = resp.generate_receipt_token(opt_in=opted_in_redaction)
     if token:
         request.session[f"receipt_token_{survey.slug}"] = str(token)
+    _stash_category_snapshot(request, survey, progress)
     messages.success(request, _("Thank you for your diary entry."))
     return redirect("surveys:thank_you", slug=survey.slug)
 
@@ -7417,6 +7419,9 @@ def _handle_participant_submission(
         token = resp.generate_receipt_token(opt_in=opted_in_redaction)
         if token:
             request.session[f"receipt_token_{survey.slug}"] = str(token)
+        # One-time category echo on the thank-you page (issue #349
+        # decision 4).
+        _stash_category_snapshot(request, survey, progress)
 
         messages.success(request, "Thank you for your response.")
         # Redirect to thank-you page
@@ -7771,6 +7776,23 @@ def survey_closed(request: HttpRequest, slug: str) -> HttpResponse:
     )
 
 
+def _stash_category_snapshot(
+    request: HttpRequest, survey: Survey, progress: SurveyProgress | None
+) -> None:
+    """Stash the participant's resolved category values in the session for
+    the thank-you page echo (issue #349 decision 4 — the values are the
+    rater's own context, e.g. the 360 subject they were rating).
+
+    One-time display, same session pattern as the receipt token. Nothing is
+    stashed when there is no progress (anonymous) or nothing resolved.
+    """
+    if progress is None or not survey.respondent_categories.exists():
+        return
+    resolved = _resolve_categories_for_progress(progress)
+    if resolved:
+        request.session[f"category_values_{survey.slug}"] = resolved
+
+
 @require_http_methods(["GET"])
 def survey_thank_you(request: HttpRequest, slug: str) -> HttpResponse:
     """Simple post-submission landing page for participants.
@@ -7783,6 +7805,17 @@ def survey_thank_you(request: HttpRequest, slug: str) -> HttpResponse:
 
     # Retrieve and clear receipt token from session (one-time display)
     receipt_token = request.session.pop(f"receipt_token_{slug}", None)
+    # One-time echo of the participant's resolved category values (issue
+    # #349 decision 4). Enriched with display names when the survey exists;
+    # the values are the participant's own context, auto-escaped by the
+    # template.
+    category_values = request.session.pop(f"category_values_{slug}", None)
+    category_echo: list[tuple[str, str]] = []
+    if category_values and survey is not None:
+        labels = {c.name: c.display_name for c in survey.respondent_categories.all()}
+        category_echo = [
+            (labels.get(dim, dim), val) for dim, val in category_values.items()
+        ]
 
     # Render generic thank you even if survey missing to avoid information leakage
     return render(
@@ -7792,6 +7825,7 @@ def survey_thank_you(request: HttpRequest, slug: str) -> HttpResponse:
             "survey": survey,
             "is_preview": False,
             "receipt_token": receipt_token,
+            "category_echo": category_echo,
         },
     )
 

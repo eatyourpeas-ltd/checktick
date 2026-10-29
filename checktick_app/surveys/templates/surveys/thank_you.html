@@ -45,6 +45,19 @@
       </div>
       {% endif %}
 
+      {% if category_echo %}
+      {# One-time echo of the participant's resolved category values (e.g. #}
+      {# the 360 subject they were rating) — their own context, issue #349. #}
+      <div class="mt-4 text-sm">
+        <p class="opacity-70 mb-2">{% trans "Your response was recorded with the following details:" %}</p>
+        <div class="flex flex-wrap justify-center gap-2">
+          {% for label, val in category_echo %}
+          <span class="badge badge-outline">{{ label }}: {{ val }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
       {% if is_preview and survey %}
         <a href="/surveys/{{ survey.slug }}/take/" class="btn btn-primary">{% trans "Back to survey" %}</a>
       {% elif not is_preview %}
