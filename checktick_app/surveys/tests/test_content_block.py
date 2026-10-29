@@ -335,6 +335,61 @@ def test_export_content_block_round_trip(client, django_user_model):
 
 
 @pytest.mark.django_db
+def test_export_content_block_placeholder_round_trip(client, django_user_model):
+    """{{subject}} placeholders must survive export → import as literal
+    text (issue #349 edge case 2 — the exporter and the Markdown importer
+    must not mangle them). Placeholders live in the heading:/subtitle:
+    config lines and the body, not the internal label."""
+    from checktick_app.surveys.models import QuestionGroup
+    from checktick_app.surveys.views import _export_survey_to_markdown
+
+    user = django_user_model.objects.create_user(
+        username="author-ph", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(owner=user, name="ExportPH", slug="export-ph")
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Introduction",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "heading": "360° feedback for {{subject}}",
+            "subtitle": "You are rating {{subject}}",
+            "body_md": "Thank you for rating {{subject}} in this round.",
+            "links": [],
+            "image_id": None,
+            "consent": None,
+            "render_once": True,
+        },
+        required=False,
+        order=0,
+    )
+
+    exported = _export_survey_to_markdown(survey)
+    assert "heading: 360° feedback for {{subject}}" in exported
+    assert "subtitle: You are rating {{subject}}" in exported
+    assert "Thank you for rating {{subject}} in this round." in exported
+
+    # Re-import into a fresh survey — the placeholders survive intact.
+    survey2 = Survey.objects.create(owner=user, name="ReimportPH", slug="reimport-ph")
+    client.login(username="author-ph", password=TEST_PASSWORD)
+    response = client.post(
+        reverse("surveys:bulk_upload", kwargs={"slug": survey2.slug}),
+        {"markdown": exported},
+        follow=False,
+    )
+    assert response.status_code == 302
+
+    q = SurveyQuestion.objects.get(survey=survey2, text="Introduction")
+    assert q.type == SurveyQuestion.Types.CONTENT_BLOCK
+    assert q.options["heading"] == "360° feedback for {{subject}}"
+    assert q.options["subtitle"] == "You are rating {{subject}}"
+    assert q.options["body_md"] == "Thank you for rating {{subject}} in this round."
+
+
+@pytest.mark.django_db
 def test_export_content_block_minimal_round_trip(client, django_user_model):
     """A minimal content_block (body only) round-trips."""
     from checktick_app.surveys.models import QuestionGroup
