@@ -1097,19 +1097,39 @@
   <section class="not-prose mb-6" aria-labelledby="respondent-categories-heading">
     <div class="card bg-base-100 border border-base-300 max-w-4xl">
       <div class="card-body gap-3 p-4">
-        <div class="flex items-center justify-between">
-          <h3 id="respondent-categories-heading" class="font-semibold text-base-content">
-            {% trans 'Respondent categories' %}
-          </h3>
-          <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="inline">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="add_respondent_category" />
-            <input type="text" name="category_name" placeholder="{% trans 'e.g. rater_role' %}" class="input input-bordered input-sm w-40" />
-            <button type="submit" class="btn btn-sm btn-outline">{% trans 'Add dimension' %}</button>
-          </form>
-        </div>
+        <h3 id="respondent-categories-heading" class="font-semibold text-base-content">
+          {% trans 'Respondent categories' %}
+        </h3>
         <p class="text-xs text-base-content/70">
           {% trans 'Categorise respondents along author-defined dimensions (rater role, site, cohort) so different respondents see different sections of the same survey without cloning it. Works with any layout. Used for 360° / multi-rater assessments.' %}
+        </p>
+        <div class="alert alert-info text-xs" role="note">
+          {% include "components/icons/information-circle.html" with classes="w-4 h-4 shrink-0" %}
+          <div>
+            <p class="font-semibold">{% trans 'How to use respondent categories' %}</p>
+            <ol class="list-decimal pl-4 mt-1 space-y-0.5">
+              <li>{% trans 'Add a dimension — the property you split respondents by, e.g. Rater role, Recruitment site, Cohort.' %}</li>
+              <li>{% trans 'Enter its allowed values, comma-separated, e.g. self, peer, supervisor, patient.' %}</li>
+              <li>{% trans 'Choose how each participant gets their value: set per invite batch on the Tokens page, a self-select question, system assignment, or a profile field.' %}</li>
+              <li>{% trans 'Tick which values each section is visible to. Sections with nothing ticked stay visible to everyone.' %}</li>
+            </ol>
+            <p class="mt-1">
+              {% trans 'Prefer the outline? Define categories with a CATEGORIES block on the bulk upload page:' %}
+              <a href="/docs/import.md#respondent-categories" class="link">{% trans 'outline reference' %}</a>
+            </p>
+          </div>
+        </div>
+        <form method="post" action="/surveys/{{ survey.slug }}/groups/" class="flex flex-wrap items-end gap-2">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add_respondent_category" />
+          <div>
+            <label class="label text-xs" for="add-category-name">{% trans 'New dimension name' %}</label>
+            <input id="add-category-name" type="text" name="category_name" placeholder="{% trans 'e.g. Rater role' %}" class="input input-bordered input-sm w-44" />
+          </div>
+          <button type="submit" class="btn btn-sm btn-outline">{% trans 'Add dimension' %}</button>
+        </form>
+        <p class="text-xs text-base-content/50">
+          {% trans 'The name becomes the key used in visibility rules and token batches — "Rater role" is saved as rater_role, and you can set a friendlier display label after adding.' %}
         </p>
 
         {% if respondent_categories %}

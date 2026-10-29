@@ -89,6 +89,32 @@ def test_categories_card_shows_empty_state(client, survey, owner):
     assert "No category dimensions yet" in html
 
 
+@pytest.mark.django_db
+def test_categories_card_shows_howto_signposting(client, survey, owner):
+    """The card must explain the workflow and label the add-dimension input.
+
+    The original card only said "e.g. rater_role" with no label and no
+    steps, which was too ambiguous to follow (see the fix branch for the
+    404 + signposting rework).
+    """
+    client.force_login(owner)
+    res = client.get(_groups_url(survey))
+    assert res.status_code == 200
+    html = res.content.decode()
+    # How-to alert with the four setup steps.
+    assert "How to use respondent categories" in html
+    assert "Add a dimension" in html
+    assert "Tick which values each section is visible to" in html
+    # Link to the outline reference.
+    assert 'href="/docs/import.md#respondent-categories"' in html
+    # The add-dimension input is labelled (accessibility) and carries the
+    # clearer placeholder.
+    assert 'for="add-category-name"' in html
+    assert 'id="add-category-name"' in html
+    assert "e.g. Rater role" in html
+    assert "e.g. rater_role" not in html
+
+
 # --- Add dimension ----------------------------------------------------
 
 
