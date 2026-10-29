@@ -2536,12 +2536,42 @@ def _prepare_question_rendering(
         "actions": actions_meta,
     }
 
+    # Content blocks: batch-resolve the referenced images (options.image_id)
+    # in one query so the builder row can show a thumbnail. Mirrors the
+    # take-side annotation in _annotate_question_render_sequence
+    # (q.content_block_image).
+    content_block_image_ids: set[Any] = set()
+    for q in questions_iter:
+        if q.type == SurveyQuestion.Types.CONTENT_BLOCK and isinstance(q.options, dict):
+            image_id = q.options.get("image_id")
+            if image_id:
+                content_block_image_ids.add(image_id)
+    content_block_images: dict[int, Any] = {}
+    if content_block_image_ids:
+        from .models import QuestionImage
+
+        for img in QuestionImage.objects.filter(id__in=content_block_image_ids):
+            content_block_images[img.id] = img
+
     for q in questions_iter:
         try:
             if q.type == SurveyQuestion.Types.TEMPLATE_PATIENT:
                 q.options = _normalize_patient_template_options(q.options)
             elif q.type == SurveyQuestion.Types.TEMPLATE_PROFESSIONAL:
                 q.options = _normalize_professional_template_options(q.options)
+            if q.type == SurveyQuestion.Types.CONTENT_BLOCK:
+                image_id = (
+                    q.options.get("image_id") if isinstance(q.options, dict) else None
+                )
+                img = content_block_images.get(image_id) if image_id else None
+                # Guard against a stale image_id pointing at another
+                # question's image — same constraint as the take-side filter
+                # (id=image_id, question_id=q.id).
+                setattr(
+                    q,
+                    "content_block_image",
+                    img if img is not None and img.question_id == q.id else None,
+                )
             if (
                 q.type == "likert"
                 and isinstance(q.options, list)

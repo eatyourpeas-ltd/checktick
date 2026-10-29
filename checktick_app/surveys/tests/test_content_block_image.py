@@ -93,8 +93,11 @@ def test_configure_form_uploads_image(client, owner, survey, group, block):
     assert block.options["image_id"] == image.id
     # The rest of the form saved too.
     assert block.options["heading"] == "Welcome"
-    # The re-rendered row reflects the new state.
-    assert "Image set" in res.content.decode()
+    # The re-rendered row reflects the new state, with a thumbnail.
+    html = res.content.decode()
+    assert "Image set" in html
+    assert image.image.url in html
+    assert "Content block image preview" in html
 
 
 @pytest.mark.django_db
@@ -170,6 +173,38 @@ def test_row_has_file_input_and_no_dead_upload_link(
         f"/questions/{block.id}/images/upload"
     )
     assert dead_link not in html
+
+
+@pytest.mark.django_db
+def test_builder_page_shows_thumbnail(client, owner, survey, group, block):
+    """After upload, a full builder page reload shows the thumbnail too
+    (the image is batch-resolved in _prepare_question_rendering)."""
+    client.force_login(owner)
+    client.post(_configure_url(survey, group, block), {"content_block_image": _png()})
+    image = QuestionImage.objects.get(question=block)
+    res = client.get(_builder_url(survey, group))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert image.image.url in html
+    assert "Content block image preview" in html
+
+
+@pytest.mark.django_db
+def test_dangling_image_id_shows_warning_and_remove(
+    client, owner, survey, group, block
+):
+    """An image_id whose QuestionImage row is gone (e.g. removed from
+    storage) shows a warning and still offers Remove, and never renders
+    another question's image."""
+    client.force_login(owner)
+    block.options = {**block.options, "image_id": 999999}
+    block.save(update_fields=["options"])
+    res = client.get(_builder_url(survey, group))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Image missing" in html
+    assert 'name="remove_image"' in html
+    assert "Content block image preview" not in html
 
 
 @pytest.mark.django_db

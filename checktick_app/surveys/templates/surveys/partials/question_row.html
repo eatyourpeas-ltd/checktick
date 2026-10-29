@@ -1,6 +1,6 @@
 {% with q.id|stringformat:"s" as qid %}
   {% with 'question-data-'|add:qid as payload_id %}
-{% load survey_extras %}
+{% load i18n survey_extras %}
 <li id="question-row-{{ q.id }}" class="list-none w-full" data-qid="{{ q.id }}">
   <div id="{{ payload_id }}" data-question-payload hidden style="display:none" aria-hidden="true">{{ q.builder_payload_json|default:"null"|safe }}</div>
   {% if row_message %}
@@ -177,11 +177,26 @@
                   <label class="label">Image / logo (optional)</label>
                   <p class="text-xs opacity-60 mb-1">Images are NOT encrypted — only use for non-medical, non-patient-identifying content (e.g. study logo). Max 1MB. Allowed: PNG, JPG, WebP.</p>
                   {% if q.options.image_id %}
-                    <p class="text-xs text-success mb-2">Image set. Upload a new file to replace it, or tick Remove.</p>
-                    <label class="label cursor-pointer flex items-center gap-2 mb-2">
-                      <input type="checkbox" name="remove_image" class="checkbox" />
-                      <span class="label-text">Remove image</span>
-                    </label>
+                    <div class="flex flex-wrap items-start gap-3 mb-2">
+                      {% if q.content_block_image %}
+                      <img src="{{ q.content_block_image.image.url }}" alt="{% trans 'Content block image preview' %}" class="rounded-lg border border-base-300 max-h-24 w-auto" />
+                      <div class="space-y-1">
+                        <p class="text-xs text-success">Image set. Upload a new file to replace it, or tick Remove.</p>
+                        <label class="label cursor-pointer flex items-center gap-2">
+                          <input type="checkbox" name="remove_image" class="checkbox" />
+                          <span class="label-text">Remove image</span>
+                        </label>
+                      </div>
+                      {% else %}
+                      <div class="space-y-1">
+                        <p class="text-xs text-warning">Image missing — the file was removed. Upload a new file, or tick Remove to clear it.</p>
+                        <label class="label cursor-pointer flex items-center gap-2">
+                          <input type="checkbox" name="remove_image" class="checkbox" />
+                          <span class="label-text">Remove image</span>
+                        </label>
+                      </div>
+                      {% endif %}
+                    </div>
                   {% endif %}
                   <input type="file" name="content_block_image" accept="image/png,image/jpeg,image/webp" class="file-input file-input-sm w-full max-w-md" />
                 </div>
