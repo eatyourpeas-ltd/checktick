@@ -402,6 +402,9 @@
   <div class="card-body p-4">
     <h3 class="text-sm font-semibold text-base-content/80 mb-2">{% trans 'Simulate category' %}</h3>
     <p class="text-xs text-base-content/60 mb-3">{% trans "Preview as a respondent in a particular category: pick an option per category below. Sections visible only to other options are hidden." %}</p>
+    {% if category_preview.has_placeholders %}
+    <p class="text-xs text-info mb-3">{% trans "This survey's content blocks contain category placeholders — pick options above to see them substituted. Without a simulated value they render empty, exactly as a participant without that category would see it." %}</p>
+    {% endif %}
     <form method="get" action="" class="space-y-2">
       {% for cat in category_preview.categories %}
       <div>

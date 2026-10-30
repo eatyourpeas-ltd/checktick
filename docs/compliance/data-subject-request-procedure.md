@@ -125,6 +125,25 @@ The controller must document any refusal and inform the respondent of their righ
 - Response freeze (excludes from exports/analysis)
 - Response unfreezing (if objection is resolved)
 
+### 4.5 Respondent-Category Values (Response Metadata)
+
+Surveys using respondent categories store per-respondent category values
+(e.g. `rater_role`, and the `subject` dimension of a 360° assessment,
+which holds the assessed clinician's name). These are response metadata:
+
+- **Access requests:** the `category_*` columns of the response and token
+  CSV exports are part of the respondent's data and must be included in
+  the export.
+- **Erasure requests:** deleting a response removes its category
+  assignments (they cascade with the response's progress record).
+  Token-borne values, however, remain on the invite-token row until the
+  survey's retention sweep or deletion — the controller must state this
+  in the erasure confirmation when the token values identify the
+  respondent or, for the `subject` dimension, a third party.
+- Subject names are staff data, not patient data, but remain personal
+  data under UK GDPR and follow the survey's response retention
+  schedule.
+
 ## 5. Workflow: Controller-Handled DSR
 
 This is the standard flow where the controller receives and handles the DSR directly.

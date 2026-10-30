@@ -35,6 +35,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.safestring import mark_safe
 from django.utils.text import slugify
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
@@ -1633,14 +1634,17 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
     # token/question/profile. A "Simulate category" panel on the preview
     # page lets the author pick a value per dimension without a real
     # participant. Available for any layout when the survey has
-    # RespondentCategory rows.
+    # RespondentCategory rows. The simulated values also drive {{dim}}
+    # substitution in content blocks (docs/
+    # content-block-category-substitution-implementation-plan.md
+    # §Substitution contract).
     category_preview = None
+    sim_values: dict[str, str] = {}
     if survey.respondent_categories.exists():
         categories = list(survey.respondent_categories.order_by("order", "id"))
         category_preview = {"categories": categories}
         sim_cat_raw = request.GET.get("simulate_category", "")
         if sim_cat_raw:
-            sim_values: dict[str, str] = {}
             for pair in sim_cat_raw.split(","):
                 pair = pair.strip()
                 if ":" in pair:
@@ -1664,9 +1668,25 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
         .prefetch_related("images")
         .all()
     )
+    # Hint for the Simulate category panel (issue #349 edge case 3): when a
+    # content block carries a {{dim}} placeholder, the panel explains that
+    # picking simulated values is how the author sees them substituted —
+    # the author is never shown a bare placeholder with no explanation.
+    if category_preview is not None:
+        category_preview["has_placeholders"] = any(
+            q.type == SurveyQuestion.Types.CONTENT_BLOCK
+            and any(
+                _CATEGORY_PLACEHOLDER_RE.search(str((q.options or {}).get(field) or ""))
+                for field in ("heading", "subtitle", "body_md")
+            )
+            for q in all_questions
+        )
     qs = _order_questions_by_group(survey, all_questions, simulated_group_ids)
     _inject_dataset_options(qs)
-    _annotate_question_render_sequence(survey, qs)
+    # Content block {{dim}} substitution: the preview path substitutes the
+    # ?simulate_category= values (empty when absent — same semantics as the
+    # live path: known-but-unresolved renders empty).
+    _annotate_question_render_sequence(survey, qs, sim_values)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
     prof_group, professional_fields, professional_ods = (
         _get_professional_group_and_fields(survey)
@@ -2176,8 +2196,54 @@ def _render_delphi_feedback_summary(feedback_rows: list) -> str:
     return "\n".join(parts)
 
 
+# {{<dimension>}} placeholder in content block heading / subtitle / body_md,
+# substituted with the participant's resolved respondent-category values at
+# render time. See docs/content-block-category-substitution-implementation-
+# plan.md §Substitution contract.
+_CATEGORY_PLACEHOLDER_RE = re.compile(r"\{\{([A-Za-z0-9_]+)\}\}")
+
+
+def _substitute_category_placeholders(
+    text: str | None,
+    category_values: dict[str, str] | None,
+    known_dims: set[str],
+    *,
+    escape_values: bool = False,
+) -> str:
+    """Substitute ``{{<dimension>}}`` placeholders in content block text.
+
+    Rules (docs/content-block-category-substitution-implementation-plan.md
+    §Substitution contract):
+
+    - ``category_values=None`` → no substitution (the builder detail path
+      shows the raw placeholder exactly as typed).
+    - Unknown dimension (not defined on the survey) → left literal, so a
+      typo like ``{{subjekt}}`` renders visibly and the author catches it
+      in preview.
+    - Known but unresolved dimension → empty string (same semantics as
+      the visibility rules: unresolved = not shown).
+    - ``escape_values=True`` inserts ``escape(value)`` — for substitution
+      into already-rendered, sanitised HTML (the ``body_md`` path). The
+      plain-text fields (heading / subtitle) substitute the raw value and
+      rely on template auto-escaping.
+    """
+    if not text or category_values is None:
+        return text or ""
+
+    def _repl(match: re.Match[str]) -> str:
+        dim = match.group(1)
+        if dim not in known_dims:
+            return match.group(0)
+        value = str(category_values.get(dim, ""))
+        return escape(value) if escape_values else value
+
+    return _CATEGORY_PLACEHOLDER_RE.sub(_repl, text)
+
+
 def _annotate_question_render_sequence(
-    survey: Survey, questions: list[SurveyQuestion]
+    survey: Survey,
+    questions: list[SurveyQuestion],
+    category_values: dict[str, str] | None = None,
 ) -> list[SurveyQuestion]:
     """Attach rendering helper attrs consumed by ``surveys/detail.html``.
 
@@ -2186,6 +2252,13 @@ def _annotate_question_render_sequence(
     ``heading`` substituted from the ``DelphiRoundFeedback`` cache for
     the previous round at view time. See docs/survey-layouts-technical.md
     §Delphi §Inter-round feedback rendering.
+
+    When ``category_values`` is a dict, ``{{<dimension>}}`` placeholders in
+    content block heading / subtitle / body_md are substituted with the
+    participant's resolved category values (live + preview paths); ``None``
+    means no substitution (the builder detail path shows the raw
+    placeholder). See docs/content-block-category-substitution-
+    implementation-plan.md §Substitution contract.
     """
     questions_with_show_conditions = set(
         SurveyQuestionCondition.objects.filter(
@@ -2208,6 +2281,12 @@ def _annotate_question_render_sequence(
                 .order_by("question__order", "question__id")
             )
 
+    # Respondent categories: known dimension names for {{dim}} placeholder
+    # substitution in content blocks (lazily populated on the first content
+    # block — see docs/content-block-category-substitution-implementation-
+    # plan.md §Substitution contract).
+    known_category_dims: set[str] | None = None
+
     for i, q in enumerate(questions, start=1):
         setattr(q, "idx", i)
         prev_gid = questions[i - 2].group_id if i - 2 >= 0 else None
@@ -2225,6 +2304,15 @@ def _annotate_question_render_sequence(
             )
 
             opts = q.options if isinstance(q.options, dict) else {}
+            # Known category dimensions for {{dim}} substitution (fetched
+            # once; None category_values is the builder path, which never
+            # substitutes).
+            if known_category_dims is None:
+                known_category_dims = (
+                    set(survey.respondent_categories.values_list("name", flat=True))
+                    if category_values is not None
+                    else set()
+                )
             # Delphi aggregate feedback substitution: if this content block is
             # marked as aggregate feedback (``is_delphi_feedback = True``),
             # substitute the body_md with a combined summary of all feedback
@@ -2241,23 +2329,64 @@ def _annotate_question_render_sequence(
                     "content_block_html",
                     render_content_block_markdown(feedback_body),
                 )
+                # Substitution applies to author-written text only — the
+                # generated feedback body above is system-produced and
+                # already context-specific (issue #349 edge case 1).
                 setattr(
                     q,
                     "content_block_heading",
-                    opts.get("heading", "Inter-round feedback"),
+                    _substitute_category_placeholders(
+                        opts.get("heading", "Inter-round feedback"),
+                        category_values,
+                        known_category_dims,
+                    ),
                 )
-                setattr(q, "content_block_subtitle", opts.get("subtitle", ""))
+                setattr(
+                    q,
+                    "content_block_subtitle",
+                    _substitute_category_placeholders(
+                        opts.get("subtitle", ""),
+                        category_values,
+                        known_category_dims,
+                    ),
+                )
                 setattr(q, "content_block_links", opts.get("links", []))
                 setattr(q, "content_block_image", None)
                 setattr(q, "content_block_consent", None)
                 continue
+            body_html = render_content_block_markdown(opts.get("body_md", ""))
+            if category_values is not None:
+                # Substitute into the sanitised HTML with an entity-escaped
+                # value — never through |safe paths unescaped (issue #349
+                # privacy notes). Safe by construction: the Markdown body is
+                # already sanitised and the inserted text is escaped.
+                body_html = mark_safe(  # nosemgrep
+                    _substitute_category_placeholders(
+                        str(body_html),
+                        category_values,
+                        known_category_dims,
+                        escape_values=True,
+                    )
+                )
+            setattr(q, "content_block_html", body_html)
             setattr(
                 q,
-                "content_block_html",
-                render_content_block_markdown(opts.get("body_md", "")),
+                "content_block_heading",
+                _substitute_category_placeholders(
+                    opts.get("heading", ""),
+                    category_values,
+                    known_category_dims,
+                ),
             )
-            setattr(q, "content_block_heading", opts.get("heading", ""))
-            setattr(q, "content_block_subtitle", opts.get("subtitle", ""))
+            setattr(
+                q,
+                "content_block_subtitle",
+                _substitute_category_placeholders(
+                    opts.get("subtitle", ""),
+                    category_values,
+                    known_category_dims,
+                ),
+            )
             setattr(q, "content_block_links", opts.get("links", []))
             # Resolve the image if one is set.
             image_id = opts.get("image_id")
@@ -6539,6 +6668,7 @@ def _matrix_final_submit(
     token = resp.generate_receipt_token(opt_in=opted_in_redaction)
     if token:
         request.session[f"receipt_token_{survey.slug}"] = str(token)
+    _stash_category_snapshot(request, survey, progress)
     messages.success(request, "Thank you for your response.")
     return redirect("surveys:thank_you", slug=survey.slug)
 
@@ -6741,6 +6871,7 @@ def _diary_submit_entry(
     token = resp.generate_receipt_token(opt_in=opted_in_redaction)
     if token:
         request.session[f"receipt_token_{survey.slug}"] = str(token)
+    _stash_category_snapshot(request, survey, progress)
     messages.success(request, _("Thank you for your diary entry."))
     return redirect("surveys:thank_you", slug=survey.slug)
 
@@ -7288,6 +7419,9 @@ def _handle_participant_submission(
         token = resp.generate_receipt_token(opt_in=opted_in_redaction)
         if token:
             request.session[f"receipt_token_{survey.slug}"] = str(token)
+        # One-time category echo on the thank-you page (issue #349
+        # decision 4).
+        _stash_category_snapshot(request, survey, progress)
 
         messages.success(request, "Thank you for your response.")
         # Redirect to thank-you page
@@ -7508,9 +7642,10 @@ def _handle_participant_submission(
     # with no RespondentCategory rows has _category_visible_group_ids
     # return None and the filter is a no-op.
     category_visible: set[int] | None = None
+    resolved_categories: dict[str, str] = {}
     if progress is not None and survey.respondent_categories.exists():
-        resolved = _resolve_categories_for_progress(progress)
-        category_visible = _category_visible_group_ids(survey, resolved)
+        resolved_categories = _resolve_categories_for_progress(progress)
+        category_visible = _category_visible_group_ids(survey, resolved_categories)
 
     _prepare_question_rendering(survey)
     all_questions = list(survey.questions.select_related("group", "dataset").all())
@@ -7535,7 +7670,10 @@ def _handle_participant_submission(
             filter_ids = [gid for gid in filter_ids if gid in category_visible]
     qs = _order_questions_by_group(survey, all_questions, filter_ids)
     _inject_dataset_options(qs)
-    _annotate_question_render_sequence(survey, qs)
+    # Content block {{dim}} substitution: the live path always passes a map
+    # (empty when anonymous / no categories) so known-but-unresolved
+    # dimensions render empty, matching the visibility-rule semantics.
+    _annotate_question_render_sequence(survey, qs, resolved_categories)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
     prof_group, professional_fields, professional_ods = (
         _get_professional_group_and_fields(survey)
@@ -7638,6 +7776,23 @@ def survey_closed(request: HttpRequest, slug: str) -> HttpResponse:
     )
 
 
+def _stash_category_snapshot(
+    request: HttpRequest, survey: Survey, progress: SurveyProgress | None
+) -> None:
+    """Stash the participant's resolved category values in the session for
+    the thank-you page echo (issue #349 decision 4 — the values are the
+    rater's own context, e.g. the 360 subject they were rating).
+
+    One-time display, same session pattern as the receipt token. Nothing is
+    stashed when there is no progress (anonymous) or nothing resolved.
+    """
+    if progress is None or not survey.respondent_categories.exists():
+        return
+    resolved = _resolve_categories_for_progress(progress)
+    if resolved:
+        request.session[f"category_values_{survey.slug}"] = resolved
+
+
 @require_http_methods(["GET"])
 def survey_thank_you(request: HttpRequest, slug: str) -> HttpResponse:
     """Simple post-submission landing page for participants.
@@ -7650,6 +7805,17 @@ def survey_thank_you(request: HttpRequest, slug: str) -> HttpResponse:
 
     # Retrieve and clear receipt token from session (one-time display)
     receipt_token = request.session.pop(f"receipt_token_{slug}", None)
+    # One-time echo of the participant's resolved category values (issue
+    # #349 decision 4). Enriched with display names when the survey exists;
+    # the values are the participant's own context, auto-escaped by the
+    # template.
+    category_values = request.session.pop(f"category_values_{slug}", None)
+    category_echo: list[tuple[str, str]] = []
+    if category_values and survey is not None:
+        labels = {c.name: c.display_name for c in survey.respondent_categories.all()}
+        category_echo = [
+            (labels.get(dim, dim), val) for dim, val in category_values.items()
+        ]
 
     # Render generic thank you even if survey missing to avoid information leakage
     return render(
@@ -7659,6 +7825,7 @@ def survey_thank_you(request: HttpRequest, slug: str) -> HttpResponse:
             "survey": survey,
             "is_preview": False,
             "receipt_token": receipt_token,
+            "category_echo": category_echo,
         },
     )
 

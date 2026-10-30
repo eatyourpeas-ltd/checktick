@@ -294,6 +294,17 @@ From your dashboard:
 - Resend invitations to non-responders
 - Export invitation data to CSV
 
+### Category Values for Token Batches
+
+Surveys with respondent categories (see [Survey Layouts (Technical)](
+survey-layouts-technical.md) §Respondent categories) assign category
+values per token batch — a 360° survey generates one batch per rater
+role and subject. On the Invite Tokens page, pick a value per category
+when generating a batch; every token in the batch carries those values,
+and each participant sees only the sections — and, in content blocks,
+the `{{placeholder}}` text — resolved for their batch. The tokens CSV
+export includes a `category_<dimension>` column per category.
+
 ## Participant Experience
 
 ### Progress Saving and Resume

@@ -1092,6 +1092,52 @@ For non-matrix layouts, a "landing page" or "section intro" is simply a
 renders sections in order, so a single-content-block section renders as
 a static page between question sections.
 
+### Category substitution
+
+Content block `heading`, `subtitle`, and `body_md` support
+`{{<dimension>}}` placeholders that are substituted at render time with
+the participant's resolved respondent-category values (see §Respondent
+categories). The 360° pattern is the first consumer — an author writes
+`heading: 360° feedback for {{subject}}` and every rater invited for
+that subject sees the clinician's name.
+
+Substitution happens in `_annotate_question_render_sequence`, which
+takes a `category_values` map:
+
+- **Live take path** — the map from `_resolve_categories_for_progress`
+  (empty when anonymous / no categories).
+- **Preview path** — the `?simulate_category=` values; the Simulate
+  category panel is the documented way to see substituted values, and
+  it shows a hint when any content block carries a placeholder.
+- **Builder detail path** — no map; the author sees the raw placeholder
+  exactly as typed.
+
+Rules:
+
+- **Unknown dimension** (not defined on the survey) — left literal, so a
+  typo like `{{subjekt}}` renders visibly and the author catches it in
+  preview.
+- **Known but unresolved dimension** — empty string (same semantics as
+  the visibility rules: unresolved = not shown).
+- **Escaping** — `heading` / `subtitle` substitute the raw value and rely
+  on template auto-escaping; `body_md` substitutes **after**
+  `render_content_block_markdown`, inserting an entity-escaped value
+  into the sanitised HTML — never through `|safe` paths unescaped.
+  Placeholders inside code spans and link labels also substitute
+  (harmless, escaped).
+- **Delphi inter-round feedback** — substitution applies to author-written
+  text only (heading / subtitle / authored `body_md`); the system-generated
+  feedback body is never substituted.
+- **Thank-you page** — the submission handlers stash the resolved values
+  in the session (same one-time pattern as the receipt token) and the
+  thank-you page echoes them as auto-escaped badges.
+
+Placeholders survive the outline export → import round-trip as literal
+text (`test_export_content_block_placeholder_round_trip`). They belong
+in the `heading:` / `subtitle:` config lines and the body — not the
+internal label, where `## Name {slug}` braces could be misparsed as a
+slug.
+
 ### Outline grammar
 
 ```text
@@ -1630,6 +1676,10 @@ Built on **respondent categories** (see §Respondent categories above):
 - Sections tagged with `required_categories` so each rater role sees
   only its question set about the same subject.
 - Invite tokens carry the `rater_role` value for that batch.
+- Content blocks can address the subject directly — `heading: 360°
+  feedback for {{subject}}` substitutes the assessed clinician's name
+  for every rater in that subject's batches (see §Content blocks §Category
+  substitution).
 - No new runtime hook, no new `MultiRaterMenu` model, no new layout
   enum value. The 360 *instrument* (the actual question set) ships in
   the question bank as a ready-made template.
