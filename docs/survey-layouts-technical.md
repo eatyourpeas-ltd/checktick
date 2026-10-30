@@ -1099,7 +1099,11 @@ Content block `heading`, `subtitle`, and `body_md` support
 the participant's resolved respondent-category values (see §Respondent
 categories). The 360° pattern is the first consumer — an author writes
 `heading: 360° feedback for {{subject}}` and every rater invited for
-that subject sees the clinician's name.
+that subject sees the clinician's name. An optional
+`{{<dimension>|default:<text>}}` segment supplies fallback text for the
+known-but-unresolved case (issue #351): `{{subject|default:your
+colleague}}` renders "your colleague" when the token batch carries no
+subject value.
 
 Substitution happens in `_annotate_question_render_sequence`, which
 takes a `category_values` map:
@@ -1116,15 +1120,26 @@ Rules:
 
 - **Unknown dimension** (not defined on the survey) — left literal, so a
   typo like `{{subjekt}}` renders visibly and the author catches it in
-  preview.
-- **Known but unresolved dimension** — empty string (same semantics as
-  the visibility rules: unresolved = not shown).
+  preview — including any `|default:` segment: the fallback never
+  masks a typo.
+- **Known but unresolved dimension** — the placeholder's optional
+  `|default:<text>` fallback when present (issue #351), else an empty
+  string (same semantics as the visibility rules: unresolved = not
+  shown). A resolved value always wins over the default; an empty-string
+  value counts as unresolved.
 - **Escaping** — `heading` / `subtitle` substitute the raw value and rely
   on template auto-escaping; `body_md` substitutes **after**
   `render_content_block_markdown`, inserting an entity-escaped value
   into the sanitised HTML — never through `|safe` paths unescaped.
   Placeholders inside code spans and link labels also substitute
-  (harmless, escaped).
+  (harmless, escaped). The `|default:` text is authored source text, not
+  participant data: it substitutes as typed on the plain-text fields
+  (auto-escaped by the template) and as-rendered on the `body_md` path —
+  markdown has already escaped and sanitised it with the surrounding
+  body (`&` → `&amp;`), so it is never re-escaped (that would
+  double-encode to `&amp;amp;`). It cannot form tags or attributes: any
+  `<` it carries is by then either an allowlisted sanitised tag or an
+  `&lt;` entity.
 - **Delphi inter-round feedback** — substitution applies to author-written
   text only (heading / subtitle / authored `body_md`); the system-generated
   feedback body is never substituted.
