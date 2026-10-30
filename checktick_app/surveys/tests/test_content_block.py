@@ -339,7 +339,12 @@ def test_export_content_block_placeholder_round_trip(client, django_user_model):
     """{{subject}} placeholders must survive export → import as literal
     text (issue #349 edge case 2 — the exporter and the Markdown importer
     must not mangle them). Placeholders live in the heading:/subtitle:
-    config lines and the body, not the internal label."""
+    config lines, the body, and link labels (issue #352) — not the internal
+    label.
+
+    Consent statements are not part of the outline grammar (the exporter
+    drops the consent config), so there is no consent round-trip to guard.
+    """
     from checktick_app.surveys.models import QuestionGroup
     from checktick_app.surveys.views import _export_survey_to_markdown
 
@@ -358,7 +363,12 @@ def test_export_content_block_placeholder_round_trip(client, django_user_model):
             "heading": "360° feedback for {{subject}}",
             "subtitle": "You are rating {{subject}}",
             "body_md": "Thank you for rating {{subject}} in this round.",
-            "links": [],
+            "links": [
+                {
+                    "label": "Privacy notice for {{subject}}",
+                    "url": "https://example.com/privacy",
+                }
+            ],
             "image_id": None,
             "consent": None,
             "render_once": True,
@@ -371,6 +381,9 @@ def test_export_content_block_placeholder_round_trip(client, django_user_model):
     assert "heading: 360° feedback for {{subject}}" in exported
     assert "subtitle: You are rating {{subject}}" in exported
     assert "Thank you for rating {{subject}} in this round." in exported
+    assert (
+        "link: Privacy notice for {{subject}}|https://example.com/privacy" in exported
+    )
 
     # Re-import into a fresh survey — the placeholders survive intact.
     survey2 = Survey.objects.create(owner=user, name="ReimportPH", slug="reimport-ph")
@@ -387,6 +400,8 @@ def test_export_content_block_placeholder_round_trip(client, django_user_model):
     assert q.options["heading"] == "360° feedback for {{subject}}"
     assert q.options["subtitle"] == "You are rating {{subject}}"
     assert q.options["body_md"] == "Thank you for rating {{subject}} in this round."
+    assert q.options["links"][0]["label"] == "Privacy notice for {{subject}}"
+    assert q.options["links"][0]["url"] == "https://example.com/privacy"
 
 
 @pytest.mark.django_db

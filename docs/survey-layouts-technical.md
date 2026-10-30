@@ -1094,12 +1094,16 @@ a static page between question sections.
 
 ### Category substitution
 
-Content block `heading`, `subtitle`, and `body_md` support
+Content block `heading`, `subtitle`, `body_md`, each `links[].label`, and
+the `consent.statement` support
 `{{<dimension>}}` placeholders that are substituted at render time with
 the participant's resolved respondent-category values (see §Respondent
 categories). The 360° pattern is the first consumer — an author writes
 `heading: 360° feedback for {{subject}}` and every rater invited for
-that subject sees the clinician's name. An optional
+that subject sees the clinician's name. Link labels and consent
+statements substitute the same way (issue #352): `link: Privacy notice
+for {{subject}}|…` and `I confirm my feedback for {{subject}} may be
+shared…`. An optional
 `{{<dimension>|default:<text>}}` segment supplies fallback text for the
 known-but-unresolved case (issue #351): `{{subject|default:your
 colleague}}` renders "your colleague" when the token batch carries no
@@ -1127,7 +1131,8 @@ Rules:
   string (same semantics as the visibility rules: unresolved = not
   shown). A resolved value always wins over the default; an empty-string
   value counts as unresolved.
-- **Escaping** — `heading` / `subtitle` substitute the raw value and rely
+- **Escaping** — `heading` / `subtitle` / link labels / consent statements
+  substitute the raw value and rely
   on template auto-escaping; `body_md` substitutes **after**
   `render_content_block_markdown`, inserting an entity-escaped value
   into the sanitised HTML — never through `|safe` paths unescaped.
@@ -1141,17 +1146,19 @@ Rules:
   `<` it carries is by then either an allowlisted sanitised tag or an
   `&lt;` entity.
 - **Delphi inter-round feedback** — substitution applies to author-written
-  text only (heading / subtitle / authored `body_md`); the system-generated
-  feedback body is never substituted.
+  text only (heading / subtitle / authored `body_md` / link labels); the
+  system-generated feedback body is never substituted.
 - **Thank-you page** — the submission handlers stash the resolved values
   in the session (same one-time pattern as the receipt token) and the
   thank-you page echoes them as auto-escaped badges.
 
 Placeholders survive the outline export → import round-trip as literal
 text (`test_export_content_block_placeholder_round_trip`). They belong
-in the `heading:` / `subtitle:` config lines and the body — not the
-internal label, where `## Name {slug}` braces could be misparsed as a
-slug.
+in the `heading:` / `subtitle:` config lines, the body, and `link:`
+labels — not the internal label, where `## Name {slug}` braces could be
+misparsed as a slug. (Consent statements are not part of the outline
+grammar — the exporter drops the consent config — so there is no consent
+round-trip to guard.)
 
 ### Outline grammar
 
