@@ -2198,9 +2198,11 @@ def _render_delphi_feedback_summary(feedback_rows: list) -> str:
 
 # {{<dimension>}} placeholder in content block heading / subtitle / body_md,
 # substituted with the participant's resolved respondent-category values at
-# render time. See docs/content-block-category-substitution-implementation-
-# plan.md §Substitution contract.
-_CATEGORY_PLACEHOLDER_RE = re.compile(r"\{\{([A-Za-z0-9_]+)\}\}")
+# render time. An optional ``|default:<text>`` segment supplies fallback
+# text for the known-but-unresolved case (issue #351). See docs/
+# content-block-category-substitution-implementation-plan.md
+# §Substitution contract.
+_CATEGORY_PLACEHOLDER_RE = re.compile(r"\{\{([A-Za-z0-9_]+)(?:\|default:([^}]*))?\}\}")
 
 
 def _substitute_category_placeholders(
@@ -2219,13 +2221,21 @@ def _substitute_category_placeholders(
       shows the raw placeholder exactly as typed).
     - Unknown dimension (not defined on the survey) → left literal, so a
       typo like ``{{subjekt}}`` renders visibly and the author catches it
-      in preview.
-    - Known but unresolved dimension → empty string (same semantics as
-      the visibility rules: unresolved = not shown).
+      in preview — including when the placeholder carries a ``|default:``
+      segment (the default must not mask the typo).
+    - Known but unresolved dimension → the placeholder's optional
+      ``{{dim|default:<text>}}`` fallback when present (issue #351), else
+      an empty string (same semantics as the visibility rules: unresolved
+      = not shown). A resolved value always wins over the default.
     - ``escape_values=True`` inserts ``escape(value)`` — for substitution
       into already-rendered, sanitised HTML (the ``body_md`` path). The
       plain-text fields (heading / subtitle) substitute the raw value and
-      rely on template auto-escaping.
+      rely on template auto-escaping. The ``|default:`` text is authored
+      source text, not participant data: it substitutes as typed on the
+      plain-text fields (auto-escaped by the template) and as-rendered
+      on the ``body_md`` path — markdown has already escaped and
+      sanitised it with the surrounding body, so it is never re-escaped
+      (that would double-encode entities like ``&`` → ``&amp;amp;``).
     """
     if not text or category_values is None:
         return text or ""
@@ -2235,7 +2245,16 @@ def _substitute_category_placeholders(
         if dim not in known_dims:
             return match.group(0)
         value = str(category_values.get(dim, ""))
-        return escape(value) if escape_values else value
+        if value:
+            return escape(value) if escape_values else value
+        # Known but unresolved: fall back to the placeholder's optional
+        # ``|default:`` text (issue #351), else render empty (unresolved =
+        # not shown). The default is authored source text, inserted as
+        # typed / as-rendered (see docstring) — it cannot form tags or
+        # attributes: by the time substitution sees it, any ``<`` it
+        # carries is either an allowlisted sanitised tag or an ``&lt;``
+        # entity, and quotes in text content are inert.
+        return match.group(2) or ""
 
     return _CATEGORY_PLACEHOLDER_RE.sub(_repl, text)
 

@@ -81,8 +81,10 @@ Builds entirely on respondent categories (v0.20,
     raw placeholder, exactly as typed.
 - **Rules:**
   - Unknown dimension (not defined on the survey): left literal —
-    `{{subjekt}}` renders visibly so the author catches it in preview.
-  - Known but unresolved: empty string.
+    `{{subjekt}}` renders visibly so the author catches it in preview,
+    `|default:` segment included (the fallback never masks a typo).
+  - Known but unresolved: the optional `{{dim|default:<text>}}`
+    fallback when present (issue #351), else an empty string.
   - Escaping: `heading` / `subtitle` substitute as plain strings and rely on
     template auto-escaping (`detail.html` emits them unmarked). `body_md`
     substitutes **after** `render_content_block_markdown`, inserting
@@ -98,6 +100,13 @@ Builds entirely on respondent categories (v0.20,
   escape_values)` next to the annotator, unit-tested in isolation. Known
   dimension names come from `survey.respondent_categories` (fetched once per
   annotator call when a content block is present).
+
+  The `|default:` fallback (issue #351) is authored source text, not
+  participant data: it substitutes as typed on the plain-text fields
+  (template auto-escaping applies) and as-rendered on the `body_md` path —
+  markdown has already escaped and sanitised it with the body, so it is
+  never re-escaped. `_CATEGORY_PLACEHOLDER_RE` captures the optional
+  `|default:...` segment (no `}` allowed in the fallback text).
 
 ## Commit plan
 
@@ -125,8 +134,10 @@ Each commit is self-contained: code + tests + the doc line it implements.
 
 ## Out of scope (follow-ups)
 
-- Per-block default text for unresolved dimensions
-  (e.g. `{{subject|default:your colleague}}`).
+- ~~Per-block default text for unresolved dimensions
+  (e.g. `{{subject|default:your colleague}}`)~~ — shipped in issue #351
+  (`_CATEGORY_PLACEHOLDER_RE` captures the optional `|default:` segment;
+  see §Substitution contract).
 - Substitution in link labels and consent statements.
 - Free-text dimension values (large rotating rosters).
 - Token-level subject override; "Generate full 360 set for a subject" batch
