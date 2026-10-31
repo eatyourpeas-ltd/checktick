@@ -1,0 +1,154 @@
+# OPTIONAL: PostgreSQL in-cluster via the CloudNativePG operator.
+#
+# The budget alternative to the Civo managed database (whose entry tier is
+# ~$43/mo for 2 vCPU / 4 GB): two small instances on nodes you already pay
+# for, with automated failover, scheduled base backups and WAL archiving to
+# S3-compatible object storage (Civo Object Storage) — i.e. point-in-time
+# recovery, which this application's medical-data posture requires.
+#
+# Prerequisites (this file is deliberately NOT in kustomization.yaml):
+#   1. Install the CloudNativePG operator — v1.30.1 at POC time (the
+#      1.28/1.29 lines are end-of-life). Note the filename convention:
+#      releases/cnpg-X.Y.Z.yaml (verified against the repo listing):
+#      kubectl apply --server-side -f \
+#        https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/v1.30.1/releases/cnpg-1.30.1.yaml
+#   2. Generate a URL-safe password:  openssl rand -hex 24
+#      (hex avoids characters that would need percent-encoding in
+#      DATABASE_URL), then create the bootstrap Secret that initdb uses
+#      for the `checktick` database owner:
+#      kubectl create secret generic checktick-db-creds -n checktick \
+#        --from-literal=username=checktick \
+#        --from-literal=password='<generated password>'
+#   3. Retrieve the credential's two values (creation does NOT display
+#      them — see Civo docs "Object store credentials"):
+#        dashboard: Object stores -> Credentials management -> drop down
+#        the credential -> Access Key ID + hidden secret key
+#        CLI: civo objectstore credential ls                       # access key
+#             civo objectstore credential secret -a <ACCESS_KEY>   # secret key
+#      then create the backup-credentials Secret:
+#      kubectl create secret generic checktick-db-backup-creds -n checktick \
+#        --from-literal=ACCESS_KEY_ID='<access key>' \
+#        --from-literal=SECRET_ACCESS_KEY='<secret key>'
+#      NOTE: the UIDs shown against the store/credential in the dashboard
+#      are Civo resource IDs, NOT S3 keys — they are not used anywhere.
+#   4. Endpoint and destinationPath are set for the checktick-backups
+#      store (objectstore.lon1.civo.com); then:
+#      kubectl apply -f k8s/postgres-cnpg.yaml
+#
+# The app connects to the generated read/write service. Put the SAME
+# password you generated above into your local git-ignored k8s/secrets.env
+# (CNPG does not need to be referenced by the web Deployment at all):
+#   DATABASE_URL=postgresql://checktick:<password>@checktick-db-rw:5432/checktick
+#
+# Alternative: delete the initdb `secret:` block and CNPG will generate a
+# random password for you, publishing a ready-made connection string in
+# the checktick-db-app Secret:
+#   kubectl get secret checktick-db-app -n checktick \
+#     -o jsonpath='{.data.uri}' | base64 -d
+# (Bring-your-own is the documented flow because it keeps a single rotation
+# point. Never wire the checktick-db-superuser Secret into the app.)
+#
+# Rotation: update the checktick-db-creds Secret — the operator reconciles
+# the role password — then update checktick-secrets with the same value and
+# `kubectl rollout restart deploy/checktick-web` (pods read env at start).
+#
+# Verify field names against your operator version before applying — CNPG's
+# schema evolves between releases.
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: checktick-db
+  namespace: checktick
+spec:
+  instances: 2 # primary + one streaming replica; operator handles failover
+  # Pin a specific 17.x tag from the CNPG image releases.
+  # The 16 -> 17 major upgrade happens via the cutover pg_dump/restore
+  # (docs/migration-northflank-to-civo.md, safety rule 3) — never via
+  # pg_upgrade-in-place on the first migration.
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  # Civo's object store rejects the default payload-checksum mode of modern
+  # S3 clients (boto3 >= 1.36 / aws-cli v2): every upload fails with
+  # XAmzContentSHA256Mismatch on PutObject (POC finding, proven by test
+  # uploads with and without these variables). These switch the client back
+  # to the compatible behaviour; barman inherits them from the pod env.
+  # Any future uploader to this bucket (SNOMED CI step, OpenObserve) needs
+  # the same two variables.
+  env:
+    - name: AWS_REQUEST_CHECKSUM_CALCULATION
+      value: "when_required"
+    - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+      value: "when_required"
+  bootstrap:
+    initdb:
+      database: checktick
+      owner: checktick
+      secret:
+        name: checktick-db-creds
+  postgresql:
+    parameters:
+      shared_buffers: 512MB # right-size for a small user base
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+  storage:
+    size: 10Gi
+    # storageClassName omitted -> cluster default. On Civo that is
+    # civo-volume (CSI block storage, RWO — correct for Postgres data).
+    # POC finding: Civo does NOT ship Longhorn; an explicit "longhorn"
+    # class left the PVC permanently Pending. Availability comes from the
+    # operator-managed replica + PITR from object storage, not volume
+    # replication.
+    # storageClass: civo-volume
+  affinity:
+    # Never co-locate primary and replica on one node
+    podAntiAffinityType: required
+  # NOTE: in-tree Barman configuration (below) is deprecated and REMOVED
+  # in CNPG 1.31. Works fully in 1.30.x; before any operator upgrade past
+  # 1.30, migrate to the Barman Cloud Plugin (runbook Phase 6 backlog).
+  backup:
+    retentionPolicy: 30d
+    barmanObjectStore:
+      # One shared bucket, CNPG under the /db prefix (SNOMED builds and logs
+      # will use /snomed and /logs). Barman lays out base/ + wals/ inside.
+      destinationPath: s3://checktick-backups/db
+      # S3 endpoint (host only — the bucket name lives in destinationPath).
+      # The store's dashboard URL is https://objectstore.lon1.civo.com/checktick-backups
+      endpointURL: https://objectstore.lon1.civo.com
+      s3Credentials:
+        accessKeyId:
+          name: checktick-db-backup-creds
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: checktick-db-backup-creds
+          key: SECRET_ACCESS_KEY
+        # SigV4 signing region — CNPG requires a SecretKeySelector here,
+        # NOT a plain string (the validating webhook rejects bare values).
+        # Without a region barman signs for us-east-1 and Civo rejects
+        # every WAL archive (barman exit status 4). Add the key once:
+        #   kubectl -n checktick patch secret checktick-db-backup-creds \
+        #       -p '{"stringData":{"REGION":"lon1"}}'
+        region:
+          name: checktick-db-backup-creds
+          key: REGION
+      data:
+        compression: gzip
+      wal:
+        compression: gzip # WAL archiving = point-in-time recovery
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: checktick-db-backup
+  namespace: checktick
+spec:
+  # CNPG's cron is SIX fields (seconds first) — unlike Kubernetes CronJob
+  # schedules, which are five. Without the leading seconds field the
+  # operator warns that the schedule may be misparsed.
+  schedule: "0 0 2 * * *" # daily at 02:00:00 UTC
+  backupOwnerReference: self
+  cluster:
+    name: checktick-db

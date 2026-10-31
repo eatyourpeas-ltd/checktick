@@ -1,0 +1,198 @@
+# CheckTick web application: Deployment, Service, PVCs, PodDisruptionBudget.
+#
+# Zero-downtime design notes:
+# - RollingUpdate maxUnavailable: 0 / maxSurge: 1 — a new pod only receives
+#   traffic once /healthz passes; old pods keep serving during the overlap.
+# - readinessProbe = /healthz (deep: DB + Vault sealed state + SNOMED).
+# - livenessProbe = /api/health (trivial). NEVER point liveness at /healthz:
+#   a sealed Vault would cause restart loops, and restarts cannot fix it.
+# - preStop sleep lets Traefik converge endpoints before SIGTERM; gunicorn's
+#   default graceful timeout (30s) fits inside terminationGracePeriodSeconds.
+# - Migrations do NOT run at container start (image CMD is gunicorn-only);
+#   apply migrate-job.yaml before each deploy instead.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: checktick-media
+  namespace: checktick
+spec:
+  # RWX (Longhorn/NFS-backed): during a rolling update the surge pod mounts
+  # the volume while the old pod still holds it, possibly on another node.
+  accessModes: ["ReadWriteMany"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: checktick-snomed-data
+  namespace: checktick
+spec:
+  # RWX: the update-snomed-db CronJob writes it while web initContainers on
+  # every node read it. Web pods never open SQLite from this share directly —
+  # each pod copies snomed.db to a node-local emptyDir at startup.
+  accessModes: ["ReadWriteMany"]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checktick-web
+  namespace: checktick
+  labels:
+    app: checktick-web
+spec:
+  replicas: 2 # POC; raise to 3 for production (survives a node failure + a rollout simultaneously)
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: checktick-web
+  template:
+    metadata:
+      labels:
+        app: checktick-web
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: checktick-web
+      terminationGracePeriodSeconds: 45
+      initContainers:
+        # Longhorn RWX (NFS) does not honour fsGroup, so the media share starts
+        # root-owned and the container user cannot write. Chown once at boot
+        # using the image's own checktick user (uid is assigned by useradd -r,
+        # so resolve it rather than hardcoding).
+        - name: media-chown
+          image: ghcr.io/eatyourpeas-ltd/checktick:latest
+          command: ["sh", "-c", "chown -R \"$(id -u checktick):$(id -g checktick)\" /app/media"]
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: media
+              mountPath: /app/media
+        # Copy snomed.db to node-local storage so SQLite is never opened over
+        # NFS. Tolerates absence: healthz reports snomed degraded, not fatal,
+        # until the first update-snomed-db run builds it.
+        - name: snomed-copy
+          image: ghcr.io/eatyourpeas-ltd/checktick:latest
+          command:
+            - sh
+            - -c
+            - |
+              if [ -f /snomed-source/snomed.db ]; then
+                cp /snomed-source/snomed.db /app-data/snomed.db
+              else
+                echo "snomed.db not present on the volume yet; skipping copy"
+              fi
+          volumeMounts:
+            - name: snomed-share
+              mountPath: /snomed-source
+              readOnly: true
+            - name: snomed-local
+              mountPath: /app-data
+      containers:
+        - name: web
+          # Pin to a released version tag (docs/versioning-and-deployment.md)
+          # for anything beyond the POC; update via `kubectl set image`.
+          image: ghcr.io/eatyourpeas-ltd/checktick:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: checktick-config
+            - secretRef:
+                name: checktick-secrets
+          # startupProbe gives slow first boots headroom before readiness is
+          # consulted (image pull, SNOMED copy, Vault auth).
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 2
+            successThreshold: 1
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 10"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 500m
+            limits:
+              memory: 2Gi
+              cpu: "2"
+          volumeMounts:
+            - name: media
+              mountPath: /app/media
+            - name: snomed-local
+              mountPath: /app/data
+              readOnly: true
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: checktick-media
+        - name: snomed-share
+          persistentVolumeClaim:
+            claimName: checktick-snomed-data
+        - name: snomed-local
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checktick-web
+  namespace: checktick
+  labels:
+    app: checktick-web
+spec:
+  selector:
+    app: checktick-web
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: checktick-web
+  namespace: checktick
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: checktick-web

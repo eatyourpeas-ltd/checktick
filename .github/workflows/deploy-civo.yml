@@ -1,0 +1,153 @@
+# Deploys a published CheckTick image from GHCR to the Civo cluster.
+#
+# This is the Kubernetes replacement for the Northflank deployment webhook.
+# The image itself is built and published by docker-publish.yml; this
+# workflow deploys a tag that already exists in GHCR.
+#
+# One-time setup:
+#   civo k8s config <cluster-name> > kubeconfig.yaml   # or download from the Civo dashboard
+#   base64 < kubeconfig.yaml | gh secret set CIVO_KUBECONFIG
+#   rm kubeconfig.yaml
+#
+#   The kubeconfig is cluster-admin for now; a least-privilege
+#   ServiceAccount kubeconfig is on the migration runbook's Phase 6
+#   hardening backlog (docs/migration-northflank-to-civo.md).
+#
+# Deploy sequence (zero downtime):
+#   1. pre-deploy Job (migrate + idempotent syncs) pinned to the SAME tag
+#   2. rolling update of the web Deployment (maxUnavailable: 0)
+#   3. rollout must pass readiness (/healthz gates traffic)
+#   4. smoke check against the service
+#   5. automatic rollback if anything fails after the image changed
+#
+# Migration discipline: if step 1 succeeds but the rollout is rolled back,
+# the PREVIOUS image briefly runs against the NEW schema. Migrations must
+# therefore stay expansion/contract (additive for one release) — see the
+# runbook and k8s/README.md.
+#
+# NOTE: docker-publish.yml keeps calling the Northflank webhook on main
+# publishes until the cutover is complete; swapping that step for a call to
+# this workflow is runbook Phase 6 work, deliberately not done in advance.
+# Add protection rules (required reviewers) to the `civo` GitHub
+# environment to make dispatch a gated production deploy.
+
+name: Deploy (Civo)
+
+on:
+  workflow_dispatch:
+    inputs:
+      image-tag:
+        description: "GHCR image tag to deploy (a published release tag)"
+        default: "latest"
+        required: false
+        type: string
+      namespace:
+        description: "Namespace to deploy into"
+        default: "checktick"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never two deploys racing in the same namespace
+  group: deploy-civo-${{ inputs.namespace }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/eatyourpeas-ltd/checktick
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: civo
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Configure kubectl
+        env:
+          KUBECONFIG: ${{ runner.temp }}/kubeconfig
+        run: |
+          printf '%s' "${{ secrets.CIVO_KUBECONFIG }}" | base64 -d > "$KUBECONFIG"
+          chmod 600 "$KUBECONFIG"
+
+      - name: Pre-flight check
+        env:
+          NS: ${{ inputs.namespace }}
+        run: |
+          kubectl -n "$NS" get deploy checktick-web
+          kubectl -n "$NS" get secret checktick-secrets
+
+      - name: Pre-deploy job (migrations + syncs)
+        env:
+          NS: ${{ inputs.namespace }}
+          TAG: ${{ inputs.image-tag }}
+        run: |
+          # Job specs are immutable — clear any previous run first
+          kubectl -n "$NS" delete job checktick-predeploy --ignore-not-found
+          # Pin the migrate job to the exact tag being deployed so the
+          # migration always runs with the code it belongs to
+          sed "s|checktick:latest|checktick:${TAG}|" k8s/migrate-job.yaml \
+            | kubectl apply -f -
+          kubectl -n "$NS" wait --for=condition=complete \
+            job/checktick-predeploy --timeout=300s
+
+      - name: Roll out new image
+        id: set_image
+        env:
+          NS: ${{ inputs.namespace }}
+          TAG: ${{ inputs.image-tag }}
+        run: |
+          kubectl -n "$NS" set image deployment/checktick-web \
+            web="${IMAGE}:${TAG}"
+
+      - name: Wait for rollout (readiness-gated, zero downtime)
+        env:
+          NS: ${{ inputs.namespace }}
+        run: |
+          kubectl -n "$NS" rollout status deployment/checktick-web \
+            --timeout=300s
+
+      - name: Smoke check (/healthz via the service)
+        env:
+          NS: ${{ inputs.namespace }}
+          TAG: ${{ inputs.image-tag }}
+        run: |
+          # Uses the app image itself (curl is installed in it) so no
+          # third-party image is needed; tests service DNS + a ready pod
+          kubectl -n "$NS" run "deploy-smoke-${GITHUB_RUN_ID}" \
+            --restart=Never -i --rm \
+            --image="${IMAGE}:${TAG}" \
+            --command -- curl -fsS --max-time 10 \
+            "http://checktick-web.${NS}.svc.cluster.local:8000/healthz"
+          echo "OK: /healthz healthy after deploy"
+
+      - name: Diagnose failure
+        if: failure()
+        env:
+          NS: ${{ inputs.namespace }}
+        run: |
+          kubectl -n "$NS" describe job checktick-predeploy || true
+          kubectl -n "$NS" logs job/checktick-predeploy --tail=100 || true
+          kubectl -n "$NS" get pods -l app=checktick-web -o wide || true
+
+      - name: Rollback on failure
+        if: failure() && steps.set_image.outcome == 'success'
+        env:
+          NS: ${{ inputs.namespace }}
+        run: |
+          echo "! deploy failed after the image changed — rolling back"
+          kubectl -n "$NS" rollout undo deployment/checktick-web
+          kubectl -n "$NS" rollout status deployment/checktick-web \
+            --timeout=180s
+
+      - name: Report deployed image
+        if: success()
+        env:
+          NS: ${{ inputs.namespace }}
+        run: |
+          kubectl -n "$NS" get deploy checktick-web \
+            -o jsonpath='{.spec.template.spec.containers[0].image} is live'

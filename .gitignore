@@ -279,3 +279,9 @@ axecore-new.js
 sortable-new.js
 
 temp_keys/*
+
+# Kubernetes — local unencrypted secret env files (never commit; see k8s/README.md)
+k8s/secrets.env
+kubeconfig.yaml
+k8s/scratch-secret.env
+.venv-vault/

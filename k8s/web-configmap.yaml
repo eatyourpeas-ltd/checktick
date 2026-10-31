@@ -1,0 +1,50 @@
+# Non-sensitive application configuration for CheckTick.
+# Everything here is safe to publish: defaults, hostnames, URLs.
+# Secrets live in the `checktick-secrets` Secret, created from a local
+# git-ignored env file (see k8s/README.md).
+#
+# SECURITY: PLATFORM_CUSTODIAN_COMPONENT must NEVER appear here or in any
+# environment/secret — settings.py hard-fails if it is set (split-knowledge
+# control F6, see docs/vault.md).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: checktick-config
+  namespace: checktick
+data:
+  # --- Core Django ---
+  DEBUG: "False"
+  # Replace with the real hostname before going live
+  ALLOWED_HOSTS: "checktick.example,localhost"
+  CSRF_TRUSTED_ORIGINS: "https://checktick.example"
+  SECURE_SSL_REDIRECT: "True"
+
+  # --- Vault ---
+  # POC: HTTP-internal behind the vault-airgap NetworkPolicy (no egress,
+  # ingress only from web pods). Cutover hardening: cert-manager internal TLS
+  # and VAULT_TLS_VERIFY=true — docs/migration-northflank-to-civo.md Phase 6.
+  VAULT_ADDR: "http://vault.checktick.svc.cluster.local:8200"
+  VAULT_TLS_VERIFY: "false"
+
+  # --- SNOMED CT ---
+  # Node-local path; an initContainer copies snomed.db here from the shared
+  # PVC so SQLite is never opened over NFS
+  SNOMED_DB_PATH: "/app/data/snomed.db"
+
+  # --- External datasets ---
+  EXTERNAL_DATASET_API_URL: "https://api.rcpch.ac.uk"
+
+  # --- Branding (defaults match docker-compose.registry.yml) ---
+  BRAND_TITLE: "CheckTick"
+  BRAND_ICON_URL: "/static/favicon.ico"
+  BRAND_THEME: "checktick"
+  BRAND_FONT_HEADING: "'IBM Plex Mono', ui-sans-serif, system-ui"
+  BRAND_FONT_BODY: "Merriweather, ui-serif, Georgia"
+  BRAND_FONT_CSS_URL: "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=Merriweather:wght@300;400;700&display=swap"
+
+  # --- Email (credentials go in the Secret) ---
+  EMAIL_HOST: "smtp.gmail.com"
+  EMAIL_PORT: "587"
+  EMAIL_USE_TLS: "True"
+  DEFAULT_FROM_EMAIL: "no-reply@checktick.example"
+  SERVER_EMAIL: "server@checktick.example"

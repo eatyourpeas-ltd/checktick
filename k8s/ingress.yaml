@@ -1,0 +1,32 @@
+# Ingress via the Civo-managed Traefik controller, TLS via cert-manager.
+# Before applying: install cert-manager, create a ClusterIssuer (or replace
+# the annotation with your issuer name), and set a real hostname in both the
+# annotation, the tls section, and the host rule (also update ALLOWED_HOSTS /
+# CSRF_TRUSTED_ORIGINS in web-configmap.yaml).
+#
+# POC shortcut if you want to skip TLS initially: kubectl port-forward
+# svc/checktick-web 8000:8000 -n checktick
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: checktick
+  namespace: checktick
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - checktick.example
+      secretName: checktick-tls
+  rules:
+    - host: checktick.example
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: checktick-web
+                port:
+                  name: http

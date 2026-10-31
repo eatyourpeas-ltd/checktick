@@ -1,0 +1,16 @@
+# One-shot apply:  kubectl apply -k k8s/
+# The checktick-secrets Secret is intentionally NOT managed by kustomize —
+# create it from the local git-ignored env file (see k8s/README.md).
+# k8s/postgres-cnpg.yaml (optional in-cluster DB) is also excluded: it
+# requires the CloudNativePG operator to be installed first. Apply it
+# separately if you choose that path — see k8s/README.md "Database options".
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - web-configmap.yaml
+  - vault.yaml
+  - web.yaml
+  - migrate-job.yaml
+  - cronjobs.yaml
+  - ingress.yaml
