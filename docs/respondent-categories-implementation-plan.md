@@ -450,7 +450,11 @@ panel, section_menu picker):
   where the author adds dimensions (free-text name + label), types
   allowed values as a comma-separated list, and picks a resolution
   source per dimension. For `self_select`, points at the question
-  whose answer populates the dimension.
+  whose answer populates the dimension. A per-dimension "Free-text
+  values" checkbox (issue #353) switches the token-batch form from the
+  roster `<select>` to a text input; the roster authoring UI is kept
+  for non-free-text dimensions, and `allowed_values` still feeds
+  section visibility rules and system assignment either way.
 - **Section tagging:** on each group card in the organise page, a
   "Visible to" control per dimension (multi-select of allowed values,
   or "everyone"). Groups with no tag are visible to all. This is the
@@ -458,6 +462,15 @@ panel, section_menu picker):
 - **Token batch generation:** when creating a batch, a "Category values
   for this batch" field (e.g. `rater_role = peer`). Written to
   `SurveyAccessToken.category_values` for every token in the batch.
+  Dimensions flagged **free-text** (issue #353) render a text input
+  instead of the `<select>` roster, for large rotating rosters that would
+  otherwise be re-authored every intake. Typed values are trimmed and
+  stored the same way. Mitigations against the typo-split problem the
+  roster existed to prevent: the batch form offers already-used values
+  as datalist suggestions, distinct-value counts are surfaced on the
+  Tokens page, and `survey_tokens` warns (fuzzy match, 0.8 cutoff) when
+  a newly typed value nearly duplicates one already used by another
+  batch.
 - **Take page:** the participant sees nothing category-related — they
   just get their filtered question set. No picker (unlike
   section_menu). If resolution is `self_select`, the self-select

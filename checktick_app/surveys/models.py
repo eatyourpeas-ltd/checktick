@@ -4762,7 +4762,12 @@ class RespondentCategory(models.Model):
     key used in ``required_categories`` rules and ``category_values`` maps;
     the UI shows ``display_name`` instead so authors never have to read the
     underscore key. ``allowed_values`` is the free-text options list the
-    author types on the Organise page. ``resolution_source`` records how
+    author types on the Organise page. ``free_text`` opts a dimension out
+    of the roster: the token-batch form renders a text input instead of a
+    ``<select>`` over ``allowed_values``, for large rotating rosters that
+    would have to be re-authored every intake (issue #353). Values are
+    strings either way, so resolution, substitution, reporting, and the
+    ``category_*`` CSV columns are unchanged. ``resolution_source`` records how
     each respondent is put into a category — one source per dimension (the
     Organise page select offers the three workable ones; ``profile`` is
     reserved for the outline grammar until profile-based resolution has
@@ -4798,6 +4803,14 @@ class RespondentCategory(models.Model):
             "List of allowed values for this dimension, e.g. "
             "['self', 'peer', 'supervisor', 'patient']. Author-defined; there "
             "is no fixed enum."
+        ),
+    )
+    free_text = models.BooleanField(
+        default=False,
+        help_text=(
+            "When set, the token-batch form accepts any typed value for this "
+            "dimension instead of a select over allowed_values. allowed_values "
+            "is still used for section visibility rules and system assignment."
         ),
     )
 

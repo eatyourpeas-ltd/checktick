@@ -37,7 +37,14 @@
   </div>
 
   <p class="text-sm text-base-content/60 mb-4">
-    {% trans 'This page handles survey-wide settings (layout, repeats) and sharing sections to the Question Bank. For adding and editing questions, use the' %}
+    {% trans 'This page handles the survey-wide settings:' %}
+    <a href="#layout-heading" class="link underline font-semibold">{% trans 'layout' %}</a>,
+    {% if can_edit %}
+    <a href="#respondent-categories-heading" class="link underline font-semibold">{% trans 'who sees which sections' %}</a>,
+    {% endif %}
+    {% trans 'and your' %}
+    <a href="#sections" class="link underline font-semibold">{% trans 'sections and repeats' %}</a>.
+    {% trans 'For adding and editing questions, use the' %}
     <a href="/surveys/{{ survey.slug }}/builder/" class="link underline font-semibold">{% trans 'Builder' %}</a>.
     {% trans 'Visualise the flow on the' %}
     <a href="/surveys/{{ survey.slug }}/survey-map/" class="link underline font-semibold">{% trans 'Survey Map' %}</a>.
@@ -1095,14 +1102,29 @@
   {# === Respondent categories configuration card (cross-cutting, not a layout) === #}
   {% if can_edit %}
   <section class="not-prose mb-6" aria-labelledby="respondent-categories-heading">
-    <div class="card bg-base-100 border border-base-300 max-w-4xl">
-      <div class="card-body gap-3 p-4">
-        <h3 id="respondent-categories-heading" class="font-semibold text-base-content">
-          {% trans 'Respondent categories' %}
-        </h3>
-        <p class="text-xs text-base-content/70">
-          {% trans 'Split respondents into categories — by rater role, recruitment site, cohort, or anything you define — so different respondents see different sections of the same survey without cloning it. Works with any layout. Used for 360° / multi-rater assessments.' %}
-        </p>
+    <h3 id="respondent-categories-heading" class="text-sm font-semibold text-base-content/80 mb-2 inline-flex items-center gap-2">
+      {% include "components/icons/users.html" with classes="w-4 h-4 shrink-0" %}
+      {% trans 'Respondent categories' %}
+    </h3>
+    <p class="text-xs text-base-content/60 mb-3">
+      {% trans 'Show different people different sections of the same survey — e.g. one set of questions for peers and another for supervisors. Useful for 360° / multi-rater assessments and multi-site studies.' %}
+    </p>
+    {# Collapsed by default (issue #353 follow-up): most surveys don't use #}
+    {# categories, so the block is one summary row until the author opens it #}
+    {# or a category exists (the add-redirect then opens it automatically). #}
+    <details class="group max-w-4xl rounded-lg border border-base-300 bg-base-100" {% if respondent_categories %}open{% endif %}>
+      <summary class="flex w-full cursor-pointer select-none list-none items-center gap-2 px-4 py-3 text-sm font-medium text-base-content/80 [&::-webkit-details-marker]:hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 shrink-0 text-base-content/40 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+        {% if respondent_categories %}
+        {% trans 'Manage categories' %}
+        <span class="badge badge-sm badge-outline">{{ respondent_categories|length }}</span>
+        {% else %}
+        {% trans 'Add a category' %}
+        {% endif %}
+      </summary>
+      <div class="space-y-3 border-t border-base-200 px-4 py-4">
         <div class="alert alert-info text-xs" role="note">
           {% include "components/icons/information-circle.html" with classes="w-4 h-4 shrink-0" %}
           <div>
@@ -1181,6 +1203,19 @@
               </div>
               {% endif %}
             </div>
+            {# Free-text flag (issue #353): token batches type the value instead #}
+            {# of picking from the roster — for lists that change often. The #}
+            {# roster authoring UI stays; the options list still feeds section #}
+            {# visibility rules and random assignment. #}
+            <label class="label cursor-pointer justify-start gap-2 text-xs">
+              <input type="checkbox" name="free_text_{{ cat.id }}" class="checkbox checkbox-xs" {% if cat.free_text %}checked{% endif %} />
+              <span>{% trans 'Let me type the value when creating invitations' %}</span>
+            </label>
+            {% if cat.free_text %}
+            <p class="text-xs text-base-content/50 -mt-1">
+              {% trans 'For lists that change often, such as new staff each term. The options list above is still used to control which sections people see.' %}
+            </p>
+            {% endif %}
           </form>
           {% endfor %}
         </div>
@@ -1227,7 +1262,7 @@
         <p class="text-xs text-base-content/50">{% trans 'No categories yet. Add one above to start categorising respondents.' %}</p>
         {% endif %}
       </div>
-    </div>
+    </details>
   </section>
   {% endif %}
 

@@ -917,6 +917,11 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
     #         values: self
     #         source: self_select
     #         question: {subject-id}
+    #       trainee:
+    #         free_text: true
+    #
+    # ``free_text: true`` (issue #353) opts a dimension out of the roster:
+    # token batches type the value instead of picking from ``values:``.
     #
     # The ``~ cat:<dim>:<value>`` suffix is placed on the actual content
     # group headings, e.g.::
@@ -1360,6 +1365,7 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                         "name": categories_current_dim,
                         "label": "",
                         "allowed_values": [],
+                        "free_text": False,
                         "resolution_source": "token",
                         "source_question": None,
                         "profile_field": "",
@@ -1392,6 +1398,10 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                     dim["label"] = val_raw
                 elif key == "profile_field":
                     dim["profile_field"] = val_raw
+                elif key == "free_text":
+                    # ``free_text: true`` — token batches type the value
+                    # instead of picking from the roster (issue #353).
+                    dim["free_text"] = val_raw.lower() in ("true", "yes", "1")
                 continue
 
         # Blank line ends the CATEGORIES config block

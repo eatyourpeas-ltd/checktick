@@ -5,6 +5,8 @@ the section visibility table (required_categories per group), and the
 sync-on-visit behaviour.
 """
 
+import re
+
 from django.urls import reverse
 import pytest
 
@@ -87,6 +89,39 @@ def test_categories_card_shows_empty_state(client, survey, owner):
     res = client.get(_groups_url(survey))
     html = res.content.decode()
     assert "No categories yet" in html
+
+
+@pytest.mark.django_db
+def test_categories_block_collapsed_when_empty(client, survey, owner):
+    """Most surveys don't use categories: with none configured the block is
+    a single toggle row, not open by default (simplifies the Organise page)."""
+    client.force_login(owner)
+    res = client.get(_groups_url(survey))
+    html = res.content.decode()
+    # The <details> element renders without the open attribute, and the
+    # toggle reads as the entry point for adding the first category.
+    details = re.search(r"<details[^>]*>", html)
+    assert details, "categories <details> block missing"
+    assert "open" not in details.group(0)
+    assert "Add a category" in html
+
+
+@pytest.mark.django_db
+def test_categories_block_open_when_configured(client, survey, owner):
+    """Once a category exists the block opens by default so the setup stays
+    visible, and the toggle carries the configured count."""
+    RespondentCategory.objects.create(
+        survey=survey,
+        name="rater_role",
+        allowed_values=["peer"],
+    )
+    client.force_login(owner)
+    res = client.get(_groups_url(survey))
+    html = res.content.decode()
+    details = re.search(r"<details[^>]*open[^>]*>", html)
+    assert details, "categories <details> should carry the open attribute"
+    assert "Manage categories" in html
+    assert '<span class="badge badge-sm badge-outline">1</span>' in html
 
 
 @pytest.mark.django_db

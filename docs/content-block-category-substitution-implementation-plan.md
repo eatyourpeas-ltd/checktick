@@ -23,7 +23,10 @@ Builds entirely on respondent categories (v0.20,
    `survey_tokens` POST reading `category_<dim>`) is the roster — zero backend
    change. Free text would let a typo silently split a subject into two
    reporting groups. A "free-text dimension" flag for large rotating rosters
-   is a follow-up issue.
+   shipped as the planned follow-up (#353): `RespondentCategory.free_text`
+   renders a text input on the batch form (stored values are unchanged),
+   with a fuzzy near-duplicate warning and distinct-value counts on the
+   Tokens page as the typo-split mitigations.
 2. **Batch-level subject.** Matches how 360s are run (cohorts invited per
    subject) and the shipped model: `survey_tokens` writes one
    `category_values` dict per batch. A per-token override needs a token-edit

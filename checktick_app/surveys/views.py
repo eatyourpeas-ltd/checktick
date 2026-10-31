@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 import csv
 from datetime import date, datetime, time
+import difflib
 import io
 import json
 import logging
@@ -1650,17 +1651,27 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
                 if ":" in pair:
                     dim, val = pair.split(":", 1)
                     sim_values[dim.strip()] = val.strip()
-            if sim_values:
-                category_visible = _category_visible_group_ids(survey, sim_values)
-                if category_visible is not None:
-                    if simulated_group_ids is None:
-                        simulated_group_ids = list(category_visible)
-                    else:
-                        simulated_group_ids = [
-                            gid
-                            for gid in simulated_group_ids
-                            if gid in category_visible
-                        ]
+        # Free-text dimensions (issue #353): the simulate panel renders a
+        # per-dimension text input instead of a select over allowed_values,
+        # so any typed value can be simulated.
+        for cat in categories:
+            if cat.free_text:
+                sim_val = (
+                    request.GET.get(f"simulate_category_{cat.name}", "") or ""
+                ).strip()
+                if sim_val:
+                    sim_values[cat.name] = sim_val
+        # Echo the applied values back to the panel inputs.
+        category_preview["values"] = sim_values
+        if sim_values:
+            category_visible = _category_visible_group_ids(survey, sim_values)
+            if category_visible is not None:
+                if simulated_group_ids is None:
+                    simulated_group_ids = list(category_visible)
+                else:
+                    simulated_group_ids = [
+                        gid for gid in simulated_group_ids if gid in category_visible
+                    ]
 
     _prepare_question_rendering(survey)
     all_questions = list(
@@ -7920,6 +7931,25 @@ def survey_preview_thank_you(request: HttpRequest, slug: str) -> HttpResponse:
     )
 
 
+def _category_value_counts(survey: Survey) -> dict[str, dict[str, int]]:
+    """Distinct category values already carried by token batches.
+
+    Returns ``{dimension_name: {value: token_count}}`` for every dimension
+    that has at least one token-borne value. Used by the Tokens page to
+    surface distinct-value counts (a typo split shows as two near-identical
+    values) and by the token-batch POST to warn when a newly typed
+    free-text value nearly duplicates one already in use (issue #353).
+    """
+    counts: dict[str, dict[str, int]] = {}
+    for t in survey.access_tokens.all():
+        cv = t.category_values or {}
+        for dim, val in cv.items():
+            if isinstance(val, str) and val.strip():
+                per_dim = counts.setdefault(dim, {})
+                per_dim[val] = per_dim.get(val, 0) + 1
+    return counts
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
@@ -7939,14 +7969,45 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
         # workflow). Each token in the batch carries the same
         # category_values (e.g. {"rater_role": "peer"} for a peer-rater
         # batch). Only dimensions defined on the survey are kept; others
-        # are silently dropped.
+        # are silently dropped. Free-text dimensions (issue #353) arrive
+        # from a text input and are trimmed here like any other value.
+        cats = list(survey.respondent_categories.all())
         category_values: dict[str, str] = {}
-        for cat in survey.respondent_categories.all():
+        for cat in cats:
             raw_val = (request.POST.get(f"category_{cat.name}", "") or "").strip()
             if raw_val:
                 category_values[cat.name] = raw_val
+        # Issue #353 mitigation: for free-text dimensions, warn when the
+        # typed value is a near-duplicate (fuzzy match) of a value already
+        # used by other batches — a typo would silently split a subject
+        # into two reporting groups. Non-blocking: the batch is still
+        # created, and the author sees the warning after the redirect.
+        existing_counts = _category_value_counts(survey)
+        for cat in cats:
+            val = category_values.get(cat.name)
+            if not cat.free_text or not val:
+                continue
+            used = existing_counts.get(cat.name) or {}
+            if val in used:
+                continue  # Exact reuse of a previous value — not a typo.
+            close = difflib.get_close_matches(val, list(used), n=1, cutoff=0.8)
+            if close:
+                messages.warning(
+                    request,
+                    _(
+                        '"%(val)s" looks similar to "%(other)s", which you '
+                        "have already used for %(dim)s. If this is a typo, "
+                        "the two sets of responses will be counted "
+                        "separately."
+                    )
+                    % {"val": val, "other": close[0], "dim": cat.display_name},
+                )
         created = []
-        for _ in range(max(0, min(count, 1000))):
+        # NB: the loop variable must not be ``_`` — that name is bound to
+        # gettext at module level (``from django.utils.translation import
+        # gettext as _``) and the near-duplicate warning block above calls
+        # it; a local ``_`` assignment would shadow it with UnboundLocalError.
+        for _n in range(max(0, min(count, 1000))):
             t = SurveyAccessToken(
                 survey=survey,
                 token=secrets.token_urlsafe(24),
@@ -7961,6 +8022,10 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
         return redirect("surveys:tokens", slug=slug)
     tokens = survey.access_tokens.order_by("-created_at")[:500]
     respondent_categories = list(survey.respondent_categories.order_by("order", "id"))
+    # Distinct-value counts per dimension (issue #353): surfaced on the
+    # Tokens page so a free-text typo split is visible, and offered as
+    # datalist suggestions in the batch form so authors reuse values.
+    category_value_counts = _category_value_counts(survey)
     return render(
         request,
         "surveys/tokens.html",
@@ -7968,6 +8033,7 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
             "survey": survey,
             "tokens": tokens,
             "respondent_categories": respondent_categories,
+            "category_value_counts": category_value_counts,
         },
     )
 
@@ -9037,6 +9103,10 @@ def survey_groups(request: HttpRequest, slug: str) -> HttpResponse:
             cat.profile_field = (
                 request.POST.get(f"profile_field_{cat.id}", "") or ""
             ).strip()[:100]
+            # free_text (issue #353): opt out of the roster — token batches
+            # type the value instead of picking from allowed_values. Checkboxes
+            # submit "on" when ticked and nothing when unticked.
+            cat.free_text = request.POST.get(f"free_text_{cat.id}", "") == "on"
             cat.save()
             messages.success(request, _("Category saved."))
         return redirect("surveys:groups", slug=slug)
@@ -15142,6 +15212,7 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                     name=dim["name"],
                     label=dim.get("label", ""),
                     allowed_values=dim.get("allowed_values", []),
+                    free_text=bool(dim.get("free_text", False)),
                     resolution_source=dim.get(
                         "resolution_source",
                         RespondentCategory.ResolutionSource.TOKEN,
@@ -15359,6 +15430,8 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                 lines.append(f"    label: {cat.label}")
             if cat.allowed_values:
                 lines.append(f"    values: {', '.join(cat.allowed_values)}")
+            if cat.free_text:
+                lines.append("    free_text: true")
             lines.append(f"    source: {cat.resolution_source}")
             if cat.source_question_id is not None:
                 sq_ref = (
