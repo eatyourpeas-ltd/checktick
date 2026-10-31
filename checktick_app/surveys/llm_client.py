@@ -422,7 +422,7 @@ FORMAT — every survey you output looks like this:
 - Option one
 - Option two
 
-Every question MUST have: a ## heading, an id in curly braces, and a type line in parentheses. Allowed types: (text), (text number), (mc_single), (mc_multi), (dropdown), (yesno), (likert number), (likert categories), (orderable). Append * to a question heading to mark it required. Do NOT add description lines to sections or questions — headings, types, and options only.
+Every question MUST have: a ## heading, an id in curly braces, and a type line in parentheses. Allowed types: (text), (text number), (mc_single), (mc_multi), (dropdown), (yesno), (likert number), (likert categories), (orderable), (grid likert number), (grid likert categories). Append * to a question heading to mark it required. Do NOT add description lines to sections or questions — headings, types, and options only.
 
 CHOOSING TYPES (infer from phrasing):
 - Default for open questions: (text)
@@ -433,6 +433,18 @@ CHOOSING TYPES (infer from phrasing):
 - "Choose one" / "select one" with listed options: (mc_single)
 - "Tick all that apply" / "choose all" with listed options: (mc_multi)
 - List to pick from: (dropdown)
+- One stem rated across several items ("How good was X at each of the following?", "Please tick one box in each line"): (grid likert number) or (grid likert categories) — the shared scale as min:/max: or - option lines, then one ### line per item, e.g.
+
+## How good was your doctor at each of the following?* {doctor-quality}
+(grid likert number)
+min: 1
+max: 5
+left: Not at all good
+right: Very good
+### Being polite {being-polite}
+### Making you feel at ease {feeling-at-ease}
+
+Add na: Does not apply under the scale when the source form offers a "does not apply" box.
 
 EXAMPLE CONVERSION — input document:
 A Handwashing Survey

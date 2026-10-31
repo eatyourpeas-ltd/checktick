@@ -103,6 +103,8 @@ Spacing is flexible, but keep the relative order (heading → optional descripti
 | `long_text` | Long text (textarea). Aliases: `textarea`, `paragraph` |
 | `likert categories` | Likert scale with category labels (one per `-` line) |
 | `likert number` | Likert scale defined by number range |
+| `grid likert number` | Grid of sub-questions sharing a numbered scale — one `###` line per row (aliases: `grid`, `matrix`) |
+| `grid likert categories` | Grid of sub-questions sharing a labelled scale — one `###` line per row |
 
 ### Options and Likert metadata
 
@@ -158,6 +160,54 @@ render: radio
 Valid values are `slider` (default) and `radio`. Unknown values are ignored and
 the slider is used. The render mode can also be changed in the visual builder
 via the "Render as" toggle in the Likert section.
+
+### Grid of sub-questions
+
+A **grid** asks one stem across several rows that each share the same answer
+scale — NHS paper forms call this "please tick one box in each line";
+Survey/Qualtrics call it a matrix or battery question. A 360° assessment
+example:
+
+```markdown
+## How good was your doctor today at each of the following?* {doctor-quality}
+(grid likert number)
+min: 1
+max: 5
+left: Not at all good
+right: Very good
+na: Does not apply
+### Being polite {being-polite}
+### Making you feel at ease
+### Listening to you
+```
+
+- The type line is `(grid likert number)` or `(grid likert categories)`
+  (`grid` and `matrix` are accepted aliases; a bare `(grid)` defaults to a
+  1–5 number scale).
+- The shared scale is declared exactly like a standalone Likert question —
+  `min:` / `max:` / `left:` / `right:` for a number scale, one `-` line per
+  label for categories.
+- Each **row** is a `###` heading under the stem. Rows carry no type or
+  config lines of their own — they inherit the shared scale.
+- `na: <label>` adds a "Does not apply" answer to every row. Omit the line
+  to drop the option.
+- Grid rows always render as one radio per column cell (never a slider),
+  because a slider cannot express a table cell or an explicit "does not
+  apply" choice.
+- `*` on the stem marks **every** row required; `*` on a single `###` row
+  marks just that row (useful for mixed grids). The stem itself is never
+  "required" — it has no answer of its own.
+- Rows may carry their own `{ref}` ids.
+
+A `###` row outside a `(grid ...)` question is an import error.
+
+**How rows are stored.** Each row is a real question (a Likert scale
+inheriting the shared column scale) attached to its grid stem, so answers
+stay keyed by row id exactly like any other question — progress tracking,
+branching, response analytics, and CSV export all treat a grid row as its
+  own series with no special handling. The builder shows a grid as a single
+card with its rows listed inline; rows cannot be branching targets (jumping
+  into a table cell is incoherent) but work fine as branching sources.
 
 **Example with follow-up text:**
 

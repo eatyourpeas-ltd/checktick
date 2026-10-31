@@ -1362,7 +1362,9 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         survey.questions.select_related("group").prefetch_related("images").all()
     )
     qs = _order_questions_by_group(survey, all_questions)
-    _annotate_question_render_sequence(survey, qs)
+    # Reassign: grid rows are filtered out of the participant-facing
+    # sequence (they render inline inside their stem).
+    qs = _annotate_question_render_sequence(survey, qs)
     has_patient_template = any(
         getattr(q, "type", None) == SurveyQuestion.Types.TEMPLATE_PATIENT for q in qs
     )
@@ -1697,7 +1699,9 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
     # Content block {{dim}} substitution: the preview path substitutes the
     # ?simulate_category= values (empty when absent — same semantics as the
     # live path: known-but-unresolved renders empty).
-    _annotate_question_render_sequence(survey, qs, sim_values)
+    # Reassign: grid rows are filtered out of the participant-facing
+    # sequence (they render inline inside their stem).
+    qs = _annotate_question_render_sequence(survey, qs, sim_values)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
     prof_group, professional_fields, professional_ods = (
         _get_professional_group_and_fields(survey)
@@ -2329,7 +2333,33 @@ def _annotate_question_render_sequence(
     ``escape_values`` (that flag exists only for the sanitised-HTML
     ``body_md`` path). See docs/content-block-category-substitution-
     implementation-plan.md §Substitution contract.
+
+    Grid rows render inline under their parent grid stem, so they are
+    filtered out of the participant-facing sequence here and attached to
+    their stem as ``grid_rows`` instead (the builder path does the same
+    in ``_prepare_question_rendering``). ``num_scale_values`` /
+    ``grid_scale_values`` are attached for Likert / grid questions so the
+    radio renderers have their value lists — ``_prepare_question_rendering``
+    sets ``num_scale_values`` for the builder, but the take path re-queries
+    its own instances, so without this a published ``render: radio`` Likert
+    rendered no inputs at all.
     """
+    # Grid rows: attach to stems, filter out of the render sequence.
+    grid_parent_ids = [q.id for q in questions if q.type == SurveyQuestion.Types.GRID]
+    rows_by_parent: dict[int, list[SurveyQuestion]] = {}
+    if grid_parent_ids:
+        for row in SurveyQuestion.objects.filter(
+            parent_id__in=grid_parent_ids
+        ).order_by("order", "id"):
+            rows_by_parent.setdefault(row.parent_id, []).append(row)
+    for q in questions:
+        setattr(
+            q,
+            "grid_rows",
+            rows_by_parent.get(q.id, []) if q.type == SurveyQuestion.Types.GRID else [],
+        )
+    questions = [q for q in questions if q.parent_id is None]
+
     questions_with_show_conditions = set(
         SurveyQuestionCondition.objects.filter(
             target_question__survey=survey,
@@ -2365,6 +2395,41 @@ def _annotate_question_render_sequence(
         setattr(q, "group_start", bool(curr_gid and curr_gid != prev_gid))
         setattr(q, "group_end", bool(curr_gid and curr_gid != next_gid))
         setattr(q, "has_show_condition", q.id in questions_with_show_conditions)
+        # Likert number scales: value list for the radio renderer. Grid rows
+        # are filtered out above and render inside their stem's table, so
+        # they need no per-row value list here — the stem carries
+        # ``grid_scale_values`` for all of its rows.
+        if q.type == SurveyQuestion.Types.LIKERT and isinstance(q.options, list):
+            first = q.options[0] if q.options else None
+            if isinstance(first, dict) and first.get("type") == "number-scale":
+                try:
+                    minv = int(first.get("min", 1))
+                    maxv = int(first.get("max", 5))
+                except (TypeError, ValueError):
+                    minv, maxv = 1, 5
+                if maxv < minv:
+                    minv, maxv = maxv, minv
+                setattr(q, "num_scale_values", list(range(minv, maxv + 1)))
+            else:
+                setattr(q, "num_scale_values", None)
+        else:
+            setattr(q, "num_scale_values", None)
+        # Grid stems: value list for the shared column scale.
+        if q.type == SurveyQuestion.Types.GRID and isinstance(q.options, dict):
+            scale = q.options.get("scale")
+            if isinstance(scale, dict) and scale.get("type") == "number-scale":
+                try:
+                    minv = int(scale.get("min", 1))
+                    maxv = int(scale.get("max", 5))
+                except (TypeError, ValueError):
+                    minv, maxv = 1, 5
+                if maxv < minv:
+                    minv, maxv = maxv, minv
+                setattr(q, "grid_scale_values", list(range(minv, maxv + 1)))
+            else:
+                setattr(q, "grid_scale_values", [])
+        else:
+            setattr(q, "grid_scale_values", [])
         # Content block: pre-render the Markdown body to sanitised HTML and
         # extract heading/subtitle/links/consent so the template emits them
         # without |safe on raw content.
@@ -2653,6 +2718,30 @@ def _is_linked_consent_question(q: SurveyQuestion) -> bool:
     return any(isinstance(o, dict) and "_content_block_parent" in o for o in opts)
 
 
+def _is_grid_row(q: SurveyQuestion) -> bool:
+    """Return True if ``q`` is a row of a grid question.
+
+    Grid rows are real questions with real answers, but they render inline
+    under their parent grid — never as standalone cards in the builder list
+    or the branching target picker.
+    """
+    return q.parent_id is not None
+
+
+def _grid_scale(options: Any) -> dict[str, Any]:
+    """Return the shared column scale config stored on a grid parent.
+
+    Grid parents keep the shared scale in ``options["scale"]`` so the edit
+    form can prefill it. Rows carry their own copy in their ``options`` so
+    every flat consumer (rendering, analytics, exports) works unchanged.
+    """
+    if isinstance(options, dict):
+        scale = options.get("scale")
+        if isinstance(scale, dict):
+            return scale
+    return {}
+
+
 def _prepare_question_rendering(
     survey: Survey, questions: Iterable[SurveyQuestion] | None = None
 ) -> list[SurveyQuestion]:
@@ -2697,11 +2786,39 @@ def _prepare_question_rendering(
     # their options list.
     questions_iter = [q for q in questions_iter if not _is_linked_consent_question(q)]
 
+    # Grid rows render inline under their parent grid card — filter them out
+    # of the top-level builder list and attach them to their parents instead
+    # (as ``grid_rows``), same hiding contract as linked consent questions.
+    grid_parents = [q for q in questions_iter if q.type == SurveyQuestion.Types.GRID]
+    if grid_parents:
+        parent_ids = [q.id for q in grid_parents if q.id is not None]
+        rows_by_parent: dict[int, list[SurveyQuestion]] = {}
+        if parent_ids:
+            for row in (
+                SurveyQuestion.objects.filter(parent_id__in=parent_ids)
+                .select_related("group")
+                .order_by("order", "id")
+            ):
+                rows_by_parent.setdefault(row.parent_id, []).append(row)
+        for parent in grid_parents:
+            rows = rows_by_parent.get(parent.id, [])
+            setattr(parent, "grid_rows", rows)
+            # The builder card shows the grid as required when any row is —
+            # the stem itself is stored required=False (clean() enforces).
+            setattr(parent, "grid_rows_required", any(bool(r.required) for r in rows))
+    for q in questions_iter:
+        if not hasattr(q, "grid_rows"):
+            setattr(q, "grid_rows", [])
+    questions_iter = [q for q in questions_iter if not _is_grid_row(q)]
+
     all_questions_meta: list[dict[str, Any]] = []
     try:
         for item in (
             survey.questions.select_related("group")
             .only("id", "text", "order", "group__name", "hidden_by_default")
+            # Grid rows render inline under their parent — never offered as
+            # branching targets (jumping into a table cell is incoherent).
+            .filter(parent__isnull=True)
             .all()
         ):
             text = (item.text or "Untitled question").strip() or "Untitled question"
@@ -2848,6 +2965,8 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
     }
 
     options: Any = []
+    # Grid rows to create — populated by the GRID branch below.
+    grid_new_rows: list[str] = []
     if qtype in {
         SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE,
         SurveyQuestion.Types.MULTIPLE_CHOICE_MULTI,
@@ -2966,6 +3085,50 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
                 ]
             else:
                 options = labels
+    elif qtype == SurveyQuestion.Types.GRID:
+        # Grid: a stem with no answer of its own plus rows sharing one
+        # scale. The likert_* fields build the shared scale (rows always
+        # render as radios — a slider can't express a table cell, and
+        # "Does not apply" needs an explicit choice). Row labels come
+        # from the grid_rows textarea (create) or grid_new_rows (edit —
+        # existing rows post as grid_row_id_<id> inputs and are handled
+        # by the edit view, not here).
+        likert_mode = (data.get("likert_mode") or "number").strip()
+        if likert_mode not in {"number", "categories"}:
+            likert_mode = "number"
+        if likert_mode == "number":
+            try:
+                min_v = int(data.get("likert_min", "1"))
+            except (TypeError, ValueError):
+                min_v = 1
+            try:
+                max_v = int(data.get("likert_max", "5"))
+            except (TypeError, ValueError):
+                max_v = 5
+            if max_v < min_v:
+                min_v, max_v = max_v, min_v
+            scale: dict[str, Any] = {
+                "type": "number-scale",
+                "min": min_v,
+                "max": max_v,
+                "left": (data.get("likert_left_label") or "").strip(),
+                "right": (data.get("likert_right_label") or "").strip(),
+                "render": "radio",
+            }
+        else:
+            raw = data.get("likert_categories", "")
+            labels = [line.strip() for line in raw.splitlines() if line.strip()]
+            scale = {"type": "categories", "labels": labels, "render": "radio"}
+        if data.get("grid_include_na") in {"on", "true", "1", "yes"}:
+            scale["na_label"] = (
+                data.get("grid_na_label") or ""
+            ).strip() or "Does not apply"
+        options = {"type": "grid", "row_type": "likert", "scale": scale}
+        # Rows to CREATE — the textarea always posts as grid_new_rows.
+        # Existing rows post as grid_row_id_<id> inputs and are handled by
+        # the edit view's row sync, not here.
+        rows_raw = data.get("grid_new_rows", "")
+        grid_new_rows = [line.strip() for line in rows_raw.splitlines() if line.strip()]
     elif qtype == SurveyQuestion.Types.TEXT:
         text_format = (data.get("text_format") or "free").strip()
         if text_format not in {"number", "free", "date", "time", "datetime"}:
@@ -3004,6 +3167,7 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
         "hidden_by_default": hidden_by_default,
         "options": options,
         "dataset_key": dataset_key,
+        "grid_new_rows": grid_new_rows,
     }
 
 
@@ -3249,7 +3413,12 @@ def _build_condition_payload(
 
 
 def _duplicate_question(question: SurveyQuestion) -> SurveyQuestion:
-    """Clone a question immediately after the original within the survey order."""
+    """Clone a question immediately after the original within the survey order.
+
+    Grid questions clone their rows as a block: room is made after the cloned
+    stem (everything past it shifts by the row count), then the rows are
+    inserted in their original relative order under the cloned parent.
+    """
     order = question.order
     with transaction.atomic():
         SurveyQuestion.objects.filter(survey=question.survey, order__gt=order).update(
@@ -3264,6 +3433,27 @@ def _duplicate_question(question: SurveyQuestion) -> SurveyQuestion:
             required=question.required,
             order=order + 1,
         )
+        if question.type == SurveyQuestion.Types.GRID:
+            rows = list(question.subquestions.order_by("order", "id"))
+            if rows:
+                # Shift everything after the cloned stem past the row block.
+                # The source rows were shifted by +1 above and sit after the
+                # clone, so they move with the rest.
+                SurveyQuestion.objects.filter(
+                    survey=question.survey, order__gt=cloned.order
+                ).update(order=models.F("order") + len(rows))
+                for idx, row in enumerate(rows):
+                    SurveyQuestion.objects.create(
+                        survey=question.survey,
+                        group=question.group,
+                        parent=cloned,
+                        text=row.text,
+                        type=row.type,
+                        options=deepcopy(row.options),
+                        required=row.required,
+                        hidden_by_default=row.hidden_by_default,
+                        order=cloned.order + 1 + idx,
+                    )
     return cloned
 
 
@@ -3285,7 +3475,40 @@ def _serialize_question_for_builder(
     }
 
     options = question.options or []
-    if question.type == SurveyQuestion.Types.TEXT:
+    if question.type == SurveyQuestion.Types.GRID:
+        # Grid: expose the shared scale in the same likert_* keys the edit
+        # form reads, plus the row list so the edit pane can prefill the
+        # row chips. required reflects the rows (the stem is stored False).
+        scale = _grid_scale(options)
+        payload["likert_mode"] = (
+            "number" if scale.get("type") == "number-scale" else "categories"
+        )
+        try:
+            payload["likert_min"] = int(scale.get("min", 1))
+        except (TypeError, ValueError):
+            payload["likert_min"] = 1
+        try:
+            payload["likert_max"] = int(scale.get("max", 5))
+        except (TypeError, ValueError):
+            payload["likert_max"] = 5
+        payload["likert_left_label"] = str(scale.get("left") or "")
+        payload["likert_right_label"] = str(scale.get("right") or "")
+        labels = scale.get("labels")
+        payload["likert_categories"] = (
+            [str(x) for x in labels] if isinstance(labels, list) else []
+        )
+        payload["likert_render"] = "radio"
+        na_label = scale.get("na_label")
+        payload["grid_include_na"] = bool(na_label)
+        payload["grid_na_label"] = str(na_label or "")
+        payload["grid_rows"] = [
+            {"id": row.id, "text": row.text}
+            for row in getattr(question, "grid_rows", [])
+        ]
+        payload["required"] = any(
+            bool(r.required) for r in getattr(question, "grid_rows", [])
+        )
+    elif question.type == SurveyQuestion.Types.TEXT:
         fmt = "free"
         text_min = ""
         text_max = ""
@@ -7761,7 +7984,9 @@ def _handle_participant_submission(
     # Content block {{dim}} substitution: the live path always passes a map
     # (empty when anonymous / no categories) so known-but-unresolved
     # dimensions render empty, matching the visibility-rule semantics.
-    _annotate_question_render_sequence(survey, qs, resolved_categories)
+    # Reassign: grid rows are filtered out of the participant-facing
+    # sequence (they render inline inside their stem).
+    qs = _annotate_question_render_sequence(survey, qs, resolved_categories)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
     prof_group, professional_fields, professional_ods = (
         _get_professional_group_and_fields(survey)
@@ -12091,6 +12316,10 @@ def survey_export_csv(
             # Content blocks have no answer — skip them in CSV export.
             if q.type == "content_block":
                 continue
+            # Grid stems have no answer either — their rows are real
+            # questions and export as their own columns below.
+            if q.type == "grid":
+                continue
             # Use question text as header, truncated if too long
             q_header = q.text[:100] + "..." if len(q.text) > 100 else q.text
             # Clean up for CSV header (remove newlines)
@@ -12644,17 +12873,49 @@ def builder_question_create(request: HttpRequest, slug: str) -> HttpResponse:
             is_active=True,
         ).first()
 
-    SurveyQuestion.objects.create(
-        survey=survey,
-        group=group,
-        text=text or "Untitled",
-        type=qtype,
-        options=options,
-        required=required,
-        hidden_by_default=form_data["hidden_by_default"],
-        order=order,
-        dataset=dataset,
-    )
+    if qtype == SurveyQuestion.Types.GRID:
+        # Grid: create the stem plus one child question per row. The stem
+        # carries the shared scale; rows copy it into their own options so
+        # every flat consumer (rendering, analytics, exports) works unchanged.
+        # required lives on the rows — the stem has no answer (clean()
+        # rejects a required grid parent).
+        scale = _grid_scale(options)
+        with transaction.atomic():
+            parent = SurveyQuestion.objects.create(
+                survey=survey,
+                group=group,
+                text=text or "Untitled",
+                type=SurveyQuestion.Types.GRID,
+                options=options,
+                required=False,
+                hidden_by_default=form_data["hidden_by_default"],
+                order=order,
+                dataset=dataset,
+            )
+            for idx, row_text in enumerate(form_data["grid_new_rows"]):
+                SurveyQuestion.objects.create(
+                    survey=survey,
+                    group=group,
+                    parent=parent,
+                    text=row_text,
+                    type=SurveyQuestion.Types.LIKERT,
+                    options=[deepcopy(scale)],
+                    required=required,
+                    hidden_by_default=form_data["hidden_by_default"],
+                    order=order + 1 + idx,
+                )
+    else:
+        SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text=text or "Untitled",
+            type=qtype,
+            options=options,
+            required=required,
+            hidden_by_default=form_data["hidden_by_default"],
+            order=order,
+            dataset=dataset,
+        )
     questions_qs = survey.questions.select_related("group").all()
     questions = _prepare_question_rendering(survey, questions_qs)
     groups = survey.question_groups.filter(owner=request.user)
@@ -13437,6 +13698,60 @@ def builder_group_question_content_block_update(
     )
 
 
+def _sync_grid_rows(q: SurveyQuestion, form_data: dict[str, Any], post) -> None:
+    """Sync a grid's rows from the edit form.
+
+    Existing rows post as ``grid_row_id_<id>`` inputs — text is updated in
+    place so row identity (and with it any existing answers) survives a
+    rename. Rows whose input is missing from the POST were removed in the
+    browser and are deleted — their answers cascade with them. New rows
+    from the ``grid_new_rows`` textarea are appended, then all rows are
+    renumbered relative to the parent so their sort stays tidy.
+
+    The shared scale and the stem's required/hidden flags are re-applied to
+    every row so a scale edit or required toggle reaches the whole grid.
+    """
+    scale = _grid_scale(form_data["options"])
+    rows_required = form_data["required"]
+    rows_hidden = form_data["hidden_by_default"]
+    existing = list(q.subquestions.order_by("order", "id"))
+    kept: list[SurveyQuestion] = []
+    for row in existing:
+        val = (post.get(f"grid_row_id_{row.id}") or "").strip()
+        if not val:
+            # Removed in the browser — delete the row (answers cascade).
+            row.delete()
+            continue
+        row.text = val
+        row.options = [deepcopy(scale)]
+        row.required = rows_required
+        row.hidden_by_default = rows_hidden
+        row.save()
+        kept.append(row)
+    base = q.order
+    for idx, row_text in enumerate(form_data["grid_new_rows"]):
+        kept.append(
+            SurveyQuestion.objects.create(
+                survey=q.survey,
+                group=q.group,
+                parent=q,
+                text=row_text,
+                type=SurveyQuestion.Types.LIKERT,
+                options=[deepcopy(scale)],
+                required=rows_required,
+                hidden_by_default=rows_hidden,
+                order=base + 1 + idx,
+            )
+        )
+    # Renumber rows sequentially under the parent (relative order kept) —
+    # create may have appended past stale orders left by earlier edits.
+    for idx, row in enumerate(kept):
+        want = base + 1 + idx
+        if row.order != want:
+            row.order = want
+            row.save(update_fields=["order"])
+
+
 @login_required
 @require_http_methods(["POST"])
 def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResponse:
@@ -13444,9 +13759,16 @@ def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResp
     require_can_edit(request.user, survey)
     q = get_object_or_404(SurveyQuestion, id=qid, survey=survey)
     form_data = _parse_builder_question_form(request.POST)
+    old_type = q.type
     q.text = form_data["text"] or "Untitled"
     q.type = form_data["type"]
-    q.required = form_data["required"]
+    # Grid stems have no answer of their own — required on the stem applies
+    # to every row instead (clean() rejects a required grid parent).
+    q.required = (
+        False
+        if form_data["type"] == SurveyQuestion.Types.GRID
+        else form_data["required"]
+    )
     q.hidden_by_default = form_data["hidden_by_default"]
     q.options = form_data["options"]
     dataset_key = form_data.get("dataset_key")
@@ -13470,7 +13792,14 @@ def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResp
     else:
         q.dataset = None
 
-    q.save()
+    with transaction.atomic():
+        q.save()
+        if q.type == SurveyQuestion.Types.GRID:
+            _sync_grid_rows(q, form_data, request.POST)
+        elif old_type == SurveyQuestion.Types.GRID:
+            # Switched away from grid: rows would render nowhere — delete
+            # them (answers cascade; a grid row cannot stand alone).
+            q.subquestions.all().delete()
     return _render_template_question_row(
         request,
         survey,
@@ -13489,9 +13818,16 @@ def builder_group_question_edit(
     group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)
     q = get_object_or_404(SurveyQuestion, id=qid, survey=survey, group=group)
     form_data = _parse_builder_question_form(request.POST)
+    old_type = q.type
     q.text = form_data["text"] or "Untitled"
     q.type = form_data["type"]
-    q.required = form_data["required"]
+    # Grid stems have no answer of their own — required on the stem applies
+    # to every row instead (clean() rejects a required grid parent).
+    q.required = (
+        False
+        if form_data["type"] == SurveyQuestion.Types.GRID
+        else form_data["required"]
+    )
     q.hidden_by_default = form_data["hidden_by_default"]
     q.options = form_data["options"]
     dataset_key = form_data.get("dataset_key")
@@ -13509,7 +13845,14 @@ def builder_group_question_edit(
     else:
         q.dataset = None
 
-    q.save()
+    with transaction.atomic():
+        q.save()
+        if q.type == SurveyQuestion.Types.GRID:
+            _sync_grid_rows(q, form_data, request.POST)
+        elif old_type == SurveyQuestion.Types.GRID:
+            # Switched away from grid: rows would render nowhere — delete
+            # them (answers cascade; a grid row cannot stand alone).
+            q.subquestions.all().delete()
     return _render_template_question_row(
         request,
         survey,
@@ -14918,6 +15261,26 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                             dataset=dataset,
                         )
                         next_order += 1
+                        # Grid: create the rows from the ### headings (see
+                        # docs/import.md). Rows copy the shared scale into
+                        # their own options so flat consumers need no changes.
+                        if q["final_type"] == "grid":
+                            grid_scale = (
+                                (q.get("final_options") or {}).get("scale")
+                            ) or {}
+                            for row in q.get("grid_rows", []):
+                                SurveyQuestion.objects.create(
+                                    survey=survey,
+                                    group=grp,
+                                    parent=question,
+                                    text=row["title"],
+                                    type="likert",
+                                    options=[deepcopy(grid_scale)],
+                                    required=bool(row.get("required", False)),
+                                    hidden_by_default=q.get("hidden_by_default", False),
+                                    order=next_order,
+                                )
+                                next_order += 1
                         if q.get("ref"):
                             question_ref_map[q["ref"]] = question
                         if q.get("branches"):
@@ -15740,6 +16103,10 @@ def _export_survey_to_markdown(survey: Survey) -> str:
 
         # Add questions
         for question in group.surveyquestion_set.all():
+            # Grid rows export as ### lines under their parent grid —
+            # never as top-level questions.
+            if question.parent_id is not None:
+                continue
             required = "*" if question.required else ""
             question_ref = question.text.lower()[:30].replace(" ", "-").strip("-")
             lines.append(f"{indent}## {question.text}{required} {{{question_ref}}}")
@@ -15776,6 +16143,14 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                         "type"
                     ) in ["number", "number-scale"]:
                         export_type = "likert number"
+            elif question.type == "grid" and isinstance(question.options, dict):
+                # Grid: export the full scale so the round-trip keeps it.
+                grid_scale = (question.options or {}).get("scale") or {}
+                export_type = (
+                    "grid likert categories"
+                    if grid_scale.get("type") == "categories"
+                    else "grid likert number"
+                )
 
             # Question type
             lines.append(f"{indent}({export_type})")
@@ -15921,6 +16296,28 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                     render_val = question.options.get("render")
                     if render_val:
                         lines.append(f"{indent}render: {render_val}")
+
+            # Grid of sub-questions: emit the shared scale, then the rows
+            # as ### headings (see docs/import.md §Grid of sub-questions).
+            if question.type == "grid" and isinstance(question.options, dict):
+                grid_scale = (question.options or {}).get("scale") or {}
+                if grid_scale.get("type") == "categories":
+                    for label in grid_scale.get("labels", []):
+                        lines.append(f"{indent}- {label}")
+                elif grid_scale.get("type") == "number-scale":
+                    if grid_scale.get("min") is not None:
+                        lines.append(f"{indent}min: {grid_scale['min']}")
+                    if grid_scale.get("max") is not None:
+                        lines.append(f"{indent}max: {grid_scale['max']}")
+                    if grid_scale.get("left"):
+                        lines.append(f"{indent}left: {grid_scale['left']}")
+                    if grid_scale.get("right"):
+                        lines.append(f"{indent}right: {grid_scale['right']}")
+                if grid_scale.get("na_label"):
+                    lines.append(f"{indent}na: {grid_scale['na_label']}")
+                for row in question.subquestions.order_by("order", "id"):
+                    row_required = "*" if row.required else ""
+                    lines.append(f"{indent}### {row.text}{row_required}")
 
             # Branching rules
             conditions = SurveyQuestionCondition.objects.filter(
@@ -17089,7 +17486,7 @@ def published_template_import(request, template_id, slug):
 
             # Create questions
             for idx, q_data in enumerate(group_data.get("questions", []), start=1):
-                SurveyQuestion.objects.create(
+                question = SurveyQuestion.objects.create(
                     survey=survey,
                     group=new_group,
                     text=q_data.get("title", ""),
@@ -17098,6 +17495,24 @@ def published_template_import(request, template_id, slug):
                     required=q_data.get("required", False),
                     order=idx,
                 )
+                # Grid: create the rows from the ### headings (see
+                # docs/import.md). Rows copy the shared scale into their
+                # own options so flat consumers need no changes.
+                if q_data.get("final_type") == "grid":
+                    grid_scale = (
+                        (q_data.get("final_options") or {}).get("scale")
+                    ) or {}
+                    for row_idx, row in enumerate(q_data.get("grid_rows", []), start=1):
+                        SurveyQuestion.objects.create(
+                            survey=survey,
+                            group=new_group,
+                            parent=question,
+                            text=row.get("title", ""),
+                            type="likert",
+                            options=[deepcopy(grid_scale)],
+                            required=bool(row.get("required", False)),
+                            order=idx + row_idx,
+                        )
 
             # Increment import count
             template.increment_import_count()
@@ -17193,6 +17608,10 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
 
     # Add questions
     for question in questions:
+        # Grid rows export as ### lines under their parent grid — never
+        # as top-level questions.
+        if question.parent_id is not None:
+            continue
         required = "*" if question.required else ""
         question_ref = question.text.lower()[:30].replace(" ", "-").strip("-")
         lines.append(f"## {question.text}{required} {{{question_ref}}}")
@@ -17221,6 +17640,14 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                     export_type = "likert categories"
                 elif first_option.get("type") in ["number", "number-scale"]:
                     export_type = "likert number"
+        elif question.type == "grid" and isinstance(question.options, dict):
+            # Grid: export the full scale so the round-trip keeps it.
+            grid_scale = (question.options or {}).get("scale") or {}
+            export_type = (
+                "grid likert categories"
+                if grid_scale.get("type") == "categories"
+                else "grid likert number"
+            )
 
         # Question type
         lines.append(f"({export_type})")
@@ -17355,6 +17782,28 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                 render_val = question.options.get("render")
                 if render_val:
                     lines.append(f"render: {render_val}")
+
+        # Grid of sub-questions: emit the shared scale, then the rows as
+        # ### headings (see docs/import.md §Grid of sub-questions).
+        if question.type == "grid" and isinstance(question.options, dict):
+            grid_scale = (question.options or {}).get("scale") or {}
+            if grid_scale.get("type") == "categories":
+                for label in grid_scale.get("labels", []):
+                    lines.append(f"- {label}")
+            elif grid_scale.get("type") == "number-scale":
+                if grid_scale.get("min") is not None:
+                    lines.append(f"min: {grid_scale['min']}")
+                if grid_scale.get("max") is not None:
+                    lines.append(f"max: {grid_scale['max']}")
+                if grid_scale.get("left"):
+                    lines.append(f"left: {grid_scale['left']}")
+                if grid_scale.get("right"):
+                    lines.append(f"right: {grid_scale['right']}")
+            if grid_scale.get("na_label"):
+                lines.append(f"na: {grid_scale['na_label']}")
+            for row in question.subquestions.order_by("order", "id"):
+                row_required = "*" if row.required else ""
+                lines.append(f"### {row.text}{row_required}")
 
         # Branching rules
         conditions = SurveyQuestionCondition.objects.filter(question=question)

@@ -137,7 +137,11 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
 
     def is_heading(s: str) -> bool:
         s_strip = s.lstrip()
-        return s_strip.startswith("# ") or s_strip.startswith("## ")
+        return (
+            s_strip.startswith("# ")
+            or s_strip.startswith("## ")
+            or s_strip.startswith("### ")
+        )
 
     # Action keywords map to SurveyQuestionCondition.Action values.
     # The default (no keyword) is jump_to, preserving existing outlines.
@@ -405,8 +409,43 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                 "hidden_by_default": False,
                 "links": [],
                 "body_lines": [],
+                "grid_rows": [],
             }
             current_group["questions"].append(current_question)
+        elif line.startswith("### "):
+            # Grid row (see docs/import.md §Grid of sub-questions). Rows are
+            # only valid under a (grid ...) question — they inherit the grid's
+            # shared scale. `*` marks the row required; {ref} keeps export
+            # round-trips stable. Rows carry no config lines of their own.
+            rtitle_raw = line[4:].strip()
+            row_type_first = (
+                current_question["type"].split()[0] if current_question else ""
+            )
+            if row_type_first not in {"grid", "matrix"}:
+                raise BulkParseError(
+                    f"Grid row '{rtitle_raw}' declared outside a (grid ...) "
+                    f"question at line {i+1}"
+                )
+            row_required = False
+            if rtitle_raw.endswith("*") or (
+                "{" in rtitle_raw and rtitle_raw.split("{")[0].rstrip().endswith("*")
+            ):
+                row_required = True
+                if "{" in rtitle_raw and rtitle_raw.split("{")[0].rstrip().endswith(
+                    "*"
+                ):
+                    parts = rtitle_raw.split("{")
+                    parts[0] = parts[0].rstrip()[:-1].rstrip()
+                    rtitle_raw = "{".join(parts)
+                else:
+                    rtitle_raw = rtitle_raw[:-1].strip()
+            rtitle, rref = _extract_title_and_ref(
+                rtitle_raw,
+                f"{current_question['ref']}-row-{len(current_question['grid_rows']) + 1}",
+            )
+            current_question["grid_rows"].append(
+                {"title": rtitle, "required": row_required, "ref": rref}
+            )
         else:
             if current_question:
                 if line.startswith("? ") or line.startswith("?"):
@@ -450,7 +489,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                         )
                 else:
                     m = re.match(
-                        r"^(min|max|left|right|dataset|address_lookup|render_once|render|heading|subtitle):(.*)$",
+                        r"^(min|max|left|right|na|dataset|address_lookup|render_once|render|heading|subtitle):(.*)$",
                         line,
                         re.IGNORECASE,
                     )
@@ -644,6 +683,62 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                 }:
                     options["address_lookup"] = True
                 q["final_options"] = options
+            elif t.split()[0] in {"grid", "matrix"}:
+                # Grid of sub-questions (see docs/import.md §Grid of
+                # sub-questions). The stem carries the shared scale; rows
+                # come from ### headings and copy the scale into their own
+                # options so flat consumers (rendering, analytics, exports)
+                # need no changes. Aliases: (grid ...), (matrix ...).
+                parts = t.split()
+                if "categories" in parts[1:]:
+                    if not q["options"]:
+                        raise BulkParseError(
+                            f"Grid categories requires category lines for question '{q['title']}'"
+                        )
+                    grid_scale: Dict[str, Any] = {
+                        "type": "categories",
+                        "labels": [
+                            o[0] if isinstance(o, tuple) else o for o in q["options"][:]
+                        ],
+                    }
+                else:
+                    try:
+                        min_v = int(q["kv"].get("min", "1"))
+                        max_v = int(q["kv"].get("max", "5"))
+                    except (TypeError, ValueError):
+                        raise BulkParseError(
+                            f"Grid number requires integer min/max for question '{q['title']}'"
+                        )
+                    if min_v >= max_v:
+                        raise BulkParseError(
+                            f"Grid number min must be < max for question '{q['title']}'"
+                        )
+                    grid_scale = {
+                        "type": "number-scale",
+                        "min": min_v,
+                        "max": max_v,
+                        "left": str(q["kv"].get("left", "")).strip(),
+                        "right": str(q["kv"].get("right", "")).strip(),
+                    }
+                # Rows always render as radios (one per column cell) — a
+                # slider cannot express a table cell, and the optional
+                # "Does not apply" answer needs an explicit choice.
+                grid_scale["render"] = "radio"
+                na_label = _unquote_value(str(q["kv"].get("na", "")).strip())
+                if na_label:
+                    grid_scale["na_label"] = na_label
+                q["final_type"] = "grid"
+                q["final_options"] = {
+                    "type": "grid",
+                    "row_type": "likert",
+                    "scale": grid_scale,
+                }
+                # The stem has no answer of its own — required lives on the
+                # rows. A `*` on the stem marks every row required; a `*` on
+                # an individual row overrides upward for mixed grids.
+                for row in q["grid_rows"]:
+                    row["required"] = bool(row.get("required")) or bool(q["required"])
+                q["required"] = False
             elif t.startswith("likert"):
                 render_val = _normalise_likert_render(q["kv"].get("render"))
                 if "categories" in t:

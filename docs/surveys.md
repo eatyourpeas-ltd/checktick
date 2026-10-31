@@ -104,6 +104,9 @@ Supported types (as of now):
 - Yes/No (`yesno`)
 - Orderable list (`orderable`): reorder options
 - Image choice (`image`): choose from visual options
+- Grid of sub-questions (`grid`): several rows that each answer on the same
+  shared scale — e.g. a 360° "How good was your doctor at each of the
+  following?" block (see [Import](import.md#grid-of-sub-questions))
 
 Some types use options metadata. Examples:
 
