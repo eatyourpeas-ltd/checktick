@@ -10,14 +10,18 @@ unchanged. See docs/respondent-categories-implementation-plan.md for the
 
 from __future__ import annotations
 
+import textwrap
+
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 import pytest
 
+from checktick_app.surveys.markdown_import import parse_bulk_markdown
 from checktick_app.surveys.models import QuestionGroup, Survey, SurveyQuestion
 from checktick_app.surveys.views import (
     _duplicate_question,
+    _export_survey_to_markdown,
     _parse_builder_question_form,
     _prepare_question_rendering,
 )
@@ -551,3 +555,167 @@ def test_grid_rows_not_offered_as_branch_targets(db):
     assert [q.type for q in prepared] == [SurveyQuestion.Types.GRID]
     payload = _serialize_question_for_builder(prepared[0])
     assert [r["text"] for r in payload["grid_rows"]] == ["one"]
+
+
+# --- Outline grammar (see docs/import.md §Grid of sub-questions) ---
+
+
+GRID_MD = textwrap.dedent("""
+    # About your consultation {consultation}
+
+    ## How good was your doctor today at each of the following?* {doctor-quality}
+    (grid likert number)
+    min: 1
+    max: 5
+    left: Not at all good
+    right: Very good
+    na: Does not apply
+    ### Being polite {being-polite}
+    ### Making you feel at ease
+    ### Listening to you*
+    """).strip()
+
+
+def test_parse_grid_markdown():
+    groups = parse_bulk_markdown(GRID_MD)
+    q = groups[0]["questions"][0]
+    assert q["final_type"] == "grid"
+    assert q["required"] is False  # stem never required
+    scale = q["final_options"]["scale"]
+    assert scale["type"] == "number-scale"
+    assert scale["min"] == 1
+    assert scale["max"] == 5
+    assert scale["left"] == "Not at all good"
+    assert scale["right"] == "Very good"
+    assert scale["render"] == "radio"
+    assert scale["na_label"] == "Does not apply"
+    # Rows: order preserved, `*` on the stem marks every row required,
+    # a `*` on a single row overrides upward for mixed grids.
+    assert [(r["title"], r["required"]) for r in q["grid_rows"]] == [
+        ("Being polite", True),
+        ("Making you feel at ease", True),
+        ("Listening to you", True),
+    ]
+    # Row refs survive for stable round-trips.
+    assert q["grid_rows"][0]["ref"] == "being-polite"
+
+
+def test_parse_grid_categories_markdown():
+    md = textwrap.dedent("""
+        # Section {sec}
+
+        ## Rate each aspect {rate}
+        (grid likert categories)
+        - Poor
+        - Fair
+        - Good
+        ### Aspect one
+        ### Aspect two
+        """).strip()
+    groups = parse_bulk_markdown(md)
+    q = groups[0]["questions"][0]
+    scale = q["final_options"]["scale"]
+    assert scale["type"] == "categories"
+    assert scale["labels"] == ["Poor", "Fair", "Good"]
+    assert [r["title"] for r in q["grid_rows"]] == ["Aspect one", "Aspect two"]
+
+
+def test_parse_grid_row_outside_grid_errors():
+    md = textwrap.dedent("""
+        # Section {sec}
+
+        ## Standalone question
+        (likert number)
+        min: 1
+        max: 5
+        ### Orphan row
+        """).strip()
+    with pytest.raises(Exception, match=r"outside a \(grid"):
+        parse_bulk_markdown(md)
+
+
+def test_parse_grid_defaults_to_number_scale():
+    md = textwrap.dedent("""
+        # Section {sec}
+
+        ## Rate it {rate}
+        (grid)
+        ### Row one
+        """).strip()
+    groups = parse_bulk_markdown(md)
+    scale = groups[0]["questions"][0]["final_options"]["scale"]
+    assert scale["type"] == "number-scale"
+    assert scale["min"] == 1
+    assert scale["max"] == 5
+
+
+@pytest.mark.django_db
+class TestGridOutlineRoundTrip:
+    def test_export_then_parse_keeps_grid(self):
+        user = User.objects.create_user(username="gridrt", password=TEST_PASSWORD)
+        survey = _make_survey(user, name="Grid RT")
+        group = QuestionGroup.objects.create(name="Section", owner=user)
+        group.surveys.set([survey])
+        parent = SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text="How good was your doctor today at each of the following?",
+            type=SurveyQuestion.Types.GRID,
+            order=1,
+            options={
+                "type": "grid",
+                "row_type": "likert",
+                "scale": {
+                    "type": "number-scale",
+                    "min": 1,
+                    "max": 5,
+                    "left": "Not at all good",
+                    "right": "Very good",
+                    "render": "radio",
+                    "na_label": "Does not apply",
+                },
+            },
+        )
+        for idx, text in enumerate(["Being polite", "Listening to you"], start=2):
+            SurveyQuestion.objects.create(
+                survey=survey,
+                group=group,
+                parent=parent,
+                text=text,
+                type=SurveyQuestion.Types.LIKERT,
+                required=True,
+                order=idx,
+                options=[
+                    {
+                        "type": "number-scale",
+                        "min": 1,
+                        "max": 5,
+                        "left": "Not at all good",
+                        "right": "Very good",
+                        "render": "radio",
+                    }
+                ],
+            )
+
+        exported = _export_survey_to_markdown(survey)
+
+        # The stem exports as a grid with the full scale…
+        assert "(grid likert number)" in exported
+        assert "min: 1" in exported
+        assert "na: Does not apply" in exported
+        # …rows export as ### lines, never as top-level ## questions…
+        assert "### Being polite" in exported
+        assert "### Listening to you*" in exported
+        assert not any(
+            line.startswith("## Being polite") for line in exported.splitlines()
+        )
+        # …and the re-parse round-trips.
+        groups = parse_bulk_markdown(exported)
+        q = groups[0]["questions"][0]
+        assert q["final_type"] == "grid"
+        assert q["final_options"]["scale"]["na_label"] == "Does not apply"
+        assert [r["title"] for r in q["grid_rows"]] == [
+            "Being polite",
+            "Listening to you",
+        ]
+        assert all(r["required"] for r in q["grid_rows"])

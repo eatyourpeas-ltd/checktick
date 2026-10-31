@@ -15190,6 +15190,26 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                             dataset=dataset,
                         )
                         next_order += 1
+                        # Grid: create the rows from the ### headings (see
+                        # docs/import.md). Rows copy the shared scale into
+                        # their own options so flat consumers need no changes.
+                        if q["final_type"] == "grid":
+                            grid_scale = (
+                                (q.get("final_options") or {}).get("scale")
+                            ) or {}
+                            for row in q.get("grid_rows", []):
+                                SurveyQuestion.objects.create(
+                                    survey=survey,
+                                    group=grp,
+                                    parent=question,
+                                    text=row["title"],
+                                    type="likert",
+                                    options=[deepcopy(grid_scale)],
+                                    required=bool(row.get("required", False)),
+                                    hidden_by_default=q.get("hidden_by_default", False),
+                                    order=next_order,
+                                )
+                                next_order += 1
                         if q.get("ref"):
                             question_ref_map[q["ref"]] = question
                         if q.get("branches"):
@@ -16012,6 +16032,10 @@ def _export_survey_to_markdown(survey: Survey) -> str:
 
         # Add questions
         for question in group.surveyquestion_set.all():
+            # Grid rows export as ### lines under their parent grid —
+            # never as top-level questions.
+            if question.parent_id is not None:
+                continue
             required = "*" if question.required else ""
             question_ref = question.text.lower()[:30].replace(" ", "-").strip("-")
             lines.append(f"{indent}## {question.text}{required} {{{question_ref}}}")
@@ -16048,6 +16072,14 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                         "type"
                     ) in ["number", "number-scale"]:
                         export_type = "likert number"
+            elif question.type == "grid" and isinstance(question.options, dict):
+                # Grid: export the full scale so the round-trip keeps it.
+                grid_scale = (question.options or {}).get("scale") or {}
+                export_type = (
+                    "grid likert categories"
+                    if grid_scale.get("type") == "categories"
+                    else "grid likert number"
+                )
 
             # Question type
             lines.append(f"{indent}({export_type})")
@@ -16193,6 +16225,28 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                     render_val = question.options.get("render")
                     if render_val:
                         lines.append(f"{indent}render: {render_val}")
+
+            # Grid of sub-questions: emit the shared scale, then the rows
+            # as ### headings (see docs/import.md §Grid of sub-questions).
+            if question.type == "grid" and isinstance(question.options, dict):
+                grid_scale = (question.options or {}).get("scale") or {}
+                if grid_scale.get("type") == "categories":
+                    for label in grid_scale.get("labels", []):
+                        lines.append(f"{indent}- {label}")
+                elif grid_scale.get("type") == "number-scale":
+                    if grid_scale.get("min") is not None:
+                        lines.append(f"{indent}min: {grid_scale['min']}")
+                    if grid_scale.get("max") is not None:
+                        lines.append(f"{indent}max: {grid_scale['max']}")
+                    if grid_scale.get("left"):
+                        lines.append(f"{indent}left: {grid_scale['left']}")
+                    if grid_scale.get("right"):
+                        lines.append(f"{indent}right: {grid_scale['right']}")
+                if grid_scale.get("na_label"):
+                    lines.append(f"{indent}na: {grid_scale['na_label']}")
+                for row in question.subquestions.order_by("order", "id"):
+                    row_required = "*" if row.required else ""
+                    lines.append(f"{indent}### {row.text}{row_required}")
 
             # Branching rules
             conditions = SurveyQuestionCondition.objects.filter(
@@ -17361,7 +17415,7 @@ def published_template_import(request, template_id, slug):
 
             # Create questions
             for idx, q_data in enumerate(group_data.get("questions", []), start=1):
-                SurveyQuestion.objects.create(
+                question = SurveyQuestion.objects.create(
                     survey=survey,
                     group=new_group,
                     text=q_data.get("title", ""),
@@ -17370,6 +17424,24 @@ def published_template_import(request, template_id, slug):
                     required=q_data.get("required", False),
                     order=idx,
                 )
+                # Grid: create the rows from the ### headings (see
+                # docs/import.md). Rows copy the shared scale into their
+                # own options so flat consumers need no changes.
+                if q_data.get("final_type") == "grid":
+                    grid_scale = (
+                        (q_data.get("final_options") or {}).get("scale")
+                    ) or {}
+                    for row_idx, row in enumerate(q_data.get("grid_rows", []), start=1):
+                        SurveyQuestion.objects.create(
+                            survey=survey,
+                            group=new_group,
+                            parent=question,
+                            text=row.get("title", ""),
+                            type="likert",
+                            options=[deepcopy(grid_scale)],
+                            required=bool(row.get("required", False)),
+                            order=idx + row_idx,
+                        )
 
             # Increment import count
             template.increment_import_count()
@@ -17465,6 +17537,10 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
 
     # Add questions
     for question in questions:
+        # Grid rows export as ### lines under their parent grid — never
+        # as top-level questions.
+        if question.parent_id is not None:
+            continue
         required = "*" if question.required else ""
         question_ref = question.text.lower()[:30].replace(" ", "-").strip("-")
         lines.append(f"## {question.text}{required} {{{question_ref}}}")
@@ -17493,6 +17569,14 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                     export_type = "likert categories"
                 elif first_option.get("type") in ["number", "number-scale"]:
                     export_type = "likert number"
+        elif question.type == "grid" and isinstance(question.options, dict):
+            # Grid: export the full scale so the round-trip keeps it.
+            grid_scale = (question.options or {}).get("scale") or {}
+            export_type = (
+                "grid likert categories"
+                if grid_scale.get("type") == "categories"
+                else "grid likert number"
+            )
 
         # Question type
         lines.append(f"({export_type})")
@@ -17627,6 +17711,28 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                 render_val = question.options.get("render")
                 if render_val:
                     lines.append(f"render: {render_val}")
+
+        # Grid of sub-questions: emit the shared scale, then the rows as
+        # ### headings (see docs/import.md §Grid of sub-questions).
+        if question.type == "grid" and isinstance(question.options, dict):
+            grid_scale = (question.options or {}).get("scale") or {}
+            if grid_scale.get("type") == "categories":
+                for label in grid_scale.get("labels", []):
+                    lines.append(f"- {label}")
+            elif grid_scale.get("type") == "number-scale":
+                if grid_scale.get("min") is not None:
+                    lines.append(f"min: {grid_scale['min']}")
+                if grid_scale.get("max") is not None:
+                    lines.append(f"max: {grid_scale['max']}")
+                if grid_scale.get("left"):
+                    lines.append(f"left: {grid_scale['left']}")
+                if grid_scale.get("right"):
+                    lines.append(f"right: {grid_scale['right']}")
+            if grid_scale.get("na_label"):
+                lines.append(f"na: {grid_scale['na_label']}")
+            for row in question.subquestions.order_by("order", "id"):
+                row_required = "*" if row.required else ""
+                lines.append(f"### {row.text}{row_required}")
 
         # Branching rules
         conditions = SurveyQuestionCondition.objects.filter(question=question)

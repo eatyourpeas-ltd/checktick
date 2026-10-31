@@ -155,19 +155,21 @@ Yes, you can convert an individual account to an organisation account. Your exis
 3. Add questions:
    - Click "Add Question"
    - Choose question type:
-     - Text (short answer)
-     - Text Area (long answer)
-     - Multiple Choice
-     - Checkboxes
-     - Dropdown
-     - Number
-     - Date
-     - Scale (1-5, 1-10, etc.)
-     - File Upload
+     - Text / Number / Date (short answer, with number/date/time formats)
+     - Long text (multi-line answer)
+     - Multiple Choice (single answer)
+     - Multiple Choice (multiple answers)
+     - Dropdown (including standardised NHS Datasets)
+     - Orderable (rank the options)
+     - Yes/No
+     - Likert scale (numbered 1–5 style or your own labelled categories)
+     - Grid of sub-questions (several rows sharing one scale — e.g.
+       "How good was your doctor at each of the following?")
+     - Image choice
    - Set question options:
      - Required vs. optional
-     - Help text
      - Conditional logic (show if...)
+     - Follow-up text inputs for specific answers
 
 4. organise questions:
    - Drag and drop to reorder
