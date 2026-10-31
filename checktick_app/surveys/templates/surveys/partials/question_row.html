@@ -26,6 +26,11 @@
             </div>
             {% if q.type == 'template_patient' or q.type == 'template_professional' or q.type == 'content_block' %}
               <div class="text-xs opacity-70 flex items-center gap-1 flex-wrap">{% include "surveys/partials/question_type_icon.html" with qtype=q.type %}<span>{% if q.type == 'content_block' %}Content block • {{ q.get_type_display }}{% else %}Template • {{ q.get_type_display }}{% endif %}{% if q.required %} • <span class="text-error font-medium">(required)</span>{% endif %}</span></div>
+            {% elif q.type == 'grid' %}
+              <div class="text-xs opacity-70 flex items-center gap-1 flex-wrap">
+                {% include "surveys/partials/question_type_icon.html" with qtype=q.type %}
+                <span>Grid • {{ q.grid_rows|length }} row{{ q.grid_rows|pluralize }} — each on the shared scale{% if q.grid_rows_required %} • <span class="text-error font-medium">(required)</span>{% endif %}</span>
+              </div>
             {% else %}
               <div class="text-xs opacity-70 flex items-center gap-1 flex-wrap">
                 {% include "surveys/partials/question_type_icon.html" with qtype=q.type fmt=q.options.0.format %}
@@ -51,6 +56,25 @@
                 </div>
               {% endif %}
             {% endwith %}
+            {% if q.type == 'grid' %}
+              <div class="mt-2">
+                <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded text-xs font-medium">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h4M4 12h4M4 18h4"></path><path d="M12 6h8M12 12h8M12 18h8"></path></svg>
+                  <span>Rows</span>
+                </div>
+                <ol class="ml-1 mt-1 space-y-0.5">
+                  {% for row in q.grid_rows %}
+                    <li class="text-xs opacity-70 flex items-center gap-1.5">
+                      <span class="font-semibold opacity-60 select-none" aria-hidden="true">{{ forloop.counter }}.</span>
+                      <span>{{ row.text }}</span>
+                      {% if row.required %}<span class="text-error" aria-label="required">*</span>{% endif %}
+                    </li>
+                  {% empty %}
+                    <li class="text-xs text-warning">No rows yet — edit the grid to add them.</li>
+                  {% endfor %}
+                </ol>
+              </div>
+            {% endif %}
             {% include 'surveys/partials/question_preview.html' %}
           </div>
           <div class="flex items-center gap-2 ml-auto pr-1">

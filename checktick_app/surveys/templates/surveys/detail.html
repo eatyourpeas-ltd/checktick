@@ -898,6 +898,9 @@
               </div>
             {% endif %}
           </div>
+        {% elif q.type == 'grid' %}
+          {# Grid stem — no answer input of its own; the rows render below and are collected flat (one answer per row id). #}
+          <p class="text-sm opacity-70 -mt-1">{% trans "One answer per line — every line shares the same scale." %}</p>
         {% else %}
           <input class="input input-bordered w-full" type="text" name="q_{{ q.id }}" id="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true" required{% endif %} />
         {% endif %}

@@ -4,6 +4,23 @@
   let currentEditButton = null;
   let editButtonsDelegated = false;
 
+  // One-line explainer per question type, shown under the type picker so
+  // the picker itself can stay terse. Keep in sync with the type radios in
+  // builder_question_pane.html.
+  const TYPE_EXPLAINERS = {
+    text: "One line of free text. Formats: free text, number, date, time, or date & time.",
+    mc_single: "Pick exactly one answer from your list of options.",
+    mc_multi: "Tick any number of answers from your list of options.",
+    dropdown:
+      "Pick one answer from a dropdown menu \u2014 best for long lists. You can load standardised option sets (Datasets) below.",
+    orderable: "Drag your options into the respondent\u2019s preferred order.",
+    yesno: "A Yes / No toggle, with an optional third \u201CDon\u2019t know\u201D answer.",
+    likert: "One rating on a scale \u2014 numbered (e.g. 1\u20135) or your own labelled categories.",
+    image: "Pick one answer by clicking an image.",
+    long_text: "A multi-line free-text box for longer written answers.",
+    grid: "Several rows that each answer on the same scale \u2014 e.g. \u201CHow good was your doctor at each of the following?\u201D",
+  };
+
   function csrfToken() {
     const name = "csrftoken";
     const m = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
@@ -320,7 +337,9 @@
       }
     }
 
-    if (payload.type === "likert") {
+    // Likert scale fields are shared by likert questions and grid column
+    // scales (grid rows always render as radios).
+    if (payload.type === "likert" || payload.type === "grid") {
       const likertMode =
         payload.likert_mode || payload.likertMode || "categories";
       const likertRadio = form.querySelector(
@@ -370,6 +389,60 @@
             catsField.value = "";
           }
         }
+      }
+    }
+
+    // Grid: render the existing rows as editable chips and reset the
+    // add-rows textarea. Each chip posts grid_row_id_<id> so a rename keeps
+    // the row (and its answers); Remove drops the input so the row deletes.
+    if (payload.type === "grid") {
+      const rowsContainer = form.querySelector("[data-grid-rows-existing]");
+      const emptyNote = form.querySelector("[data-grid-rows-empty-note]");
+      const rows = Array.isArray(payload.grid_rows) ? payload.grid_rows : [];
+      if (rowsContainer) {
+        rowsContainer
+          .querySelectorAll("[data-grid-row-chip]")
+          .forEach((el) => el.remove());
+        rows.forEach((row) => {
+          const chip = document.createElement("div");
+          chip.className =
+            "flex items-center gap-2 p-2 bg-base-100 rounded border border-base-300";
+          chip.setAttribute("data-grid-row-chip", "");
+          const input = document.createElement("input");
+          input.type = "text";
+          input.name = `grid_row_id_${row.id}`;
+          input.className = "input input-sm input-bordered flex-1";
+          input.setAttribute("aria-label", "Row text");
+          input.value = row.text || "";
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "btn btn-xs btn-warning";
+          removeBtn.textContent = "Remove";
+          removeBtn.addEventListener("click", function () {
+            chip.remove();
+            const remaining = rowsContainer.querySelectorAll(
+              "[data-grid-row-chip]",
+            ).length;
+            if (emptyNote)
+              emptyNote.classList.toggle("hidden", remaining > 0);
+          });
+          chip.appendChild(input);
+          chip.appendChild(removeBtn);
+          rowsContainer.appendChild(chip);
+        });
+        if (emptyNote)
+          emptyNote.classList.toggle("hidden", rows.length > 0);
+      }
+      const newRowsField = form.querySelector(
+        'textarea[name="grid_new_rows"]',
+      );
+      if (newRowsField) newRowsField.value = "";
+      const naToggle = form.querySelector("[data-grid-include-na]");
+      if (naToggle) naToggle.checked = Boolean(payload.grid_include_na);
+      const naLabel = form.querySelector('input[name="grid_na_label"]');
+      if (naLabel) {
+        naLabel.value = payload.grid_na_label || "";
+        naLabel.disabled = !Boolean(payload.grid_include_na);
       }
     }
 
@@ -879,6 +952,7 @@
     const textSection = form.querySelector('[data-section="text-options"]');
     const optsSection = form.querySelector('[data-section="options"]');
     const likertSection = form.querySelector('[data-section="likert"]');
+    const gridSection = form.querySelector('[data-section="grid"]');
     const yesnoFollowupSection = form.querySelector(
       '[data-section="yesno-followup"]',
     );
@@ -935,6 +1009,12 @@
       const checked = form.querySelector('input[name="type"]:checked');
       const type = checked ? checked.value : null;
       if (!type) return;
+
+      // Keep the per-type explainer in step with the picker.
+      const explainerEl = form.querySelector("[data-type-explainer]");
+      if (explainerEl) {
+        explainerEl.textContent = TYPE_EXPLAINERS[type] || "";
+      }
       const isText = type === "text";
       const isImage = type === "image";
       const isMC =
@@ -944,6 +1024,7 @@
         type === "orderable";
       const isDropdown = type === "dropdown";
       const isLikert = type === "likert";
+      const isGrid = type === "grid";
       const isYesNo = type === "yesno";
 
       // Show/hide follow-up for mc/dropdown/orderable (not image or likert)
@@ -955,7 +1036,17 @@
 
       if (textSection) textSection.classList.toggle("hidden", !isText);
       if (optsSection) optsSection.classList.toggle("hidden", !isMC);
-      if (likertSection) likertSection.classList.toggle("hidden", !isLikert);
+      // Grid shares the likert section for its column scale.
+      if (likertSection)
+        likertSection.classList.toggle("hidden", !(isLikert || isGrid));
+      if (gridSection) gridSection.classList.toggle("hidden", !isGrid);
+      // Render-mode radios make no sense for a grid — rows always render
+      // as one radio per column cell.
+      const likertRenderFieldset = form.querySelector(
+        "[data-likert-render-fieldset]",
+      );
+      if (likertRenderFieldset)
+        likertRenderFieldset.classList.toggle("hidden", isGrid);
       if (yesnoFollowupSection)
         yesnoFollowupSection.classList.toggle("hidden", !isYesNo);
       if (imageOptionsSection)
@@ -1054,6 +1145,12 @@
           likertCat.classList.toggle("hidden", mode !== "categories");
         if (likertNum) likertNum.classList.toggle("hidden", mode !== "number");
       }
+
+      // Grid "Does not apply" label is only editable when the option is on.
+      const gridNaToggle = form.querySelector("[data-grid-include-na]");
+      const gridNaLabel = form.querySelector('input[name="grid_na_label"]');
+      if (gridNaLabel)
+        gridNaLabel.disabled = !(gridNaToggle && gridNaToggle.checked);
 
       refreshYesnoLabels();
     }

@@ -2653,6 +2653,30 @@ def _is_linked_consent_question(q: SurveyQuestion) -> bool:
     return any(isinstance(o, dict) and "_content_block_parent" in o for o in opts)
 
 
+def _is_grid_row(q: SurveyQuestion) -> bool:
+    """Return True if ``q`` is a row of a grid question.
+
+    Grid rows are real questions with real answers, but they render inline
+    under their parent grid — never as standalone cards in the builder list
+    or the branching target picker.
+    """
+    return q.parent_id is not None
+
+
+def _grid_scale(options: Any) -> dict[str, Any]:
+    """Return the shared column scale config stored on a grid parent.
+
+    Grid parents keep the shared scale in ``options["scale"]`` so the edit
+    form can prefill it. Rows carry their own copy in their ``options`` so
+    every flat consumer (rendering, analytics, exports) works unchanged.
+    """
+    if isinstance(options, dict):
+        scale = options.get("scale")
+        if isinstance(scale, dict):
+            return scale
+    return {}
+
+
 def _prepare_question_rendering(
     survey: Survey, questions: Iterable[SurveyQuestion] | None = None
 ) -> list[SurveyQuestion]:
@@ -2697,11 +2721,39 @@ def _prepare_question_rendering(
     # their options list.
     questions_iter = [q for q in questions_iter if not _is_linked_consent_question(q)]
 
+    # Grid rows render inline under their parent grid card — filter them out
+    # of the top-level builder list and attach them to their parents instead
+    # (as ``grid_rows``), same hiding contract as linked consent questions.
+    grid_parents = [q for q in questions_iter if q.type == SurveyQuestion.Types.GRID]
+    if grid_parents:
+        parent_ids = [q.id for q in grid_parents if q.id is not None]
+        rows_by_parent: dict[int, list[SurveyQuestion]] = {}
+        if parent_ids:
+            for row in (
+                SurveyQuestion.objects.filter(parent_id__in=parent_ids)
+                .select_related("group")
+                .order_by("order", "id")
+            ):
+                rows_by_parent.setdefault(row.parent_id, []).append(row)
+        for parent in grid_parents:
+            rows = rows_by_parent.get(parent.id, [])
+            setattr(parent, "grid_rows", rows)
+            # The builder card shows the grid as required when any row is —
+            # the stem itself is stored required=False (clean() enforces).
+            setattr(parent, "grid_rows_required", any(bool(r.required) for r in rows))
+    for q in questions_iter:
+        if not hasattr(q, "grid_rows"):
+            setattr(q, "grid_rows", [])
+    questions_iter = [q for q in questions_iter if not _is_grid_row(q)]
+
     all_questions_meta: list[dict[str, Any]] = []
     try:
         for item in (
             survey.questions.select_related("group")
             .only("id", "text", "order", "group__name", "hidden_by_default")
+            # Grid rows render inline under their parent — never offered as
+            # branching targets (jumping into a table cell is incoherent).
+            .filter(parent__isnull=True)
             .all()
         ):
             text = (item.text or "Untitled question").strip() or "Untitled question"
@@ -2848,6 +2900,8 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
     }
 
     options: Any = []
+    # Grid rows to create — populated by the GRID branch below.
+    grid_new_rows: list[str] = []
     if qtype in {
         SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE,
         SurveyQuestion.Types.MULTIPLE_CHOICE_MULTI,
@@ -2966,6 +3020,50 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
                 ]
             else:
                 options = labels
+    elif qtype == SurveyQuestion.Types.GRID:
+        # Grid: a stem with no answer of its own plus rows sharing one
+        # scale. The likert_* fields build the shared scale (rows always
+        # render as radios — a slider can't express a table cell, and
+        # "Does not apply" needs an explicit choice). Row labels come
+        # from the grid_rows textarea (create) or grid_new_rows (edit —
+        # existing rows post as grid_row_id_<id> inputs and are handled
+        # by the edit view, not here).
+        likert_mode = (data.get("likert_mode") or "number").strip()
+        if likert_mode not in {"number", "categories"}:
+            likert_mode = "number"
+        if likert_mode == "number":
+            try:
+                min_v = int(data.get("likert_min", "1"))
+            except (TypeError, ValueError):
+                min_v = 1
+            try:
+                max_v = int(data.get("likert_max", "5"))
+            except (TypeError, ValueError):
+                max_v = 5
+            if max_v < min_v:
+                min_v, max_v = max_v, min_v
+            scale: dict[str, Any] = {
+                "type": "number-scale",
+                "min": min_v,
+                "max": max_v,
+                "left": (data.get("likert_left_label") or "").strip(),
+                "right": (data.get("likert_right_label") or "").strip(),
+                "render": "radio",
+            }
+        else:
+            raw = data.get("likert_categories", "")
+            labels = [line.strip() for line in raw.splitlines() if line.strip()]
+            scale = {"type": "categories", "labels": labels, "render": "radio"}
+        if data.get("grid_include_na") in {"on", "true", "1", "yes"}:
+            scale["na_label"] = (
+                data.get("grid_na_label") or ""
+            ).strip() or "Does not apply"
+        options = {"type": "grid", "row_type": "likert", "scale": scale}
+        # Rows to CREATE — the textarea always posts as grid_new_rows.
+        # Existing rows post as grid_row_id_<id> inputs and are handled by
+        # the edit view's row sync, not here.
+        rows_raw = data.get("grid_new_rows", "")
+        grid_new_rows = [line.strip() for line in rows_raw.splitlines() if line.strip()]
     elif qtype == SurveyQuestion.Types.TEXT:
         text_format = (data.get("text_format") or "free").strip()
         if text_format not in {"number", "free", "date", "time", "datetime"}:
@@ -3004,6 +3102,7 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
         "hidden_by_default": hidden_by_default,
         "options": options,
         "dataset_key": dataset_key,
+        "grid_new_rows": grid_new_rows,
     }
 
 
@@ -3249,7 +3348,12 @@ def _build_condition_payload(
 
 
 def _duplicate_question(question: SurveyQuestion) -> SurveyQuestion:
-    """Clone a question immediately after the original within the survey order."""
+    """Clone a question immediately after the original within the survey order.
+
+    Grid questions clone their rows as a block: room is made after the cloned
+    stem (everything past it shifts by the row count), then the rows are
+    inserted in their original relative order under the cloned parent.
+    """
     order = question.order
     with transaction.atomic():
         SurveyQuestion.objects.filter(survey=question.survey, order__gt=order).update(
@@ -3264,6 +3368,27 @@ def _duplicate_question(question: SurveyQuestion) -> SurveyQuestion:
             required=question.required,
             order=order + 1,
         )
+        if question.type == SurveyQuestion.Types.GRID:
+            rows = list(question.subquestions.order_by("order", "id"))
+            if rows:
+                # Shift everything after the cloned stem past the row block.
+                # The source rows were shifted by +1 above and sit after the
+                # clone, so they move with the rest.
+                SurveyQuestion.objects.filter(
+                    survey=question.survey, order__gt=cloned.order
+                ).update(order=models.F("order") + len(rows))
+                for idx, row in enumerate(rows):
+                    SurveyQuestion.objects.create(
+                        survey=question.survey,
+                        group=question.group,
+                        parent=cloned,
+                        text=row.text,
+                        type=row.type,
+                        options=deepcopy(row.options),
+                        required=row.required,
+                        hidden_by_default=row.hidden_by_default,
+                        order=cloned.order + 1 + idx,
+                    )
     return cloned
 
 
@@ -3285,7 +3410,40 @@ def _serialize_question_for_builder(
     }
 
     options = question.options or []
-    if question.type == SurveyQuestion.Types.TEXT:
+    if question.type == SurveyQuestion.Types.GRID:
+        # Grid: expose the shared scale in the same likert_* keys the edit
+        # form reads, plus the row list so the edit pane can prefill the
+        # row chips. required reflects the rows (the stem is stored False).
+        scale = _grid_scale(options)
+        payload["likert_mode"] = (
+            "number" if scale.get("type") == "number-scale" else "categories"
+        )
+        try:
+            payload["likert_min"] = int(scale.get("min", 1))
+        except (TypeError, ValueError):
+            payload["likert_min"] = 1
+        try:
+            payload["likert_max"] = int(scale.get("max", 5))
+        except (TypeError, ValueError):
+            payload["likert_max"] = 5
+        payload["likert_left_label"] = str(scale.get("left") or "")
+        payload["likert_right_label"] = str(scale.get("right") or "")
+        labels = scale.get("labels")
+        payload["likert_categories"] = (
+            [str(x) for x in labels] if isinstance(labels, list) else []
+        )
+        payload["likert_render"] = "radio"
+        na_label = scale.get("na_label")
+        payload["grid_include_na"] = bool(na_label)
+        payload["grid_na_label"] = str(na_label or "")
+        payload["grid_rows"] = [
+            {"id": row.id, "text": row.text}
+            for row in getattr(question, "grid_rows", [])
+        ]
+        payload["required"] = any(
+            bool(r.required) for r in getattr(question, "grid_rows", [])
+        )
+    elif question.type == SurveyQuestion.Types.TEXT:
         fmt = "free"
         text_min = ""
         text_max = ""
@@ -12644,17 +12802,49 @@ def builder_question_create(request: HttpRequest, slug: str) -> HttpResponse:
             is_active=True,
         ).first()
 
-    SurveyQuestion.objects.create(
-        survey=survey,
-        group=group,
-        text=text or "Untitled",
-        type=qtype,
-        options=options,
-        required=required,
-        hidden_by_default=form_data["hidden_by_default"],
-        order=order,
-        dataset=dataset,
-    )
+    if qtype == SurveyQuestion.Types.GRID:
+        # Grid: create the stem plus one child question per row. The stem
+        # carries the shared scale; rows copy it into their own options so
+        # every flat consumer (rendering, analytics, exports) works unchanged.
+        # required lives on the rows — the stem has no answer (clean()
+        # rejects a required grid parent).
+        scale = _grid_scale(options)
+        with transaction.atomic():
+            parent = SurveyQuestion.objects.create(
+                survey=survey,
+                group=group,
+                text=text or "Untitled",
+                type=SurveyQuestion.Types.GRID,
+                options=options,
+                required=False,
+                hidden_by_default=form_data["hidden_by_default"],
+                order=order,
+                dataset=dataset,
+            )
+            for idx, row_text in enumerate(form_data["grid_new_rows"]):
+                SurveyQuestion.objects.create(
+                    survey=survey,
+                    group=group,
+                    parent=parent,
+                    text=row_text,
+                    type=SurveyQuestion.Types.LIKERT,
+                    options=[deepcopy(scale)],
+                    required=required,
+                    hidden_by_default=form_data["hidden_by_default"],
+                    order=order + 1 + idx,
+                )
+    else:
+        SurveyQuestion.objects.create(
+            survey=survey,
+            group=group,
+            text=text or "Untitled",
+            type=qtype,
+            options=options,
+            required=required,
+            hidden_by_default=form_data["hidden_by_default"],
+            order=order,
+            dataset=dataset,
+        )
     questions_qs = survey.questions.select_related("group").all()
     questions = _prepare_question_rendering(survey, questions_qs)
     groups = survey.question_groups.filter(owner=request.user)
@@ -13437,6 +13627,60 @@ def builder_group_question_content_block_update(
     )
 
 
+def _sync_grid_rows(q: SurveyQuestion, form_data: dict[str, Any], post) -> None:
+    """Sync a grid's rows from the edit form.
+
+    Existing rows post as ``grid_row_id_<id>`` inputs — text is updated in
+    place so row identity (and with it any existing answers) survives a
+    rename. Rows whose input is missing from the POST were removed in the
+    browser and are deleted — their answers cascade with them. New rows
+    from the ``grid_new_rows`` textarea are appended, then all rows are
+    renumbered relative to the parent so their sort stays tidy.
+
+    The shared scale and the stem's required/hidden flags are re-applied to
+    every row so a scale edit or required toggle reaches the whole grid.
+    """
+    scale = _grid_scale(form_data["options"])
+    rows_required = form_data["required"]
+    rows_hidden = form_data["hidden_by_default"]
+    existing = list(q.subquestions.order_by("order", "id"))
+    kept: list[SurveyQuestion] = []
+    for row in existing:
+        val = (post.get(f"grid_row_id_{row.id}") or "").strip()
+        if not val:
+            # Removed in the browser — delete the row (answers cascade).
+            row.delete()
+            continue
+        row.text = val
+        row.options = [deepcopy(scale)]
+        row.required = rows_required
+        row.hidden_by_default = rows_hidden
+        row.save()
+        kept.append(row)
+    base = q.order
+    for idx, row_text in enumerate(form_data["grid_new_rows"]):
+        kept.append(
+            SurveyQuestion.objects.create(
+                survey=q.survey,
+                group=q.group,
+                parent=q,
+                text=row_text,
+                type=SurveyQuestion.Types.LIKERT,
+                options=[deepcopy(scale)],
+                required=rows_required,
+                hidden_by_default=rows_hidden,
+                order=base + 1 + idx,
+            )
+        )
+    # Renumber rows sequentially under the parent (relative order kept) —
+    # create may have appended past stale orders left by earlier edits.
+    for idx, row in enumerate(kept):
+        want = base + 1 + idx
+        if row.order != want:
+            row.order = want
+            row.save(update_fields=["order"])
+
+
 @login_required
 @require_http_methods(["POST"])
 def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResponse:
@@ -13444,9 +13688,16 @@ def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResp
     require_can_edit(request.user, survey)
     q = get_object_or_404(SurveyQuestion, id=qid, survey=survey)
     form_data = _parse_builder_question_form(request.POST)
+    old_type = q.type
     q.text = form_data["text"] or "Untitled"
     q.type = form_data["type"]
-    q.required = form_data["required"]
+    # Grid stems have no answer of their own — required on the stem applies
+    # to every row instead (clean() rejects a required grid parent).
+    q.required = (
+        False
+        if form_data["type"] == SurveyQuestion.Types.GRID
+        else form_data["required"]
+    )
     q.hidden_by_default = form_data["hidden_by_default"]
     q.options = form_data["options"]
     dataset_key = form_data.get("dataset_key")
@@ -13470,7 +13721,14 @@ def builder_question_edit(request: HttpRequest, slug: str, qid: int) -> HttpResp
     else:
         q.dataset = None
 
-    q.save()
+    with transaction.atomic():
+        q.save()
+        if q.type == SurveyQuestion.Types.GRID:
+            _sync_grid_rows(q, form_data, request.POST)
+        elif old_type == SurveyQuestion.Types.GRID:
+            # Switched away from grid: rows would render nowhere — delete
+            # them (answers cascade; a grid row cannot stand alone).
+            q.subquestions.all().delete()
     return _render_template_question_row(
         request,
         survey,
@@ -13489,9 +13747,16 @@ def builder_group_question_edit(
     group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)
     q = get_object_or_404(SurveyQuestion, id=qid, survey=survey, group=group)
     form_data = _parse_builder_question_form(request.POST)
+    old_type = q.type
     q.text = form_data["text"] or "Untitled"
     q.type = form_data["type"]
-    q.required = form_data["required"]
+    # Grid stems have no answer of their own — required on the stem applies
+    # to every row instead (clean() rejects a required grid parent).
+    q.required = (
+        False
+        if form_data["type"] == SurveyQuestion.Types.GRID
+        else form_data["required"]
+    )
     q.hidden_by_default = form_data["hidden_by_default"]
     q.options = form_data["options"]
     dataset_key = form_data.get("dataset_key")
@@ -13509,7 +13774,14 @@ def builder_group_question_edit(
     else:
         q.dataset = None
 
-    q.save()
+    with transaction.atomic():
+        q.save()
+        if q.type == SurveyQuestion.Types.GRID:
+            _sync_grid_rows(q, form_data, request.POST)
+        elif old_type == SurveyQuestion.Types.GRID:
+            # Switched away from grid: rows would render nowhere — delete
+            # them (answers cascade; a grid row cannot stand alone).
+            q.subquestions.all().delete()
     return _render_template_question_row(
         request,
         survey,

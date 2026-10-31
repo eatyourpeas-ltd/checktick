@@ -157,6 +157,22 @@
         <p class="text-sm opacity-60 italic">No images uploaded yet. Click "Upload/Edit Images" to add images.</p>
       {% endif %}
     </div>
+  {% elif q.type == 'grid' %}
+    {% with q.options.scale as scale %}
+    <div class="text-xs opacity-70 space-y-0.5">
+      {% if scale and scale.type == 'number-scale' %}
+        <p>Shared scale per row: {{ scale.min }}&ndash;{{ scale.max }}{% if scale.left %} ({{ scale.left }} &hellip;{% endif %}{% if scale.right %} {{ scale.right }}){% endif %}{% if not scale.left and not scale.right %} (numbers){% endif %}</p>
+      {% elif scale and scale.labels %}
+        <p>Shared scale per row: {{ scale.labels|join:', ' }}</p>
+      {% endif %}
+      {% if scale and scale.na_label %}
+        <p>Plus a &ldquo;{{ scale.na_label }}&rdquo; answer on every row.</p>
+      {% endif %}
+      {% if not q.grid_rows %}
+        <p class="text-warning">No rows yet — edit the grid to add them.</p>
+      {% endif %}
+    </div>
+    {% endwith %}
   {% elif q.type == 'long_text' %}
     <textarea class="textarea textarea-bordered w-full" rows="3" disabled></textarea>
   {% elif q.type == 'content_block' %}

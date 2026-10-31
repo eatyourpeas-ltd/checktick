@@ -2602,12 +2602,26 @@ class SurveyQuestion(models.Model):
         CONTENT_BLOCK = "content_block", "Content block"
         TEMPLATE_PATIENT = "template_patient", "Patient details template"
         TEMPLATE_PROFESSIONAL = "template_professional", "Professional details template"
+        GRID = "grid", "Grid of sub-questions"
 
     survey = models.ForeignKey(
         Survey, on_delete=models.CASCADE, related_name="questions"
     )
     group = models.ForeignKey(
         QuestionGroup, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    # [Grid subquestions] Parent grid question. Rows of a grid are real
+    # SurveyQuestion rows (type per-row, usually likert) with parent set;
+    # answers stay flat (keyed by row id) so submissions, progress,
+    # analytics, and exports need no nested shape. NULL = top-level
+    # question.
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="subquestions",
+        help_text="Grid this row belongs to (NULL for top-level questions)",
     )
     text = models.TextField()
     type = models.CharField(max_length=50, choices=Types.choices)
@@ -2646,12 +2660,32 @@ class SurveyQuestion(models.Model):
     class Meta:
         ordering = ["order", "id"]
 
+    # Question types allowed as grid rows. Likert covers the 360° case
+    # (shared scale per row); the others keep the grid honest for mixed
+    # instruments. Rows with their own type are rendered inline by the
+    # parent grid, not as standalone questions.
+    GRID_ROW_TYPES = {
+        Types.LIKERT,
+        Types.YESNO,
+        Types.MULTIPLE_CHOICE_SINGLE,
+        Types.MULTIPLE_CHOICE_MULTI,
+        Types.DROPDOWN,
+        Types.TEXT,
+        Types.LONG_TEXT,
+    }
+
     def clean(self):
         """Validate question-level constraints.
 
         Content blocks have no answer input, so ``required`` is meaningless
         and must always be ``False``. Enforced here as the last line of
         defence (the parser and builder form also force it).
+
+        Grid parents are the same: the stem has no answer of its own (each
+        row is answered separately), so ``required`` must be ``False`` —
+        the builder applies the stem's required flag to every row instead.
+        Grid rows must point at a grid parent, may not be grids themselves,
+        and must use a row-compatible type.
         """
         from django.core.exceptions import ValidationError
 
@@ -2660,6 +2694,39 @@ class SurveyQuestion(models.Model):
             raise ValidationError(
                 {"required": "Content blocks cannot be required (they have no answer)."}
             )
+        if self.type == self.Types.GRID:
+            if self.required:
+                raise ValidationError(
+                    {
+                        "required": (
+                            "Grid stems cannot be required (each row is "
+                            "answered separately). Mark the grid required to "
+                            "apply it to every row."
+                        )
+                    }
+                )
+            if self.parent_id is not None:
+                raise ValidationError(
+                    {
+                        "parent": (
+                            "Grid rows cannot be grids themselves (no nested " "grids)."
+                        )
+                    }
+                )
+        if self.parent_id is not None:
+            if self.type == self.Types.GRID:
+                # Covered above; kept explicit for clarity.
+                raise ValidationError({"type": "Grid rows cannot be grids themselves."})
+            if self.type not in self.GRID_ROW_TYPES:
+                raise ValidationError(
+                    {
+                        "type": (
+                            f"{self.type} questions cannot be grid rows. "
+                            "Allowed row types: likert, yesno, mc_single, "
+                            "mc_multi, dropdown, text, long_text."
+                        )
+                    }
+                )
 
 
 def question_image_upload_path(instance, filename):
