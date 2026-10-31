@@ -305,6 +305,24 @@ and each participant sees only the sections — and, in content blocks,
 the `{{placeholder}}` text — resolved for their batch. The tokens CSV
 export includes a `category_<dimension>` column per category.
 
+Three Tokens-page conveniences cover the 360° pattern's edge cases:
+
+- **Generate full 360 set for a subject** — when the survey has
+  token-based `subject` and `rater_role` dimensions, pick a subject from
+  the roster and how many invitations each rater role needs;
+  CheckTick creates one batch per role, every invitation carrying
+  `{"subject": …, "rater_role": …}` — the whole 360 in one action
+  instead of one form submission per role.
+- **Filter by subject** — a dropdown of the subject values already
+  carried by invitation batches, for scanning completion per subject
+  once the sets are generated. The CSV export stays flat.
+- **Per-invitation override** — an *unused* invitation's category
+  values can be edited in place ("Edit" in the Categories column) —
+  the escape hatch for an extra peer rater for an existing subject or a
+  mis-tagged reused link. Batch generation stays the primary flow. A
+  used invitation's values are part of the audit trail and stay
+  read-only; edits are recorded in the audit log.
+
 ## Participant Experience
 
 ### Progress Saving and Resume

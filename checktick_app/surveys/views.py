@@ -7950,12 +7950,169 @@ def _category_value_counts(survey: Survey) -> dict[str, dict[str, int]]:
     return counts
 
 
+def _survey_360_dims(
+    survey: Survey,
+) -> tuple[RespondentCategory | None, RespondentCategory | None]:
+    """The 360 pattern's dimensions, when the survey carries the convention.
+
+    Returns ``(subject_category, role_category)`` when the survey defines a
+    token-source ``subject`` dimension and a token-source ``rater_role``
+    dimension, the roles have a roster to loop over, and the subject has a
+    roster to pick from (or is free-text). Otherwise ``(None, None)`` — the
+    Tokens page then hides the "Generate full 360 set" action (issue #355).
+    The first cut hardcodes the 360 convention; only generalise if another
+    pattern emerges.
+    """
+    cats = {c.name: c for c in survey.respondent_categories.all()}
+    subject_category = cats.get("subject")
+    role_category = cats.get("rater_role")
+    if subject_category is None or role_category is None:
+        return None, None
+    token_source = RespondentCategory.ResolutionSource.TOKEN
+    if subject_category.resolution_source != token_source:
+        return None, None
+    if role_category.resolution_source != token_source:
+        return None, None
+    if not role_category.allowed_values:
+        return None, None
+    if not subject_category.free_text and not subject_category.allowed_values:
+        return None, None
+    return subject_category, role_category
+
+
+def _create_token_batch(
+    survey: Survey,
+    *,
+    created_by: User,
+    count: int,
+    note: str,
+    expires_at: datetime | None,
+    category_values: dict[str, str],
+) -> list[SurveyAccessToken]:
+    """Create one token batch; every token carries the same category_values.
+
+    Shared by the batch-form POST and the "Generate full 360 set" action
+    (issue #355) — the latter is a loop over roles, no new model.
+    """
+    created = []
+    # NB: the loop variable must not be ``_`` — that name is bound to
+    # gettext at module level; a local ``_`` assignment would shadow it
+    # with UnboundLocalError.
+    for _n in range(max(0, min(count, 1000))):
+        t = SurveyAccessToken(
+            survey=survey,
+            token=secrets.token_urlsafe(24),
+            created_by=created_by,
+            expires_at=expires_at,
+            note=note,
+            category_values=category_values,
+        )
+        t.save()
+        created.append(t)
+    return created
+
+
+def _warn_near_duplicate_category_values(
+    request: HttpRequest,
+    survey: Survey,
+    cats: Iterable[RespondentCategory],
+    new_values: dict[str, str],
+) -> None:
+    """Issue #353 mitigation, shared by every category-values write path.
+
+    For free-text dimensions, warn when the typed value is a
+    near-duplicate (fuzzy match) of a value already used by other batches —
+    a typo would silently split a subject into two reporting groups.
+    Non-blocking: the batch/edit still goes through.
+    """
+    existing_counts = _category_value_counts(survey)
+    for cat in cats:
+        val = new_values.get(cat.name)
+        if not cat.free_text or not val:
+            continue
+        used = existing_counts.get(cat.name) or {}
+        if val in used:
+            continue  # Exact reuse of a previous value — not a typo.
+        close = difflib.get_close_matches(val, list(used), n=1, cutoff=0.8)
+        if close:
+            messages.warning(
+                request,
+                _(
+                    '"%(val)s" looks similar to "%(other)s", which you '
+                    "have already used for %(dim)s. If this is a typo, "
+                    "the two sets of responses will be counted "
+                    "separately."
+                )
+                % {"val": val, "other": close[0], "dim": cat.display_name},
+            )
+
+
+def _survey_tokens_generate_360_set(
+    request: HttpRequest, survey: Survey
+) -> HttpResponse:
+    """Issue #355: "Generate full 360 set for a subject".
+
+    One batch per ``rater_role`` value, every token carrying
+    ``{"subject": <subject>, "rater_role": <role>}`` — the whole 360 in
+    one action instead of N separate form submissions. Reuses the existing
+    batch creation path (``_create_token_batch``) in a loop; no new model.
+    Only offered when the survey carries the 360 convention
+    (``_survey_360_dims``) — a direct POST against a non-360 survey is
+    rejected.
+    """
+    subject_category, role_category = _survey_360_dims(survey)
+    if subject_category is None or role_category is None:
+        messages.error(
+            request,
+            _(
+                "This survey does not have the token-based subject and "
+                "rater_role dimensions the 'Generate full 360 set' action "
+                "needs."
+            ),
+        )
+        return redirect("surveys:tokens", slug=survey.slug)
+    subject = (request.POST.get("subject") or "").strip()
+    if not subject:
+        messages.error(request, _("Pick a subject for the 360 set."))
+        return redirect("surveys:tokens", slug=survey.slug)
+    _warn_near_duplicate_category_values(
+        request, survey, [subject_category], {subject_category.name: subject}
+    )
+    created_total = 0
+    for role in role_category.allowed_values:
+        raw_count = request.POST.get(f"count_{role}", "0")
+        try:
+            role_count = int(raw_count)
+        except (TypeError, ValueError):
+            role_count = 0
+        if role_count <= 0:
+            continue  # Roles left at zero get no batch.
+        created = _create_token_batch(
+            survey,
+            created_by=request.user,
+            count=role_count,
+            note="",
+            expires_at=None,
+            category_values={
+                subject_category.name: subject,
+                role_category.name: str(role),
+            },
+        )
+        created_total += len(created)
+    messages.success(request, f"Created {created_total} tokens for {subject}.")
+    return redirect("surveys:tokens", slug=survey.slug)
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
     require_can_edit(request.user, survey)
     if request.method == "POST":
+        # Issue #355: the "Generate full 360 set" action posts with
+        # action=generate_360_set; the plain batch form posts without it.
+        if request.POST.get("action") == "generate_360_set":
+            return _survey_tokens_generate_360_set(request, survey)
         try:
             count = int(request.POST.get("count", "0"))
         except ValueError:
@@ -7977,55 +8134,32 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
             raw_val = (request.POST.get(f"category_{cat.name}", "") or "").strip()
             if raw_val:
                 category_values[cat.name] = raw_val
-        # Issue #353 mitigation: for free-text dimensions, warn when the
-        # typed value is a near-duplicate (fuzzy match) of a value already
-        # used by other batches — a typo would silently split a subject
-        # into two reporting groups. Non-blocking: the batch is still
-        # created, and the author sees the warning after the redirect.
-        existing_counts = _category_value_counts(survey)
-        for cat in cats:
-            val = category_values.get(cat.name)
-            if not cat.free_text or not val:
-                continue
-            used = existing_counts.get(cat.name) or {}
-            if val in used:
-                continue  # Exact reuse of a previous value — not a typo.
-            close = difflib.get_close_matches(val, list(used), n=1, cutoff=0.8)
-            if close:
-                messages.warning(
-                    request,
-                    _(
-                        '"%(val)s" looks similar to "%(other)s", which you '
-                        "have already used for %(dim)s. If this is a typo, "
-                        "the two sets of responses will be counted "
-                        "separately."
-                    )
-                    % {"val": val, "other": close[0], "dim": cat.display_name},
-                )
-        created = []
-        # NB: the loop variable must not be ``_`` — that name is bound to
-        # gettext at module level (``from django.utils.translation import
-        # gettext as _``) and the near-duplicate warning block above calls
-        # it; a local ``_`` assignment would shadow it with UnboundLocalError.
-        for _n in range(max(0, min(count, 1000))):
-            t = SurveyAccessToken(
-                survey=survey,
-                token=secrets.token_urlsafe(24),
-                created_by=request.user,
-                expires_at=expires_at,
-                note=note,
-                category_values=category_values,
-            )
-            t.save()
-            created.append(t)
+        _warn_near_duplicate_category_values(request, survey, cats, category_values)
+        created = _create_token_batch(
+            survey,
+            created_by=request.user,
+            count=count,
+            note=note,
+            expires_at=expires_at,
+            category_values=category_values,
+        )
         messages.success(request, f"Created {len(created)} tokens.")
         return redirect("surveys:tokens", slug=slug)
-    tokens = survey.access_tokens.order_by("-created_at")[:500]
+    # Issue #356: filter the flat token list by the subject dimension's
+    # token-borne value so organisers can scan completion per subject.
+    # The CSV export stays flat and unchanged.
+    subject_filter = (request.GET.get("subject") or "").strip()
+    tokens_qs = survey.access_tokens.order_by("-created_at")
+    if subject_filter:
+        tokens_qs = tokens_qs.filter(category_values__subject=subject_filter)
+    tokens = tokens_qs[:500]
     respondent_categories = list(survey.respondent_categories.order_by("order", "id"))
     # Distinct-value counts per dimension (issue #353): surfaced on the
     # Tokens page so a free-text typo split is visible, and offered as
     # datalist suggestions in the batch form so authors reuse values.
     category_value_counts = _category_value_counts(survey)
+    subject_category, role_category = _survey_360_dims(survey)
+    subject_choices = sorted((category_value_counts.get("subject") or {}).keys())
     return render(
         request,
         "surveys/tokens.html",
@@ -8034,8 +8168,76 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
             "tokens": tokens,
             "respondent_categories": respondent_categories,
             "category_value_counts": category_value_counts,
+            "subject_filter": subject_filter,
+            "subject_choices": subject_choices,
+            "subject_category": subject_category,
+            "role_category": role_category,
         },
     )
+
+
+@login_required
+@require_http_methods(["POST"])
+def survey_token_categories_edit(
+    request: HttpRequest, slug: str, token_id: int
+) -> HttpResponse:
+    """Issue #354: token-level category value override.
+
+    Edits one invitation's ``category_values`` in place — the edge-case
+    escape hatch (one extra peer rater for an existing subject, a
+    mis-tagged reused link). Batch generation stays the primary flow. A
+    used invitation's values are part of the audit trail and cannot be
+    edited; the edit itself is audit-logged.
+    """
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    token = get_object_or_404(SurveyAccessToken, survey=survey, id=token_id)
+    if token.used_at:
+        messages.error(
+            request,
+            _(
+                "This invitation has already been used, so its category "
+                "values are part of the audit trail and can no longer be "
+                "edited. Generate a new batch instead."
+            ),
+        )
+        return redirect("surveys:tokens", slug=survey.slug)
+    cats = list(survey.respondent_categories.order_by("order", "id"))
+    old_values = dict(token.category_values or {})
+    new_values: dict[str, str] = {}
+    for cat in cats:
+        raw_val = (request.POST.get(f"category_{cat.name}", "") or "").strip()
+        if raw_val:
+            new_values[cat.name] = raw_val
+    changed_dims = sorted(
+        name
+        for name in set(old_values) | set(new_values)
+        if old_values.get(name) != new_values.get(name)
+    )
+    if not changed_dims:
+        messages.info(
+            request,
+            _("No changes — this invitation's category values stay as " "they are."),
+        )
+        return redirect("surveys:tokens", slug=survey.slug)
+    _warn_near_duplicate_category_values(request, survey, cats, new_values)
+    token.category_values = new_values
+    token.save(update_fields=["category_values"])
+    # Audit-log metadata only: the token id and the changed dimension
+    # keys. Never the values (subject names are personal data — see the
+    # AGENTS.md logging rules) and never the token string itself (a
+    # single-use credential).
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.SURVEY,
+        survey=survey,
+        action=AuditLog.Action.UPDATE,
+        severity=AuditLog.Severity.INFO,
+        message="Invite token category values edited before use.",
+        metadata={"token_id": token.id, "dimensions": changed_dims},
+    )
+    messages.success(request, _("Category values updated for this invitation."))
+    return redirect("surveys:tokens", slug=survey.slug)
 
 
 @login_required

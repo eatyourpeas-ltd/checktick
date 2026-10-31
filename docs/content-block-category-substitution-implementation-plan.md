@@ -151,5 +151,10 @@ Each commit is self-contained: code + tests + the doc line it implements.
   link labels are the only new field covered by
   `test_export_content_block_placeholder_round_trip`).
 - Free-text dimension values (large rotating rosters).
-- Token-level subject override; "Generate full 360 set for a subject" batch
-  action; Tokens page grouping by subject (already parked in #349).
+- ~~Token-level subject override; "Generate full 360 set for a subject"
+  batch action; Tokens page grouping by subject~~ — shipped in issues
+  #354, #355, and #356: a per-invitation `category_values` edit on the
+  Tokens page (unused invitations only, audit-logged), a "Generate full
+  360 set" action (one batch per `rater_role` value, all carrying the
+  subject), and a subject filter on the token list. The flat CSV export
+  is unchanged.

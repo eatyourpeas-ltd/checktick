@@ -70,6 +70,61 @@
       <a class="btn btn-ghost" href="/surveys/{{ survey.slug }}/tokens/export.csv">{% trans "Export CSV" %}</a>
     </div>
   </form>
+  {% if subject_category and role_category %}
+  {# Issue #355: the 360 convenience action. One batch per rater_role value, #}
+  {# all carrying the picked subject — shown only when the survey carries #}
+  {# the 360 convention (token-source subject + rater_role dimensions). #}
+  <details class="mt-6 rounded-lg border border-base-300 bg-base-100 px-4 py-3">
+    <summary class="cursor-pointer select-none text-sm font-semibold text-base-content/80">
+      {% trans "Generate full 360 set for a subject" %}
+    </summary>
+    <p class="text-xs text-base-content/60 mt-2 mb-3">
+      {% trans "Creates one invitation batch per rater role, every invitation carrying this subject — the whole 360 in one action instead of one batch per role." %}
+    </p>
+    <form method="post" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="generate_360_set" />
+      <div>
+        <label class="label text-xs">{% trans "Subject" %}</label>
+        {% if subject_category.free_text %}
+        <input type="text" name="subject" list="category-values-subject" class="input input-bordered input-sm w-full" placeholder="{% trans 'Type the subject for this 360 set' %}" autocomplete="off" required />
+        {% else %}
+        <select name="subject" class="select select-bordered select-sm w-full" required>
+          <option value="">—</option>
+          {% for val in subject_category.allowed_values %}
+          <option value="{{ val }}">{{ val }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+      </div>
+      {% for role in role_category.allowed_values %}
+      <div>
+        <label class="label text-xs">{% trans "How many" %} — {{ role }}</label>
+        <input type="number" name="count_{{ role }}" min="0" max="1000" value="1" class="input input-bordered input-sm w-full" />
+      </div>
+      {% endfor %}
+      <div class="flex items-end">
+        <button class="btn btn-primary btn-sm" type="submit">{% trans "Generate 360 set" %}</button>
+      </div>
+    </form>
+  </details>
+  {% endif %}
+  {% if subject_choices %}
+  {# Issue #356: filter the flat token list by the subject value so #}
+  {# organisers can scan completion per subject. CSV export stays flat. #}
+  <form method="get" class="flex items-end gap-2 mt-6">
+    <div>
+      <label class="label text-xs" for="subject-filter">{% trans "Filter by subject" %}</label>
+      <select name="subject" id="subject-filter" class="select select-bordered select-sm">
+        <option value="">{% trans "All subjects" %}</option>
+        {% for val in subject_choices %}
+        <option value="{{ val }}" {% if subject_filter == val %}selected{% endif %}>{{ val }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="btn btn-sm" type="submit">{% trans "Apply" %}</button>
+  </form>
+  {% endif %}
   <table class="table w-full mt-6">
     <thead>
       <tr>
@@ -106,9 +161,44 @@
         <td>{{ t.note }}</td>
         {% if respondent_categories %}
         <td class="text-xs">
+          {% if t.used_at %}
+          {# Issue #354: a used invitation's values are part of the audit #}
+          {# trail — read-only badges, no edit form. #}
           {% for dim, val in t.category_values.items %}
           <span class="badge badge-outline badge-xs">{{ dim }}: {{ val }}</span>
           {% endfor %}
+          {% else %}
+          {# Issue #354: token-level override for unused invitations — the #}
+          {# same per-dimension fields as the batch form, pre-filled with #}
+          {# the token's current values. #}
+          {% for dim, val in t.category_values.items %}
+          <span class="badge badge-outline badge-xs">{{ dim }}: {{ val }}</span>
+          {% endfor %}
+          <details class="mt-1">
+            <summary class="btn btn-ghost btn-xs px-2 list-none cursor-pointer select-none">{% trans "Edit" %}</summary>
+            <form method="post" action="{% url 'surveys:token_categories_edit' slug=survey.slug token_id=t.id %}" class="mt-1 flex flex-wrap items-end gap-1">
+              {% csrf_token %}
+              {% for cat in respondent_categories %}
+              {% with current=t.category_values|get_item:cat.name %}
+              <div>
+                <label class="block mb-0.5 text-[10px] leading-tight text-base-content/60" for="token-cat-{{ t.id }}-{{ cat.id }}">{{ cat.display_name }}</label>
+                {% if cat.free_text %}
+                <input type="text" id="token-cat-{{ t.id }}-{{ cat.id }}" name="category_{{ cat.name }}" value="{{ current|default:'' }}" class="input input-bordered input-xs w-28" autocomplete="off" />
+                {% else %}
+                <select id="token-cat-{{ t.id }}-{{ cat.id }}" name="category_{{ cat.name }}" class="select select-bordered select-xs w-28">
+                  <option value="">—</option>
+                  {% for val in cat.allowed_values %}
+                  <option value="{{ val }}" {% if current == val %}selected{% endif %}>{{ val }}</option>
+                  {% endfor %}
+                </select>
+                {% endif %}
+              </div>
+              {% endwith %}
+              {% endfor %}
+              <button type="submit" class="btn btn-primary btn-xs">{% trans "Save" %}</button>
+            </form>
+          </details>
+          {% endif %}
         </td>
         {% endif %}
       </tr>
