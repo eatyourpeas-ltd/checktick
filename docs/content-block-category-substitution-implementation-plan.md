@@ -146,10 +146,13 @@ Each commit is self-contained: code + tests + the doc line it implements.
   issue #352 (`_substituted_content_block_links` copies each link with the
   label substituted; the consent statement substitutes in
   `_annotate_question_render_sequence`. Both substitute the raw,
-  auto-escaped value. Note: consent statements are still not part of the
-  outline export/import grammar, so there is no consent round-trip —
-  link labels are the only new field covered by
-  `test_export_content_block_placeholder_round_trip`).
+  auto-escaped value. Consent statements are also part of the outline
+  export/import grammar since issue #358 — the exporter emits
+  `consent:` / `consent_required:` config lines and skips the linked
+  yesno question, and the importer rebuilds both — so the
+  `{{subject}}` placeholder in a consent statement is covered by
+  `test_export_content_block_placeholder_round_trip` alongside link
+  labels).
 - Free-text dimension values (large rotating rosters).
 - ~~Token-level subject override; "Generate full 360 set for a subject"
   batch action; Tokens page grouping by subject~~ — shipped in issues

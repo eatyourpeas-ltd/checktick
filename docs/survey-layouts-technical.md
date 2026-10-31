@@ -1154,11 +1154,9 @@ Rules:
 
 Placeholders survive the outline export → import round-trip as literal
 text (`test_export_content_block_placeholder_round_trip`). They belong
-in the `heading:` / `subtitle:` config lines, the body, and `link:`
-labels — not the internal label, where `## Name {slug}` braces could be
-misparsed as a slug. (Consent statements are not part of the outline
-grammar — the exporter drops the consent config — so there is no consent
-round-trip to guard.)
+in the `heading:` / `subtitle:` config lines, the body, `link:` labels,
+and `consent:` statements — not the internal label, where `## Name
+{slug}` braces could be misparsed as a slug.
 
 ### Outline grammar
 
@@ -1169,6 +1167,8 @@ heading: Welcome
 variant: disclosure
 link: Privacy notice|https://example.com/privacy
 link: Study protocol|https://example.com/protocol
+consent: I have read and accept the study terms.
+consent_required: true
 
 Welcome to the study. Please read the privacy notice and links above
 before continuing.
@@ -1179,12 +1179,21 @@ before continuing.
 - `variant` is optional (defaults to `text`).
 - `render_once` is optional (defaults to `true`).
 - `link:` lines are one per reference, `Label|URL` format.
+- `consent:` is optional — the consent statement rendered as a checkbox.
+  `consent_required: true` marks the agreement required (omit it for an
+  optional checkbox). On import, the bulk-upload view creates the linked
+  yesno question that stores the answer (same text convention and
+  `_content_block_parent` marker as the builder's configure panel).
 - The body is everything after the config lines (multiline Markdown).
 - A blank line after the config block starts the body; a new `#`/`##`
   heading ends it.
 
-The export side emits the `(content_block)` type and config lines, and
-the body survives export → import round-trips.
+The export side emits the `(content_block)` type and config lines
+(including `consent:` / `consent_required: true` when configured), and
+the body and consent config survive export → import round-trips. The
+linked consent yesno question is deliberately skipped by the exporter —
+it round-trips through the block's `consent:` line rather than as a
+stray standalone question.
 
 ### Builder
 

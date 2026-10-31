@@ -15281,6 +15281,43 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
                                     order=next_order,
                                 )
                                 next_order += 1
+                        # Content block with consent config (issue #358): create
+                        # the linked yesno question that stores the consent
+                        # answer, mirroring the builder's configure panel
+                        # (_parse_content_block_form) — same text convention,
+                        # same ``_content_block_parent`` marker, ordered after
+                        # the content block. The parsed consent dict carries
+                        # ``question_id: None``; patch it with the real id so
+                        # the block's options reference the linked question.
+                        if q["final_type"] == "content_block":
+                            consent = (q.get("final_options") or {}).get("consent")
+                            if isinstance(consent, dict) and consent.get("statement"):
+                                consent_required = bool(consent.get("required", False))
+                                linked_q = SurveyQuestion.objects.create(
+                                    survey=survey,
+                                    group=grp,
+                                    text=(
+                                        f"Consent (content block: {question.text[:50]})"
+                                    ),
+                                    type=SurveyQuestion.Types.YESNO,
+                                    options=[
+                                        {"label": "I agree", "value": "yes"},
+                                        {"label": "I do not agree", "value": "no"},
+                                        {"_content_block_parent": question.id},
+                                    ],
+                                    required=consent_required,
+                                    order=next_order,
+                                )
+                                next_order += 1
+                                question.options = {
+                                    **q["final_options"],
+                                    "consent": {
+                                        "question_id": linked_q.id,
+                                        "statement": consent.get("statement", ""),
+                                        "required": consent_required,
+                                    },
+                                }
+                                question.save(update_fields=["options"])
                         if q.get("ref"):
                             question_ref_map[q["ref"]] = question
                         if q.get("branches"):
@@ -16107,6 +16144,12 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             # never as top-level questions.
             if question.parent_id is not None:
                 continue
+            # Linked consent yesno questions are an implementation detail
+            # of their parent content block (created by the builder's
+            # configure panel). They round-trip through the block's
+            # ``consent:`` config line instead of as stray questions.
+            if _is_linked_consent_question(question):
+                continue
             required = "*" if question.required else ""
             question_ref = question.text.lower()[:30].replace(" ", "-").strip("-")
             lines.append(f"{indent}## {question.text}{required} {{{question_ref}}}")
@@ -16176,8 +16219,9 @@ def _export_survey_to_markdown(survey: Survey) -> str:
             if question.hidden_by_default:
                 lines.append(f"{indent}HIDDEN")
 
-            # Content block: emit heading/subtitle/render_once config, links, then body.
-            # The body is multiline Markdown; a blank line separates config from body.
+            # Content block: emit heading/subtitle/render_once/consent config,
+            # links, then body. The body is multiline Markdown; a blank line
+            # separates config from body.
             if question.type == "content_block" and isinstance(question.options, dict):
                 opts = question.options or {}
                 heading = opts.get("heading", "")
@@ -16189,6 +16233,15 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                 render_once = opts.get("render_once", True)
                 if render_once is False:
                     lines.append(f"{indent}render_once: false")
+                # Consent config (issue #358): the statement round-trips as a
+                # config line so the linked yesno question can be rebuilt on
+                # import. ``consent_required`` is only emitted when set — the
+                # importer defaults to not-required.
+                consent = opts.get("consent")
+                if isinstance(consent, dict) and consent.get("statement"):
+                    lines.append(f"{indent}consent: {consent['statement']}")
+                    if consent.get("required"):
+                        lines.append(f"{indent}consent_required: true")
                 for link in opts.get("links", []):
                     label = link.get("label", "")
                     url = link.get("url", "")
