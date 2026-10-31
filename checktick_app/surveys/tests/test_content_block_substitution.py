@@ -3,7 +3,8 @@
 
 The live take path substitutes content block heading / subtitle / body_md
 placeholders with the participant's resolved respondent-category values
-(token-borne values via ``_resolve_categories_for_progress``). See
+(token-borne values via ``_resolve_categories_for_progress``). Since issue
+#352, link labels and consent statements substitute too. See
 docs/content-block-category-substitution-implementation-plan.md
 §Substitution contract.
 """
@@ -61,10 +62,20 @@ def _make_survey(
     heading="360° feedback for {{subject}}",
     subtitle="You are rating {{subject}}",
     body_md="Thank you for rating {{subject}} in this round.",
+    links=None,
+    consent_statement=None,
+    consent_required=False,
 ):
     """A published token-visibility survey with a ``subject`` category
     dimension (roster of clinician names) and an intro content block
-    carrying ``{{subject}}`` placeholders."""
+    carrying ``{{subject}}`` placeholders.
+
+    ``links`` adds reference links to the content block;
+    ``consent_statement`` configures consent, mirroring the builder's
+    ``_parse_content_block_form``: a linked yesno question is created to
+    store the answer, and the content block's options gain a ``consent``
+    dict pointing at it.
+    """
     s = Survey.objects.create(
         owner=owner,
         organization=org,
@@ -76,12 +87,18 @@ def _make_survey(
     g_intro = QuestionGroup.objects.create(name="Intro", owner=owner)
     g_questions = QuestionGroup.objects.create(name="Questions", owner=owner)
     s.question_groups.add(g_intro, g_questions)
-    SurveyQuestion.objects.create(
+    q_intro = SurveyQuestion.objects.create(
         survey=s,
         group=g_intro,
         text="Introduction",
         type=SurveyQuestion.Types.CONTENT_BLOCK,
-        options={"heading": heading, "subtitle": subtitle, "body_md": body_md},
+        options={
+            "heading": heading,
+            "subtitle": subtitle,
+            "body_md": body_md,
+            "links": links or [],
+            "consent": None,
+        },
         order=0,
     )
     SurveyQuestion.objects.create(
@@ -98,6 +115,32 @@ def _make_survey(
         allowed_values=["Dr Jane Smith", "Dr John Doe"],
         resolution_source=RespondentCategory.ResolutionSource.TOKEN,
     )
+    if consent_statement:
+        # Same shape as the builder: consent config references a linked
+        # yesno question (marker-hidden from the builder list) that stores
+        # the participant's answer for the audit trail.
+        linked_q = SurveyQuestion.objects.create(
+            survey=s,
+            group=g_intro,
+            text=f"Consent (content block: {q_intro.text[:50]})",
+            type=SurveyQuestion.Types.YESNO,
+            options=[
+                {"label": "I agree", "value": "yes"},
+                {"label": "I do not agree", "value": "no"},
+                {"_content_block_parent": q_intro.id},
+            ],
+            required=consent_required,
+            order=1,
+        )
+        q_intro.options = {
+            **q_intro.options,
+            "consent": {
+                "question_id": linked_q.id,
+                "statement": consent_statement,
+                "required": consent_required,
+            },
+        }
+        q_intro.save(update_fields=["options"])
     return s
 
 
@@ -246,6 +289,198 @@ def test_walkthrough_token_substitutes_subject(client, owner, org):
     assert "You are rating Dr Jane Smith" in html
     assert "Thank you for rating Dr Jane Smith in this round." in html
     assert "{{subject}}" not in html
+
+
+@pytest.mark.django_db
+def test_walkthrough_substitutes_link_label_and_consent(client, owner, org):
+    """After the intro heading, link labels and consent statements are the
+    places a 360 author most wants the subject's name (issue #352): the
+    privacy notice link and the consent statement both show it."""
+    s = _make_survey(
+        owner,
+        org,
+        links=[
+            {
+                "label": "Privacy notice for {{subject}}",
+                "url": "https://example.com/privacy",
+            }
+        ],
+        consent_statement=(
+            "I confirm my feedback for {{subject}} may be shared with the team."
+        ),
+    )
+    token = SurveyAccessToken.objects.create(
+        survey=s,
+        token="tok-sub-links-consent",
+        created_by=owner,
+        category_values={"subject": "Dr Jane Smith"},
+    )
+    res = client.get(_take_token_url(s, token))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Privacy notice for Dr Jane Smith" in html
+    assert (
+        "I confirm my feedback for Dr Jane Smith may be shared with the team." in html
+    )
+    assert "{{subject}}" not in html
+
+
+@pytest.mark.django_db
+def test_unresolved_link_and_consent_render_empty(client, owner, org):
+    """Known-but-unresolved renders empty in link labels and consent
+    statements too — the participant never sees a bare ``{{subject}}``
+    (issue #352)."""
+    s = _make_survey(
+        owner,
+        org,
+        links=[
+            {
+                "label": "Privacy notice for {{subject}}",
+                "url": "https://example.com/privacy",
+            }
+        ],
+        consent_statement="I confirm my feedback for {{subject}} may be shared.",
+    )
+    token = SurveyAccessToken.objects.create(
+        survey=s,
+        token="tok-links-unresolved",
+        created_by=owner,
+        category_values={},
+    )
+    res = client.get(_take_token_url(s, token))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "{{subject}}" not in html
+    assert "Privacy notice for " in html
+    assert "I confirm my feedback for  may be shared." in html
+
+
+@pytest.mark.django_db
+def test_unknown_dim_left_literal_in_link_and_consent(client, owner, org):
+    """A typo'd dimension stays literal in link labels and consent
+    statements — same rule as the other fields: the author must catch it
+    in preview (issue #352)."""
+    s = _make_survey(
+        owner,
+        org,
+        heading="Static heading",
+        subtitle="Static subtitle",
+        body_md="Thanks for taking part.",
+        links=[
+            {
+                "label": "Notice for {{subjekt}}",
+                "url": "https://example.com/privacy",
+            }
+        ],
+        consent_statement="I confirm my feedback for {{subjekt}} may be shared.",
+    )
+    token = SurveyAccessToken.objects.create(
+        survey=s,
+        token="tok-links-typo",
+        created_by=owner,
+        category_values={"subject": "Dr Jane Smith"},
+    )
+    res = client.get(_take_token_url(s, token))
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert "Notice for {{subjekt}}" in html
+    assert "I confirm my feedback for {{subjekt}} may be shared." in html
+    assert "Dr Jane Smith" not in html
+
+
+@pytest.mark.django_db
+def test_link_label_and_consent_values_are_escaped(client, owner, org):
+    """Link labels and the consent statement substitute the raw value and
+    rely on template auto-escaping — the entity-encoded form reaches the
+    page, the raw value never does (issue #352 escaping rule)."""
+    s = _make_survey(
+        owner,
+        org,
+        heading="Static heading",
+        subtitle="Static subtitle",
+        body_md="Thanks for taking part.",
+        links=[
+            {
+                "label": "Notice for {{subject}}",
+                "url": "https://example.com/privacy",
+            }
+        ],
+        consent_statement="I confirm {{subject}} may be shared.",
+    )
+    token = SurveyAccessToken.objects.create(
+        survey=s,
+        token="tok-links-escape",
+        created_by=owner,
+        category_values={"subject": 'Dr <b>"Smith"</b> & Co'},
+    )
+    res = client.get(_take_token_url(s, token))
+    assert res.status_code == 200
+    html = res.content.decode()
+    escaped = "Dr &lt;b&gt;&quot;Smith&quot;&lt;/b&gt; &amp; Co"
+    assert f"Notice for {escaped}" in html
+    assert f"I confirm {escaped} may be shared." in html
+    assert 'Dr <b>"Smith"</b> & Co' not in html
+
+
+@pytest.mark.django_db
+def test_none_map_leaves_link_and_consent_literal(owner, org):
+    """category_values=None (the builder detail path) leaves the raw
+    placeholders in link labels and consent statements exactly as typed —
+    and never touches the stored options."""
+    s = _make_survey(
+        owner,
+        org,
+        links=[
+            {
+                "label": "Privacy notice for {{subject}}",
+                "url": "https://example.com/privacy",
+            }
+        ],
+        consent_statement="I confirm my feedback for {{subject}} may be shared.",
+    )
+    q = s.questions.filter(type=SurveyQuestion.Types.CONTENT_BLOCK).first()
+    qs = _annotate_question_render_sequence(s, [q], None)
+    assert qs[0].content_block_links[0]["label"] == "Privacy notice for {{subject}}"
+    assert (
+        qs[0].content_block_consent["statement"]
+        == "I confirm my feedback for {{subject}} may be shared."
+    )
+    # The stored options payload is untouched.
+    assert q.options["links"][0]["label"] == "Privacy notice for {{subject}}"
+    assert (
+        q.options["consent"]["statement"]
+        == "I confirm my feedback for {{subject}} may be shared."
+    )
+
+
+@pytest.mark.django_db
+def test_substitution_does_not_mutate_stored_options(owner, org):
+    """The annotated links are copies: a substituted participant value can
+    never leak back into the stored options via a later save (issue #352)."""
+    s = _make_survey(
+        owner,
+        org,
+        links=[
+            {
+                "label": "Privacy notice for {{subject}}",
+                "url": "https://example.com/privacy",
+            }
+        ],
+        consent_statement="I confirm my feedback for {{subject}} may be shared.",
+    )
+    q = s.questions.filter(type=SurveyQuestion.Types.CONTENT_BLOCK).first()
+    qs = _annotate_question_render_sequence(s, [q], {"subject": "Dr Jane Smith"})
+    assert qs[0].content_block_links[0]["label"] == "Privacy notice for Dr Jane Smith"
+    assert (
+        qs[0].content_block_consent["statement"]
+        == "I confirm my feedback for Dr Jane Smith may be shared."
+    )
+    # The stored options still carry the raw placeholder.
+    assert q.options["links"][0]["label"] == "Privacy notice for {{subject}}"
+    assert (
+        q.options["consent"]["statement"]
+        == "I confirm my feedback for {{subject}} may be shared."
+    )
 
 
 @pytest.mark.django_db
@@ -487,6 +722,12 @@ def test_delphi_feedback_body_not_substituted(owner, org):
         options={
             "heading": "Feedback for {{subject}}",
             "body_md": "Authored {{subject}} body.",
+            "links": [
+                {
+                    "label": "Protocol for {{subject}}",
+                    "url": "https://example.com/protocol",
+                }
+            ],
             "is_delphi_feedback": True,
         },
     )
@@ -515,6 +756,9 @@ def test_delphi_feedback_body_not_substituted(owner, org):
     fb = qs[1]
     # Author-written heading substitutes.
     assert fb.content_block_heading == "Feedback for Dr Jane Smith"
+    # Author-written link labels substitute on the Delphi path too
+    # (issue #352).
+    assert fb.content_block_links[0]["label"] == "Protocol for Dr Jane Smith"
     # The generated feedback body is system-produced — never substituted.
     body_html = str(fb.content_block_html)
     assert "Dr Jane Smith" not in body_html

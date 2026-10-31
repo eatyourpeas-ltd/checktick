@@ -68,9 +68,10 @@ Builds entirely on respondent categories (v0.20,
 ## Substitution contract
 
 - **Syntax:** `{{<dimension>}}` in `options.heading`, `options.subtitle`,
-  `options.body_md` of `content_block` questions. Nothing else substitutes
-  (link labels, consent statements, `question.text` — follow-ups if asked
-  for).
+  `options.body_md`, each `options.links[].label`, and
+  `options.consent.statement` of `content_block` questions (link labels and
+  consent statements since issue #352). Nothing else substitutes
+  (`question.text` — follow-up if asked for).
 - **Resolution per path:**
   - Live (`_handle_participant_submission`): the map already computed by
     `_resolve_categories_for_progress` (hoist the local so the annotator
@@ -138,7 +139,14 @@ Each commit is self-contained: code + tests + the doc line it implements.
   (e.g. `{{subject|default:your colleague}}`)~~ — shipped in issue #351
   (`_CATEGORY_PLACEHOLDER_RE` captures the optional `|default:` segment;
   see §Substitution contract).
-- Substitution in link labels and consent statements.
+- ~~Substitution in link labels and consent statements~~ — shipped in
+  issue #352 (`_substituted_content_block_links` copies each link with the
+  label substituted; the consent statement substitutes in
+  `_annotate_question_render_sequence`. Both substitute the raw,
+  auto-escaped value. Note: consent statements are still not part of the
+  outline export/import grammar, so there is no consent round-trip —
+  link labels are the only new field covered by
+  `test_export_content_block_placeholder_round_trip`).
 - Free-text dimension values (large rotating rosters).
 - Token-level subject override; "Generate full 360 set for a subject" batch
   action; Tokens page grouping by subject (already parked in #349).

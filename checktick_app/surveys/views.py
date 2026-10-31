@@ -2196,10 +2196,11 @@ def _render_delphi_feedback_summary(feedback_rows: list) -> str:
     return "\n".join(parts)
 
 
-# {{<dimension>}} placeholder in content block heading / subtitle / body_md,
-# substituted with the participant's resolved respondent-category values at
-# render time. An optional ``|default:<text>`` segment supplies fallback
-# text for the known-but-unresolved case (issue #351). See docs/
+# {{<dimension>}} placeholder in content block heading / subtitle / body_md
+# and, since issue #352, in link labels and consent statements — substituted
+# with the participant's resolved respondent-category values at render time.
+# An optional ``|default:<text>`` segment supplies fallback text for the
+# known-but-unresolved case (issue #351). See docs/
 # content-block-category-substitution-implementation-plan.md
 # §Substitution contract.
 _CATEGORY_PLACEHOLDER_RE = re.compile(r"\{\{([A-Za-z0-9_]+)(?:\|default:([^}]*))?\}\}")
@@ -2229,8 +2230,9 @@ def _substitute_category_placeholders(
       = not shown). A resolved value always wins over the default.
     - ``escape_values=True`` inserts ``escape(value)`` — for substitution
       into already-rendered, sanitised HTML (the ``body_md`` path). The
-      plain-text fields (heading / subtitle) substitute the raw value and
-      rely on template auto-escaping. The ``|default:`` text is authored
+      plain-text fields (heading / subtitle / link labels / consent
+      statements) substitute the raw value and rely on template
+      auto-escaping. The ``|default:`` text is authored
       source text, not participant data: it substitutes as typed on the
       plain-text fields (auto-escaped by the template) and as-rendered
       on the ``body_md`` path — markdown has already escaped and
@@ -2259,6 +2261,40 @@ def _substitute_category_placeholders(
     return _CATEGORY_PLACEHOLDER_RE.sub(_repl, text)
 
 
+def _substituted_content_block_links(
+    links: Any,
+    category_values: dict[str, str] | None,
+    known_dims: set[str],
+) -> list[Any]:
+    """Return ``links`` with ``{{<dimension>}}`` labels substituted (issue #352).
+
+    The annotated list carries new dicts — the stored ``options`` payload is
+    never mutated, so a later ``question.save()`` on an annotated instance
+    can never persist a participant's resolved category value into the
+    survey definition. Non-dict entries pass through untouched; labels
+    substitute the raw value (``detail.html`` / ``question_preview.html``
+    auto-escape ``link.label``).
+    """
+    if not isinstance(links, list):
+        return []
+    substituted: list[Any] = []
+    for link in links:
+        if not isinstance(link, dict):
+            substituted.append(link)
+            continue
+        substituted.append(
+            {
+                **link,
+                "label": _substitute_category_placeholders(
+                    str(link.get("label") or ""),
+                    category_values,
+                    known_dims,
+                ),
+            }
+        )
+    return substituted
+
+
 def _annotate_question_render_sequence(
     survey: Survey,
     questions: list[SurveyQuestion],
@@ -2273,10 +2309,14 @@ def _annotate_question_render_sequence(
     §Delphi §Inter-round feedback rendering.
 
     When ``category_values`` is a dict, ``{{<dimension>}}`` placeholders in
-    content block heading / subtitle / body_md are substituted with the
-    participant's resolved category values (live + preview paths); ``None``
-    means no substitution (the builder detail path shows the raw
-    placeholder). See docs/content-block-category-substitution-
+    content block heading / subtitle / body_md — and, since issue #352, in
+    each ``options.links[].label`` and the ``options.consent.statement`` —
+    are substituted with the participant's resolved category values (live
+    + preview paths); ``None`` means no substitution (the builder detail
+    path shows the raw placeholder). Link labels and consent statements
+    substitute the raw value: the templates auto-escape them, so no
+    ``escape_values`` (that flag exists only for the sanitised-HTML
+    ``body_md`` path). See docs/content-block-category-substitution-
     implementation-plan.md §Substitution contract.
     """
     questions_with_show_conditions = set(
@@ -2369,7 +2409,13 @@ def _annotate_question_render_sequence(
                         known_category_dims,
                     ),
                 )
-                setattr(q, "content_block_links", opts.get("links", []))
+                setattr(
+                    q,
+                    "content_block_links",
+                    _substituted_content_block_links(
+                        opts.get("links", []), category_values, known_category_dims
+                    ),
+                )
                 setattr(q, "content_block_image", None)
                 setattr(q, "content_block_consent", None)
                 continue
@@ -2406,7 +2452,13 @@ def _annotate_question_render_sequence(
                     known_category_dims,
                 ),
             )
-            setattr(q, "content_block_links", opts.get("links", []))
+            setattr(
+                q,
+                "content_block_links",
+                _substituted_content_block_links(
+                    opts.get("links", []), category_values, known_category_dims
+                ),
+            )
             # Resolve the image if one is set.
             image_id = opts.get("image_id")
             if image_id:
@@ -2429,7 +2481,13 @@ def _annotate_question_render_sequence(
                     "content_block_consent",
                     {
                         "question": consent_q,
-                        "statement": consent.get("statement", ""),
+                        # Substituted raw (issue #352) — the take/preview
+                        # templates auto-escape the statement.
+                        "statement": _substitute_category_placeholders(
+                            consent.get("statement", ""),
+                            category_values,
+                            known_category_dims,
+                        ),
                         "required": consent.get("required", False),
                     },
                 )
