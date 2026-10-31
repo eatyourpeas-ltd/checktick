@@ -160,6 +160,10 @@ def _aggregate_single_question(
 
     if q_type == "content_block":
         return None
+    # Grid stems carry no answer (their rows are plain likert questions
+    # and aggregate normally) — a count-only card would be noise.
+    if q_type == "grid":
+        return None
 
     # Collect raw answer values from all responses.
     raw_values: list[Any] = []

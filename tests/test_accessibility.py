@@ -208,6 +208,53 @@ def published_survey(db):
             q.options = ["Option 1", "Option 2", "Option 3"]
             q.save()
 
+    # Likert radio + grid of sub-questions: the radiogroup renderers.
+    SurveyQuestion.objects.create(
+        survey=survey,
+        type="likert",
+        text="Rate your visit",
+        order=len(question_types),
+        options=[{"type": "number-scale", "min": 1, "max": 5, "render": "radio"}],
+    )
+    grid_stem = SurveyQuestion.objects.create(
+        survey=survey,
+        type="grid",
+        text="How good was your doctor today at each of the following?",
+        order=len(question_types) + 1,
+        options={
+            "type": "grid",
+            "row_type": "likert",
+            "scale": {
+                "type": "number-scale",
+                "min": 1,
+                "max": 5,
+                "left": "Not at all good",
+                "right": "Very good",
+                "render": "radio",
+                "na_label": "Does not apply",
+            },
+        },
+    )
+    for idx, row_text in enumerate(["Being polite", "Listening to you"]):
+        SurveyQuestion.objects.create(
+            survey=survey,
+            parent=grid_stem,
+            type="likert",
+            text=row_text,
+            required=(idx == 0),
+            order=grid_stem.order + 1 + idx,
+            options=[
+                {
+                    "type": "number-scale",
+                    "min": 1,
+                    "max": 5,
+                    "left": "Not at all good",
+                    "right": "Very good",
+                    "render": "radio",
+                }
+            ],
+        )
+
     return survey, user
 
 

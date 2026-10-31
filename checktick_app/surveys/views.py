@@ -1362,7 +1362,9 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
         survey.questions.select_related("group").prefetch_related("images").all()
     )
     qs = _order_questions_by_group(survey, all_questions)
-    _annotate_question_render_sequence(survey, qs)
+    # Reassign: grid rows are filtered out of the participant-facing
+    # sequence (they render inline inside their stem).
+    qs = _annotate_question_render_sequence(survey, qs)
     has_patient_template = any(
         getattr(q, "type", None) == SurveyQuestion.Types.TEMPLATE_PATIENT for q in qs
     )
@@ -1697,7 +1699,9 @@ def survey_preview(request: HttpRequest, slug: str) -> HttpResponse:
     # Content block {{dim}} substitution: the preview path substitutes the
     # ?simulate_category= values (empty when absent — same semantics as the
     # live path: known-but-unresolved renders empty).
-    _annotate_question_render_sequence(survey, qs, sim_values)
+    # Reassign: grid rows are filtered out of the participant-facing
+    # sequence (they render inline inside their stem).
+    qs = _annotate_question_render_sequence(survey, qs, sim_values)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
     prof_group, professional_fields, professional_ods = (
         _get_professional_group_and_fields(survey)
@@ -2329,7 +2333,33 @@ def _annotate_question_render_sequence(
     ``escape_values`` (that flag exists only for the sanitised-HTML
     ``body_md`` path). See docs/content-block-category-substitution-
     implementation-plan.md §Substitution contract.
+
+    Grid rows render inline under their parent grid stem, so they are
+    filtered out of the participant-facing sequence here and attached to
+    their stem as ``grid_rows`` instead (the builder path does the same
+    in ``_prepare_question_rendering``). ``num_scale_values`` /
+    ``grid_scale_values`` are attached for Likert / grid questions so the
+    radio renderers have their value lists — ``_prepare_question_rendering``
+    sets ``num_scale_values`` for the builder, but the take path re-queries
+    its own instances, so without this a published ``render: radio`` Likert
+    rendered no inputs at all.
     """
+    # Grid rows: attach to stems, filter out of the render sequence.
+    grid_parent_ids = [q.id for q in questions if q.type == SurveyQuestion.Types.GRID]
+    rows_by_parent: dict[int, list[SurveyQuestion]] = {}
+    if grid_parent_ids:
+        for row in SurveyQuestion.objects.filter(
+            parent_id__in=grid_parent_ids
+        ).order_by("order", "id"):
+            rows_by_parent.setdefault(row.parent_id, []).append(row)
+    for q in questions:
+        setattr(
+            q,
+            "grid_rows",
+            rows_by_parent.get(q.id, []) if q.type == SurveyQuestion.Types.GRID else [],
+        )
+    questions = [q for q in questions if q.parent_id is None]
+
     questions_with_show_conditions = set(
         SurveyQuestionCondition.objects.filter(
             target_question__survey=survey,
@@ -2365,6 +2395,41 @@ def _annotate_question_render_sequence(
         setattr(q, "group_start", bool(curr_gid and curr_gid != prev_gid))
         setattr(q, "group_end", bool(curr_gid and curr_gid != next_gid))
         setattr(q, "has_show_condition", q.id in questions_with_show_conditions)
+        # Likert number scales: value list for the radio renderer. Grid rows
+        # are filtered out above and render inside their stem's table, so
+        # they need no per-row value list here — the stem carries
+        # ``grid_scale_values`` for all of its rows.
+        if q.type == SurveyQuestion.Types.LIKERT and isinstance(q.options, list):
+            first = q.options[0] if q.options else None
+            if isinstance(first, dict) and first.get("type") == "number-scale":
+                try:
+                    minv = int(first.get("min", 1))
+                    maxv = int(first.get("max", 5))
+                except (TypeError, ValueError):
+                    minv, maxv = 1, 5
+                if maxv < minv:
+                    minv, maxv = maxv, minv
+                setattr(q, "num_scale_values", list(range(minv, maxv + 1)))
+            else:
+                setattr(q, "num_scale_values", None)
+        else:
+            setattr(q, "num_scale_values", None)
+        # Grid stems: value list for the shared column scale.
+        if q.type == SurveyQuestion.Types.GRID and isinstance(q.options, dict):
+            scale = q.options.get("scale")
+            if isinstance(scale, dict) and scale.get("type") == "number-scale":
+                try:
+                    minv = int(scale.get("min", 1))
+                    maxv = int(scale.get("max", 5))
+                except (TypeError, ValueError):
+                    minv, maxv = 1, 5
+                if maxv < minv:
+                    minv, maxv = maxv, minv
+                setattr(q, "grid_scale_values", list(range(minv, maxv + 1)))
+            else:
+                setattr(q, "grid_scale_values", [])
+        else:
+            setattr(q, "grid_scale_values", [])
         # Content block: pre-render the Markdown body to sanitised HTML and
         # extract heading/subtitle/links/consent so the template emits them
         # without |safe on raw content.
@@ -7919,7 +7984,9 @@ def _handle_participant_submission(
     # Content block {{dim}} substitution: the live path always passes a map
     # (empty when anonymous / no categories) so known-but-unresolved
     # dimensions render empty, matching the visibility-rule semantics.
-    _annotate_question_render_sequence(survey, qs, resolved_categories)
+    # Reassign: grid rows are filtered out of the participant-facing
+    # sequence (they render inline inside their stem).
+    qs = _annotate_question_render_sequence(survey, qs, resolved_categories)
     patient_group, demographics_fields = _get_patient_group_and_fields(survey)
     prof_group, professional_fields, professional_ods = (
         _get_professional_group_and_fields(survey)
@@ -12248,6 +12315,10 @@ def survey_export_csv(
                 continue
             # Content blocks have no answer — skip them in CSV export.
             if q.type == "content_block":
+                continue
+            # Grid stems have no answer either — their rows are real
+            # questions and export as their own columns below.
+            if q.type == "grid":
                 continue
             # Use question text as header, truncated if too long
             q_header = q.text[:100] + "..." if len(q.text) > 100 else q.text

@@ -18,8 +18,14 @@ from django.urls import reverse
 import pytest
 
 from checktick_app.surveys.markdown_import import parse_bulk_markdown
-from checktick_app.surveys.models import QuestionGroup, Survey, SurveyQuestion
+from checktick_app.surveys.models import (
+    QuestionGroup,
+    Survey,
+    SurveyQuestion,
+    SurveyResponse,
+)
 from checktick_app.surveys.views import (
+    _annotate_question_render_sequence,
     _duplicate_question,
     _export_survey_to_markdown,
     _parse_builder_question_form,
@@ -719,3 +725,183 @@ class TestGridOutlineRoundTrip:
             "Listening to you",
         ]
         assert all(r["required"] for r in q["grid_rows"])
+
+
+# --- Participant-facing rendering + submission ---
+
+
+def _published_grid_survey(user: User) -> tuple[Survey, SurveyQuestion, list]:
+    """Published public survey with a grid stem and two rows."""
+    survey = Survey.objects.create(
+        owner=user,
+        name="Grid Take",
+        slug=f"grid-take-{user.id}",
+        status=Survey.Status.PUBLISHED,
+        visibility=Survey.Visibility.PUBLIC,
+    )
+    stem = SurveyQuestion.objects.create(
+        survey=survey,
+        text="How good was your doctor today at each of the following?",
+        type=SurveyQuestion.Types.GRID,
+        order=1,
+        options={
+            "type": "grid",
+            "row_type": "likert",
+            "scale": {
+                "type": "number-scale",
+                "min": 1,
+                "max": 5,
+                "left": "Not at all good",
+                "right": "Very good",
+                "render": "radio",
+                "na_label": "Does not apply",
+            },
+        },
+    )
+    rows = []
+    for idx, text in enumerate(["Being polite", "Listening to you"], start=2):
+        rows.append(
+            SurveyQuestion.objects.create(
+                survey=survey,
+                parent=stem,
+                text=text,
+                type=SurveyQuestion.Types.LIKERT,
+                required=True,
+                order=idx,
+                options=[
+                    {
+                        "type": "number-scale",
+                        "min": 1,
+                        "max": 5,
+                        "left": "Not at all good",
+                        "right": "Very good",
+                        "render": "radio",
+                    }
+                ],
+            )
+        )
+    return survey, stem, rows
+
+
+@pytest.mark.django_db
+class TestGridTakePage:
+    def setup_method(self):
+        self.user = User.objects.create_user(
+            username="gridtake", password=TEST_PASSWORD
+        )
+        self.survey, self.stem, self.rows = _published_grid_survey(self.user)
+
+    def test_take_page_renders_grid(self, client):
+        res = client.get(reverse("surveys:take", kwargs={"slug": self.survey.slug}))
+        assert res.status_code == 200
+        html = res.content.decode()
+
+        # Rows render as labelled radiogroups named q_<row id> — answers
+        # stay flat, exactly like a standalone question.
+        for row in self.rows:
+            assert f'name="q_{row.id}"' in html
+            assert f'id="grid_row_label_{row.id}"' in html
+            assert f'aria-labelledby="grid_row_label_{row.id}' in html
+        # Required rows enforce one answer per row (any required radio in
+        # a named group makes the group required).
+        assert html.count('name="q_%s"' % self.rows[0].id) >= 5
+        # Every row offers the numbers 1-5 and the Does-not-apply answer.
+        assert html.count(">1</span>") >= 2
+        assert html.count(">5</span>") >= 2
+        assert html.count('value="na"') == 2
+        assert "Does not apply" in html
+        # The shared scale labels render once for the whole grid.
+        assert "Not at all good" in html
+        assert "Very good" in html
+        # The stem itself has no answer input.
+        assert f'name="q_{self.stem.id}"' not in html
+        # Required rows are marked for assistive tech.
+        assert 'aria-required="true"' in html
+        # Rows render ONLY inside the grid — never again as standalone
+        # questions (their h2 label id must not appear).
+        for row in self.rows:
+            assert f"q_label_{row.id}" not in html
+
+    def test_take_page_renders_categories_scale(self, client):
+        opts = dict(self.stem.options)
+        opts["scale"] = {
+            "type": "categories",
+            "labels": ["Poor", "Fair", "Good"],
+            "render": "radio",
+        }
+        self.stem.options = opts
+        self.stem.save()
+        res = client.get(reverse("surveys:take", kwargs={"slug": self.survey.slug}))
+        assert res.status_code == 200
+        html = res.content.decode()
+        assert "Poor, Fair, Good" in html  # shared scale hint line
+        # Category labels become radio values.
+        assert 'value="Fair"' in html
+        # No Does-not-apply column without na_label.
+        assert 'value="na"' not in html
+
+    def test_annotate_filters_rows_and_attaches_to_stem(self):
+
+        likert = SurveyQuestion.objects.create(
+            survey=self.survey,
+            text="Standalone",
+            type=SurveyQuestion.Types.LIKERT,
+            order=10,
+            options=[{"type": "number-scale", "min": 1, "max": 3, "render": "radio"}],
+        )
+        all_qs = list(self.survey.questions.order_by("order", "id"))
+        out = _annotate_question_render_sequence(self.survey, all_qs)
+        # Rows render inside the stem — filtered out of the sequence.
+        assert [q.id for q in out] == [self.stem.id, likert.id]
+        stem = out[0]
+        assert [r.id for r in stem.grid_rows] == [r.id for r in self.rows]
+        # The shared column-scale value list is attached for the template.
+        assert stem.grid_scale_values == [1, 2, 3, 4, 5]
+        # Likert radio questions get their value list on the take path too
+        # (this was previously only set on the builder path, so a published
+        # render=radio Likert rendered no inputs at all).
+        standalone = out[1]
+        assert standalone.num_scale_values == [1, 2, 3]
+
+    def test_submit_stores_row_answers_flat(self, client):
+        res = client.post(
+            reverse("surveys:take", kwargs={"slug": self.survey.slug}),
+            data={
+                f"q_{self.rows[0].id}": "4",
+                f"q_{self.rows[1].id}": "na",
+            },
+        )
+        assert res.status_code in (200, 302)
+        response = SurveyResponse.objects.filter(survey=self.survey).first()
+        assert response is not None
+        # Answers are keyed by row id — no nesting.
+        assert response.answers[str(self.rows[0].id)] == "4"
+        assert response.answers[str(self.rows[1].id)] == "na"
+        # The stem carries no answer.
+        assert response.answers.get(str(self.stem.id)) in (None, "")
+
+    def test_csv_export_skips_stem_keeps_rows(self):
+        """Grid stems get no CSV column; rows export as their own columns."""
+        # Simulate the column-selection loop from survey_export_csv — the
+        # view skips template_*, content_block, and grid stems.
+        questions = list(self.survey.questions.order_by("order", "id"))
+        columns = [
+            q.text
+            for q in questions
+            if q.type
+            not in (
+                "template_patient",
+                "template_professional",
+                "content_block",
+                "grid",
+            )
+        ]
+        assert columns == ["Being polite", "Listening to you"]
+
+    def test_delphi_aggregation_skips_stem(self):
+        from checktick_app.surveys.delphi import _aggregate_single_question
+
+        assert _aggregate_single_question(self.stem, [], None) is None
+        # Rows aggregate as ordinary likert questions.
+        stats = _aggregate_single_question(self.rows[0], [], None)
+        assert stats["question_type"] == "likert"
