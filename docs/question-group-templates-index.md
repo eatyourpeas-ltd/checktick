@@ -9,6 +9,17 @@ This appendix lists validated questionnaires and instruments available as global
 
 ## Available Templates
 
+### 360° Colleague Feedback Battery
+
+**Multi-rater (360°) feedback battery**
+
+- **Citation**: CheckTick generic item bank (2026). Original items — no third-party instrument.
+- **License**: MIT (same as the CheckTick project)
+- **Questions**: 9 questions — 3 grids of professional behaviours (4–5 rows each, shared 1–5 scale with a "Does not apply" option), rater context, free-text strengths and development, and an overall recommendation
+- **Tags**: 360, multi-rater, appraisal, feedback, professional-behaviours
+
+[View 360° Colleague Feedback Battery Template →](/docs/question-group-templates-360-assessment/)
+
 ### PHQ-9 (Patient Health Questionnaire-9)
 
 **Depression Screening Questionnaire**
