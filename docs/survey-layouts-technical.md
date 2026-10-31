@@ -1698,6 +1698,12 @@ Built on **respondent categories** (see §Respondent categories above):
 - Sections tagged with `required_categories` so each rater role sees
   only its question set about the same subject.
 - Invite tokens carry the `rater_role` value for that batch.
+- Tokens-page conveniences (issues #354–#356): a "Generate full 360 set
+  for a subject" action (one batch per `rater_role` value, all
+  carrying the subject — shown when both dimensions are
+  token-source), a subject filter on the token list, and a
+  per-invitation `category_values` override for unused invitations
+  (audit-logged; used invitations stay read-only as the audit trail).
 - Content blocks can address the subject directly — `heading: 360°
   feedback for {{subject}}` substitutes the assessed clinician's name
   for every rater in that subject's batches (see §Content blocks §Category

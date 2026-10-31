@@ -279,6 +279,11 @@ urlpatterns = [
     ),
     path("<slug:slug>/tokens/", views.survey_tokens, name="tokens"),
     path(
+        "<slug:slug>/tokens/<int:token_id>/categories",
+        views.survey_token_categories_edit,
+        name="token_categories_edit",
+    ),
+    path(
         "<slug:slug>/invites/pending/",
         views.survey_invites_pending,
         name="invites_pending",
