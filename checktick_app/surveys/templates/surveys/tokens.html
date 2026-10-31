@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load i18n %}
+{% load survey_extras %}
 {% block title %}{% trans "Invite Tokens" %} - {{ survey.name }}{% endblock %}
 {% block content %}
 <div class="prose max-w-3xl">
@@ -24,18 +25,42 @@
     {% if respondent_categories %}
     <div class="md:col-span-3">
       <h3 class="font-semibold text-sm mb-2">{% trans "Categories for this batch" %}</h3>
-      <p class="text-xs text-base-content/60 mb-2">{% trans "Pick each respondent's category for every token in this batch — e.g. one batch for peers, another for supervisors. Leave blank for categories decided another way (a survey question or random assignment)." %}</p>
+      <p class="text-xs text-base-content/60 mb-2">{% trans "Set each respondent's category for every token in this batch — e.g. one batch for peers, another for supervisors. Leave blank for categories decided another way (a survey question or random assignment)." %}</p>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {% for cat in respondent_categories %}
+        {% with used=category_value_counts|get_item:cat.name %}
         <div>
           <label class="label text-xs">{{ cat.display_name }}</label>
+          {% if cat.free_text %}
+          {# Free-text dimension (issue #353): type the value instead of picking #}
+          {# from the roster. The datalist offers values already used by other #}
+          {# batches so the author reuses them instead of typing a near-typo. #}
+          <input type="text" name="category_{{ cat.name }}" list="category-values-{{ cat.name }}" class="input input-bordered input-sm w-full" placeholder="{% trans 'Type the value for this batch' %}" autocomplete="off" />
+          <datalist id="category-values-{{ cat.name }}">
+            {% for val, count in used.items %}
+            <option value="{{ val }}"></option>
+            {% endfor %}
+          </datalist>
+          {% if used %}
+          <p class="text-xs text-base-content/60 mt-1">
+            {% trans 'Already used' %}:
+            {% for val, count in used.items %}
+            <span class="badge badge-outline badge-xs" title="{% trans 'Number of invitations with this value' %}">{{ val }} ({{ count }})</span>
+            {% endfor %}
+          </p>
+          {% else %}
+          <p class="text-xs text-base-content/50 mt-1">{% trans 'No values yet — the first invitation batch sets the first one.' %}</p>
+          {% endif %}
+          {% else %}
           <select name="category_{{ cat.name }}" class="select select-bordered select-sm w-full">
             <option value="">—</option>
             {% for val in cat.allowed_values %}
             <option value="{{ val }}">{{ val }}</option>
             {% endfor %}
           </select>
+          {% endif %}
         </div>
+        {% endwith %}
         {% endfor %}
       </div>
     </div>

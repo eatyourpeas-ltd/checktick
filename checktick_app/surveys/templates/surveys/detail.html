@@ -409,12 +409,17 @@
       {% for cat in category_preview.categories %}
       <div>
         <label class="text-xs text-base-content/70 font-medium">{{ cat.display_name }}</label>
+        {% if cat.free_text %}
+        {# Free-text dimension (issue #353): simulate any typed value. #}
+        <input type="text" name="simulate_category_{{ cat.name }}" value="{{ category_preview.values|get_item:cat.name }}" class="input input-bordered input-xs ml-2" placeholder="{% trans 'Type a value' %}" />
+        {% else %}
         <select name="simulate_category" class="select select-bordered select-xs ml-2" onchange="this.form.submit()">
           <option value="">—</option>
           {% for val in cat.allowed_values %}
           <option value="{{ cat.name }}:{{ val }}" {% if request.GET.simulate_category and cat.name|add:':'|add:val in request.GET.simulate_category %}selected{% endif %}>{{ val }}</option>
           {% endfor %}
         </select>
+        {% endif %}
       </div>
       {% endfor %}
       <div class="flex gap-2">

@@ -196,7 +196,10 @@
               {% for val in cat.allowed_values %}
               <span class="badge badge-outline badge-sm">{{ val }}</span>
               {% endfor %}
-              {% if not cat.allowed_values %}
+              {% if cat.free_text %}
+              {# Free-text dimension (issue #353): values are typed per invitation batch. #}
+              <span class="badge badge-sm badge-ghost">{% trans 'values typed per invitation' %}</span>
+              {% elif not cat.allowed_values %}
               <span class="text-xs text-warning">{% trans 'no values configured' %}</span>
               {% endif %}
             </div>
