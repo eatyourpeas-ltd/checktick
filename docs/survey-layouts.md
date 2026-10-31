@@ -570,14 +570,18 @@ builder and power users):
 heading: Welcome
 variant: disclosure
 link: Privacy notice|https://example.com/privacy
+consent: I have read and accept the study terms.
+consent_required: true
 
 Welcome to the study. Please read the privacy notice before continuing.
 ```
 
 The `## Introduction` heading is the internal label (not rendered to
 participants). The `heading:` config line sets the rendered heading.
-Image upload is builder-only — the outline grammar does not carry image
-references.
+`consent:` adds a consent checkbox to the block (the linked yesno
+question is rebuilt on import); `consent_required: true` marks it
+required — omit it for an optional agreement. Image upload is
+builder-only — the outline grammar does not carry image references.
 
 ## Respondent categories
 

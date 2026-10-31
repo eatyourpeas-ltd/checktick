@@ -157,6 +157,60 @@ def test_parse_content_block_subtitle_and_render_once():
     assert q["final_options"]["render_once"] is False
 
 
+def test_parse_content_block_consent_config():
+    """consent: / consent_required: lines build the consent dict (issue #358).
+
+    ``question_id`` is None at parse time — the bulk-upload view fills it
+    in when it creates the linked yesno question.
+    """
+    md = textwrap.dedent("""
+        # Section {sec}
+        ## Disclosure
+        (content_block)
+        consent: I have read and accept the study terms.
+        consent_required: true
+
+        Please read this disclosure.
+        """).strip()
+
+    groups = parse_bulk_markdown(md)
+    q = groups[0]["questions"][0]
+    assert q["final_options"]["consent"] == {
+        "question_id": None,
+        "statement": "I have read and accept the study terms.",
+        "required": True,
+    }
+    # The consent lines are config, not body.
+    assert "consent:" not in q["final_options"]["body_md"]
+    assert q["final_options"]["body_md"] == "Please read this disclosure."
+
+
+def test_parse_content_block_consent_defaults():
+    """consent without consent_required is optional; no consent line → None."""
+    md = textwrap.dedent("""
+        # Section {sec}
+        ## A
+        (content_block)
+        consent: Optional agreement.
+
+        Body A.
+
+        ## B
+        (content_block)
+
+        Body B.
+        """).strip()
+
+    groups = parse_bulk_markdown(md)
+    a, b = groups[0]["questions"]
+    assert a["final_options"]["consent"] == {
+        "question_id": None,
+        "statement": "Optional agreement.",
+        "required": False,
+    }
+    assert b["final_options"]["consent"] is None
+
+
 def test_parse_content_block_forces_required_false():
     """Even with the * suffix, a content_block must not be required."""
     md = textwrap.dedent("""
@@ -339,11 +393,8 @@ def test_export_content_block_placeholder_round_trip(client, django_user_model):
     """{{subject}} placeholders must survive export → import as literal
     text (issue #349 edge case 2 — the exporter and the Markdown importer
     must not mangle them). Placeholders live in the heading:/subtitle:
-    config lines, the body, and link labels (issue #352) — not the internal
-    label.
-
-    Consent statements are not part of the outline grammar (the exporter
-    drops the consent config), so there is no consent round-trip to guard.
+    config lines, the body, link labels (issue #352), and consent
+    statements (issue #358) — not the internal label.
     """
     from checktick_app.surveys.models import QuestionGroup
     from checktick_app.surveys.views import _export_survey_to_markdown
@@ -370,7 +421,11 @@ def test_export_content_block_placeholder_round_trip(client, django_user_model):
                 }
             ],
             "image_id": None,
-            "consent": None,
+            "consent": {
+                "question_id": None,
+                "statement": "I confirm my feedback for {{subject}} may be shared.",
+                "required": False,
+            },
             "render_once": True,
         },
         required=False,
@@ -384,6 +439,7 @@ def test_export_content_block_placeholder_round_trip(client, django_user_model):
     assert (
         "link: Privacy notice for {{subject}}|https://example.com/privacy" in exported
     )
+    assert "consent: I confirm my feedback for {{subject}} may be shared." in exported
 
     # Re-import into a fresh survey — the placeholders survive intact.
     survey2 = Survey.objects.create(owner=user, name="ReimportPH", slug="reimport-ph")
@@ -402,6 +458,124 @@ def test_export_content_block_placeholder_round_trip(client, django_user_model):
     assert q.options["body_md"] == "Thank you for rating {{subject}} in this round."
     assert q.options["links"][0]["label"] == "Privacy notice for {{subject}}"
     assert q.options["links"][0]["url"] == "https://example.com/privacy"
+    assert (
+        q.options["consent"]["statement"]
+        == "I confirm my feedback for {{subject}} may be shared."
+    )
+
+
+@pytest.mark.django_db
+def test_export_content_block_consent_round_trip(client, django_user_model):
+    """Content block consent config survives export → import (issue #358).
+
+    The exporter emits ``consent:`` / ``consent_required:`` config lines and
+    skips the linked yesno question (it is an implementation detail of the
+    block, not a standalone question). Re-importing rebuilds the block's
+    consent config plus a fresh linked yesno question — no stray
+    unlinked question, and a second export is identical (idempotent).
+    """
+    from checktick_app.surveys.models import QuestionGroup
+    from checktick_app.surveys.views import (
+        _export_survey_to_markdown,
+        _is_linked_consent_question,
+    )
+
+    user = django_user_model.objects.create_user(
+        username="author-consent", password=TEST_PASSWORD
+    )
+    survey = Survey.objects.create(
+        owner=user, name="ExportConsent", slug="export-consent"
+    )
+    group = QuestionGroup.objects.create(name="Section", owner=user)
+    survey.question_groups.add(group)
+    block = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="Disclosure",
+        type=SurveyQuestion.Types.CONTENT_BLOCK,
+        options={
+            "heading": "",
+            "subtitle": "",
+            "body_md": "Please read this disclosure.",
+            "links": [],
+            "image_id": None,
+            "consent": None,
+            "render_once": True,
+        },
+        required=False,
+        order=0,
+    )
+    # Configure consent exactly as the builder's configure panel does
+    # (_parse_content_block_form): a linked yesno question marked with the
+    # _content_block_parent marker, plus the consent dict on the block.
+    linked = SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text=f"Consent (content block: {block.text[:50]})",
+        type=SurveyQuestion.Types.YESNO,
+        options=[
+            {"label": "I agree", "value": "yes"},
+            {"label": "I do not agree", "value": "no"},
+            {"_content_block_parent": block.id},
+        ],
+        required=True,
+        order=1,
+    )
+    block.options = {
+        **block.options,
+        "consent": {
+            "question_id": linked.id,
+            "statement": "I have read and accept the study terms.",
+            "required": True,
+        },
+    }
+    block.save(update_fields=["options"])
+
+    exported = _export_survey_to_markdown(survey)
+    assert "consent: I have read and accept the study terms." in exported
+    assert "consent_required: true" in exported
+    # The linked question is skipped — no stray "## Consent (content block:
+    # …)" question in the outline.
+    assert "## Consent (content block:" not in exported
+
+    # Re-import into a fresh survey.
+    survey2 = Survey.objects.create(
+        owner=user, name="ReimportConsent", slug="reimport-consent"
+    )
+    client.login(username="author-consent", password=TEST_PASSWORD)
+    response = client.post(
+        reverse("surveys:bulk_upload", kwargs={"slug": survey2.slug}),
+        {"markdown": exported},
+        follow=False,
+    )
+    assert response.status_code == 302
+
+    q = SurveyQuestion.objects.get(survey=survey2, text="Disclosure")
+    assert q.type == SurveyQuestion.Types.CONTENT_BLOCK
+    consent = q.options["consent"]
+    assert consent["statement"] == "I have read and accept the study terms."
+    assert consent["required"] is True
+    # The linked yesno question was rebuilt, ordered after the block.
+    linked2 = SurveyQuestion.objects.get(id=consent["question_id"], survey=survey2)
+    assert linked2.type == SurveyQuestion.Types.YESNO
+    assert linked2.required is True
+    assert linked2.group_id == q.group_id
+    assert linked2.order > q.order
+    assert _is_linked_consent_question(linked2)
+    assert linked2.text == "Consent (content block: Disclosure)"
+    # Exactly one consent question exists in the re-imported survey — no
+    # stray unlinked duplicate from the outline.
+    consent_questions = SurveyQuestion.objects.filter(
+        survey=survey2, type=SurveyQuestion.Types.YESNO
+    )
+    assert consent_questions.count() == 1
+
+    # Re-export: the consent config is still there and still no stray
+    # question (the rebuild is idempotent).
+    exported2 = _export_survey_to_markdown(survey2)
+    assert "consent: I have read and accept the study terms." in exported2
+    assert "consent_required: true" in exported2
+    assert "## Consent (content block:" not in exported2
 
 
 @pytest.mark.django_db

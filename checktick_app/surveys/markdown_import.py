@@ -489,7 +489,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                         )
                 else:
                     m = re.match(
-                        r"^(min|max|left|right|na|dataset|address_lookup|render_once|render|heading|subtitle):(.*)$",
+                        r"^(min|max|left|right|na|dataset|address_lookup|render_once|render|heading|subtitle|consent|consent_required):(.*)$",
                         line,
                         re.IGNORECASE,
                     )
@@ -636,6 +636,21 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                 render_once = render_once_raw not in {"false", "no", "off", "0"}
                 heading = str(q["kv"].get("heading", "")).strip()
                 subtitle = str(q["kv"].get("subtitle", "")).strip()
+                # Consent (issue #358): ``consent:`` carries the statement;
+                # ``consent_required: true`` marks the linked yesno question
+                # required. ``question_id`` is filled in by the bulk-upload
+                # view when it creates the linked question.
+                consent_statement = str(q["kv"].get("consent", "")).strip()
+                consent_required = str(
+                    q["kv"].get("consent_required", "")
+                ).strip().lower() in {"true", "yes", "on", "1"}
+                consent = None
+                if consent_statement:
+                    consent = {
+                        "question_id": None,
+                        "statement": consent_statement,
+                        "required": consent_required,
+                    }
                 # Body: strip leading/trailing blank lines, preserve internal.
                 body = "\n".join(q["body_lines"]).strip("\n")
                 # Sanitise link URLs at parse time so bad schemes never persist.
@@ -652,7 +667,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                     "body_md": body,
                     "image_id": None,
                     "links": links,
-                    "consent": None,
+                    "consent": consent,
                     "render_once": render_once,
                 }
             elif t in {
