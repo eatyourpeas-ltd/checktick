@@ -117,14 +117,14 @@ Last updated: 2026-11-01 (end of session 4).
   the `users/<uid>/surveys/<sid>/recovery-kek` path used by the recovery
   dashboard is NOT in the `checktick-app` policy — approvals would fail
   with `permission denied`. Pre-existing (same `setup_vault.py` on
-  Northflank), not Civo-specific. **Policy stanza now fixed in
-  `vault/setup_vault.py`** (this branch) and `k8s/smoke-test.py` step 17
-  exercises the real `users/...` escrow path — red until the policy is
-  applied to the running Vault (needs a temporary root via
-  `vault operator generate-root`; the AppRole can't write policies). The
-  migration copies Vault storage (no re-init), so the production Vault
-  needs the same apply before/after cutover; fresh Vaults get it
-  automatically from the fixed script.
+  Northflank), not Civo-specific. **Fixed and APPLIED:** the stanza is in
+  `vault/setup_vault.py` (this branch), and the staging Vault got it via the
+  root ceremony (`vault operator generate-root` with 3-of-4 shares →
+  `vault policy write checktick-app` → revoke temp root). Smoke step 17
+  exercises the real `users/...` escrow path and is GREEN — 19/19 with the
+  recovery path included. The migration copies Vault storage (no re-init),
+  so the PRODUCTION Vault still needs the same apply before/after cutover
+  (runbook Phase 3 checklist); fresh Vaults get it automatically.
 
 ## Known state at session close
 
@@ -144,31 +144,25 @@ Last updated: 2026-11-01 (end of session 4).
 
 ## Next steps (next session)
 
-1. **Apply the fixed `checktick-app` policy to the staging Vault** (root
-   ceremony: `vault operator generate-root` with 3 of 4 unseal shares →
-   temporary root → re-run `vault/setup_vault.py` `create_policies` or
-   `vault policy write` → revoke the temp root) → **re-run
-   `k8s/smoke-test.py`** — step 17 goes green only when the running Vault
-   has the `secret/data/users/*` stanza. Until then step 17 is expected
-   red (the policy fix is in the branch, not yet in the cluster).
-2. **Resend confirmation emails** for the two test accounts (Graph works,
+1. **Resend confirmation emails** for the two test accounts (Graph works,
    SITE_URL points at staging) → click the links. The Phase 1 round-trip
-   itself is DONE (smoke 19/19) — this is now only about real email
-   delivery to the real accounts.
-3. **Pin the live web image off `latest`**: the live Deployment still runs
+   itself is DONE (smoke 19/19 incl. the recovery-escrow path) — this is
+   now only about real email delivery to the real accounts.
+2. **Pin the live web image off `latest`**: the live Deployment still runs
    `ghcr.io/eatyourpeas-ltd/checktick:latest` — run Deploy (Civo) with an
    explicit `image-tag: 0.24.1` to pin it (also proves the tagged CI path
    end to end).
-4. Verify which redirect URIs in the Google/Azure app registrations matched
+3. Verify which redirect URIs in the Google/Azure app registrations matched
    for staging OIDC (signup worked — record the exact entries).
-5. POC exit criteria left: `kubectl apply -k k8s/` idempotency check (re-apply
+4. POC exit criteria left: `kubectl apply -k k8s/` idempotency check (re-apply
    the ALLOWED_HOSTS patch after) and the tear-down/re-apply test.
-6. Runbook Phase 3 rehearsal planning (Vault storage-migration drill, DB
+5. Runbook Phase 3 rehearsal planning (Vault storage-migration drill, DB
    restore drill, timing table). NOTE for the drill: the Vault
-   storage-copy carries the OLD policy — apply the `users/*` stanza on
-   the production Vault before/after the move (pre-cutover checklist
-   item, runbook Phase 3).
-7. Phase 6 backlog candidates: `ALLOWED_HOSTS_EXTRA` in settings.py (kills
+   storage-copy carries whatever policy the source had at copy time — the
+   staging Vault is already fixed, but the PRODUCTION copy from Northflank
+   would carry the stale policy if the stanza is not applied there first
+   (pre-cutover checklist item, runbook Phase 3).
+6. Phase 6 backlog candidates: `ALLOWED_HOSTS_EXTRA` in settings.py (kills
    the scratch patch); open SNOMED readers as
    `file:...?mode=ro&immutable=1` in healthz/resolver/seed so a WAL-mode
    snomed.db is readable on ANY read-only mount (needs an image release;

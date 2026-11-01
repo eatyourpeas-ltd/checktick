@@ -177,17 +177,17 @@ Manifest details and apply order: [`k8s/README.md`](../k8s/README.md).
       gap (recovery escrow was never exercised there either).
       **Fix status:** the policy stanza (`secret/data/users/+/surveys/+/
       recovery-kek` + `secret/metadata/users/*` list/delete) is added to
-      `vault/setup_vault.py` on this branch, and `k8s/smoke-test.py`
-      step 17 now exercises the real `users/...` escrow path — it stays
-      red until the policy is applied to the running Vault. Applying needs
-      a privileged token (the AppRole cannot write policies; the POC root
-      token was revoked after setup): `vault operator generate-root` with
-      3 of the 4 unseal shares → temporary root → re-run the
-      `create_policies` stanza (or `vault policy write checktick-app`) →
-      revoke the temporary root. Because Vault migrates by storage-directory
-      COPY (not re-init), the moved Vault keeps its old policy — the stanza
-      must be applied to the PRODUCTION Vault too (pre-cutover on Northflank
-      or right after the move, before any recovery approval is needed).
+      `vault/setup_vault.py`, and `k8s/smoke-test.py`
+      step 17 exercises the real `users/...` escrow path. **Applied to the
+      STAGING Vault** (root ceremony: `vault operator generate-root` with
+      3-of-4 shares → `vault policy write checktick-app` → revoke temp
+      root) and smoke is **19/19 green**. Applying needs a privileged token
+      (the AppRole cannot write policies; the POC root token was revoked
+      after setup). Because Vault migrates by storage-directory
+      COPY (not re-init), the moved Vault keeps whatever policy the source
+      had — the **PRODUCTION** Vault (Northflank) still needs the same
+      apply before/after the move, before any recovery approval is
+      needed (pre-cutover checklist item, Phase 3).
       Fresh Vaults initialised after the fix get it automatically.
 - [ ] **Config overlay precedence finding (POC):** changing a value in the
       committed `web-configmap.yaml` (`checktick-config`) is NOT enough —
