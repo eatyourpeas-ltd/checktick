@@ -13,9 +13,15 @@ manager / private ops repo / unseal ceremony).
 
 ## Status
 
-Draft, authored on the `civo-migration` branch. Phase 0 (Civo provisioning) and
-Phase 1 (POC) can start immediately. Phases 3–6 are executed only after the POC
-exit criteria are met.
+Phase 0 (Civo provisioning) is complete — the `checktick` cluster is live and
+running the staging POC. Phase 1 (POC) is green apart from two exit criteria
+(manifest idempotency check, tear-down test). **Phase 2 (credential rotation)
+is complete:** every provider-level credential is rotated at its provider and
+staged in the git-ignored `k8s/secrets.env` / applied as the `checktick-secrets`
+Secret — only the two deliberately cutover-time items remain (new
+`SECRET_KEY` inside the freeze window; fresh AppRole credentials on the
+migrated Vault). Phases 3–6 are executed only after the remaining POC exit
+criteria are met.
 
 ## Context
 
@@ -145,6 +151,50 @@ Manifest details and apply order: [`k8s/README.md`](../k8s/README.md).
       because CI has no app database), upload to
       `s3://checktick-backups/snomed`, and import in-cluster with a small
       CronJob (download + atomic rename + `seed_snomed_datasets`).
+- [ ] **SNOMED WAL finding (POC):** `sct` builds `snomed.db` with
+      `journal_mode=WAL` (db header write/read version = 2), and every app
+      reader opens it `mode=ro` (healthz, `snomed_resolver`,
+      `seed_snomed_datasets`). A read-only SQLite connection to a WAL
+      database must create a `-shm` file — that works wherever the volume is
+      mounted read-write (which is why the seed container succeeds on the
+      RWX PVC) but fails on the web container's `readOnly: true` emptyDir
+      mount with `SQLITE_CANTOPEN` ("unable to open database file", surfaced
+      by healthz as `snomed: error` — after a copy the file exists, it just
+      cannot be opened). Fix in `k8s/web.yaml`: the `snomed-copy` init
+      container (which mounts the emptyDir read-write) runs
+      `PRAGMA journal_mode=DELETE` on the POD-LOCAL COPY after `cp` — the
+      RWX share is never written, and the read-only web container then opens
+      a plain rollback-journal database. Verified end to end:
+      `import-snomed-db` job → 1.9 GB copy → conversion → `/healthz`
+      `snomed: ok`. App-level alternative for the Phase 6 backlog: open
+      `file:...?mode=ro&immutable=1` (skips the shm entirely); would need an
+      image release.
+- [ ] **Vault AppRole policy gap (POC finding, smoke step 17):** the
+      `checktick-app` policy written by `vault/setup_vault.py` grants
+      `secret/data/surveys/+/kek`, `organizations/+/master-key`,
+      `teams/+/team-key` and read-only `platform/master-key` — but NOT
+      `secret/data/users/*`, which is the path family
+      `VaultClient.escrow_user_survey_kek` / `recover_user_survey_kek` /
+      `verify_user_identity_email` use (`users/<uid>/surveys/<sid>/recovery-kek`).
+      Consequence: any recovery-dashboard approval
+      (`RecoveryRequest.execute_recovery`) or `execute_platform_recovery`
+      run fails at Vault with `permission denied`. NOT Civo-specific — the
+      same setup script ran on Northflank, so production carries the same
+      gap (recovery escrow was never exercised there either).
+      **Fix status:** the policy stanza (`secret/data/users/+/surveys/+/
+      recovery-kek` + `secret/metadata/users/*` list/delete) is added to
+      `vault/setup_vault.py`, and `k8s/smoke-test.py`
+      step 17 exercises the real `users/...` escrow path. **Applied to the
+      STAGING Vault** (root ceremony: `vault operator generate-root` with
+      3-of-4 shares → `vault policy write checktick-app` → revoke temp
+      root) and smoke is **19/19 green**. Applying needs a privileged token
+      (the AppRole cannot write policies; the POC root token was revoked
+      after setup). Because Vault migrates by storage-directory
+      COPY (not re-init), the moved Vault keeps whatever policy the source
+      had — the **PRODUCTION** Vault (Northflank) still needs the same
+      apply before/after the move, before any recovery approval is
+      needed (pre-cutover checklist item, Phase 3).
+      Fresh Vaults initialised after the fix get it automatically.
 - [ ] **Config overlay precedence finding (POC):** changing a value in the
       committed `web-configmap.yaml` (`checktick-config`) is NOT enough —
       the git-ignored local overlay (`checktick-config-local`, applied from
@@ -223,19 +273,27 @@ Manifest details and apply order: [`k8s/README.md`](../k8s/README.md).
 Goal: prove the plumbing and **rehearse the migration mechanics** with
 synthetic data and a throwaway Vault — not just steady-state running.
 
-- [ ] Apply the manifests per [`k8s/README.md`](../k8s/README.md).
-- [ ] Initialise the throwaway Vault with `vault operator init -key-shares=4
+- [x] Apply the manifests per [`k8s/README.md`](../k8s/README.md).
+- [x] Initialise the throwaway Vault with `vault operator init -key-shares=4
       -key-threshold=3` (rehearse the real ceremony shape) and configure
       AppRole per [Vault](vault/). These shares/keys are disposable.
-- [ ] Run the pre-deploy Job and the SNOMED build (`update_snomed_db`, needs
+- [x] Run the pre-deploy Job and the SNOMED build (`update_snomed_db`, needs
       the 8 GiB memory allocation documented in
-      [Scheduled Tasks](self-hosting-scheduled-tasks/)).
-- [ ] `/healthz` returns full `ok`: DB, Vault unsealed, SNOMED.
-- [ ] Log in, create a test survey, submit a response, and view/decrypt it —
+      [Scheduled Tasks](self-hosting-scheduled-tasks/)). POC variant: the CI
+      workflow builds snomed.db on a GitHub runner and the small
+      `import-snomed-db` CronJob imports it (see the SNOMED build finding
+      below).
+- [x] `/healthz` returns full `ok`: DB, Vault unsealed, SNOMED.
+- [x] Log in, create a test survey, submit a response, and view/decrypt it —
       the round-trip proves DB + Vault + key hierarchy work together.
-- [ ] **Zero-downtime proof:** run `while true; do curl -sf
+      Scripted and green: `k8s/smoke-test.py` (19/19 steps — real login+2FA,
+      encrypted create, ECIES submission, password unlock, export decrypt,
+      Vault escrow, SNOMED resolver). **Found the Vault AppRole policy gap
+      on the way — see the Phase 0 ledger.**
+- [x] **Zero-downtime proof:** run `while true; do curl -sf
       https://<host>/healthz >/dev/null || echo FAIL; sleep 1; done` and trigger
       a rolling update (`kubectl set image ...`). Zero FAILs required.
+      (The `zdt-test` pod loop: zero FAILs across five rollouts.)
 - [ ] Re-apply all manifests (`kubectl apply -k k8s/`) and confirm idempotency
       (no spurious restarts).
 - [ ] Tear-down test: `kubectl delete -k k8s/` then re-apply from scratch.
@@ -245,23 +303,46 @@ Appendix B. Do not schedule the cutover until then.
 
 ## Phase 2 — Credential rotation plan (incident follow-through)
 
-The migration is the completion point for rotating everything that ever
-transited Northflank's secret store. Rotate at the provider, then update the
-Kubernetes Secret.
+**Status: COMPLETE.** The migration was the completion point for rotating
+everything that ever transited Northflank's secret store: every provider-level
+credential below is rotated at its provider, staged in the git-ignored
+`k8s/secrets.env`, and applied to the cluster as the `checktick-secrets`
+Secret. Proven, not just applied: the post-rotation rollout was healthz-gated
+(so the rotated `DATABASE_URL` and Vault AppRole pair demonstrably work end
+to end), and a live Microsoft Graph token fetch verified the rotated email
+credentials.
 
-| Credential | Action | Lands in |
+| Credential | Action | Status |
 | :--- | :--- | :--- |
-| Civo DB password | Generated at instance creation | `DATABASE_URL` in Secret |
-| Vault AppRole `role_id` / `secret_id` | New AppRole on the migrated Civo Vault | `VAULT_*` in Secret |
-| Django `SECRET_KEY` | New at cutover (sessions/reset links invalidate; free inside the window; passwords unaffected) | `SECRET_KEY` in Secret |
-| OIDC client secrets (Google, Azure) | Rotate in provider consoles | `OIDC_*` in Secret |
-| `LLM_API_KEY` | Rotate at the APIM | Secret |
-| `EXTERNAL_DATASET_API_KEY` | Rotate at RCPCH | Secret |
-| `TRUD_API_KEY` | Rotate at TRUD | Secret (SNOMED CronJob only) |
-| `EMAIL_HOST_PASSWORD` | Rotate at SMTP provider | Secret |
-| `HCAPTCHA_SECRET` | Rotate at hCaptcha | Secret |
-| `LOGS_KEY` | New OpenObserve credentials | Secret |
-| GoCardless API/webhook secrets | Rotate in GoCardless dashboard | Secret |
+| Civo DB password | Generated at instance creation | ✅ rotated + proven (healthz-gated rollout) |
+| Vault AppRole `role_id` / `secret_id` (staging POC Vault) | New AppRole per [`vault/setup_vault.py`](../vault/) | ✅ rotated + proven; **superseded at cutover** — see below |
+| OIDC client secrets (Google, Azure) | Rotate in provider consoles | ✅ rotated |
+| `LLM_API_KEY` | Rotate at the APIM | ✅ rotated |
+| `EXTERNAL_DATASET_API_KEY` | Rotate at RCPCH | ✅ rotated |
+| `TRUD_API_KEY` | Rotate at TRUD | ✅ rotated (SNOMED CronJob only) |
+| `EMAIL_HOST_PASSWORD` | Rotate at SMTP provider | ✅ rotated + proven (live Graph token fetch) |
+| `HCAPTCHA_SECRET` | Rotate at hCaptcha | ✅ rotated |
+| `LOGS_KEY` | New OpenObserve credentials | ✅ rotated |
+| GoCardless API/webhook secrets | Rotate in GoCardless dashboard | ✅ rotated |
+
+**Two items are deliberately cutover-time, not pre-rotatable:**
+
+- **Django `SECRET_KEY`** — new at cutover, inside the freeze window.
+  Rotating early would invalidate live production sessions and password-reset
+  links; with writes frozen at T+0 it is free. Do NOT pre-stage it in
+  `secrets.env` — swap the value in the Secret during the window.
+- **Vault AppRole credentials on the MIGRATED Vault** — the staging AppRole
+  belongs to the throwaway POC Vault, whose storage directory is REPLACED at
+  T+2 by the Northflank copy. The migrated Vault therefore carries
+  Northflank's AppRole (and its policy, which lacks the
+  `secret/data/users/*` stanza — Phase 0 ledger finding). After the copy,
+  one root ceremony on the migrated Vault covers everything: mint a fresh
+  `secret_id` (new `role_id` comes with the copied role), apply the fixed
+  `checktick-app` policy, revoke the temp root — then update `VAULT_*` in
+  `checktick-secrets` and re-run `k8s/smoke-test.py` (step 17 gates the
+  policy). Alternatively apply the stanza on the Northflank Vault pre-copy
+  so it travels with the storage (Phase 3 checklist item) and only the
+  `secret_id` mint remains for the window.
 
 Vault unseal shares and the custodian component are **not** rotated by this
 move — custody is unchanged (they never transited Northflank). A platform key
@@ -283,6 +364,15 @@ Rotation".
       pending migrations; row counts match source.
 - [ ] Media pre-sync (bulk `rsync`/`rclone` into the PVC).
 - [ ] SNOMED rebuilt on the production PVC; `healthz` reports snomed ok.
+- [ ] **Apply the fixed `checktick-app` policy to the production Vault**
+      (Phase 0 ledger finding): the migration copies Vault storage, so the
+      moved Vault keeps the old policy and recovery-dashboard approvals
+      (`users/<uid>/surveys/<sid>/recovery-kek`) stay `permission denied`.
+      Root ceremony on the Northflank Vault (or immediately post-move):
+      `vault operator generate-root` → `vault policy write checktick-app`
+      with the fixed `vault/setup_vault.py` HCL → revoke the temp root →
+      re-run `k8s/smoke-test.py` against it (step 17 green). Fresh Vaults
+      initialised from the fixed script get the stanza automatically.
 - [ ] Lower DNS TTL to 60s at T−24h.
 - [ ] Deploy freeze on Northflank from T−24h; announce the window to users
       (email + in-app banner).
@@ -307,9 +397,14 @@ row contents into terminals or tickets.
 
 3. **T+5 — restore Vault on Civo.** Pre-create the `data-vault-0` PVC, extract
    the archive into it, apply `k8s/vault.yaml`, unseal with 3 of 4 shares,
-   confirm `vault status` shows `initialized: true, sealed: false`, then create
-   the new production AppRole and update the `checktick-secrets` Secret.
-   Delete the tarball.
+   confirm `vault status` shows `initialized: true, sealed: false`, then —
+   ONE root ceremony on the migrated Vault (`vault operator generate-root`,
+   revoke after): mint the new production AppRole `secret_id`, apply the fixed
+   `checktick-app` policy **if the `secret/data/users/*` stanza was not
+   applied on the Northflank Vault pre-copy** (Phase 3 checklist item), and
+   update `VAULT_*` in the `checktick-secrets` Secret. Re-run
+   `k8s/smoke-test.py` against it — step 17 gates the policy. Delete the
+   tarball.
 4. **T+10 — database.** Final dump, transfer, restore:
 
    ```bash
@@ -328,7 +423,9 @@ row contents into terminals or tickets.
 6. **T+15 — media delta sync** (seconds; volume is small).
 7. **T+15 — pre-deploy Job** (`k8s/migrate-job.yaml`; migrations should be a
    no-op, syncs are idempotent).
-8. **T+20 — deploy web.** `kubectl apply -k k8s/` (excluding CronJobs until
+8. **T+20 — deploy web.** Update `SECRET_KEY` in the `checktick-secrets`
+   Secret (new value per Phase 2 — live sessions/reset links invalidate,
+   free inside the freeze). `kubectl apply -k k8s/` (excluding CronJobs until
    smoke passes), then `kubectl rollout status deployment/checktick-web`.
    (Routine releases after cutover can instead be dispatched from the
    *Deploy (Civo)* GitHub workflow, which runs these steps with automatic

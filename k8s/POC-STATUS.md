@@ -1,10 +1,11 @@
 # POC Status — Civo Migration (session handoff)
 
-Working state of the `civo-migration` branch POC. Read this together with
+Working state of the Civo migration POC — the `civo-migration` branch is now
+merged to `main` (v0.24.1 shipped). Read this together with
 `docs/migration-northflank-to-civo.md` (the runbook — its Phase 0 "findings"
 ledger records every environment discovery so far) and `k8s/README.md`.
 
-Last updated: 2026-11-01 (end of session 3).
+Last updated: 2026-11-01 (end of session 4).
 
 ## Environment
 
@@ -40,13 +41,16 @@ Last updated: 2026-11-01 (end of session 3).
   re-applied from the cycled files; rollout was healthz-gated (so the rotated
   `DATABASE_URL` + Vault AppRole are proven working) and a live Graph token
   fetch verified the email creds (the signup-time 401 is fixed).
-- `/healthz`: `db: ok`, `vault: ok`, `snomed: unavailable` (pending the CI
-  build), via pod localhost, Service DNS, and public HTTPS.
+- `/healthz`: **full `status: ok`** — `db: ok`, `vault: ok`, `snomed: ok`
+  (SNOMED verified end to end this session), via pod localhost, Service DNS,
+  and public HTTPS.
 - Zero-downtime proof: **PASSED** — the `zdt-test` curl loop pod has been
   running through **three** full `rollout restart`s with zero FAILs.
 - Ingress + TLS: Traefik routes `staging.checktick.uk`; cert-manager
   certificate `READY True` (Let's Encrypt); public HTTPS serving 200.
-- CronJobs: all 13 applied (incl. `import-snomed-db`);
+- CronJobs: all 13 applied (incl. `import-snomed-db` — verified end to end
+  via `kubectl create job --from=cronjob/import-snomed-db snomed-import -n
+  checktick`);
   `process-recovery-time-delays` verified running to completion.
 
 ## Session 3: the "too many redirects" on staging
@@ -71,6 +75,57 @@ Last updated: 2026-11-01 (end of session 3).
   (their confirmation emails never delivered). Resend AFTER the 0.24.0
   roll-out so the link works even while logged in.
 
+## Session 4: staging live, CI deploy green, SNOMED end to end
+
+- Staging is serving real HTTPS traffic on `staging.checktick.uk`; the
+  redirect-loop fix shipped (0.24.0 → 0.24.1 merged to `main`) and the
+  Deploy (Civo) workflow runs green.
+- **SNOMED pipeline verified end to end:** "Build SNOMED DB" workflow →
+  `s3://checktick-backups/snomed` → `kubectl create job
+  --from=cronjob/import-snomed-db snomed-import` (1.9 GB download + atomic
+  rename onto the RWX PVC + `seed_snomed_datasets --force`) — release
+  2026-10-21, 19 dataset descriptors seeded. NOTE the in-cluster import
+  job is NOT automatic after the CI build — the CronJob schedule is
+  Tuesday 14:00 UTC; healthz stays `snomed: unavailable` until it runs.
+- **SNOMED WAL finding (full entry in the runbook Phase 0 ledger):** `sct`
+  builds `snomed.db` in WAL mode, so every `mode=ro` reader (healthz,
+  `snomed_resolver`, `seed_snomed_datasets`) needs to create a `-shm`
+  file — fine on the seed Job's read-write PVC mount, impossible on the
+  web container's `readOnly: true` emptyDir mount
+  (`SQLITE_CANTOPEN`, healthz `snomed: error`). **Fix in `k8s/web.yaml`:**
+  the `snomed-copy` init container runs `PRAGMA journal_mode=DELETE` on
+  its pod-local copy after the `cp` (the emptyDir is read-write there; the
+  RWX share is never written). Applied to the live Deployment via a
+  name-keyed strategic patch so the live `ALLOWED_HOSTS` env and image
+  were untouched. Verified: init logs print `journal_mode: delete`, both
+  pods `snomed: ok`, public `/healthz` fully `ok`.
+- Web pods must be restarted (rollout restart) after any import run —
+  the emptyDir copy only happens in the init container at pod boot.
+- **Phase 1 round-trip smoke: PASSED 19/19** — `k8s/smoke-test.py`, run
+  inside a live web pod (`kubectl exec ... python /tmp/smoke-test.py`)
+  against the real staging DB/Vault/snomed.db, all through the REAL views:
+  login view + TOTP 2FA verify, encrypted survey create (X25519 keypair,
+  dual-path wraps), builder question create incl. SNOMED dataset binding
+  (POST field is `prefilled_dataset`), snomed_resolver on the pod-local
+  copy (3,743 options, release 2026-10-21), anonymous submission stored
+  as an ECIES blob with no plaintext, password unlock, export CSV decrypt
+  (marker + SNOMED preferred term), recovery-phrase unlock, Vault KV
+  escrow write→read→delete via AppRole, AuditLog writes. Public gate:
+  `/healthz` ok, `/api/health` ok, hashed `styles.*.css` 200.
+  Throwaway user/survey deleted afterward (AuditLog actor is SET_NULL).
+- **Vault AppRole policy gap found by the smoke (runbook Phase 0 ledger):
+  the `users/<uid>/surveys/<sid>/recovery-kek` path used by the recovery
+  dashboard is NOT in the `checktick-app` policy — approvals would fail
+  with `permission denied`. Pre-existing (same `setup_vault.py` on
+  Northflank), not Civo-specific. **Fixed and APPLIED:** the stanza is in
+  `vault/setup_vault.py` (this branch), and the staging Vault got it via the
+  root ceremony (`vault operator generate-root` with 3-of-4 shares →
+  `vault policy write checktick-app` → revoke temp root). Smoke step 17
+  exercises the real `users/...` escrow path and is GREEN — 19/19 with the
+  recovery path included. The migration copies Vault storage (no re-init),
+  so the PRODUCTION Vault still needs the same apply before/after cutover
+  (runbook Phase 3 checklist); fresh Vaults get it automatically.
+
 ## Known state at session close
 
 - `SITE_URL=https://staging.checktick.uk` in the overlay — applied to the
@@ -83,33 +138,43 @@ Last updated: 2026-11-01 (end of session 3).
   it; re-apply the patch afterwards. Proper fix (`ALLOWED_HOSTS_EXTRA` in
   settings.py) is runbook Phase 6 backlog.
 - The `zdt-test` pod is still running (1 req/s loop) — delete it when done
-  with the POC.
+  with the POC. Its cumulative FAIL count is still **zero** after five
+  rollouts (three restarts + the WAL-fix patch rollout + the restart
+  before it).
 
 ## Next steps (next session)
 
-1. **PR `civo-migration` → `main` with the 0.24.0 minor bump** (bump is in
-   the PR). On merge: docker-publish publishes `0.24.0` + `latest` and fires
-   the Northflank webhook — production gets the 2FA fix. Nothing automatic
-   happens on Civo.
-2. **Civo roll-out test** (exercises the real CI deploy path): set the
-   `CIVO_KUBECONFIG` GitHub secret (`base64 < ~/.kube/civo-checktick.yaml
-   | gh secret set CIVO_KUBECONFIG` — the only deploy secret still missing),
-   then dispatch "Deploy (Civo)" with `image-tag: 0.24.0`: predeploy Job
-   pinned to the tag → `set image` → readiness-gated rollout → smoke check
-   → auto-rollback on failure. This also pins web off `latest`.
-3. **SNOMED**: dispatch "Build SNOMED DB" (works now: `--no-seed` is in the
-   published image and TRUD/S3 secrets are set), then
-   `kubectl create job --from=cronjob/import-snomed-db snomed-import -n checktick`
-   → `/healthz` goes `snomed: ok`, `status: ok`.
-4. **Resend confirmation emails** for the two test accounts (Graph works,
-   SITE_URL points at staging) → click the links → then the runbook Phase 1
-   round-trip: log in, create a test survey, submit a response, view/decrypt.
-5. Verify which redirect URIs in the Google/Azure app registrations matched
+1. **Resend confirmation emails** for the two test accounts (Graph works,
+   SITE_URL points at staging) → click the links. The Phase 1 round-trip
+   itself is DONE (smoke 19/19 incl. the recovery-escrow path) — this is
+   now only about real email delivery to the real accounts.
+2. **Pin the live web image off `latest`**: the live Deployment still runs
+   `ghcr.io/eatyourpeas-ltd/checktick:latest` — run Deploy (Civo) with an
+   explicit `image-tag: 0.24.1` to pin it (also proves the tagged CI path
+   end to end).
+3. Verify which redirect URIs in the Google/Azure app registrations matched
    for staging OIDC (signup worked — record the exact entries).
-6. POC exit criteria left: `kubectl apply -k k8s/` idempotency check (re-apply
+4. POC exit criteria left: `kubectl apply -k k8s/` idempotency check (re-apply
    the ALLOWED_HOSTS patch after) and the tear-down/re-apply test.
-7. Runbook Phase 3 rehearsal planning (Vault storage-migration drill, DB
-   restore drill, timing table).
+5. Runbook Phase 3 rehearsal planning (Vault storage-migration drill, DB
+   restore drill, timing table). NOTE for the drill: the Vault
+   storage-copy carries whatever policy the source had at copy time — the
+   staging Vault is already fixed, but the PRODUCTION copy from Northflank
+   would carry the stale policy if the stanza is not applied there first
+   (pre-cutover checklist item, runbook Phase 3).
+   **Phase 2 is COMPLETE** (all provider-level creds rotated + staged in
+   `k8s/secrets.env`, applied as `checktick-secrets`, proven by the
+   healthz-gated rollout and the live Graph token fetch). The only
+   rotation items left are deliberately cutover-time (runbook Phase 2):
+   new `SECRET_KEY` swapped inside the freeze window (T+20), and the fresh
+   AppRole `secret_id` + fixed `checktick-app` policy minted on the
+   MIGRATED Vault after the T+2 storage copy (one root ceremony —
+   runbook Phase 4 T+5).
+6. Phase 6 backlog candidates: `ALLOWED_HOSTS_EXTRA` in settings.py (kills
+   the scratch patch); open SNOMED readers as
+   `file:...?mode=ro&immutable=1` in healthz/resolver/seed so a WAL-mode
+   snomed.db is readable on ANY read-only mount (needs an image release;
+   the init-container conversion makes this non-urgent).
 
 ## Pointers
 
