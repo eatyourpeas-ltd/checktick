@@ -5,7 +5,7 @@ merged to `main` (v0.24.1 shipped). Read this together with
 `docs/migration-northflank-to-civo.md` (the runbook — its Phase 0 "findings"
 ledger records every environment discovery so far) and `k8s/README.md`.
 
-Last updated: 2026-11-01 (end of session 4).
+Last updated: 2026-11-01 (end of session 5).
 
 ## Environment
 
@@ -126,6 +126,58 @@ Last updated: 2026-11-01 (end of session 4).
   so the PRODUCTION Vault still needs the same apply before/after cutover
   (runbook Phase 3 checklist); fresh Vaults get it automatically.
 
+## Session 5: Phase 1 exit criteria — idempotency + tear-down test
+
+- **Idempotency check: PASSED.** Two consecutive `kubectl apply -k k8s/` —
+  Deployment spec converged, generation stable, no new pods, `vault-0`
+  uptime untouched. `vault`/PDB/NetworkPolicy print `configured` on every
+  apply but a field-by-field compare shows zero spec differences: the
+  recurring `configured` is empty-patch metadata churn (generation tick),
+  not drift. `zdt-test` pod deleted after recording its final tally:
+  **0 FAILs across five rollouts**.
+- **Tear-down → re-apply test: PASSED** (`kubectl delete -k k8s/`, namespace
+  gone in ~5m20s) and re-applied from scratch. Sequencing findings on the
+  way (full entries in the runbook Phase 0 ledger):
+  - **Dual-default StorageClass bug (the big one):** `civo-volume` AND
+    `longhorn` were both annotated default, so the CNPG data PVCs and the
+    Vault PVC silently landed on Longhorn. Longhorn's size×3 reservation
+    per node exhausted the ~35 GiB free per node → the RWX media/snomed
+    volumes failed replica scheduling (`insufficient storage`, volumes
+    `detached/faulted`) → web pods hung `Init:0/2` and the SNOMED import job
+    sat unscheduled for 20+ min looking like a slow download (zero
+    init-container logs = volume-attach failure, not network). Fix: removed
+    the default annotation from `longhorn` (single default `civo-volume`,
+    matching the manifest comments), deleted + recreated the CNPG cluster
+    and Vault — RWX volumes attached immediately, import ran in its normal
+    **3m24s**.
+  - **Apply order is load-bearing:** predeploy hit
+    `CreateContainerConfigError` when `checktick-config` didn't exist yet,
+    and the import job Pending on a not-yet-created PVC. README order
+    (config → secrets → workloads) must be followed exactly.
+  - **The out-of-band objects had to be exported first:**
+    `checktick-secrets` is NOT rebuildable from `k8s/secrets.env` — it alone
+    carries `OIDC_OP_TENANT_ID_AZURE` (`settings.py` reads it without a
+    default → app crashes at import). `SELF_HOSTED` in the live Secret is
+    the string `"False"` (leftover quoting artefact) — django-environ
+    parses it to False, i.e. correct SaaS mode for the hosted service.
+    Exports live in git-ignored `k8s/scratch-export-*.json`.
+- **Fresh Vault ceremony on the rebuilt Vault** (throwaway POC init —
+  production stays storage-copy): `vault operator init -key-shares=4
+  -key-threshold=3`, unseal ×3, `vault/setup_vault.py` via a temp pod
+  labelled `app=checktick-web` (airgap), fresh AppRole patched into
+  `checktick-secrets`, throwaway root token revoked. Tooling:
+  `k8s/scratch-vault-ceremony.sh` + `k8s/scratch-revoke-root.sh` (git-
+  ignored; note Vault 1.21.1 emits `unseal_keys_b64`, and the CNI needs
+  ~15 s before a fresh pod can reach `vault:8200` — the script retries).
+- **Rebuild verified end to end:** predeploy Complete, SNOMED import
+  Complete (3m24s), cert `READY True`, `/healthz` fully `ok` via pod /
+  Service DNS / public HTTPS, and **`smoke-test.py` re-run 19/19 green**
+  against the rebuilt environment (incl. step 17, the `users/*`
+  recovery-escrow path).
+- **Phase 2 re-verified post-rebuild:** the restored `checktick-secrets`
+  carries the rotated provider credentials and the fresh AppRole pair;
+  healthz-gated rollouts and the smoke prove them working.
+
 ## Known state at session close
 
 - `SITE_URL=https://staging.checktick.uk` in the overlay — applied to the
@@ -137,10 +189,14 @@ Last updated: 2026-11-01 (end of session 4).
   roll-outs — but any `kubectl apply -f k8s/web.yaml` (or `-k k8s/`) resets
   it; re-apply the patch afterwards. Proper fix (`ALLOWED_HOSTS_EXTRA` in
   settings.py) is runbook Phase 6 backlog.
-- The `zdt-test` pod is still running (1 req/s loop) — delete it when done
-  with the POC. Its cumulative FAIL count is still **zero** after five
-  rollouts (three restarts + the WAL-fix patch rollout + the restart
-  before it).
+- The `zdt-test` pod was deleted at the end of session 5 (final tally
+  recorded above: **zero FAILs across five rollouts**).
+- Git-ignored POC tooling added in session 5: `k8s/scratch-vault-ceremony.sh`
+  (fresh-Vault ceremony), `k8s/scratch-revoke-root.sh` (root-token revoke),
+  `k8s/scratch-export-*.json` (the four out-of-band objects — needed for
+  any future teardown test), `k8s/scratch-vault-init.json` +
+  `k8s/scratch-vault-setup.txt` (current ceremony output). All match the
+  `k8s/scratch-*` gitignore patterns; NEVER commit them.
 
 ## Next steps (next session)
 
@@ -154,17 +210,21 @@ Last updated: 2026-11-01 (end of session 4).
    end to end).
 3. Verify which redirect URIs in the Google/Azure app registrations matched
    for staging OIDC (signup worked — record the exact entries).
-4. POC exit criteria left: `kubectl apply -k k8s/` idempotency check (re-apply
-   the ALLOWED_HOSTS patch after) and the tear-down/re-apply test.
+4. ~~POC exit criteria left~~ **DONE (session 5):** the `kubectl apply -k
+   k8s/` idempotency check and the tear-down/re-apply test both PASSED —
+   Phase 1 is complete. `CIVO_KUBECONFIG` GitHub secret is also set
+   (verified via `gh secret list`) — the Deploy (Civo) workflow is
+   dispatchable.
 5. Runbook Phase 3 rehearsal planning (Vault storage-migration drill, DB
    restore drill, timing table). NOTE for the drill: the Vault
    storage-copy carries whatever policy the source had at copy time — the
    staging Vault is already fixed, but the PRODUCTION copy from Northflank
    would carry the stale policy if the stanza is not applied there first
    (pre-cutover checklist item, runbook Phase 3).
-   **Phase 2 is COMPLETE** (all provider-level creds rotated + staged in
-   `k8s/secrets.env`, applied as `checktick-secrets`, proven by the
-   healthz-gated rollout and the live Graph token fetch). The only
+   **Phase 2 is COMPLETE and re-verified on the rebuilt environment** (all
+   provider-level creds rotated + staged in `k8s/secrets.env`, restored as
+   `checktick-secrets`, proven by the healthz-gated rollouts, the live
+   Graph token fetch, and the post-rebuild smoke 19/19). The only
    rotation items left are deliberately cutover-time (runbook Phase 2):
    new `SECRET_KEY` swapped inside the freeze window (T+20), and the fresh
    AppRole `secret_id` + fixed `checktick-app` policy minted on the
@@ -180,7 +240,7 @@ Last updated: 2026-11-01 (end of session 4).
 
 - Runbook + findings ledger: `docs/migration-northflank-to-civo.md`
 - Walkthrough + validation commands: `k8s/README.md`
-- Deploy workflow: `.github/workflows/deploy-civo.yml` — needs
-  `CIVO_KUBECONFIG` GitHub secret (still to set)
+- Deploy workflow: `.github/workflows/deploy-civo.yml` — `CIVO_KUBECONFIG`
+  GitHub secret is set (verified session 5); dispatchable from Actions
 - SNOMED build workflow: `.github/workflows/build-snomed-db.yml` — GitHub
   secrets `TRUD_API_KEY`, `CIVO_S3_ACCESS_KEY`, `CIVO_S3_SECRET_KEY` are set
