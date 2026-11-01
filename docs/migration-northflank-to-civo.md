@@ -158,6 +158,38 @@ Manifest details and apply order: [`k8s/README.md`](../k8s/README.md).
       when changing any posture key, grep BOTH `web-configmap.yaml` and
       `config.env`; after fixing, re-apply the overlay ConfigMap and
       `rollout restart` (env loads only at container start).
+- [ ] **Redirect-cycle finding (POC, APP-LEVEL, fixed in 0.24.0):**
+      `Require2FAMiddleware` × the `email_confirmed_required` decorator
+      form an infinite redirect cycle for any authenticated password
+      user with unconfirmed email and no 2FA device: every page →
+      `/2fa/setup/` (middleware) → `core:home` (email gate) →
+      `/2fa/setup/` (home not exempt) → … The browser shows "too many
+      redirects", and even the emailed confirmation link is bounced
+      into the cycle, so the user can never confirm. Reproduced
+      mechanically in the live pod (Django test client →
+      RedirectCycleError). Staging hit it because Google signup
+      auto-logs in with `email_confirmed=False` while confirmation
+      delivery was broken (stale creds) — production runs the SAME
+      released code and is reachable via the same states, unnoticed
+      only because password users there confirm before first login.
+      Fix: exempt the real `/2fa/` route (the old `/app/2fa/` entry
+      never existed), the `/accounts/confirm-email/` +
+      `/accounts/resend-confirmation/` recovery routes, and `/home`;
+      `is_password_user` no longer counts OIDC accounts' empty-string
+      password as usable (SSO exemption as documented). The anti-bot
+      gating is unchanged: unconfirmed users still cannot create
+      surveys, and the prune cron is untouched. Regression tests:
+      `checktick_app/core/tests/test_2fa_middleware.py`.
+- [ ] **SITE_URL finding (POC):** emailed links (email confirmation,
+      invitations) are built from `settings.SITE_URL`, so staging must
+      set `SITE_URL` to the staging hostname or the links point at
+      production where the token does not exist. The Civo overlay
+      (`k8s/config.env`) now carries
+      `SITE_URL=https://staging.checktick.uk`; cutover flips it back.
+- [ ] **OIDC-on-staging finding (POC):** Google signup worked on
+      staging using the production client IDs — record exactly which
+      redirect URIs in the Google/Azure app registrations matched
+      before relying on OIDC on staging or at cutover.
 - [ ] Choose the database host (PostgreSQL 17 either way — safety rule 3):
       - **Civo managed PostgreSQL 17** (~$43/mo entry tier): least
         operational burden — backups, upgrades and failover are the
