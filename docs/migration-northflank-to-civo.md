@@ -163,6 +163,22 @@ Manifest details and apply order: [`k8s/README.md`](../k8s/README.md).
       `snomed: ok`. App-level alternative for the Phase 6 backlog: open
       `file:...?mode=ro&immutable=1` (skips the shm entirely); would need an
       image release.
+- [ ] **Vault AppRole policy gap (POC finding, smoke step 17):** the
+      `checktick-app` policy written by `vault/setup_vault.py` grants
+      `secret/data/surveys/+/kek`, `organizations/+/master-key`,
+      `teams/+/team-key` and read-only `platform/master-key` — but NOT
+      `secret/data/users/*`, which is the path family
+      `VaultClient.escrow_user_survey_kek` / `recover_user_survey_kek` /
+      `verify_user_identity_email` use (`users/<uid>/surveys/<sid>/recovery-kek`).
+      Consequence: any recovery-dashboard approval
+      (`RecoveryRequest.execute_recovery`) or `execute_platform_recovery`
+      run fails at Vault with `permission denied`. NOT Civo-specific — the
+      same setup script ran on Northflank, so production carries the same
+      gap (recovery escrow was never exercised there either).
+      Fix (Phase 6 backlog): add `secret/data/users/+/surveys/+/recovery-kek`
+      (+ `secret/metadata/users/*` list/delete) to the policy, re-run
+      `vault/setup_vault.py`, and re-prove via `k8s/smoke-test.py` (swap
+      the escrow step to the `users/...` path).
 - [ ] **Config overlay precedence finding (POC):** changing a value in the
       committed `web-configmap.yaml` (`checktick-config`) is NOT enough —
       the git-ignored local overlay (`checktick-config-local`, applied from
@@ -241,19 +257,27 @@ Manifest details and apply order: [`k8s/README.md`](../k8s/README.md).
 Goal: prove the plumbing and **rehearse the migration mechanics** with
 synthetic data and a throwaway Vault — not just steady-state running.
 
-- [ ] Apply the manifests per [`k8s/README.md`](../k8s/README.md).
-- [ ] Initialise the throwaway Vault with `vault operator init -key-shares=4
+- [x] Apply the manifests per [`k8s/README.md`](../k8s/README.md).
+- [x] Initialise the throwaway Vault with `vault operator init -key-shares=4
       -key-threshold=3` (rehearse the real ceremony shape) and configure
       AppRole per [Vault](vault/). These shares/keys are disposable.
-- [ ] Run the pre-deploy Job and the SNOMED build (`update_snomed_db`, needs
+- [x] Run the pre-deploy Job and the SNOMED build (`update_snomed_db`, needs
       the 8 GiB memory allocation documented in
-      [Scheduled Tasks](self-hosting-scheduled-tasks/)).
-- [ ] `/healthz` returns full `ok`: DB, Vault unsealed, SNOMED.
-- [ ] Log in, create a test survey, submit a response, and view/decrypt it —
+      [Scheduled Tasks](self-hosting-scheduled-tasks/)). POC variant: the CI
+      workflow builds snomed.db on a GitHub runner and the small
+      `import-snomed-db` CronJob imports it (see the SNOMED build finding
+      below).
+- [x] `/healthz` returns full `ok`: DB, Vault unsealed, SNOMED.
+- [x] Log in, create a test survey, submit a response, and view/decrypt it —
       the round-trip proves DB + Vault + key hierarchy work together.
-- [ ] **Zero-downtime proof:** run `while true; do curl -sf
+      Scripted and green: `k8s/smoke-test.py` (19/19 steps — real login+2FA,
+      encrypted create, ECIES submission, password unlock, export decrypt,
+      Vault escrow, SNOMED resolver). **Found the Vault AppRole policy gap
+      on the way — see the Phase 0 ledger.**
+- [x] **Zero-downtime proof:** run `while true; do curl -sf
       https://<host>/healthz >/dev/null || echo FAIL; sleep 1; done` and trigger
       a rolling update (`kubectl set image ...`). Zero FAILs required.
+      (The `zdt-test` pod loop: zero FAILs across five rollouts.)
 - [ ] Re-apply all manifests (`kubectl apply -k k8s/`) and confirm idempotency
       (no spurious restarts).
 - [ ] Tear-down test: `kubectl delete -k k8s/` then re-apply from scratch.

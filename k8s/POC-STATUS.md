@@ -101,6 +101,23 @@ Last updated: 2026-11-01 (end of session 4).
   pods `snomed: ok`, public `/healthz` fully `ok`.
 - Web pods must be restarted (rollout restart) after any import run —
   the emptyDir copy only happens in the init container at pod boot.
+- **Phase 1 round-trip smoke: PASSED 19/19** — `k8s/smoke-test.py`, run
+  inside a live web pod (`kubectl exec ... python /tmp/smoke-test.py`)
+  against the real staging DB/Vault/snomed.db, all through the REAL views:
+  login view + TOTP 2FA verify, encrypted survey create (X25519 keypair,
+  dual-path wraps), builder question create incl. SNOMED dataset binding
+  (POST field is `prefilled_dataset`), snomed_resolver on the pod-local
+  copy (3,743 options, release 2026-10-21), anonymous submission stored
+  as an ECIES blob with no plaintext, password unlock, export CSV decrypt
+  (marker + SNOMED preferred term), recovery-phrase unlock, Vault KV
+  escrow write→read→delete via AppRole, AuditLog writes. Public gate:
+  `/healthz` ok, `/api/health` ok, hashed `styles.*.css` 200.
+  Throwaway user/survey deleted afterward (AuditLog actor is SET_NULL).
+- **Vault AppRole policy gap found by the smoke (runbook Phase 0 ledger):
+  the `users/<uid>/surveys/<sid>/recovery-kek` path used by the recovery
+  dashboard is NOT in the `checktick-app` policy — approvals would fail
+  with `permission denied`. Pre-existing (same `setup_vault.py` on
+  Northflank), not Civo-specific. Phase 6 backlog.
 
 ## Known state at session close
 
@@ -121,8 +138,9 @@ Last updated: 2026-11-01 (end of session 4).
 ## Next steps (next session)
 
 1. **Resend confirmation emails** for the two test accounts (Graph works,
-   SITE_URL points at staging) → click the links → then the runbook Phase 1
-   round-trip: log in, create a test survey, submit a response, view/decrypt.
+   SITE_URL points at staging) → click the links. The Phase 1 round-trip
+   itself is DONE (smoke 19/19) — this is now only about real email
+   delivery to the real accounts.
 2. **Pin the live web image off `latest`**: the live Deployment still runs
    `ghcr.io/eatyourpeas-ltd/checktick:latest` — run Deploy (Civo) with an
    explicit `image-tag: 0.24.1` to pin it (also proves the tagged CI path
@@ -137,7 +155,10 @@ Last updated: 2026-11-01 (end of session 4).
    the scratch patch); open SNOMED readers as
    `file:...?mode=ro&immutable=1` in healthz/resolver/seed so a WAL-mode
    snomed.db is readable on ANY read-only mount (needs an image release;
-   the init-container conversion makes this non-urgent).
+   the init-container conversion makes this non-urgent); **add
+   `secret/data/users/+/surveys/+/recovery-kek` to the `checktick-app`
+   Vault policy** so recovery-dashboard approvals work (see the Phase 0
+   ledger finding).
 
 ## Pointers
 
