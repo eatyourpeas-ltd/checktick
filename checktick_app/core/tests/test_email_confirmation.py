@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -545,3 +545,40 @@ class TestResendConfirmationFlow(TestCase):
             200,
             "Confirmed user should be able to access protected features",
         )
+
+    @override_settings(RATELIMIT_ENABLE=True)
+    def test_profile_resend_action_shares_rate_budget(self):
+        """The profile-page resend action draws from the same 5/hour budget.
+
+        The dedicated endpoint (resend_confirmation_email) is rate limited
+        via its decorator using the shared ``resend_confirmation`` group;
+        the profile action must count against the same budget so it
+        cannot be used to bypass the endpoint's limit.
+        """
+        from django.core import mail
+
+        self.client.login(username="resenduser", password=PASSWORD)
+
+        def confirmation_emails():
+            return [e for e in mail.outbox if "confirm" in e.subject.lower()]
+
+        # Five profile resends inside the hour are allowed.
+        for _ in range(5):
+            response = self.client.post(
+                reverse("core:profile"),
+                {"action": "resend_confirmation"},
+                follow=True,
+            )
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(confirmation_emails()), 5)
+
+        # The sixth is refused with a friendly error (not a 403 — other
+        # profile actions must stay unaffected) and no sixth email.
+        response = self.client.post(
+            reverse("core:profile"),
+            {"action": "resend_confirmation"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Too many confirmation emails requested")
+        self.assertEqual(len(confirmation_emails()), 5)

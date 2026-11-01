@@ -85,6 +85,32 @@ class Require2FAMiddlewareLoopTests(TestCase):
         self.assertEqual(response.status_code, 405)
         self.assertEqual(len(mail.outbox), 0, "GET must not send confirmation email")
 
+    @override_settings(REQUIRE_2FA=True, RATELIMIT_ENABLE=True)
+    def test_resend_endpoint_rate_limited(self):
+        """More than 5 resends per hour must be blocked with no email sent.
+
+        The endpoint is middleware-exempt and sends email, so an
+        out-of-control client must not be able to hammer inboxes.
+        RATELIMIT_ENABLE is False during test runs (settings.py gates it
+        on PYTEST_CURRENT_TEST), hence the explicit override here.
+        """
+        from django.core import mail
+
+        def confirmation_emails():
+            return [e for e in mail.outbox if "confirm" in e.subject.lower()]
+
+        # Five resends inside the hour are allowed.
+        for _ in range(5):
+            response = self.client.post(reverse("resend_confirmation"), follow=True)
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(confirmation_emails()), 5)
+
+        # The sixth is blocked (403, house style for block=True) and
+        # sends nothing.
+        response = self.client.post(reverse("resend_confirmation"), follow=True)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(len(confirmation_emails()), 5)
+
     @override_settings(REQUIRE_2FA=True)
     def test_home_offers_resend_action_while_gated(self):
         """The page gated users land on must offer a working resend action.
