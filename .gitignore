@@ -282,6 +282,10 @@ temp_keys/*
 
 # Kubernetes — local unencrypted secret env files (never commit; see k8s/README.md)
 k8s/secrets.env
-kubeconfig.yaml
 k8s/scratch-secret.env
+k8s/config.env
+# Transient cluster-admin kubeconfig created by the README's one-time
+# deploy-workflow setup (base64 < kubeconfig.yaml | gh secret set ...) —
+# this repo is public, never let it land in a commit
+kubeconfig.yaml
 .venv-vault/

@@ -33,8 +33,11 @@ spec:
               python manage.py sync_nhs_dd_datasets &&
               python manage.py sync_global_question_group_templates
           envFrom:
+            # Order is precedence: structural -> local overlay -> credentials
             - configMapRef:
                 name: checktick-config
+            - configMapRef:
+                name: checktick-config-local
             - secretRef:
                 name: checktick-secrets
           resources:

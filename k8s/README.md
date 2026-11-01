@@ -22,6 +22,7 @@ values are applied out-of-band.
 | `cronjobs.yaml` | All 13 scheduled tasks (docs/self-hosting-scheduled-tasks.md) |
 | `ingress.yaml` | Traefik Ingress + cert-manager TLS |
 | `secrets.example.env` | Template for the Secret (copy to `secrets.env`, git-ignored) |
+| `config.example.env` | Template for the local config overlay (copy to `config.env`, git-ignored) |
 | `postgres-cnpg.yaml` | **Optional** in-cluster PostgreSQL 17 (CloudNativePG) — budget path |
 
 ## Database options
@@ -58,6 +59,27 @@ kubectl create secret generic checktick-secrets -n checktick \
 public and the docs ship inside the container image. Long-term, prefer SOPS in
 a private ops repo. `PLATFORM_CUSTODIAN_COMPONENT` must never appear in any
 environment (settings.py hard-fails; docs/vault.md control F6).
+
+## Local config overlay (config.env)
+
+Environment-identifying config — real domains, branding, compliance
+contacts, company details, feature URLs — stays out of the public repo. It
+lives in a second git-ignored file, `k8s/config.env` (template:
+`k8s/config.example.env`), applied as the `checktick-config-local` ConfigMap:
+
+```bash
+cp k8s/config.example.env k8s/config.env
+kubectl create configmap checktick-config-local -n checktick \
+  --from-env-file=k8s/config.env --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Rules: no quoting (kubectl stores values raw), and DELETE lines you don't
+want set — a blank `KEY=` overrides the default with an empty string.
+Precedence is the `envFrom` order in every workload: `checktick-config`
+(structural defaults, committed) → `checktick-config-local` (this overlay)
+→ `checktick-secrets`. The overlay ConfigMap must exist before web pods
+start (they reference it via `envFrom`), so create it even if nearly empty
+during early POC steps.
 
 ## Local kubectl setup (during the migration)
 

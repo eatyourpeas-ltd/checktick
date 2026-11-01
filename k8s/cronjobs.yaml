@@ -34,6 +34,7 @@ spec:
               command: ["python", "manage.py", "process_data_governance"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 requests: {memory: 256Mi, cpu: 250m}
@@ -62,6 +63,7 @@ spec:
               command: ["python", "manage.py", "cleanup_survey_progress"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 requests: {memory: 256Mi, cpu: 250m}
@@ -90,6 +92,7 @@ spec:
               command: ["python", "manage.py", "sync_external_datasets"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 requests: {memory: 256Mi, cpu: 250m}
@@ -118,6 +121,7 @@ spec:
               command: ["python", "manage.py", "sync_global_question_group_templates"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 requests: {memory: 256Mi, cpu: 250m}
@@ -146,6 +150,7 @@ spec:
               command: ["python", "manage.py", "prune_unconfirmed_users"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 requests: {memory: 256Mi, cpu: 250m}
@@ -174,6 +179,7 @@ spec:
               command: ["python", "manage.py", "process_expired_subscriptions"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 requests: {memory: 256Mi, cpu: 250m}
@@ -202,6 +208,7 @@ spec:
               command: ["python", "manage.py", "process_expiring_subscriptions"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 requests: {memory: 256Mi, cpu: 250m}
@@ -230,6 +237,7 @@ spec:
               command: ["python", "manage.py", "process_promotion_lifecycle"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 requests: {memory: 256Mi, cpu: 250m}
@@ -258,6 +266,7 @@ spec:
               command: ["python", "manage.py", "process_dsr_deadlines"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 requests: {memory: 256Mi, cpu: 250m}
@@ -286,6 +295,7 @@ spec:
               command: ["python", "manage.py", "process_diary_reminders"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 requests: {memory: 256Mi, cpu: 250m}
@@ -314,6 +324,7 @@ spec:
               command: ["python", "manage.py", "sync_nhs_dd_datasets"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 requests: {memory: 256Mi, cpu: 250m}
@@ -343,6 +354,7 @@ spec:
               command: ["python", "manage.py", "process_recovery_time_delays"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 requests: {memory: 128Mi, cpu: 100m}
@@ -375,6 +387,7 @@ spec:
               command: ["python", "manage.py", "update_snomed_db"]
               envFrom:
                 - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
                 # sct ndjson peaks above 4 GiB; 4 GiB gets OOM-killed (exit -9)

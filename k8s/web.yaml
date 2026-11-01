@@ -19,6 +19,9 @@ metadata:
 spec:
   # RWX (Longhorn/NFS-backed): during a rolling update the surge pod mounts
   # the volume while the old pod still holds it, possibly on another node.
+  # storageClassName is explicit because the cluster default is Civo's
+  # civo-volume (RWO-only) — a RWX claim on the default class never binds.
+  storageClassName: longhorn
   accessModes: ["ReadWriteMany"]
   resources:
     requests:
@@ -33,6 +36,7 @@ spec:
   # RWX: the update-snomed-db CronJob writes it while web initContainers on
   # every node read it. Web pods never open SQLite from this share directly —
   # each pod copies snomed.db to a node-local emptyDir at startup.
+  storageClassName: longhorn
   accessModes: ["ReadWriteMany"]
   resources:
     requests:
@@ -112,10 +116,29 @@ spec:
             - name: http
               containerPort: 8000
           envFrom:
+            # Order is precedence: later sources override earlier
+            # (structural defaults -> local overlay -> credentials)
             - configMapRef:
                 name: checktick-config
+            - configMapRef:
+                name: checktick-config-local
             - secretRef:
                 name: checktick-secrets
+          # Kubelet httpGet probes send `Host: <pod IP>`, which Django rejects
+          # unless it is in ALLOWED_HOSTS. The Downward API exposes the pod's
+          # own IP and $(POD_IP) expands inside the value. This env entry
+          # intentionally overrides the ConfigMap/overlay ALLOWED_HOSTS for
+          # the POC (in-cluster traffic only, no public domain yet).
+          # PROPER FIX (next image release, runbook Phase 6 backlog): settings.py
+          # should append an ALLOWED_HOSTS_EXTRA list, so the config overlay
+          # owns the public domains and this Deployment adds only the pod IP.
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                    fieldPath: status.podIP
+            - name: ALLOWED_HOSTS
+              value: "$(POD_IP),checktick-web,checktick-web.checktick,checktick-web.checktick.svc.cluster.local,localhost,127.0.0.1"
           # startupProbe gives slow first boots headroom before readiness is
           # consulted (image pull, SNOMED copy, Vault auth).
           startupProbe:

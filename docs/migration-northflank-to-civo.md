@@ -110,6 +110,46 @@ Manifest details and apply order: [`k8s/README.md`](../k8s/README.md).
       `AWS_RESPONSE_CHECKSUM_VALIDATION=when_required` — set on the CNPG
       `spec.env`; the future SNOMED CI upload step and OpenObserve need
       the same pair.
+- [ ] **CNPG credential finding (POC):** the `bootstrap.initdb` secret is
+      BOOTSTRAP-TIME-ONLY — changing it does NOT change the database
+      role's password (auth failures after a secret update). Empty-database
+      remedy: delete Cluster + PVCs and re-apply so initdb runs with the
+      current secret. For post-cutover rotation, use `spec.managed.roles`
+      with `passwordSecret` (continuously reconciled) — verify the schema
+      against the installed CRD before relying on it. Cutover itself is
+      unaffected: it bootstraps fresh with the current secret.
+- [ ] **Byte-count checksums (POC habit):** `openssl rand -hex 24` = 48
+      bytes; `DATABASE_URL` for that password = 102 bytes (23-char prefix +
+      48 + 31-char suffix). Environments that store env-file values raw
+      (kubectl) must never wrap values in quotes, and byte counts are the
+      cheapest integrity check after any credential paste.
+- [ ] **Probe host-header finding (POC):** kubelet httpGet probes send
+      `Host: <pod IP>`, which Django's `ALLOWED_HOSTS` rejects — readiness
+      never passes even though the app is healthy. POC fix: the web
+      Deployment sets `ALLOWED_HOSTS` via the Downward API (`$(POD_IP)`).
+      Proper fix for the next image release: `settings.py` appends an
+      `ALLOWED_HOSTS_EXTRA` list so the config overlay owns the public
+      domains and the Deployment adds only the pod IP. Northflank never
+      surfaced this because its probes used an approved hostname.
+- [ ] **TLS posture finding (POC):** on Kubernetes, `SECURE_SSL_REDIRECT`
+      must be False at the app — TLS and the http→https redirect belong to
+      the ingress (Traefik). App-level redirects hide healthz content behind
+      301s and would loop against the ingress's plain-HTTP backend (no
+      proxy-header trust is configured in settings). Same posture at
+      cutover.
+- [ ] **Config overlay precedence finding (POC):** changing a value in the
+      committed `web-configmap.yaml` (`checktick-config`) is NOT enough —
+      the git-ignored local overlay (`checktick-config-local`, applied from
+      `k8s/config.env`) sits later in the envFrom chain and silently
+      overrides it. This bit exactly here: the structural ConfigMap said
+      `SECURE_SSL_REDIRECT=False` but the overlay still said `True`, so
+      pods kept 301-ing plain-HTTP to https and startup probes never went
+      green — with a misleading symptom (probe events showed
+      `https://<pod-ip>:8000` timeouts because the probe FOLLOWS the 301,
+      then the TLS handshake against plain-HTTP gunicorn hangs). Rule:
+      when changing any posture key, grep BOTH `web-configmap.yaml` and
+      `config.env`; after fixing, re-apply the overlay ConfigMap and
+      `rollout restart` (env loads only at container start).
 - [ ] Choose the database host (PostgreSQL 17 either way — safety rule 3):
       - **Civo managed PostgreSQL 17** (~$43/mo entry tier): least
         operational burden — backups, upgrades and failover are the
