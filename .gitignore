@@ -287,8 +287,8 @@ k8s/config.env
 k8s/ingress.local.yaml
 # Local POC scratch manifests (applied out-of-band, environment-specific)
 k8s/scratch-*.yaml
-# Transient cluster-admin kubeconfig created by the README's one-time
-# deploy-workflow setup (base64 < kubeconfig.yaml | gh secret set ...) —
-# this repo is public, never let it land in a commit
+# Safety net: the deploy-workflow setup writes its transient cluster-admin
+# kubeconfig to /tmp (outside the repo). This repo is public — never let
+# one land in a commit.
 kubeconfig.yaml
 .venv-vault/

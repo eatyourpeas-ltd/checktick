@@ -218,9 +218,9 @@ automates the sequence above with the same zero-downtime semantics:
 One-time setup:
 
 ```bash
-civo k8s config <cluster-name> > kubeconfig.yaml   # or download from the dashboard
-base64 < kubeconfig.yaml | gh secret set CIVO_KUBECONFIG
-rm kubeconfig.yaml
+civo k8s config <cluster-name> > /tmp/kubeconfig.yaml   # or download from the Civo dashboard
+base64 < /tmp/kubeconfig.yaml | gh secret set CIVO_KUBECONFIG
+rm /tmp/kubeconfig.yaml
 ```
 
 Dispatch it from the Actions tab (image tag defaults to `latest`). Add
