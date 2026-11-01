@@ -222,10 +222,13 @@ def home(request):
     if request.user.is_authenticated and not request.user.profile.email_confirmed:
         # Add context variable so template can show resend option
         context["show_email_confirmation_notice"] = True
-        # Also add a message that explains the resend functionality
+        # Also add a message that explains the resend functionality. The
+        # resend action must live on THIS page: 2FA-gated users (unconfirmed
+        # email, no device) are redirected here by Require2FAMiddleware and
+        # cannot reach /profile/, where the resend form also lives.
         messages.warning(
             request,
-            "Nearly there! Check your email and confirm your account. You can request a new confirmation email by following Profile > Email Notification Preferences in the menu in the top-right corner.",
+            "Nearly there! Check your email and confirm your account. If it hasn't arrived, use the Resend confirmation email button on this page.",
         )
 
     return render(request, "core/home.html", context)

@@ -77,6 +77,37 @@ class Require2FAMiddlewareLoopTests(TestCase):
         self.assertEqual(response.redirect_chain[-1][0], reverse("core:home"))
 
     @override_settings(REQUIRE_2FA=True)
+    def test_home_offers_resend_action_while_gated(self):
+        """The page gated users land on must offer a working resend action.
+
+        The 2FA gate makes /profile/ unreachable for exactly this account
+        state, so the old "resend via Profile" instruction was a dead end.
+        Home (where the middleware and email_confirmed_required send the
+        user) must carry the resend action itself, posting to the exempt
+        dedicated route.
+        """
+        response = self.client.get(reverse("core:home"))
+        self.assertEqual(response.status_code, 200)
+        # The resend form posts to the middleware-exempt route.
+        self.assertContains(response, reverse("resend_confirmation"))
+        self.assertContains(response, "Resend confirmation email")
+        # The gated Profile path must no longer be advertised on home.
+        self.assertNotContains(response, "Email Notification Preferences")
+
+    @override_settings(REQUIRE_2FA=True)
+    def test_resend_button_flow_sends_email_while_gated(self):
+        """POSTing the home resend form must deliver the confirmation email."""
+        from django.core import mail
+
+        response = self.client.post(reverse("resend_confirmation"), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.redirect_chain[-1][0], reverse("core:home"))
+        self.assertTrue(
+            any("confirm" in email.subject.lower() for email in mail.outbox),
+            "Resend confirmation email was not sent while gated",
+        )
+
+    @override_settings(REQUIRE_2FA=True)
     def test_confirmed_password_user_is_sent_to_setup_exactly_once(self):
         """With email confirmed, the user must reach the setup page itself.
 

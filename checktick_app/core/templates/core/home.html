@@ -7,6 +7,20 @@
 {% block content %}
   <!-- center above hero alert -->
   <div class="mt-8">
+    {% if show_email_confirmation_notice %}
+    <div role="alert" class="alert alert-warning mb-3">
+      {% include 'components/icons/envelope.html' with classes='h-6 w-6 shrink-0' %}
+      <span>
+        {% trans 'Your email address is not confirmed yet. Check your inbox for the confirmation link, or request a new one below.' %}
+      </span>
+      <form method="post" action="{% url 'resend_confirmation' %}" class="ml-auto">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline btn-secondary btn-sm">
+          {% trans 'Resend confirmation email' %}
+        </button>
+      </form>
+    </div>
+    {% endif %}
     <div role="alert" class="alert alert-info">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="h-6 w-6 shrink-0 stroke-current" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
