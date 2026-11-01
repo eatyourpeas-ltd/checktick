@@ -70,11 +70,77 @@ class Require2FAMiddlewareLoopTests(TestCase):
 
     @override_settings(REQUIRE_2FA=True)
     def test_resend_confirmation_reachable_while_gated(self):
-        """The self-service resend endpoint must stay reachable while gated."""
-        response = self.client.get(reverse("resend_confirmation"), follow=True)
+        """The self-service resend endpoint must stay reachable while gated.
+
+        The endpoint is POST-only (GET must never trigger an email
+        send), so a GET returns 405 from the view itself. What this
+        asserts is that the middleware still lets the request through:
+        if the exemption regressed, a gated user would never reach the
+        view and would get a 302 to /2fa/setup/ instead. The POST flow
+        is covered by test_resend_button_flow_sends_email_while_gated.
+        """
+        from django.core import mail
+
+        response = self.client.get(reverse("resend_confirmation"))
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(len(mail.outbox), 0, "GET must not send confirmation email")
+
+    @override_settings(REQUIRE_2FA=True, RATELIMIT_ENABLE=True)
+    def test_resend_endpoint_rate_limited(self):
+        """More than 5 resends per hour must be blocked with no email sent.
+
+        The endpoint is middleware-exempt and sends email, so an
+        out-of-control client must not be able to hammer inboxes.
+        RATELIMIT_ENABLE is False during test runs (settings.py gates it
+        on PYTEST_CURRENT_TEST), hence the explicit override here.
+        """
+        from django.core import mail
+
+        def confirmation_emails():
+            return [e for e in mail.outbox if "confirm" in e.subject.lower()]
+
+        # Five resends inside the hour are allowed.
+        for _ in range(5):
+            response = self.client.post(reverse("resend_confirmation"), follow=True)
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(confirmation_emails()), 5)
+
+        # The sixth is blocked (403, house style for block=True) and
+        # sends nothing.
+        response = self.client.post(reverse("resend_confirmation"), follow=True)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(len(confirmation_emails()), 5)
+
+    @override_settings(REQUIRE_2FA=True)
+    def test_home_offers_resend_action_while_gated(self):
+        """The page gated users land on must offer a working resend action.
+
+        The 2FA gate makes /profile/ unreachable for exactly this account
+        state, so the old "resend via Profile" instruction was a dead end.
+        Home (where the middleware and email_confirmed_required send the
+        user) must carry the resend action itself, posting to the exempt
+        dedicated route.
+        """
+        response = self.client.get(reverse("core:home"))
         self.assertEqual(response.status_code, 200)
-        # It redirects to home (exempt) with a message.
+        # The resend form posts to the middleware-exempt route.
+        self.assertContains(response, reverse("resend_confirmation"))
+        self.assertContains(response, "Resend confirmation email")
+        # The gated Profile path must no longer be advertised on home.
+        self.assertNotContains(response, "Email Notification Preferences")
+
+    @override_settings(REQUIRE_2FA=True)
+    def test_resend_button_flow_sends_email_while_gated(self):
+        """POSTing the home resend form must deliver the confirmation email."""
+        from django.core import mail
+
+        response = self.client.post(reverse("resend_confirmation"), follow=True)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(response.redirect_chain[-1][0], reverse("core:home"))
+        self.assertTrue(
+            any("confirm" in email.subject.lower() for email in mail.outbox),
+            "Resend confirmation email was not sent while gated",
+        )
 
     @override_settings(REQUIRE_2FA=True)
     def test_confirmed_password_user_is_sent_to_setup_exactly_once(self):

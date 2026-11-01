@@ -14,6 +14,9 @@ from django.shortcuts import redirect, render
 from django.utils import timezone, translation
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
+from django.views.decorators.http import require_http_methods
+from django_ratelimit.core import is_ratelimited
+from django_ratelimit.decorators import ratelimit
 
 from checktick_app.surveys.models import (
     Organization,
@@ -222,10 +225,13 @@ def home(request):
     if request.user.is_authenticated and not request.user.profile.email_confirmed:
         # Add context variable so template can show resend option
         context["show_email_confirmation_notice"] = True
-        # Also add a message that explains the resend functionality
+        # Also add a message that explains the resend functionality. The
+        # resend action must live on THIS page: 2FA-gated users (unconfirmed
+        # email, no device) are redirected here by Require2FAMiddleware and
+        # cannot reach /profile/, where the resend form also lives.
         messages.warning(
             request,
-            "Nearly there! Check your email and confirm your account. You can request a new confirmation email by following Profile > Email Notification Preferences in the menu in the top-right corner.",
+            "Nearly there! Check your email and confirm your account. If it hasn't arrived, use the Resend confirmation email button on this page.",
         )
 
     return render(request, "core/home.html", context)
@@ -360,6 +366,22 @@ def profile(request):
     # Handle resend confirmation email
     if request.method == "POST" and request.POST.get("action") == "resend_confirmation":
         if not request.user.profile.email_confirmed:
+            # Same budget as the dedicated resend endpoint (see
+            # resend_confirmation_email below): one user, 5 confirmation
+            # emails per hour across BOTH paths, so this form cannot be
+            # used to bypass the endpoint's rate limit.
+            if is_ratelimited(
+                request,
+                group="resend_confirmation",
+                key="user",
+                rate="5/h",
+                increment=True,
+            ):
+                messages.error(
+                    request,
+                    "Too many confirmation emails requested. Please try again later.",
+                )
+                return redirect("core:profile")
             try:
                 from .email_confirmation import EmailConfirmationManager
 
@@ -937,8 +959,19 @@ def confirm_email(request, token):
     return redirect("core:home")
 
 
+@require_http_methods(["POST"])
+@ratelimit(group="resend_confirmation", key="user", rate="5/h", block=True)
 def resend_confirmation_email(request):
-    """Resend confirmation email to the current user."""
+    """Resend confirmation email to the current user.
+
+    POST-only on purpose: it has a side effect (sends email), and the
+    route is middleware-exempt, so a GET must never trigger a send —
+    mail prefetchers or link scanners could otherwise spam inboxes.
+
+    Rate limited to 5 sends per hour per user, sharing the
+    ``resend_confirmation`` budget with the profile-page resend action
+    so neither path can be used to bypass the other.
+    """
     if not request.user.is_authenticated:
         messages.error(request, "You must be logged in to resend confirmation email.")
         return redirect("login")

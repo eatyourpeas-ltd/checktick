@@ -1323,9 +1323,11 @@ def send_unconfirmed_account_warning_email(
     Idempotency is enforced by the command via
     ``UserProfile.unconfirmed_warning_stage``.
 
-    The email signposts the user to their profile page to resend the
-    confirmation email, and to the platform support email
-    (``settings.DEFAULT_FROM_EMAIL``) if they are having difficulties.
+    The email signposts the user to the home page to resend the
+    confirmation email — home carries the resend action for every
+    account state (2FA-gated users cannot reach the profile page), and
+    to the platform support email (``settings.DEFAULT_FROM_EMAIL``) if
+    they are having difficulties.
 
     Args:
         user: Django User instance with an unconfirmed email.
@@ -1344,7 +1346,7 @@ def send_unconfirmed_account_warning_email(
     branding = get_platform_branding()
     site_url = getattr(settings, "SITE_URL", "http://localhost:8000").rstrip("/")
     support_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com")
-    profile_url = f"{site_url}/profile"
+    home_url = f"{site_url}/home"
 
     if days_until_removal <= 1:
         subject = (
@@ -1363,7 +1365,7 @@ def send_unconfirmed_account_warning_email(
             "user": user,
             "brand_title": branding["title"],
             "days_until_removal": days_until_removal,
-            "profile_url": profile_url,
+            "home_url": home_url,
             "support_email": support_email,
         },
     )
@@ -1376,7 +1378,7 @@ def send_unconfirmed_account_warning_email(
         context={
             "user": user,
             "days_until_removal": days_until_removal,
-            "profile_url": profile_url,
+            "home_url": home_url,
             "support_email": support_email,
         },
     )

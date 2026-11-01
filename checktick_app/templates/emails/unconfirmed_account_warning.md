@@ -8,9 +8,9 @@
 
 ### {% blocktranslate %}Confirm your email now{% endblocktranslate %}
 
-{% blocktranslate %}To keep your account, sign in and request a new confirmation email from your profile page:{% endblocktranslate %}
+{% blocktranslate %}To keep your account, sign in and use the Resend confirmation email button on the home page:{% endblocktranslate %}
 
-- [{% blocktranslate %}Go to your profile{% endblocktranslate %}]({{ profile_url }}) → {% blocktranslate %}Email Notification Preferences → Resend Confirmation Email{% endblocktranslate %}
+- [{% blocktranslate %}Go to the home page{% endblocktranslate %}]({{ home_url }}) → {% blocktranslate %}Resend confirmation email{% endblocktranslate %}
 
 ### {% blocktranslate %}Having trouble?{% endblocktranslate %}
 
