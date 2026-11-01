@@ -229,23 +229,35 @@ try:
     check(16, "recovery-phrase unlock returns key material", kek is not None)
 
     # ---- 9. Vault KV escrow round-trip via the REAL VaultClient ----
-    # Path must match the checktick-app policy grant (surveys/+/kek); the
-    # users/<id>/surveys/<id>/recovery-kek escrow path used by
-    # recover_user_survey_kek is NOT granted to the AppRole (POC finding,
-    # recorded in the runbook) — the app-role escrow path is surveys/<id>/kek.
+    # Uses the REAL recovery-escrow path family (users/<uid>/surveys/<sid>/
+    # recovery-kek) that escrow_user_survey_kek / recover_user_survey_kek /
+    # verify_user_identity_email rely on. This is the step that caught the
+    # AppRole policy gap: before the `secret/data/users/*` stanza was added
+    # to vault/setup_vault.py, this failed with `permission denied`. A red
+    # step 17 means the running Vault's checktick-app policy is stale.
     vc = get_vault_client()
     kek32 = secrets.token_bytes(32)
     hier = secrets.token_bytes(32)
-    vault_path = f"surveys/{survey.id}/kek"
-    vc.encrypt_survey_kek(kek32, hier, vault_path)
-    back = vc.decrypt_survey_kek(vault_path, hier)
-    vc.delete_survey_kek(vault_path)
-    check(
-        17,
-        "Vault KV write -> read -> unwrap -> delete",
-        back == kek32,
-        f"path=smoke/{survey.id}",
-    )
+    vault_path = f"users/{user.id}/surveys/{survey.id}/recovery-kek"
+    try:
+        vc.encrypt_survey_kek(kek32, hier, vault_path)
+        back = vc.decrypt_survey_kek(vault_path, hier)
+        vc.delete_survey_kek(vault_path)
+        check(
+            17,
+            "Vault KV escrow path (users/...) write -> read -> delete",
+            back == kek32,
+            f"survey={survey.id}",
+        )
+    except Exception as exc:
+        check(
+            17,
+            "Vault KV escrow path (users/...) write -> read -> delete",
+            False,
+            f"{type(exc).__name__} — the running Vault's checktick-app policy "
+            "lacks the secret/data/users/* stanza (vault/setup_vault.py); "
+            "apply it via a root ceremony and re-run",
+        )
 
     # ---- 10. Audit trail ----
     n_unlock = AuditLog.objects.filter(actor=user, survey=survey).count()

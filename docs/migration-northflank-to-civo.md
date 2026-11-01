@@ -175,10 +175,20 @@ Manifest details and apply order: [`k8s/README.md`](../k8s/README.md).
       run fails at Vault with `permission denied`. NOT Civo-specific — the
       same setup script ran on Northflank, so production carries the same
       gap (recovery escrow was never exercised there either).
-      Fix (Phase 6 backlog): add `secret/data/users/+/surveys/+/recovery-kek`
-      (+ `secret/metadata/users/*` list/delete) to the policy, re-run
-      `vault/setup_vault.py`, and re-prove via `k8s/smoke-test.py` (swap
-      the escrow step to the `users/...` path).
+      **Fix status:** the policy stanza (`secret/data/users/+/surveys/+/
+      recovery-kek` + `secret/metadata/users/*` list/delete) is added to
+      `vault/setup_vault.py` on this branch, and `k8s/smoke-test.py`
+      step 17 now exercises the real `users/...` escrow path — it stays
+      red until the policy is applied to the running Vault. Applying needs
+      a privileged token (the AppRole cannot write policies; the POC root
+      token was revoked after setup): `vault operator generate-root` with
+      3 of the 4 unseal shares → temporary root → re-run the
+      `create_policies` stanza (or `vault policy write checktick-app`) →
+      revoke the temporary root. Because Vault migrates by storage-directory
+      COPY (not re-init), the moved Vault keeps its old policy — the stanza
+      must be applied to the PRODUCTION Vault too (pre-cutover on Northflank
+      or right after the move, before any recovery approval is needed).
+      Fresh Vaults initialised after the fix get it automatically.
 - [ ] **Config overlay precedence finding (POC):** changing a value in the
       committed `web-configmap.yaml` (`checktick-config`) is NOT enough —
       the git-ignored local overlay (`checktick-config-local`, applied from
@@ -325,6 +335,15 @@ Rotation".
       pending migrations; row counts match source.
 - [ ] Media pre-sync (bulk `rsync`/`rclone` into the PVC).
 - [ ] SNOMED rebuilt on the production PVC; `healthz` reports snomed ok.
+- [ ] **Apply the fixed `checktick-app` policy to the production Vault**
+      (Phase 0 ledger finding): the migration copies Vault storage, so the
+      moved Vault keeps the old policy and recovery-dashboard approvals
+      (`users/<uid>/surveys/<sid>/recovery-kek`) stay `permission denied`.
+      Root ceremony on the Northflank Vault (or immediately post-move):
+      `vault operator generate-root` → `vault policy write checktick-app`
+      with the fixed `vault/setup_vault.py` HCL → revoke the temp root →
+      re-run `k8s/smoke-test.py` against it (step 17 green). Fresh Vaults
+      initialised from the fixed script get the stanza automatically.
 - [ ] Lower DNS TTL to 60s at T−24h.
 - [ ] Deploy freeze on Northflank from T−24h; announce the window to users
       (email + in-app banner).

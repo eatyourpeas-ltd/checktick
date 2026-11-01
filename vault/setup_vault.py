@@ -106,6 +106,23 @@ path "secret/metadata/surveys/*" {
   capabilities = ["list", "delete"]
 }
 
+# User survey KEK escrows (recovery flows)
+#
+# VaultClient.escrow_user_survey_kek / recover_user_survey_kek /
+# verify_user_identity_email read and write escrowed recovery KEKs at
+# users/<user_id>/surveys/<survey_id>/recovery-kek. Without this stanza the
+# recovery dashboard's approvals (RecoveryRequest.execute_recovery) and
+# execute_platform_recovery fail at Vault with `permission denied`.
+# Found by k8s/smoke-test.py during the Civo POC (2026-11-01); the same gap
+# existed on Northflank.
+path "secret/data/users/+/surveys/+/recovery-kek" {
+  capabilities = ["create", "read", "update", "delete"]
+}
+
+path "secret/metadata/users/*" {
+  capabilities = ["list", "delete"]
+}
+
 # Token management
 path "auth/token/renew-self" {
   capabilities = ["update"]
