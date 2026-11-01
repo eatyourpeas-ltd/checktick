@@ -70,11 +70,20 @@ class Require2FAMiddlewareLoopTests(TestCase):
 
     @override_settings(REQUIRE_2FA=True)
     def test_resend_confirmation_reachable_while_gated(self):
-        """The self-service resend endpoint must stay reachable while gated."""
-        response = self.client.get(reverse("resend_confirmation"), follow=True)
-        self.assertEqual(response.status_code, 200)
-        # It redirects to home (exempt) with a message.
-        self.assertEqual(response.redirect_chain[-1][0], reverse("core:home"))
+        """The self-service resend endpoint must stay reachable while gated.
+
+        The endpoint is POST-only (GET must never trigger an email
+        send), so a GET returns 405 from the view itself. What this
+        asserts is that the middleware still lets the request through:
+        if the exemption regressed, a gated user would never reach the
+        view and would get a 302 to /2fa/setup/ instead. The POST flow
+        is covered by test_resend_button_flow_sends_email_while_gated.
+        """
+        from django.core import mail
+
+        response = self.client.get(reverse("resend_confirmation"))
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(len(mail.outbox), 0, "GET must not send confirmation email")
 
     @override_settings(REQUIRE_2FA=True)
     def test_home_offers_resend_action_while_gated(self):

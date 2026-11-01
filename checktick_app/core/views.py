@@ -14,6 +14,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone, translation
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
+from django.views.decorators.http import require_http_methods
 
 from checktick_app.surveys.models import (
     Organization,
@@ -940,8 +941,14 @@ def confirm_email(request, token):
     return redirect("core:home")
 
 
+@require_http_methods(["POST"])
 def resend_confirmation_email(request):
-    """Resend confirmation email to the current user."""
+    """Resend confirmation email to the current user.
+
+    POST-only on purpose: it has a side effect (sends email), and the
+    route is middleware-exempt, so a GET must never trigger a send —
+    mail prefetchers or link scanners could otherwise spam inboxes.
+    """
     if not request.user.is_authenticated:
         messages.error(request, "You must be logged in to resend confirmation email.")
         return redirect("login")
