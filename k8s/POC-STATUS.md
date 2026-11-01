@@ -162,6 +162,14 @@ Last updated: 2026-11-01 (end of session 4).
    staging Vault is already fixed, but the PRODUCTION copy from Northflank
    would carry the stale policy if the stanza is not applied there first
    (pre-cutover checklist item, runbook Phase 3).
+   **Phase 2 is COMPLETE** (all provider-level creds rotated + staged in
+   `k8s/secrets.env`, applied as `checktick-secrets`, proven by the
+   healthz-gated rollout and the live Graph token fetch). The only
+   rotation items left are deliberately cutover-time (runbook Phase 2):
+   new `SECRET_KEY` swapped inside the freeze window (T+20), and the fresh
+   AppRole `secret_id` + fixed `checktick-app` policy minted on the
+   MIGRATED Vault after the T+2 storage copy (one root ceremony —
+   runbook Phase 4 T+5).
 6. Phase 6 backlog candidates: `ALLOWED_HOSTS_EXTRA` in settings.py (kills
    the scratch patch); open SNOMED readers as
    `file:...?mode=ro&immutable=1` in healthz/resolver/seed so a WAL-mode

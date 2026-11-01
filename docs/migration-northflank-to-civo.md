@@ -13,9 +13,15 @@ manager / private ops repo / unseal ceremony).
 
 ## Status
 
-Draft, authored on the `civo-migration` branch. Phase 0 (Civo provisioning) and
-Phase 1 (POC) can start immediately. Phases 3–6 are executed only after the POC
-exit criteria are met.
+Phase 0 (Civo provisioning) is complete — the `checktick` cluster is live and
+running the staging POC. Phase 1 (POC) is green apart from two exit criteria
+(manifest idempotency check, tear-down test). **Phase 2 (credential rotation)
+is complete:** every provider-level credential is rotated at its provider and
+staged in the git-ignored `k8s/secrets.env` / applied as the `checktick-secrets`
+Secret — only the two deliberately cutover-time items remain (new
+`SECRET_KEY` inside the freeze window; fresh AppRole credentials on the
+migrated Vault). Phases 3–6 are executed only after the remaining POC exit
+criteria are met.
 
 ## Context
 
@@ -297,23 +303,46 @@ Appendix B. Do not schedule the cutover until then.
 
 ## Phase 2 — Credential rotation plan (incident follow-through)
 
-The migration is the completion point for rotating everything that ever
-transited Northflank's secret store. Rotate at the provider, then update the
-Kubernetes Secret.
+**Status: COMPLETE.** The migration was the completion point for rotating
+everything that ever transited Northflank's secret store: every provider-level
+credential below is rotated at its provider, staged in the git-ignored
+`k8s/secrets.env`, and applied to the cluster as the `checktick-secrets`
+Secret. Proven, not just applied: the post-rotation rollout was healthz-gated
+(so the rotated `DATABASE_URL` and Vault AppRole pair demonstrably work end
+to end), and a live Microsoft Graph token fetch verified the rotated email
+credentials.
 
-| Credential | Action | Lands in |
+| Credential | Action | Status |
 | :--- | :--- | :--- |
-| Civo DB password | Generated at instance creation | `DATABASE_URL` in Secret |
-| Vault AppRole `role_id` / `secret_id` | New AppRole on the migrated Civo Vault | `VAULT_*` in Secret |
-| Django `SECRET_KEY` | New at cutover (sessions/reset links invalidate; free inside the window; passwords unaffected) | `SECRET_KEY` in Secret |
-| OIDC client secrets (Google, Azure) | Rotate in provider consoles | `OIDC_*` in Secret |
-| `LLM_API_KEY` | Rotate at the APIM | Secret |
-| `EXTERNAL_DATASET_API_KEY` | Rotate at RCPCH | Secret |
-| `TRUD_API_KEY` | Rotate at TRUD | Secret (SNOMED CronJob only) |
-| `EMAIL_HOST_PASSWORD` | Rotate at SMTP provider | Secret |
-| `HCAPTCHA_SECRET` | Rotate at hCaptcha | Secret |
-| `LOGS_KEY` | New OpenObserve credentials | Secret |
-| GoCardless API/webhook secrets | Rotate in GoCardless dashboard | Secret |
+| Civo DB password | Generated at instance creation | ✅ rotated + proven (healthz-gated rollout) |
+| Vault AppRole `role_id` / `secret_id` (staging POC Vault) | New AppRole per [`vault/setup_vault.py`](../vault/) | ✅ rotated + proven; **superseded at cutover** — see below |
+| OIDC client secrets (Google, Azure) | Rotate in provider consoles | ✅ rotated |
+| `LLM_API_KEY` | Rotate at the APIM | ✅ rotated |
+| `EXTERNAL_DATASET_API_KEY` | Rotate at RCPCH | ✅ rotated |
+| `TRUD_API_KEY` | Rotate at TRUD | ✅ rotated (SNOMED CronJob only) |
+| `EMAIL_HOST_PASSWORD` | Rotate at SMTP provider | ✅ rotated + proven (live Graph token fetch) |
+| `HCAPTCHA_SECRET` | Rotate at hCaptcha | ✅ rotated |
+| `LOGS_KEY` | New OpenObserve credentials | ✅ rotated |
+| GoCardless API/webhook secrets | Rotate in GoCardless dashboard | ✅ rotated |
+
+**Two items are deliberately cutover-time, not pre-rotatable:**
+
+- **Django `SECRET_KEY`** — new at cutover, inside the freeze window.
+  Rotating early would invalidate live production sessions and password-reset
+  links; with writes frozen at T+0 it is free. Do NOT pre-stage it in
+  `secrets.env` — swap the value in the Secret during the window.
+- **Vault AppRole credentials on the MIGRATED Vault** — the staging AppRole
+  belongs to the throwaway POC Vault, whose storage directory is REPLACED at
+  T+2 by the Northflank copy. The migrated Vault therefore carries
+  Northflank's AppRole (and its policy, which lacks the
+  `secret/data/users/*` stanza — Phase 0 ledger finding). After the copy,
+  one root ceremony on the migrated Vault covers everything: mint a fresh
+  `secret_id` (new `role_id` comes with the copied role), apply the fixed
+  `checktick-app` policy, revoke the temp root — then update `VAULT_*` in
+  `checktick-secrets` and re-run `k8s/smoke-test.py` (step 17 gates the
+  policy). Alternatively apply the stanza on the Northflank Vault pre-copy
+  so it travels with the storage (Phase 3 checklist item) and only the
+  `secret_id` mint remains for the window.
 
 Vault unseal shares and the custodian component are **not** rotated by this
 move — custody is unchanged (they never transited Northflank). A platform key
@@ -368,9 +397,14 @@ row contents into terminals or tickets.
 
 3. **T+5 — restore Vault on Civo.** Pre-create the `data-vault-0` PVC, extract
    the archive into it, apply `k8s/vault.yaml`, unseal with 3 of 4 shares,
-   confirm `vault status` shows `initialized: true, sealed: false`, then create
-   the new production AppRole and update the `checktick-secrets` Secret.
-   Delete the tarball.
+   confirm `vault status` shows `initialized: true, sealed: false`, then —
+   ONE root ceremony on the migrated Vault (`vault operator generate-root`,
+   revoke after): mint the new production AppRole `secret_id`, apply the fixed
+   `checktick-app` policy **if the `secret/data/users/*` stanza was not
+   applied on the Northflank Vault pre-copy** (Phase 3 checklist item), and
+   update `VAULT_*` in the `checktick-secrets` Secret. Re-run
+   `k8s/smoke-test.py` against it — step 17 gates the policy. Delete the
+   tarball.
 4. **T+10 — database.** Final dump, transfer, restore:
 
    ```bash
@@ -389,7 +423,9 @@ row contents into terminals or tickets.
 6. **T+15 — media delta sync** (seconds; volume is small).
 7. **T+15 — pre-deploy Job** (`k8s/migrate-job.yaml`; migrations should be a
    no-op, syncs are idempotent).
-8. **T+20 — deploy web.** `kubectl apply -k k8s/` (excluding CronJobs until
+8. **T+20 — deploy web.** Update `SECRET_KEY` in the `checktick-secrets`
+   Secret (new value per Phase 2 — live sessions/reset links invalidate,
+   free inside the freeze). `kubectl apply -k k8s/` (excluding CronJobs until
    smoke passes), then `kubectl rollout status deployment/checktick-web`.
    (Routine releases after cutover can instead be dispatched from the
    *Deploy (Civo)* GitHub workflow, which runs these steps with automatic
