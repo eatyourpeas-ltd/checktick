@@ -28,6 +28,12 @@ Usage:
     python manage.py update_snomed_db --force --prune   # clean stale artefacts first
     python manage.py update_snomed_db --edition uk_drug   # alternative edition
     python manage.py update_snomed_db --dry-run
+    python manage.py update_snomed_db --force --no-seed   # CI builder: no app DB
+
+`--no-seed` skips the seed_snomed_datasets refresh for environments with no
+application database (the GitHub Actions SNOMED builder): settings.py still
+requires a DATABASE_URL to parse, but it is never queried. Run
+`seed_snomed_datasets --force` in-cluster after importing the built file.
 
 Requirements:
     - TRUD_API_KEY environment variable set
@@ -101,6 +107,15 @@ class Command(BaseCommand):
             help="Show what would happen without running sct commands or saving",
         )
         parser.add_argument(
+            "--no-seed",
+            action="store_true",
+            help=(
+                "Skip the seed_snomed_datasets refresh (for builders with no "
+                "application database, e.g. the CI SNOMED build — run the seed "
+                "in-cluster after importing the file)"
+            ),
+        )
+        parser.add_argument(
             "--prune",
             action="store_true",
             help=(
@@ -114,6 +129,7 @@ class Command(BaseCommand):
         edition = options["edition"]
         dry_run = options["dry_run"]
         prune = options["prune"]
+        no_seed = options["no_seed"]
 
         if dry_run:
             self.stdout.write(
@@ -431,15 +447,26 @@ class Command(BaseCommand):
 
             self.stdout.write(self.style.SUCCESS("✅ snomed.db rebuilt successfully."))
 
-            # ── Step 3: refresh DataSet descriptors ───────────────────────
-            self.stdout.write(
-                "🔄 Refreshing SNOMED CT dataset descriptors in database..."
-            )
-            call_command("seed_snomed_datasets", force=True, dry_run=False)
+            # ── Step 3: refresh DataSet descriptors ────────────────────
+            if no_seed:
+                self.stdout.write(
+                    "⏭️  Skipping dataset descriptor refresh (--no-seed) — "
+                    "run seed_snomed_datasets in-cluster after importing."
+                )
+            else:
+                self.stdout.write(
+                    "🔄 Refreshing SNOMED CT dataset descriptors in database..."
+                )
+                call_command("seed_snomed_datasets", force=True, dry_run=False)
 
             self.stdout.write(
                 self.style.SUCCESS(
                     f"\n🏥 SNOMED CT update complete ({edition}).\n"
-                    "   snomed.db rebuilt and dataset descriptors refreshed."
+                    "   snomed.db rebuilt"
+                    + (
+                        " and dataset descriptors refreshed."
+                        if not no_seed
+                        else " (descriptor refresh skipped — --no-seed)."
+                    )
                 )
             )

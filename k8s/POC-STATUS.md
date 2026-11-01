@@ -4,7 +4,7 @@ Working state of the `civo-migration` branch POC. Read this together with
 `docs/migration-northflank-to-civo.md` (the runbook — its Phase 0 "findings"
 ledger records every environment discovery so far) and `k8s/README.md`.
 
-Last updated: 2026-11-01 (session 2: web serving verified).
+Last updated: 2026-11-01 (end of session 2).
 
 ## Environment
 
@@ -15,8 +15,9 @@ Last updated: 2026-11-01 (session 2: web serving verified).
 - Object store: `checktick-backups` (objectstore.lon1.civo.com), credential
   "backups" attached
 - Local (git-ignored) files that carry the environment:
-  `k8s/secrets.env`, `k8s/config.env`, and the DB password in a password
-  manager (also in `checktick-db-creds`)
+  `k8s/secrets.env`, `k8s/config.env`, `k8s/ingress.local.yaml`,
+  `k8s/scratch-*.yaml`, and the DB password in a password manager (also in
+  `checktick-db-creds`)
 
 ## What is live and verified
 
@@ -31,11 +32,21 @@ Last updated: 2026-11-01 (session 2: web serving verified).
 - Migrate job (`checktick-predeploy`): **passed** — full credential chain
   Django → Secret → service → CNPG verified; migrations and syncs complete.
 - Web Deployment: 2 replicas, Longhorn RWX PVCs bound (media + SNOMED share).
-- `/healthz` serving: HTTP 200 via pod localhost AND the Service DNS —
-  `db: ok`, `vault: ok`, `snomed: unavailable`, `status: degraded`
-  (SNOMED absent by design until its CI build exists).
 - Structural config (`checktick-config`) + local overlay
   (`checktick-config-local`) + `checktick-secrets` all applied.
+- `/healthz` serving: HTTP 200 via pod localhost AND the Service DNS —
+  `db: ok`, `vault: ok`, `snomed: unavailable`, `status: degraded`
+  (SNOMED absent until the CI build runs — see next steps).
+- Zero-downtime proof: **PASSED** — the `zdt-test` curl loop pod (1 req/s
+  against the Service DNS) ran through TWO full `rollout restart`s of
+  `deploy/checktick-web`: zero FAILs.
+- Ingress: Traefik (hostNetwork DaemonSet, ports 80/443 on the node external
+  IP) routes `staging.checktick.uk` → `checktick-web`; verified 200
+  `/healthz` via the node IP with a Host header, over both HTTP and HTTPS.
+  cert-manager `ClusterIssuer` (letsencrypt-production) + `IngressClass` +
+  Ingress applied; the Certificate's HTTP-01 challenge is pending DNS.
+- CronJobs: all 13 applied (incl. the new `import-snomed-db`);
+  `process-recovery-time-delays` verified running to completion.
 
 ## Known state at session close
 
@@ -51,25 +62,36 @@ Last updated: 2026-11-01 (session 2: web serving verified).
   `k8s/config.env`, re-apply the overlay ConfigMap, and `rollout restart`.
   Rule: when changing any posture key, grep BOTH `web-configmap.yaml` and
   `config.env` — the overlay silently overrides the structural default.
-- Zero-downtime proof: **PASSED** (session 2) — fresh `zdt-test` curl loop
-  pod (1 req/s against the Service DNS) ran through a full
-  `rollout restart` of `deploy/checktick-web`: zero FAILs. The `zdt-test`
-  pod is still running; delete it when done with the POC.
+- Ingress TLS is waiting on the user's DNS record (next steps). Until it
+  exists, https://staging.checktick.uk serves Traefik's default cert.
+- POC-only Deployment patch: the staging hostname was appended to the web
+  Deployment's `ALLOWED_HOSTS` env via `k8s/scratch-allowhosts-patch.yaml`
+  (git-ignored). Any `kubectl apply -f k8s/web.yaml` (or `-k k8s/`) resets
+  it — re-apply the patch afterwards. Proper fix is `ALLOWED_HOSTS_EXTRA`
+  in settings.py (runbook Phase 6 backlog; noted in `k8s/web.yaml`).
+- The `zdt-test` pod is still running (1 req/s loop) — delete it when done
+  with the POC.
 
 ## Next steps (next session)
 
-1. Run the zero-downtime proof (healthz verification is done — see above).
-2. Commit the working tree (`s/lint` first) — it contains the local config
-   overlay system, Longhorn storage classes, the ALLOWED_HOSTS probe fix,
-   the TLS posture change, and the runbook findings ledger.
-3. SNOMED CI build workflow (GitHub Actions, free 16 GB runners; upload to
-   `s3://checktick-backups/snomed` with the checksum env vars; small
-   in-cluster import job replaces the 8 GiB `update-snomed-db` CronJob).
-4. Ingress + TLS on a STAGING hostname (never `checktick.uk` — that DNS
-   flip is the final gate of the cutover window, runbook Phase 4 step 10).
-5. CronJobs (`k8s/cronjobs.yaml`) once stable; then runbook Phase 3
-   rehearsal planning (Vault storage-migration drill, DB restore drill,
-   timing table).
+1. DNS: create an A record `staging.checktick.uk` → `74.220.17.170` (the
+   node external IP Traefik answers on; re-check with
+   `kubectl get nodes -o wide`). cert-manager then completes the HTTP-01
+   challenge — verify `kubectl -n checktick get certificate` shows READY
+   True and `https://staging.checktick.uk/healthz` returns 200.
+2. SNOMED CI build: set the GitHub secrets `TRUD_API_KEY`,
+   `CIVO_S3_ACCESS_KEY`, `CIVO_S3_SECRET_KEY` (see
+   `.github/workflows/build-snomed-db.yml` header), dispatch the "Build
+   SNOMED DB" workflow, then run the in-cluster import:
+   `kubectl create job --from=cronjob/import-snomed-db snomed-import -n checktick`.
+   Expect `/healthz` → `snomed: ok`, `status: ok`.
+3. Runbook Phase 1 round-trip through the ingress: log in, create a test
+   survey, submit a response, view/decrypt it (proves DB + Vault + key
+   hierarchy together).
+4. POC exit criteria left: `kubectl apply -k k8s/` idempotency check (no
+   spurious restarts) and the tear-down/re-apply test.
+5. Runbook Phase 3 rehearsal planning (Vault storage-migration drill, DB
+   restore drill, timing table).
 
 ## Pointers
 
@@ -78,3 +100,5 @@ Last updated: 2026-11-01 (session 2: web serving verified).
 - Deploy workflow (manual dispatch, not yet used): `.github/workflows/deploy-civo.yml`
   — needs `CIVO_KUBECONFIG` GitHub secret (`base64 < ~/.kube/civo-checktick.yaml
   | gh secret set CIVO_KUBECONFIG`)
+- SNOMED build workflow: `.github/workflows/build-snomed-db.yml` — needs
+  `TRUD_API_KEY`, `CIVO_S3_ACCESS_KEY`, `CIVO_S3_SECRET_KEY` GitHub secrets

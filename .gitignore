@@ -284,6 +284,9 @@ temp_keys/*
 k8s/secrets.env
 k8s/scratch-secret.env
 k8s/config.env
+k8s/ingress.local.yaml
+# Local POC scratch manifests (applied out-of-band, environment-specific)
+k8s/scratch-*.yaml
 # Transient cluster-admin kubeconfig created by the README's one-time
 # deploy-workflow setup (base64 < kubeconfig.yaml | gh secret set ...) —
 # this repo is public, never let it land in a commit

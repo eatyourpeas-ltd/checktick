@@ -4,6 +4,8 @@
 # k8s/postgres-cnpg.yaml (optional in-cluster DB) is also excluded: it
 # requires the CloudNativePG operator to be installed first. Apply it
 # separately if you choose that path — see k8s/README.md "Database options".
+# k8s/ingress.yaml is a TEMPLATE (hostname is environment-identifying):
+# copy to the git-ignored k8s/ingress.local.yaml and apply out-of-band.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -13,4 +15,3 @@ resources:
   - web.yaml
   - migrate-job.yaml
   - cronjobs.yaml
-  - ingress.yaml

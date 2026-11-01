@@ -19,8 +19,8 @@ values are applied out-of-band.
 | `vault.yaml` | Vault StatefulSet (file storage, manual unseal), Service, airgap NetworkPolicy |
 | `web.yaml` | Web Deployment (probes, rolling update, anti-affinity), Service, PVCs, PDB |
 | `migrate-job.yaml` | Pre-deploy Job: migrations + idempotent syncs |
-| `cronjobs.yaml` | All 13 scheduled tasks (docs/self-hosting-scheduled-tasks.md) |
-| `ingress.yaml` | Traefik Ingress + cert-manager TLS |
+| `cronjobs.yaml` | All 13 scheduled tasks (docs/self-hosting-scheduled-tasks.md); SNOMED arrives as a small object-store import — the 8 GiB in-cluster build is replaced by the CI workflow |
+| `ingress.yaml` | TEMPLATE for the Traefik Ingress + cert-manager TLS + IngressClass — copy to the git-ignored `ingress.local.yaml` and set your hostname |
 | `secrets.example.env` | Template for the Secret (copy to `secrets.env`, git-ignored) |
 | `config.example.env` | Template for the local config overlay (copy to `config.env`, git-ignored) |
 | `postgres-cnpg.yaml` | **Optional** in-cluster PostgreSQL 17 (CloudNativePG) — budget path |
@@ -131,13 +131,19 @@ kubectl exec -n checktick vault-0 -it -- vault operator unseal   # x3
 kubectl apply -f k8s/migrate-job.yaml
 kubectl wait --for=condition=complete job/checktick-predeploy -n checktick --timeout=300s
 
-# 4. Build SNOMED CT once (~1.8 GB download; 8 GiB memory required)
-kubectl create job --from=cronjob/update-snomed-db snomed-bootstrap -n checktick
-kubectl wait --for=condition=complete job/snomed-bootstrap -n checktick --timeout=4h
+# 4. SNOMED CT: dispatch the "Build SNOMED DB" GitHub workflow once
+#    (.github/workflows/build-snomed-db.yml — needs the TRUD_API_KEY,
+#    CIVO_S3_ACCESS_KEY and CIVO_S3_SECRET_KEY GitHub secrets). It builds
+#    snomed.db on a free 16 GB runner and uploads it to the object store;
+#    then import it in-cluster (weekly CronJob, manual first run):
+kubectl create job --from=cronjob/import-snomed-db snomed-import -n checktick
+kubectl wait --for=condition=complete job/snomed-import -n checktick --timeout=1h
 
-# 5. Web + ingress
+# 5. Web + ingress (ingress.yaml is a template: copy to the git-ignored
+#    k8s/ingress.local.yaml, set your hostname, apply that)
 kubectl apply -f k8s/web.yaml
-kubectl apply -f k8s/ingress.yaml
+cp k8s/ingress.yaml k8s/ingress.local.yaml   # edit the hostname first
+kubectl apply -f k8s/ingress.local.yaml
 kubectl rollout status deployment/checktick-web -n checktick
 
 # 6. Scheduled tasks (enable once stable)
@@ -178,7 +184,11 @@ kubectl apply -f k8s/cronjobs.yaml
   Longhorn RWX (NFS-backed) does not honour fsGroup.
 - **SNOMED** lives on an RWX PVC but is never opened from the share: each pod
   copies `snomed.db` to a node-local `emptyDir` at startup, so SQLite is never
-  touched over NFS. The updater CronJob writes atomically (`os.replace`).
+  touched over NFS. The file is built by CI
+  ([build-snomed-db.yml](../.github/workflows/build-snomed-db.yml) — the
+  sct ndjson step peaks above 4 GiB and cannot run on 4 GB nodes) and the
+  importer CronJob swaps it in with an atomic rename; the seed runs
+  in-cluster where the database lives.
 - **Vault** runs file storage with manual unseal behind a NetworkPolicy that
   denies all egress and only accepts ingress from web pods on 8200. There is
   deliberately no liveness probe. A node drain re-seals Vault and 503s the

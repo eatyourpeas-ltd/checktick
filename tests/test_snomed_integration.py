@@ -657,6 +657,55 @@ def test_update_command_builds_to_temp_then_atomically_swaps(tmp_path, monkeypat
 
 
 @pytest.mark.django_db
+def test_update_command_no_seed_skips_dataset_refresh(tmp_path, monkeypatch):
+    """--no-seed skips seed_snomed_datasets (CI builders have no app DB).
+
+    The GitHub Actions SNOMED builder runs update_snomed_db with --no-seed
+    because it has no application database; the seed runs in-cluster from the
+    import job after the built file is downloaded onto the PVC.
+    """
+    db_path = tmp_path / "snomed.db"
+    db_path.touch()
+    zip_path = tmp_path / "uk_sct2mo_42.3.0_20260701000001Z.zip"
+    zip_path.touch()
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["sct", "ndjson"]:
+            out_flag = cmd.index("--output")
+            with open(cmd[out_flag + 1], "w") as fh:
+                fh.write('{"_type":"sct_provenance"}\n')
+        if cmd[:2] == ["sct", "sqlite"]:
+            out_flag = cmd.index("--output")
+            conn = sqlite3.connect(cmd[out_flag + 1])
+            conn.execute("CREATE TABLE concepts (id TEXT PRIMARY KEY)")
+            conn.commit()
+            conn.close()
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    seed_calls: list[str] = []
+
+    def fake_call_command(name, *args, **kwargs):
+        seed_calls.append(name)
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "checktick_app.surveys.management.commands.update_snomed_db.call_command",
+        fake_call_command,
+    )
+
+    out = StringIO()
+    with override_settings(SNOMED_DB_PATH=str(db_path), TRUD_API_KEY="dummy-key"):
+        call_command("update_snomed_db", force=True, no_seed=True, stdout=out)
+
+    assert seed_calls == [], "--no-seed must not invoke seed_snomed_datasets"
+    text = out.getvalue()
+    assert "--no-seed" in text
+    assert "descriptor refresh skipped" in text
+    # The build itself still completed and swapped into place.
+    assert db_path.exists()
+
+
+@pytest.mark.django_db
 def test_update_command_sqlite_failure_cleans_temp_and_exits(tmp_path, monkeypatch):
     """If sct sqlite fails, the partial temp db is removed and the command exits non-zero.
 

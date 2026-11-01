@@ -137,6 +137,14 @@ Manifest details and apply order: [`k8s/README.md`](../k8s/README.md).
       301s and would loop against the ingress's plain-HTTP backend (no
       proxy-header trust is configured in settings). Same posture at
       cutover.
+- [ ] **SNOMED build finding (POC):** the in-cluster `update-snomed-db`
+      CronJob allocates 8 GiB (the `sct ndjson` step peaks above 4 GiB and
+      is OOM-killed with less) — it can NEVER run on the Civo POC nodes
+      (3 × 2 vCPU/4 GB). Replacement: build snomed.db on a free GitHub
+      16 GB runner (`.github/workflows/build-snomed-db.yml`, `--no-seed`
+      because CI has no app database), upload to
+      `s3://checktick-backups/snomed`, and import in-cluster with a small
+      CronJob (download + atomic rename + `seed_snomed_datasets`).
 - [ ] **Config overlay precedence finding (POC):** changing a value in the
       committed `web-configmap.yaml` (`checktick-config`) is NOT enough —
       the git-ignored local overlay (`checktick-config-local`, applied from
@@ -402,7 +410,7 @@ kubectl run mediasync --rm -it --image=alpine \
 | process-diary-reminders | `process_diary_reminders` | daily 03:20 |
 | sync-nhs-dd-datasets | `sync_nhs_dd_datasets` | Sunday 04:00 |
 | process-recovery-time-delays | `process_recovery_time_delays` | every 5 min |
-| update-snomed-db | `update_snomed_db` | weekdays 13:00 (TRUD windows; 8 GiB memory) |
+| import-snomed-db | object-store download + `seed_snomed_datasets` | weekly Tue 14:00 (built by CI: `build-snomed-db.yml`) |
 
 The billing commands are no-ops when `SELF_HOSTED=True`; the hosted service
 runs in SaaS mode, so all CronJobs stay enabled. See

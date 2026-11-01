@@ -7,9 +7,12 @@
 # they stay enabled here.
 #
 # Schedules are UTC. Daily jobs are staggered so they do not stampede the
-# database. The SNOMED updater runs on UK weekday afternoons to avoid the TRUD
-# maintenance windows (weekdays 18:00–08:00 UK) and allocates 8 GiB: the
-# sct ndjson step peaks above 4 GiB and will be OOM-killed with less.
+# database. SNOMED is NOT built in-cluster: the sct ndjson step peaks above
+# 4 GiB, so the old 8 GiB update-snomed-db CronJob can never run on the Civo
+# POC nodes (2 vCPU/4 GB). Instead, .github/workflows/build-snomed-db.yml
+# builds snomed.db on a free GitHub runner and uploads it to the object
+# store; the import-snomed-db CronJob below is the small in-cluster half
+# (download + atomic rename + seed).
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -360,39 +363,87 @@ spec:
                 requests: {memory: 128Mi, cpu: 100m}
                 limits: {memory: 512Mi}
 ---
-# SNOMED CT updater. Writes to the shared RWX PVC with an atomic
-# os.replace() swap (safe while web pods serve). Web pods pick up the new
-# file on their next restart. Exits cleanly when TRUD_API_KEY is unset.
+# SNOMED CT importer — the in-cluster half of the CI build pipeline
+# (.github/workflows/build-snomed-db.yml builds snomed.db on a free GitHub
+# runner and uploads it to s3://checktick-backups/snomed/snomed.db).
+#
+# initContainer: download to a temp name on the PVC, then rename into place
+# (same atomic-swap contract the old updater's os.replace() gave — web pods'
+# snomed-copy initContainer reads the file at pod start, and readers keep
+# their already-open fd). Runs as root: the Longhorn RWX (NFS) share is
+# root-owned and does not honour fsGroup; the chmod 644 result stays
+# world-readable for the web pods' initContainer copy. Pin the aws-cli
+# image tag for production (same post-POC hygiene as the app image).
+# Main container: refresh the DataSet descriptors in Postgres — the CI
+# builder runs update_snomed_db --no-seed because it has no app database.
+#
+# Reuses the CNPG backup credential Secret (checktick-db-backup-creds:
+# ACCESS_KEY_ID / SECRET_ACCESS_KEY / REGION=lon1) and the same Civo
+# object-store checksum env vars as the backup cluster. Clusters WITHOUT
+# the object-store pipeline can instead run `update_snomed_db` directly
+# (needs 8 GiB memory and TRUD_API_KEY — see the workflow header).
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: update-snomed-db
+  name: import-snomed-db
   namespace: checktick
 spec:
-  schedule: "0 13 * * 1-5" # UK weekday afternoons, outside TRUD maintenance windows
+  schedule: "0 14 * * 2" # weekly, Tuesday 14:00 UTC — after the Monday CI build
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: 0 # a failed 1.8 GB download should not auto-retry blindly
-      activeDeadlineSeconds: 14400
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600
       ttlSecondsAfterFinished: 172800
       template:
         spec:
           restartPolicy: Never
+          initContainers:
+            - name: download
+              image: amazon/aws-cli:latest
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: {name: checktick-db-backup-creds, key: ACCESS_KEY_ID}
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: {name: checktick-db-backup-creds, key: SECRET_ACCESS_KEY}
+                - name: AWS_DEFAULT_REGION
+                  valueFrom:
+                    secretKeyRef: {name: checktick-db-backup-creds, key: REGION}
+                # Civo object store rejects the default payload-checksum
+                # mode of modern S3 clients (POC finding — see the CNPG
+                # cluster env for the full story)
+                - name: AWS_REQUEST_CHECKSUM_CALCULATION
+                  value: when_required
+                - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+                  value: when_required
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  aws s3 cp s3://checktick-backups/snomed/snomed.db /app/data/snomed.db.new \
+                    --endpoint-url https://objectstore.lon1.civo.com
+                  chmod 644 /app/data/snomed.db.new
+                  mv /app/data/snomed.db.new /app/data/snomed.db
+                  ls -lh /app/data/snomed.db
+              volumeMounts:
+                - name: snomed-data
+                  mountPath: /app/data
           containers:
-            - name: run
+            - name: seed
               image: ghcr.io/eatyourpeas-ltd/checktick:latest
-              command: ["python", "manage.py", "update_snomed_db"]
+              command: ["python", "manage.py", "seed_snomed_datasets", "--force"]
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
                 - secretRef: {name: checktick-secrets}
               resources:
-                # sct ndjson peaks above 4 GiB; 4 GiB gets OOM-killed (exit -9)
-                requests: {memory: 8Gi, cpu: "1"}
-                limits: {memory: 8Gi, cpu: "2"}
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
               volumeMounts:
                 - name: snomed-data
                   mountPath: /app/data
