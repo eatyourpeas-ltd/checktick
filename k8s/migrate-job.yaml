@@ -1,0 +1,48 @@
+# Pre-deploy Job — the Kubernetes equivalent of the Northflank pre-deploy
+# migration job. Runs BEFORE applying/rolling the web Deployment, never at
+# container start (the image CMD is gunicorn-only).
+#
+# Apply once before each deploy:  kubectl apply -f k8s/migrate-job.yaml
+# then wait:                      kubectl wait --for=condition=complete \
+#                                    job/checktick-predeploy -n checktick --timeout=300s
+#
+# backoffLimit 0: fail fast against a production database rather than
+# retrying blindly; investigate before re-running.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: checktick-predeploy
+  namespace: checktick
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/eatyourpeas-ltd/checktick:latest
+          # Same tag as the web Deployment — keep them in lockstep on deploy.
+          command:
+            - sh
+            - -c
+            - |
+              python manage.py migrate --noinput &&
+              python manage.py createcachetable &&
+              python manage.py sync_branding &&
+              python manage.py sync_nhs_dd_datasets &&
+              python manage.py sync_global_question_group_templates
+          envFrom:
+            # Order is precedence: structural -> local overlay -> credentials
+            - configMapRef:
+                name: checktick-config
+            - configMapRef:
+                name: checktick-config-local
+            - secretRef:
+                name: checktick-secrets
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 500m
+            limits:
+              memory: 1Gi

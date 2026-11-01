@@ -1,0 +1,41 @@
+# STRUCTURAL application config: cluster-internal, non-identifying values
+# that let pods boot and probes pass from the committed manifests alone.
+#
+# Environment-IDENTIFYING config (real domains, branding, compliance
+# contacts, company details, feature URLs/IDs) is deliberately NOT here —
+# it lives in a git-ignored k8s/config.env, applied as the
+# checktick-config-local ConfigMap (template: k8s/config.example.env).
+#
+# Precedence is the envFrom order in the workload manifests:
+#   checktick-config (this file) -> checktick-config-local (overlay)
+#   -> checktick-secrets
+# Later sources override earlier, so the overlay wins without touching
+# these committed defaults.
+#
+# SECURITY: PLATFORM_CUSTODIAN_COMPONENT must NEVER appear here or in any
+# environment/secret — settings.py hard-fails if it is set (split-knowledge
+# control F6, see docs/vault.md).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: checktick-config
+  namespace: checktick
+data:
+  DEBUG: "False"
+  # Internal service names keep in-cluster probes and smoke tests working;
+  # the config.env overlay adds the real public domain on top.
+  ALLOWED_HOSTS: "checktick-web,checktick-web.checktick,checktick-web.checktick.svc.cluster.local,localhost,127.0.0.1"
+  # TLS and the http->https redirect are handled at the INGRESS (Traefik),
+  # not the app: internal pod traffic is plain HTTP, probes and in-cluster
+  # callers need real responses (not 301s), and app-level redirects would
+  # loop against the ingress's plain-HTTP backend (no proxy-header trust
+  # configured). See runbook: this is the k8s posture for cutover too.
+  SECURE_SSL_REDIRECT: "False"
+  # POC: HTTP-internal behind the vault-airgap NetworkPolicy. Cutover
+  # hardening: cert-manager TLS + VAULT_TLS_VERIFY=true (runbook Phase 6).
+  VAULT_ADDR: "http://vault.checktick.svc.cluster.local:8200"
+  VAULT_TLS_VERIFY: "false"
+  # Node-local path; an initContainer copies snomed.db here from the shared
+  # volume so SQLite is never opened over NFS
+  SNOMED_DB_PATH: "/app/data/snomed.db"
+  EXTERNAL_DATASET_API_URL: "https://api.rcpch.ac.uk"

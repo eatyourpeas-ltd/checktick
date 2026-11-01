@@ -279,3 +279,16 @@ axecore-new.js
 sortable-new.js
 
 temp_keys/*
+
+# Kubernetes — local unencrypted secret env files (never commit; see k8s/README.md)
+k8s/secrets.env
+k8s/scratch-secret.env
+k8s/config.env
+k8s/ingress.local.yaml
+# Local POC scratch manifests (applied out-of-band, environment-specific)
+k8s/scratch-*.yaml
+# Safety net: the deploy-workflow setup writes its transient cluster-admin
+# kubeconfig to /tmp (outside the repo). This repo is public — never let
+# one land in a commit.
+kubeconfig.yaml
+.venv-vault/

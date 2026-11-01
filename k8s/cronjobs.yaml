@@ -1,0 +1,453 @@
+# Scheduled tasks as CronJobs — the Kubernetes equivalent of the Northflank
+# cron services. Command semantics and required frequencies are documented in
+# docs/self-hosting-scheduled-tasks.md (authoritative list).
+#
+# The billing commands (process_*_subscriptions, process_promotion_lifecycle)
+# are no-ops when SELF_HOSTED=True; the hosted service runs in SaaS mode, so
+# they stay enabled here.
+#
+# Schedules are UTC. Daily jobs are staggered so they do not stampede the
+# database. SNOMED is NOT built in-cluster: the sct ndjson step peaks above
+# 4 GiB, so the old 8 GiB update-snomed-db CronJob can never run on the Civo
+# POC nodes (2 vCPU/4 GB). Instead, .github/workflows/build-snomed-db.yml
+# builds snomed.db on a free GitHub runner and uploads it to the object
+# store; the import-snomed-db CronJob below is the small in-cluster half
+# (download + atomic rename + seed).
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: process-data-governance
+  namespace: checktick
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "process_data_governance"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup-survey-progress
+  namespace: checktick
+spec:
+  schedule: "10 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "cleanup_survey_progress"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sync-external-datasets
+  namespace: checktick
+spec:
+  schedule: "20 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "sync_external_datasets"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sync-global-question-group-templates
+  namespace: checktick
+spec:
+  schedule: "30 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "sync_global_question_group_templates"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: prune-unconfirmed-users
+  namespace: checktick
+spec:
+  schedule: "40 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "prune_unconfirmed_users"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: process-expired-subscriptions
+  namespace: checktick
+spec:
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "process_expired_subscriptions"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: process-expiring-subscriptions
+  namespace: checktick
+spec:
+  schedule: "5 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "process_expiring_subscriptions"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: process-promotion-lifecycle
+  namespace: checktick
+spec:
+  schedule: "10 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "process_promotion_lifecycle"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: process-dsr-deadlines
+  namespace: checktick
+spec:
+  schedule: "15 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "process_dsr_deadlines"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: process-diary-reminders
+  namespace: checktick
+spec:
+  schedule: "20 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "process_diary_reminders"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sync-nhs-dd-datasets
+  namespace: checktick
+spec:
+  schedule: "0 4 * * 0" # weekly, Sunday 04:00 UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "sync_nhs_dd_datasets"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: process-recovery-time-delays
+  namespace: checktick
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 240
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "process_recovery_time_delays"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 128Mi, cpu: 100m}
+                limits: {memory: 512Mi}
+---
+# SNOMED CT importer — the in-cluster half of the CI build pipeline
+# (.github/workflows/build-snomed-db.yml builds snomed.db on a free GitHub
+# runner and uploads it to s3://checktick-backups/snomed/snomed.db).
+#
+# initContainer: download to a temp name on the PVC, then rename into place
+# (same atomic-swap contract the old updater's os.replace() gave — web pods'
+# snomed-copy initContainer reads the file at pod start, and readers keep
+# their already-open fd). Runs as root: the Longhorn RWX (NFS) share is
+# root-owned and does not honour fsGroup; the chmod 644 result stays
+# world-readable for the web pods' initContainer copy. Pin the aws-cli
+# image tag for production (same post-POC hygiene as the app image).
+# Main container: refresh the DataSet descriptors in Postgres — the CI
+# builder runs update_snomed_db --no-seed because it has no app database.
+#
+# Reuses the CNPG backup credential Secret (checktick-db-backup-creds:
+# ACCESS_KEY_ID / SECRET_ACCESS_KEY / REGION=lon1) and the same Civo
+# object-store checksum env vars as the backup cluster. Clusters WITHOUT
+# the object-store pipeline can instead run `update_snomed_db` directly
+# (needs 8 GiB memory and TRUD_API_KEY — see the workflow header).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: import-snomed-db
+  namespace: checktick
+spec:
+  schedule: "0 14 * * 2" # weekly, Tuesday 14:00 UTC — after the Monday CI build
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          initContainers:
+            - name: download
+              image: amazon/aws-cli:latest
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: {name: checktick-db-backup-creds, key: ACCESS_KEY_ID}
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: {name: checktick-db-backup-creds, key: SECRET_ACCESS_KEY}
+                - name: AWS_DEFAULT_REGION
+                  valueFrom:
+                    secretKeyRef: {name: checktick-db-backup-creds, key: REGION}
+                # Civo object store rejects the default payload-checksum
+                # mode of modern S3 clients (POC finding — see the CNPG
+                # cluster env for the full story)
+                - name: AWS_REQUEST_CHECKSUM_CALCULATION
+                  value: when_required
+                - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+                  value: when_required
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  aws s3 cp s3://checktick-backups/snomed/snomed.db /app/data/snomed.db.new \
+                    --endpoint-url https://objectstore.lon1.civo.com
+                  chmod 644 /app/data/snomed.db.new
+                  mv /app/data/snomed.db.new /app/data/snomed.db
+                  ls -lh /app/data/snomed.db
+              volumeMounts:
+                - name: snomed-data
+                  mountPath: /app/data
+          containers:
+            - name: seed
+              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              command: ["python", "manage.py", "seed_snomed_datasets", "--force"]
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}
+              volumeMounts:
+                - name: snomed-data
+                  mountPath: /app/data
+          volumes:
+            - name: snomed-data
+              persistentVolumeClaim:
+                claimName: checktick-snomed-data

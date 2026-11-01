@@ -1,0 +1,166 @@
+# HashiCorp Vault — single node, file storage, manual unseal (3-of-4 Shamir).
+#
+# POC: initialise a THROWAWAY Vault (vault operator init -key-shares=4
+# -key-threshold=3) and configure AppRole per docs/vault.md.
+#
+# PRODUCTION CUTOVER: never `init` here. The migrated storage directory from
+# Northflank must be extracted into the `data-vault-0` PVC BEFORE this
+# StatefulSet is applied, then unsealed with the EXISTING shares. A fresh init
+# makes every encrypted survey in PostgreSQL permanently undecryptable.
+# See docs/migration-northflank-to-civo.md, critical safety rule 1.
+#
+# Version is pinned to match the source instance (1.21.1). Upgrade only after
+# the migration settles, as a separate change.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-config
+  namespace: checktick
+data:
+  vault.hcl: |
+    ui = true
+    # k3s/containerd caps RLIMIT_MEMLOCK below what Vault needs even with
+    # IPC_LOCK granted, so mlock fails at startup and the container exits
+    # in a loop ("Failed to lock memory"). Kubernetes nodes run without
+    # swap by default, which removes most of the benefit mlock would give.
+    # Cutover hardening: verify node swap is disabled.
+    disable_mlock = true
+
+    storage "file" {
+      path = "/vault/file"
+    }
+
+    listener "tcp" {
+      address = "0.0.0.0:8200"
+      # POC: plain HTTP on the cluster network, protected by the vault-airgap
+      # NetworkPolicy below. Cutover hardening: serve TLS here (cert-manager)
+      # and set VAULT_TLS_VERIFY=true in checktick-config.
+      tls_disable = 1
+    }
+
+    api_addr = "http://vault.checktick.svc.cluster.local:8200"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  namespace: checktick
+  labels:
+    app: vault
+spec:
+  selector:
+    app: vault
+  ports:
+    - name: api
+      port: 8200
+      targetPort: 8200
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vault
+  namespace: checktick
+spec:
+  serviceName: vault
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault
+  template:
+    metadata:
+      labels:
+        app: vault
+    spec:
+      # No liveness probe: restarting cannot fix a sealed Vault, it only adds
+      # churn while the unseal ceremony is pending. Readiness (exec-based, so
+      # unaffected by the egress deny below) reports sealed = NotReady, which
+      # matches reality: web healthz would 503 until the ceremony completes.
+      securityContext:
+        # The hashicorp/vault image runs as uid 100 / gid 1000. A fresh
+        # Longhorn PVC is root-owned; without fsGroup the vault process
+        # cannot create its storage directory and the container exits in a
+        # restart loop (Error state). Docker-compose dev never hit this
+        # because named volumes inherit the image's directory ownership —
+        # k8s PVCs start root-owned instead.
+        fsGroup: 1000
+      containers:
+        - name: vault
+          image: hashicorp/vault:1.21.1
+          # Invoke vault directly. Verified healthy by running it manually in
+          # the container during POC debugging. The image's wrapper
+          # (docker-entrypoint.sh) chowns the read-only ConfigMap mount
+          # (harmless warnings) and its exact failure mode on this runtime
+          # was never isolated — bypass it. Vault handles SIGTERM/SIGINT
+          # itself as PID 1. Hardening (cutover): add runAsUser: 100 /
+          # runAsGroup: 1000 — the image defaults to root (see runbook).
+          command: ["vault"]
+          args: ["server", "-config=/vault/config/vault.hcl"]
+          env:
+            - name: VAULT_ADDR
+              value: "http://127.0.0.1:8200"
+          ports:
+            - name: api
+              containerPort: 8200
+          securityContext:
+            capabilities:
+              add: ["IPC_LOCK"]
+          readinessProbe:
+            exec:
+              command: ["vault", "status"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /vault/config
+              readOnly: true
+            - name: data
+              mountPath: /vault/file
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 250m
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: config
+          configMap:
+            name: vault-config
+            items:
+              - key: vault.hcl
+                path: vault.hcl
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # storageClassName omitted -> cluster default (Longhorn on Civo)
+        resources:
+          requests:
+            storage: 10Gi
+---
+# The "airgap": Vault accepts nothing but API traffic from the web pods, and
+# makes no outbound connections at all (file storage needs none).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vault-airgap
+  namespace: checktick
+spec:
+  podSelector:
+    matchLabels:
+      app: vault
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: checktick-web
+      ports:
+        - protocol: TCP
+          port: 8200
+  # Empty egress list = deny all outbound.
+  egress: []

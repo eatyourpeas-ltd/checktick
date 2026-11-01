@@ -95,8 +95,13 @@ def get_totp_secret_display(device: TOTPDevice) -> str:
 
 def is_password_user(user) -> bool:
     """Check if a user authenticates via password (vs SSO/OIDC)."""
-    # If user has a usable password, they're a password user
-    return user.has_usable_password()
+    # If user has a usable password, they're a password user. The explicit
+    # non-empty check matters: OIDC-provisioned accounts never get a
+    # password set and keep the model's empty-string default, but Django's
+    # is_password_usable("") is True (it only rejects None and the
+    # unusable-password marker) — without the check, SSO users get dragged
+    # into the 2FA enrollment the SSO exemption is supposed to prevent.
+    return bool(user.password) and user.has_usable_password()
 
 
 @login_required

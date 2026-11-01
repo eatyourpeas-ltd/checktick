@@ -1,0 +1,93 @@
+# Builds snomed.db on a free GitHub-hosted runner and uploads it to the
+# Civo object store. This REPLACES the in-cluster update-snomed-db CronJob:
+# the sct ndjson step peaks above 4 GiB, so the 8 GiB CronJob can never run
+# on the Civo POC nodes (3 × 2 vCPU/4 GB) — and even on bigger nodes it is
+# cheaper to burn GitHub's runner memory than cluster memory.
+#
+# Pipeline:
+#   1. Build in the published app image (it carries the pinned `sct` binary)
+#      with --no-seed — CI has no application database, so the
+#      seed_snomed_datasets refresh is skipped here.
+#   2. Upload to s3://checktick-backups/snomed/snomed.db.
+#   3. In-cluster, the import-snomed-db CronJob (k8s/cronjobs.yaml) downloads
+#      the file onto the shared PVC (atomic rename) and runs
+#      seed_snomed_datasets there, where the database lives.
+#
+# One-time setup — GitHub secrets (Repository settings -> Secrets and
+# variables -> Actions):
+#   TRUD_API_KEY        TRUD API key (register at isd.digital.nhs.uk/trud)
+#   CIVO_S3_ACCESS_KEY  Civo object-store credential access key ("backups")
+#   CIVO_S3_SECRET_KEY  matching secret key (dashboard: Object stores ->
+#                       Credentials management, or:
+#                       civo objectstore credential secret -a <ACCESS_KEY>)
+#
+# Civo object-store quirk (POC finding, same as the CNPG backup cluster):
+# the store rejects the default payload-checksum mode of modern S3 clients
+# (XAmzContentSHA256Mismatch on PutObject) — the two AWS_*_CHECKSUM_* vars
+# below switch the runner's aws-cli v2 back to compatible behaviour, and
+# AWS_DEFAULT_REGION=lon1 is the SigV4 region barman also signs for.
+#
+# The build runs as root inside the container (--user 0:0): the bind-mounted
+# host directory is owned by the runner user (uid 1001) and the image's
+# appuser (uid 1000) cannot write to it. The runner only needs to READ the
+# root-owned 0644 result for the upload step.
+
+name: Build SNOMED DB
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Monday 13:00 UTC — inside TRUD's service window (maintenance
+    # runs weekdays 18:00–08:00 UK). UK Monolith releases roughly monthly,
+    # so a weekly --force rebuild wastes one download at most.
+    - cron: "0 13 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never two SNOMED builds racing (each is a ~1.8 GB download)
+  group: build-snomed-db
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/eatyourpeas-ltd/checktick
+  SNOMED_DIR: /tmp/snomed
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # public repo: 4 vCPU / 16 GB, free
+    timeout-minutes: 120 # build takes ~10-20 min; generous headroom
+    steps:
+      - name: Build snomed.db in the app image
+        env:
+          TRUD_API_KEY: ${{ secrets.TRUD_API_KEY }}
+        run: |
+          mkdir -p "$SNOMED_DIR"
+          docker run --rm \
+            --user 0:0 \
+            -e TRUD_API_KEY \
+            -e DATABASE_URL=sqlite:////tmp/throwaway.db \
+            -e SNOMED_DB_PATH=/data/snomed.db \
+            -v "$SNOMED_DIR":/data \
+            "$IMAGE:latest" \
+            python manage.py update_snomed_db --force --no-seed
+          test -s "$SNOMED_DIR/snomed.db"
+          ls -lh "$SNOMED_DIR"/
+
+      - name: Upload to Civo object store
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CIVO_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CIVO_S3_SECRET_KEY }}
+          AWS_DEFAULT_REGION: lon1
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: |
+          aws s3 cp "$SNOMED_DIR/snomed.db" \
+            s3://checktick-backups/snomed/snomed.db \
+            --endpoint-url https://objectstore.lon1.civo.com
+          aws s3api head-object \
+            --bucket checktick-backups \
+            --key snomed/snomed.db \
+            --endpoint-url https://objectstore.lon1.civo.com \
+            --query '[ContentLength, LastModified]'

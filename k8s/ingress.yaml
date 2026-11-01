@@ -1,0 +1,69 @@
+# Ingress via the Civo-managed Traefik controller, TLS via cert-manager.
+#
+# TEMPLATE — deliberately NOT in kustomization.yaml: the hostname is
+# environment-identifying, so the real ingress is applied out-of-band:
+#   1. cp k8s/ingress.yaml k8s/ingress.local.yaml   (git-ignored)
+#   2. Replace checktick.example with your hostname (annotation stays as
+#      the issuer name; tls hosts; host rule)
+#   3. kubectl apply -f k8s/ingress.local.yaml
+#
+# Prerequisites (out-of-band, cluster-scoped — see k8s/README.md):
+#   - cert-manager installed
+#   - a ClusterIssuer named letsencrypt-production, e.g.:
+#       kubectl apply -f - <<'EOF'
+#       apiVersion: cert-manager.io/v1
+#       kind: ClusterIssuer
+#       metadata:
+#         name: letsencrypt-production
+#       spec:
+#         acme:
+#           server: https://acme-v02.api.letsencrypt.org/directory
+#           email: <your expiry-contact email>
+#           privateKeySecretRef:
+#             name: letsencrypt-production-account-key
+#           solvers:
+#             - http01:
+#                 ingress:
+#                   ingressClassName: traefik
+#       EOF
+#   - DNS A record for the hostname pointing at the cluster's ingress IP
+#     (on Civo: the node external IP that Traefik's hostNetwork ports
+#     80/443 answer on — `kubectl get nodes -o wide`).
+#
+# The app itself must also accept the hostname: until the image supports
+# ALLOWED_HOSTS_EXTRA (runbook Phase 6 backlog), add the domain to the
+# ALLOWED_HOSTS env value in the web Deployment (k8s/web.yaml).
+#
+# POC shortcut if you want to skip TLS initially: kubectl port-forward
+# svc/checktick-web 8000:8000 -n checktick
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: traefik
+spec:
+  controller: traefik.io/ingress-controller
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: checktick
+  namespace: checktick
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - checktick.example
+      secretName: checktick-tls
+  rules:
+    - host: checktick.example
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: checktick-web
+                port:
+                  name: http

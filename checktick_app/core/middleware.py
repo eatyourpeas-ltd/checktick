@@ -12,13 +12,20 @@ LANGUAGE_SESSION_KEY = "_language"
 
 # URLs that should be accessible without 2FA setup
 TWO_FACTOR_EXEMPT_URLS = [
-    "/app/2fa/",  # 2FA setup/manage pages
+    "/2fa/",  # 2FA setup/manage pages (the real route; an earlier
+    # "/app/2fa/" never existed, so these pages were NOT exempt)
     "/accounts/logout/",  # Allow logout
+    "/accounts/confirm-email/",  # emailed confirmation link must work even
+    # for a logged-in user the middleware is gating
+    "/accounts/resend-confirmation/",  # self-service recovery for the same
     "/admin/",  # Admin site (has its own auth)
     "/api/",  # API uses token auth
     "/oidc/",  # OIDC auth flow
     "/static/",  # Static files
     "/media/",  # Media files
+    "/home",  # Landing page shown to unconfirmed-email users (home is
+    # where email_confirmed_required sends users who cannot yet reach
+    # 2FA setup — exempting it breaks the /home <-> /2fa/setup/ cycle)
 ]
 
 

@@ -1,0 +1,10 @@
+# CheckTick deployment namespace.
+# POC and production share this manifest set; environment-specific values
+# (secrets, hostnames) are applied separately and never committed to this repo.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: checktick
+  labels:
+    app.kubernetes.io/name: checktick
+    app.kubernetes.io/part-of: checktick
