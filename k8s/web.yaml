@@ -97,6 +97,15 @@ spec:
             - |
               if [ -f /snomed-source/snomed.db ]; then
                 cp /snomed-source/snomed.db /app-data/snomed.db
+                # sct leaves snomed.db in WAL mode, and every reader opens it
+                # mode=ro (healthz, snomed_resolver, seed_snomed_datasets).
+                # A read-only connection to a WAL database must create a
+                # -shm file, which fails on the web container's readOnly
+                # /app/data mount (SQLITE_CANTOPEN "unable to open database
+                # file"). This init container mounts the emptyDir
+                # read-write, so convert the POD-LOCAL COPY to the default
+                # rollback journal here; the RWX share is never written.
+                python -c "import sqlite3; conn = sqlite3.connect('/app-data/snomed.db'); print('journal_mode:', conn.execute('PRAGMA journal_mode=DELETE').fetchone()[0]); conn.close()"
               else
                 echo "snomed.db not present on the volume yet; skipping copy"
               fi

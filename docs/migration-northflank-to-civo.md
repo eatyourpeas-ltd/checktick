@@ -145,6 +145,24 @@ Manifest details and apply order: [`k8s/README.md`](../k8s/README.md).
       because CI has no app database), upload to
       `s3://checktick-backups/snomed`, and import in-cluster with a small
       CronJob (download + atomic rename + `seed_snomed_datasets`).
+- [ ] **SNOMED WAL finding (POC):** `sct` builds `snomed.db` with
+      `journal_mode=WAL` (db header write/read version = 2), and every app
+      reader opens it `mode=ro` (healthz, `snomed_resolver`,
+      `seed_snomed_datasets`). A read-only SQLite connection to a WAL
+      database must create a `-shm` file — that works wherever the volume is
+      mounted read-write (which is why the seed container succeeds on the
+      RWX PVC) but fails on the web container's `readOnly: true` emptyDir
+      mount with `SQLITE_CANTOPEN` ("unable to open database file", surfaced
+      by healthz as `snomed: error` — after a copy the file exists, it just
+      cannot be opened). Fix in `k8s/web.yaml`: the `snomed-copy` init
+      container (which mounts the emptyDir read-write) runs
+      `PRAGMA journal_mode=DELETE` on the POD-LOCAL COPY after `cp` — the
+      RWX share is never written, and the read-only web container then opens
+      a plain rollback-journal database. Verified end to end:
+      `import-snomed-db` job → 1.9 GB copy → conversion → `/healthz`
+      `snomed: ok`. App-level alternative for the Phase 6 backlog: open
+      `file:...?mode=ro&immutable=1` (skips the shm entirely); would need an
+      image release.
 - [ ] **Config overlay precedence finding (POC):** changing a value in the
       committed `web-configmap.yaml` (`checktick-config`) is NOT enough —
       the git-ignored local overlay (`checktick-config-local`, applied from
