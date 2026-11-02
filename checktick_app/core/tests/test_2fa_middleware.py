@@ -19,6 +19,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from checktick_app.core.email_confirmation import EmailConfirmationManager
+from checktick_app.core.models import UserOIDC
 from checktick_app.core.views_2fa import is_password_user
 
 User = get_user_model()
@@ -192,3 +193,81 @@ class IsPasswordUserTests(TestCase):
             self.assertFalse(is_password_user(user))
         finally:
             user.delete()
+
+
+class OIDCHomeNoticeTests(TestCase):
+    """OIDC users must not be prompted to confirm their email.
+
+    Found on the Civo staging POC (2026-11-02): a successful M365 SSO login
+    landed on /home and still saw the "confirm your email" banner and flash
+    even though OIDC users bypass the confirmation flow entirely (their
+    provider verified the email; they have no confirmation link to click).
+    """
+
+    def _make_oidc_user(self, email_verified=True):
+        # No password: mirrors OIDC provisioning (empty-string password)
+        user = User.objects.create_user(
+            username="oidcprobe@example.com", email="oidcprobe@example.com"
+        )
+        user.profile.email_confirmed = False
+        user.profile.save()
+        UserOIDC.objects.create(
+            user=user,
+            provider="azure",
+            subject="az-home-probe-1",
+            email_verified=email_verified,
+            key_derivation_salt=b"s" * 32,
+        )
+        return user
+
+    def test_home_shows_no_confirmation_notice_for_verified_oidc_user(self):
+        user = self._make_oidc_user(email_verified=True)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("core:home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Your email address is not confirmed yet")
+        self.assertNotContains(response, "Nearly there!")
+
+    def test_home_still_prompts_unconfirmed_password_user(self):
+        """Positive control: the notice is a password-signup feature."""
+        user = User.objects.create_user(
+            username="pwprobe@example.com",
+            email="pwprobe@example.com",
+            password=PASSWORD,
+        )
+        user.profile.email_confirmed = False
+        user.profile.save()
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("core:home"))
+
+        self.assertContains(response, "Your email address is not confirmed yet")
+
+    def test_profile_page_shows_sso_line_for_oidc_user(self):
+        """The profile Email Confirmation card must not offer a resend to a
+        provider-verified OIDC user (covers sessions predating the login-time
+        profile sync)."""
+        user = self._make_oidc_user(email_verified=True)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("core:profile"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "verified by your single sign-on provider")
+        self.assertNotContains(response, "Resend Confirmation Email")
+
+    def test_profile_page_still_prompts_unconfirmed_password_user(self):
+        user = User.objects.create_user(
+            username="pwprofile@example.com",
+            email="pwprofile@example.com",
+            password=PASSWORD,
+        )
+        user.profile.email_confirmed = False
+        user.profile.save()
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("core:profile"))
+
+        self.assertContains(response, "Resend Confirmation Email")

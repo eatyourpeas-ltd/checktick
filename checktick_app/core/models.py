@@ -219,6 +219,14 @@ class UserOIDC(models.Model):
                 "key_derivation_salt": os.urandom(32),
             },
         )
+        if not created and email_verified and not oidc_record.email_verified:
+            # get_or_create applies ``defaults`` only on create. Without this
+            # refresh a record created before the provider reported
+            # email_verified keeps the stale False, so the
+            # email_confirmed_required exemption (and the prune cron's
+            # OIDC exclusion) never applies to the user.
+            oidc_record.email_verified = email_verified
+            oidc_record.save(update_fields=["email_verified"])
         return oidc_record, created
 
 

@@ -32,6 +32,10 @@ function handleSSOSignup(provider) {
 
   // Store choices in sessionStorage for post-auth processing
   sessionStorage.setItem("signup_tier", tierValue);
+  const billingCycleInput = document.getElementById("selected-billing-cycle");
+  if (billingCycleInput) {
+    sessionStorage.setItem("signup_billing_cycle", billingCycleInput.value);
+  }
 
   // Get the 'next' URL from current page's query params (e.g., from survey invite)
   const urlParams = new URLSearchParams(window.location.search);

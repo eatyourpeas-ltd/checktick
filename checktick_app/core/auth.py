@@ -65,6 +65,28 @@ def derive_key_from_oidc_identity(
     return kdf.derive(identity)
 
 
+def sync_email_confirmed_from_oidc(user, claims: Dict[str, Any]) -> None:
+    """Mirror a provider-verified OIDC email onto ``profile.email_confirmed``.
+
+    OIDC users bypass the password-signup confirmation flow — they never
+    receive a confirmation link — yet every other reader of the profile flag
+    (the home/profile "confirm your email" notices and the
+    ``prune_unconfirmed_users`` command) only looks at
+    ``profile.email_confirmed``. Without this sync, a successfully
+    authenticated SSO user is still prompted to confirm an email their
+    provider already verified, and would eventually be deactivated or
+    deleted by the prune cron. The ``email_confirmed_required`` decorator
+    already treats ``oidc.email_verified`` as equivalent to a clicked
+    confirmation link; this keeps the profile flag in agreement with it.
+    """
+    if not claims.get("email_verified"):
+        return
+    profile = user.profile
+    if not profile.email_confirmed:
+        profile.email_confirmed = True
+        profile.save(update_fields=["email_confirmed"])
+
+
 class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
     """
     Custom OIDC backend that integrates with healthcare encryption system.
@@ -296,6 +318,7 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
                 subject=subject_id,
                 email_verified=claims.get("email_verified", False),
             )
+            sync_email_confirmed_from_oidc(user, claims)
 
             logger.info(
                 f"Successfully created new OIDC healthcare user: {email} (provider: {provider})"
@@ -335,6 +358,8 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
             )
             logger.info(f"Updated OIDC record for existing user: {user.email}")
 
+        sync_email_confirmed_from_oidc(user, claims)
+
         user.save()
         logger.info(f"Saved updated user: {user.email}, is_active={user.is_active}")
         return user
@@ -360,6 +385,23 @@ class CustomOIDCAuthenticationBackend(OIDCAuthenticationBackend):
             # provider; otherwise every provider is stored as "unknown".
             if not claims.get("iss"):
                 claims["iss"] = payload.get("iss", "")
+
+            # ``email_verified`` has the same gap, and it breaks Azure logins:
+            # Microsoft's userinfo endpoint omits the claim (it appears only
+            # in the ID token, and Entra work/school tokens omit it entirely
+            # because directory emails are verified by definition). With the
+            # stale False, ``email_confirmed_required`` never exempts Azure
+            # users and they are bounced off every gated view despite a
+            # successful provider authentication. Fill from the ID token when
+            # present, then trust the two supported providers: Google and
+            # Microsoft both assert emails under the provider's own control,
+            # which is exactly what the ``oidc.email_verified`` exemption
+            # relies on. An explicit False claim is never overridden.
+            if "email_verified" not in claims:
+                claims["email_verified"] = bool(
+                    payload.get("email_verified")
+                    or self._get_provider_from_claims(claims) in ("google", "azure")
+                )
 
             email = claims.get("email")
 
