@@ -366,6 +366,9 @@
       <div class="divider text-sm text-base-content">Email Confirmation</div>
       {% if user.profile.email_confirmed %}
         <p class="text-success">Your email address is confirmed.</p>
+      {% elif user.oidc.email_verified %}
+        {# OIDC users have no confirmation link — their provider verified the email. #}
+        <p class="text-success">Your email address is verified by your single sign-on provider.</p>
       {% else %}
         <alert class="alert alert-warning">
           <span class="font-bold">Your email address is not yet confirmed. Please check your email for a confirmation link.</span>

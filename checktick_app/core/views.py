@@ -221,8 +221,20 @@ def _get_public_pricing_context() -> dict:
 def home(request):
     context = _get_public_pricing_context()
 
-    # Show email confirmation notice to authenticated users with unconfirmed email
-    if request.user.is_authenticated and not request.user.profile.email_confirmed:
+    # Show email confirmation notice to authenticated users with unconfirmed
+    # email. OIDC users are exempt: their provider verified the email (the
+    # email_confirmed_required decorator exempts them too) and they have no
+    # confirmation link to click, so prompting them is noise. The OIDC backend
+    # syncs profile.email_confirmed at login; the oidc check here also covers
+    # sessions that predate that sync.
+    user_oidc_verified = (
+        hasattr(request.user, "oidc") and request.user.oidc.email_verified
+    )
+    if (
+        request.user.is_authenticated
+        and not request.user.profile.email_confirmed
+        and not user_oidc_verified
+    ):
         # Add context variable so template can show resend option
         context["show_email_confirmation_notice"] = True
         # Also add a message that explains the resend functionality. The
@@ -1031,6 +1043,15 @@ def complete_signup(request):
     if request.method == "POST":
         account_type = request.POST.get("account_type")
 
+        # Tier/billing-cycle chosen on the signup page (hidden fields fed from
+        # sessionStorage — see signup.js and complete_signup.html). OIDC users
+        # must reach billing for paid tiers exactly like password users after
+        # email confirmation does.
+        tier = request.POST.get("tier", "free").lower()
+        billing_cycle = request.POST.get("billing_cycle", "monthly").lower()
+        if billing_cycle not in ("monthly", "annual"):
+            billing_cycle = "monthly"
+
         # Get next URL from POST (from hidden field populated via sessionStorage)
         next_url = request.POST.get("next")
         if next_url and url_has_allowed_host_and_scheme(
@@ -1097,6 +1118,23 @@ def complete_signup(request):
                 _("Account setup complete! You can now complete the survey."),
             )
             return redirect(pending_next_url)
+
+        # A paid tier chosen on the signup page must reach billing — same
+        # contract as the password flow, where confirm_email sends the user
+        # to pricing with auto_open_checkout once the email is confirmed.
+        # Priority mirrors confirm_email: a pending survey invite wins over
+        # the tier. Org/enterprise signups have no self-serve checkout
+        # (bespoke per-seat billing is set up by the platform admin), so
+        # they keep the organisation flow above.
+        if tier in ("pro", "team_small", "team_medium", "team_large"):
+            request.session["pending_tier"] = tier
+            request.session["pending_billing_cycle"] = billing_cycle
+            request.session["auto_open_checkout"] = True
+            messages.success(
+                request,
+                _("Account setup complete! Proceeding with your subscription setup."),
+            )
+            return redirect("core:pricing")
 
         messages.success(
             request,

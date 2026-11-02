@@ -34,6 +34,9 @@
       <form method="post" class="space-y-6">
         {% csrf_token %}
         <input type="hidden" name="next" id="next-url-field" value="" />
+        {# Tier/billing cycle chosen on the signup page; fed from sessionStorage below #}
+        <input type="hidden" name="tier" id="tier-field" value="free" />
+        <input type="hidden" name="billing_cycle" id="billing-cycle-field" value="monthly" />
 
         {# Account type selection #}
         <div class="form-control">
@@ -152,6 +155,21 @@
       document.getElementById('next-url-field').value = pendingNextUrl;
       // Clear it from sessionStorage
       sessionStorage.removeItem('signup_next_url');
+    }
+
+    // Tier/billing-cycle chosen on the signup page survive the SSO redirect
+    // via sessionStorage (stored by signup.js handleSSOSignup). Without this,
+    // an SSO signup for a paid tier silently became a free account with no
+    // billing redirect.
+    const pendingTier = sessionStorage.getItem('signup_tier');
+    if (pendingTier) {
+      document.getElementById('tier-field').value = pendingTier;
+      sessionStorage.removeItem('signup_tier');
+    }
+    const pendingPlanCycle = sessionStorage.getItem('signup_plan_cycle');
+    if (pendingPlanCycle) {
+      document.getElementById('billing-cycle-field').value = pendingPlanCycle;
+      sessionStorage.removeItem('signup_plan_cycle');
     }
   });
 </script>

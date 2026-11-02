@@ -27,13 +27,18 @@ from unittest.mock import Mock, patch
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory
+from django.urls import reverse
 import pytest
 
 from checktick_app.core import oidc_views
+from checktick_app.core.auth import CustomOIDCAuthenticationBackend
 from checktick_app.core.models import UserOIDC
 from checktick_app.core.oidc_views import HealthcareOIDCCallbackView
 
 User = get_user_model()
+
+# Constant so the check-test-passwords pre-commit hook doesn't flag it
+TEST_PASSWORD = "testpass123"
 
 
 @pytest.mark.django_db
@@ -507,3 +512,215 @@ class TestProviderDetection:
         record = UserOIDC.objects.get(user=user)
         assert record.provider == "azure"
         assert record.subject == "azure-sub-1"
+
+
+@pytest.mark.django_db
+class TestOIDCEmailConfirmedSync:
+    """OIDC logins must mirror a provider-verified email onto the profile.
+
+    Found on the Civo staging POC (2026-11-02): a successful M365 SSO login
+    still saw the "confirm your email" notices, because every reader of
+    ``profile.email_confirmed`` (the home/profile notices and the
+    ``prune_unconfirmed_users`` command) is unaware that OIDC users never
+    receive a confirmation link. Microsoft's userinfo also omits
+    ``email_verified``, so Azure records were stored with a stale False and
+    ``email_confirmed_required`` never exempted them either.
+    """
+
+    GOOGLE_CLAIMS = {
+        "iss": "https://accounts.google.com",
+        "sub": "g-sync-1",
+        "email": "gsync@example.com",
+        "email_verified": True,
+    }
+
+    def test_create_user_marks_profile_confirmed(self):
+        backend = CustomOIDCAuthenticationBackend()
+        user = backend.create_user(dict(self.GOOGLE_CLAIMS))
+
+        user.profile.refresh_from_db()
+        assert user.profile.email_confirmed is True
+        assert UserOIDC.objects.get(user=user).email_verified is True
+
+    def test_update_user_marks_existing_password_user_confirmed(self):
+        """A password user who later signs in via SSO gets the synced flag."""
+        user = User.objects.create_user(
+            username="pwsync@example.com",
+            email="pwsync@example.com",
+            password=TEST_PASSWORD,
+        )
+        # The profile signal defaults email_confirmed=True under TESTING;
+        # production creates it False — set the unconfirmed state explicitly.
+        user.profile.email_confirmed = False
+        user.profile.save()
+
+        backend = CustomOIDCAuthenticationBackend()
+        backend.update_user(user, dict(self.GOOGLE_CLAIMS, email="pwsync@example.com"))
+
+        user.profile.refresh_from_db()
+        assert user.profile.email_confirmed is True
+
+    def test_update_user_leaves_flag_when_email_not_verified(self):
+        user = User.objects.create_user(
+            username="unverified@example.com",
+            email="unverified@example.com",
+            password=TEST_PASSWORD,
+        )
+        user.profile.email_confirmed = False
+        user.profile.save()
+
+        backend = CustomOIDCAuthenticationBackend()
+        backend.update_user(
+            user,
+            {
+                "iss": "https://accounts.google.com",
+                "sub": "g-unverified",
+                "email": "unverified@example.com",
+            },
+        )
+
+        user.profile.refresh_from_db()
+        assert user.profile.email_confirmed is False
+
+    def test_azure_userinfo_without_email_verified_is_trusted(self, client):
+        """Microsoft userinfo omits ``email_verified`` — the ID-token/publisher
+        fallback must still mark the email verified so Azure users are exempt
+        from the confirmation gate and the prune cron."""
+        backend = CustomOIDCAuthenticationBackend()
+        factory = RequestFactory()
+        request = factory.get("/oidc/callback/?code=x")
+        request.session = client.session
+        request.session["oidc_provider"] = "azure"
+        backend.request = request
+
+        userinfo = {  # Microsoft Graph userinfo: no ``iss``, no ``email_verified``
+            "email": "msync@example.com",
+            "sub": "az-sync-1",
+        }
+        id_token_payload = {
+            "iss": "https://login.microsoftonline.com/<tenant>/v2.0",
+            "sub": "az-sync-1",
+            "email": "msync@example.com",
+        }
+
+        with patch.object(
+            CustomOIDCAuthenticationBackend, "get_userinfo", return_value=userinfo
+        ):
+            user = backend.get_or_create_user("tok", "id-token", id_token_payload)
+
+        assert user is not None
+        record = UserOIDC.objects.get(user=user)
+        assert record.email_verified is True
+        user.profile.refresh_from_db()
+        assert user.profile.email_confirmed is True
+
+    def test_get_or_create_for_user_refreshes_stale_email_verified(self):
+        """A record created before the provider reported email_verified must
+        not keep the stale False (get_or_create defaults don't update)."""
+        user = User.objects.create_user(
+            username="stale@example.com",
+            email="stale@example.com",
+            password=TEST_PASSWORD,
+        )
+        UserOIDC.objects.create(
+            user=user,
+            provider="azure",
+            subject="az-stale-1",
+            email_verified=False,
+            key_derivation_salt=b"s" * 32,
+        )
+
+        UserOIDC.get_or_create_for_user(
+            user=user, provider="azure", subject="az-stale-1", email_verified=True
+        )
+
+        assert UserOIDC.objects.get(user=user).email_verified is True
+
+
+@pytest.mark.django_db
+class TestCompleteSignupPaidTierRedirect:
+    """OIDC signup completion must honour a paid tier choice.
+
+    Parity with the password flow: signup.js stores the tier chosen on the
+    signup page in sessionStorage (``signup_tier``), complete_signup.html
+    feeds it into the POST, and the view must send paid tiers to billing
+    (pricing with auto_open_checkout) exactly as confirm_email does for
+    password users. Found on the Civo staging POC: the sessionStorage value
+    was written but never read, so an SSO signup for Pro/Team silently
+    became a free account with no billing redirect.
+    """
+
+    def _start_signup_session(self, client):
+        # No password: mirrors OIDC provisioning
+        user = User.objects.create_user(
+            username="cs_signup@example.com", email="cs_signup@example.com"
+        )
+        client.force_login(user)
+        session = client.session
+        session["needs_signup_completion"] = True
+        session.save()
+        return user
+
+    @pytest.mark.parametrize("tier", ["pro", "team_small", "team_medium", "team_large"])
+    def test_paid_tier_redirects_to_pricing_checkout(self, client, tier):
+        self._start_signup_session(client)
+
+        response = client.post(
+            reverse("core:complete_signup"),
+            {"account_type": "simple", "tier": tier, "billing_cycle": "annual"},
+        )
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:pricing")
+        assert client.session["pending_tier"] == tier
+        assert client.session["pending_billing_cycle"] == "annual"
+        assert client.session["auto_open_checkout"] is True
+        assert "needs_signup_completion" not in client.session
+
+    def test_free_tier_goes_straight_to_surveys(self, client):
+        self._start_signup_session(client)
+
+        response = client.post(
+            reverse("core:complete_signup"),
+            {"account_type": "simple", "tier": "free"},
+        )
+
+        assert response.status_code == 302
+        assert response.url == reverse("surveys:list")
+        assert "pending_tier" not in client.session
+        assert "auto_open_checkout" not in client.session
+
+    def test_paid_tier_with_pending_survey_invite_goes_to_survey(self, client):
+        """A survey invite wins over the tier — same priority as confirm_email."""
+        self._start_signup_session(client)
+
+        response = client.post(
+            reverse("core:complete_signup"),
+            {
+                "account_type": "simple",
+                "tier": "pro",
+                "next": "/surveys/invited-survey/take/",
+            },
+        )
+
+        assert response.status_code == 302
+        assert response.url == "/surveys/invited-survey/take/"
+        assert "pending_tier" not in client.session
+
+    def test_org_signup_keeps_organisation_flow(self, client):
+        """Org signups have no self-serve checkout (bespoke billing is set up
+        by the platform admin), so the org flow is unchanged by a tier value."""
+        from checktick_app.surveys.models import Organization, OrganizationMembership
+
+        self._start_signup_session(client)
+
+        response = client.post(
+            reverse("core:complete_signup"),
+            {"account_type": "org", "org_name": "Probe Org", "tier": "pro"},
+        )
+
+        assert response.status_code == 302
+        org = Organization.objects.get(name="Probe Org")
+        assert response.url == reverse("surveys:org_users", args=[org.id])
+        assert OrganizationMembership.objects.filter(organization=org).exists()
+        assert "pending_tier" not in client.session

@@ -187,6 +187,13 @@ class Command(BaseCommand):
             )
             .exclude(is_superuser=True)
             .exclude(is_staff=True)
+            # OIDC users never receive a confirmation link — their email is
+            # verified by their provider and email_confirmed_required exempts
+            # them. The backend syncs profile.email_confirmed on login, but
+            # this exclusion also protects users who have not logged in since
+            # that sync shipped (otherwise every OIDC account would be
+            # deactivated/deleted after the grace period).
+            .exclude(oidc__email_verified=True)
             .select_related("profile")
         )
 
@@ -269,6 +276,8 @@ class Command(BaseCommand):
             )
             .exclude(is_superuser=True)
             .exclude(is_staff=True)
+            # Same OIDC exemption as the warning window — see comment there.
+            .exclude(oidc__email_verified=True)
             .select_related("profile")
         )
 

@@ -9,6 +9,7 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from checktick_app.core.models import UserOIDC
 from checktick_app.surveys.models import AuditLog, Survey
 
 User = get_user_model()
@@ -252,6 +253,56 @@ class PruneUnconfirmedUsersCommandTests(TestCase):
 
         user.refresh_from_db()
         self.assertTrue(user.is_active)
+
+    def test_oidc_verified_user_with_unconfirmed_profile_not_pruned(self):
+        """OIDC users never receive a confirmation link, so their profile flag
+        stays False even though email_confirmed_required exempts them.
+        Without the exclusion the cron would deactivate or delete every SSO
+        account after the grace period (found on the Civo staging POC:
+        both SSO test accounts were in exactly this state).
+        """
+        user = self._create_user(
+            "oidc_unconfirmed",
+            "oidc_unconfirmed@example.com",
+            email_confirmed=False,
+            date_joined=timezone.make_aware(timezone.datetime(2024, 1, 1)),
+        )
+        UserOIDC.objects.create(
+            user=user,
+            provider="azure",
+            subject="az-prune-1",
+            email_verified=True,
+            key_derivation_salt=b"s" * 32,
+        )
+
+        call_command("prune_unconfirmed_users", stdout=self.out)
+
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertTrue(User.objects.filter(id=user.id).exists())
+
+    def test_oidc_verified_user_with_unconfirmed_profile_not_warned(self):
+        """The pre-removal warning emails must also skip OIDC-verified users —
+        they have no confirmation link to click, so the email is noise."""
+        user = self._create_user(
+            "oidc_warn",
+            "oidc_warn@example.com",
+            email_confirmed=False,
+            # 24 days old: inside the 7-days-before-removal warning window
+            date_joined=timezone.now() - timedelta(days=24),
+        )
+        UserOIDC.objects.create(
+            user=user,
+            provider="google",
+            subject="g-warn-1",
+            email_verified=True,
+            key_derivation_salt=b"s" * 32,
+        )
+
+        call_command("prune_unconfirmed_users", stdout=self.out)
+
+        user.profile.refresh_from_db()
+        self.assertEqual(user.profile.unconfirmed_warning_stage, "")
 
     def test_multiple_users_processed(self):
         """Test that multiple users are processed in one run."""

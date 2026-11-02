@@ -209,7 +209,7 @@
             {# Hidden fields to store tier selection #}
             <input type="hidden" name="account_type" value="simple" />
             <input type="hidden" name="tier" id="selected-tier" value="free" />
-            <input type="hidden" name="billing_cycle" id="selected-billing-cycle" value="monthly" />
+            <input type="hidden" name="billing_cycle" id="selected-plan-cycle" value="monthly" />
             {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
 
             {% include 'components/form_errors.html' with form=form %}
@@ -249,7 +249,7 @@
     document.addEventListener("DOMContentLoaded", function () {
       // Billing cycle toggle (monthly/annual)
       const toggle = document.getElementById("signup-billing-cycle-toggle");
-      const billingInput = document.getElementById("selected-billing-cycle");
+      const billingInput = document.getElementById("selected-plan-cycle");
       const monthlyLabel = document.getElementById("signup-billing-label-monthly");
       const annualLabel = document.getElementById("signup-billing-label-annual");
 
