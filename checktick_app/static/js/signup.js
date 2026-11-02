@@ -38,8 +38,8 @@ function handleSSOSignup(provider) {
   // the DOM access pattern, so suppress it with the documented annotation.
   const billingCycleInput = document.querySelector("#selected-billing-cycle");
   if (billingCycleInput) {
-    // codeql[js/clear-text-storage-of-sensitive-data]
-    sessionStorage.setItem("signup_billing_cycle", billingCycleInput.value);
+    // Suppression must sit on the flagged line itself.
+    sessionStorage.setItem("signup_billing_cycle", billingCycleInput.value); // codeql[js/clear-text-storage-of-sensitive-data]
   }
 
   // Get the 'next' URL from current page's query params (e.g., from survey invite)
