@@ -199,6 +199,11 @@ kubectl apply -f k8s/cronjobs.yaml
 
 ## Production deploy flow
 
+The manifests pin released image tags — never `latest` — in `web.yaml` (web
++ initContainers), `migrate-job.yaml`, and `cronjobs.yaml`. Bump the pinned
+tags in the release PR so `kubectl apply -k k8s/` cannot regress the live
+deployment to an older image.
+
 1. `kubectl apply -f k8s/migrate-job.yaml` → wait for completion
 2. `kubectl set image -n checktick deploy/checktick-web web=ghcr.io/eatyourpeas-ltd/checktick:X.Y.Z`
    (pin released version tags — docs/versioning-and-deployment.md)
@@ -223,9 +228,9 @@ base64 < /tmp/kubeconfig.yaml | gh secret set CIVO_KUBECONFIG
 rm /tmp/kubeconfig.yaml
 ```
 
-Dispatch it from the Actions tab (image tag defaults to `latest`). Add
-protection rules (required reviewers) to the `civo` GitHub environment to
-make dispatch a gated production deploy.
+Dispatch it from the Actions tab (the `image-tag` input is required — pass
+the released tag, e.g. `0.24.2`). Add protection rules (required reviewers)
+to the `civo` GitHub environment to make dispatch a gated production deploy.
 
 Until the cutover completes, `docker-publish.yml` still calls the
 Northflank webhook on main publishes — swapping that step for this

@@ -33,7 +33,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "process_data_governance"]
               envFrom:
                 - configMapRef: {name: checktick-config}
@@ -62,7 +62,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "cleanup_survey_progress"]
               envFrom:
                 - configMapRef: {name: checktick-config}
@@ -91,7 +91,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "sync_external_datasets"]
               envFrom:
                 - configMapRef: {name: checktick-config}
@@ -120,7 +120,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "sync_global_question_group_templates"]
               envFrom:
                 - configMapRef: {name: checktick-config}
@@ -149,7 +149,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "prune_unconfirmed_users"]
               envFrom:
                 - configMapRef: {name: checktick-config}
@@ -178,7 +178,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "process_expired_subscriptions"]
               envFrom:
                 - configMapRef: {name: checktick-config}
@@ -207,7 +207,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "process_expiring_subscriptions"]
               envFrom:
                 - configMapRef: {name: checktick-config}
@@ -236,7 +236,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "process_promotion_lifecycle"]
               envFrom:
                 - configMapRef: {name: checktick-config}
@@ -265,7 +265,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "process_dsr_deadlines"]
               envFrom:
                 - configMapRef: {name: checktick-config}
@@ -294,7 +294,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "process_diary_reminders"]
               envFrom:
                 - configMapRef: {name: checktick-config}
@@ -323,7 +323,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "sync_nhs_dd_datasets"]
               envFrom:
                 - configMapRef: {name: checktick-config}
@@ -353,7 +353,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "process_recovery_time_delays"]
               envFrom:
                 - configMapRef: {name: checktick-config}
@@ -435,7 +435,7 @@ spec:
                   mountPath: /app/data
           containers:
             - name: seed
-              image: ghcr.io/eatyourpeas-ltd/checktick:latest
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
               command: ["python", "manage.py", "seed_snomed_datasets", "--force"]
               envFrom:
                 - configMapRef: {name: checktick-config}

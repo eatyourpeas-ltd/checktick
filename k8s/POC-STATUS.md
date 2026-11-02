@@ -258,9 +258,13 @@ Last updated: 2026-11-02 (end of session 6).
    email received and clicked. (Optional: resend for the two older
    `email_confirmed=False` test accounts if you want them usable.)
 2. **Pin the live web image off `latest`**: the live Deployment still runs
-   `ghcr.io/eatyourpeas-ltd/checktick:latest` — run Deploy (Civo) with an
-   explicit `image-tag: 0.24.1` to pin it (also proves the tagged CI path
-   end to end).
+   `ghcr.io/eatyourpeas-ltd/checktick:latest`. The k8s manifests are now
+   pinned to released tags (`0.24.2` — the current release, superseding the
+   `0.24.1` noted here earlier) and the Deploy (Civo) `image-tag` input is
+   now required. REMAINING: dispatch Deploy (Civo) with `image-tag: 0.24.2`
+   to pin the live Deployment (also proves the tagged CI path end to end).
+   Once dispatched, live == manifest, so `kubectl apply -k k8s/` no longer
+   resets the image to `latest`.
 3. ~~Verify which redirect URIs matched for staging OIDC~~ **Recorded
    (session 6):** the redirect URI sent on staging is
    `https://staging.checktick.uk/oidc/callback/` (mozilla-django-oidc

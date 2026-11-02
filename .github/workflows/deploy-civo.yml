@@ -38,8 +38,7 @@ on:
     inputs:
       image-tag:
         description: "GHCR image tag to deploy (a published release tag)"
-        default: "latest"
-        required: false
+        required: true
         type: string
       namespace:
         description: "Namespace to deploy into"
@@ -92,8 +91,10 @@ jobs:
           # Job specs are immutable — clear any previous run first
           kubectl -n "$NS" delete job checktick-predeploy --ignore-not-found
           # Pin the migrate job to the exact tag being deployed so the
-          # migration always runs with the code it belongs to
-          sed "s|checktick:latest|checktick:${TAG}|" k8s/migrate-job.yaml \
+          # migration always runs with the code it belongs to. The manifest
+          # carries a pinned released tag (never `latest`) — substitute
+          # whatever tag is pinned with the dispatched one.
+          sed "s|checktick:[^ ]*|checktick:${TAG}|" k8s/migrate-job.yaml \
             | kubectl apply -f -
           kubectl -n "$NS" wait --for=condition=complete \
             job/checktick-predeploy --timeout=300s
