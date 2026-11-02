@@ -32,12 +32,13 @@ function handleSSOSignup(provider) {
 
   // Store choices in sessionStorage for post-auth processing
   sessionStorage.setItem("signup_tier", tierValue);
-  // querySelector, not getElementById: CodeQL's
-  // js/clear-text-storage-of-sensitive-data models getElementById results
-  // as sensitive data and false-positives on storing a plain
-  // monthly/annual toggle value.
+  // The plan billing cycle ("monthly"/"annual") — plan choice metadata, not
+  // payment data. CodeQL's js/clear-text-storage-of-sensitive-data
+  // keyword heuristic flags anything "billing" as sensitive regardless of
+  // the DOM access pattern, so suppress it with the documented annotation.
   const billingCycleInput = document.querySelector("#selected-billing-cycle");
   if (billingCycleInput) {
+    // codeql[js/clear-text-storage-of-sensitive-data]
     sessionStorage.setItem("signup_billing_cycle", billingCycleInput.value);
   }
 
