@@ -5,7 +5,7 @@ merged to `main` (v0.24.1 shipped). Read this together with
 `docs/migration-northflank-to-civo.md` (the runbook — its Phase 0 "findings"
 ledger records every environment discovery so far) and `k8s/README.md`.
 
-Last updated: 2026-11-01 (end of session 5).
+Last updated: 2026-11-02 (end of session 6).
 
 ## Environment
 
@@ -178,6 +178,59 @@ Last updated: 2026-11-01 (end of session 5).
   carries the rotated provider credentials and the fresh AppRole pair;
   healthz-gated rollouts and the smoke prove them working.
 
+## Session 6: real email delivery verified, Azure SSO fixed
+
+- **Real email delivery verified end to end:** a fresh account was
+  created on staging via the normal signup flow and the confirmation
+  email was received and clicked. Next-steps item 1 is done — the only
+  leftover is the two older test accounts still at `email_confirmed=False`
+  if you want them usable.
+- **Azure SSO was broken — fixed.** Symptom: `AADSTS900023: Specified
+  tenant identifier '""'`. Root cause: the live `checktick-secrets`
+  carried `OIDC_OP_TENANT_ID_AZURE` as the literal two-character string
+  `""` (quote artefact from the out-of-band restore, same class as the
+  `SELF_HOSTED: "False"` value; the key was missing from
+  `k8s/secrets.env` entirely). Truthy string → settings.py's
+  `or "common"` fallback never fired → authorize URL built as
+  `login.microsoftonline.com/""/...`. Google SSO was unaffected
+  (no tenant in its URLs).
+- **Fix applied (final value: `common`):** live Secret patched and the
+  key added unquoted to `k8s/config.env` as
+  `OIDC_OP_TENANT_ID_AZURE=common`; `checktick-config-local` re-applied,
+  healthz-gated rollout restarted, `/healthz` fully ok. Verified from
+  inside a pod: the `common` authorize endpoint returns **200
+  (Microsoft sign-in page)** with the staging redirect URI. NOT the org
+  tenant GUID — see the AADSTS90123 note below. The scratch export was
+  re-exported so future teardown/restore carries the fixed value.
+  Full ledger entry in the runbook Phase 0 findings.
+  **Cutover note:** production's effective value must stay `common` when
+  its env moves — do not pin the org GUID.
+- **OIDC redirect resolution (corrected after the retest):**
+  mozilla-django-oidc derives the redirect URI from the request host
+  (`absolutify(request, ...)` in BOTH the authorize and token steps), so
+  staging sends `https://staging.checktick.uk/oidc/callback/` and the SSO
+  loop completes on staging for both providers. The hardcoded prod
+  `settings.OIDC_REDIRECT_URI` is unused by this version of the library.
+  Both app registrations carry the staging URI — Google completes end to
+  end, and the Azure flow gets past redirect validation.
+- **AADSTS90123 explained and resolved:** an initial fix pinned the
+  tenant to the `5630eab2` GUID — the user reached the Microsoft sign-in
+  page, but Azure then denied token issuance ("identity or claim
+  issuance provider denied the request") because the test account is a
+  **personal M365 account**, and production accepts personal accounts —
+  i.e. production's effective tenant is `common`, and a tenant-scoped
+  authorize endpoint refuses personal accounts at claim issuance. Value
+  switched to `common` (which also accepts organisational accounts from
+  any tenant — the NHSmail model), rolled out, authorize endpoint
+  verified 200. Pending: user retest with the personal account to
+  confirm the full loop on staging.
+- **Quote-artefact audit:** all six keys that exist in the live Secret
+  but not in `k8s/secrets.env` are quote-wrapped (`OIDC_OP_TENANT_ID_AZURE`,
+  `SELF_HOSTED`, 4 × `HOSTING_*`). `SELF_HOSTED` only works because
+  django-environ's bool parser strips quotes. The `HOSTING_*` values are
+  stale Northflank API credentials — recommend dropping them at cutover
+  rather than migrating.
+
 ## Known state at session close
 
 - `SITE_URL=https://staging.checktick.uk` in the overlay — applied to the
@@ -200,16 +253,22 @@ Last updated: 2026-11-01 (end of session 5).
 
 ## Next steps (next session)
 
-1. **Resend confirmation emails** for the two test accounts (Graph works,
-   SITE_URL points at staging) → click the links. The Phase 1 round-trip
-   itself is DONE (smoke 19/19 incl. the recovery-escrow path) — this is
-   now only about real email delivery to the real accounts.
+1. ~~Resend confirmation emails~~ **DONE (session 6):** real email delivery
+   verified end to end — fresh account created on staging, confirmation
+   email received and clicked. (Optional: resend for the two older
+   `email_confirmed=False` test accounts if you want them usable.)
 2. **Pin the live web image off `latest`**: the live Deployment still runs
    `ghcr.io/eatyourpeas-ltd/checktick:latest` — run Deploy (Civo) with an
    explicit `image-tag: 0.24.1` to pin it (also proves the tagged CI path
    end to end).
-3. Verify which redirect URIs in the Google/Azure app registrations matched
-   for staging OIDC (signup worked — record the exact entries).
+3. ~~Verify which redirect URIs matched for staging OIDC~~ **Recorded
+   (session 6):** the redirect URI sent on staging is
+   `https://staging.checktick.uk/oidc/callback/` (mozilla-django-oidc
+   absolutifies from the request host; the hardcoded prod
+   `OIDC_REDIRECT_URI` is unused). Both app registrations carry it —
+   Google completes on staging, Azure gets past redirect validation.
+   REMAINING: user retest of the Microsoft button with the personal
+   M365 account (tenant value now `common` — see session 6).
 4. ~~POC exit criteria left~~ **DONE (session 5):** the `kubectl apply -k
    k8s/` idempotency check and the tear-down/re-apply test both PASSED —
    Phase 1 is complete. `CIVO_KUBECONFIG` GitHub secret is also set

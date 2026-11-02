@@ -240,9 +240,41 @@ Manifest details and apply order: [`k8s/README.md`](../k8s/README.md).
       (`k8s/config.env`) now carries
       `SITE_URL=https://staging.checktick.uk`; cutover flips it back.
 - [ ] **OIDC-on-staging finding (POC):** Google signup worked on
-      staging using the production client IDs — record exactly which
-      redirect URIs in the Google/Azure app registrations matched
-      before relying on OIDC on staging or at cutover.
+      staging using the production client IDs. Resolved (2026-11-02):
+      mozilla-django-oidc derives the redirect URI from the request host
+      (`absolutify(request, ...)` in both the authorize and token steps),
+      so staging sends `https://staging.checktick.uk/oidc/callback/` and
+      the SSO loop completes on staging. Both app registrations carry the
+      staging URI — Google completes end to end, and the Azure flow gets
+      past redirect validation to the token-issuance stage. The hardcoded
+      `settings.OIDC_REDIRECT_URI` (prod `OIDC_BASE_URL`) is unused by
+      this version of the library — no app change needed.
+- [ ] **Azure tenant quote artefact (POC, 2026-11-02):** Microsoft SSO
+      failed with `AADSTS900023 … tenant identifier '""'` — the live
+      `checktick-secrets` carried `OIDC_OP_TENANT_ID_AZURE` as the literal
+      two-character string `""` (quote artefact, same class as the
+      `SELF_HOSTED: "False"` value; the key was absent from
+      `k8s/secrets.env` entirely, so the Secret was not rebuildable from
+      it). The string is truthy, so `settings.py`'s `or "common"` fallback
+      never fired and the authorize URL became
+      `login.microsoftonline.com/""/oauth2/v2.0/authorize`. Fix (final,
+      2026-11-02): the correct value is **`common`**, not the org tenant
+      GUID — the Azure registration accepts personal Microsoft accounts
+      (production signs in personal M365 accounts), and a tenant-scoped
+      authorize endpoint refuses them at claim issuance (`AADSTS90123`:
+      an initial pin to the `GRAPH_TENANT_ID` GUID let the user reach the
+      Microsoft sign-in page, then Azure denied token issuance for a
+      personal M365 account). Live Secret patched to `common`, the key
+      added unquoted to `k8s/config.env`, `checktick-config-local`
+      re-applied, healthz-gated rollout, authorize endpoint verified 200
+      at `common` with the staging redirect URI, and the scratch export
+      re-exported so future teardown/restore carries the fixed value.
+      Rule: `kubectl --from-env-file` stores values raw — never quote
+      values in `secrets.env`/`config.env`. **Cutover note:** when
+      production's env moves, its effective tenant value must stay
+      `common` — do not "helpfully" pin the org tenant GUID. Follow-ups:
+      the four `HOSTING_*` Northflank keys are quote-wrapped stale
+      values — drop them at cutover rather than migrating.
 - [ ] **Dual-default StorageClass finding (POC, found by the Phase 1
       tear-down test):** the cluster had BOTH `civo-volume` AND `longhorn`
       annotated as default StorageClass, so anything omitting
