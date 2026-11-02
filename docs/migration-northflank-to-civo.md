@@ -14,14 +14,17 @@ manager / private ops repo / unseal ceremony).
 ## Status
 
 Phase 0 (Civo provisioning) is complete — the `checktick` cluster is live and
-running the staging POC. Phase 1 (POC) is green apart from two exit criteria
-(manifest idempotency check, tear-down test). **Phase 2 (credential rotation)
-is complete:** every provider-level credential is rotated at its provider and
-staged in the git-ignored `k8s/secrets.env` / applied as the `checktick-secrets`
-Secret — only the two deliberately cutover-time items remain (new
-`SECRET_KEY` inside the freeze window; fresh AppRole credentials on the
-migrated Vault). Phases 3–6 are executed only after the remaining POC exit
-criteria are met.
+running the staging POC. **Phase 1 (POC) is COMPLETE:** the round-trip smoke
+(`k8s/smoke-test.py`) is 19/19 green, the manifest idempotency check passed
+(two consecutive `kubectl apply -k k8s/`: no spec drift, no pod restarts),
+and the tear-down → re-apply test passed (full namespace delete, rebuild
+from the manifests + out-of-band objects, fresh Vault ceremony, `/healthz`
+fully ok, smoke 19/19 re-run on the rebuilt environment). **Phase 2
+(credential rotation) is complete:** every provider-level credential is
+rotated at its provider and staged in the git-ignored `k8s/secrets.env` /
+applied as the `checktick-secrets` Secret — only the two deliberately
+cutover-time items remain (new `SECRET_KEY` inside the freeze window; fresh
+AppRole credentials on the migrated Vault). Phases 3–6 are next.
 
 ## Context
 
@@ -240,6 +243,53 @@ Manifest details and apply order: [`k8s/README.md`](../k8s/README.md).
       staging using the production client IDs — record exactly which
       redirect URIs in the Google/Azure app registrations matched
       before relying on OIDC on staging or at cutover.
+- [ ] **Dual-default StorageClass finding (POC, found by the Phase 1
+      tear-down test):** the cluster had BOTH `civo-volume` AND `longhorn`
+      annotated as default StorageClass, so anything omitting
+      `storageClassName` (the CNPG data PVCs, the Vault
+      `volumeClaimTemplates`) silently landed on Longhorn instead of the
+      documented civo-volume. Longhorn reserves size × 3 replicas per
+      volume per node; db (2×10 GiB) + vault (10 GiB) reservations exhausted
+      the ~35 GiB free per node, and the RWX media/snomed volumes then failed
+      replica scheduling (`ReplicaSchedulingFailure: precheck new replica
+      failed: insufficient storage`, volumes `detached/faulted`). Symptom:
+      web pods hung `Init:0/2` on FailedAttachVolume and the SNOMED import
+      job sat unscheduled for 20+ min looking like a "slow download" —
+      a stuck import with zero init-container logs is a volume-attach
+      failure, not a network problem. Fix: remove the default annotation
+      from `longhorn` (single default = `civo-volume`, matching the comments
+      in `web.yaml`/`postgres-cnpg.yaml`), delete + recreate the CNPG cluster
+      and Vault, after which the RWX volumes attach immediately and the
+      import completes in its normal ~3.5 min. `civo-volume` is RWO — correct
+      for single-instance data; only the explicitly-pinned `longhorn` RWX
+      claims should ever touch Longhorn on this cluster size.
+- [ ] **Apply-order finding (POC, tear-down test):** the
+      [`k8s/README.md`](../k8s/README.md) apply order is load-bearing.
+      Re-applying in a custom order (CNPG → predeploy → cronjobs → import)
+      left `checktick-predeploy` in `CreateContainerConfigError` (its
+      `envFrom` ConfigMap `checktick-config` did not exist yet) and the
+      import job Pending on a not-yet-created PVC; the 5-min cron also fired
+      two Failed ticks into the same window. Rule: config (both ConfigMaps)
+      and secrets BEFORE any workload; `web.yaml` BEFORE anything that
+      mounts its PVCs.
+- [ ] **NetworkPolicy propagation finding (POC):** a freshly created pod
+      labelled `app=checktick-web` cannot reach `vault:8200` for the first
+      seconds of its life — the CNI has not yet programmed the vault-airgap
+      allow rule for the new pod, so connections fail with EPERM
+      ("Operation not permitted"), which looks like a policy
+      misconfiguration but is not: the same connection succeeds ~15 s
+      later. The POC ceremony script
+      (`k8s/scratch-vault-ceremony.sh`, git-ignored) retries with backoff.
+      Expect the same delay for any freshly created helper pod that talks
+      to Vault.
+- [ ] **CNPG bootstrap race (POC, minor):** `kubectl wait --for=condition=Ready
+      pod/checktick-db-1` errors NotFound until the initdb Job has completed —
+      instance pods do not exist during bootstrap. Wait on the cluster
+      instead: `kubectl wait --for=jsonpath='{.status.readyInstances}'=2
+      cluster/checktick-db`.
+- [ ] **Vault init JSON field name (POC, minor):** Vault 1.21.1
+      `vault operator init -format=json` emits `unseal_keys_b64`, not the
+      older `unseal_keys_b` — ceremony tooling must parse accordingly.
 - [ ] Choose the database host (PostgreSQL 17 either way — safety rule 3):
       - **Civo managed PostgreSQL 17** (~$43/mo entry tier): least
         operational burden — backups, upgrades and failover are the
@@ -294,9 +344,28 @@ synthetic data and a throwaway Vault — not just steady-state running.
       https://<host>/healthz >/dev/null || echo FAIL; sleep 1; done` and trigger
       a rolling update (`kubectl set image ...`). Zero FAILs required.
       (The `zdt-test` pod loop: zero FAILs across five rollouts.)
-- [ ] Re-apply all manifests (`kubectl apply -k k8s/`) and confirm idempotency
+- [x] Re-apply all manifests (`kubectl apply -k k8s/`) and confirm idempotency
       (no spurious restarts).
-- [ ] Tear-down test: `kubectl delete -k k8s/` then re-apply from scratch.
+      **DONE (2026-11-01):** two consecutive applies — the Deployment spec
+      converged, its generation stable, no new pods, `vault-0` uptime
+      untouched. `vault`/PDB/NetworkPolicy report `configured` on every apply
+      but a field-by-field compare shows **zero** spec differences — the
+      recurring `configured` is empty-patch metadata churn (generation tick),
+      not drift. Signature: only generation moves; `kubectl diff` shows
+      nothing but metadata.
+- [x] Tear-down test: `kubectl delete -k k8s/` then re-apply from scratch.
+      **DONE (2026-11-01):** namespace delete ~5m20s (CNPG decommissioning
+      dominates), rebuilt from the four out-of-band objects
+      (`checktick-secrets`, `checktick-db-creds`, `checktick-db-backup-creds`,
+      `checktick-config-local` — exported first; the Secret is restored
+      as-is, it is NOT rebuildable from `k8s/secrets.env` because it alone
+      carries `OIDC_OP_TENANT_ID_AZURE`, which `settings.py` reads without a
+      default) + CNPG + a FRESH `vault operator init` ceremony (throwaway
+      POC only — production is storage-copy, rule 1) + predeploy + SNOMED
+      import + ingress + `ALLOWED_HOSTS` scratch patch. Exposed the
+      dual-default StorageClass bug on the way (Phase 0 ledger) — which is
+      exactly what a tear-down test is for. Verified: `/healthz` fully ok
+      via pod / Service DNS / public HTTPS, smoke 19/19 re-run green.
 
 **Exit criteria:** every box above ticked, and the timed steps recorded in
 Appendix B. Do not schedule the cutover until then.
@@ -522,6 +591,26 @@ kubectl run mediasync --rm -it --image=alpine \
 | Pre-deploy Job | _tbd_ | |
 | Rollout + smoke gate | _tbd_ | |
 | **Announced window (total + 50%)** | _tbd_ | |
+
+### POC measurements (2026-11-01, tear-down → re-apply test)
+
+The rows above are filled by the Phase 3 rehearsals (they measure the
+cutover's dump/restore path). These measure the POC's re-apply mechanics —
+evidence that a from-scratch rebuild is fast, and timings for the parts of
+the cutover that reuse them:
+
+| Step | Measured | Notes |
+| :--- | :--- | :--- |
+| `kubectl delete -k k8s/` (namespace gone) | 5m20s | CNPG decommissioning dominates; plan the cutover rollback/DNS around this |
+| CNPG bootstrap → 2 ready instances | ~2m15s | primary ready first (~1m), replica joins after |
+| Pre-deploy Job (migrate + syncs) | 45–76s | against an empty database |
+| Vault StatefulSet + PVC up | ~2m40s | fresh PVC, `civo-volume` |
+| Full fresh ceremony (init → unseal → `setup_vault.py` → patch creds) | ~1m | throwaway POC path; production is storage-copy + unseal only |
+| SNOMED import (download + seed) | 3m24s | 1.9 GiB from the object store + `seed_snomed_datasets --force` |
+| Ingress apply → Let's Encrypt cert `READY True` | ~3m30s | cert re-issued from scratch |
+| Web rollout per replica (readiness-gated) | ~1m | `maxUnavailable: 0` |
+| `smoke-test.py` 19 steps | ~40s | run inside a live web pod |
+| Web pods restart after SNOMED import | required | pod-local emptyDir copy happens at init only
 
 ## Appendix C — Scheduled tasks (CronJob equivalents)
 
