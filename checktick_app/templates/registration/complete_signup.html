@@ -166,10 +166,10 @@
       document.getElementById('tier-field').value = pendingTier;
       sessionStorage.removeItem('signup_tier');
     }
-    const pendingBillingCycle = sessionStorage.getItem('signup_billing_cycle');
-    if (pendingBillingCycle) {
-      document.getElementById('billing-cycle-field').value = pendingBillingCycle;
-      sessionStorage.removeItem('signup_billing_cycle');
+    const pendingPlanCycle = sessionStorage.getItem('signup_plan_cycle');
+    if (pendingPlanCycle) {
+      document.getElementById('billing-cycle-field').value = pendingPlanCycle;
+      sessionStorage.removeItem('signup_plan_cycle');
     }
   });
 </script>
