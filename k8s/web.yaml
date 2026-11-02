@@ -79,7 +79,7 @@ spec:
         # using the image's own checktick user (uid is assigned by useradd -r,
         # so resolve it rather than hardcoding).
         - name: media-chown
-          image: ghcr.io/eatyourpeas-ltd/checktick:latest
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
           command: ["sh", "-c", "chown -R \"$(id -u checktick):$(id -g checktick)\" /app/media"]
           securityContext:
             runAsUser: 0
@@ -90,7 +90,7 @@ spec:
         # NFS. Tolerates absence: healthz reports snomed degraded, not fatal,
         # until the first update-snomed-db run builds it.
         - name: snomed-copy
-          image: ghcr.io/eatyourpeas-ltd/checktick:latest
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
           command:
             - sh
             - -c
@@ -117,9 +117,11 @@ spec:
               mountPath: /app-data
       containers:
         - name: web
-          # Pin to a released version tag (docs/versioning-and-deployment.md)
-          # for anything beyond the POC; update via `kubectl set image`.
-          image: ghcr.io/eatyourpeas-ltd/checktick:latest
+          # Pinned to a released version tag (docs/versioning-and-deployment.md)
+          # — never `latest`. Bump this pin (and the initContainer pins above)
+          # in the release PR so `kubectl apply -k k8s/` cannot regress the live
+          # image; CI deploys roll it forward with `kubectl set image`.
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
           imagePullPolicy: Always
           ports:
             - name: http
