@@ -22,7 +22,7 @@ Infrastructure Technical Change Log. Supplier status at 04/11/2026:
 
 | Supplier | DPA Status | Article 28 Compliant? | Mechanism |
 | :--- | :--- | :--- | :--- |
-| **Civo** | Active | Yes | Civo Data Processing Agreement (UK data residency) |
+| **Civo** | Active | Yes | Civo Data Processing Agreement — https://www.civo.com/legal/data-processing-agreement (Civo Ltd, London; UK GDPR + Data Protection Act 2018; England & Wales governing law; sub-processor clause 8 with 30-day change notice and objection rights; cross-border transfer clause 7/IDTA; data residency UK — London LON1 region). Evidence of DPA acceptance retained with the compliance records. |
 | **Northflank** | Terminated (account closure scheduled 05/11/2026) | Yes (historical) | Online DPA (UK Data Residency) |
 
 ## Review Checklist for Article 28 Compliance:

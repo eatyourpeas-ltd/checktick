@@ -32,7 +32,7 @@ It does **not** cover deployments where third parties have materially modified t
 
 ## 2. System Description
 
-{{ platform_name }} is an open-source healthcare survey platform designed for medical audit, research, and the collection of Patient-Reported Outcome Measures (PROMs). It is a web-based application built on Django (Python), containerised with Docker, and hosted on managed Kubernetes (Civo) in the UK.
+{{ platform_name }} is an open-source healthcare survey platform designed for medical audit, research, and the collection of Patient-Reported Outcome Measures (PROMs). It is a web-based application built on Django (Python), containerised with Docker, and hosted on UK-based managed cloud container infrastructure.
 
 ### 2.1 Key Functional Domains
 
@@ -52,9 +52,9 @@ It does **not** cover deployments where third parties have materially modified t
 ### 2.2 Technology Summary
 
 - **Language / Framework:** Python 3 / Django
-- **Database:** PostgreSQL 17 (CloudNativePG operator, in-cluster, Civo UK London LON1)
+- **Database:** PostgreSQL 17 (in-cluster, UK region)
 - **Encryption:** AES-256-GCM at rest; TLS 1.2+ in transit
-- **Hosting:** Civo managed Kubernetes (UK, London LON1)
+- **Hosting:** UK-based managed container platform (UK region)
 - **Key Management:** HashiCorp Vault (enterprise) / environment-level secrets (standard)
 - **Source Control:** GitHub (public repository, GPG-signed commits)
 - **Authentication:** Local accounts with 2FA; OIDC SSO (Google / Microsoft 365)
@@ -207,7 +207,7 @@ The following hazards have been identified through structured review of the syst
 | **Initial Severity** | Medium |
 | **Initial Likelihood** | Low |
 | **Initial Risk** | Acceptable |
-| **Existing Controls** | (1) Managed Kubernetes with multi-node availability in the Civo London region; nightly database backups with continuous WAL archiving to UK object storage. (2) Fallback paper-based survey procedure documented and communicated to Trust leads. (3) Clinician outage notification within 2 hours of a High severity incident. (4) Monitoring and alerting via StatusCake uptime monitoring and healthchecks.io scheduled-task alerting. (5) {{ platform_name }} is not used for emergency triage or real-time life-critical monitoring — per the intended use limitations at Section 3.3. |
+| **Existing Controls** | (1) Managed container platform with multi-node availability in a UK region; nightly database backups with continuous WAL archiving to UK object storage. (2) Fallback paper-based survey procedure documented and communicated to Trust leads. (3) Clinician outage notification within 2 hours of a High severity incident. (4) Monitoring and alerting via StatusCake uptime monitoring and healthchecks.io scheduled-task alerting. (5) {{ platform_name }} is not used for emergency triage or real-time life-critical monitoring — per the intended use limitations at Section 3.3. |
 | **Residual Severity** | Low |
 | **Residual Likelihood** | Low |
 | **Residual Risk** | Acceptable |

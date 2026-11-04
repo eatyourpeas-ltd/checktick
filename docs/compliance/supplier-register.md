@@ -33,7 +33,7 @@ This register identifies all third-party suppliers that provide critical IT infr
 
 ## 4. Security Assessment Summary
 
-* **Civo:** [Security certifications — confirm current ISO/SOC2 status on Civo's compliance pages]
+* **Civo:** ISO 27001 / SOC 2 — certificates requested from Civo (04/11/2026), verification pending. DPA: https://www.civo.com/legal/data-processing-agreement (Civo Ltd, London; UK GDPR + Data Protection Act 2018; England & Wales law; sub-processor clause with 30-day change notice and objection rights; cross-border transfer clause/IDTA). Evidence of DPA acceptance to be retained with the compliance records.
 * **Microsoft 365:** ISO 27001 / SOC2 Type II
 * **Proton Mail:** GDPR-compliant secure email provider
 * **GoCardless:** FCA-regulated, GDPR compliant
