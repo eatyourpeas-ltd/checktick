@@ -1,0 +1,157 @@
+---
+title: Civo Kubernetes Operations
+category: development
+priority: 13
+---
+
+# Civo Kubernetes Operations
+
+Operational reference for running CheckTick on managed Kubernetes (Civo, London LON1).
+The durable knowledge here was extracted from the Northflank → Civo migration
+(production cutover 2026-11-03); the migration runbook and its session log were
+retained only until Phase 6 close-out and then removed. The permanent historical
+record of the migration lives in
+[`docs/compliance/infrastructure-technical-change-log/`](compliance/infrastructure-technical-change-log/).
+
+For a walkthrough of the manifests and day-to-day validation commands, see
+[`k8s/README.md`](../k8s/README.md).
+
+## Cluster Overview
+
+- Managed k3s on Civo, UK London (LON1) — UK-sovereign hosting for a medical application
+- Production namespace `checktick`; staging (`staging.checktick.uk`) runs on the same cluster
+- Components:
+  - web Deployment (image pinned to a published release tag, never `latest`)
+  - CloudNativePG PostgreSQL 17 — `checktick-db` cluster (primary + one replica), in-cluster
+  - HashiCorp Vault — single-replica StatefulSet (`vault-0`), file storage on a PVC
+  - Traefik ingress (443 only) + cert-manager TLS
+  - Longhorn volumes: `checktick-media`, `checktick-snomed-data`
+  - 13 CronJobs (scheduled tasks — see [`docs/self-hosting-scheduled-tasks.md`](self-hosting-scheduled-tasks.md))
+- Backups: CNPG `ScheduledBackup` (nightly 02:00 UTC base backup) + continuous WAL
+  archiving to Civo Object Store (UK region), **120-day retention** per the
+  [Backup & Data Retention Policy](compliance/backup-policy.md)
+- Deploys: GitHub Actions *Deploy (Civo)* workflow (pre-deploy Job runs migrations +
+  idempotent syncs pinned to the same tag, then a `maxUnavailable: 0` rolling update
+  gated on `/healthz`). Migrations must stay expansion/contract — a rolled-back
+  rollout briefly runs the previous image against the new schema.
+
+## Critical Safety Rules
+
+1. **Never `vault operator init` on migrated/restored Vault storage.** A fresh init
+   makes every encrypted survey in PostgreSQL permanently undecryptable. Restore the
+   storage directory first, then unseal with the EXISTING shares.
+2. **Vault and PostgreSQL move together or not at all.** Never roll back one
+   component alone.
+3. **Major PostgreSQL upgrades go via dump/restore with the TARGET version's
+   binaries** — never `pg_upgrade` in place, and never dump with newer binaries
+   than the restore target.
+4. The public `ALLOWED_HOSTS` currently live in the live Deployment env patch
+   (`k8s/scratch-allowhosts-patch.yaml`, git-ignored) until `ALLOWED_HOSTS_EXTRA`
+   ships in an image release. The deploy workflow never re-applies manifests
+   (`set image` only) so the patch survives deploys — but any manual
+   `kubectl apply -f k8s/web.yaml` (or `-k k8s/`) **resets it and the site 400s**.
+   Re-apply the patch afterwards.
+
+## Node Maintenance (kernel / node-image upgrades)
+
+Proven during the CVE-2026-98432 patch window (2026-11-04):
+
+- **`civo k8s upgrade` is IN-PLACE** — it swaps the k3s binary only (~4 min) and does
+  **not** re-image the nodes. One API `ServiceUnavailable` blip + a transient
+  `degraded` healthz while the k3s daemon bounces. The node image and kernel are
+  unchanged by it.
+- **`civo k8s recycle CLUSTER --node NODE` is the image path**: cordon + drain →
+  DELETE the instance → build a fresh node from the current image (~4–8 min each;
+  the PVC reattach dominates). Serial per node — never recycle two at once.
+- **The external IP is a cluster-managed floating IP.** When the node holding it is
+  deleted, Civo moves the IP to a surviving node automatically. Across a full
+  3-node recycle it never changed (no kubeconfig / DNS / Namecheap changes needed) —
+  but **verify after every recycle**.
+- **Expect ~2 minutes of 404s after each recycle** while the floating IP settles and
+  the new node's traefik syncs its routers — a fresh traefik answers TLS on the IP
+  before it has the ingress routes. Self-heals; do not panic.
+- Take a CNPG base backup before each recycle. Draining the primary's node triggers
+  a CNPG switchover (~40 s, healthz degraded→ok) — data-safe because the operator
+  coordinates it via each instance's status API (see the NetworkPolicy note below).
+- After any node loss, Longhorn RWX volumes serve from **one surviving replica**
+  until replenishment completes (600 s `replica-replenishment-wait-interval`);
+  both volumes returned to 3 replicas a few minutes after the last recycle.
+
+## CNPG (PostgreSQL) Operations
+
+- **The db-ingress NetworkPolicy must allow the CNPG operator to reach the
+  instances on port 8000 (status API) as well as 5432.** Without it:
+  `Instance Status Extraction Error` on the Cluster and
+  `Cannot extract Pod status ... :8000: i/o timeout` every ~4 s in the operator log —
+  and draining the primary's node STALLS against the `checktick-db-primary` PDB.
+- **Verify the backup chain after ANY intervention** (node recycles, operator
+  restarts, schedule changes — this caught two real outages):
+  1. `kubectl get scheduledbackups -n checktick` — schedule armed,
+     `nextScheduleTime` in the future
+  2. `kubectl get backups -n checktick` — every row must be terminal
+     (`completed`/`failed`). A **stuck non-terminal Backup silently blocks the
+     whole schedule** (delete it to unblock)
+  3. Check the scheduled backup's status for a **dead pod IP** — a backup pinned
+     to a deleted pod's IP never runs
+  4. `ContinuousArchiving=True` on the Cluster; WAL chain unbroken in the object store
+- **Before any CNPG operator upgrade past 1.30**: migrate backups from the in-tree
+  Barman object store to the **Barman Cloud Plugin** — in-tree support is removed
+  in 1.31 and the operator emits a deprecation warning on every reconcile.
+- Restore path: latest base backup + WAL archive from Civo Object Store into a
+  fresh CNPG cluster. The quarterly restore rehearsal feeds
+  [`docs/compliance/restoration-test-log.md`](compliance/restoration-test-log.md).
+
+## Vault Operations
+
+- After node loss, `vault-0`'s storage reattaches in ~5.5 min and the pod comes up
+  `Initialized: true, Sealed: true` — **storage survives; do not re-init.** Unseal
+  with 3-of-4 production shares; healthz is fully ok ~10 s later.
+- **Storage backup today is a manual, ceremony-gated copy — there is no scheduled
+  Vault backup.** The designed fix (top hardening priority): migrate file storage →
+  integrated Raft storage, then a nightly `vault operator raft snapshot save`
+  CronJob — online snapshots, no unseal ceremony. The alternative
+  (stop-copy-restart on a cron) would put unseal shares on a scheduled job and
+  breaks the custody model — do not use it.
+- `tls_disable = true` in-cluster is the migration baseline; the backlog adds
+  cert-manager TLS on the in-cluster endpoint + `VAULT_TLS_VERIFY=true`.
+- The Vault container image defaults to root — pin `runAsUser: 100` (backlog).
+
+## Monitoring & Alerting
+
+- **StatusCake** (5-minute polling) on `https://checktick.uk/healthz` — returns 503
+  if Vault is sealed, the database is unreachable, or SNOMED is misconfigured.
+- **healthchecks.io** per-CronJob pings: each CronJob pings its `HC_PING_*`
+  capability URL only on success (`command && curl ...`), so a failed *or
+  non-running* job triggers an email alert. The URLs live in the git-ignored
+  `k8s/config.env` (`checktick-config-local` ConfigMap) and never enter the repo.
+  Unset = no ping (self-hosters are unaffected).
+- Log shipping to OpenObserve is planned (backlog) — the app emits structured
+  JSON to stdout ([Infrastructure Logging](infrastructure-logging.md)); the
+  Platform Admin log-viewer API (`HOSTING_*`) is an unrelated opt-in feature.
+
+## Hardening Backlog
+
+Moved from the migration runbook's Phase 6 list; in rough priority order:
+
+1. **Vault storage backup** — Raft migration + nightly snapshot CronJob (see above)
+2. **Barman Cloud Plugin migration** before any CNPG operator upgrade past 1.30
+3. **`ALLOWED_HOSTS_EXTRA` in `settings.py`** (needs an image release) — retires
+   the live ALLOWED_HOSTS patch (safety rule 4)
+4. TLS on the in-cluster Vault endpoint (cert-manager) + `VAULT_TLS_VERIFY=true`
+5. OpenObserve + collector DaemonSet for infrastructure log retention
+6. Least-privilege ServiceAccount kubeconfig for the deploy workflow (today it is
+   cluster-admin)
+7. Longhorn recurring snapshots on `checktick-media`; Velero/PVC backups
+8. k3s Secrets encryption-at-rest (verify feasibility); non-root Vault
+   (`runAsUser: 100`); staging namespace separation; alerting on `/healthz`
+9. Open SNOMED readers as `file:...?mode=ro&immutable=1` (needs an image release;
+   non-urgent given the init-container conversion)
+10. Quarterly restore rehearsal (DB drill tooling is directly reusable)
+
+## Related
+
+- [`k8s/README.md`](../k8s/README.md) — manifest walkthrough and validation commands
+- [`docs/self-hosting-scheduled-tasks.md`](self-hosting-scheduled-tasks.md) — CronJob reference
+- [`docs/infrastructure-logging.md`](infrastructure-logging.md) — structured logging
+- [`docs/versioning-and-deployment.md`](versioning-and-deployment.md) — release flow
+- [`.github/workflows/deploy-civo.yml`](../.github/workflows/deploy-civo.yml) — deploy pipeline
