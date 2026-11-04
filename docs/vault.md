@@ -98,78 +98,7 @@ secret/users/{id}/surveys/{id}/recovery-kek  # Individual user recovery keys
 
 ## Deployment Options
 
-### Option 1: Northflank (Recommended for Production)
-
-Northflank provides managed container hosting with persistent storage.
-
-#### Step 1: Create Volume
-
-1. Navigate to your project → **Add new** → **Addon** → **Volume**
-2. Configure:
-   - Name: `vault-data`
-   - Size: 10GB
-   - Type: NVMe
-
-#### Step 2: Create Service
-
-1. **Add new** → **Service** → **External Image**
-2. Configure:
-   - Service name: `vault`
-   - Image: `hashicorp/vault:1.21.1`
-   - Port: `8200` (HTTP, **Private only** - do NOT make public)
-
-> **Security**: Keep Vault private. Only your CheckTick webapp should access it via Northflank's internal networking.
-
-#### Step 3: Mount Volume
-
-- Volume: `vault-data`
-- Mount path: `/vault/file`
-
-#### Step 4: Command Override
-
-```bash
-/bin/sh -c 'printf "ui = true\nlistener \"tcp\" {\n  address = \"0.0.0.0:8200\"\n  tls_disable = true\n}\nstorage \"file\" {\n  path = \"/vault/file\"\n}\napi_addr = \"http://127.0.0.1:8200\"\n" > /vault/config/vault.hcl && vault server -config=/vault/config/vault.hcl'
-```
-
-> **Note**: `tls_disable = true` is correct—Northflank's load balancer handles TLS termination.
-
-#### Step 5: Environment Variables
-
-| Variable      | Value                   |
-| ------------- | ----------------------- |
-| `VAULT_ADDR`  | `http://127.0.0.1:8200` |
-| `SKIP_CHOWN`  | `true`                  |
-| `SKIP_SETCAP` | `true`                  |
-
-#### Step 6: Network Configuration
-
-**Critical Security Step**: Ensure Vault is only accessible internally.
-
-1. In Vault service settings → **Networking**:
-   - ✅ **Private Port**: 8200 enabled
-   - ❌ **Public Port**: Disabled (or remove public exposure)
-
-2. Note the **internal URL**: `vault.PROJECT_ID.svc.cluster.local:8200`
-
-3. In CheckTick webapp service → **Environment Variables**:
-
-   ```bash
-   # If you have TLS configured on Vault:
-   VAULT_ADDR=https://vault.PROJECT_ID.svc.cluster.local:8200
-   VAULT_TLS_VERIFY=true  # Verify Vault's TLS certificate
-
-   # If using Northflank's load balancer TLS only:
-   VAULT_ADDR=http://vault.PROJECT_ID.svc.cluster.local:8200
-   VAULT_TLS_VERIFY=false  # Load balancer handles TLS
-   ```
-
-4. Replace `PROJECT_ID` with your actual Northflank project ID (found in project URL)
-
-#### Step 7: Deploy and Initialize
-
-See [Initialization](#initialization) below.
-
-### Option 2: Docker Compose (Development)
+### Option 1: Docker Compose (default self-hosting path)
 
 Create `docker-compose.vault.yml`:
 
@@ -203,9 +132,31 @@ command: >
   sh -c "vault server -config=/vault/config/vault.hcl"
 ```
 
-### Option 3: Kubernetes (Enterprise)
+### Option 2: Kubernetes (recommended for production)
 
-For large-scale deployments, use the official Helm chart:
+The production reference is a single-replica StatefulSet with file storage on a
+persistent volume, kept cluster-internal by a NetworkPolicy — see the
+reference manifest [`k8s/vault.yaml`](../k8s/vault.yaml) (managed Kubernetes on
+Civo, production since 2026-11-03). Key points of that deployment:
+
+- **Never `vault operator init` on migrated storage.** If you are moving an
+  existing Vault, restore the storage directory first and unseal with the
+  EXISTING shares — a fresh init makes every encrypted survey in PostgreSQL
+  permanently undecryptable.
+- Vault is reachable only inside the cluster: the web app uses
+  `http://vault.checktick.svc.cluster.local:8200`, and the `vault-airgap`
+  NetworkPolicy denies all other ingress.
+- Pin the Vault image version to match the source instance when migrating.
+- `tls_disable = true` in-cluster is the migration baseline; the hardening
+  backlog adds cert-manager TLS on the in-cluster endpoint
+  (`VAULT_TLS_VERIFY=true`).
+- Back up the storage: the top hardening priority is migrating file storage
+  to integrated Raft storage with a nightly `vault operator raft snapshot
+  save` CronJob (see the migration runbook's Phase 6 backlog). Until then,
+  Vault storage backups are manual, ceremony-gated copies.
+
+For large-scale HA deployments, the official Helm chart with integrated Raft
+storage is an alternative:
 
 ```bash
 helm repo add hashicorp https://helm.releases.hashicorp.com
@@ -226,7 +177,6 @@ After deployment, initialize Vault (one-time only):
 # Docker
 docker exec -it vault /bin/sh
 
-# Northflank: Use Shell button in dashboard
 # Kubernetes: kubectl exec -it vault-0 -- /bin/sh
 ```
 
@@ -721,7 +671,7 @@ python manage.py activate_platform_key_version --version v1
 
 ### `/healthz` — Platform Health Endpoint
 
-CheckTick exposes a health endpoint at `/healthz` that checks all critical services and returns a structured JSON response. This is the primary mechanism for hosting providers (Northflank, Railway, etc.) to detect degraded state and trigger alerts.
+CheckTick exposes a health endpoint at `/healthz` that checks all critical services and returns a structured JSON response. This is the primary mechanism for hosting platforms (managed Kubernetes probes, Railway, etc.) to detect degraded state and trigger alerts.
 
 ```bash
 curl -s https://yourdomain.com/healthz | jq
@@ -768,7 +718,7 @@ vault operator unseal <unseal-key-2>
 vault operator unseal <unseal-key-3>
 ```
 
-Or for Northflank / remote deployments, use the Vault HTTP API directly:
+Or for remote deployments, use the Vault HTTP API directly:
 
 ```bash
 curl -X PUT https://vault.yourdomain.com/v1/sys/unseal \
@@ -991,11 +941,7 @@ docker run --network vault-network checktick-web
 
 For production deployments, restrict Vault access by IP:
 
-**Northflank**: Use Private Networking
-
-1. Enable Private Network in project settings
-2. Deploy Vault with private service only (no public port)
-3. CheckTick webapp accesses via internal DNS: `vault.checktick-private.svc.cluster.local`
+**Kubernetes**: keep the Vault Service cluster-internal and restrict ingress with a NetworkPolicy — the reference deployment's `vault-airgap` policy denies all ingress except the CheckTick web pods. The webapp accesses Vault via in-cluster service DNS (`vault.checktick.svc.cluster.local:8200`).
 
 **AWS/Cloud**: Security Group Rules
 
@@ -1114,7 +1060,7 @@ listener "tcp" {
 
 1. Check Vault is running: `docker ps | grep vault`
 2. Check port: `curl -v http://localhost:8200/v1/sys/health`
-3. For Northflank: Use HTTPS external URL
+3. For Kubernetes: check the Service and endpoints — `kubectl get svc,endpoints -n checktick | grep vault`
 
 ### Vault Sealed
 

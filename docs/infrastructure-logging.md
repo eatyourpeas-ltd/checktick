@@ -12,7 +12,7 @@ CheckTick uses structured logging to emit **machine-readable JSON logs to stdout
 
 This design is platform-agnostic and works with any infrastructure that captures stdout logs, including:
 
-- Northflank (primary reference implementation)
+- Managed Kubernetes on Civo (primary reference implementation)
 - Azure App Service / Application Insights
 - AWS CloudWatch / ECS / EKS
 - GCP Cloud Logging
@@ -53,7 +53,7 @@ JSONFormatter (emits structured JSON)
 ↓
 stdout
 ↓
-Platform logging system (Northflank / Azure / AWS / etc.)
+Platform logging system (Kubernetes / Azure / AWS / etc.)
 ↓
 Optional external log store (OpenObserve / Datadog / ELK / Loki)
 ```
@@ -175,7 +175,7 @@ If deployed on:
 - Azure App Service
 - AWS CloudWatch / ECS / EKS
 - GCP Cloud Logging
-- Northflank
+- Managed Kubernetes (e.g. Civo)
 - Kubernetes logging stacks
 
 then:
@@ -245,7 +245,7 @@ The primary control is:
 ## Deployment Checklist
 
 - Logs emit JSON to stdout
-- Platform logging enabled (Azure/AWS/Northflank/etc.)
+- Platform logging enabled (Azure/AWS/Kubernetes/etc.)
 - LoggingContextFilter enabled
 - RedactionFilter enabled
 - No secrets logged via extra, `__dict__`, or request bodies

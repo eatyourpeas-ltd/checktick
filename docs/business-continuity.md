@@ -143,11 +143,11 @@ Same as Individual, with faster recovery:
 
 #### Scenario: Vault Pod/Container Crashed
 
-**For Northflank deployments:**
+**For managed Kubernetes deployments (e.g. Civo):**
 
-1. Check Northflank dashboard for service status
-2. Review container logs for crash reason
-3. Restart the service if needed
+1. Check pod status: `kubectl get pods -n checktick` (look for `vault-0`)
+2. Review container logs: `kubectl logs -n checktick vault-0`
+3. Restart the pod if needed: `kubectl delete pod vault-0 -n checktick` (the StatefulSet recreates it)
 4. Unseal Vault after restart (always required after restart)
 
 **For self-hosted deployments:**
@@ -906,7 +906,7 @@ Maintain an emergency contact list:
 ### External Contacts
 
 - HashiCorp Support: [if Enterprise]
-- Northflank Support: [if using Northflank]
+- Civo Support: [managed Kubernetes provider — support via the Civo dashboard]
 - Legal/Compliance: [name] - [email]
 
 ## Recovery Time Objectives

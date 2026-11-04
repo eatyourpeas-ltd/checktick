@@ -221,7 +221,7 @@ CheckTick requires **three persistent volumes** in addition to your PostgreSQL d
 | `snomed-data` | 10 GB          | SNOMED CT SQLite database (`snomed.db`)        |
 | `media-data`  | 6 GB (min)     | Uploaded images (question images, intro content images, admin icons) |
 
-In Docker Compose these are declared as named volumes and referenced in your `docker-compose.yml`. In Northflank, Railway, Render, or other PaaS providers, create them as persistent disks and mount them at the paths shown below:
+In Docker Compose these are declared as named volumes and referenced in your `docker-compose.yml`. In Kubernetes they are PersistentVolumeClaims (see [`k8s/`](../k8s/)); on Railway, Render, or other PaaS providers, create them as persistent disks and mount them at the paths shown below:
 
 | Volume        | Mount path in container |
 | ------------- | ----------------------- |
@@ -359,10 +359,9 @@ CSO_EMAIL="cso@yourdomain.com"
 HOSTING_API_TOKEN=your-api-token
 
 # Base URL for your hosting provider's API
-# Northflank: https://api.northflank.com/v1
 # Railway: https://backboard.railway.app/graphql
 # Render: https://api.render.com/v1
-HOSTING_API_BASE_URL=https://api.northflank.com/v1
+HOSTING_API_BASE_URL=https://api.render.com/v1
 
 # Project/service identifiers from your hosting provider
 HOSTING_PROJECT_ID=your-project-id

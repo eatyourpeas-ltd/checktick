@@ -95,7 +95,7 @@ export KUBECONFIG=~/.kube/civo-checktick.yaml   # per Civo working session
 kubectl config current-context                   # glance before any apply/delete
 ```
 
-Any other cluster config (e.g. the Northflank `~/.kube/config`) stays
+Any other cluster config (e.g. a previous platform's `~/.kube/config`) stays
 untouched; a fresh terminal without the export falls back to it. After the
 migration completes (runbook Phase 6), consolidate at will. The deploy
 workflow's kubeconfig is separate again — a base64-encoded GitHub secret
@@ -232,6 +232,6 @@ Dispatch it from the Actions tab (the `image-tag` input is required — pass
 the released tag, e.g. `0.24.2`). Add protection rules (required reviewers)
 to the `civo` GitHub environment to make dispatch a gated production deploy.
 
-Until the cutover completes, `docker-publish.yml` still calls the
-Northflank webhook on main publishes — swapping that step for this
-workflow is runbook Phase 6 work, deliberately not done in advance.
+On main publishes, `docker-publish.yml` dispatches this workflow with the
+newly published image tag (swapped from the previous platform's deployment
+webhook at migration close-out — runbook Phase 6).

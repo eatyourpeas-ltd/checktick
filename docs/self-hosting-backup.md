@@ -140,7 +140,7 @@ docker run --rm \
   alpine ls -lah /media
 ```
 
-On Northflank, the equivalent is the persistent volume (e.g. `CheckTickImageVolume`) mounted at `/app/media`. Back up via Northflank's volume snapshot feature or by running the tar command in a shell on the service.
+On Kubernetes, the equivalent is the media PersistentVolumeClaim (e.g. `checktick-media`) mounted at `/app/media`. Back up via a volume snapshot (Longhorn supports recurring snapshots) or by running the tar command in a one-off pod.
 
 ## Restore Procedures
 

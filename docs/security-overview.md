@@ -583,7 +583,7 @@ We follow responsible disclosure and credit researchers who report valid issues.
 
 ### 1. Tooling & Patching
 
-Because developer machines hold access tokens for GitHub and Northflank, they are treated as 'Remote Endpoints':
+Because developer machines hold access tokens for GitHub and Civo, they are treated as 'Remote Endpoints':
 
 * **Automated OS Updates:** macOS is configured to install security response files automatically (Window: <7 days).
 * **IDE & Tooling:** VS Code and Extensions are set to auto-update.
@@ -598,7 +598,7 @@ We avoid 'Version Drift' between laptops and production:
 ### 3. Credential Protection
 
 * **No Hardcoded Secrets:** Local `.env` files are added to `.gitignore`.
-* **MFA:** Access to the GitHub repository and Northflank console requires Hardware/App-based MFA.
+* **MFA:** Access to the GitHub repository and Civo console requires Hardware/App-based MFA.
 * **SSH Keys:** SSH keys used for Git pushes are stored in the macOS Keychain and protected by biometric/password lock.
 
 ---
