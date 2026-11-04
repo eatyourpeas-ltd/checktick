@@ -45,12 +45,16 @@ For a walkthrough of the manifests and day-to-day validation commands, see
 3. **Major PostgreSQL upgrades go via dump/restore with the TARGET version's
    binaries** — never `pg_upgrade` in place, and never dump with newer binaries
    than the restore target.
-4. The public `ALLOWED_HOSTS` currently live in the live Deployment env patch
-   (`k8s/scratch-allowhosts-patch.yaml`, git-ignored) until `ALLOWED_HOSTS_EXTRA`
-   ships in an image release. The deploy workflow never re-applies manifests
-   (`set image` only) so the patch survives deploys — but any manual
-   `kubectl apply -f k8s/web.yaml` (or `-k k8s/`) **resets it and the site 400s**.
-   Re-apply the patch afterwards.
+4. Public hostnames are owned by the **config overlay** via `ALLOWED_HOSTS_EXTRA`
+   (k8s/config.env → checktick-config-local), which settings.py appends on top
+   of the in-cluster ALLOWED_HOSTS. The web Deployment's env entry carries only
+   the in-cluster hosts (pod IP + service names), so `kubectl apply -f
+   k8s/web.yaml` / `-k k8s/` can never 400 the public site. *(Shipped in 0.25.0;
+   until that release is deployed, a live Deployment env patch —
+   `k8s/scratch-allowhosts-patch.yaml`, git-ignored — still carries the public
+   hosts and any manifest re-apply must be followed by re-applying the patch.)*
+   Post-release retirement: apply the overlay, re-apply web.yaml, verify
+   checktick.uk + staging respond, then delete the scratch patch.
 
 ## Node Maintenance (kernel / node-image upgrades)
 
@@ -139,23 +143,22 @@ Proven during the CVE-2026-98432 patch window (2026-11-04):
 
 ## Hardening Backlog
 
-Moved from the migration runbook's Phase 6 list; in rough priority order:
+Moved from the migration runbook's Phase 6 list; in rough priority order
+(`ALLOWED_HOSTS_EXTRA` shipped in 0.25.0 and is off the list):
 
 1. **Vault storage backup** — Raft migration + nightly snapshot CronJob (see above)
 2. **Barman Cloud Plugin migration** before any CNPG operator upgrade past 1.30
-3. **`ALLOWED_HOSTS_EXTRA` in `settings.py`** (needs an image release) — retires
-   the live ALLOWED_HOSTS patch (safety rule 4)
-4. TLS on the in-cluster Vault endpoint (cert-manager) + `VAULT_TLS_VERIFY=true`
-5. OpenObserve + collector DaemonSet for infrastructure log retention
-6. Least-privilege ServiceAccount kubeconfig for the deploy workflow (today it is
+3. TLS on the in-cluster Vault endpoint (cert-manager) + `VAULT_TLS_VERIFY=true`
+4. OpenObserve + collector DaemonSet for infrastructure log retention
+5. Least-privilege ServiceAccount kubeconfig for the deploy workflow (today it is
    cluster-admin)
-7. Longhorn recurring snapshots on `checktick-media`; Velero/PVC backups
-8. k3s Secrets encryption-at-rest (verify feasibility); non-root Vault
+6. Longhorn recurring snapshots on `checktick-media`; Velero/PVC backups
+7. k3s Secrets encryption-at-rest (verify feasibility); non-root Vault
    (`runAsUser: 100`); staging namespace separation; alerting on `/healthz`
-9. Open SNOMED readers as `file:...?mode=ro&immutable=1` (needs an image release;
+8. Open SNOMED readers as `file:...?mode=ro&immutable=1` (needs an image release;
    non-urgent given the init-container conversion)
-10. Quarterly restore rehearsal — step-by-step procedure in
-    [docs/restore-rehearsal.md](restore-rehearsal.md)
+9. Quarterly restore rehearsal — step-by-step procedure in
+   [docs/restore-rehearsal.md](restore-rehearsal.md)
 
 ## Related
 

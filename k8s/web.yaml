@@ -138,11 +138,11 @@ spec:
           # Kubelet httpGet probes send `Host: <pod IP>`, which Django rejects
           # unless it is in ALLOWED_HOSTS. The Downward API exposes the pod's
           # own IP and $(POD_IP) expands inside the value. This env entry
-          # intentionally overrides the ConfigMap/overlay ALLOWED_HOSTS for
-          # the POC (in-cluster traffic only, no public domain yet).
-          # PROPER FIX (next image release, runbook Phase 6 backlog): settings.py
-          # should append an ALLOWED_HOSTS_EXTRA list, so the config overlay
-          # owns the public domains and this Deployment adds only the pod IP.
+          # intentionally overrides the ConfigMap/overlay ALLOWED_HOSTS with
+          # the IN-CLUSTER hosts only (probes, smoke tests, service DNS).
+          # Public domains are APPENDED by settings.py from ALLOWED_HOSTS_EXTRA
+          # in the config overlay (checktick-config-local) — never listed here,
+          # so re-applying this manifest can never 400 the public site.
           env:
             - name: POD_IP
               valueFrom:

@@ -27,6 +27,11 @@ env = environ.Env(
     ENVIRONMENT=(str, "development"),
     SECRET_KEY=(str, ""),
     ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
+    # Appended to ALLOWED_HOSTS at import time (see below): lets the k8s
+    # config overlay own the PUBLIC domains while the Deployment-level
+    # ALLOWED_HOSTS env entry keeps only the in-cluster hosts (pod IP +
+    # service names) so kubelet probes keep working.
+    ALLOWED_HOSTS_EXTRA=(list, []),
     SECURE_SSL_REDIRECT=(bool, False),
     CSRF_TRUSTED_ORIGINS=(list, []),
     BRAND_TITLE=(str, "CheckTick"),
@@ -123,6 +128,17 @@ if ENVIRONMENT == "production" and not env("SECRET_KEY", default=""):
     )
 SECRET_KEY = env("SECRET_KEY") or os.urandom(32).hex()
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
+
+# Public hostnames are APPENDED here rather than baked into the Deployment's
+# ALLOWED_HOSTS env entry (which intentionally overrides the ConfigMaps with
+# the in-cluster hosts only — pod IP + service names — for kubelet probes).
+# The local config overlay (k8s/config.env -> checktick-config-local
+# ConfigMap) owns the public domains via ALLOWED_HOSTS_EXTRA, so re-applying
+# the web manifest can never 400 the public site. See k8s/web.yaml and
+# docs/civo-kubernetes-operations.md.
+# Strip and drop empty segments so messy comma lists cannot inject ""
+# (which Django would treat as match-anything).
+ALLOWED_HOSTS += [h.strip() for h in env("ALLOWED_HOSTS_EXTRA") if h.strip()]
 
 # Self-hosted mode - gives all users Enterprise features
 SELF_HOSTED = env.bool("SELF_HOSTED", default=False)
