@@ -9,14 +9,14 @@ category: dspt-10-suppliers
 
 | Supplier | Certification / Assurance | DSPT Equivalent? | Notes |
 | :--- | :--- | :--- | :--- |
-| **Northflank** | ISO 27001 / SOC 2 | **Yes** | Covers physical, network, and operational security of hosting infrastructure. |
+| **Civo** | [Security certifications — confirm current ISO/SOC2 status on Civo's compliance pages] | **Yes** | Covers physical, network, and operational security of the managed Kubernetes hosting infrastructure (UK, London LON1). |
 | **GitHub** | ISO 27001 / SOC 2 | **Yes** | Covers security of the code management and CI/CD pipeline. |
 | **Microsoft 365 (Exchange Online)** | ISO 27001 / SOC 2 / NHS DCB1596 Conformance | **Yes** | Used for all CheckTick transactional and health/care-related email. Configured in line with NHS Secure Email Standard (DCB1596). |
 | **Proton Mail** | ISO 27001 | **Not Applicable (Out of Scope)** | Used only for Eatyourpeas Ltd corporate communications. Not used for patient data or health/care communications. |
 
 ## Assurance Conclusion:
 
-All suppliers involved in the processing, storage, or transmission of health and care data (Northflank, GitHub, and Microsoft 365) hold internationally recognised security certifications (ISO 27001 and/or SOC 2) and are subject to independent third-party audit.
+All suppliers involved in the processing, storage, or transmission of health and care data (Civo, GitHub, and Microsoft 365) hold recognised security certifications or provide documented assurance (ISO 27001 and/or SOC 2 where available) and are subject to independent third-party audit.
 
 Microsoft 365 is additionally configured to meet the NHS Secure Email Standard (DCB1596) and is used exclusively for all in-scope health and care communications.
 

@@ -16,7 +16,7 @@ This policy covers authentication requirements for internet-facing services that
 
 These are services **operated and hosted by {{ company_name }}** for customers:
 
-* **CheckTick Web Application** - Django-based SaaS platform hosted on Northflank (Port 443/HTTPS)
+* **CheckTick Web Application** - Django-based SaaS platform hosted on managed Kubernetes (Civo, Port 443/HTTPS)
   * Service we run for NHS Trusts and healthcare providers
   * Contains patient and organisational data
   * **This is what CE section A5.4/A5.5 refers to**
@@ -25,7 +25,7 @@ These are services **operated and hosted by {{ company_name }}** for customers:
 
 These are third-party cloud services **used by {{ company_name }} staff** to operate the business:
 
-* **Infrastructure Management** - Northflank dashboard (hosting console)
+* **Infrastructure Management** - Civo dashboard (hosting console)
 * **Version Control** - GitHub repositories (code and documentation)
 * **Business Services** - Personal Google accounts for email (custom domain redirects)
 
@@ -56,7 +56,7 @@ These are third-party cloud services **used by {{ company_name }} staff** to ope
 
 **Staff Access to Business Cloud Services:**
 
-For GitHub and Northflank accounts used by {{ company_name }} staff:
+For GitHub and Civo accounts used by {{ company_name }} staff:
 
 * Password: Minimum 12 characters, no maximum length
 * MFA: Mandatory TOTP, biometric (Touch ID), or WebAuthn/Passkey
@@ -84,7 +84,7 @@ For GitHub and Northflank accounts used by {{ company_name }} staff:
 
 ### 3.3 Third-party Cloud Services (Services We Use)
 
-Authentication for GitHub and Northflank relies on vendor-provided security controls:
+Authentication for GitHub and Civo relies on vendor-provided security controls:
 * Vendor-managed TLS/HTTPS encryption
 * Vendor default brute force protection (login throttling, account lockouts)
 * Our enforcement: 12-char passwords + mandatory MFA for all staff accounts
@@ -99,7 +99,7 @@ Authentication for GitHub and Northflank relies on vendor-provided security cont
 * Review authentication failure logs for suspicious patterns
 * Confirm django-axes brute force protection functioning
 
-**For cloud services we use (GitHub, Northflank):**
+**For cloud services we use (GitHub, Civo):**
 
 * Verify MFA enabled on all staff accounts (part of general access control audit)
 * Confirm no default/weak passwords in use
@@ -116,7 +116,7 @@ Authentication for GitHub and Northflank relies on vendor-provided security cont
 
 **Answer:** **Yes** - We operate CheckTick, a web-based SaaS application for healthcare data collection.
 
-**Clarification:** This refers to services WE PROVIDE (CheckTick platform), NOT third-party services we use like GitHub/Northflank.
+**Clarification:** This refers to services WE PROVIDE (CheckTick platform), NOT third-party services we use like GitHub/Civo.
 
 ---
 
@@ -140,7 +140,7 @@ Monthly verification: All CheckTick administrative accounts confirmed to have MF
 
 ---
 
-**For third-party cloud services we use (GitHub, Northflank):**
+**For third-party cloud services we use (GitHub, Civo):**
 
 These follow the same 12-character + MFA requirements in our Password Policy, but are NOT covered by CE question A5.4/A5.5 (we don't "run or host" these services).
 

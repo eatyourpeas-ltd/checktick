@@ -28,7 +28,7 @@ founding team.
 * **Individual Accounts:** No shared "admin" or "root" accounts
   are permitted.
 * **Authentication:** Mandatory Multi-Factor Authentication (MFA)
-  is enforced for Northflank (Infrastructure), GitHub (Source
+  is enforced for Civo (Infrastructure), GitHub (Source
   Code), and Microsoft 365 (Business Email). MFA is enforced
   at the tenant/organisation level on all three platforms.
 * **Workstations:** Administrative tasks must be performed on
@@ -52,12 +52,12 @@ users only access data necessary for their role.
 
 Upon the departure of any founding partner or future contractor:
 
-1. **Immediate Revocation:** Access to GitHub, Northflank, and
+1. **Immediate Revocation:** Access to GitHub, Civo, and
    Microsoft 365 is revoked within 1 hour.
 2. **Secret Rotation:** Any shared environmental variables or
    API keys they had access to are rotated. Microsoft Graph
    API client secret is rotated if the departing individual
-   had access to Northflank environment variables.
+   had access to production Kubernetes Secrets.
 3. **Audit:** A final audit of the Access Log is conducted to
    ensure no unauthorized exports occurred.
 
@@ -75,7 +75,7 @@ staff.
 ## 5. Access Review Schedule
 
 * **Monthly:** CTO reviews the list of 'Collaborators' on
-  GitHub and Northflank, and active accounts on Microsoft 365.
+  GitHub and Civo, and active accounts on Microsoft 365.
 * **Bi-Annually:** SIRO performs a spot-check of the Audit Log
   to ensure Data Custodian exports match authorized clinical
   requests.
@@ -118,7 +118,7 @@ To prevent 'account sprawl' and security risks from dormant
 credentials:
 
 * **Monthly Review:** The CTO reviews all 'Active' seats on
-  Northflank, GitHub, and Microsoft 365. Any account that has
+  Civo, GitHub, and Microsoft 365. Any account that has
   not been utilised for 90 days is flagged for disabling unless
   a specific justification is provided.
 * **Privileged Review:** Access to production secrets and
@@ -128,7 +128,7 @@ credentials:
 * **Leaver Synchronization:** Upon notification of a departure,
   the SIRO verifies the Access Audit Log to ensure all
   identified touchpoints (SaaS tools, Cloud Ingress, Microsoft
-  365, Northflank environment variables) have been successfully
+  365, in-cluster Kubernetes Secrets) have been successfully
   neutralized.
 
 ## 7. Separation of Privileged Activities
@@ -139,7 +139,7 @@ System Administrators:
 
 * **No High-Risk Activity on Admin Sessions:** Administrators
   must not check email, engage in social media, or perform
-  general web browsing while logged into the Northflank
+  general web browsing while logged into the Civo
   production console or database.
 * **Isolated Browser Profiles:** Privileged access must be
   conducted via a dedicated browser profile that contains
@@ -185,7 +185,7 @@ priority.
   to ensure that a 403 Forbidden is returned when a user
   attempts to access a resource they do not own or have
   membership for.
-* **CI/CD Enforcement:** Our Northflank deployment pipeline
+* **CI/CD Enforcement:** Our GitHub Actions deployment pipeline
   fails automatically if any RBAC test fails.
 
 ## 11. Mandatory MFA Enforcement
@@ -193,7 +193,7 @@ priority.
 {{ platform_name }} operates a 'No MFA, No Access' policy for
 all critical systems:
 
-* **Infrastructure (Northflank):** Every account with access
+* **Infrastructure (Civo):** Every account with access
   to production clusters or secrets must have TOTP or
   FIDO2/WebAuthn MFA enabled.
 * **Source Control (GitHub):** 2FA is required for all members
@@ -206,7 +206,7 @@ all critical systems:
   risk-assessed by the SIRO and documented in our exceptions
   log. Currently, there are 0 active exceptions.
 * **Session Persistence:** Administrative sessions for
-  Northflank, GitHub, and Microsoft 365 are configured to
+  Civo, GitHub, and Microsoft 365 are configured to
   require re-authentication after a period of inactivity.
   We do not use "Stay Logged In" on public or shared networks.
 * **Phishing-Resistant MFA:** Where supported (GitHub,

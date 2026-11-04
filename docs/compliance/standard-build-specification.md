@@ -8,7 +8,7 @@ category: dspt-9-it-protection
 **Version:** 1.1
 **Last Reviewed:** 08/02/2026
 
-All devices used for {{ platform_name }} business must meet the following "Standard Build" requirements before accessing GitHub, Northflank, or internal data.
+All devices used for {{ platform_name }} business must meet the following "Standard Build" requirements before accessing GitHub, Civo, or internal data.
 
 **Current Device Inventory:**
 - 1x macOS laptop (Touch ID)

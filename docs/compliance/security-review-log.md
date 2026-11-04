@@ -19,7 +19,7 @@ category: dspt-5-process-reviews
 
 ## Audit Procedure:
 
-1. Login to Northflank Production Console.
+1. Login to the Civo dashboard and the production cluster.
 2. Navigate to Networking -> Ingress.
 3. Compare live rules against 'Authorized Inbound Rule Register' (Policy 9.6).
 4. Identify any 'unmanaged' or 'temporary' rules.

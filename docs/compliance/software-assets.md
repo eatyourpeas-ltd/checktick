@@ -134,12 +134,12 @@ Served from `checktick_app/static/` with SHA-384 Subresource Integrity
 
 | Asset Name | Category | Version / Config Method | Hosting |
 | :--- | :--- | :--- | :--- |
-| **Northflank** | PaaS / Orchestration | Northflank console + API | Northflank |
-| **PostgreSQL** | Database | 15.x — Northflank managed addon | Northflank |
-| **HashiCorp Vault** | Secret Management | 1.21.1 — Northflank container service | Northflank |
-| **Ubuntu LTS** | Base OS (Containers) | 22.04 | Northflank |
+| **Civo** | Managed Kubernetes (k3s) | Civo dashboard + API | Civo (London LON1) |
+| **PostgreSQL** | Database | 17.x — in-cluster via CloudNativePG operator | Civo Kubernetes (in-cluster) |
+| **HashiCorp Vault** | Secret Management | 1.21.1 — in-cluster StatefulSet | Civo Kubernetes (in-cluster) |
+| **Debian (python:3.12-slim)** | Base OS (application containers) | 12 (bookworm) | Civo Kubernetes |
 | **GitHub** | Version Control / CI | Enterprise Cloud | GitHub |
-| **Gunicorn** | WSGI Server | ^22.0.0 (see above) | Northflank |
+| **Gunicorn** | WSGI Server | ^22.0.0 (see above) | Civo Kubernetes |
 | **Microsoft 365** | email service |  |  |
 
 ---

@@ -23,19 +23,19 @@ category: dspt-9-it-protection
 
 **Verification:** To check user accounts on macOS: System Settings > Users and Groups
 
-### 1.2 Cloud Service Account Management (GitHub, Northflank)
+### 1.2 Cloud Service Account Management (GitHub, Civo)
 
 * **Individual Named Accounts:** All cloud services use individual, named accounts. No shared credentials permitted.
 * **User/Admin Separation:** Where the service supports it, standard user access and administrative access are separated:
   - **GitHub:** Separate accounts or limited repository access for routine work; full admin rights only when needed
-  - **Northflank:** Role-based access; administrative console access restricted to CTO/SIRO only
+  - **Civo:** Role-based access; administrative console access restricted to CTO/SIRO only
 * **MFA Required:** Multi-Factor Authentication enforced on all cloud service accounts and personal email accounts without exception.
-* **Monthly Account Review:** The CTO reviews all active accounts on GitHub and Northflank monthly. Any account inactive for >90 days is flagged for disabling (documented in Access Control Policy section 6.4).
+* **Monthly Account Review:** The CTO reviews all active accounts on GitHub and Civo monthly. Any account inactive for >90 days is flagged for disabling (documented in Access Control Policy section 6.4).
 
 ### 1.3 Production Server/Container Accounts
 
 * **No Local User Accounts:** Production containers are "headless" with no SSH user accounts or interactive login capability.
-* **Cloud-Managed Authentication:** All administrative access to production infrastructure is via cloud-managed consoles (Northflank) with MFA-protected authentication.
+* **Cloud-Managed Authentication:** All administrative access to production infrastructure is via cloud-managed consoles (Civo) with MFA-protected authentication.
 * **No Default Accounts:** Container images based on minimal distros; default system accounts (e.g., 'demo', 'test') removed from base images.
 
 ### 1.4 Regular Account Review Schedule

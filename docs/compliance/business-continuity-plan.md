@@ -17,7 +17,7 @@ This plan ensures that {{ platform_name }} can continue to support clinical work
 
 | Critical Activity | Recovery Time Objective (RTO) | Dependency |
 | :--- | :--- | :--- |
-| Patient Survey Intake | 4 Hours | Northflank/Database |
+| Patient Survey Intake | 4 Hours | Civo Kubernetes/Database |
 | Clinician Data Access | 4 Hours | Encryption Vault/SSO |
 | New Account Creation | 24 Hours | Admin Portal |
 
@@ -25,8 +25,8 @@ This plan ensures that {{ platform_name }} can continue to support clinical work
 
 ### 3.1 Technical Recovery (SaaS Infrastructure)
 
-* **Hosting Failure:** {{ platform_name }} will redeploy to secondary AWS regions if Northflank is unavailable. See [Vault Integration](/docs/vault/) for the full recovery procedure.
-* **Data Corruption:** Daily RDS snapshots are restored. RPO is 24 hours.
+* **Hosting Failure:** {{ platform_name }} can redeploy to an alternative managed Kubernetes provider from the IaC manifests and images held in GitHub if Civo is unavailable. See [Vault Integration](/docs/vault/) for the full recovery procedure.
+* **Data Corruption:** Nightly base backups and the WAL archive are restored. RPO is 24 hours.
 
 #### Platform Key / Survey KEK Recovery
 
@@ -83,7 +83,7 @@ If the digital service is unavailable for >4 hours:
 ### 3.3 People & Resource Dependencies
 
 * **Remote Operations:** {{ platform_name }} is a remote-first team. If a staff member’s local site (home office) fails (power/internet), they will relocate to a secondary site with 4G/5G backup.
-* **Succession:** If the CTO is unavailable, the SIRO holds emergency "Break-Glass" credentials to the Northflank consoles to initiate infrastructure recovery with 3rd party support. Note: platform **key** recovery still requires 3 of 4 custodian shares — the SIRO's break-glass access covers infrastructure only, not single-party key decryption. See §3.1 above.
+* **Succession:** If the CTO is unavailable, the SIRO holds emergency "Break-Glass" credentials to the Civo dashboard and cluster to initiate infrastructure recovery with 3rd party support. Note: platform **key** recovery still requires 3 of 4 custodian shares — the SIRO's break-glass access covers infrastructure only, not single-party key decryption. See §3.1 above.
 
 ## 4. Communication Plan
 

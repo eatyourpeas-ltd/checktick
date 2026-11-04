@@ -7,7 +7,7 @@ category: dspt-9-it-protection
 
 ## 1. Network Hardening (Sovereign Defense)
 
-* **Zero-Trust Ingress:** Only HTTPS (443) is permitted. All other ports (SSH, DB, FTP) are blocked at the Northflank platform edge.
+* **Zero-Trust Ingress:** Only HTTPS (443) is permitted. All other ports (SSH, DB, FTP) are blocked at the cluster ingress (Traefik).
 * **Database Isolation:** The PostgreSQL database is not assigned a public IP address and is only reachable via the internal virtual private network (VPC) from the application containers.
 * **TLS Enforcement:** We enforce TLS 1.3 for all data in transit, with HSTS enabled to prevent protocol downgrade attacks.
 

@@ -18,7 +18,7 @@ category: dspt-1-confidential-data
 
 ## Data Transfers
 
-* **Hosting:** All patient data is stored in the UK (Northflank).
+* **Hosting:** All patient data is stored in the UK (managed Kubernetes on Civo, London region).
 * **International Transfers:** None. All processing of health data occurs within the UK.
 
 ## Security Measures

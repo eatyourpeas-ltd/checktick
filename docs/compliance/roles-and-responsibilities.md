@@ -28,7 +28,7 @@ category: dspt-2-staff-responsibilities
 
 ### Cyber Security Lead (CTO) - {{ siro_name }}
 
-* **Implementation:** Manages technical controls (MFA, Encryption, Vault, Northflank).
+* **Implementation:** Manages technical controls (MFA, Encryption, Vault, Civo).
 * **Incident Response:** Leads technical containment during a security event.
 
 ## 2. Shared Responsibilities

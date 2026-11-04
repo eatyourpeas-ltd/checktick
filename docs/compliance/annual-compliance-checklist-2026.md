@@ -129,7 +129,7 @@ priority: 2
 
 ### Ongoing Monthly (February)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](/compliance/access-control/)
+- [ ] **Monthly Access Review** - GitHub and Civo user lists (CTO) [Access Control Policy](/compliance/access-control/)
   - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
 - [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](/compliance/access-audit-logs/)
 - [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](/compliance/external-service-authentication/)
@@ -162,11 +162,11 @@ priority: 2
   - Final SIRO sign-off
   - Submit via DSPT portal
 - [ ] **Quarterly Access Review (Q1) (Cyber Essentials)** - Comprehensive user account and privilege audit [Access Control Policy](/compliance/access-control/)
-  - **Automated Export & Reconciliation:** Export GitHub organisation members list and Northflank team members list; compare against Privileged Account Inventory for discrepancies
+  - **Automated Export & Reconciliation:** Export GitHub organisation members list and Civo account users list; compare against Privileged Account Inventory for discrepancies
   - **Device Privileges:** Verify standard/admin account separation maintained on all devices
   - **Device Admin Credentials:** Verify device administrator credentials remain securely stored in password manager
   - **Admin Usage Verification:** Confirm admin accounts (device and cloud) not used for routine work activities
-  - **Cloud Accounts:** Verify no orphaned or inactive accounts exist on GitHub and Northflank
+  - **Cloud Accounts:** Verify no orphaned or inactive accounts exist on GitHub and Civo
   - **Role Alignment:** Confirm all current users are authorized with appropriate role assignments (Owner vs Member)
   - **Privilege Verification:** Verify account privileges match current role requirements and identify any 'privilege creep'
   - **Admin Controls:** Verify administrative privileges only assigned to designated administrative accounts
@@ -179,7 +179,7 @@ priority: 2
 
 ### Ongoing Monthly (March)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](/compliance/access-control/)
+- [ ] **Monthly Access Review** - GitHub and Civo user lists (CTO) [Access Control Policy](/compliance/access-control/)
   - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
 - [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](/compliance/access-audit-logs/)
 - [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](/compliance/external-service-authentication/)
@@ -212,7 +212,7 @@ priority: 2
 
 ### Ongoing Monthly (April)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](/compliance/access-control/)
+- [ ] **Monthly Access Review** - GitHub and Civo user lists (CTO) [Access Control Policy](/compliance/access-control/)
   - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
 - [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](/compliance/access-audit-logs/)
 - [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](/compliance/external-service-authentication/)
@@ -226,7 +226,7 @@ priority: 2
 ### Week 1-4 (May 1-31)
 
 - [ ] **Internal Audit Spot Check** - Semi-annual comprehensive audit [Internal Audit Spot Check Log](/compliance/internal-audit-spot-check-log/)
-  - User access review (GitHub & Northflank)
+  - User access review (GitHub & Civo)
   - Encryption verification test
   - Staff awareness test (random questions)
   - Backup verification
@@ -237,7 +237,7 @@ priority: 2
 
 ### Ongoing Monthly (May)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](/compliance/access-control/)
+- [ ] **Monthly Access Review** - GitHub and Civo user lists (CTO) [Access Control Policy](/compliance/access-control/)
   - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
 - [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](/compliance/access-audit-logs/)
 - [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](/compliance/external-service-authentication/)
@@ -258,11 +258,11 @@ priority: 2
 ### Week 3-4 (Jun 16-30)
 
 - [ ] **Quarterly Access Review (Q2) (Cyber Essentials)** - Comprehensive user account and privilege audit [Access Control Policy](/compliance/access-control/)
-  - **Automated Export & Reconciliation:** Export GitHub organisation members list and Northflank team members list; compare against Privileged Account Inventory for discrepancies
+  - **Automated Export & Reconciliation:** Export GitHub organisation members list and Civo account users list; compare against Privileged Account Inventory for discrepancies
   - **Device Privileges:** Verify standard/admin account separation maintained on all devices
   - **Device Admin Credentials:** Verify device administrator credentials remain securely stored in password manager
   - **Admin Usage Verification:** Confirm admin accounts (device and cloud) not used for routine work activities
-  - **Cloud Accounts:** Verify no orphaned or inactive accounts exist on GitHub and Northflank
+  - **Cloud Accounts:** Verify no orphaned or inactive accounts exist on GitHub and Civo
   - **Role Alignment:** Confirm all current users are authorized with appropriate role assignments (Owner vs Member)
   - **Privilege Verification:** Verify account privileges match current role requirements and identify any 'privilege creep'
   - **Admin Controls:** Verify administrative privileges only assigned to designated administrative accounts
@@ -290,7 +290,7 @@ priority: 2
 
 ### Ongoing Monthly (June)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](/compliance/access-control/)
+- [ ] **Monthly Access Review** - GitHub and Civo user lists (CTO) [Access Control Policy](/compliance/access-control/)
   - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
 - [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](/compliance/access-audit-logs/)
 - [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](/compliance/external-service-authentication/)
@@ -319,7 +319,7 @@ priority: 2
 
 ### Ongoing Monthly (July)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](/compliance/access-control/)
+- [ ] **Monthly Access Review** - GitHub and Civo user lists (CTO) [Access Control Policy](/compliance/access-control/)
   - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
 - [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](/compliance/access-audit-logs/)
 - [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](/compliance/external-service-authentication/)
@@ -374,7 +374,7 @@ priority: 2
 
 ### Ongoing Monthly (August)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists (CTO) [Access Control Policy](/compliance/access-control/)
+- [ ] **Monthly Access Review** - GitHub and Civo user lists (CTO) [Access Control Policy](/compliance/access-control/)
   - Flag any accounts inactive for >90 days for review/disabling (Access Control Policy Section 6.4)
 - [ ] **Privileged Account Inventory Update** - Update inventory with any account changes (new hires, role changes, leavers) [Access Audit Logs](/compliance/access-audit-logs/)
 - [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal) [External Service Authentication](/compliance/external-service-authentication/)
@@ -388,11 +388,11 @@ priority: 2
 ### Week 1-4 (Sep 1-30)
 
 - [ ] **Quarterly Access Review (Q3) (Cyber Essentials)** - Comprehensive user account and privilege audit [Access Control Policy](/compliance/access-control/)
-  - **Automated Export & Reconciliation:** Export GitHub organisation members list and Northflank team members list; compare against Privileged Account Inventory for discrepancies
+  - **Automated Export & Reconciliation:** Export GitHub organisation members list and Civo account users list; compare against Privileged Account Inventory for discrepancies
   - **Device Privileges:** Verify standard/admin account separation maintained on all devices
   - **Device Admin Credentials:** Verify device administrator credentials remain securely stored in password manager
   - **Admin Usage Verification:** Confirm admin accounts (device and cloud) not used for routine work activities
-  - **Cloud Accounts:** Verify no orphaned or inactive accounts exist on GitHub and Northflank
+  - **Cloud Accounts:** Verify no orphaned or inactive accounts exist on GitHub and Civo
   - **Role Alignment:** Confirm all current users are authorized with appropriate role assignments (Owner vs Member)
   - **Privilege Verification:** Verify account privileges match current role requirements and identify any 'privilege creep'
   - **Admin Controls:** Verify administrative privileges only assigned to designated administrative accounts
@@ -406,7 +406,7 @@ priority: 2
 
 ### Ongoing Monthly (September)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Civo user lists
 - [ ] **Privileged Account Inventory Update** - Update inventory with any account changes
 - [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
@@ -438,7 +438,7 @@ priority: 2
 
 ### Ongoing Monthly (October)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Civo user lists
 - [ ] **Privileged Account Inventory Update** - Update inventory with any account changes
 - [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
@@ -467,7 +467,7 @@ priority: 2
 
 ### Ongoing Monthly (November)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Civo user lists
 - [ ] **Privileged Account Inventory Update** - Update inventory with any account changes
 - [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
@@ -486,11 +486,11 @@ priority: 2
   - Verify UPnP disabled
   - Document findings in Security Review Log
 - [ ] **Quarterly Access Review (Q4) (Cyber Essentials)** - Comprehensive user account and privilege audit [Access Control Policy](/compliance/access-control/)
-  - **Automated Export & Reconciliation:** Export GitHub organisation members list and Northflank team members list; compare against Privileged Account Inventory for discrepancies
+  - **Automated Export & Reconciliation:** Export GitHub organisation members list and Civo account users list; compare against Privileged Account Inventory for discrepancies
   - **Device Privileges:** Verify standard/admin account separation maintained on all devices
   - **Device Admin Credentials:** Verify device administrator credentials remain securely stored in password manager
   - **Admin Usage Verification:** Confirm admin accounts (device and cloud) not used for routine work activities
-  - **Cloud Accounts:** Verify no orphaned or inactive accounts exist on GitHub and Northflank
+  - **Cloud Accounts:** Verify no orphaned or inactive accounts exist on GitHub and Civo
   - **Role Alignment:** Confirm all current users are authorized with appropriate role assignments (Owner vs Member)
   - **Privilege Verification:** Verify account privileges match current role requirements and identify any 'privilege creep'
   - **Admin Controls:** Verify administrative privileges only assigned to designated administrative accounts
@@ -517,7 +517,7 @@ priority: 2
 
 ### Ongoing Monthly (December)
 
-- [ ] **Monthly Access Review** - GitHub and Northflank user lists
+- [ ] **Monthly Access Review** - GitHub and Civo user lists
 - [ ] **Privileged Account Inventory Update** - Update inventory with any account changes
 - [ ] **Monthly MFA Compliance Check (Cyber Essentials)** - Verify MFA enabled on staff administrative accounts (CheckTick backend/admin portal)
 - [ ] **Monthly Risk Register Review** - Founders' Board meeting
@@ -534,7 +534,7 @@ priority: 2
   - `process_data_governance` - GDPR data minimization
   - `process_recovery_time_delays` - Key recovery
   - `cleanup_survey_progress` - Session cleanup
-- [ ] **Security Monitoring** - Review alerts from Northflank/GitHub
+- [ ] **Security Monitoring** - Review alerts from Civo/GitHub
 
 ### Weekly
 

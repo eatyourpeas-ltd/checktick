@@ -48,7 +48,7 @@ unique passwords meeting the requirements below.
 * **App Passwords:** All business apps (GitHub, email) protected
   by device biometric authentication
 
-### 1.3 Cloud Services (GitHub, Northflank, Microsoft 365)
+### 1.3 Cloud Services (GitHub, Civo, Microsoft 365)
 
 All cloud service accounts meet one of these Cyber Essentials-
 compliant configurations:
@@ -109,7 +109,7 @@ options:
   (Microsoft 365 / Entra ID, GitHub) to reduce the number
   of managed passwords.
 * **Multi-Factor Authentication (MFA):** MFA is mandatory for
-  all cloud services (GitHub, Northflank, Microsoft 365).
+  all cloud services (GitHub, Civo, Microsoft 365).
   Passkeys and Biometric (Touch ID) authentication are the
   preferred methods.
 * **Microsoft 365 / Entra ID:** Staff email and compliance
@@ -162,11 +162,11 @@ or service provisioning.
 * **Mobile Devices:** Factory default PINs/passwords changed
   during initial setup
 * **Cloud Services:** Default passwords on new accounts changed
-  immediately (GitHub, Northflank, Microsoft 365, Namecheap)
+  immediately (GitHub, Civo, Microsoft 365, Namecheap)
 * **Infrastructure:** Database admin passwords (20+ characters
   minimum), API keys, all stored in Bitwarden
 * **Microsoft Graph API:** Application client secret stored as
-  an encrypted Northflank environment variable, not in source
+  an encrypted Kubernetes Secret, not in source
   code or version control. Rotated annually.
 * **Social Media/Third-party Services:** All accounts used for
   business protected by unique passwords + MFA
@@ -226,8 +226,8 @@ to be compromised:
 
 1. **Immediate Rotation:** Generate a new client secret in the
    Microsoft Entra app registration immediately.
-2. **Update Northflank:** Update the encrypted environment
-   variable in Northflank with the new secret.
+2. **Update the cluster Secret store:** Update the encrypted environment
+   variable in the cluster Secret store with the new secret, then re-roll the web Deployment.
 3. **Revoke Old Secret:** Delete the compromised secret from
    the Entra app registration.
 4. **Audit Send Logs:** Review Microsoft 365 mail send audit

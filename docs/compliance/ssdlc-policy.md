@@ -15,7 +15,7 @@ category: dspt-9-it-protection
 ## 2. Secure Development (Coding)
 
 * **Framework Security:** We leverage Django’s built-in security features (ORM for SQLi prevention, auto-escaping for XSS, and CSRF middleware).
-* **Secrets Management:** No secrets (API keys, DB passwords) are ever stored in source code. We use Northflank Environment Secrets and local `.env` files (excluded via `.gitignore`).
+* **Secrets Management:** No secrets (API keys, DB passwords) are ever stored in source code. We use in-cluster Kubernetes Secrets and local `.env` files (excluded via `.gitignore`).
 * **Input Validation:** All user input is treated as untrusted and validated against strict schemas.
 
 ## 3. Security Testing (The Pipeline)
@@ -37,5 +37,5 @@ Our GitHub Actions pipeline acts as our security "Gatekeeper":
 
 ## 5. Deployment
 
-* Deployments are automated via Northflank (UK).
+* Deployments are automated via GitHub Actions to the Civo Kubernetes cluster (UK).
 * Any security scan failure in the CI/CD pipeline automatically blocks the deployment to production.

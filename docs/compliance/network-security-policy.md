@@ -12,12 +12,12 @@ category: dspt-9-it-protection
 * **Immediate Change:** Vendor-supplied default passwords (e.g., 'admin', 'password') must be changed during the initial setup of any networking device (routers, modems, switches).
 * **Strength Requirements:** New passwords must meet our "High-Strength" criteria (minimum 12 characters, complex mix) and be stored in the corporate password manager.
 * **Unique Identities:** Wherever the hardware supports it, default 'admin' accounts are disabled in favor of individual named accounts for the CTO and SIRO.
-* **Cloud Boundary Controls** Our primary network boundary is managed via Northflank's Infrastructure-as-Code (IaC) settings. Access to change these "firewall-equivalent" settings is protected by the same MFA and unique-identity standards as our code repository.
+* **Cloud Boundary Controls** Our primary network boundary is managed via Kubernetes manifests (NetworkPolicy, Traefik ingress) held in our git repository. Access to change these "firewall-equivalent" settings is protected by the same MFA and unique-identity standards as our code repository.
 
 ## 2. Remote Access & Management
 
 * **Management Interfaces:** Local management interfaces for networking hardware must not be accessible from the public internet (WAN side).
-* **MFA:** Any cloud-based networking console (e.g., Northflank, Domain Registrars) must have Multi-Factor Authentication (MFA) enabled.
+* **MFA:** Any cloud-based networking console (e.g., Civo, Domain Registrars) must have Multi-Factor Authentication (MFA) enabled.
 * **Just-In-Time (JIT) Management** We do not leave administrative ports (e.g., database ports) open for management. Any direct database access for maintenance is conducted via temporary, authenticated proxy connections that bypass the public internet boundary.
 
 ## 3. Annual Review
@@ -82,7 +82,7 @@ Any device found to be non-compliant with these firewall requirements must be im
 
 ## 5. Protection of Administrative Interfaces
 
-As {{ platform_name }} utilizes cloud-managed boundaries, the following controls are mandatory for the Northflank and Domain Management consoles:
+As {{ platform_name }} utilizes cloud-managed boundaries, the following controls are mandatory for the Civo and Domain Management consoles:
 
 * **MFA Enforcement:** Every administrative account must utilize TOTP or FIDO2 hardware keys.
 * **Audit Logging:** We rely on the provider's immutable audit logs to monitor for configuration changes. These logs are reviewed by the SIRO quarterly.
@@ -101,7 +101,7 @@ The following inbound protocol checks have been performed on the production boun
 | **HTTP (80)** | **Blocked** | Redirected to 443 at Load Balancer |
 | **HTTPS (443)** | **Open** | Required for Production Web Traffic |
 | **SMB/NetBIOS (137-139, 445)** | **Blocked** | High Risk - Not utilized |
-| **Telnet/SSH (22, 23)** | **Blocked** | SSH managed via Northflank internal console |
+| **Telnet/SSH (22, 23)** | **Blocked** | SSH not exposed; cluster access via the Kubernetes API (MFA-protected Civo account) |
 | **Database (5432)** | **Blocked** | Database is on a private subnet; no WAN access |
 | **TFTP/RPC/Rlogin** | **Blocked** | Not installed in container images |
 

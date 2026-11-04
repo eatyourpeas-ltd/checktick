@@ -64,8 +64,8 @@ decryption, is planned prior to live deployment (see Section 4).
 ## 3. Planned Full BCDR Test (Pre-Launch)
 
 **Scenario:** Simulated complete infrastructure loss — Vault data corruption
-and PostgreSQL database failure requiring full restoration from Northflank
-snapshots.
+and PostgreSQL database failure requiring full restoration from the Civo
+Object Storage backups.
 
 **Participants:** {{ siro_name }} (SIRO), {{ cto_name }} (CTO)
 
@@ -73,10 +73,10 @@ snapshots.
 
 ### Test Objectives
 
-1. Restore PostgreSQL database from most recent Northflank managed addon
-   snapshot into a clean staging environment
+1. Restore PostgreSQL database from the most recent nightly base backup and
+   WAL archive (Civo Object Storage) into a clean scratch CloudNativePG cluster
 2. Redeploy the application container from GitHub into the staging environment
-3. Restore the Vault persistent volume from Northflank snapshot and unseal
+3. Restore the Vault storage from its most recent ceremony-gated backup and unseal
    using YubiKey hardware tokens (as validated in CT-01)
 4. Reconstruct platform master key from Shamir custodian shares held on
    YubiKeys (as validated in CT-01)

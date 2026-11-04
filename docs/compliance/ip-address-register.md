@@ -8,16 +8,16 @@ category: dspt-4-managing-access
 **Last Reviewed:** March 2026
 **Owner:** Dr Simon Chapman (CTO)
 
-## 1. Production Infrastructure (Northflank)
+## 1. Production Infrastructure (Civo Kubernetes)
 
 | Asset | Type | IP Address / Range | Purpose |
 | :--- | :--- | :--- | :--- |
-| Web Production | Ingress | Assigned by Northflank — recorded in Northflank console | Public access to CheckTick web application |
-| Service Egress | Egress | Assigned by Northflank — recorded in Northflank console | Outbound requests to OIDC providers and mail delivery services |
-| Database | Internal | Northflank private network (not publicly routable) | Internal communication between application and PostgreSQL |
-| Vault | Internal | Northflank private network (not publicly routable) | Internal communication between application and HashiCorp Vault |
+| Web Production | Ingress | Cluster-managed floating IP assigned by Civo — recorded in the Civo dashboard | Public access to CheckTick web application (Traefik ingress, 443) |
+| Service Egress | Egress | Assigned by Civo — recorded in the Civo dashboard | Outbound requests to OIDC providers and mail delivery services |
+| Database | Internal | Cluster-internal pod network (not publicly routable) | Internal communication between application and PostgreSQL |
+| Vault | Internal | Cluster-internal pod network (not publicly routable) | Internal communication between application and HashiCorp Vault |
 
-Specific IP values are recorded in the Northflank console and reviewed
+Specific IP values are recorded in the Civo dashboard and reviewed
 quarterly by the CTO. Production ingress and egress IPs are noted for
 reference when registering with external services such as NCSC Early Warning.
 
@@ -39,7 +39,7 @@ registered hardware authenticator regardless of the source IP address.
 ## 3. Review Process
 
 The CTO reviews all IP ranges and infrastructure networking configuration
-quarterly, confirming that production IP assignments in Northflank are
+quarterly, confirming that production IP assignments in Civo are
 current and that no unauthorised ingress rules have been added. Any change
 to production IP assignments is logged in the Infrastructure Technical
 Change Log. Reviews are documented in the Internal Audit and Spot Check Log.

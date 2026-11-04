@@ -57,12 +57,12 @@ Security patches are applied based on the severity of the risk:
 ## 4. Environment Isolation
 
 * **Development:** Local environments use anonymized or "dummy" data. No patient-identifiable data (PII) is ever used in development.
-* **Staging:** A separate Northflank environment used for final QA.
+* **Staging:** A staging namespace on the production Kubernetes cluster (staging.checktick.uk) used for final QA.
 * **Production:** The only environment containing encrypted health data. Access is strictly limited to System Administrators via MFA.
 
 ## 5. Supply Chain Security
 
-We only use reputable, well-maintained libraries. Our primary infrastructure providers (Northflank) are verified for:
+We only use reputable, well-maintained libraries. Our primary infrastructure providers (Civo) are verified for:
 
 * ISO 27001 Certification.
 * Compliance with the NHS Data Security and Protection Toolkit (DSPT) standards for data centers.

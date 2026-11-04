@@ -7,7 +7,7 @@ category: dspt-9-it-protection
 
 ## 1. Scope
 
-This policy applies to all changes to the {{ platform_name }} production environment, including application code, database schema, and Northflank infrastructure configurations.
+This policy applies to all changes to the {{ platform_name }} production environment, including application code, database schema, and Civo/Kubernetes infrastructure configurations.
 
 ## 2. Standard Change Procedure (Git-Ops)
 
@@ -18,7 +18,7 @@ This policy applies to all changes to the {{ platform_name }} production environ
     * Static Analysis (SAST) via CodeQL.
     * Dependency scanning via `pip-audit`.
 4. **Approval:** The CTO ({{ siro_name }}) or SIRO ({{ cto_name }}) must review the code and manually approve the PR.
-5. **Deployment:** Once merged, the Northflank pipeline automatically builds and deploys the change to the production environment.
+5. **Deployment:** Once merged, the GitHub Actions pipeline automatically builds and deploys the change to the production environment.
 
 ## 3. Emergency Changes
 

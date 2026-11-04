@@ -19,7 +19,7 @@ category: dspt-6-incidents
 
 | Organisation | Service | Contact Method | Account/Ref No. |
 | :--- | :--- | :--- | :--- |
-| **Northflank** | Hosting / PaaS | [Support Hotline/URL] | [Account ID] |
+| **Civo** | Managed Kubernetes (UK) | [Support Hotline/URL] | [Account ID] |
 
 ## 3. Health Sector & Regulatory
 

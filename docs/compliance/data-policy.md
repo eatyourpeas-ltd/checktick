@@ -23,7 +23,7 @@ This policy defines {{ platform_name }}’s commitment to managing data as a cri
 
 ### 2.2 Secure Storage
 
-* All data is stored in the UK/EEA (Northflank).
+* All data is stored in the UK (managed Kubernetes on Civo, London region).
 * **Encryption at Rest:** All health data is encrypted using AES-256-GCM.
 * **Encryption in Transit:** Minimum TLS 1.2 is enforced for all connections.
 

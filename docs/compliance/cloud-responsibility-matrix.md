@@ -5,17 +5,17 @@ category: dspt-10-suppliers
 
 # Cloud Shared Responsibility Matrix
 
-{{ platform_name }} uses this matrix to ensure clarity of accountability for our outsourced services (primarily Northflank/PaaS).
+{{ platform_name }} uses this matrix to ensure clarity of accountability for our outsourced services (primarily managed Kubernetes on Civo).
 
 | Security Layer | Responsible Party | Description |
 | :--- | :--- | :--- |
-| **Physical Security** | Northflank / GCP | Security of data centers, power, and hardware. |
-| **Host Infrastructure**| Northflank | Security of the OS/Hypervisor running the containers. |
-| **Network Boundary** | Joint | Northflank provides the firewall; {{ platform_name }} configures the rules. |
+| **Physical Security** | Civo | Security of the London (LON1) data centre, power, and hardware. |
+| **Host Infrastructure**| Civo | Security and patching of the managed k3s node images and hypervisors. |
+| **Network Boundary** | Joint | Civo manages the cluster edge; {{ platform_name }} configures Traefik ingress and Kubernetes NetworkPolicies. |
 | **Application Code** | {{ platform_name }} | Security of the Django/Python code and dependencies. |
 | **Identity & Access** | {{ platform_name }} | Management of staff accounts and MFA enforcement. |
 | **Data Encryption** | {{ platform_name }} | Configuring SSL/TLS and database encryption-at-rest. |
-| **Backups & Recovery** | Joint | Northflank provides the tool; {{ platform_name }} defines the schedule. |
+| **Backups & Recovery** | Joint | Civo provides the Object Storage target; {{ platform_name }} defines the CNPG backup schedule and retention. |
 
 ## Verification
 

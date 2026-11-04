@@ -13,23 +13,27 @@ category: dspt-7-continuity
 
 This policy covers all infrastructure used for the development, hosting, and
 operation of {{ platform_name }} services provided to health and care providers.
-All infrastructure is hosted on Northflank, a SOC 2 Type II compliant Platform-
-as-a-Service provider. Our backup strategy relies on Northflank's native automated
-snapshot capability with defined retention periods.
+All infrastructure is hosted on managed Kubernetes (Civo, UK London LON1 region).
+Our backup strategy uses the CloudNativePG operator's scheduled base backups
+and continuous WAL archiving to Civo Object Storage (UK region), with a defined
+retention period.
 
 ## 2. Backup Schedule & Scope
 
 {{ platform_name }} ensures all critical clinical and configuration data is backed
 up automatically:
 
-* **Database (PostgreSQL — Northflank Managed Addon):** Automated daily snapshots
-  managed by Northflank with a 120-day retention period. Snapshots are stored
-  within Northflank's isolated backup infrastructure, separate from the live
-  service environment.
-* **Encryption Vault (HashiCorp Vault — Northflank Service):** Daily snapshots
-  of the Vault persistent volume via Northflank's volume backup capability.
-  Vault unseal keys and custodian shares are stored offline by named administrators
-  independently of the Northflank environment.
+* **Database (PostgreSQL 17 — in-cluster via CloudNativePG):** Nightly scheduled
+  base backups (02:00 UTC) plus continuous WAL archiving to Civo Object Storage
+  (UK region), with a 30-day retention period. Backups are stored in an object
+  storage bucket separate from the live cluster.
+* **Encryption Vault (HashiCorp Vault — in-cluster StatefulSet):** Vault storage
+  backups are manual, ceremony-gated copies taken by named administrators.
+  Migrating the Vault to integrated Raft storage with a nightly
+  `vault operator raft snapshot save` CronJob is the top hardening priority
+  (migration runbook Phase 6 backlog). Vault unseal keys and custodian shares
+  are stored offline by named administrators independently of the hosting
+  environment.
 * **Source Code & Configuration:** Version-controlled in GitHub, providing
   globally redundant, immutable history of all application code and
   infrastructure configuration.
@@ -42,33 +46,34 @@ change in data volume or clinical deployment scope.
 In the event of a total system failure, systems must be restored in the following
 specific order to maintain the cryptographic security chain:
 
-1. **Identity & Access:** Restore MFA-protected admin access to the Northflank
-   console and GitHub organisation.
-2. **Encryption Vault:** Restore the Vault service from the most recent Northflank
-   volume snapshot and unseal using the Shamir recovery keys held by named
+1. **Identity & Access:** Restore MFA-protected admin access to the Civo
+   dashboard and GitHub organisation.
+2. **Encryption Vault:** Restore the Vault service from the most recent storage
+   backup and unseal using the Shamir recovery keys held by named
    administrators. Critical: survey data cannot be decrypted without this step.
-3. **Core Database:** Restore the most recent PostgreSQL snapshot via the
-   Northflank addon restore interface.
-4. **Application Tier:** Redeploy application containers via Northflank using
-   the latest verified image from GitHub.
+3. **Core Database:** Restore the most recent base backup and WAL archive from
+   Civo Object Storage into a fresh CloudNativePG cluster.
+4. **Application Tier:** Redeploy application containers to the Kubernetes
+   cluster using the latest verified image from GitHub.
 5. **Connectivity:** Verify Cloudflare DNS routing and confirm the platform
    is reachable and responding correctly.
 
 ## 4. Security of Backups
 
-* **Encryption:** All Northflank-managed backups are encrypted at rest.
-  Vault persistent volume backups contain only encrypted key material —
+* **Encryption:** All backups in Civo Object Storage are encrypted at rest.
+  Vault storage backups contain only encrypted key material —
   the custodian component required to reconstruct the platform master key
-  is stored offline and is never present in the Northflank environment.
+  is stored offline and is never present in the hosting environment.
 * **Access:** Access to restore backups is restricted to named administrators
-  (CTO and SIRO) via MFA-protected Northflank accounts. No application
-  service account has permission to delete or modify snapshots.
-* **Isolation:** Northflank snapshot storage is logically isolated from the
-  production service environment. Application service accounts operate under
-  least-privilege and have no access to the backup layer.
+  (CTO and SIRO) via MFA-protected Civo accounts. No application
+  service account has permission to delete or modify backups.
+* **Isolation:** The backup object store is logically isolated from the
+  production service environment, with dedicated scoped credentials. Application
+  service accounts operate under least-privilege and have no access to the
+  backup layer beyond write-only WAL/base-backup uploads.
 * **Source code independence:** GitHub provides an additional independent copy
   of all application and infrastructure configuration, ensuring recovery is
-  possible even in the event of a complete Northflank account loss.
+  possible even in the event of a complete Civo account loss.
 
 ## 5. Restoration Testing
 

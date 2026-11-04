@@ -16,12 +16,12 @@ category: dspt-8-unsupported-systems
 ## 2. Infrastructure Support
 
 * **Containers:** We use the `python:3.12-slim-bookworm` or `ubuntu:22.04` base images, which are actively maintained.
-* **Host Hardware:** Our UK hosting provider (Northflank) is responsible for patching the underlying hypervisors and physical hardware.
+* **Host Hardware:** Our UK hosting provider (Civo) is responsible for patching the underlying hypervisors and physical hardware.
 
 ## 3. Isolation of Legacy/Unsupported Assets
 
 {{ platform_name }} currently has **zero** unsupported assets. If an asset becomes unsupported:
 
-1. **Network Kill-Switch:** Public ingress (Port 443) is disabled via the Northflank console.
+1. **Network Kill-Switch:** Public ingress (Port 443) is disabled via the Civo dashboard / ingress configuration.
 2. **Internal-Only Access:** The asset is limited to internal VPC communication only.
 3. **Risk Review:** The SIRO assesses the clinical necessity of the asset. If it is not critical, it is decommissioned within 30 days.

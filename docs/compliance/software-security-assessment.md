@@ -232,7 +232,7 @@ Privacy by Design is applied throughout the development lifecycle. All survey re
 - Authentication and Permissions documentation: [checktick.uk/docs/authentication-and-permissions/](https://checktick.uk/docs/authentication-and-permissions/)
 - OIDC SSO Setup documentation: [checktick.uk/docs/oidc-sso-setup/](https://checktick.uk/docs/oidc-sso-setup/)
 
-**Arguments:** MFA is technically enforced for all Data Custodian and Organisation Owner accounts within CheckTick. NHS Trust users authenticating via OIDC/SSO inherit their Trust's MFA enforcement - CheckTick does not weaken or bypass Trust-level authentication requirements. For infrastructure administrative accounts (GitHub, Northflank, Microsoft 365), MFA is enforced at the organisation/tenant level with zero exceptions. The Enhanced Acceptable Use Policy commits both named administrators personally to MFA maintenance.
+**Arguments:** MFA is technically enforced for all Data Custodian and Organisation Owner accounts within CheckTick. NHS Trust users authenticating via OIDC/SSO inherit their Trust's MFA enforcement - CheckTick does not weaken or bypass Trust-level authentication requirements. For infrastructure administrative accounts (GitHub, Civo, Microsoft 365), MFA is enforced at the organisation/tenant level with zero exceptions. The Enhanced Acceptable Use Policy commits both named administrators personally to MFA maintenance.
 
 #### Claim 1.4.3 - Default (and persistent) passwords are not used.
 
@@ -265,9 +265,9 @@ Privacy by Design is applied throughout the development lifecycle. All survey re
 - Vault Integration documentation: [checktick.uk/docs/vault/](https://checktick.uk/docs/vault/)
 - Encryption Technical Reference: [checktick.uk/docs/encryption-technical-reference/](https://checktick.uk/docs/encryption-technical-reference/)
 - Staff Password Policy: [checktick.uk/compliance/password-policy/](https://checktick.uk/compliance/password-policy/)
-- Infrastructure Technical Change Log (Microsoft Graph API secret stored as encrypted Northflank environment variable, logged April 2026): [checktick.uk/compliance/infrastructure-technical-change-log/](https://checktick.uk/compliance/infrastructure-technical-change-log/)
+- Infrastructure Technical Change Log (Microsoft Graph API secret stored as an encrypted platform secret, logged April 2026; moved to in-cluster Kubernetes Secrets at the November 2026 Civo migration): [checktick.uk/compliance/infrastructure-technical-change-log/](https://checktick.uk/compliance/infrastructure-technical-change-log/)
 
-**Arguments:** All survey response data containing patient-identifiable information is encrypted at field level using AES-256-GCM before reaching the database. Encryption keys are managed via HashiCorp Vault using a split-knowledge architecture where neither the Vault component nor the offline custodian component alone can decrypt data. Staff credentials are stored in Bitwarden. The Microsoft Graph API client secret is stored as an encrypted Northflank environment variable injected at runtime - it is not present in source code or version control. GitGuardian pre-commit hooks provide a technical backstop against accidental credential exposure.
+**Arguments:** All survey response data containing patient-identifiable information is encrypted at field level using AES-256-GCM before reaching the database. Encryption keys are managed via HashiCorp Vault using a split-knowledge architecture where neither the Vault component nor the offline custodian component alone can decrypt data. Staff credentials are stored in Bitwarden. The Microsoft Graph API client secret is stored as an encrypted in-cluster Kubernetes Secret injected at runtime - it is not present in source code or version control. GitGuardian pre-commit hooks provide a technical backstop against accidental credential exposure.
 
 ---
 
@@ -277,7 +277,7 @@ This theme ensures appropriate steps are taken to prevent the build environment 
 
 ### Principle 2.1 - Protect the build environment against unauthorised access.
 
-Access to GitHub (source control and CI/CD) and Northflank (production hosting) is restricted to named administrators only - Dr Simon Chapman (CTO) and Dr Serena Haywood (SIRO). Both accounts require MFA enforced at the organisation level. No third party or contractor has standing access to the build environment. Any temporary access is pre-approved, time-limited, and revoked immediately on completion. GitGuardian (ggshield) prevents secrets or credentials from entering the repository via pre-commit hooks.
+Access to GitHub (source control and CI/CD) and Civo (production hosting) is restricted to named administrators only - Dr Simon Chapman (CTO) and Dr Serena Haywood (SIRO). Both accounts require MFA enforced at the organisation level. No third party or contractor has standing access to the build environment. Any temporary access is pre-approved, time-limited, and revoked immediately on completion. GitGuardian (ggshield) prevents secrets or credentials from entering the repository via pre-commit hooks.
 
 **Status: Met**
 
@@ -289,7 +289,7 @@ Access to GitHub (source control and CI/CD) and Northflank (production hosting) 
 - Information Governance: Roles and Responsibilities: [checktick.uk/compliance/roles-and-responsibilities/](https://checktick.uk/compliance/roles-and-responsibilities/)
 - Authentication and Permissions documentation: [checktick.uk/docs/authentication-and-permissions/](https://checktick.uk/docs/authentication-and-permissions/)
 
-**Arguments:** GitHub organisation enforces role-based access with admin, write, and read roles clearly defined. Northflank project roles restrict console access to named administrators only. No service account has write access to production secrets or infrastructure configuration. As a two-person organisation, the entire privileged access population is fully enumerated and individually named, making role definition and enforcement straightforward to verify.
+**Arguments:** GitHub organisation enforces role-based access with admin, write, and read roles clearly defined. Civo account roles restrict console access to named administrators only. No service account has write access to production secrets or infrastructure configuration. As a two-person organisation, the entire privileged access population is fully enumerated and individually named, making role definition and enforcement straightforward to verify.
 
 #### Claim 2.1.2 - Users of the build environment are required to authenticate on a regular basis.
 
@@ -298,7 +298,7 @@ Access to GitHub (source control and CI/CD) and Northflank (production hosting) 
 - Access Control Policy (Section 11 - session persistence): [checktick.uk/compliance/access-control/](https://checktick.uk/compliance/access-control/)
 - Enhanced Acceptable Use Policy: [checktick.uk/compliance/enhanced-acceptable-use-policy/](https://checktick.uk/compliance/enhanced-acceptable-use-policy/)
 
-**Arguments:** GitHub and Northflank both enforce session expiry and require re-authentication after inactivity. MFA is required on every login - there is no persistent session bypass mechanism. The Enhanced Acceptable Use Policy explicitly prohibits using Stay Logged In features on shared or public networks. This ensures that build environment access cannot persist undetected after a legitimate session has ended, limiting the window of exposure from a compromised device.
+**Arguments:** GitHub and Civo both enforce session expiry and require re-authentication after inactivity. MFA is required on every login - there is no persistent session bypass mechanism. The Enhanced Acceptable Use Policy explicitly prohibits using Stay Logged In features on shared or public networks. This ensures that build environment access cannot persist undetected after a legitimate session has ended, limiting the window of exposure from a compromised device.
 
 #### Claim 2.1.3 - Users of the build environment are issued with credentials bound to their role.
 
@@ -308,7 +308,7 @@ Access to GitHub (source control and CI/CD) and Northflank (production hosting) 
 - Access Control Policy (Section 8 - authorised devices): [checktick.uk/compliance/access-control/](https://checktick.uk/compliance/access-control/)
 - Access Audit Log: [checktick.uk/compliance/access-audit-logs/](https://checktick.uk/compliance/access-audit-logs/)
 
-**Arguments:** Both named administrators (Dr Simon Chapman and Dr Serena Haywood) hold individually named accounts on GitHub and Northflank that are bound to their specific roles. No shared or generic accounts exist. Credentials are independently revocable per individual, ensuring that departure of one administrator does not require rotation of shared credentials. The Enhanced Acceptable Use Policy documents personal accountability for these credentials and is signed by both individuals.
+**Arguments:** Both named administrators (Dr Simon Chapman and Dr Serena Haywood) hold individually named accounts on GitHub and Civo that are bound to their specific roles. No shared or generic accounts exist. Credentials are independently revocable per individual, ensuring that departure of one administrator does not require rotation of shared credentials. The Enhanced Acceptable Use Policy documents personal accountability for these credentials and is signed by both individuals.
 
 #### Claim 2.1.4 - Credentials are securely managed and stored.
 
@@ -316,10 +316,10 @@ Access to GitHub (source control and CI/CD) and Northflank (production hosting) 
 
 - Staff Password Policy: [checktick.uk/compliance/password-policy/](https://checktick.uk/compliance/password-policy/)
 - Vault Integration documentation: [checktick.uk/docs/vault/](https://checktick.uk/docs/vault/)
-- Infrastructure Technical Change Log (Microsoft Graph API secret in Northflank environment variables): [checktick.uk/compliance/infrastructure-technical-change-log/](https://checktick.uk/compliance/infrastructure-technical-change-log/)
+- Infrastructure Technical Change Log (Microsoft Graph API secret in encrypted platform secrets): [checktick.uk/compliance/infrastructure-technical-change-log/](https://checktick.uk/compliance/infrastructure-technical-change-log/)
 - GitGuardian (ggshield) pre-commit hook configuration in GitHub repository
 
-**Arguments:** Staff credentials are stored in Bitwarden, which is itself MFA-protected. Infrastructure secrets (database credentials, Vault tokens) are stored in HashiCorp Vault. The Microsoft Graph API client secret is stored as an encrypted Northflank environment variable injected at runtime, not in source code or version control. GitGuardian scans every commit for accidentally included credentials. No credential is stored in plain text anywhere in the build or deployment pipeline.
+**Arguments:** Staff credentials are stored in Bitwarden, which is itself MFA-protected. Infrastructure secrets (database credentials, Vault tokens) are stored in HashiCorp Vault. The Microsoft Graph API client secret is stored as an encrypted in-cluster Kubernetes Secret injected at runtime, not in source code or version control. GitGuardian scans every commit for accidentally included credentials. No credential is stored in plain text anywhere in the build or deployment pipeline.
 
 #### Claim 2.1.5 - Credentials are multi factor.
 
@@ -329,13 +329,13 @@ Access to GitHub (source control and CI/CD) and Northflank (production hosting) 
 - Access Control Policy (Section 11): [checktick.uk/compliance/access-control/](https://checktick.uk/compliance/access-control/)
 - Cyber Essentials Plus certification (independent verification of MFA enforcement)
 
-**Arguments:** MFA is mandatory on all GitHub accounts with FIDO2/WebAuthn hardware token authentication preferred and TOTP as a fallback. MFA is mandatory on all Northflank accounts. GitHub organisation policy enforces MFA at the organisation level - any account without MFA active cannot be a member of the CheckTick GitHub organisation. This provides a technical enforcement backstop independent of individual policy compliance. Cyber Essentials Plus independently verified MFA enforcement across all in-scope accounts.
+**Arguments:** MFA is mandatory on all GitHub accounts with FIDO2/WebAuthn hardware token authentication preferred and TOTP as a fallback. MFA is mandatory on all Civo accounts. GitHub organisation policy enforces MFA at the organisation level - any account without MFA active cannot be a member of the CheckTick GitHub organisation. This provides a technical enforcement backstop independent of individual policy compliance. Cyber Essentials Plus independently verified MFA enforcement across all in-scope accounts.
 
 ---
 
 ### Principle 2.2 - Control and log changes to the build environment.
 
-All changes to the build environment are managed through pull requests requiring CTO review and automated security gate approval before merging. The Git history provides an immutable timestamped record of every change, who proposed it, who approved it, and the automated scan results. Northflank infrastructure changes are logged in the Infrastructure Technical Change Log. No direct changes to the production environment are permitted outside the CI/CD pipeline.
+All changes to the build environment are managed through pull requests requiring CTO review and automated security gate approval before merging. The Git history provides an immutable timestamped record of every change, who proposed it, who approved it, and the automated scan results. Civo/Kubernetes infrastructure changes are logged in the Infrastructure Technical Change Log. No direct changes to the production environment are permitted outside the CI/CD pipeline.
 
 **Status: Met**
 
@@ -347,9 +347,9 @@ All changes to the build environment are managed through pull requests requiring
 - Logging and Audit Policy: [checktick.uk/compliance/logging-policy/](https://checktick.uk/compliance/logging-policy/)
 - Access Audit Log: [checktick.uk/compliance/access-audit-logs/](https://checktick.uk/compliance/access-audit-logs/)
 - GitHub audit log (Enterprise Cloud, accessible to organisation administrators)
-- Northflank platform audit log
+- Civo platform audit log
 
-**Arguments:** GitHub's immutable audit log records all repository access, code pushes, pull request approvals, merges, and configuration changes with full timestamp and actor attribution. Northflank's audit log records all infrastructure configuration changes. The Infrastructure Technical Change Log provides a human-readable summary of significant changes reviewed by named administrators. These logs are reviewed quarterly by the CTO and by the SIRO at bi-annual infrastructure audits.
+**Arguments:** GitHub's immutable audit log records all repository access, code pushes, pull request approvals, merges, and configuration changes with full timestamp and actor attribution. Civo's audit log records all infrastructure configuration changes. The Infrastructure Technical Change Log provides a human-readable summary of significant changes reviewed by named administrators. These logs are reviewed quarterly by the CTO and by the SIRO at bi-annual infrastructure audits.
 
 #### Claim 2.2.2 - Only authorised personnel can make changes to the build environment.
 
@@ -360,7 +360,7 @@ All changes to the build environment are managed through pull requests requiring
 - Access Control Policy (Section 12 - third-party access): [checktick.uk/compliance/access-control/](https://checktick.uk/compliance/access-control/)
 - GitHub branch protection rules (in repository settings)
 
-**Arguments:** Branch protection rules prevent any direct push to the main branch - all changes require a pull request with CTO review and approval. The CI/CD security gates must pass before any merge is permitted. Only the two named administrators can modify Northflank infrastructure settings. No third party or contractor has standing access to the build environment. Any temporary access requires pre-approval, is time-limited, and is revoked immediately on task completion.
+**Arguments:** Branch protection rules prevent any direct push to the main branch - all changes require a pull request with CTO review and approval. The CI/CD security gates must pass before any merge is permitted. Only the two named administrators can modify Civo infrastructure settings. No third party or contractor has standing access to the build environment. Any temporary access requires pre-approval, is time-limited, and is revoked immediately on task completion.
 
 #### Claim 2.2.3 - Logs are auditable and retained for an agreed period.
 
@@ -380,7 +380,7 @@ All changes to the build environment are managed through pull requests requiring
 - Security Monitoring and Logging Standard: [checktick.uk/compliance/monitoring-standard/](https://checktick.uk/compliance/monitoring-standard/)
 - Automated Security and Integrity Monitoring: [checktick.uk/compliance/automation-overview/](https://checktick.uk/compliance/automation-overview/)
 
-**Arguments:** GitHub audit logs are protected by GitHub's own infrastructure integrity controls and cannot be modified by repository administrators. Northflank platform logs are protected by platform-level access controls. Application logs are written in an append-only SIEM-ready format. Application service accounts have no access to audit logs, ensuring a compromise of the application cannot result in log tampering or deletion.
+**Arguments:** GitHub audit logs are protected by GitHub's own infrastructure integrity controls and cannot be modified by repository administrators. Civo platform logs are protected by platform-level access controls. Application logs are written in an append-only SIEM-ready format. Application service accounts have no access to audit logs, ensuring a compromise of the application cannot result in log tampering or deletion.
 
 ---
 
@@ -401,9 +401,9 @@ CheckTick is distributed as a SaaS platform over HTTPS with TLS 1.2 or better en
 - Data in Transit Security Standard: [checktick.uk/compliance/encryption-transit/](https://checktick.uk/compliance/encryption-transit/)
 - CDN Libraries documentation (SRI hashes): [checktick.uk/docs/cdn-libraries/](https://checktick.uk/docs/cdn-libraries/)
 - Infrastructure Hardening and Configuration Standard: [checktick.uk/compliance/infrastructure-hardening/](https://checktick.uk/compliance/infrastructure-hardening/)
-- Northflank deployment pipeline (container image verification on every deployment)
+- Deploy (Civo) pipeline (container image verification on every deployment)
 
-**Arguments:** CheckTick is SaaS - customers access the platform via their browser and do not install any software locally. Software integrity is maintained centrally by Eatyourpeas Ltd rather than requiring customer-side verification. All code is deployed via Northflank from the verified GitHub repository, with container images rebuilt from a clean base on every deployment. SHA-384 SRI hashes verify the integrity of all self-hosted JavaScript assets served to the browser. TLS 1.2+ on all connections ensures integrity in transit.
+**Arguments:** CheckTick is SaaS - customers access the platform via their browser and do not install any software locally. Software integrity is maintained centrally by Eatyourpeas Ltd rather than requiring customer-side verification. All code is deployed via the GitHub Actions Deploy (Civo) pipeline from the verified GitHub repository, with container images rebuilt from a clean base on every deployment. SHA-384 SRI hashes verify the integrity of all self-hosted JavaScript assets served to the browser. TLS 1.2+ on all connections ensures integrity in transit.
 
 #### Claim 3.1.2 - Software (including updates) is distributed over trusted channels.
 
@@ -413,7 +413,7 @@ CheckTick is distributed as a SaaS platform over HTTPS with TLS 1.2 or better en
 - Network Security and Infrastructure Statement: [checktick.uk/compliance/network-security/](https://checktick.uk/compliance/network-security/)
 - Infrastructure Hardening and Configuration Standard: [checktick.uk/compliance/infrastructure-hardening/](https://checktick.uk/compliance/infrastructure-hardening/)
 
-**Arguments:** As SaaS, all software is distributed via HTTPS with TLS 1.2+ enforced and HSTS preventing protocol downgrade. There are no alternative download channels, package distributions, or installers. Customers receive updates automatically through the platform without any action required on their part. The Northflank CI/CD pipeline ensures only reviewed and security-scanned code is deployed, maintaining the integrity of the distribution channel from source to production.
+**Arguments:** As SaaS, all software is distributed via HTTPS with TLS 1.2+ enforced and HSTS preventing protocol downgrade. There are no alternative download channels, package distributions, or installers. Customers receive updates automatically through the platform without any action required on their part. The GitHub Actions CI/CD pipeline ensures only reviewed and security-scanned code is deployed, maintaining the integrity of the distribution channel from source to production.
 
 ---
 

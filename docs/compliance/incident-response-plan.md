@@ -19,7 +19,7 @@ An incident is any event that threatens the confidentiality, integrity, or avail
 
 ## 2. Immediate Response Steps (The "4-Hour" Window)
 
-1. **Identify & Contain:** {{ cto_name }} isolates the affected system (e.g., revoking API keys, shutting down a Northflank service, or remote-wiping a laptop).
+1. **Identify & Contain:** {{ cto_name }} isolates the affected system (e.g., revoking API keys, scaling down a Kubernetes service, or remote-wiping a laptop).
 2. **Assess:** Determine what data was involved. Is it "Special Category" (health) data?
 3. **Notify SIRO:** {{ cto_name }} briefs {{ siro_name }} on the technical scope.
 

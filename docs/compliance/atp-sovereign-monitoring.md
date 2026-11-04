@@ -14,7 +14,7 @@ category: dspt-9-it-protection
 | **Identity** | `django-axes` | Actively monitors login attempts; automatically locks IPs/Accounts after 5 failed attempts (Brute Force Protection). |
 | **Traffic** | `django-ratelimit` | Prevents automated scraping and DoS attacks by limiting requests to sensitive endpoints (e.g., survey submissions). |
 | **Code** | `CodeQL` | Scans for logic-based security threats (SAST) on every commit. |
-| **Infrastructure** | Northflank Logs | Managed UK-based intrusion monitoring and DDoS mitigation at the platform level. |
+| **Infrastructure** | Civo platform logs | Managed UK-based platform-level monitoring. |
 
 ## 2. Monitoring & Alerting
 

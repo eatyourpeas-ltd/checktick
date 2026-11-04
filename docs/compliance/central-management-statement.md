@@ -17,7 +17,7 @@ category: dspt-9-it-protection
 In the event of a device compromise, central management is executed via our Cloud Service Providers:
 
 * **GitHub:** Central revocation of SSH keys and MFA sessions.
-* **Northflank:** Central revocation of infrastructure access.
+* **Civo:** Central revocation of infrastructure access.
 * **Password Manager:** Central vault access revocation.
 
 ## 3. Auditing
