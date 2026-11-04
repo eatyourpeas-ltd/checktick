@@ -85,7 +85,9 @@ Proven during the CVE-2026-98432 patch window (2026-11-04):
   `Cannot extract Pod status ... :8000: i/o timeout` every ~4 s in the operator log —
   and draining the primary's node STALLS against the `checktick-db-primary` PDB.
 - **Verify the backup chain after ANY intervention** (node recycles, operator
-  restarts, schedule changes — this caught two real outages):
+  restarts, schedule changes — this caught two real outages). The runner is
+  **`s/k8s-backup-verify`** (read-only, exits non-zero on any failed check);
+  it performs all of the following:
   1. `kubectl get scheduledbackups -n checktick` — schedule armed,
      `nextScheduleTime` in the future
   2. `kubectl get backups -n checktick` — every row must be terminal
@@ -99,14 +101,19 @@ Proven during the CVE-2026-98432 patch window (2026-11-04):
   in 1.31 and the operator emits a deprecation warning on every reconcile.
 - Restore path: latest base backup + WAL archive from Civo Object Store into a
   fresh CNPG cluster. Step-by-step procedure: [Quarterly Restore
-  Rehearsal](restore-rehearsal.md); results feed
+  Rehearsal](restore-rehearsal.md), run by **`s/k8s-restore-rehearsal`**;
+  results feed
   [`docs/compliance/restoration-test-log.md`](compliance/restoration-test-log.md).
+- Post-restore Vault ceremony (generate-root, fixed-policy verification,
+  AppRole mint, token revoke): **`s/k8s-vault-ceremony`** (drill pod by
+  default; production requires an explicit `--pod vault-0` + confirmation).
 
 ## Vault Operations
 
 - After node loss, `vault-0`'s storage reattaches in ~5.5 min and the pod comes up
   `Initialized: true, Sealed: true` — **storage survives; do not re-init.** Unseal
-  with 3-of-4 production shares; healthz is fully ok ~10 s later.
+  with 3-of-4 production shares (**`s/k8s-vault-unseal`** — hidden prompts only,
+  shares never appear on a command line); healthz is fully ok ~10 s later.
 - **Storage backup today is a manual, ceremony-gated copy — there is no scheduled
   Vault backup.** The designed fix (top hardening priority): migrate file storage →
   integrated Raft storage, then a nightly `vault operator raft snapshot save`

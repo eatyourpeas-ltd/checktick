@@ -19,6 +19,9 @@ is complete and usable. It is read-only for production: no writes to the
 database, no writes to the object store, no row contents ever leave the
 database — **counts only**.
 
+`s/k8s-restore-rehearsal` executes this entire procedure step by step; this
+page is the reference explanation of what it does and why.
+
 ## What the drill proves
 
 1. **Restorability** — the latest base backup + WAL archive produce a working
@@ -112,15 +115,20 @@ kubectl get cluster scratch-restore-drill -n checktick -w
 # wait for PHASE: healthy
 ```
 
-CNPG publishes the restored cluster's connection URI in the
-`scratch-restore-drill-app` Secret (key `uri`) — the drill never handles a
-password directly.
+The restored copy is reached with the **production owner credentials**
+(`checktick-db-creds`): a physical base backup carries the source's
+authentication verbatim, so the production `checktick` user's password works
+on the copy. The production cluster uses an external owner secret, so CNPG
+generates no `-app` secret for it — this is why the drills below consume
+`checktick-db-creds` via `PG*` environment variables (which also avoids any
+URL-escaping issues).
 
 ## Step 3 — Exact-count verification
 
-CNPG also publishes the production cluster's app URI in `checktick-db-app`.
-Run a helper pod holding both URIs, then generate per-table counts on both
-sides (counts only):
+Run a helper pod holding the production URI (the application's own
+`DATABASE_URL` from `checktick-secrets`) and the restored copy's credentials
+(`PG*` env from `checktick-db-creds`), then generate per-table counts on
+both sides (counts only):
 
 ```yaml
 apiVersion: v1
@@ -135,10 +143,19 @@ spec:
       image: postgres:17-alpine
       command: ["sleep", "3600"]
       env:
+        # Production: the application's own connection string.
         - name: PROD_DB_URL
-          valueFrom: {secretKeyRef: {name: checktick-db-app, key: uri}}
-        - name: DRILL_DB_URL
-          valueFrom: {secretKeyRef: {name: scratch-restore-drill-app, key: uri}}
+          valueFrom: {secretKeyRef: {name: checktick-secrets, key: DATABASE_URL}}
+        # Restored copy: production owner credentials (the physical backup
+        # carries the source's auth verbatim), consumed as psql PG* vars.
+        - name: PGHOST
+          value: scratch-restore-drill-rw
+        - name: PGDATABASE
+          value: checktick
+        - name: PGUSER
+          valueFrom: {secretKeyRef: {name: checktick-db-creds, key: username}}
+        - name: PGPASSWORD
+          valueFrom: {secretKeyRef: {name: checktick-db-creds, key: password}}
 ```
 
 ```bash
@@ -153,8 +170,8 @@ printf '%s\n' \
   | kubectl exec -i -n checktick scratch-restore-counts -- sh -s > counts-prod.txt
 
 printf '%s\n' \
-  "psql \"\$DRILL_DB_URL\" -Atc \"SELECT 'SELECT ' || quote_literal(tablename) || ' AS tbl, COUNT(*) FROM ' || quote_ident(tablename) || ';' FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename\" > /tmp/c.sql" \
-  "psql \"\$DRILL_DB_URL\" -Atf /tmp/c.sql" \
+  "psql -Atc \"SELECT 'SELECT ' || quote_literal(tablename) || ' AS tbl, COUNT(*) FROM ' || quote_ident(tablename) || ';' FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename\" > /tmp/c.sql" \
+  "psql -Atf /tmp/c.sql" \
   | kubectl exec -i -n checktick scratch-restore-counts -- sh -s > counts-drill.txt
 
 diff -u counts-prod.txt counts-drill.txt && echo "COUNTS MATCH — drill PASSES"
@@ -165,9 +182,10 @@ A non-empty diff is a drill FAILURE: do not tear down, investigate immediately
 
 ## Step 4 — Schema currency (`migrate --check`)
 
-Run the application's migration check against the restored copy. `env` entries
-win over `envFrom`, so the `DATABASE_URL` override points the check at the
-drill cluster:
+Run the application's migration check against the restored copy, using the
+same live pinned release image as production. `DATABASE_URL` is constructed
+in-container from the owner credentials with `quote_plus` (URL-safe), and
+`env` entries win over `envFrom` so the check targets the drill cluster:
 
 ```yaml
 apiVersion: batch/v1
@@ -184,14 +202,21 @@ spec:
       containers:
         - name: check
           image: ghcr.io/eatyourpeas-ltd/checktick:<current pinned release tag>
-          command: ["sh", "-c", "python manage.py migrate --check"]
+          command:
+            - sh
+            - -c
+            - |
+              export DATABASE_URL="$(python -c 'import os
+              from urllib.parse import quote_plus
+              print("postgresql://checktick:" + quote_plus(os.environ["PGPASSWORD"]) + "@scratch-restore-drill-rw:5432/checktick")')"
+              exec python manage.py migrate --check
           envFrom:
             - configMapRef: {name: checktick-config}
             - configMapRef: {name: checktick-config-local}
             - secretRef: {name: checktick-secrets}
           env:
-            - name: DATABASE_URL
-              valueFrom: {secretKeyRef: {name: scratch-restore-drill-app, key: uri}}
+            - name: PGPASSWORD
+              valueFrom: {secretKeyRef: {name: checktick-db-creds, key: password}}
 ```
 
 ```bash

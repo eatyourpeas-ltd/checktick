@@ -1,0 +1,246 @@
+#!/bin/bash
+# k8s_restore_rehearsal — quarterly restore drill: prove that the production
+# backups are restorable (KUBERNETES/Civo operational script).
+#
+# Executes the step-by-step procedure in docs/restore-rehearsal.md:
+#   1. preflight backup-chain checks (s/k8s-backup-verify)
+#   2. restore the latest base backup + WAL chain from Civo Object Store
+#      into a throwaway CNPG cluster (bootstrap.recovery)
+#   3. exact per-table row counts vs production — COUNTS ONLY, never contents
+#   4. migrate --check against the restored copy
+#   5. teardown (same day) — skipped with --keep or automatically on failure
+#
+# The restored copy carries PRODUCTION data: the scratch cluster has NO
+# backup section (a restored copy must never be re-archived) and must be
+# torn down the same day. Results go in docs/compliance/restoration-test-log.md.
+#
+# Usage: ./s/k8s-restore-rehearsal [--keep] [--help]
+
+set -euo pipefail
+
+case "${1:-}" in
+    --help) head -19 "$0" | tail -17; exit 0 ;;
+    --keep) KEEP=true ;;
+    *) KEEP=false ;;
+esac
+
+NS=checktick
+DRILL=scratch-restore-drill
+COUNTS_POD=scratch-restore-counts
+MCHECK=scratch-restore-mcheck
+TMP="$(mktemp -d /tmp/restore-drill.XXXXXX)"
+trap 'rm -rf "$TMP"' EXIT
+
+# Kubeconfig resolution: explicit KUBECONFIG wins; else the Civo kubeconfig
+# if present; else the default config.
+if [ -z "${KUBECONFIG:-}" ] && [ -f "${HOME}/.kube/civo-checktick.yaml" ]; then
+    export KUBECONFIG="${HOME}/.kube/civo-checktick.yaml"
+fi
+
+echo "=========================================="
+echo "  Quarterly restore rehearsal (Kubernetes/Civo)"
+echo "=========================================="
+echo "Cluster context: $(kubectl config current-context)"
+echo "This creates a throwaway cluster holding a restored copy of PRODUCTION."
+echo "Read-only for production and the object store; counts are compared,"
+echo "never row contents."
+echo ""
+read -p "Press Enter to continue (Ctrl-C to abort)..."
+
+echo ""
+echo "== 1. Preflight: backup chain =="
+bash "$(dirname "$0")/k8s-backup-verify"
+
+echo ""
+echo "== 2. Create $DRILL from the latest base backup + WAL =="
+# Mirrors the production barmanObjectStore (k8s/postgres-cnpg.yaml) — but NO
+# backup section of its own: a restored production copy is never re-archived.
+cat > "$TMP/cluster.yaml" <<'YAML'
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: scratch-restore-drill
+  namespace: checktick
+spec:
+  instances: 1 # no HA needed for a drill
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  bootstrap:
+    recovery:
+      # No recoveryTarget = replay WAL to the latest available point.
+      backup:
+        barmanObjectStore:
+          destinationPath: s3://checktick-backups/db
+          endpointURL: https://objectstore.lon1.civo.com
+          s3Credentials:
+            accessKeyId:
+              name: checktick-db-backup-creds
+              key: ACCESS_KEY_ID
+            secretAccessKey:
+              name: checktick-db-backup-creds
+              key: SECRET_ACCESS_KEY
+            region:
+              name: checktick-db-backup-creds
+              key: REGION
+          wal:
+            compression: gzip
+  storage:
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+YAML
+kubectl apply -f "$TMP/cluster.yaml" >/dev/null
+echo "   waiting for recovery (base backup download + WAL replay — several minutes;"
+echo "   the PVC is WaitForFirstConsumer: Pending until the pod starts)"
+DEADLINE=$((SECONDS + 1500))
+while :; do
+    PHASE="$(kubectl get cluster -n "$NS" "$DRILL" -o jsonpath='{.status.phase}' || true)"
+    if [ "$PHASE" = "healthy" ]; then
+        echo "   ✓ $DRILL is healthy"
+        break
+    fi
+    if [ "$SECONDS" -ge "$DEADLINE" ]; then
+        echo "   ✗ timed out waiting for $DRILL (phase: ${PHASE:-<none>})."
+        echo "     Inspect: kubectl get cluster -n $NS $DRILL -o yaml; kubectl get pods -n $NS | grep $DRILL"
+        echo "     Resources are KEPT for investigation."
+        exit 1
+    fi
+    sleep 15
+done
+
+echo ""
+echo "== 3. Exact-count verification (counts only, never row contents) =="
+# Production side: the application's own DATABASE_URL. Restored-copy side: a
+# physical base backup carries the source's auth verbatim, so the production
+# owner credentials work on the copy — consumed as psql PG* env vars (no URL
+# escaping issues).
+cat > "$TMP/counts-pod.yaml" <<'YAML'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scratch-restore-counts
+  namespace: checktick
+spec:
+  restartPolicy: Never
+  containers:
+    - name: counts
+      image: postgres:17-alpine
+      command: ["sleep", "3600"]
+      env:
+        - name: PROD_DB_URL
+          valueFrom: {secretKeyRef: {name: checktick-secrets, key: DATABASE_URL}}
+        - name: PGHOST
+          value: scratch-restore-drill-rw
+        - name: PGDATABASE
+          value: checktick
+        - name: PGUSER
+          valueFrom: {secretKeyRef: {name: checktick-db-creds, key: username}}
+        - name: PGPASSWORD
+          valueFrom: {secretKeyRef: {name: checktick-db-creds, key: password}}
+YAML
+kubectl apply -f "$TMP/counts-pod.yaml" >/dev/null
+kubectl wait --for=condition=Ready "pod/$COUNTS_POD" -n "$NS" --timeout=180s
+
+printf '%s\n' \
+  "psql \"\$PROD_DB_URL\" -Atc \"SELECT 'SELECT ' || quote_literal(tablename) || ' AS tbl, COUNT(*) FROM ' || quote_ident(tablename) || ';' FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename\" > /tmp/c.sql" \
+  "psql \"\$PROD_DB_URL\" -Atf /tmp/c.sql" \
+  | kubectl exec -i -n "$NS" "$COUNTS_POD" -- sh -s > "$TMP/counts-prod.txt"
+printf '%s\n' \
+  "psql -Atc \"SELECT 'SELECT ' || quote_literal(tablename) || ' AS tbl, COUNT(*) FROM ' || quote_ident(tablename) || ';' FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename\" > /tmp/c.sql" \
+  "psql -Atf /tmp/c.sql" \
+  | kubectl exec -i -n "$NS" "$COUNTS_POD" -- sh -s > "$TMP/counts-drill.txt"
+echo "   tables counted: prod=$(grep -c . "$TMP/counts-prod.txt" || true) restored=$(grep -c . "$TMP/counts-drill.txt" || true)"
+if diff -u "$TMP/counts-prod.txt" "$TMP/counts-drill.txt" > "$TMP/counts.diff"; then
+    echo "   ✓ COUNTS MATCH — every public table identical (names and exact row counts)"
+else
+    echo "   ✗ COUNT MISMATCH — drill FAILED. Diff (also kept at $TMP/counts.diff):"
+    cat "$TMP/counts.diff"
+    echo ""
+    echo "   Resources are KEPT for investigation. Do NOT tear down."
+    exit 1
+fi
+
+echo ""
+echo "== 4. migrate --check against the restored copy =="
+APP_IMAGE="$(kubectl get deploy checktick-web -n "$NS" \
+    -o jsonpath='{.spec.template.spec.containers[0].image}')"
+echo "   using the live pinned image: $APP_IMAGE"
+cat > "$TMP/mcheck.yaml" <<'YAML'
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: scratch-restore-mcheck
+  namespace: checktick
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: check
+          image: __APP_IMAGE__
+          command:
+            - sh
+            - -c
+            - |
+              export DATABASE_URL="$(python -c 'import os
+              from urllib.parse import quote_plus
+              print("postgresql://checktick:" + quote_plus(os.environ["PGPASSWORD"]) + "@scratch-restore-drill-rw:5432/checktick")')"
+              exec python manage.py migrate --check
+          envFrom:
+            - configMapRef: {name: checktick-config}
+            - configMapRef: {name: checktick-config-local}
+            - secretRef: {name: checktick-secrets}
+          env:
+            # env entries win over envFrom: this override points the check at
+            # the restored copy. DATABASE_URL is constructed with quote_plus
+            # so password characters are URL-safe.
+            - name: PGPASSWORD
+              valueFrom: {secretKeyRef: {name: checktick-db-creds, key: password}}
+YAML
+sed -i '' "s|__APP_IMAGE__|$APP_IMAGE|" "$TMP/mcheck.yaml"
+kubectl apply -f "$TMP/mcheck.yaml" >/dev/null
+if kubectl wait --for=condition=complete "job/$MCHECK" -n "$NS" --timeout=300s; then
+    kubectl logs "job/$MCHECK" -n "$NS" 2>/dev/null | tail -3 || true
+    echo "   ✓ migrate --check clean (no pending migrations)"
+else
+    echo "   ✗ migrate --check FAILED — job logs:"
+    kubectl logs "job/$MCHECK" -n "$NS" 2>/dev/null | tail -20 || true
+    echo "   Resources are KEPT for investigation. Do NOT tear down."
+    exit 1
+fi
+
+echo ""
+echo "== 5. Record the drill =="
+echo "   Append to docs/compliance/restoration-test-log.md:"
+echo "     date, base backup name/timestamp (from s/k8s-backup-verify step 4),"
+echo "     restore + verification timings, tables compared, counts result,"
+echo "     migrate --check result, performed by (CTO), verified by (SIRO)."
+
+if [ "$KEEP" = true ]; then
+    echo ""
+    echo "== Teardown SKIPPED (--keep) — remember to tear down TODAY: =="
+    echo "   kubectl delete job $MCHECK pod $COUNTS_POD cluster $DRILL -n $NS"
+    echo "   kubectl delete pvc scratch-restore-drill-1 -n $NS --ignore-not-found"
+    exit 0
+fi
+
+echo ""
+echo "== 6. Teardown =="
+kubectl delete job "$MCHECK" -n "$NS" --ignore-not-found >/dev/null
+kubectl delete pod "$COUNTS_POD" -n "$NS" --ignore-not-found >/dev/null
+kubectl delete cluster "$DRILL" -n "$NS" >/dev/null
+kubectl delete pvc scratch-restore-drill-1 -n "$NS" --ignore-not-found >/dev/null
+LEFTOVERS="$(kubectl get pvc,pods,cluster -n "$NS" 2>/dev/null | grep -c 'scratch-restore' || true)"
+if [ "$LEFTOVERS" -gt 0 ]; then
+    echo "   ⚠ leftover scratch-restore resources:"
+    kubectl get pvc,pods,cluster -n "$NS" | grep 'scratch-restore' || true
+    exit 1
+fi
+echo "   ✓ teardown complete — no leftover scratch resources."
+echo ""
+echo "Rehearsal PASSED. Record it (step 5) if you have not already."
