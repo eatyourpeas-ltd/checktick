@@ -1,8 +1,8 @@
 # Deploys a published CheckTick image from GHCR to the Civo cluster.
 #
-# This is the Kubernetes replacement for the Northflank deployment webhook.
-# The image itself is built and published by docker-publish.yml; this
-# workflow deploys a tag that already exists in GHCR.
+# This is the production deployment workflow. The image itself is built
+# and published by docker-publish.yml; this workflow deploys a tag that
+# already exists in GHCR.
 #
 # One-time setup:
 #   civo k8s config <cluster-name> > /tmp/kubeconfig.yaml   # or download from the Civo dashboard
@@ -25,9 +25,9 @@
 # therefore stay expansion/contract (additive for one release) — see the
 # runbook and k8s/README.md.
 #
-# NOTE: docker-publish.yml keeps calling the Northflank webhook on main
-# publishes until the cutover is complete; swapping that step for a call to
-# this workflow is runbook Phase 6 work, deliberately not done in advance.
+# NOTE: on main publishes, docker-publish.yml dispatches this workflow with
+# the newly published image tag (swapped from the previous platform's
+# deployment webhook at migration close-out — runbook Phase 6).
 # Add protection rules (required reviewers) to the `civo` GitHub
 # environment to make dispatch a gated production deploy.
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Data Governance Cron Job Entrypoint
-# Used by Northflank scheduled job
+# Used by scheduled jobs (cron / Kubernetes CronJob)
 
 set -e
 

@@ -12,8 +12,8 @@ TESTING = "pytest" in sys.modules or "test" in sys.argv
 
 # Silence the RemovedInDjango60Warning that Django 5.x emits whenever the
 # FORMS_URLFIELD_ASSUME_HTTPS transitional setting is explicitly set. We keep
-# the setting True so that forms.URLField assumes HTTPS (matching production
-# behaviour behind Northflank) without per-field assume_scheme kwargs. The
+# setting True so that forms.URLField assumes HTTPS (matching production
+# behaviour behind a reverse proxy) without per-field assume_scheme kwargs. The
 # setting and this warning both go away in Django 6.0, at which point HTTPS
 # becomes the unconditional default and this filter can be removed.
 warnings.filterwarnings(
@@ -534,7 +534,7 @@ SESSION_COOKIE_SAMESITE = "Lax"
 # deprecation warning for setting it is silenced via the filter above.
 FORMS_URLFIELD_ASSUME_HTTPS = True
 
-# When running behind a reverse proxy (e.g., Northflank), trust forwarded proto/host
+# When running behind a reverse proxy (e.g., Traefik or a cloud load balancer), trust forwarded proto/host
 # so Django correctly detects HTTPS and constructs absolute URLs without redirect loops.
 # Only enable in production to avoid HTTPS redirect issues in development
 if not DEBUG:
@@ -780,12 +780,11 @@ IMD_API_URL = os.environ.get(
 IMD_API_KEY = os.environ.get("IMD_API_KEY", "")
 
 # Hosting Provider API Configuration (for platform admin log viewing)
-# Used to fetch infrastructure logs from your hosting provider (Northflank, Railway, etc.)
-# See docs/self-hosting.md for provider-specific configuration examples
+# Used to fetch infrastructure logs from your hosting provider (Railway, Render, etc.)
+# See docs/self-hosting.md for provider-specific configuration examples.
+# No default base URL: set HOSTING_API_BASE_URL explicitly to enable.
 HOSTING_API_TOKEN = os.environ.get("HOSTING_API_TOKEN", "")
-HOSTING_API_BASE_URL = os.environ.get(
-    "HOSTING_API_BASE_URL", "https://api.northflank.com/v1"
-)
+HOSTING_API_BASE_URL = os.environ.get("HOSTING_API_BASE_URL", "")
 HOSTING_PROJECT_ID = os.environ.get("HOSTING_PROJECT_ID", "")
 HOSTING_SERVICE_ID = os.environ.get("HOSTING_SERVICE_ID", "")
 
@@ -846,7 +845,8 @@ LOGGING = {
     "handlers": {
         #
         # Primary log output.
-        # Northflank captures stdout and ships it to OpenObserve.
+        # The container platform captures stdout; on the production cluster a
+        # collector ships it to OpenObserve (see docs/infrastructure-logging.md).
         #
         "console": {
             "class": "logging.StreamHandler",
