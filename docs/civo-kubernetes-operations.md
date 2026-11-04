@@ -98,7 +98,8 @@ Proven during the CVE-2026-98432 patch window (2026-11-04):
   Barman object store to the **Barman Cloud Plugin** — in-tree support is removed
   in 1.31 and the operator emits a deprecation warning on every reconcile.
 - Restore path: latest base backup + WAL archive from Civo Object Store into a
-  fresh CNPG cluster. The quarterly restore rehearsal feeds
+  fresh CNPG cluster. Step-by-step procedure: [Quarterly Restore
+  Rehearsal](restore-rehearsal.md); results feed
   [`docs/compliance/restoration-test-log.md`](compliance/restoration-test-log.md).
 
 ## Vault Operations
@@ -146,7 +147,8 @@ Moved from the migration runbook's Phase 6 list; in rough priority order:
    (`runAsUser: 100`); staging namespace separation; alerting on `/healthz`
 9. Open SNOMED readers as `file:...?mode=ro&immutable=1` (needs an image release;
    non-urgent given the init-container conversion)
-10. Quarterly restore rehearsal (DB drill tooling is directly reusable)
+10. Quarterly restore rehearsal — step-by-step procedure in
+    [docs/restore-rehearsal.md](restore-rehearsal.md)
 
 ## Related
 

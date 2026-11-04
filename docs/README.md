@@ -34,6 +34,7 @@ For NHS tips on survey creation check out this [guidance](https://nhsevaluationt
 
 - [Versioning and Deployment](versioning-and-deployment/)
 - [Civo Kubernetes Operations](civo-kubernetes-operations.md)
+- [Quarterly Restore Rehearsal](restore-rehearsal.md)
 - [Northflank to Civo Migration Runbook](migration-northflank-to-civo.md)
 - [Documentation System](documentation-system/)
 - [Getting Started with API](getting-started-api/)

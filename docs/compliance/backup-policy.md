@@ -83,12 +83,13 @@ integrity is maintained:
 * **Frequency:** Prior to live clinical deployment, a full restoration test
   will be completed and documented. Thereafter, tests will be conducted
   quarterly (January, April, July, October).
-* **Procedure:** The CTO restores the most recent PostgreSQL snapshot and
-  Vault volume backup into a staging environment and verifies that the
-  application boots, connects to the restored database, and successfully
-  decrypts a sample test record using the recovered Vault keys.
-* **Success Criteria:** Full application boot, successful database connection,
-  and confirmed decryption of a test record.
+* **Procedure:** The CTO restores the most recent nightly base backup and WAL
+  archive from Civo Object Storage into a scratch CloudNativePG cluster, then
+  verifies exact per-table row counts against production and that the
+  application schema is current (`migrate --check`). The step-by-step
+  procedure is documented in [Quarterly Restore Rehearsal](../restore-rehearsal.md).
+* **Success Criteria:** Restored cluster healthy, exact count match on every
+  public table, and no pending migrations.
 * **Audit:** Results are documented in the Backup Restoration Test Log.
 
 ## 6. Routine Review
