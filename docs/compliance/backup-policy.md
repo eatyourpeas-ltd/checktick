@@ -25,7 +25,7 @@ up automatically:
 
 * **Database (PostgreSQL 17 — in-cluster via CloudNativePG):** Nightly scheduled
   base backups (02:00 UTC) plus continuous WAL archiving to Civo Object Storage
-  (UK region), with a 30-day retention period. Backups are stored in an object
+  (UK region), with a 120-day retention period. Backups are stored in an object
   storage bucket separate from the live cluster.
 * **Encryption Vault (HashiCorp Vault — in-cluster StatefulSet):** Vault storage
   backups are manual, ceremony-gated copies taken by named administrators.

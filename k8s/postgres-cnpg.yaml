@@ -110,7 +110,8 @@ spec:
   # in CNPG 1.31. Works fully in 1.30.x; before any operator upgrade past
   # 1.30, migrate to the Barman Cloud Plugin (runbook Phase 6 backlog).
   backup:
-    retentionPolicy: 30d
+    # 120-day retention per docs/compliance/backup-policy.md (DSPT evidence retention).
+    retentionPolicy: 120d
     barmanObjectStore:
       # One shared bucket, CNPG under the /db prefix (SNOMED builds and logs
       # will use /snomed and /logs). Barman lays out base/ + wals/ inside.
