@@ -89,9 +89,13 @@ else
 fi
 
 echo "4. Latest completed backup (for the log)"
-LATEST="$(kubectl get backups.postgresql.cnpg.io -n "$NS" --no-headers \
-    -o custom-columns=NAME:.metadata.name,PHASE:.status.phase,STOPPED:.status.stoppedAt 2>/dev/null \
-    | awk '$2 == "completed"' | tail -1 || true)"
+# jsonpath feed (no custom-columns padding), then sort by the STOPPED
+# timestamp — kubectl lists objects ALPHABETICALLY, and manual backups
+# named 'pre-*' sort after the dated nightly names, so tail-of-list is NOT
+# the latest.
+LATEST="$(kubectl get backups.postgresql.cnpg.io -n "$NS" \
+    -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.phase}{" "}{.status.stoppedAt}{"\n"}{end}' 2>/dev/null \
+    | awk '$2 == "completed"' | sort -k3 | tail -1 || true)"
 if [ -n "$LATEST" ]; then
     pass "$LATEST"
 else
