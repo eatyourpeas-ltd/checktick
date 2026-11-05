@@ -1,0 +1,88 @@
+# NetworkPolicy: PostgreSQL (CloudNativePG) ingress airgap.
+#
+# The database pods accept connections ONLY from:
+#   - the Django web pods (app=checktick-web) — the application
+#   - the cluster's own instance pods (cnpg.io/cluster=checktick-db) —
+#     replica -> primary streaming replication, pg_basebackup joins and
+#     CNPG backup traffic all originate from pods carrying this label
+#   - the CNPG operator (cnpg-system / app.kubernetes.io/name=cloudnative-pg)
+#     — role/database/publication reconciliation SQL
+#   - the batch jobs (checktick.io/db-client=true) — the 13 CronJobs and the
+#     pre-deploy migrate/sync Job. Found the hard way 2026-11-04: the first
+#     policy revision allowed only web/instance/operator pods and SILENTLY
+#     blocked every scheduled job from the database (a manual test job timed
+#     out reaching checktick-db-rw). Batch pods carry no other labels, so this
+#     label IS their DB access grant — do not remove it from the templates.
+# All other in-cluster sources are denied. The DB services are ClusterIP-only
+# (no external exposure); this policy closes the in-cluster gap.
+#
+# Port 8000 (per rule below): the CNPG instance-manager status API. The
+# operator polls it for instance health/status extraction and delivers
+# switchover/demote + backup commands through it. Found the hard way
+# 2026-11-04 (pre-CVE-upgrade pre-flight): allowing the operator on 5432 only
+# left the cluster reporting "Instance Status Extraction Error / HTTP
+# communication issue" (status polls timing out) and would have broken
+# coordinated primary switchover during node drains. Instance pods reach each
+# other on 8000 for the same API. Verified: operator log clean and
+# "Cluster in healthy state" immediately after adding these rules.
+#
+# Deliberately NOT restricted: egress. The instance pods upload WAL archives
+# and base backups to the Civo object store (objectstore.lon1.civo.com —
+# resolved via DNS, elastic address space), so an egress allowlist would be
+# fragile and risks silently breaking point-in-time recovery — the very
+# posture this file protects. Vault's airgap (vault.yaml) DOES deny egress
+# because file storage needs none.
+#
+# Found as a gap during the 2026-11-03 cutover review (POC-STATUS session 9);
+# applied and verified same day (see compliance infrastructure change log).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: checktick-db-ingress
+  namespace: checktick
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: checktick-db
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: checktick-web
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: checktick-db
+        - podSelector:
+            matchLabels:
+              checktick.io/db-client: "true"
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+      ports:
+        - protocol: TCP
+          port: 5432
+    # CNPG instance-manager API (status extraction, switchover, backup
+    # commands) — operator only.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Instance-manager API, instance-to-instance (same cluster label).
+    - from:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: checktick-db
+      ports:
+        - protocol: TCP
+          port: 8000

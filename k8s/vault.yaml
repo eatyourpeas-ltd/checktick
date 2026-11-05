@@ -3,14 +3,16 @@
 # POC: initialise a THROWAWAY Vault (vault operator init -key-shares=4
 # -key-threshold=3) and configure AppRole per docs/vault.md.
 #
-# PRODUCTION CUTOVER: never `init` here. The migrated storage directory from
-# Northflank must be extracted into the `data-vault-0` PVC BEFORE this
+# PRODUCTION CUTOVER: never `init` here. A migrated storage directory from
+# the source Vault must be extracted into the `data-vault-0` PVC BEFORE this
 # StatefulSet is applied, then unsealed with the EXISTING shares. A fresh init
 # makes every encrypted survey in PostgreSQL permanently undecryptable.
 # See docs/migration-northflank-to-civo.md, critical safety rule 1.
 #
-# Version is pinned to match the source instance (1.21.1). Upgrade only after
-# the migration settles, as a separate change.
+# Version is pinned to match the source instance. Verified against the live
+# production Vault 2026-11-02: server reports 1.21.4 (the runbook originally
+# assumed 1.21.1 — a storage-copy into an OLDER Vault is not a supported
+# direction). Upgrade only after the migration settles, as a separate change.
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -86,7 +88,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: vault
-          image: hashicorp/vault:1.21.1
+          image: hashicorp/vault:1.21.4
           # Invoke vault directly. Verified healthy by running it manually in
           # the container during POC debugging. The image's wrapper
           # (docker-entrypoint.sh) chowns the read-only ConfigMap mount

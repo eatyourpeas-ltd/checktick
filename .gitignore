@@ -285,12 +285,10 @@ k8s/secrets.env
 k8s/scratch-secret.env
 k8s/config.env
 k8s/ingress.local.yaml
-# Local POC scratch manifests (applied out-of-band, environment-specific)
-k8s/scratch-*.yaml
-# Local POC scratch exports/scripts (teardown-rebuild test; never commit)
-k8s/scratch-*.json
-k8s/scratch-*.txt
-k8s/scratch-*.sh
+# Local POC scratch manifests + drill tooling (applied/run out-of-band,
+# environment-specific, some handle secrets — NEVER commit anything under
+# this prefix; the earlier per-extension list kept missing new suffixes)
+k8s/scratch-*
 # Safety net: the deploy-workflow setup writes its transient cluster-admin
 # kubeconfig to /tmp (outside the repo). This repo is public — never let
 # one land in a commit.
