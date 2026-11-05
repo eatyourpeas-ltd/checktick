@@ -11,6 +11,15 @@ Northflank to Civo (UK, London region). This document contains **no secrets** �
 hostnames, credentials, and unseal shares are held out-of-band (password
 manager / private ops repo / unseal ceremony).
 
+> **SUPERSEDED (2026-11-04):** the enduring operational content of this runbook
+> (Civo/k3s node maintenance, CNPG backup verification, Vault operations, the
+> hardening backlog) has been extracted to
+> [`docs/civo-kubernetes-operations.md`](civo-kubernetes-operations.md). This
+> runbook is retained only until Phase 6 close-out (~2026-11-05 22:46 UTC) for
+> the rollback procedure (Phase 5) and the close-out checklist (Phase 6), then
+> removed. The permanent historical record of the migration is
+> [`docs/compliance/infrastructure-technical-change-log/`](compliance/infrastructure-technical-change-log/).
+
 ## Status
 
 Phase 0 (Civo provisioning) is complete — the `checktick` cluster is live and
@@ -22,9 +31,23 @@ from the manifests + out-of-band objects, fresh Vault ceremony, `/healthz`
 fully ok, smoke 19/19 re-run on the rebuilt environment). **Phase 2
 (credential rotation) is complete:** every provider-level credential is
 rotated at its provider and staged in the git-ignored `k8s/secrets.env` /
-applied as the `checktick-secrets` Secret — only the two deliberately
-cutover-time items remain (new `SECRET_KEY` inside the freeze window; fresh
-AppRole credentials on the migrated Vault). Phases 3–6 are next.
+applied as the `checktick-secrets` Secret. **Phase 3 (pre-cutover) is
+complete:** both rehearsals passed against real production data (2026-11-02),
+media pre-synced, SNOMED verified, and staging re-verified healthy 2026-11-03
+after the session-8 WAL-archive fix (image pinned 0.24.2, SSO completing for
+Google and Microsoft, `ContinuousArchiving: True`). The T−24h operational
+items (DNS TTL 60s, Northflank freeze, user announcement) were executed at
+window open.
+
+**[2026-11-03] Phase 4 (cutover) is COMPLETE** — production is live on Civo
+(22:05–22:50 UTC; full timeline in `k8s/POC-STATUS.md` session 9, timings
+table in the compliance infrastructure change log). **Phase 5 (rollback
+window) ran 2026-11-03 ~22:46 UTC → 2026-11-05 ~22:46 UTC: Northflank
+retained stopped. Phase 6 (decommission + close-out) is next.** The
+cutover surfaced two tooling bugs (vault-copy run-id JSON parse; ceremony
+grep-pipefail false negative — resume script pattern is the fix) and one
+carried-over wart (ALLOWED_HOSTS manifest override — Phase 6 backlog), all
+recorded in POC-STATUS session 9.
 
 ## Context
 
@@ -63,8 +86,11 @@ during the POC.
    becomes permanently undecryptable. Migration is a storage-directory copy
    unsealed with the **existing** 3-of-4 Shamir shares. A fresh `init` is only
    correct in the POC, against a throwaway Vault with synthetic data.
-2. **Pin the Vault image version** to `hashicorp/vault:1.21.1` (matches source).
-   Version upgrades are a separate change, done after the migration settles.
+2. **Pin the Vault image version** to `hashicorp/vault:1.21.4` (matches source
+   — verified against the live production Vault 2026-11-02; the original
+   1.21.1 assumption was wrong, and a storage-copy into an OLDER Vault is
+   not a supported direction). Version upgrades are a separate change, done
+   after the migration settles.
 3. **PostgreSQL major version may only move forward** (16 → 17). A logical
    `pg_dump`/`pg_restore` into the same or newer major version is the
    supported upgrade path — restoring into an *older* major is not. Dump
@@ -452,19 +478,69 @@ Rotation".
 
 ## Phase 3 — Pre-cutover (T−7 days → T−1 day)
 
-- [ ] Manifests final; ingress + TLS certificate issued and verified on a
-      scratch hostname.
-- [ ] **Rehearsal 1 — Vault:** copy the Northflank Vault storage directory →
-      restore into a scratch Civo PVC → start Vault → unseal with real shares →
-      `vault status` unsealed → issue a scratch AppRole → point a scratch web
-      instance with a restored DB copy at it → decrypt one real survey
-      (in scratch, privately). Destroy the scratch afterwards. If this fails,
-      the cutover will fail — stop here and investigate.
-- [ ] **Rehearsal 2 — database:** full `pg_dump` → `pg_restore` into a scratch
-      Civo DB; record duration; `python manage.py migrate --check` reports no
-      pending migrations; row counts match source.
-- [ ] Media pre-sync (bulk `rsync`/`rclone` into the PVC).
-- [ ] SNOMED rebuilt on the production PVC; `healthz` reports snomed ok.
+- [x] Manifests final; ingress + TLS certificate issued and verified on a
+      scratch hostname. (Staging hostname: cert `READY True`, public HTTPS
+      serving; the production hostname cert is created at T+30 — see the
+      TLS note in the Phase 4 findings below.)
+- [x] **Rehearsal 1 — Vault: PASSED 2026-11-02 against real production data.**
+      The Northflank Vault was paused, its `vault-data` volume moved to the
+      one-off `vault-storage-tar` job (tar + sha256 + download via CLI), the
+      volume returned, the service resumed and unsealed (~20 min end to end,
+      of which ~10 were a first-run stall — see the drill findings:
+      **abort the tar job run before resuming the Vault**). The storage copy
+      restored into a scratch Civo PVC started as `Initialized: true, Sealed:
+      true`, unsealed with the REAL 3-of-4 shares, carried the STALE policy
+      (deferred ceremony — the faithful T+5 rehearsal), and the scratch web
+      instance against the restored DB copy passed the decrypt proof:
+      **3/3 real survey responses decrypted through the moved Vault, drill
+      marker found** (booleans/counts only). Scratch destroyed afterwards.
+      If this had failed, the cutover would fail — it did not.
+      **Tooling (git-ignored):** `k8s/scratch-drill-vault.yaml` +
+      `scratch-drill-vault-restore.sh` (PVC pre-create, checksum, extraction
+      with layout normalisation) + `scratch-drill-vault-ceremony.sh`
+      (generate-root → policy → AppRole → revoke; run by the OPERATOR in
+      their own terminal — real shares/tokens never transit an agent
+      session) + `scratch-drill-web.yaml` / `scratch-drill-decrypt.sh`.
+      **Mechanically validated 2026-11-02** against a staging storage copy
+      (throwaway shares): migrated Vault starts `Initialized: true, Sealed:
+      true`, unseals, ceremonies, and serves smoke **19/19** including the
+      export-decrypt and `users/*` escrow steps. The production-data run
+      awaits the Northflank storage copy.
+- [x] **Rehearsal 2 — database: PASSED 2026-11-02 against the live production
+      DB** (run twice; second run refreshed the copy to include the drill
+      survey). See the drill findings below for timings and the expected
+      `pg_restore` extension-error noise.
+      **Tooling (git-ignored):** `k8s/scratch-drill-db.yaml` (1-instance
+      scratch CNPG cluster — no backups, so a production copy is never
+      archived to the object store) + `scratch-drill-db-run.sh` (timed
+      dump/restore, exact per-table count diff, `migrate --check` Job; prints
+      the Appendix B timing table). **Mechanically validated 2026-11-02**
+      staging→scratch (dump 1s / restore 4s / 78 tables exact match /
+      `migrate --check` clean). The production run awaits
+      `k8s/scratch-nf-db.env` (the script prints the template) with the
+      `NORTHFLANK_DB_URL` from the password manager.
+- [x] Media pre-sync (bulk copy into the `checktick-media` PVC) —
+      **DONE 2026-11-02**: the entire volume is 29 KB / 1 file (the admin
+      brand icon, as predicted). Method: `tar czf` from INSIDE the running
+      production web container via CLI exec (read-only, zero impact, no
+      volume detach needed while the owning service runs) → download →
+      extract into the Longhorn RWX PVC via a helper pod → chown 999:999
+      (app user; the media-chown init container also fixes this at every
+      web boot). Seconds end to end; verified visible to the live staging
+      pods. The T+15 cutover delta is the same exec-tar pattern repeated
+      (works while the web container runs; if it must happen after the
+      web is scaled to 0, use the `vault-storage-tar` job pattern instead).
+      Note: with exec restored, NO detach/outage is needed for media at any
+      point — the only volume that must move is `vault-data`.
+- [x] SNOMED rebuilt on the production PVC; `healthz` reports snomed ok.
+      (POC cluster: `import-snomed-db` job completed; `/healthz` `snomed:
+      ok` re-verified 2026-11-02 after the drill work.)
+- [x] **Staging health re-verified 2026-11-03 (session 8):** WAL archiving
+      repaired on the rebuilt cluster (stale-WAL contamination had silently
+      broken it since the session-5 rebuild — see the outage findings
+      below); `ContinuousArchiving: True`, backlog drained, live image
+      pinned to 0.24.2, and SSO completes end to end on staging for Google
+      and Microsoft (personal M365, tenant `common`).
 - [ ] **Apply the fixed `checktick-app` policy to the production Vault**
       (Phase 0 ledger finding): the migration copies Vault storage, so the
       moved Vault keeps the old policy and recovery-dashboard approvals
@@ -479,7 +555,170 @@ Rotation".
       (email + in-app banner).
 - [ ] Fill Appendix B timings; announce window = longest rehearsal + 50%.
 
+### Rehearsal drill findings (2026-11-02, mechanical validation)
+
+Found while dress-rehearsing both drills against staging data (throwaway
+POC Vault shares, zero production data). The first is cutover-critical:
+
+- **Vault archive layout (CRITICAL, affects the real T+5):** the Northflank
+  tar command (`tar czf … -C /vault file`) puts the storage under `file/` —
+  but the Civo manifests mount the PVC AT the storage path (`/vault/file`),
+  so extracting that archive as-is leaves the PVC root EMPTY of Vault data.
+  The migrated Vault then starts on empty storage and reports
+  `Initialized: false` — which is the failure signature (a fresh `init` at
+  that point would be catastrophic per safety rule 1). The restore must
+  detect the `file/` prefix and shift its contents up to the PVC root, then
+  verify the `core/` directory exists before starting Vault.
+  `k8s/scratch-drill-vault-restore.sh` implements this; the cutover T+5
+  step must use the same normalisation (or extract with the prefix
+  stripped).
+- **RWO volume re-attach delay:** moving a mounted `civo-volume` PVC
+  between pods (stop Vault pod → helper pod → back) goes through a
+  detach/attach cycle that can take ~4–5 minutes (`Multi-Attach error` →
+  `detaching` → `attaching`). Budget for it at cutover T+5; waits for
+  helper pods mounting an in-use PVC need 600s timeouts.
+- **`civo-volume` is `WaitForFirstConsumer`:** a new PVC stays Pending
+  until a pod mounts it — never wait for `Bound` before creating the
+  consuming pod.
+- **Vault CLI specifics (1.21.1):** `vault operator generate-root` takes
+  the key share as a POSITIONAL argument (`-nonce=… KEY`, no `-key` flag);
+  `-init` without `-otp` auto-generates an OTP and the final token must
+  be recovered with `vault operator generate-root -decode=… -otp=…`;
+  minting a secret-id with no data needs `vault write -f`.
+- **CNPG instance PVC naming:** `<cluster>-<N>` (e.g. `scratch-drill-db-1`),
+  not the StatefulSet-style `data-<cluster>-<N>`; the cluster's finalizer
+  removes them on delete.
+- **`kubectl apply --dry-run=client` misses strict field-placement errors**
+  (a `volumeClaimTemplates` nested in `template.spec` passed client dry-run
+  and failed server-side). Use `--dry-run=server` for manifest validation.
+
+Production DB drill findings (2026-11-02, live Northflank source — drill
+PASSED: 2s dump / 8s restore / 78 tables exact count match /
+`migrate --check` clean):
+
+- **External DB endpoint (cutover dependency):** Northflank's addon
+  hostname (`primary.…addon.code.run`) is INTERNAL — not publicly
+  resolvable. The cutover's T+10 dump-from-pod requires the addon's
+  **external connection** enabled, which also uses a DIFFERENT PORT
+  (28746, not 5432) — the connection string must be the external one.
+  External access must stay enabled through the cutover window.
+- **DNS negative-cache flake:** public resolvers (e.g. Quad9 — the
+  `code.run` zone's negative TTL is 1h) cache the NXDOMAIN from before
+  external access was enabled, so resolution is flaky for up to an hour
+  after enabling. The drill supports `NORTHFLANK_DB_IP` in
+  `k8s/scratch-nf-db.env` to pin the host via `hostAliases` (DNS-independent)
+  — same trick available at cutover if needed.
+- **`pg_restore` extension noise (expected):** the Northflank source DB
+  carries Northflank's platform monitoring extensions
+  (`pg_stat_statements`, `pg_stat_kcache`); restoring on CNPG reports 4
+  errors (not superuser / not in the image). Harmless — the application
+  uses no extensions (safety rule 3). The cutover's restore WILL show these;
+  treat only non-extension errors as failures. Optional: pre-create
+  `pg_stat_statements` on the target as superuser before the restore if
+  wanted for observability.
+- **Schema currency:** `migrate --check` against the restored production
+  copy is clean under the 0.24.2 image — no pending migrations, so the
+  cutover pre-deploy Job's migrate step is a no-op as planned.
+- **DB size:** 1.2 MB compressed — the dump/restore is seconds at current
+  volume; the window will be dominated by the Vault storage copy +
+  ceremony, not the database.
+- **Northflank shell access was temporarily gone post-breach (2026-11-02,
+  RESOLVED same day):** exec and file-download were account-disabled;
+  Northflank re-enabled them on request. Confirmed path for the cutover
+  and the drill — exec CANNOT reach a stopped service, so the T+2 tar runs
+  as the one-off manual job `vault-storage-tar` (stop Vault via API →
+  attach `vault-data` to the job at `/vault/file` → run → sha256 in job
+  logs → `northflank download job file` → detach/delete job → start Vault
+  → unseal). Port-forward remains token-scope-blocked: do share-bearing
+  commands in exec's interactive shell (hidden prompts), or via forward +
+  the local vault binary if the token permission becomes grantable.
+  **Rollback posture (Phase 5) now rests on this access staying enabled**
+  — a rollback needs the Northflank Vault restartable AND unsealable;
+  if Northflank ever re-disables exec, rollback falls back to a
+  platform/volume backup restore. Share hygiene: plan a post-cutover
+  `vault operator rekey` (shares were minted on Northflank pre-breach).
+  Full capability matrix: `k8s/POC-STATUS.md` session 7.
+- **Source Vault version is 1.21.4, not 1.21.1 (2026-11-02):** verified
+  live via `vault status`. A storage-copy into an OLDER Vault is not a
+  supported direction — the manifests (`k8s/vault.yaml`, scratch drill)
+  now pin `hashicorp/vault:1.21.4` and safety rule 2 is updated. The
+  staging vault was rolled to 1.21.4 and re-unsealed (live == manifest
+  == source). The drill would have caught this — which is what it is
+  for.
+
+Production Vault drill findings (2026-11-02, drill PASSED — decrypt proof
+3/3 responses + marker through the moved Vault):
+
+- **A live job container holding the volume BLOCKS the resumed Vault's
+  deployment (CRITICAL for cutover + rollback):** after the tar job's
+  download, the job run container was left sleeping its 30-min keep-alive;
+  `resume service` hung in `IN_PROGRESS/DEPLOYING` with NO container
+  started for ~8 minutes until the job run was aborted (`northflank
+  abort job run`). Rule: **abort the `vault-storage-tar` job run
+  immediately after the download, BEFORE resuming the Vault service.**
+  This also applies in reverse at rollback: the tar job (kept on
+  Northflank for cutover reuse) must not have a live run when the Vault
+  service needs its volume back.
+- **Northflank volumes are single-consumer per attach:** copying requires
+  detach (vault) → attach (job) → detach → re-attach (vault) with the SAME
+  `containerMountPath` (`/vault/file` — the volume IS the storage
+  directory; the tar therefore produces the `file/`-prefixed layout the
+  restore script normalises). Attach/detach is instant bookkeeping.
+- **`pause service` is graceful:** the Vault container takes minutes to
+  drain and exit after the pause API returns OK — budget for it in the
+  window, and do not probe with exec until the container is gone.
+- **zsh `%` marker:** Vault prints the Encoded Root Token without a
+  trailing newline; zsh decorates it with `%` (PROMPT_EOL_SPOT) — the
+  token ends BEFORE the `%`. Also decode with the -init OTP before use
+  (`vault operator generate-root -decode=… -otp=…`).
+- **Scratch tooling retained for cutover day:** the drill scripts
+  (`k8s/scratch-drill-*`, git-ignored) and the Northflank
+  `vault-storage-tar` job are reusable as-is for the cutover's T+2/T+5
+  steps.
+
+### Staging outage findings (2026-11-03, fixed same day — session 8)
+
+Found while pinning the live image before the window. Full account in
+`k8s/POC-STATUS.md` session 8:
+
+- **A cluster rebuild does not clean the barman destination (CRITICAL for
+  any future rebuild):** the session-5 tear-down test left the dead
+  cluster's WALs in `s3://checktick-backups/db/checktick-db/wals/`, so the
+  rebuilt cluster's first-archive check (`barman-cloud-check-wal-archive`,
+  default-on via a bootstrap marker file) failed on every attempt
+  ("Expected empty archive") — WAL accumulated at ~4.6 GB/day until the
+  10Gi PVC filled ~46 h later and CNPG refused to start PostgreSQL
+  ("no free disk space for WALs"), taking staging down. Fix: purge the
+  stale `wals/` objects (the old base backup does not affect the check —
+  it scans `wals/` only); the startup retry then passed, drained the
+  ~640-segment backlog and rejoined. **Rule: clean `wals/` when rebuilding
+  into the same destination, and re-verify `ContinuousArchiving: True`
+  plus a fresh base backup after ANY rebuild — a "verified" claim does not
+  survive a rebuild.**
+- **Civo PVC expansion is OFFLINE-only:** `allowVolumeExpansion` is true
+  but the CSI refuses in-use volumes ("volume is not in an available state
+  for OFFLINE expansion"). Sequence that worked: scale the CNPG operator
+  to 0 → delete the instance pod → the csi-resizer (sidecar in
+  `civo-csi-controller-0`) expands the detached volume → restore the
+  operator (it failed over to the replica in the window — benign; the
+  kubelet completes the filesystem resize on re-attach). PVCs cannot
+  shrink afterwards.
+- **The rebuilt cluster had NO restorable backup until 2026-11-03:** the
+  Nov 2 nightly base backup never uploaded its data (the bucket held only
+  the dead original cluster's base). First valid base backup + WAL chain:
+  2026-11-04 02:00 UTC. Verify it lands before relying on PITR.
+
 ## Phase 4 — Cutover window
+
+**EXECUTED 2026-11-03, 22:05–22:50 UTC — COMPLETE.** Timeline in
+`k8s/POC-STATUS.md` session 9; timings table in the compliance change log.
+Deiations from the plan as written (all deliberate, recorded for the next
+run): CronJobs were SUSPENDED at T+0 (they were already applied on this
+cluster — re-applying at T+30 was N/A) and resumed after the flip; the
+T+15 media delta was verified IDENTICAL pre-window and skipped in the
+window; the ingress pre-carried BOTH hostnames from T+20 so the production
+cert self-healed ~2 min after the flip (HTTP-01 can only solve post-flip);
+the ALLOWED_HOSTS Deployment patch was re-applied after the T+20 apply reset it.
 
 All times relative to window start (T+0). Verify by counts only — never paste
 row contents into terminals or tickets.
@@ -497,7 +736,11 @@ row contents into terminals or tickets.
    ```
 
 3. **T+5 — restore Vault on Civo.** Pre-create the `data-vault-0` PVC, extract
-   the archive into it, apply `k8s/vault.yaml`, unseal with 3 of 4 shares,
+   the archive into it — **normalise the layout first: the Northflank archive
+   has a `file/` prefix but the PVC mounts AT the storage path; without the
+   shift Vault starts on empty storage (`Initialized: false`) — see the
+   Phase 3 rehearsal drill findings** — then apply `k8s/vault.yaml`, unseal
+   with 3 of 4 shares,
    confirm `vault status` shows `initialized: true, sealed: false`, then —
    ONE root ceremony on the migrated Vault (`vault operator generate-root`,
    revoke after): mint the new production AppRole `secret_id`, apply the fixed
@@ -556,36 +799,95 @@ row contents into terminals or tickets.
 - [ ] Export Northflank operational logs if retention requires continuity,
       then delete all Northflank project data and close the account.
 - [ ] Confirm every credential in the Phase 2 table was rotated.
-- [ ] Swap the deploy trigger: replace the "Trigger Northflank deployment"
+- [x] Swap the deploy trigger: replace the "Trigger Northflank deployment"
       step in `.github/workflows/docker-publish.yml` with a call to the
       *Deploy (Civo)* workflow. Keep the Northflank webhook in place until
       the cutover window closes — it is the live production path until
       then.
-- [ ] Documentation sweep — replace Northflank-specific content:
+      **DONE 2026-11-04:** the step now dispatches `deploy-civo.yml` with the
+      published image tag via `gh workflow run` (job needs `actions: write`,
+      added). With production live on Civo and the NF workflow suspended, the
+      webhook was dead weight; the change is effective on merge to `main`.
+      Delete the `NORTHFLANK_WEBHOOK_URL` GitHub secret at close-out.
+- [x] Documentation sweep — replace Northflank-specific content:
       - `docs/vault.md` — "Option 1: Northflank (Recommended for Production)"
       - `docs/self-hosting-scheduled-tasks.md` — "Northflank (Recommended)"
         platform section and the L89 reference
-      - `docs/versioning-and-deployment.md` — steps 4–5 (Northflank webhook
-        and pre-deploy job flow)
+      - `docs/versioning-and-deployment.md` — steps 4–5 (Northflank
+        webhook and pre-deploy job flow)
       - `docs/infrastructure-logging.md` — "Northflank captures stdout"
       - `checktick_app/settings.py` — L849 comment; `checktick_app/core/views.py`
         — `healthz` docstring
       - `AGENTS.md` — versioning section's Northflank webhook reference
       - Replace with generic "managed platform" language plus a Civo/Kubernetes
         section; keep Docker Compose as the default self-hosting path.
-- [ ] Record the change in
+      **DONE 2026-11-04:** all listed files swept (`AGENTS.md` had no reference
+      left to fix). Northflank references also removed from the wider surface:
+      business-continuity, self-hosting*, security-overview, privacy-notice,
+      CONTRIBUTING, snomed-integration, key-management, vault/README,
+      generate-tls.sh, unseal_vault.sh, run-data-governance.sh, env examples,
+      management-command docstrings, settings.py, hosting.py
+      (`HOSTING_API_BASE_URL` now has no default — the feature is opt-in),
+      k8s manifest comments, and the deploy workflow comments.
+      `vault/northflank-deployment.yaml` deleted (in git history if ever
+      needed). Remaining references are historical only: `docs/compliance/*`
+      (per policy), this runbook + `k8s/POC-STATUS.md`, git-ignored scratch
+      tooling, and links pointing at this runbook's filename.
+      **NOT swept, flagged for review:** `docs/clinical-safety/*` — they carry
+      live-state claims ("hosted on Northflank infrastructure", "Northflank
+      SLA 99.9%") that are now factually wrong; they are assessment records,
+      so they need a deliberate review pass rather than an automated edit.
+- [x] Record the change in
       [`docs/compliance/infrastructure-technical-change-log/`](compliance/infrastructure-technical-change-log/)
       including the incident rationale.
-- [ ] Update the DPIA / processor record: Civo DPA, sub-processors, region.
+      **DONE 2026-11-03:** cutover entry + UTC timings table + the 30/10/2026
+      Northflank incident driver (status page link) + the DB-ingress
+      NetworkPolicy entry.
+- [x] Update the DPIA / processor record: Civo DPA, sub-processors, region.
+      **DONE 2026-11-04/05:** DPIA, ROPA, supplier register, contract reviews and
+      cloud responsibility matrix updated (Civo DPA terms recorded; UK LON1
+      region). REMAINING on Civo's reply (requested 05/11, acknowledged):
+      ISO 27001/SOC 2 certificates + sub-processor list — fill the
+      `[confirm]` markers when received.
 - [ ] Post-cutover hardening backlog (separate changes, after stability):
-      TLS on the in-cluster Vault endpoint (cert-manager) +
-      `VAULT_TLS_VERIFY=true`; k3s Secrets encryption-at-rest on Civo (verify
-      feasibility); Velero/PVC backups; staging namespace; alerting on
-      `/healthz`; OpenObserve + collector DaemonSet; migrate CNPG backups from
-      in-tree Barman to the Barman Cloud Plugin before any operator upgrade
-      past 1.30 (in-tree support is removed in 1.31); pin Vault's container to
-      a non-root user (`runAsUser: 100` — the image defaults to root, found
-      during POC debugging).
+      - **Vault storage backup (TOP PRIORITY — no scheduled backup exists):**
+        the migrated Vault is a single file-backend StatefulSet; the KEKs it
+        holds are as critical as the database (lose both copies of a KEK and
+        every encrypted survey is undecryptable). Two viable patterns:
+        (a) migrate file storage → integrated Raft storage (Vault supports
+        this as a deliberate reconfig), then a nightly
+        `vault operator raft snapshot save` CronJob — online snapshots, no
+        unseal ceremony; or (b) a nightly sealed-stop-copy-restart job —
+        needs the 3-of-4 shares on the job, which violates the custody
+        model. Prefer (a) once the migration has settled.
+      - **Media volume:** Longhorn recurring snapshots on `checktick-media`
+        (29 KB / 1 regenerable file today — cheap insurance if branding
+        grows).
+      - **Restore rehearsal (quarterly):** restore the latest 02:00 base
+        backup into a scratch CNPG cluster + exact-count verify — feeds
+        `docs/compliance/restoration-test-log.md`; the DB drill tooling
+        (`k8s/scratch-drill-db.yaml` + run script) is directly reusable.
+      - **DB ingress airgap — DONE 2026-11-03:**
+        `k8s/postgres-networkpolicy.yaml` (in kustomization): 5432 only
+        from web pods / own instance pods / CNPG operator; egress open
+        (WAL uploads). Verified positive + negative.
+      - **ALLOWED_HOSTS_EXTRA in settings.py** — kills the
+        `scratch-allowhosts-patch.yaml` workaround AND the manifest override
+        comment in `k8s/web.yaml` (needs an image release; window patch
+        carries `staging.checktick.uk` until then — remove after the
+        rollback window closes).
+      - Port the `scratch-cutover-vault-resume.sh` robust-verification
+        pattern back into the ceremony script (the `grep -q` pipefail
+        false-negative aborted the live ceremony mid-way — see POC-STATUS
+        session 9).
+      - TLS on the in-cluster Vault endpoint (cert-manager) +
+        `VAULT_TLS_VERIFY=true`; k3s Secrets encryption-at-rest on Civo (verify
+        feasibility); Velero/PVC backups; staging namespace; alerting on
+        `/healthz`; OpenObserve + collector DaemonSet; migrate CNPG backups from
+        in-tree Barman to the Barman Cloud Plugin before any operator upgrade
+        past 1.30 (in-tree support is removed in 1.31); pin Vault's container to
+        a non-root user (`runAsUser: 100` — the image defaults to root, found
+        during POC debugging).
 
 ## Appendix A — Command reference
 
@@ -610,19 +912,82 @@ kubectl run mediasync --rm -it --image=alpine \
 # then rsync/rclone into /media
 ```
 
+### Northflank CLI reference (all commands verified live 2026-11-02)
+
+Replace `<project>` / `<service>` / `<volume>` with the values in the
+password manager / ops notes. Exec quirks: the runner takes the command
+string as ONE program — no shell, no `&&`, no `VAR=value` prefixes; use
+`--shell-cmd 'sh -c'` (WITHOUT inner quotes) for chains, and flags like
+`vault status -address=http://127.0.0.1:8200` for env-style overrides.
+
+```bash
+# --- Vault storage copy (cutover T+2; source STOPPED) — scripted in the
+# --- git-ignored k8s/scratch-cutover-vault-copy.sh; commands here:  ---
+northflank pause service --project <project> --service <vault-service>
+# graceful: the container drains for minutes — do not probe until gone
+
+# volumes are SINGLE-CONSUMER per attach: move vault-data to the tar job
+northflank detach volume --project <project> --volume <vault-volume> \
+  -i '{"nfObject":{"id":"<vault-service>","type":"service"}}'
+northflank attach volume --project <project> --volume <vault-volume> \
+  -i '{"nfObject":{"id":"<tar-job>","type":"job"},"mounts":[{"containerMountPath":"/vault/file","volumeMountPath":""}]}'
+
+northflank start job run --project <project> --job <tar-job> -i '{}' --output json   # note the run id
+# wait for TARDONE-OK-TO-DOWNLOAD + sha256 in:
+northflank get job logs --project <project> --job <tar-job> --run <run-id> --types runtime
+northflank download job file --project <project> --job <tar-job> \
+  --remotePath /tmp/vault-storage.tar.gz --localPath /tmp/vault-storage.tar.gz
+
+# CRITICAL: abort the run BEFORE anything needs the volume again
+# (a live job container holding the volume hangs the resumed deployment)
+northflank abort job run --project <project> --job <tar-job> --run <run-id>
+
+# Cutover: the Northflank Vault stays STOPPED from here (Civo takes over).
+
+# --- ROLLBACK ONLY (Phase 5): return the volume + resume + unseal ---
+northflank detach volume --project <project> --volume <vault-volume> \
+  -i '{"nfObject":{"id":"<tar-job>","type":"job"}}'
+northflank attach volume --project <project> --volume <vault-volume> \
+  -i '{"nfObject":{"id":"<vault-service>","type":"service"},"mounts":[{"containerMountPath":"/vault/file","volumeMountPath":""}]}'
+northflank resume service --project <project> --service <vault-service> -i '{}'
+
+# Unseal the Northflank Vault via port-forward + the LOCAL vault binary
+# (shares typed locally, hidden prompts — never in command args):
+northflank forward service --project <project> --service <vault-service> --skipHostnames
+export VAULT_ADDR=http://127.0.0.1:<loopback-port-printed-for-8200>
+vault operator unseal        # ×3, a different share each time
+vault status                  # Sealed false
+
+# --- Media sync (pre-sync / T+15 delta) — works on the RUNNING web
+# --- container, no detach, no outage: ----------------------------------
+northflank exec service --project <project> --service <web-service> \
+  --cmd 'tar czf /tmp/media.tar.gz -C /app/media . && sha256sum /tmp/media.tar.gz' --shell-cmd 'sh -c'
+northflank download service file --project <project> --service <web-service> \
+  --remotePath /tmp/media.tar.gz --localPath /tmp/media.tar.gz
+# then extract into the checktick-media PVC via the helper pod above and
+# chown -R 999:999 /media (app user; the media-chown init container also
+# fixes ownership at every web boot)
+
+# --- generate-root ceremony gotchas (2026-11-02) ---
+# The Encoded Root Token prints WITHOUT a trailing newline; zsh decorates
+# it with '%' (PROMPT_EOL_SPOT) — the token ends BEFORE the '%'. Decode
+# with the OTP from -init before use:
+#   vault operator generate-root -decode=<encoded-without-%> -otp=<otp>
+```
+
 ## Appendix B — Timing rehearsal template
 
 | Step | Rehearsal duration | Notes |
 | :--- | :--- | :--- |
-| Vault storage copy + transfer + unseal | _tbd_ | |
-| Final `pg_dump` | _tbd_ | scales with DB size |
-| Transfer dump | _tbd_ | |
-| `pg_restore` | _tbd_ | `--jobs 4` |
-| Counts verification | _tbd_ | |
-| Media delta sync | _tbd_ | |
-| Pre-deploy Job | _tbd_ | |
-| Rollout + smoke gate | _tbd_ | |
-| **Announced window (total + 50%)** | _tbd_ | |
+| Vault storage copy + transfer + unseal | ~20 min (see notes) | **measured on production 2026-11-02**: archive 22,268 bytes; job run→tar done ~1 min (image pull dominates; tar itself <1 s); volume detach/attach bookkeeping ~2 min; service resume → container up ~45 s once the volume is free; unseal operator-timed. **~10 min of the window was a first-run stall** (live tar-job container holding the volume — preventable, abort the job run first), so the clean path is ~10–12 min |
+| Final `pg_dump` | 2s | **measured on production 2026-11-02**: 1,203,251 bytes compressed, source PostgreSQL 16.14 |
+| Transfer dump | 0s | dump + restore run in the same `pgmigrate` pod |
+| `pg_restore` | 8s | `--jobs 4`, 16 → 17 upgrade in the same step |
+| Counts verification | <1 min | exact, 78 tables per side |
+| Media delta sync | <1 min | **measured 2026-11-02**: whole volume 29 KB / 1 file; tar+hash+download+extract = seconds via CLI exec on the running web container |
+| Pre-deploy Job | 45–76s | POC measurement; migrations confirmed a no-op on the production schema (`migrate --check` clean, 2026-11-02) |
+| Rollout + smoke gate | ~2m | POC measurements: ~1 min/replica (readiness-gated) + ~40s `smoke-test.py` |
+| **Announced window (total + 50%)** | ~30 min recommended | vault copy clean-path ~10–12 min + DB ~30 s + pre-deploy ~1 min + rollout+smoke ~3 min + contingency; finalise after the media delta sync is measured |
 
 ### POC measurements (2026-11-01, tear-down → re-apply test)
 
@@ -635,6 +1000,8 @@ the cutover that reuse them:
 | :--- | :--- | :--- |
 | `kubectl delete -k k8s/` (namespace gone) | 5m20s | CNPG decommissioning dominates; plan the cutover rollback/DNS around this |
 | CNPG bootstrap → 2 ready instances | ~2m15s | primary ready first (~1m), replica joins after |
+| CNPG scratch 1-instance bootstrap | 1m50s | apply → `readyInstances=1` (drill target) |
+| Staging dress rehearsal of the DB drill (17→17, 400 KB) | dump 1s / restore 4s | mechanics only — the production dump/restore timings come from the real drill runs |
 | Pre-deploy Job (migrate + syncs) | 45–76s | against an empty database |
 | Vault StatefulSet + PVC up | ~2m40s | fresh PVC, `civo-volume` |
 | Full fresh ceremony (init → unseal → `setup_vault.py` → patch creds) | ~1m | throwaway POC path; production is storage-copy + unseal only |
