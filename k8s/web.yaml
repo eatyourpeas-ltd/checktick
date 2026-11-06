@@ -151,10 +151,14 @@ spec:
             - name: ALLOWED_HOSTS
               value: "$(POD_IP),checktick-web,checktick-web.checktick,checktick-web.checktick.svc.cluster.local,localhost,127.0.0.1"
           # startupProbe gives slow first boots headroom before readiness is
-          # consulted (image pull, SNOMED copy, Vault auth).
+          # consulted (image pull, SNOMED copy, Vault auth). It must point at
+          # the trivial /api/health, exactly like liveness: pointing it at
+          # /healthz (deep) restart-loops the pod every 150s while the Vault
+          # is sealed — restarts cannot fix a seal. Found live 2026-11-05 when
+          # the interim Vault backup's sealed window took the site down.
           startupProbe:
             httpGet:
-              path: /healthz
+              path: /api/health
               port: http
             periodSeconds: 5
             timeoutSeconds: 3
