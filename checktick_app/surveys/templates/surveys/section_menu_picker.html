@@ -105,7 +105,7 @@
   </p>
 </div>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
   (function() {
     var checkboxes = document.querySelectorAll('.section-picker-checkbox');
     var continueBtn = document.getElementById('picker-continue-btn');
