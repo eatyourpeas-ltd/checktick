@@ -181,8 +181,9 @@ Moved from the migration runbook's Phase 6 list; in rough priority order
 (`ALLOWED_HOSTS_EXTRA` shipped in 0.25.0 and is off the list):
 
 1. ~~**Vault storage backup** — Raft migration + nightly snapshot CronJob~~
-   **DONE 2026-11-06** (migration executed + snapshot pipeline live; closes
-   fully when the restore test passes — see Vault Operations)
+   **DONE 2026-11-06** — migration executed, snapshot pipeline live, and
+   the restore test PASSED (CT-03,
+   [`restoration-test-log.md`](compliance/restoration-test-log.md))
 2. **Barman Cloud Plugin migration** before any CNPG operator upgrade past 1.30
 3. TLS on the in-cluster Vault endpoint (cert-manager) + `VAULT_TLS_VERIFY=true`
 4. ~~OpenObserve + collector DaemonSet for infrastructure log retention~~ —

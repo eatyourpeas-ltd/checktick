@@ -1075,6 +1075,17 @@ retention 14.
    prune. Object independently confirmed via an aws-cli listing pod.
    Airgap negative-tested: an UNlabelled pod times out on 8200 (the
    session-10 lesson applied).
+5. **RESTORE TEST PASSED (CT-03)** — the runbook-closer, same evening:
+   newest `.age` object downloaded + sha256-verified → decrypted on the
+   operator laptop (Bitwarden age key, never in-cluster) → `snapshot
+   inspect` (full key inventory) → restored into a fresh scratch Vault
+   (`snapshot restore -force`) → **unsealed with the production 3-of-4
+   shares** → verified: production cluster identity
+   (`vault-cluster-978f63d7`), `checktick-app` AppRole login with the
+   production credentials, count-only read of
+   `secret/data/platform/master-key`. Scratch STS + PVC (a production
+   data copy) deleted same-session. Recorded in
+   `docs/compliance/restoration-test-log.md` (CT-03).
 
 ### Found live (record for next time)
 
@@ -1093,6 +1104,20 @@ retention 14.
    first policy 403'd at the first run). Policy is now read+update on
    `sys/storage/raft/snapshot` only. Cost: one extra generate-root
    ceremony.
+4. **`snapshot restore` needs `-force` for cross-cluster restores** —
+   the default hash check rejects a snapshot sealed under different
+   unseal keys (a custody feature, not a bug).
+5. **Post-restore, the running process serves its OLD in-memory seal
+   config** — unsealing before a process restart fails with
+   `invalid key: crypto/aes: invalid key size 33`; bounce the pod, the
+   restored 4-of-3 config is then served and the production shares
+   work.
+6. **A fresh raft Vault does not create its own storage path either**
+   (same as the migrate) — `mkdir -p` before start or the server exits
+   in a loop. Also: `kubectl cp` needs `tar` IN the container (the
+   aws-cli image lacks it — alpine + `apk add aws-cli` works) and a
+   pod with no readiness probe is "ready" before its work finishes —
+   don't cp out of it until the logs confirm the download.
 
 ### Still open
 
@@ -1102,11 +1127,16 @@ retention 14.
   RAW — an inline comment after the URL became part of it (`curl: (3)
   URL rejected`); env files support comments only on their OWN lines.
   Rule added to k8s/config.example.env.
-- Restore test (closes the runbook; needs the age private key + shares)
-  → then delete the old file data at the volume root, retire the interim
-  tarball note, mark hardening item 1 done.
+- ~~Restore test~~ **DONE — PASSED (CT-03)**, see What happened #5.
 - ~~Pre-raft tarball → Bitwarden → delete local~~ **DONE** (verified:
   local copies gone).
+- ~~Post-pass cleanup~~ **DONE (2026-11-06 ~19:57 UTC)**: the old
+  file-storage dirs deleted from the production volume root via vault-0
+  itself (no sealed window — the dirs were inert siblings of raft/);
+  the volume root now holds only raft/ + lost+found; healthz fully ok
+  throughout. The Bitwarden pre-raft tarball is now the pre-migration
+  rollback of last resort. The runbook + this file retire at the Phase 6
+  close-out as sequenced.
 
 ## Known state at session close (session 9, 2026-11-03)
 

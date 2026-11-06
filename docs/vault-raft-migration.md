@@ -6,17 +6,16 @@ priority: 13
 
 # Vault: file storage → integrated Raft + nightly snapshot CronJob
 
-**STATUS: WINDOW EXECUTED + SNAPSHOT PIPELINE LIVE (2026-11-06, session 14).
-The Vault is on integrated Raft storage (migrated 17:48–18:03 UTC, ~15 min
-sealed window, smoke 19/19) and the nightly ENCRYPTED snapshot CronJob is
-applied and first-run verified end-to-end — the age-encrypted object is
-confirmed in `s3://checktick-backups/vault/` and the airgap is
-negative-tested. REMAINING: the healthchecks.io wiring (operator), the
-restore test (closes this runbook), then the post-pass cleanup (delete the
-old file data at the volume root, retire the interim tarball note, mark
-hardening item 1 done). Three found-live corrections from the execution
-are recorded in "Verification notes" — read them before reusing any of
-this on another Vault.**
+**STATUS: COMPLETE (2026-11-06, sessions 13–14). Migration executed,
+nightly encrypted snapshot pipeline LIVE, and the RESTORE TEST PASSED
+(CT-03 in docs/compliance/restoration-test-log.md) — the chain is proven
+recoverable end to end. This runbook is finished; it retires at the
+Phase 6 close-out along with the other migration docs (its durable
+content — the live backup posture, the restore procedure, and the
+ceremony rotation — is carried in docs/civo-kubernetes-operations.md,
+docs/business-continuity.md, and the ceremony script's header). Five
+found-live corrections from the execution are recorded in "Verification
+notes" — read them before reusing any of this on another Vault.**
 
 This is hardening item 1 (`docs/civo-kubernetes-operations.md`): the Vault
 is the last component with no scheduled backup. File storage has no online
@@ -64,6 +63,17 @@ ceremony, no shares on the cron.
   grants read+update on `sys/storage/raft/snapshot` only; restore
   (`sys/storage/raft/snapshot-restore`, sudo) is deliberately NOT granted —
   the cron only saves.
+- **Restore findings (found live at the restore test, 2026-11-06)**:
+  - `vault operator raft snapshot restore` needs **`-force`** for a
+    cross-cluster restore — the default hash check rejects a snapshot
+    sealed under different unseal keys (a custody feature, not a bug).
+  - **Post-restore, the running process serves its OLD in-memory seal
+    config** — a process restart is required before the restored 4-of-3
+    config is served; unsealing before the restart fails with
+    `invalid key: crypto/aes: invalid key size 33`.
+  - A fresh raft Vault (like the migrate) does NOT create its own storage
+    path — `mkdir -p <path>` before start, or the server exits in a loop
+    with `failed to open bolt file`.
 - **Airgap consequence (the subtle one)**: with raft storage the node may
   dial its OWN cluster port 8201 via the Service, which the previous
   deny-all egress would have dropped silently → the airgap in
@@ -99,7 +109,9 @@ ceremony, no shares on the cron.
 - AppRole `checktick-app` minted on the migrated Vault (cutover T+5); the
   migration carries all policies/roles — no re-mint needed
 - Interim backup: manual stop-copy tarball (2026-11-05, sha256 b6b9a9bd…,
-  Bitwarden-bound). Keep until a snapshot restore-test passes.
+  Bitwarden-bound). **RETIRED 2026-11-06**: the restore test passed (CT-03)
+  and the old file data was deleted from the volume root — the Bitwarden
+  tarball is now the pre-migration rollback of last resort.
 
 ## Design decisions (record, CTO sign-off on #1)
 
@@ -213,7 +225,8 @@ WRITE path).
    the session-4 pattern).
 7. **Do NOT delete the old file-storage dirs** (`core/`, `logical/`, `sys/`,
    `audit/`, `auth/` at the volume root) — rollback path until the
-   restore test passes.
+   restore test passes. **(DELETED 2026-11-06 after CT-03 passed — the
+   volume root now holds only `raft/` + `lost+found`.)**
 
 ## Snapshot CronJob — LIVE 2026-11-06, FULLY WIRED (incl. healthchecks.io)
 
@@ -268,24 +281,20 @@ All three artifacts are committed/prepared (session 13):
    (Bitwarden private key) proves the recipient matches — do this before
    relying on the chain.
 
-## Restore test (closes the runbook)
+## Restore test — PASSED 2026-11-06 (CT-03)
 
-Restore the latest snapshot to a scratch Vault (drill pod, the
-`s/k8s-restore-rehearsal` pattern): new PVC; download the newest
-`vault-raft-*.tar.age` from `s3://checktick-backups/vault/`;
-**`age --decrypt -i <operator key from Bitwarden>`** → `.tar`;
-`vault operator raft snapshot inspect` it (sanity: version + key counts);
-then **`vault operator raft snapshot restore <file>`** — VERIFIED SYNTAX,
-and note the restore **returns before it completes**: wait for
-`post-unseal setup complete` + `vault is unsealed` in the scratch pod's
-log before testing further. Unseal with production shares (the restore
-swaps the barrier), then read a KV escrow key. Record in
-`docs/compliance/restoration-test-log.md`. **Only after this passes**:
-delete the old file-storage dirs at the volume root (everything except
-`raft/`), retire the interim tarball note, and mark hardening item 1 done
-in `docs/civo-kubernetes-operations.md`.
+Executed as designed: newest `.age` object downloaded + sha256-verified →
+decrypted on the operator laptop (Bitwarden key, never in-cluster) →
+`snapshot inspect` (full key inventory) → restored into a fresh scratch
+Vault with `snapshot restore -force` → **unsealed with the production
+3-of-4 shares** (the restored barrier IS the production one) → verified:
+production cluster identity, `checktick-app` AppRole login, and a
+count-only read of `secret/data/platform/master-key`. Scratch StatefulSet
++ PVC deleted same-session (the PVC held a production data copy).
+Recorded in `docs/compliance/restoration-test-log.md` (CT-03). The
+operational findings are in Verification notes above.
 
-## Rollback (any point before the restore test passes)
+## Rollback (any point before the restore test passes) — RETIRED 2026-11-06
 
 Revert the ConfigMap to `storage "file" { path = "/vault/storage" }`
 (keep the new `/vault/storage` mount — the data did not move, only the
@@ -295,6 +304,12 @@ the source is the migration LOCK key; a stale lock makes Vault refuse to
 start — clear it with `vault operator migrate -config=... -reset` (and
 delete the `/vault/storage/raft` destination dir before re-trying
 anything).
+
+**RETIRED 2026-11-06**: the restore test passed (CT-03) and the old file
+data was deleted from the volume root, so this in-place rollback no
+longer exists. The rollback of last resort is the Bitwarden pre-raft
+tarball (sha256 `8c8b347f…`) via the pre-cutover drill flow — or, better,
+a nightly snapshot restored per the CT-03 procedure.
 
 ## Related
 
