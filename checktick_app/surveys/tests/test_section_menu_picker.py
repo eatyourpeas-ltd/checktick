@@ -11,6 +11,8 @@ Step 5 wires up the participant-facing picker:
 - action=change_sections clears the selection and returns to the picker.
 """
 
+import re
+
 from django.urls import reverse
 import pytest
 
@@ -137,6 +139,29 @@ def test_picker_renders_when_no_selection(client, section_menu_survey, participa
     # Pickable sections shown as checkboxes
     assert "Medical" in html
     assert "Lifestyle" in html
+
+
+@pytest.mark.django_db
+def test_picker_inline_script_carries_csp_nonce(
+    client, section_menu_survey, participant
+):
+    """The picker's Continue button is enabled by an inline script.
+
+    The site CSP forbids 'unsafe-inline' for script-src, so the inline
+    script must carry the per-request nonce. Without it the browser
+    silently blocks the script and the Continue button stays disabled
+    no matter how many sections the participant ticks.
+    """
+    client.force_login(participant)
+    url = reverse("surveys:take", kwargs={"slug": section_menu_survey.slug})
+    res = client.get(url)
+    assert res.status_code == 200
+    html = res.content.decode()
+    assert 'id="picker-continue-btn"' in html
+    m = re.search(r'<script nonce="([^"]+)"', html)
+    assert m, "picker inline script must carry the per-request CSP nonce"
+    csp = res.get("Content-Security-Policy", "")
+    assert f"'nonce-{m.group(1)}'" in csp
 
 
 @pytest.mark.django_db
