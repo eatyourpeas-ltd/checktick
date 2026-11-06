@@ -69,14 +69,15 @@
 #   client is minio-based and does not send them — proven 2026-11-05: a
 #   live-fire test (recurring job fired early once) backed up all three
 #   volumes to the bucket, all Completed, and the BackupVolume listing
-#   synced back from the object store (POC-STATUS session 12).
+#   synced back from the object store (live-fire verified 2026-11-06).
 # - One-time test trigger that did NOT work: annotating the PVC with
 #   longhorn.io/backup was consumed silently but created no Backup CR on
 #   this Longhorn version — to test, patch the RecurringJob cron to a couple
 #   of minutes ahead instead, then revert.
 # - This does NOT cover the Vault: its PVC is on civo-volume, not Longhorn,
-#   and its backup path is the Raft migration + nightly snapshot CronJob
-#   (POC-STATUS next-steps item 3 — the designed first hardening item).
+#   and its backup path is the nightly encrypted raft snapshot CronJob
+#   (k8s/vault-snapshot.yaml — see docs/civo-kubernetes-operations.md,
+#   Vault Operations).
 ---
 apiVersion: longhorn.io/v1beta2
 kind: RecurringJob

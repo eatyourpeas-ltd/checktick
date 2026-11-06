@@ -24,7 +24,7 @@
 # - The tail DB (byte positions) lives on a hostPath so a collector restart
 #   resumes where it left off instead of re-shipping (and duplicating) logs.
 #
-# ⚠ NOT APPLIED (2026-11-05, POC-STATUS session 12): one fluent-bit per node
+# ⚠ NOT APPLIED (2026-11-05, found live): one fluent-bit per node
 # pushed the smallest node (~2 GiB, hosting the CNPG primary + operator +
 # traefik + longhorn) past its memory wall; every pod on it restart-looped
 # until the collector was deleted and the primary/operator moved off. It is

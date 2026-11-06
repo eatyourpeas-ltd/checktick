@@ -6,12 +6,11 @@
 # needs no unseal ceremony and no shares on a scheduled job. The snapshot is
 # then wrapped with `age -r <OPERATOR_RECIPIENT>` BEFORE upload: the stored
 # object is useless without BOTH 3-of-4 Shamir shares AND the operator's
-# age private key (Bitwarden-held). CTO-signed design — see
-# docs/vault-raft-migration.md, design decision 1.
+# age private key (Bitwarden-held). CTO-signed design (2026-11-06).
 #
 # Deliberately NOT in kustomization.yaml (same pattern as
 # postgres-cnpg.yaml): the job has three out-of-band prerequisites and is
-# applied AFTER the Raft migration window (docs/vault-raft-migration.md):
+# applied AFTER the Vault is on integrated Raft storage:
 #
 #   1. the vault-snapshot AppRole on the MIGRATED Vault, minted by
 #      s/k8s-vault-snapshot-ceremony into the Secret `vault-snapshot-approle`

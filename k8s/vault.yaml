@@ -1,10 +1,7 @@
 # HashiCorp Vault — single node, integrated Raft storage, manual unseal
-# (3-of-4 Shamir). Migrated from file storage 2026-11-06
-# (docs/vault-raft-migration.md). The migrate COPIES, so the old file data
-# still sits at the volume root (core/, logical/, sys/ …) as the rollback
-# path until the snapshot restore-test passes; rollback = revert the
-# storage stanza below to `storage "file" { path = "/vault/storage" }`
-# and re-apply.
+# (3-of-4 Shamir). Migrated from file storage 2026-11-06; the nightly
+# ENCRYPTED snapshot pipeline is live and restore-proven (see
+# docs/civo-kubernetes-operations.md, Vault Operations).
 #
 # POC: initialise a THROWAWAY Vault (vault operator init -key-shares=4
 # -key-threshold=3) and configure AppRole per docs/vault.md.
@@ -13,7 +10,6 @@
 # the source Vault must be extracted into the `data-vault-0` PVC BEFORE this
 # StatefulSet is applied, then unsealed with the EXISTING shares. A fresh init
 # makes every encrypted survey in PostgreSQL permanently undecryptable.
-# See docs/migration-northflank-to-civo.md, critical safety rule 1.
 #
 # Version is pinned to match the source instance. Verified against the live
 # production Vault 2026-11-02: server reports 1.21.4 (the runbook originally
@@ -186,8 +182,7 @@ spec:
         # same pattern as checktick.io/db-client
         # (postgres-networkpolicy.yaml). Safe to apply pre-migration:
         # purely additive, no pod carries the label until the snapshot
-        # CronJob is applied after the Raft window
-        # (docs/vault-raft-migration.md). Negative-test it: an UNlabelled
+        # CronJob is applied. Negative-test it: an UNlabelled
         # pod must still be dropped on 8200.
         - podSelector:
             matchLabels:

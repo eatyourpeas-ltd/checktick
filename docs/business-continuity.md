@@ -188,9 +188,9 @@ If Vault's storage backend is corrupted:
    `s3://checktick-backups/vault/`, decrypt it with the operator's age
    private key (`age --decrypt`), then run
    `vault operator raft snapshot restore <file>` against a fresh Vault and
-   unseal with the EXISTING Shamir shares — see
-   `docs/vault-raft-migration.md` (restore test). Never
-   `vault operator init` on restored storage.
+   unseal with the EXISTING Shamir shares (the full chain is proven in the
+   [restoration test log](compliance/restoration-test-log.md), CT-03).
+   Never `vault operator init` on restored storage.
 
    For self-hosted file-storage deployments:
 

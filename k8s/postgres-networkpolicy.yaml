@@ -33,8 +33,8 @@
 # posture this file protects. Vault's airgap (vault.yaml) DOES deny egress
 # because file storage needs none.
 #
-# Found as a gap during the 2026-11-03 cutover review (POC-STATUS session 9);
-# applied and verified same day (see compliance infrastructure change log).
+# Found as a gap during the 2026-11-03 cutover review; applied and
+# verified same day (see compliance infrastructure change log).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

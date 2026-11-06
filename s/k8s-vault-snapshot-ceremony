@@ -3,8 +3,8 @@
 # PRODUCTION Vault (post-Raft-migration) and store its credentials in the
 # k8s Secret consumed by the vault-snapshot CronJob (k8s/vault-snapshot.yaml).
 #
-# Runbook step: docs/vault-raft-migration.md, "Snapshot CronJob" — run
-# AFTER the migration window, against the unsealed migrated Vault.
+# Mint AFTER the Vault is on integrated Raft storage, against the
+# unsealed Vault (see docs/civo-kubernetes-operations.md, Vault Operations).
 #
 # What it mints (least-privilege, CTO-signed design decision 3):
 #   - policy vault-snapshot: sys/storage/raft/snapshot ONLY — a leaked
@@ -227,7 +227,7 @@ Ceremony complete. The $SECRET Secret is ready for the snapshot CronJob:
      in the git-ignored k8s/config.env → re-apply checktick-config-local.
   2. Apply the CronJob out-of-band (deliberately NOT in kustomization.yaml):
        kubectl apply -f k8s/vault-snapshot.yaml
-  3. First-run verification (runbook "Snapshot CronJob" step 4):
+  3. First-run verification:
        kubectl -n checktick create job --from=cronjob/vault-snapshot vault-snapshot-manual
        kubectl -n checktick logs -f job/vault-snapshot-manual
      then confirm the .age object under s3://checktick-backups/vault/.

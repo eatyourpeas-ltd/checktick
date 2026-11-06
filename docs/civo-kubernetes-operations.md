@@ -8,10 +8,11 @@ priority: 13
 
 Operational reference for running CheckTick on managed Kubernetes (Civo, London LON1).
 The durable knowledge here was extracted from the Northflank → Civo migration
-(production cutover 2026-11-03); the migration runbook and its session log were
-retained only until Phase 6 close-out and then removed. The permanent historical
-record of the migration lives in
-[`docs/compliance/infrastructure-technical-change-log/`](compliance/infrastructure-technical-change-log/).
+(production cutover 2026-11-03). The migration runbook and its session log
+were removed at close-out (2026-11-06) — the permanent historical record
+lives in
+[`docs/compliance/infrastructure-technical-change-log/`](compliance/infrastructure-technical-change-log/),
+with the full documents preserved in git history.
 
 For a walkthrough of the manifests and day-to-day validation commands, see
 [`k8s/README.md`](../k8s/README.md).
@@ -60,7 +61,7 @@ For a walkthrough of the manifests and day-to-day validation commands, see
    memory-reclaim stalls that liveness-killed EVERY pod on the node in
    lockstep, including the primary. Stabilisation that worked: cordon → CNPG
    auto-switchover → move Deployment pods off. Verify `kubectl top node`
-   headroom before adding any per-node workload (POC-STATUS session 12).
+   headroom before adding any per-node workload (found live 2026-11-05).
 6. Public hostnames are owned by the **config overlay** via `ALLOWED_HOSTS_EXTRA`
    (k8s/config.env → checktick-config-local), which settings.py appends on top
    of the in-cluster ALLOWED_HOSTS. The web Deployment's env entry carries only
@@ -141,9 +142,10 @@ Proven during the CVE-2026-98432 patch window (2026-11-04):
   `vault operator raft snapshot save`, wraps the snapshot with `age` using
   the operator's public key, and uploads to `s3://checktick-backups/vault/`
   (retain 14). The stored object needs BOTH the Shamir shares AND the
-  operator's age private key (Bitwarden). The runbook is
-  [`docs/vault-raft-migration.md`](vault-raft-migration.md) (executed
-  2026-11-06; the restore test closes it). The pre-migration alternative
+  operator's age private key (Bitwarden). The restore chain is proven
+  end-to-end — CT-03 in
+  [`restoration-test-log.md`](compliance/restoration-test-log.md)
+  (2026-11-06). The pre-migration alternative
   (stop-copy-restart on a cron) would put unseal shares on a scheduled job
   and breaks the custody model — do not use it.
 - `tls_disable = true` in-cluster is the migration baseline; the backlog adds
@@ -171,7 +173,7 @@ Proven during the CVE-2026-98432 patch window (2026-11-04):
   [Logging & Audit Policy](compliance/logging-policy.md). The collector
   DaemonSet (`k8s/log-collector.yaml`) is built but **deliberately not
   applied** — it tipped the smallest node over its memory wall on
-  2026-11-05 (POC-STATUS session 12); redeploy only after node-pool resizing
+  2026-11-05 (found live); redeploy only after node-pool resizing
   or reworking its footprint. The Platform Admin log-viewer API
   (`HOSTING_*`) is an unrelated opt-in feature.
 

@@ -10,8 +10,8 @@
 #   rm /tmp/kubeconfig.yaml
 #
 #   The kubeconfig is cluster-admin for now; a least-privilege
-#   ServiceAccount kubeconfig is on the migration runbook's Phase 6
-#   hardening backlog (docs/migration-northflank-to-civo.md).
+#   ServiceAccount kubeconfig is on the hardening backlog
+#   (docs/civo-kubernetes-operations.md).
 #
 # Deploy sequence (zero downtime):
 #   1. pre-deploy Job (migrate + idempotent syncs) pinned to the SAME tag

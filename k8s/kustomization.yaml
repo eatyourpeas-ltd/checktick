@@ -19,17 +19,17 @@ resources:
   - openobserve.yaml
   # NOTE: k8s/log-collector.yaml is NOT listed here on purpose. Deploying a
   # collector DaemonSet (one fluent-bit per node) tipped the smallest node
-  # over its memory wall on 2026-11-05 and restart-looped everything on it,
-  # including the CNPG primary (POC-STATUS session 12). Re-apply it
+  # over its memory wall on 2026-11-05 (found live) and restart-looped
+  # everything on it, including the CNPG primary. Re-apply it
   # out-of-band ONLY after the node pool is resized or the collector is
   # reworked (nodeSelector / smaller footprint): the file is committed and
   # ready, but `kubectl apply -k k8s/` must not silently recreate it.
   # NOTE: k8s/vault-snapshot.yaml (nightly ENCRYPTED Vault snapshot CronJob)
   # is NOT listed here on purpose either: it requires the Raft migration
-  # window + the vault-snapshot AppRole ceremony + the operator age
-  # keypair, all environment-specific/out-of-band (see the file header and
-  # docs/vault-raft-migration.md). Apply it out-of-band after the window;
-  # before then it would fail nightly at AppRole login.
+  # window is complete + the vault-snapshot AppRole ceremony + the operator
+  # age keypair, all environment-specific/out-of-band (see the file header).
+  # Apply it out-of-band after the Vault is on Raft storage; before then it
+  # would fail nightly at AppRole login.
   # The openobserve-auth Secret is intentionally NOT managed by kustomize —
   # create it from the local git-ignored env file (see k8s/openobserve.example.env),
   # same pattern as checktick-secrets above.

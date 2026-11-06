@@ -88,7 +88,7 @@ restore → production barrier unseal → escrow material readable.
 **Result:** ✅ Pass. The stored object requires BOTH the Shamir shares AND
 the operator's age private key — the custody model held at every layer.
 
-**Operational findings (recorded in docs/vault-raft-migration.md):**
+**Operational findings:**
 
 - A fresh raft Vault does not create its own storage path — `mkdir` first
 - Post-restore, the running process serves its OLD in-memory seal config;

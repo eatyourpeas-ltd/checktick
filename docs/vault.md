@@ -154,8 +154,9 @@ Civo, production since 2026-11-03). Key points of that deployment:
 - Back up the storage: the production deployment takes nightly ENCRYPTED
   raft snapshots via a CronJob (`vault operator raft snapshot save`,
   age-wrapped with an operator-held key before upload, 14 retained — see
-  [`docs/vault-raft-migration.md`](vault-raft-migration.md) and
-  `k8s/vault-snapshot.yaml`). Self-hosters: see Backup & Recovery below.
+  `k8s/vault-snapshot.yaml` and
+  [Civo Kubernetes Operations](civo-kubernetes-operations.md)).
+  Self-hosters: see Backup & Recovery below.
 
 For large-scale HA deployments, the official Helm chart with integrated Raft
 storage is an alternative:

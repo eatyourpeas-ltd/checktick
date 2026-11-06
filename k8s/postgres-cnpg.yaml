@@ -64,8 +64,7 @@ spec:
   instances: 2 # primary + one streaming replica; operator handles failover
   # Pin a specific 17.x tag from the CNPG image releases.
   # The 16 -> 17 major upgrade happens via the cutover pg_dump/restore
-  # (docs/migration-northflank-to-civo.md, safety rule 3) — never via
-  # pg_upgrade-in-place on the first migration.
+  # — never via pg_upgrade-in-place on the first migration.
   imageName: ghcr.io/cloudnative-pg/postgresql:17
   # Civo's object store rejects the default payload-checksum mode of modern
   # S3 clients (boto3 >= 1.36 / aws-cli v2): every upload fails with
