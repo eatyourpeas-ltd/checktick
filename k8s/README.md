@@ -16,7 +16,8 @@ values are applied out-of-band.
 | :--- | :--- |
 | `namespace.yaml` | `checktick` namespace |
 | `web-configmap.yaml` | Non-sensitive config (hostnames, Vault addr, defaults) |
-| `vault.yaml` | Vault StatefulSet (file storage, manual unseal), Service, airgap NetworkPolicy |
+| `vault.yaml` | Vault StatefulSet (integrated Raft storage, manual unseal), Service, airgap NetworkPolicy |
+| `vault-snapshot.yaml` | Nightly ENCRYPTED Vault snapshot CronJob — deliberately NOT in kustomization.yaml (out-of-band prerequisites: AppRole ceremony + operator age key; see the file header and docs/vault-raft-migration.md) |
 | `web.yaml` | Web Deployment (probes, rolling update, anti-affinity), Service, PVCs, PDB |
 | `migrate-job.yaml` | Pre-deploy Job: migrations + idempotent syncs |
 | `cronjobs.yaml` | All 13 scheduled tasks (docs/self-hosting-scheduled-tasks.md); SNOMED arrives as a small object-store import — the 8 GiB in-cluster build is replaced by the CI workflow |
@@ -189,8 +190,10 @@ kubectl apply -f k8s/cronjobs.yaml
   sct ndjson step peaks above 4 GiB and cannot run on 4 GB nodes) and the
   importer CronJob swaps it in with an atomic rename; the seed runs
   in-cluster where the database lives.
-- **Vault** runs file storage with manual unseal behind a NetworkPolicy that
-  denies all egress and only accepts ingress from web pods on 8200. There is
+- **Vault** runs integrated Raft storage (migrated from file storage
+  2026-11-06) with manual unseal behind a NetworkPolicy that denies all
+  egress except its own cluster port (8201) and accepts ingress from web
+  pods and the nightly snapshot CronJob on 8200. There is
   deliberately no liveness probe. A node drain re-seals Vault and 503s the
   app until the ceremony — pin Vault's node and drain it manually, or move
   Vault to a dedicated small cluster (see migration runbook, Phase 6).

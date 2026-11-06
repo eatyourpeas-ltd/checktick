@@ -1,4 +1,10 @@
-# HashiCorp Vault — single node, file storage, manual unseal (3-of-4 Shamir).
+# HashiCorp Vault — single node, integrated Raft storage, manual unseal
+# (3-of-4 Shamir). Migrated from file storage 2026-11-06
+# (docs/vault-raft-migration.md). The migrate COPIES, so the old file data
+# still sits at the volume root (core/, logical/, sys/ …) as the rollback
+# path until the snapshot restore-test passes; rollback = revert the
+# storage stanza below to `storage "file" { path = "/vault/storage" }`
+# and re-apply.
 #
 # POC: initialise a THROWAWAY Vault (vault operator init -key-shares=4
 # -key-threshold=3) and configure AppRole per docs/vault.md.
@@ -29,9 +35,18 @@ data:
     # Cutover hardening: verify node swap is disabled.
     disable_mlock = true
 
-    storage "file" {
-      path = "/vault/file"
+    # Integrated Raft (migrated from file storage 2026-11-06 — see the file
+    # header for the rollback path).
+    storage "raft" {
+      path    = "/vault/storage/raft"
+      node_id = "vault-0"
     }
+
+    # Required with raft storage (docs/configuration/storage/raft). The
+    # cluster listener port is 8201 — the vault-airgap NetworkPolicy below
+    # carries a scoped self-allow for it (single-node self-communication
+    # via the Service).
+    cluster_addr = "http://vault.checktick.svc.cluster.local:8201"
 
     listener "tcp" {
       address = "0.0.0.0:8200"
@@ -118,7 +133,7 @@ spec:
               mountPath: /vault/config
               readOnly: true
             - name: data
-              mountPath: /vault/file
+              mountPath: /vault/storage
           resources:
             requests:
               memory: 512Mi
@@ -142,8 +157,13 @@ spec:
           requests:
             storage: 10Gi
 ---
-# The "airgap": Vault accepts nothing but API traffic from the web pods, and
-# makes no outbound connections at all (file storage needs none).
+# The "airgap": Vault accepts nothing but API traffic from the web pods and
+# the nightly snapshot CronJob, and makes no outbound connections beyond the
+# Raft cluster port. File storage needed no egress at all; integrated Raft
+# (post-migration) may dial its OWN cluster port 8201 via the Service, so the
+# egress allow below is scoped to pods labelled app=vault on 8201 ONLY —
+# everything else stays denied. The snapshot pod is a SEPARATE pod (not a
+# sidecar on vault-0), so this egress deny cannot block its S3 upload.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -161,8 +181,35 @@ spec:
         - podSelector:
             matchLabels:
               app: checktick-web
+        # Nightly snapshot CronJob (k8s/vault-snapshot.yaml): the
+        # checktick.io/vault-snapshot label IS the pod's API access grant —
+        # same pattern as checktick.io/db-client
+        # (postgres-networkpolicy.yaml). Safe to apply pre-migration:
+        # purely additive, no pod carries the label until the snapshot
+        # CronJob is applied after the Raft window
+        # (docs/vault-raft-migration.md). Negative-test it: an UNlabelled
+        # pod must still be dropped on 8200.
+        - podSelector:
+            matchLabels:
+              checktick.io/vault-snapshot: "true"
       ports:
         - protocol: TCP
           port: 8200
-  # Empty egress list = deny all outbound.
-  egress: []
+    # Raft cluster port (post-migration): single-node self-communication.
+    # Scoped to Vault's own pods only — no other source may use it.
+    - from:
+        - podSelector:
+            matchLabels:
+              app: vault
+      ports:
+        - protocol: TCP
+          port: 8201
+  # Deny all egress EXCEPT the Raft cluster port to Vault's own pods above.
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vault
+      ports:
+        - protocol: TCP
+          port: 8201

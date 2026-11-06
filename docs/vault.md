@@ -134,8 +134,9 @@ command: >
 
 ### Option 2: Kubernetes (recommended for production)
 
-The production reference is a single-replica StatefulSet with file storage on a
-persistent volume, kept cluster-internal by a NetworkPolicy — see the
+The production reference is a single-replica StatefulSet with integrated
+Raft storage on a persistent volume (migrated from file storage
+2026-11-06), kept cluster-internal by a NetworkPolicy — see the
 reference manifest [`k8s/vault.yaml`](../k8s/vault.yaml) (managed Kubernetes on
 Civo, production since 2026-11-03). Key points of that deployment:
 
@@ -150,10 +151,11 @@ Civo, production since 2026-11-03). Key points of that deployment:
 - `tls_disable = true` in-cluster is the migration baseline; the hardening
   backlog adds cert-manager TLS on the in-cluster endpoint
   (`VAULT_TLS_VERIFY=true`).
-- Back up the storage: the top hardening priority is migrating file storage
-  to integrated Raft storage with a nightly `vault operator raft snapshot
-  save` CronJob (see the migration runbook's Phase 6 backlog). Until then,
-  Vault storage backups are manual, ceremony-gated copies.
+- Back up the storage: the production deployment takes nightly ENCRYPTED
+  raft snapshots via a CronJob (`vault operator raft snapshot save`,
+  age-wrapped with an operator-held key before upload, 14 retained — see
+  [`docs/vault-raft-migration.md`](vault-raft-migration.md) and
+  `k8s/vault-snapshot.yaml`). Self-hosters: see Backup & Recovery below.
 
 For large-scale HA deployments, the official Helm chart with integrated Raft
 storage is an alternative:

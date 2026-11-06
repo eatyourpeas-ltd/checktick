@@ -76,8 +76,9 @@ Object Storage backups.
 1. Restore PostgreSQL database from the most recent nightly base backup and
    WAL archive (Civo Object Storage) into a clean scratch CloudNativePG cluster
 2. Redeploy the application container from GitHub into the staging environment
-3. Restore the Vault storage from its most recent ceremony-gated backup and unseal
-   using YubiKey hardware tokens (as validated in CT-01)
+3. Restore the Vault from its most recent nightly encrypted raft snapshot
+   (age-decrypt with the operator's key, `vault operator raft snapshot
+   restore`) and unseal using YubiKey hardware tokens (as validated in CT-01)
 4. Reconstruct platform master key from Shamir custodian shares held on
    YubiKeys (as validated in CT-01)
 5. Verify that an existing test user account can successfully authenticate

@@ -1,0 +1,201 @@
+# Nightly ENCRYPTED Vault snapshot → Civo Object Store.
+#
+# Hardening item 1 (docs/civo-kubernetes-operations.md): the Vault is the
+# last component with no scheduled backup. Integrated Raft storage supports
+# `vault operator raft snapshot save` while UNSEALED — so the nightly backup
+# needs no unseal ceremony and no shares on a scheduled job. The snapshot is
+# then wrapped with `age -r <OPERATOR_RECIPIENT>` BEFORE upload: the stored
+# object is useless without BOTH 3-of-4 Shamir shares AND the operator's
+# age private key (Bitwarden-held). CTO-signed design — see
+# docs/vault-raft-migration.md, design decision 1.
+#
+# Deliberately NOT in kustomization.yaml (same pattern as
+# postgres-cnpg.yaml): the job has three out-of-band prerequisites and is
+# applied AFTER the Raft migration window (docs/vault-raft-migration.md):
+#
+#   1. the vault-snapshot AppRole on the MIGRATED Vault, minted by
+#      s/k8s-vault-snapshot-ceremony into the Secret `vault-snapshot-approle`
+#      (keys VAULT_ROLE_ID / VAULT_SECRET_ID) — the policy is
+#      sys/storage/raft/snapshot ONLY (read+update on that single path;
+#      found live 2026-11-06: the 1.21.4 CLI calls
+#      GET /v1/sys/storage/raft/snapshot), so a leaked secret_id can do
+#      nothing but take (barrier-encrypted) snapshots.
+#   2. the operator age keypair (`age-keygen`): private key → Bitwarden,
+#      NEVER in the repo/cluster; the public recipient (age1...) is public
+#      material but identifies the operator's backup identity, so it lives
+#      in an out-of-band ConfigMap like the HC_PING_* URLs — never in this
+#      public repo:
+#        kubectl create configmap vault-snapshot-config -n checktick \
+#          --from-literal=AGE_RECIPIENT=age1... \
+#          --dry-run=client -o yaml | kubectl apply -f -
+#      (The AGE_RECIPIENT ref below is deliberately NOT optional: if the
+#      ConfigMap/key is missing the job must FAIL rather than upload an
+#      unencrypted snapshot.)
+#   3. NetworkPolicy `vault-airgap` (k8s/vault.yaml) ingress rule for pods
+#      labelled checktick.io/vault-snapshot=true — the label IS this pod's
+#      API access grant (the checktick.io/db-client pattern,
+#      postgres-networkpolicy.yaml). The snapshot runs in a SEPARATE pod,
+#      not a sidecar on vault-0, so the vault-airgap egress deny does not
+#      block its S3/healthchecks egress.
+#
+# Flow (initContainers run in order, then the main container; all share the
+# tmpfs /snapshots volume so the raw barrier snapshot never touches node
+# disk and dies with the pod):
+#   snapshot : AppRole login → vault operator raft snapshot save
+#   encrypt  : apk add age → age -r $AGE_RECIPIENT → rm the raw tar
+#   upload   : aws s3 cp → prune to the 14 newest → ping healthchecks.io
+#              on success only (HC_PING_VAULT_SNAPSHOT in the git-ignored
+#              k8s/config.env → checktick-config-local; unset = no ping,
+#              self-hosters unaffected — a failed or non-running job sends
+#              no ping and healthchecks.io alerts).
+#
+# Retention: 14 objects (runbook decision 1). The Bitwarden manual copy
+# remains the custody-grade offline backup; this is the nightly-freshness
+# path (the Vault is NOT static — every survey creation writes escrow key
+# material, so any point-in-time copy silently rots).
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vault-snapshot
+  namespace: checktick
+spec:
+  # 03:45 UTC — after the Longhorn 03:30 nightly window, before the NHS DD
+  # Sunday 04:00 batch. Kubernetes CronJob schedules are UTC (five fields).
+  schedule: "45 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 900
+      ttlSecondsAfterFinished: 172800
+      template:
+        metadata:
+          labels:
+            # vault-airgap API grant (vault.yaml) — see header note 3.
+            checktick.io/vault-snapshot: "true"
+        spec:
+          restartPolicy: Never
+          volumes:
+            # tmpfs: the raw (barrier-encrypted, but pre-age) snapshot and
+            # the .age blob live in memory only — never on node disk.
+            - name: snapshots
+              emptyDir:
+                medium: Memory
+          initContainers:
+            # 1. Take the snapshot via the vault CLI + the dedicated AppRole.
+            - name: snapshot
+              image: hashicorp/vault:1.21.4
+              env:
+                - name: VAULT_ADDR
+                  value: "http://vault.checktick.svc.cluster.local:8200"
+                - name: VAULT_ROLE_ID
+                  valueFrom:
+                    secretKeyRef: {name: vault-snapshot-approle, key: VAULT_ROLE_ID}
+                - name: VAULT_SECRET_ID
+                  valueFrom:
+                    secretKeyRef: {name: vault-snapshot-approle, key: VAULT_SECRET_ID}
+              command: ["sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  TOKEN="$(vault write -field=token auth/approle/login \
+                    role_id="$VAULT_ROLE_ID" secret_id="$VAULT_SECRET_ID")"
+                  export VAULT_TOKEN="$TOKEN"
+                  vault operator raft snapshot save /snapshots/vault-raft.snapshot.tar
+                  ls -l /snapshots
+              volumeMounts:
+                - name: snapshots
+                  mountPath: /snapshots
+              resources:
+                requests: {memory: 128Mi, cpu: 100m}
+                limits: {memory: 256Mi}
+            # 2. Encrypt with the operator's age public key (ConfigMap
+            #    vault-snapshot-config; the private key NEVER leaves
+            #    Bitwarden), then remove the raw snapshot from tmpfs.
+            - name: encrypt
+              image: alpine:3.21
+              env:
+                - name: AGE_RECIPIENT
+                  valueFrom:
+                    configMapKeyRef: {name: vault-snapshot-config, key: AGE_RECIPIENT}
+              command: ["sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  apk add --no-cache age
+                  age -r "$AGE_RECIPIENT" \
+                    -o /snapshots/vault-raft.snapshot.tar.age \
+                    /snapshots/vault-raft.snapshot.tar
+                  rm /snapshots/vault-raft.snapshot.tar
+                  ls -l /snapshots
+              volumeMounts:
+                - name: snapshots
+                  mountPath: /snapshots
+              resources:
+                requests: {memory: 64Mi, cpu: 100m}
+                limits: {memory: 128Mi}
+          containers:
+            # 3. Upload, prune, ping. Same aws-cli + Civo checksum env pair
+            #    as the proven SNOMED download step (k8s/cronjobs.yaml) —
+            #    Civo's object store rejects the default payload-checksum
+            #    mode of modern clients (see postgres-cnpg.yaml for the
+            #    full finding). Credentials: the same object-store keys as
+            #    the CNPG backups (checktick-db-backup-creds).
+            - name: upload
+              image: amazon/aws-cli:latest
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: {name: checktick-db-backup-creds, key: ACCESS_KEY_ID}
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: {name: checktick-db-backup-creds, key: SECRET_ACCESS_KEY}
+                - name: AWS_DEFAULT_REGION
+                  valueFrom:
+                    secretKeyRef: {name: checktick-db-backup-creds, key: REGION}
+                - name: AWS_REQUEST_CHECKSUM_CALCULATION
+                  value: when_required
+                - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+                  value: when_required
+                # Ping-on-success URL — unset = no ping (optional so
+                # self-hosters without a check are unaffected).
+                - name: HC_PING_VAULT_SNAPSHOT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: checktick-config-local
+                      key: HC_PING_VAULT_SNAPSHOT
+                      optional: true
+              command: ["sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  KEY="vault-raft-$(date -u +%Y-%m-%dT%H%M%S).tar.age"
+                  aws s3 cp /snapshots/vault-raft.snapshot.tar.age \
+                    "s3://checktick-backups/vault/$KEY" \
+                    --endpoint-url https://objectstore.lon1.civo.com
+                  # Prune to the 14 newest objects. Keys are date-prefixed,
+                  # so lexical sort is chronological; listing is oldest-safe
+                  # because we keep the HEAD of the reversed list.
+                  aws s3 ls "s3://checktick-backups/vault/" \
+                    --endpoint-url https://objectstore.lon1.civo.com \
+                    | awk '{print $4}' | sort -r | tail -n +15 > /tmp/prune.list || true
+                  while IFS= read -r old; do
+                    [ -n "$old" ] || continue
+                    echo "pruning: $old"
+                    aws s3 rm "s3://checktick-backups/vault/$old" \
+                      --endpoint-url https://objectstore.lon1.civo.com
+                  done < /tmp/prune.list
+                  if [ -n "${HC_PING_VAULT_SNAPSHOT:-}" ]; then
+                    curl -fsS --retry 3 "$HC_PING_VAULT_SNAPSHOT" > /dev/null
+                  fi
+                  echo "snapshot complete: $KEY"
+              volumeMounts:
+                - name: snapshots
+                  mountPath: /snapshots
+                  readOnly: true
+              resources:
+                requests: {memory: 128Mi, cpu: 100m}
+                limits: {memory: 512Mi}

@@ -183,6 +183,17 @@ If Vault's storage backend is corrupted:
 
 2. **Restore from backup** (if available):
 
+   For managed Kubernetes deployments (Civo — nightly encrypted raft
+   snapshots): download the newest `vault-raft-*.tar.age` from
+   `s3://checktick-backups/vault/`, decrypt it with the operator's age
+   private key (`age --decrypt`), then run
+   `vault operator raft snapshot restore <file>` against a fresh Vault and
+   unseal with the EXISTING Shamir shares — see
+   `docs/vault-raft-migration.md` (restore test). Never
+   `vault operator init` on restored storage.
+
+   For self-hosted file-storage deployments:
+
    ```bash
    # Stop Vault
    docker stop vault-container

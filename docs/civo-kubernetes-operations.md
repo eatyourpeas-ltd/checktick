@@ -23,13 +23,16 @@ For a walkthrough of the manifests and day-to-day validation commands, see
 - Components:
   - web Deployment (image pinned to a published release tag, never `latest`)
   - CloudNativePG PostgreSQL 17 — `checktick-db` cluster (primary + one replica), in-cluster
-  - HashiCorp Vault — single-replica StatefulSet (`vault-0`), file storage on a PVC
+  - HashiCorp Vault — single-replica StatefulSet (`vault-0`), integrated
+    Raft storage on a PVC (migrated from file storage 2026-11-06)
   - Traefik ingress (443 only) + cert-manager TLS
   - Longhorn volumes: `checktick-media`, `checktick-snomed-data`
   - 13 CronJobs (scheduled tasks — see [`docs/self-hosting-scheduled-tasks.md`](self-hosting-scheduled-tasks.md))
 - Backups: CNPG `ScheduledBackup` (nightly 02:00 UTC base backup) + continuous WAL
   archiving to Civo Object Store (UK region), **120-day retention** per the
-  [Backup & Data Retention Policy](compliance/backup-policy.md)
+  [Backup & Data Retention Policy](compliance/backup-policy.md); nightly
+  ENCRYPTED Vault raft snapshots (03:45 UTC, 14-snapshot retention — see
+  Vault Operations below)
 - Deploys: GitHub Actions *Deploy (Civo)* workflow (pre-deploy Job runs migrations +
   idempotent syncs pinned to the same tag, then a `maxUnavailable: 0` rolling update
   gated on `/healthz`). Migrations must stay expansion/contract — a rolled-back
@@ -45,7 +48,20 @@ For a walkthrough of the manifests and day-to-day validation commands, see
 3. **Major PostgreSQL upgrades go via dump/restore with the TARGET version's
    binaries** — never `pg_upgrade` in place, and never dump with newer binaries
    than the restore target.
-4. Public hostnames are owned by the **config overlay** via `ALLOWED_HOSTS_EXTRA`
+4. **Probe rules: never point liveness OR startupProbe at `/healthz`.** A
+   deep-probed startup gate restart-loops the web pods every 150 s while the
+   Vault is sealed — restarts cannot fix a seal (found live 2026-11-05 when
+   the interim Vault backup's sealed window took the site down; both probes
+   now use the trivial `/api/health`, which itself 500s if the DB is
+   unreachable — DRF's throttle cache is DB-backed).
+5. **A ~2 GiB node is a full node.** The smallest node ran primary DB + CNPG
+   operator + traefik (floating IP) + longhorn + a web pod at ~79% of
+   requests; adding one small DaemonSet (~150–250 Mi/node) caused
+   memory-reclaim stalls that liveness-killed EVERY pod on the node in
+   lockstep, including the primary. Stabilisation that worked: cordon → CNPG
+   auto-switchover → move Deployment pods off. Verify `kubectl top node`
+   headroom before adding any per-node workload (POC-STATUS session 12).
+6. Public hostnames are owned by the **config overlay** via `ALLOWED_HOSTS_EXTRA`
    (k8s/config.env → checktick-config-local), which settings.py appends on top
    of the in-cluster ALLOWED_HOSTS. The web Deployment's env entry carries only
    the in-cluster hosts (pod IP + service names), so `kubectl apply -f
@@ -118,12 +134,18 @@ Proven during the CVE-2026-98432 patch window (2026-11-04):
   `Initialized: true, Sealed: true` — **storage survives; do not re-init.** Unseal
   with 3-of-4 production shares (**`s/k8s-vault-unseal`** — hidden prompts only,
   shares never appear on a command line); healthz is fully ok ~10 s later.
-- **Storage backup today is a manual, ceremony-gated copy — there is no scheduled
-  Vault backup.** The designed fix (top hardening priority): migrate file storage →
-  integrated Raft storage, then a nightly `vault operator raft snapshot save`
-  CronJob — online snapshots, no unseal ceremony. The alternative
-  (stop-copy-restart on a cron) would put unseal shares on a scheduled job and
-  breaks the custody model — do not use it.
+- **Storage backup: nightly ENCRYPTED raft snapshots — LIVE since 2026-11-06.**
+  A 03:45 UTC CronJob (`k8s/vault-snapshot.yaml`, applied out-of-band) logs
+  in via a least-privilege AppRole (`sys/storage/raft/snapshot` only — no
+  unseal shares ever touch a scheduled job), runs
+  `vault operator raft snapshot save`, wraps the snapshot with `age` using
+  the operator's public key, and uploads to `s3://checktick-backups/vault/`
+  (retain 14). The stored object needs BOTH the Shamir shares AND the
+  operator's age private key (Bitwarden). The runbook is
+  [`docs/vault-raft-migration.md`](vault-raft-migration.md) (executed
+  2026-11-06; the restore test closes it). The pre-migration alternative
+  (stop-copy-restart on a cron) would put unseal shares on a scheduled job
+  and breaks the custody model — do not use it.
 - `tls_disable = true` in-cluster is the migration baseline; the backlog adds
   cert-manager TLS on the in-cluster endpoint + `VAULT_TLS_VERIFY=true`.
 - The Vault container image defaults to root — pin `runAsUser: 100` (backlog).
@@ -137,19 +159,36 @@ Proven during the CVE-2026-98432 patch window (2026-11-04):
   non-running* job triggers an email alert. The URLs live in the git-ignored
   `k8s/config.env` (`checktick-config-local` ConfigMap) and never enter the repo.
   Unset = no ping (self-hosters are unaffected).
-- Log shipping to OpenObserve is planned (backlog) — the app emits structured
-  JSON to stdout ([Infrastructure Logging](infrastructure-logging.md)); the
-  Platform Admin log-viewer API (`HOSTING_*`) is an unrelated opt-in feature.
+- **OpenObserve** (self-hosted, `k8s/openobserve.yaml`): log retention layer
+  for the app's structured stdout JSON
+  ([Infrastructure Logging](infrastructure-logging.md)). ClusterIP only —
+  reach the UI with `kubectl -n checktick port-forward svc/openobserve
+  5080:5080`; credentials in the `openobserve-auth` Secret
+  (see `k8s/openobserve.example.env`). Org `default` / stream `default`
+  carries the exported Northflank-era archive (June 2026 week — the
+  in-app exporter only ran that long) and would carry live logs; 180-day
+  stream retention per the
+  [Logging & Audit Policy](compliance/logging-policy.md). The collector
+  DaemonSet (`k8s/log-collector.yaml`) is built but **deliberately not
+  applied** — it tipped the smallest node over its memory wall on
+  2026-11-05 (POC-STATUS session 12); redeploy only after node-pool resizing
+  or reworking its footprint. The Platform Admin log-viewer API
+  (`HOSTING_*`) is an unrelated opt-in feature.
 
 ## Hardening Backlog
 
 Moved from the migration runbook's Phase 6 list; in rough priority order
 (`ALLOWED_HOSTS_EXTRA` shipped in 0.25.0 and is off the list):
 
-1. **Vault storage backup** — Raft migration + nightly snapshot CronJob (see above)
+1. ~~**Vault storage backup** — Raft migration + nightly snapshot CronJob~~
+   **DONE 2026-11-06** (migration executed + snapshot pipeline live; closes
+   fully when the restore test passes — see Vault Operations)
 2. **Barman Cloud Plugin migration** before any CNPG operator upgrade past 1.30
 3. TLS on the in-cluster Vault endpoint (cert-manager) + `VAULT_TLS_VERIFY=true`
-4. OpenObserve + collector DaemonSet for infrastructure log retention
+4. ~~OpenObserve + collector DaemonSet for infrastructure log retention~~ —
+   OpenObserve is deployed (2026-11-05, NF-era history restored); the
+   collector awaits node-pool sizing — see the ⚠ note in
+   `k8s/log-collector.yaml`
 5. Least-privilege ServiceAccount kubeconfig for the deploy workflow (today it is
    cluster-admin)
 6. Longhorn recurring snapshots on `checktick-media`; Velero/PVC backups

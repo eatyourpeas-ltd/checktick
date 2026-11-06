@@ -36,6 +36,7 @@ For NHS tips on survey creation check out this [guidance](https://nhsevaluationt
 - [Civo Kubernetes Operations](civo-kubernetes-operations.md)
 - [Quarterly Restore Rehearsal](restore-rehearsal.md)
 - [Northflank to Civo Migration Runbook](migration-northflank-to-civo.md)
+- [Vault Raft Migration & Nightly Snapshots](vault-raft-migration.md)
 - [Documentation System](documentation-system/)
 - [Getting Started with API](getting-started-api/)
 - [SNOMED CT Integration](snomed-integration.md)

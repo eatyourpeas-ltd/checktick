@@ -5,8 +5,8 @@ category: dspt-7-continuity
 
 # Backup & Data Retention Policy
 
-**Version:** 3.0 (Revised for DSPT 7.2.1)
-**Last Reviewed:** March 2026
+**Version:** 3.1 (Revised for DSPT 7.2.1)
+**Last Reviewed:** November 2026
 **Owner:** CTO
 
 ## 1. Scope & Strategy
@@ -27,13 +27,15 @@ up automatically:
   base backups (02:00 UTC) plus continuous WAL archiving to Civo Object Storage
   (UK region), with a 120-day retention period. Backups are stored in an object
   storage bucket separate from the live cluster.
-* **Encryption Vault (HashiCorp Vault — in-cluster StatefulSet):** Vault storage
-  backups are manual, ceremony-gated copies taken by named administrators.
-  Migrating the Vault to integrated Raft storage with a nightly
-  `vault operator raft snapshot save` CronJob is the top hardening priority
-  (migration runbook Phase 6 backlog). Vault unseal keys and custodian shares
-  are stored offline by named administrators independently of the hosting
-  environment.
+* **Encryption Vault (HashiCorp Vault — in-cluster StatefulSet, integrated
+  Raft storage):** Nightly automated raft snapshots (03:45 UTC) taken while
+  the Vault is unsealed, via a least-privilege AppRole — no unseal keys
+  ever touch a scheduled job. Each snapshot is encrypted with an
+  operator-held age key BEFORE upload to Civo Object Storage (UK region,
+  14-snapshot retention): the stored object is useless without BOTH the
+  3-of-4 Shamir unseal shares AND the operator's age private key (held
+  offline). Vault unseal keys and custodian shares are stored offline by
+  named administrators independently of the hosting environment.
 * **Source Code & Configuration:** Version-controlled in GitHub, providing
   globally redundant, immutable history of all application code and
   infrastructure configuration.
@@ -61,9 +63,11 @@ specific order to maintain the cryptographic security chain:
 ## 4. Security of Backups
 
 * **Encryption:** All backups in Civo Object Storage are encrypted at rest.
-  Vault storage backups contain only encrypted key material —
-  the custodian component required to reconstruct the platform master key
-  is stored offline and is never present in the hosting environment.
+  Vault snapshots are doubly protected — barrier-encrypted by Vault, then
+  age-encrypted with an operator-held key before upload — and contain only
+  encrypted key material: the custodian component required to reconstruct
+  the platform master key is stored offline and is never present in the
+  hosting environment.
 * **Access:** Access to restore backups is restricted to named administrators
   (CTO and SIRO) via MFA-protected Civo accounts. No application
   service account has permission to delete or modify backups.

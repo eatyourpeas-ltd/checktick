@@ -773,6 +773,341 @@ operator present throughout.
   backup expected on the new nodes (verify in the morning — the runbook
   record item).
 
+## Session 12 (2026-11-05 evening): interim Vault backup + NF log export + OpenObserve deployed — and a node-memory cascade
+
+Driver: next-steps items 2 (interim Vault storage backup, NF log export)
+plus hardening item 4 (OpenObserve). All three landed; the evening also
+produced two live findings that bit hard (see F1/F2).
+
+### Done
+
+1. **Interim Vault stop-copy backup DONE** (scale sts → 0 → helper pod on
+   `data-vault-0` → tar streamed off-cluster → restore → operator unseal).
+   Tarball 24 KB / 96 entries, sha256 `b6b9a9bd…`, at
+   `~/vault-backup-2026-11-05/` — **custody: move to Bitwarden/offline, then
+   delete the local copy** (superseded by the Raft migration, first hardening
+   item). Sealed window ran ~47 min, not the planned 10 — see F1.
+2. **NF historical logs exported + verified.** The running NF OpenObserve
+   service turned out to be EMPTY: its 6 GiB `checktick-logs` volume was
+   detached in a 2026-09-28 redeploy and the instance has run on ephemeral
+   storage since. Attached the volume to a one-shot NF job (`northflank
+   attach volume`, jobs have no `volumes` field in create-job), tarred /data
+   (118 MB), downloaded + sha256-verified (`d8097c8d…`, 64.7 MB tarball at
+   `~/nf-logs-export-2026-11-05/`), deleted the job, volume detached.
+   Data spans **2026-06-20 → 06-26 only** (505,913 docs): the in-app
+   OpenObserve exporter ran just one week before the stdout refactor killed
+   it — the July→cutover NF-era logs only ever existed in Northflank's own
+   platform log viewer and are gone with the account. Nothing more to
+   export; NF side is clean for close-out.
+3. **OpenObserve deployed on Civo** (`k8s/openobserve.yaml`, in kustomize):
+   pinned `openobserve:v1.1.2`, Longhorn PVC, ClusterIP only (port-forward
+   to use: `kubectl -n checktick port-forward svc/openobserve 5080:5080`).
+   NF data dir restored into the PVC BEFORE first boot (scratch helper pod);
+   v1.1.2 booted on it clean (forward metadata migration). Stream
+   `default/default` carries the NF archive + would carry live logs;
+   retention already 180 d. Auth: `openobserve-auth` Secret from git-ignored
+   `k8s/openobserve.env` (keys documented in `k8s/openobserve.example.env`).
+   **Rotate the root password in the UI after first login** (it is the NF-era
+   credential).
+4. **startupProbe bug fixed (live + manifest)**: the live Deployment had a
+   `startupProbe` on `/healthz` (deep) — `failureThreshold 30 × 5s = 150s`,
+   so a sealed Vault restart-looped the web pods every 2m41s and took the
+   site down for the whole sealed window. Fixed in `k8s/web.yaml` (now
+   `/api/health`, with comment) AND live-patched. Same class of lesson as
+   the liveness rule in web.yaml — restarts cannot fix a seal.
+5. **Collector built but REVERTED** — see F2. `k8s/log-collector.yaml` is
+   committed but deliberately NOT in kustomization.yaml.
+6. Backup chain re-verified after the CNPG interventions (`s/k8s-backup-verify`:
+   all green, next run 02:00 UTC Nov 6).
+
+### Findings that bit (record for next time)
+
+1. **F1 — startupProbe on /healthz**: sealed Vault (planned window) → pods
+   pass `/api/health` liveness but fail the deep startup probe → killed every
+   150 s. Diagnosis: `kubectl get events` showed "Startup probe failed: 503"
+   + "Container web failed startup probe"; container `Last State: Completed,
+   exit 0` (graceful SIGTERM, so it looks *nothing* like a crash). The
+   web pods ALSO 500'd `/api/health` intermittently — because DRF's throttle
+   cache is DB-backed and the DB was unreachable while the CNPG primary was
+   itself being killed (cascade below). `/api/health` is "trivial" only
+   while the DB answers.
+2. **F2 — the collector DaemonSet tipped the smallest node over its memory
+   wall**: `8ciwh` (~2 GiB) already hosted the CNPG primary + cnpg operator
+   + metrics-server + traefik (floating-IP node) + longhorn instance-manager
+   + a web pod at ~79% requests. One fluent-bit (~150–250 Mi, tailing the
+   CNPG pods' chatty csv+json triple-logs with Merge_Log) pushed it to
+   101–109% actual → memory-reclaim stalls → EVERY pod's probes timed out in
+   lockstep (localhost probes included!) → liveness-kill cascade (db-2 7×,
+   traefik 9×, cilium-operator 7×, cnpg operator 14×, metrics-server 4×).
+   The CNPG primary dying on a loop = the site down with 503/404 + the
+   AdminEmailHandler → Graph 403 storm amplifying load.
+   **Stabilisation that worked:** delete the DaemonSet → `kubectl cordon 8ciwh`
+   (CNPG auto-switched the primary to db-1 on hwp2f in ~40 s, the documented
+   cordon behaviour — no plugin needed) → delete the web pod on 8ciwh
+   (rescheduled off the cordoned node) → delete the cnpg operator +
+   metrics-server pods (Deployments — they rescheduled to healthy nodes).
+   Cascade stopped; healthz 200; chain verified. **8ciwh left cordoned** —
+   decide tomorrow: resize the node pool (proper fix) or `civo k8s recycle`
+   the node (proven session-11 flow; db-2 is now a mere replica so risk is
+   low) and uncordon.
+3. **Unseal gotcha**: `s/k8s-vault-unseal`'s `printf | kubectl exec -i`
+   piping failed ("Unseal submission failed") — the documented fallback
+   `kubectl -n checktick exec -it vault-0 -- vault operator unseal`
+   (interactive form) worked. Port the resume-script's capture-then-count
+   verification pattern into the unseal script before next use.
+4. **OpenObserve v1.x _json**: fluent-bit `format json_lines` (NDJSON) gets
+   a 400 "trailing characters"; the documented `format json` (single JSON
+   document per flush) works. Also: `[PARSER]` sections are rejected in the
+   main config on fluent-bit 5.1.5 — must go in `Parsers_File`.
+5. **Collector restart caveat**: ConfigMap changes do NOT restart DaemonSet
+   pods; `rollout restart` after every collector config change.
+
+### Late addition (22:00 UTC): Longhorn nightly off-cluster backups LIVE
+
+Answered the "no backups for OpenObserve/Vault?" gap for every **Longhorn**
+volume: `k8s/longhorn-backup.yaml` — RecurringJob `nightly-backup`, task
+`backup`, **cron 03:30 UTC, retain 14, group `default`** (auto-covers any
+future Longhorn PVC). BackupTarget patched to the SAME object-store bucket
+the CNPG backups use, under `/longhorn` (secret `civo-object-store-creds`
+in longhorn-system, created from the CNPG `checktick-db-backup-creds` keys
+via a piped transform — values never printed). **Live-fire verified**: set
+the cron 2 min ahead once → all three volumes (openobserve 640 MB, media
+174 MB, snomed 5.8 GB) backed up, all `Completed`, BackupVolume listing
+synced back FROM the bucket — data genuinely off-cluster. Gotchas for next
+time: this Longhorn uses the **BackupTarget CRD**, not the old
+`settings.longhorn.io backup-target` key (which no longer exists), and the
+CRD rejects strategic-merge patches (`--type=merge` works). Longhorn's
+minio-based S3 client is NOT affected by the Civo checksum quirk (unlike
+AWS-SDK clients). PVC-annotation on-demand backup trigger
+(`longhorn.io/backup`) silently does nothing on this version.
+
+**Vault remains the only unbacked-up-scheduled component** — file storage has
+no online snapshot path; the nightly-automatable fix is the Raft migration +
+`vault operator raft snapshot save` CronJob (next-steps item 3, the designed
+FIRST hardening item — needs an operator runbook + sealed window, do NOT
+improvise). A stop-copy cron is NOT acceptable (unseal shares on a scheduled
+job — breaks custody). Interim: the Bitwarden tarball from tonight.
+
+**Node sizing answer** (user asked): Civo can't live-resize nodes, but
+`civo k8s node-pool create checktick --name <pool> --nodes 3 --size
+g4s.kube.large` adds a bigger pool to the SAME cluster — then drain the old
+pool's nodes serially (session-11 recycle pattern per node: CNPG switchover
+coordinated, floating IP follows) and `civo k8s node-pool delete` it. No
+new cluster needed. Current pool is g4s.kube.medium (2 CPU/4 GB, ~2.25 Gi
+allocatable/node — all three nodes measured at 79–101% of allocatable).
+
+### Morning follow-up (2026-11-06 ~09:00)
+
+1. **First fully-Civo night: green.** All 10 daily jobs completed on
+   schedule, CNPG 02:00 backup landed, first production Longhorn nightly
+   (03:30) completed, no restarts. One genuine job failure:
+   process-recovery-time-delays ~21:40–21:55 (DB unreachable — the evening
+   cascade), recovered same evening.
+2. **The "4 failed healthchecks" were NOT failures**: three healthchecks.io
+   checks (checktick-data-sync, checktick-prune-unconfirmed-email-accounts,
+   checktick-downgrade-expired-subscriptions) still carry OLD Northflank-era
+   schedules — they expected morning pings Nov 5, went "late", went UP when
+   the Civo night batch pinged (02:20/02:40/03:00 — the downtime durations in
+   the emails match exactly), then downgrade-expired went DOWN again on its
+   stale schedule. healthchecks.io is a dead-man's switch: a schedule
+   mismatch looks identical to a job failure. **Operator fix: set those
+   three checks to the Civo times (02:20 / 02:40 / 03:00 UTC) and audit the
+   other ten** (full table in the session log discussion; recovery */5,
+   SNOMED Tue 14:00, NHS DD Sun 04:00 — NHS DD has still never run on Civo;
+   manual test run recommended before Sunday).
+3. **SNOMED excluded from Longhorn backups** (user decision — space/noise):
+   the PVC is a derived artifact (built snomed.db already lives in the
+   bucket under /snomed; import-snomed-db rebuilds the PVC from it).
+   RecurringJob moved from the catch-all `default` group to named group
+   `checktick-backup`; volumes opt in via the label
+   `recurring-job-group.longhorn.io/checktick-backup=enabled` (⚠ the
+   `recurringjob.longhorn.io/` prefix is for by-JOB association — the
+   wrong prefix fails SILENTLY with no volumes matched, found live).
+   Labelled: openobserve-data, checktick-media. Live-fire verified 09:22
+   (two backups, no snomed); the two existing snomed backup sets deleted.
+   New PVCs are no longer auto-covered — add the label when adding a PVC.
+4. **Bucket reality** (s3 listing via scratch pod): longhorn/ 0.55 GB,
+   db/ 0.09 GB, snomed/ 1.85 GB — ~2.5 GB total. Space is NOT currently
+   a constraint.
+
+### Deferred decisions (tomorrow)
+
+- **NEXT SESSION — Vault Raft migration**: the draft runbook is
+  `docs/vault-raft-migration.md` (pre-written 2026-11-06: current-state
+  facts, design decisions incl. the CTO snapshot-custody sign-off, the
+  window procedure, the snapshot CronJob spec, restore test, rollback).
+  **Session 13 PREP landed 2026-11-06** (see below): ⚠ VERIFY flags
+  resolved against the 1.21 CLI docs — the draft `migrate.hcl` stanza names
+  were WRONG and are corrected — and every artifact is committed
+  (`k8s/vault-snapshot.yaml`, `s/k8s-vault-snapshot-ceremony`, airgap
+  rules in `vault.yaml`, the scratch migrate helper). What remains is
+  OPERATOR work: the age keypair, the window ceremonies (3-of-4 shares),
+  the healthchecks.io check, the first-run + restore-test verification.
+  This is the LAST unautomated backup.
+
+- Node pool resize (the create-pool/drain/delete path above) vs recycling
+  `8ciwh` (it is cordoned right now).
+- Vault Raft migration runbook + snapshot CronJob (the last unautomated
+  backup).
+- Collector redeploy options (see the ⚠ note in `k8s/log-collector.yaml`).
+- Graph email 403s (`sendMail` Forbidden for admin@checktick.uk) — separate
+  pre-existing issue, surfaced by the alert storm.
+- AdminEmailHandler fires on every ERROR log → a healthz 503 loop turns into
+  an outbound-email storm (self-amplifying during any outage). Consider
+  `requirement` filters or rate limiting.
+- Rotate the OpenObserve root password (UI) after first login.
+
+## Session 13 (2026-11-06): Vault Raft migration PREP — ⚠ VERIFY resolved, artifacts built
+
+Driver: the deferred decision above (the last unautomated backup). The
+window itself is still operator-pending (needs the 3-of-4 shares twice);
+this session made it mechanical. The runbook now carries a "Verification
+notes" section — every flag was checked against the HashiCorp 1.21 CLI
+docs, not assumed.
+
+### Done
+
+1. **⚠ VERIFY flags resolved — and they mattered**: the draft
+   `migrate.hcl` stanza names (`storage` / `destination`) are WRONG —
+   1.21 uses **`storage_source` / `storage_destination`**
+   (docs/commands/operator/migrate). The window would have died on a
+   config error. Also verified: migrate is offline + resumable
+   (`-start <prefix>`), a lock key blocks Vault start mid-migration
+   (`-reset` clears it), the destination must be UNINITIALISED, and the
+   source is untouched except the lock (the rollback holds).
+   `vault operator raft snapshot save/restore/inspect` verified
+   (docs/commands/operator/raft) — **restore returns BEFORE completing**:
+   wait for `post-unseal setup complete` + `vault is unsealed` in the
+   server log. Raft stanza verified (docs/configuration/storage/raft):
+   `cluster_addr` REQUIRED, no `ha_storage`, `disable_mlock = true`
+   recommended (already set). `age` 1.2.1 confirmed in alpine v3.21
+   community → the encrypt container is viable. Live state re-verified
+   from the cluster: `1.21.4`, Storage Type `file`, Sealed false — the
+   window has NOT run. **Pre-window live layout check caught a THIRD
+   error**: the data-vault-0 volume root IS the storage dir (`core/`,
+   `logical/`, `sys/` at the PVC root — NO `file/` subdir); the draft's
+   source path `/vault/storage/file` was wrong → migrate source is
+   `/vault/storage`, and the runbook's rollback + cleanup paths are
+   corrected to match.
+2. **`k8s/vault-snapshot.yaml` built** (committed, deliberately NOT in
+   kustomization.yaml — the postgres-cnpg pattern; apply out-of-band
+   after the window): CronJob 03:45 UTC (after Longhorn 03:30), pod
+   label `checktick.io/vault-snapshot=true`, tmpfs working volume (the
+   raw barrier snapshot never touches node disk). initContainers:
+   `snapshot` (vault CLI, AppRole login, `raft snapshot save`) →
+   `encrypt` (`alpine:3.21` + `apk add age`, `age -r $AGE_RECIPIENT`,
+   rm the raw tar); main container `upload`: aws-cli + the Civo
+   checksum env pair, creds `checktick-db-backup-creds`, uploads to
+   `s3://checktick-backups/vault/`, prunes to the 14 newest, pings
+   `HC_PING_VAULT_SNAPSHOT` on success only (optional
+   configMapKeyRef → self-hosters unaffected). AGE_RECIPIENT is
+   deliberately NON-optional: a missing recipient must FAIL the job
+   rather than upload an unencrypted snapshot.
+3. **`s/k8s-vault-snapshot-ceremony` built** (generate-root → policy
+   `vault-snapshot`, `sys/raft/snapshot/save` ONLY → batch-token
+   AppRole, 90d secret_id, NO default policy → k8s Secret
+   `vault-snapshot-approle` → root revoke). Same captured-output
+   verification pattern as `s/k8s-vault-ceremony`. Rotation = re-run at
+   the quarterly restore rehearsal; a missed rotation fails the nightly
+   job and the healthchecks.io dead-man alert fires same-night.
+4. **Airgap rules committed in `k8s/vault.yaml`**: the snapshot-pod
+   ingress grant (the label IS the access grant — the db-client pattern)
+   + a scoped 8201 self-allow. FINDING: the previous deny-all egress
+   would have silently blocked a single-node raft Vault dialing its OWN
+   cluster port via the Service — the failure mode is a hung unseal /
+   leadership at the window, found only because the docs were read with
+   that question in mind. Both rules are additive → safe pre-window;
+   negative-test after apply (an UNlabelled pod must still time out on
+   8200).
+5. **`k8s/scratch-vault-raft-migrate.yaml`** (git-ignored): the one-shot
+   migrate helper pod + the CORRECTED migrate.hcl (applied, never
+   committed).
+6. Runbook updated (verification notes, corrected configs, artifact
+   pointers, first-run verification commands); kustomization.yaml NOTE
+   added for the excluded snapshot manifest.
+
+### Still operator (the window)
+
+- age keypair (`age-keygen`): private → Bitwarden; recipient → the
+  out-of-band ConfigMap `vault-snapshot-config` (command in the
+  vault-snapshot.yaml header — public material, but it identifies the
+  operator's backup identity, so it never enters the repo)
+- the window per the runbook (two share ceremonies), then
+  `s/k8s-vault-snapshot-ceremony` → `kubectl apply -f
+  k8s/vault-snapshot.yaml` → healthchecks.io check (daily 03:45) +
+  `HC_PING_VAULT_SNAPSHOT` in config.env → manual first-run job green →
+  restore test → THEN delete the old file data at the volume root, retire
+  the interim tarball note, mark hardening item 1 done, and add the change
+  to the compliance infrastructure change log.
+
+## Session 14 (2026-11-06 evening): Vault Raft migration EXECUTED + encrypted nightly snapshots LIVE
+
+Driver: session 13's prep + the operator's go. The last unautomated
+backup is now automated: nightly 03:45 UTC, age-encrypted, off-cluster,
+retention 14.
+
+### What happened (UTC actuals)
+
+1. **Activity check first** (17:41): app logs showed zero authenticated
+   users all day (bot noise only — failed OIDC callbacks, CSRF-rejected
+   scanner hits; last event 14:47). Traefik access logging is OFF (only
+   internal CRD-watch noise) — noted as a monitoring gap.
+2. **Window 17:48:47 → ~18:03** (~15 min sealed, on estimate): scale 0 →
+   helper pod → fresh stop-copy (29 KB tarball, sha256 `8c8b347f…`, at
+   `~/vault-backup-2026-11-06-pre-raft/` — Bitwarden custody pending) →
+   `vault operator migrate` (all keys copied in <1 s) → raft ConfigMap
+   + `/vault/storage` remount applied → scale 1 → operator unseal
+   (3 shares). StatusCake fired + recovered as expected; no web restart
+   loops (the fixed `/api/health` startupProbe held).
+3. **Verification**: `vault status` Storage Type raft, HA active,
+   committed=applied index; `/healthz` fully ok (the deep check proves
+   the migrated AppRole + platform key); **smoke 19/19** — the escrow KV
+   write→read→delete exercises the raft WRITE path, not just reads.
+   `raft list-peers`: vault-0 leader (peer registered as `127.0.0.1:8201`
+   — the migrate.hcl loopback cluster_addr; harmless single-node,
+   revisit if a peer is ever added).
+4. **Snapshot pipeline LIVE**: age keypair minted (recipient in the
+   `vault-snapshot-config` ConfigMap; private key → Bitwarden), the
+   ceremony minted the `vault-snapshot` AppRole, CronJob applied
+   out-of-band, manual first run GREEN end-to-end: AppRole login → raft
+   snapshot save (29 KB) → age encrypt (raw tar rm'd from tmpfs) → S3
+   upload (`vault-raft-2026-11-06T184809.tar.age`, 29,575 bytes) →
+   prune. Object independently confirmed via an aws-cli listing pod.
+   Airgap negative-tested: an UNlabelled pod times out on 8200 (the
+   session-10 lesson applied).
+
+### Found live (record for next time)
+
+1. **`vault operator migrate` does NOT mkdir the destination** —
+   `mkdir /vault/storage/raft` first, else `failed to open bolt file:
+   open /vault/storage/raft/vault.db: no such file or directory`.
+   "Destination must not be initialised" = an EMPTY dir must EXIST.
+2. **`vault read -format=json` PRETTY-PRINTS** (space after the colon,
+   arrays across lines) — compact-JSON grep patterns false-negative a
+   SUCCESSFUL write. Bit the ceremony's role verification; recovered
+   via a new `--resume` flag (re-enter the live root token, no second
+   generate-root). Same lesson class as the grep -q rule.
+3. **The snapshot endpoint moved**: 1.21.4 `vault operator raft
+   snapshot save` calls `GET /v1/sys/storage/raft/snapshot` — NOT the
+   older `sys/raft/snapshot/save` (which the CLI docs never state; the
+   first policy 403'd at the first run). Policy is now read+update on
+   `sys/storage/raft/snapshot` only. Cost: one extra generate-root
+   ceremony.
+
+### Still open
+
+- ~~healthchecks.io wiring~~ **DONE**: check created (daily 03:45),
+  `HC_PING_VAULT_SNAPSHOT` in config.env, ping delivered by a manual
+  verification run. GOTCHA found live: `--from-env-file` keeps the value
+  RAW — an inline comment after the URL became part of it (`curl: (3)
+  URL rejected`); env files support comments only on their OWN lines.
+  Rule added to k8s/config.example.env.
+- Restore test (closes the runbook; needs the age private key + shares)
+  → then delete the old file data at the volume root, retire the interim
+  tarball note, mark hardening item 1 done.
+- ~~Pre-raft tarball → Bitwarden → delete local~~ **DONE** (verified:
+  local copies gone).
+
 ## Known state at session close (session 9, 2026-11-03)
 
 - **PRODUCTION IS LIVE ON CIVO** — `https://checktick.uk` → 200, `/healthz`
