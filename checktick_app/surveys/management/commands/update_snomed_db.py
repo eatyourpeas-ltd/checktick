@@ -17,7 +17,7 @@ safe to run while the web app is serving traffic, and therefore safe to run from
 scheduled job.
 
 This avoids the cost of a full download when there is nothing new, making it
-safe to run frequently (e.g. as a daily cron / Northflank scheduled job).
+safe to run frequently (e.g. as a daily cron / Kubernetes CronJob).
 
 After a successful rebuild, `seed_snomed_datasets` is re-run automatically to
 refresh member counts and the release date stored in Postgres.

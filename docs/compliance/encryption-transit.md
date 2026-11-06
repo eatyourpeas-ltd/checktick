@@ -21,5 +21,5 @@ category: dspt-9-it-protection
 
 ## 3. Internal Infrastructure
 
-* **VPC Encryption:** All traffic between Northflank containers and the managed database is encrypted via internal SSL certificates.
-* **Management Access:** Access to the Northflank console and GitHub is strictly via HTTPS or SSH (with Ed25519 keys).
+* **VPC Encryption:** All traffic between application pods and the in-cluster database is encrypted at the pod-network layer.
+* **Management Access:** Access to the Civo dashboard and GitHub is strictly via HTTPS or SSH (with Ed25519 keys).

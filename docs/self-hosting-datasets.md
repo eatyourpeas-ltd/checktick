@@ -163,15 +163,7 @@ Both NHS DD and RCPCH commands automatically create dataset records on first run
 0 5 * * 0 cd /app && python manage.py sync_nhs_dd_datasets
 ```
 
-**Northflank setup:**
-
-1. Create a new Cron Job service
-2. Configure:
-   - **Name**: `checktick-nhs-dd-sync`
-   - **Schedule**: `0 5 * * 0` (weekly)
-   - **Command**: `python manage.py sync_nhs_dd_datasets`
-3. Copy environment variables from web service
-4. Deploy
+**Kubernetes setup:** create a CronJob (`checktick-nhs-dd-sync`, schedule `0 5 * * 0`, command `python manage.py sync_nhs_dd_datasets`) with the same environment as the web Deployment — see the manifest pattern in [`k8s/cronjobs.yaml`](../k8s/cronjobs.yaml).
 
 See [Self-hosting Scheduled Tasks](/docs/self-hosting-scheduled-tasks/) for full setup details.
 
@@ -189,15 +181,7 @@ See [Self-hosting Scheduled Tasks](/docs/self-hosting-scheduled-tasks/) for full
 0 4 * * * cd /app && python manage.py sync_external_datasets
 ```
 
-**Northflank setup:**
-
-1. Create a new Cron Job service
-2. Configure:
-   - **Name**: `checktick-dataset-sync`
-   - **Schedule**: `0 4 * * *` (daily)
-   - **Command**: `python manage.py sync_external_datasets`
-3. Copy environment variables from web service
-4. Deploy
+**Kubernetes setup:** create a CronJob (`checktick-dataset-sync`, schedule `0 4 * * *`, command `python manage.py sync_external_datasets`) with the same environment as the web Deployment — see the manifest pattern in [`k8s/cronjobs.yaml`](../k8s/cronjobs.yaml).
 
 See [Self-hosting Scheduled Tasks](/docs/self-hosting-scheduled-tasks/) for full setup details.
 

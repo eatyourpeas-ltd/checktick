@@ -2,7 +2,7 @@
 """
 Django management command to process data governance tasks.
 
-This command should be run daily (e.g., via cron or Northflank scheduled job) to:
+This command should be run daily (e.g., via cron or a Kubernetes CronJob) to:
 1. Send deletion warning emails (30 days, 7 days, 1 day before deletion)
 2. Automatically soft-delete surveys that have passed their retention period
 3. Automatically hard-delete surveys that have passed their grace period

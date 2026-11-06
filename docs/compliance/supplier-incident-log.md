@@ -16,7 +16,7 @@ category: dspt-6-incidents
 
 The CTO reviews the following security/status dashboards monthly to identify potential supplier incidents:
 
-* **Northflank:** https://status.northflank.com/
+* **Civo:** https://status.civo.com/
 * **GitHub:** https://www.githubstatus.com/
 * **Mailgun:** https://status.mailgun.com/
 

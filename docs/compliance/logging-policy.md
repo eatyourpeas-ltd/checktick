@@ -29,7 +29,7 @@ These two systems serve different purposes and have different retention and gove
 ### 2.1 Operational Logs (Infrastructure / Observability)
 
 - Emitted as **structured JSON to stdout**
-- Captured by the hosting platform (e.g. Northflank / Azure / AWS)
+- Captured by the hosting platform (e.g. managed Kubernetes on Civo / Azure / AWS)
 - Optionally forwarded to external log systems (e.g. OpenObserve)
 - Used for:
   - System debugging
@@ -254,7 +254,7 @@ Platform-level logs (outside application scope) include:
 - Container access sessions
 - Infrastructure scaling actions
 
-These are reviewed separately in the hosting provider dashboard (e.g. Northflank).
+These are reviewed separately in the hosting provider dashboard (e.g. Civo).
 
 ---
 

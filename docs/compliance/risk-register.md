@@ -16,7 +16,7 @@ category: dspt-5-process-reviews
 | ID | Risk Description | Category | L | I | Total | Mitigation Strategy | Owner |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **R01** | Unauthorized DB Access | Security | 2 | 5 | **10** | AES-256-GCM encryption; MFA for all admins; Private VPC. | {{ cto_name }} |
-| **R02** | Supply Chain: Northflank Outage | Availability | 2 | 4 | **8** | Daily off-site backups; BCDR plan tested annually. | {{ cto_name }} |
+| **R02** | Supply Chain: Civo Outage | Availability | 2 | 4 | **8** | Daily off-site backups; BCDR plan tested annually. | {{ cto_name }} |
 | **R03** | Supply Chain: GitHub/Code Breach | Integrity | 1 | 4 | **4** | Mandatory GPG signed commits; MFA; Branch protection. | {{ cto_name }} |
 | **R04** | Insider Threat (Staff Error) | Security | 2 | 3 | **6** | Annual NHS Training; Least Privilege access; Audit logs. | {{ siro_name }} |
 | **R05** | Loss of Staff Laptop | Physical | 2 | 3 | **6** | Full Disk Encryption; Remote wipe capability; No local DB. | {{ cto_name }} |

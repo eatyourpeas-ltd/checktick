@@ -1,0 +1,237 @@
+#!/bin/bash
+# k8s_vault_snapshot_ceremony — mint the nightly-snapshot AppRole on the
+# PRODUCTION Vault (post-Raft-migration) and store its credentials in the
+# k8s Secret consumed by the vault-snapshot CronJob (k8s/vault-snapshot.yaml).
+#
+# Mint AFTER the Vault is on integrated Raft storage, against the
+# unsealed Vault (see docs/civo-kubernetes-operations.md, Vault Operations).
+#
+# What it mints (least-privilege, CTO-signed design decision 3):
+#   - policy vault-snapshot: sys/storage/raft/snapshot ONLY — a leaked
+#     secret_id can do nothing but take (barrier-encrypted) snapshots
+#   - AppRole vault-snapshot: batch tokens (stateless, 10m TTL), NO
+#     default policy, secret_id 90d — rotate by re-running this script at
+#     the quarterly restore rehearsal; a missed rotation fails the nightly
+#     job and the healthchecks.io dead-man alert fires
+#   - k8s Secret vault-snapshot-approle (VAULT_ROLE_ID / VAULT_SECRET_ID)
+#
+# SAFETY RULES (docs/civo-kubernetes-operations.md):
+#   - generate-root mints a temporary root token on the production Vault.
+#     It is revoked before exit, never printed, never stored.
+#   - If this aborts AFTER the root token was decoded, do NOT re-run from
+#     the top — a second generate-root mints another temporary root token.
+#     Re-enter the SAME token and run the remaining steps manually.
+#   - NEVER `vault operator init` on migrated storage — a fresh init makes
+#     every encrypted survey permanently undecryptable.
+#
+# VERIFICATION PATTERN: capture command output into a variable FIRST,
+# greps use `grep -c` (reads ALL input — no SIGPIPE), decisions test the
+# counts. NEVER `cmd | grep -q` under pipefail: grep -q exits on first
+# match, the writer gets SIGPIPE, and a SUCCESSFUL write can be reported
+# as failed (this false-negative aborted the live cutover ceremony
+# 2026-11-03).
+#
+# Usage: ./s/k8s-vault-snapshot-ceremony [--pod NAME] [--secret NAME] [--resume] [--help]
+#   --pod NAME     target vault pod (default: vault-0)
+#   --secret NAME  k8s Secret for the minted AppRole
+#                 (default: vault-snapshot-approle)
+#   --resume       re-enter the EXISTING decoded root token (hidden prompt)
+#                 and skip generate-root — for recovering an abort AFTER
+#                 the root token was decoded. NEVER re-run from the top for
+#                 that case: a second generate-root mints another temp root.
+#                 Steps 2+ re-run idempotently (policy/role are upserts).
+
+set -euo pipefail
+
+NS=checktick
+VPOD=vault-0
+SECRET=vault-snapshot-approle
+POLICY=vault-snapshot
+ROLE=vault-snapshot
+RESUME=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help)   head -42 "$0" | tail -41; exit 0 ;;
+        --pod)    VPOD="$2"; shift 2 ;;
+        --secret) SECRET="$2"; shift 2 ;;
+        --resume) RESUME=1; shift ;;
+        *) echo "unknown argument: $1 (see --help)"; exit 1 ;;
+    esac
+done
+
+# Kubeconfig resolution: explicit KUBECONFIG wins; else the Civo kubeconfig
+# if present; else the default config.
+if [ -z "${KUBECONFIG:-}" ] && [ -f "${HOME}/.kube/civo-checktick.yaml" ]; then
+    export KUBECONFIG="${HOME}/.kube/civo-checktick.yaml"
+fi
+
+vexec() { # vault command inside the target pod; token via env, never printed
+    kubectl exec -n "$NS" "$VPOD" -- \
+        env VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN="$ROOT_TOKEN" "$@"
+}
+
+echo "=========================================="
+echo "  Vault snapshot ceremony (Kubernetes/Civo)"
+echo "=========================================="
+echo "Cluster context: $(kubectl config current-context)"
+echo "Target pod     : $NS/$VPOD"
+echo "Target secret  : $NS/$SECRET"
+if [ "$VPOD" = "vault-0" ]; then
+    echo ""
+    echo "  ⚠ THIS IS THE PRODUCTION VAULT. generate-root will mint a"
+    echo "    temporary root token on it. Only proceed if that is the plan."
+    read -p "  Type 'production' to continue: " CONFIRM
+    [ "$CONFIRM" = "production" ] || { echo "aborted"; exit 1; }
+fi
+
+# Robust sealed check: capture first (vault status exits non-zero when
+# sealed, hence the || true), then COUNT — no grep -q pipeline (header note).
+STATUS_OUT="$(kubectl exec -n "$NS" "$VPOD" -- vault status 2>&1 || true)"
+UNSEALED="$(printf '%s\n' "$STATUS_OUT" | grep -c 'Sealed.*false' || true)"
+if [ "$UNSEALED" -lt 1 ]; then
+    echo "Vault is still sealed — unseal first (3 of 4 shares;"
+    echo "for production: s/k8s-vault-unseal), then re-run."
+    exit 1
+fi
+
+if [ "$RESUME" -eq 1 ]; then
+    echo ""
+    echo "== 1. RESUME — re-enter the EXISTING decoded root token (hidden) =="
+    echo "   generate-root SKIPPED — a second one would mint another"
+    echo "   temporary root token (header safety rules)."
+    printf "   Root token (input hidden): "
+    IFS= read -rs ROOT_TOKEN
+else
+    echo ""
+    echo "== 1. generate-root ceremony (3 shares, interactive, hidden input) =="
+    echo "   Running: kubectl -n $NS exec -it $VPOD -- vault operator generate-root -init"
+    kubectl -n "$NS" exec -it "$VPOD" -- vault operator generate-root -init
+    for i in 1 2 3; do
+        echo "   Share $i of 3:"
+        kubectl -n "$NS" exec -it "$VPOD" -- vault operator generate-root
+    done
+    echo ""
+    echo "   Decode the Encoded Root Token with the OTP from the -init output:"
+    echo "     kubectl -n $NS exec $VPOD -- vault operator generate-root -decode=<encoded-token> -otp=<otp>"
+    echo "   (The encoded token ends BEFORE the shell prompt marker.)"
+    echo "   Paste the DECODED root token here."
+    printf "   Root token (input hidden): "
+    IFS= read -rs ROOT_TOKEN
+fi
+[ -n "$ROOT_TOKEN" ] || { echo "no token entered"; exit 1; }
+echo "   token check:"
+# NOTE: vault CLI -format=json PRETTY-PRINTS (space after the colon) —
+# grep for '"key": value', never compact '"key":value'.
+vexec vault token lookup -format=json | grep -o '"display_name": "[^"]*"' || true
+
+echo ""
+echo "== 2. policy: $POLICY (sys/raft/snapshot/save ONLY) =="
+HCL_DIR="$(mktemp -d /tmp/vault-snapshot-policy.XXXXXX)"
+HCL_FILE="$HCL_DIR/policy.hcl"
+cat > "$HCL_FILE" <<'HCL'
+# Nightly Vault snapshot backup — k8s/vault-snapshot.yaml.
+# This role exists so that taking a nightly backup needs NO unseal shares
+# on a scheduled job. It may save a (barrier-encrypted) raft snapshot and
+# NOTHING else — no reads of secrets, no restores, no peer management.
+#
+# ENDPOINT (found live 2026-11-06, Vault 1.21.4): `vault operator raft
+# snapshot save` calls GET /v1/sys/storage/raft/snapshot — NOT the older
+# sys/raft/snapshot/save path (the CLI docs never state the underlying
+# endpoint; the first policy used the stale path and the first run 403'd).
+# read+update covers both the GET verb mapping and the streaming-handler
+# capability check; the path remains a single snapshot-save endpoint, so
+# the least-privilege posture is unchanged. Restore (sys/storage/raft/
+# snapshot-restore, sudo) is deliberately NOT granted — the cron only saves.
+path "sys/storage/raft/snapshot" {
+  capabilities = ["read", "update"]
+}
+HCL
+kubectl cp "$HCL_FILE" "$NS/$VPOD:/tmp/policy.hcl" >/dev/null
+rm -rf "$HCL_DIR"
+vexec sh -c 'vault policy write vault-snapshot /tmp/policy.hcl && rm -f /tmp/policy.hcl'
+# Re-read and re-verify with the SAME captured-output pattern — never
+# `vault policy read | grep -q` (header note).
+POLICY_OUT="$(vexec vault policy read "$POLICY")"
+STANZAS="$(printf '%s\n' "$POLICY_OUT" | grep -c 'path "' || true)"
+SNAPSHOT_SAVE="$(printf '%s\n' "$POLICY_OUT" | grep -c 'sys/storage/raft/snapshot' || true)"
+echo "   after write: ${STANZAS} path stanza(s), sys/storage/raft/snapshot present: ${SNAPSHOT_SAVE} (expect 1, 1)"
+[ "${SNAPSHOT_SAVE}" -ge 1 ] || { echo "POLICY WRITE DID NOT TAKE — stop and investigate"; exit 1; }
+
+echo ""
+echo "== 3. AppRole: $ROLE (batch tokens, NO default policy) =="
+vexec vault write "auth/approle/role/$ROLE" \
+    token_policies="$POLICY" \
+    token_no_default_policy=true \
+    token_type=batch \
+    token_ttl=10m \
+    token_max_ttl=1h \
+    token_num_uses=0 \
+    bind_secret_id=true \
+    secret_id_ttl=90d
+ROLE_OUT="$(vexec vault read -format=json "auth/approle/role/$ROLE")"
+# NOTE: `vault read -format=json` PRETTY-PRINTS (2-space indent, space
+# after the colon, arrays across lines) — patterns must match '"key": value'
+# and bare values, never compact JSON. The first run of this script assumed
+# compact JSON and false-negatived a SUCCESSFUL write (found live
+# 2026-11-06) — same lesson as the grep -q rule in the header.
+POLICY_OK="$(printf '%s\n' "$ROLE_OUT" | grep -c '"vault-snapshot"' || true)"
+BATCH_OK="$(printf '%s\n' "$ROLE_OUT" | grep -c '"token_type": "batch"' || true)"
+NODEFAULT_OK="$(printf '%s\n' "$ROLE_OUT" | grep -c '"token_no_default_policy": true' || true)"
+echo "   role read: policies=[$POLICY_OK] batch=[$BATCH_OK] no-default-policy=[$NODEFAULT_OK] (expect 1, 1, 1)"
+[ "${POLICY_OK}" -ge 1 ] && [ "${BATCH_OK}" -ge 1 ] || { echo "ROLE WRITE DID NOT TAKE — stop and investigate"; exit 1; }
+
+echo ""
+echo "== 4. mint the AppRole into the $SECRET k8s Secret (values not printed) =="
+ROLE_ID="$(vexec vault read -field=role_id "auth/approle/role/$ROLE/role-id")"
+SECRET_ID="$(vexec vault write -f -field=secret_id "auth/approle/role/$ROLE/secret-id")"
+[ -n "$ROLE_ID" ] && [ -n "$SECRET_ID" ] || { echo "AppRole mint failed"; exit 1; }
+kubectl delete secret "$SECRET" -n "$NS" --ignore-not-found >/dev/null
+kubectl create secret generic "$SECRET" -n "$NS" \
+    --from-literal=VAULT_ROLE_ID="$ROLE_ID" \
+    --from-literal=VAULT_SECRET_ID="$SECRET_ID" >/dev/null
+echo "   created ($(kubectl get secret "$SECRET" -n "$NS" -o json | grep -o '"VAULT_[A-Z_]*"' | wc -l | tr -d ' ') keys)"
+
+echo ""
+echo "== 5. raft cluster sanity (uses the temp root; output is node IDs) =="
+# list-peers proves the raft cluster is live AND that the 8201 self-allow in
+# the vault-airgap NetworkPolicy actually holds (this hangs if egress is
+# wrong). Output is non-secret (node IDs/addresses).
+PEERS_OUT="$(vexec vault operator raft list-peers 2>&1 || true)"
+printf '%s\n' "$PEERS_OUT"
+PEERS_OK="$(printf '%s\n' "$PEERS_OUT" | grep -c 'vault-0' || true)"
+if [ "${PEERS_OK}" -ge 1 ]; then
+    echo "   raft peers OK (vault-0 present)"
+else
+    echo "   WARNING: list-peers did not show vault-0 — investigate BEFORE"
+    echo "   relying on the nightly snapshot (the raft cluster may be down)."
+fi
+
+echo ""
+echo "== 6. revoke the temporary root token and verify =="
+vexec vault token revoke -self >/dev/null
+if vexec vault token lookup >/dev/null 2>&1; then
+    echo "   WARNING: token lookup still succeeds — revoke did not take."
+    echo "   Investigate, then re-run steps 3-5 with the SAME token (do NOT re-run generate-root)."
+    exit 1
+else
+    echo "   revoked (lookup now fails, as expected)"
+fi
+
+cat <<EOF
+
+Ceremony complete. The $SECRET Secret is ready for the snapshot CronJob:
+
+  1. If not yet done: put the age recipient in the vault-snapshot-config
+     ConfigMap (command in the k8s/vault-snapshot.yaml header) and create
+     the healthchecks.io check (daily 03:45 UTC) → HC_PING_VAULT_SNAPSHOT
+     in the git-ignored k8s/config.env → re-apply checktick-config-local.
+  2. Apply the CronJob out-of-band (deliberately NOT in kustomization.yaml):
+       kubectl apply -f k8s/vault-snapshot.yaml
+  3. First-run verification:
+       kubectl -n checktick create job --from=cronjob/vault-snapshot vault-snapshot-manual
+       kubectl -n checktick logs -f job/vault-snapshot-manual
+     then confirm the .age object under s3://checktick-backups/vault/.
+  4. Rotation: re-run this script at the quarterly restore rehearsal —
+     the secret_id TTL is 90d, and an expired secret_id fails the nightly
+     job (the healthchecks.io dead-man alert catches it same-night).
+EOF

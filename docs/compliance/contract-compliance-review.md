@@ -10,9 +10,20 @@ category: dspt-5-process-reviews
 
 | Supplier | DPA Status | Article 28 Compliant? | Mechanism |
 | :--- | :--- | :--- | :--- |
-| **Northflank** | Active | Yes | Online DPA (UK Data Residency) |
+| **Northflank** | Active (at review date) | Yes | Online DPA (UK Data Residency) |
 | **Mailgun** | Active | Yes | Online DPA + UK Addendum |
 | **Github** | Active | Yes | GitHub Data Protection Agreement (included in Standard Terms) |
+
+## Supplier Change Review — 04/11/2026
+
+Following the Northflank security incident of 30/10/2026, production hosting
+moved to Civo (managed Kubernetes, UK London LON1) on 2026-11-03 — see the
+Infrastructure Technical Change Log. Supplier status at 04/11/2026:
+
+| Supplier | DPA Status | Article 28 Compliant? | Mechanism |
+| :--- | :--- | :--- | :--- |
+| **Civo** | Active | Yes | Civo Data Processing Agreement — https://www.civo.com/legal/data-processing-agreement (Civo Ltd, London; UK GDPR + Data Protection Act 2018; England & Wales governing law; sub-processor clause 8 with 30-day change notice and objection rights; cross-border transfer clause 7/IDTA; data residency UK — London LON1 region). Evidence of DPA acceptance retained with the compliance records. |
+| **Northflank** | Terminated (account closure scheduled 05/11/2026) | Yes (historical) | Online DPA (UK Data Residency) |
 
 ## Review Checklist for Article 28 Compliance:
 

@@ -1,0 +1,111 @@
+#!/bin/bash
+# k8s_backup_verify — verify the production CNPG backup chain is genuinely
+# armed. Read-only.
+#
+# NOTE: this is a KUBERNETES (Civo production) operational script.
+#
+# The 2026-11-04 outage taught that a nightly backup schedule can be
+# SILENTLY blocked: a stuck non-terminal Backup object — or one pinned to
+# a deleted pod — halts the schedule with no visible failure. Run this:
+#   - after any node recycle, operator restart, or cluster intervention
+#   - the morning after, to confirm the 02:00 UTC nightly backup landed
+# Exits non-zero if any check fails (safe to wire into CI/cron).
+#
+# Usage: ./s/k8s-backup-verify [--help]
+
+set -euo pipefail
+
+if [[ "${1:-}" == "--help" ]]; then
+    head -16 "$0" | tail -14
+    exit 0
+fi
+
+NS=checktick
+CLUSTER=checktick-db
+SB=checktick-db-backup
+FAILURES=0
+
+# Kubeconfig resolution: explicit KUBECONFIG wins; else the Civo kubeconfig
+# if present; else the default config.
+if [ -z "${KUBECONFIG:-}" ] && [ -f "${HOME}/.kube/civo-checktick.yaml" ]; then
+    export KUBECONFIG="${HOME}/.kube/civo-checktick.yaml"
+fi
+
+pass() { echo "  ✓ $1"; }
+fail() { echo "  ✗ $1"; FAILURES=$((FAILURES + 1)); }
+
+echo "=========================================="
+echo "  Backup chain verification (Kubernetes/Civo)"
+echo "=========================================="
+echo "Cluster context: $(kubectl config current-context)"
+echo ""
+
+echo "1. Scheduled backup is armed"
+NEXT="$(kubectl get scheduledbackup -n "$NS" "$SB" \
+    -o jsonpath='{.status.nextScheduleTime}' 2>/dev/null || true)"
+NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+if [ -n "$NEXT" ] && [[ "$NEXT" > "$NOW" ]]; then
+    pass "next scheduled run: $NEXT (UTC)"
+else
+    fail "schedule NOT armed (nextScheduleTime: '${NEXT:-missing}') — see docs/civo-kubernetes-operations.md"
+fi
+
+echo "2. Cluster conditions"
+CA="$(kubectl get cluster -n "$NS" "$CLUSTER" \
+    -o jsonpath='{.status.conditions[?(@.type=="ContinuousArchiving")].status}' || true)"
+LB="$(kubectl get cluster -n "$NS" "$CLUSTER" \
+    -o jsonpath='{.status.conditions[?(@.type=="LastBackupSucceeded")].status}' || true)"
+if [ "$CA" = "True" ]; then pass "ContinuousArchiving=True (WAL chain live)"; else fail "ContinuousArchiving=${CA:-missing}"; fi
+if [ "$LB" = "True" ]; then pass "LastBackupSucceeded=True"; else fail "LastBackupSucceeded=${LB:-missing}"; fi
+
+echo "3. Every Backup object is terminal (stuck objects silently block the schedule)"
+STUCK=0
+# jsonpath feed (NOT custom-columns — its output is space-padded and a padded
+# 'completed ' would falsely read as non-terminal).
+while IFS=' ' read -r bname phase; do
+    case "$phase" in
+        completed|failed) ;;
+        ""|pending|running|stopping|*)
+            STUCK=$((STUCK + 1))
+            POD="$(kubectl get backup -n "$NS" "$bname" \
+                -o jsonpath='{.status.instanceID.podName}' 2>/dev/null || true)"
+            echo "  ✗ NON-TERMINAL: $bname (phase: '${phase:-<blank>}')"
+            if [ -n "$POD" ]; then
+                if kubectl get pod "$POD" -n "$NS" >/dev/null 2>&1; then
+                    echo "      pinned to pod $POD (still exists)"
+                else
+                    echo "      pinned to DELETED pod '$POD' — the silent-block signature. Delete it:"
+                    echo "        kubectl delete backup -n $NS $bname"
+                fi
+            fi
+            ;;
+    esac
+done < <(kubectl get backups.postgresql.cnpg.io -n "$NS" \
+    -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.phase}{"\n"}{end}' 2>/dev/null || true)
+if [ "$STUCK" -eq 0 ]; then
+    pass "all Backup objects are terminal"
+else
+    fail "$STUCK non-terminal Backup object(s) — the nightly schedule is blocked until they are deleted"
+fi
+
+echo "4. Latest completed backup (for the log)"
+# jsonpath feed (no custom-columns padding), then sort by the STOPPED
+# timestamp — kubectl lists objects ALPHABETICALLY, and manual backups
+# named 'pre-*' sort after the dated nightly names, so tail-of-list is NOT
+# the latest.
+LATEST="$(kubectl get backups.postgresql.cnpg.io -n "$NS" \
+    -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.phase}{" "}{.status.stoppedAt}{"\n"}{end}' 2>/dev/null \
+    | awk '$2 == "completed"' | sort -k3 | tail -1 || true)"
+if [ -n "$LATEST" ]; then
+    pass "$LATEST"
+else
+    fail "no completed backup found"
+fi
+
+echo ""
+if [ "$FAILURES" -eq 0 ]; then
+    echo "✓ Backup chain healthy."
+else
+    echo "✗ $FAILURES check(s) failed — investigate before trusting restores."
+    exit 1
+fi

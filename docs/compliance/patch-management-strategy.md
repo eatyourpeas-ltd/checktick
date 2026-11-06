@@ -12,7 +12,7 @@ category: dspt-8-unsupported-systems
 
 | Layer | Responsible Party | Update Mechanism | Frequency |
 | :--- | :--- | :--- | :--- |
-| **Cloud Infrastructure** | Northflank | Automatic Vendor Managed | Immediate |
+| **Cloud Infrastructure** | Civo | Automatic Vendor Managed | Immediate |
 | **Base OS (Containers)** | {{ platform_name }} (CTO) | Rebuild of Docker/OCI images | Weekly or on Critical Alert |
 | **Database (RDS)** | {{ platform_name }} | Managed 'Minor Version' Upgrades | Monthly Maintenance Window |
 | **App Dependencies** | {{ platform_name }} (CTO) | Poetry / GitHub Dependabot | Daily Scans / Weekly PRs |
@@ -27,7 +27,7 @@ category: dspt-8-unsupported-systems
     * **Automated Tests:** Full Pytest suite and Playwright end-to-end tests must pass (100% success rate required).
 4. **Production Deployment:**
     * Once verified, the Pull Request is merged to `main`.
-    * Northflank executes a 'Zero-Downtime' rolling deployment.
+    * The GitHub Actions Deploy (Civo) pipeline executes a 'Zero-Downtime' rolling deployment.
 5. **Verification:** The CTO monitors production logs and Cloudflare analytics for 30 minutes post-deploy to ensure stability.
 
 ## 3. Emergency Patching ("Zero-Day" Response)
@@ -55,6 +55,6 @@ In addition to software patching, {{ platform_name }} executes automated mainten
 
 ### Monitoring & Failure Response
 
-* **Logs:** All cron job outputs are captured in the Northflank 'Log Streams'.
-* **Alerting:** Any task returning a non-zero exit code triggers an immediate 'Critical' alert to the CTO via the GitHub/Northflank integration.
+* **Logs:** All cron job outputs are captured in the Kubernetes CronJob logs.
+* **Alerting:** Any task returning a non-zero exit code triggers an immediate 'Critical' alert to the CTO via the healthchecks.io alerting integration.
 * **Idempotency:** All maintenance commands are designed to be idempotent; if a task fails once, the subsequent run will safely resume the work.

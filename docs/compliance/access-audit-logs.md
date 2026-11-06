@@ -13,8 +13,8 @@ category: dspt-4-managing-access
 
 | System | Account Found | Role | Status | Verified? |
 | :--- | :--- | :--- | :--- | :--- |
-| **Northflank** | {{ cto_name }} | Admin/SIRO | Active | ✅ |
-| **Northflank** | {{ siro_name }} | Admin/CTO | Active | ✅ |
+| **Civo** | {{ cto_name }} | Admin/SIRO | Active | ✅ |
+| **Civo** | {{ siro_name }} | Admin/CTO | Active | ✅ |
 | **GitHub** | {{ cto_name }} | Owner | Active | ✅ |
 | **GitHub** | {{ siro_name }} | Owner | Active | ✅ |
 | **PostgreSQL** | `ct_prod_admin` | DB Admin | Active | ✅ (Rotated) |

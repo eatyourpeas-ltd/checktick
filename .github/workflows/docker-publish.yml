@@ -75,6 +75,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: write  # dispatch the Deploy (Civo) workflow after publish
 
     steps:
       - name: Checkout repository
@@ -156,20 +157,15 @@ jobs:
           name: checktick-deployment-${{ github.ref_name }}
           path: deployment-artifacts/
 
-      - name: Trigger Northflank deployment
+      - name: Trigger Deploy (Civo) workflow
         if: github.ref == 'refs/heads/main'
         env:
-          NF_WEBHOOK_URL: ${{ secrets.NORTHFLANK_WEBHOOK_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE_TAG: ${{ steps.app_version.outputs.version }}
         run: |
-          if [ -n "$NF_WEBHOOK_URL" ]; then
-            echo "Triggering Northflank workflow 'checktick-deployment' for ${IMAGE_TAG}..."
-            curl -fsS -X POST "${NF_WEBHOOK_URL}?IMAGE_TAG=${IMAGE_TAG}"
-            echo "✓ Northflank deployment workflow triggered for ${IMAGE_TAG}"
-          else
-            echo "⊘ NORTHFLANK_WEBHOOK_URL not configured, skipping deployment trigger"
-            echo "   Required secret: NORTHFLANK_WEBHOOK_URL"
-          fi
+          echo "Dispatching Deploy (Civo) workflow for ${IMAGE_TAG}..."
+          gh workflow run deploy-civo.yml --ref main -f image-tag="${IMAGE_TAG}"
+          echo "✓ Deploy (Civo) workflow dispatched for ${IMAGE_TAG}"
 
   publish-skipped:
     needs: decide-release

@@ -1,0 +1,189 @@
+# Fluent Bit DaemonSet — ships every pod's stdout (the app's structured JSON,
+# docs/infrastructure-logging.md) to the in-cluster OpenObserve
+# (openobserve.yaml). This is the "collector DaemonSet" half of the log
+# retention backlog item.
+#
+# Design notes:
+# - Output uses the generic `http` plugin POSTing json_lines to OpenObserve's
+#   ingestion endpoint /api/{org}/{stream}/_json with gzip, per Fluent Bit's
+#   documented OpenObserve recipe (docs.fluentbit.io → Outputs → OpenObserve).
+#   The org/stream are `default`/`default` — the SAME stream the Northflank
+#   era wrote to, so history and live logs form one timeline.
+# - Credentials come from the same `openobserve-auth` Secret as the
+#   OpenObserve Deployment (env-substituted via ${OPENOBSERVE_USER} /
+#   ${OPENOBSERVE_PASSWORD} — never committed). Create a dedicated
+#   least-privilege ingestion user in the OpenObserve UI later and swap the
+#   secret; the root user works but is broader than needed.
+# - The collector excludes its own log files to avoid feedback loops.
+# - Filesystem buffering (storage.type + storage.path) plus Retry_Limit
+#   False: if OpenObserve is briefly down, logs buffer on the node and are
+#   flushed on recovery instead of being dropped.
+# - The kubernetes filter enriches each line with namespace/pod/container
+#   names read from the kube API (read-only, least-privilege ClusterRole
+#   below) — this is what makes the logs searchable by workload.
+# - The tail DB (byte positions) lives on a hostPath so a collector restart
+#   resumes where it left off instead of re-shipping (and duplicating) logs.
+#
+# ⚠ NOT APPLIED (2026-11-05, found live): one fluent-bit per node
+# pushed the smallest node (~2 GiB, hosting the CNPG primary + operator +
+# traefik + longhorn) past its memory wall; every pod on it restart-looped
+# until the collector was deleted and the primary/operator moved off. It is
+# deliberately absent from kustomization.yaml. Before re-applying:
+#   1. resize the node pool (proper fix), or
+#   2. add a nodeSelector pinning the collector to the roomier nodes, or
+#   3. shrink the footprint (Mem_Buf_Limit 10MB, no filesystem buffering,
+#      Exclude_Path the CNPG pods' chatty triple-logs: *checktick-db*)
+# and watch `kubectl top node` for a night before trusting it.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: log-collector
+  namespace: checktick
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: checktick-log-collector
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: checktick-log-collector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: checktick-log-collector
+subjects:
+  - kind: ServiceAccount
+    name: log-collector
+    namespace: checktick
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: log-collector-config
+  namespace: checktick
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         5
+        Daemon        Off
+        Log_Level     info
+        Parsers_File  /fluent-bit/etc/parsers.conf
+        storage.path  /flb-state/buffers
+
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/*.log
+        Exclude_Path      /var/log/containers/*log-collector*.log
+        Parser            containerd
+        Tag               kube.*
+        DB                /flb-state/tail.db
+        Mem_Buf_Limit     50MB
+        Skip_Long_Lines   On
+        storage.type      filesystem
+
+    [FILTER]
+        Name              kubernetes
+        Match             kube.*
+        Kube_URL          https://kubernetes.default.svc:443
+        Kube_CA_File      /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        Kube_Token_File   /var/run/secrets/kubernetes.io/serviceaccount/token
+        Kube_Tag_Prefix   kube.var.log.containers.
+        Merge_Log         On
+        K8S-Logging.Parser   Off
+        K8S-Logging.Exclude  Off
+
+    [OUTPUT]
+        Name            http
+        Match           kube.*
+        Host            openobserve.checktick.svc.cluster.local
+        Port            5080
+        URI             /api/default/default/_json
+        # OpenObserve's _json endpoint parses the body as ONE JSON document:
+        # the documented Fluent Bit recipe uses Format json (a JSON array of
+        # records per flush). json_lines (NDJSON) gets a 400 "trailing
+        # characters" from OpenObserve v1.x.
+        Format          json
+        JSON_Date_Key   timestamp
+        JSON_Date_Format iso8601
+        HTTP_User       ${OPENOBSERVE_USER}
+        HTTP_Passwd     ${OPENOBSERVE_PASSWORD}
+        Compress        gzip
+        Retry_Limit     False
+        Tls             Off
+  # Copy of the standard `docker` parser (containerd emits the same
+  # {"log":...,"stream":...,"time":...} wrapper). [PARSER] sections belong
+  # in the Parsers_File, not the main config.
+  parsers.conf: |
+    [PARSER]
+        Name        containerd
+        Format      json
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L
+        Time_Keep   On
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: log-collector
+  namespace: checktick
+  labels:
+    app: log-collector
+spec:
+  selector:
+    matchLabels:
+      app: log-collector
+  template:
+    metadata:
+      labels:
+        app: log-collector
+    spec:
+      serviceAccountName: log-collector
+      containers:
+        - name: fluent-bit
+          image: fluent/fluent-bit:5.1.5
+          env:
+            # Substituted into fluent-bit.conf — never committed.
+            - name: OPENOBSERVE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: openobserve-auth
+                  key: OPENOBSERVE_USER
+            - name: OPENOBSERVE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openobserve-auth
+                  key: OPENOBSERVE_PASSWORD
+          volumeMounts:
+            - name: config
+              mountPath: /fluent-bit/etc
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+            # Tail DB + filesystem buffers survive collector restarts.
+            - name: flb-state
+              mountPath: /flb-state
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: config
+          configMap:
+            name: log-collector-config
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: flb-state
+          hostPath:
+            path: /var/lib/checktick-log-collector
+            type: DirectoryOrCreate

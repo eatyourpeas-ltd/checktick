@@ -63,7 +63,7 @@ the minimum required permission scope:
   other Graph API permissions
 * **Secret management:** Application client ID and client secret
   are stored as encrypted environment variables within the
-  Northflank platform and injected into the application container
+  in-cluster Kubernetes Secrets and injected into the application container
   at runtime. They are not present in source code, version
   control, or any other storage location. GitGuardian pre-commit
   hooks would block any accidental commit of these credentials.

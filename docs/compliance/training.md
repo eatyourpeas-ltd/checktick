@@ -22,7 +22,7 @@ category: dspt-3-training
 
 In addition to the NHS module, we held an internal briefing on:
 
-* **Northflank Secrets Management:** Handling DB credentials securely.
+* **Kubernetes Secrets Management:** Handling DB credentials securely.
 * **Incident Response:** Walking through the "Restoration Test Log" procedures.
 * **Phishing Awareness:** Reviewing email security protocols for the `@checktick.uk` domain.
 
@@ -66,4 +66,4 @@ In addition to the NHS module, we held an internal briefing on:
 
 ## 3. Monitoring & Enforcement
 
-The SIRO performs a quarterly review of this log. In the event of a training expiry, access to administrative systems (Northflank/GitHub) is restricted until the refresher is completed and evidence is provided.
+The SIRO performs a quarterly review of this log. In the event of a training expiry, access to administrative systems (Civo/GitHub) is restricted until the refresher is completed and evidence is provided.

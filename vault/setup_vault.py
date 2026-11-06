@@ -114,7 +114,7 @@ path "secret/metadata/surveys/*" {
 # recovery dashboard's approvals (RecoveryRequest.execute_recovery) and
 # execute_platform_recovery fail at Vault with `permission denied`.
 # Found by k8s/smoke-test.py during the Civo POC (2026-11-01); the same gap
-# existed on Northflank.
+# existed on the previous platform.
 path "secret/data/users/+/surveys/+/recovery-kek" {
   capabilities = ["create", "read", "update", "delete"]
 }
@@ -356,7 +356,7 @@ def main():
     print(f"\n🔗 Connecting to Vault at {vault_addr}...")
 
     # Initialize Vault client with explicit HTTPS
-    # Northflank routes through port 443, not 8200
+    # Some platforms route through port 443, not 8200
     # TLS verification: disable only for initial setup with self-signed certs
     verify_tls = os.getenv("VAULT_TLS_VERIFY_SETUP", "false").lower() == "true"
     client = hvac.Client(

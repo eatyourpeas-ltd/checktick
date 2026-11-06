@@ -32,7 +32,7 @@ In the event of a malware detection:
 
 1. The software is configured to automatically quarantine the threat.
 2. The user must take a screenshot of the alert and notify the CTO/SIRO immediately.
-3. The device must be disconnected from the {{ platform_name }} Northflank/GitHub environment until a full system scan confirms the threat has been neutralized.
+3. The device must be disconnected from the {{ platform_name }} Civo/GitHub environment until a full system scan confirms the threat has been neutralized.
 
 ## 4. Maintenance
 

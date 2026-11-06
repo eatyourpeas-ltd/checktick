@@ -11,7 +11,7 @@ category: dspt-9-it-protection
 
 ### 1.1 Infrastructure Layer
 
-- Hosting platform logs and metrics (e.g. Northflank, Azure, AWS)
+- Hosting platform logs and metrics (e.g. managed Kubernetes on Civo, Azure, AWS)
 - Container health, restarts, and resource utilisation
 - Network ingress and service availability checks
 
@@ -37,7 +37,7 @@ category: dspt-9-it-protection
 | **Brute Force Attacks** | `django-axes` | IP lockout + automated alerting + admin notification |
 | **Authentication Failures** | Django logging + audit system | Logged + threshold-based alerting |
 | **Secret Leakage Attempts** | GitHub Secret Scanning | Immediate alert + pull request block |
-| **Service Downtime / Degradation** | Hosting health checks (Northflank / equivalent) | Critical alert + incident workflow trigger |
+| **Service Downtime / Degradation** | Hosting health checks (Civo / StatusCake / equivalent) | Critical alert + incident workflow trigger |
 | **Dependency Vulnerabilities** | GitHub Dependabot | Automated PR + weekly security review |
 
 ---
@@ -84,7 +84,7 @@ The following events trigger automatic notifications:
 ### 4.2 Notification Channels
 
 - Email alerts (administrative mailbox)
-- Hosting platform alerting (Northflank / equivalent)
+- Hosting platform alerting (Civo / StatusCake / equivalent)
 - Optional external integrations (Slack or equivalent, if configured)
 
 ---

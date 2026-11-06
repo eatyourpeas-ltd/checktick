@@ -1,0 +1,232 @@
+#!/bin/bash
+# k8s_vault_ceremony — post-restore Vault ceremony for a migrated/drill Vault
+# on the Kubernetes (Civo) cluster: generate-root with 3 unseal shares, apply
+# the fixed checktick-app policy if the copy still carries a stale one, mint
+# a fresh AppRole secret_id into a transfer Secret, and revoke the temporary
+# root token.
+#
+# NOTE: this is a KUBERNETES (Civo) operational script, NOT Docker Compose.
+#
+# Default target is the DRILL vault pod (scratch-drill-vault-0). Targeting
+# the production vault-0 requires an explicit --pod vault-0 AND a
+# confirmation, because generate-root mints a temporary root token.
+#
+# SAFETY RULES (see docs/civo-kubernetes-operations.md):
+#   - NEVER `vault operator init` on migrated/restored storage (a fresh init
+#     makes every encrypted survey permanently undecryptable).
+#   - NEVER run vault/setup_vault.py against a migrated Vault (it would
+#     overwrite the platform master-key component and mint a conflicting
+#     AppRole).
+#   - If this script aborts AFTER the root token was decoded (steps 3+), do
+#     NOT re-run it from the top — a second generate-root mints another
+#     temporary root token. Re-enter the SAME token and run the remaining
+#     steps manually.
+#   - Shares and tokens are read from hidden prompts only, never printed,
+#     never stored.
+#
+# VERIFICATION PATTERN: command output is captured into a variable FIRST,
+# greps use `grep -c` (reads ALL input — no SIGPIPE), and decisions test the
+# counts. NEVER verify with `cmd | grep -q` under pipefail: grep -q exits on
+# first match, the upstream command gets SIGPIPE, and a SUCCESSFUL write can
+# be reported as failed (this exact false-negative aborted the live cutover
+# ceremony on 2026-11-03).
+#
+# Usage: ./s/k8s-vault-ceremony [--pod NAME] [--secret NAME] [--help]
+#   --pod NAME     target vault pod (default: scratch-drill-vault-0)
+#   --secret NAME  transfer Secret for the minted AppRole
+#                 (default: scratch-drill-vault-approle)
+
+set -euo pipefail
+
+NS=checktick
+VPOD=scratch-drill-vault-0
+SECRET=scratch-drill-vault-approle
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help)  head -37 "$0" | tail -35; exit 0 ;;
+        --pod)   VPOD="$2"; shift 2 ;;
+        --secret) SECRET="$2"; shift 2 ;;
+        *) echo "unknown argument: $1 (see --help)"; exit 1 ;;
+    esac
+done
+
+# Kubeconfig resolution: explicit KUBECONFIG wins; else the Civo kubeconfig
+# if present; else the default config.
+if [ -z "${KUBECONFIG:-}" ] && [ -f "${HOME}/.kube/civo-checktick.yaml" ]; then
+    export KUBECONFIG="${HOME}/.kube/civo-checktick.yaml"
+fi
+
+vexec() { # vault command inside the target pod; token via env, never printed
+    kubectl exec -n "$NS" "$VPOD" -- \
+        env VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN="$ROOT_TOKEN" "$@"
+}
+
+echo "=========================================="
+echo "  Vault ceremony (Kubernetes/Civo)"
+echo "=========================================="
+echo "Cluster context: $(kubectl config current-context)"
+echo "Target pod     : $NS/$VPOD"
+if [ "$VPOD" = "vault-0" ]; then
+    echo ""
+    echo "  ⚠ THIS IS THE PRODUCTION VAULT. generate-root will mint a"
+    echo "    temporary root token on it. Only proceed if that is the plan."
+    read -p "  Type 'production' to continue: " CONFIRM
+    [ "$CONFIRM" = "production" ] || { echo "aborted"; exit 1; }
+fi
+
+# Robust sealed check: capture first (vault status exits non-zero when
+# sealed, hence the || true), then COUNT — no grep -q pipeline (header note).
+STATUS_OUT="$(kubectl exec -n "$NS" "$VPOD" -- vault status 2>&1 || true)"
+UNSEALED="$(printf '%s\n' "$STATUS_OUT" | grep -c 'Sealed.*false' || true)"
+if [ "$UNSEALED" -lt 1 ]; then
+    echo "Vault is still sealed — unseal first (3 of 4 shares;"
+    echo "for production: s/k8s-vault-unseal), then re-run."
+    exit 1
+fi
+
+echo ""
+echo "== 1. generate-root ceremony (3 shares, interactive, hidden input) =="
+echo "   Running: kubectl -n $NS exec -it $VPOD -- vault operator generate-root -init"
+kubectl -n "$NS" exec -it "$VPOD" -- vault operator generate-root -init
+for i in 1 2 3; do
+    echo "   Share $i of 3:"
+    kubectl -n "$NS" exec -it "$VPOD" -- vault operator generate-root
+done
+echo ""
+echo "   Decode the Encoded Root Token with the OTP from the -init output:"
+echo "     kubectl -n $NS exec $VPOD -- vault operator generate-root -decode=<encoded-token> -otp=<otp>"
+echo "   (The encoded token ends BEFORE the shell prompt marker.)"
+echo "   Paste the DECODED root token here."
+printf "   Root token (input hidden): "
+IFS= read -rs ROOT_TOKEN
+[ -n "$ROOT_TOKEN" ] || { echo "no token entered"; exit 1; }
+echo "   token check:"
+vexec vault token lookup -format=json | grep -o '"display_name":"[^"]*"' || true
+
+echo ""
+echo "== 2. policy: apply fixed checktick-app if the copy is still stale =="
+# Captured-output verification (no pipes on the vault command; grep -c reads
+# all input). The users/* escrow stanza is the marker for the fixed policy.
+POLICY_OUT="$(vexec vault policy read checktick-app)" || {
+    echo "   vault policy read failed — the policy name is missing; writing it below"
+    POLICY_OUT=""
+}
+STANZAS="$(printf '%s\n' "$POLICY_OUT" | grep -c 'path "' || true)"
+USERS_PRESENT="$(printf '%s\n' "$POLICY_OUT" | grep -c 'secret/data/users' || true)"
+echo "   policy read: ${STANZAS} path stanzas; users/* escrow stanza present: ${USERS_PRESENT} (expect 14 stanzas, 1 present)"
+if [ "${USERS_PRESENT}" -ge 1 ] && [ "${STANZAS}" -ge 12 ]; then
+    echo "   copy already carries the fixed policy — skipping"
+else
+    echo "   stale policy found — writing the fixed checktick-app policy"
+    # Copied VERBATIM from vault/setup_vault.py create_policies() — keep the
+    # two in sync.
+    HCL_DIR="$(mktemp -d /tmp/scratch-policy.XXXXXX)"
+    HCL_FILE="$HCL_DIR/policy.hcl"
+    cat > "$HCL_FILE" <<'HCL'
+# CheckTick Application Policy
+# Allows CheckTick to manage encryption keys
+
+# Platform master key (read-only)
+path "secret/data/platform/master-key" {
+  capabilities = ["read"]
+}
+
+# Organization keys (create, read, update)
+path "secret/data/organizations/+/master-key" {
+  capabilities = ["create", "read", "update", "list"]
+}
+
+path "secret/metadata/organizations/*" {
+  capabilities = ["list"]
+}
+
+# Team keys (create, read, update)
+path "secret/data/teams/+/team-key" {
+  capabilities = ["create", "read", "update", "list"]
+}
+
+path "secret/metadata/teams/*" {
+  capabilities = ["list"]
+}
+
+# Survey keys (create, read, update, delete)
+path "secret/data/surveys/+/kek" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
+
+path "secret/metadata/surveys/*" {
+  capabilities = ["list", "delete"]
+}
+
+# User survey KEK escrows (recovery flows)
+#
+# VaultClient.escrow_user_survey_kek / recover_user_survey_kek /
+# verify_user_identity_email read and write escrowed recovery KEKs at
+# users/<user_id>/surveys/<survey_id>/recovery-kek. Without this stanza the
+# recovery dashboard's approvals (RecoveryRequest.execute_recovery) and
+# execute_platform_recovery fail at Vault with `permission denied`.
+path "secret/data/users/+/surveys/+/recovery-kek" {
+  capabilities = ["create", "read", "update", "delete"]
+}
+
+path "secret/metadata/users/*" {
+  capabilities = ["list", "delete"]
+}
+
+# Token management
+path "auth/token/renew-self" {
+  capabilities = ["update"]
+}
+
+path "auth/token/lookup-self" {
+  capabilities = ["read"]
+}
+HCL
+    kubectl cp "$HCL_FILE" "$NS/$VPOD:/tmp/policy.hcl" >/dev/null
+    rm -rf "$HCL_DIR"
+    vexec sh -c 'vault policy write checktick-app /tmp/policy.hcl && rm -f /tmp/policy.hcl'
+    # Re-read and re-verify with the SAME captured-output pattern — never
+    # `vault policy read | grep -q` (header note).
+    POLICY_OUT="$(vexec vault policy read checktick-app)"
+    STANZAS="$(printf '%s\n' "$POLICY_OUT" | grep -c 'path "' || true)"
+    USERS_PRESENT="$(printf '%s\n' "$POLICY_OUT" | grep -c 'secret/data/users' || true)"
+    echo "   after write: ${STANZAS} stanzas, users/* present: ${USERS_PRESENT}"
+    [ "${USERS_PRESENT}" -ge 1 ] || { echo "RE-WRITE DID NOT TAKE — stop and investigate"; exit 1; }
+fi
+
+echo ""
+echo "== 3. mint the AppRole on the target Vault =="
+ROLE_ID="$(vexec vault read -field=role_id auth/approle/role/checktick-app/role-id)"
+SECRET_ID="$(vexec vault write -f -field=secret_id auth/approle/role/checktick-app/secret-id)"
+[ -n "$ROLE_ID" ] && [ -n "$SECRET_ID" ] || { echo "AppRole mint failed"; exit 1; }
+
+echo "== 4. store the AppRole in the $SECRET transfer Secret (values not printed) =="
+kubectl delete secret "$SECRET" -n "$NS" --ignore-not-found >/dev/null
+kubectl create secret generic "$SECRET" -n "$NS" \
+    --from-literal=VAULT_ROLE_ID="$ROLE_ID" \
+    --from-literal=VAULT_SECRET_ID="$SECRET_ID" >/dev/null
+echo "   created ($(kubectl get secret "$SECRET" -n "$NS" -o json | grep -o '"VAULT_[A-Z_]*"' | wc -l | tr -d ' ') keys)"
+
+echo ""
+echo "== 5. revoke the temporary root token and verify =="
+vexec vault token revoke -self >/dev/null
+if vexec vault token lookup >/dev/null 2>&1; then
+    echo "   WARNING: token lookup still succeeds — revoke did not take."
+    echo "   Investigate, then re-run steps 3-5 with the SAME token (do NOT re-run generate-root)."
+    exit 1
+else
+    echo "   revoked (lookup now fails, as expected)"
+fi
+
+cat <<EOF
+
+Ceremony complete. Next steps depend on the target:
+
+  drill pod ($VPOD): continue the restore drill — deploy the scratch web,
+    run the decrypt proof, then tear down the same day.
+
+  production (vault-0): patch VAULT_ROLE_ID / VAULT_SECRET_ID into
+    checktick-secrets from $SECRET (secret-to-secret), delete the transfer
+    Secret, rollout restart deploy/checktick-web (healthz-gated), and run
+    k8s/smoke-test.py (step 17 gates the fixed policy).
+EOF

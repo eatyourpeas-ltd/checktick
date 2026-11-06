@@ -8,7 +8,7 @@ category: dspt-7-continuity
 To ensure a rapid response, the following resources are maintained:
 
 1. **Technical Access:**
-    * Root credentials for Northflank (Encrypted/Offline).
+    * Root credentials for Civo (Encrypted/Offline).
     * 2048-bit SSH keys for server access (stored on FIPS 140-2 encrypted hardware).
 2. **Documentation (Offline Access):**
     * PDF copy of the Business Continuity Plan.
@@ -18,4 +18,4 @@ To ensure a rapid response, the following resources are maintained:
     * Secondary mobile devices for MFA and hotspotting.
     * Out-of-band communication channel (Signal/Phone) for directors.
 4. **Personnel Redundancy:**
-    * The SIRO is trained on the basic 'Container Restart' and 'Snapshot Restore' procedures in Northflank to act as a backup to the CTO.
+    * The SIRO is trained on the basic 'Container Restart' and 'Snapshot Restore' procedures in the Civo dashboard / Kubernetes to act as a backup to the CTO.

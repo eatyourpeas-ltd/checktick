@@ -1,4 +1,4 @@
-# Scheduled tasks as CronJobs — the Kubernetes equivalent of the Northflank
+# Scheduled tasks as CronJobs — the Kubernetes equivalent of platform-level
 # cron services. Command semantics and required frequencies are documented in
 # docs/self-hosting-scheduled-tasks.md (authoritative list).
 #
@@ -29,12 +29,19 @@ spec:
       backoffLimit: 1
       ttlSecondsAfterFinished: 172800
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           containers:
             - name: run
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "process_data_governance"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py process_data_governance && if [ -n "$HC_PING_PROCESS_DATA_GOVERNANCE" ]; then curl -fsS --retry 3 "$HC_PING_PROCESS_DATA_GOVERNANCE" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
@@ -58,12 +65,19 @@ spec:
       backoffLimit: 1
       ttlSecondsAfterFinished: 172800
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           containers:
             - name: run
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "cleanup_survey_progress"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py cleanup_survey_progress && if [ -n "$HC_PING_CLEANUP_SURVEY_PROGRESS" ]; then curl -fsS --retry 3 "$HC_PING_CLEANUP_SURVEY_PROGRESS" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
@@ -87,12 +101,19 @@ spec:
       backoffLimit: 1
       ttlSecondsAfterFinished: 172800
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           containers:
             - name: run
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "sync_external_datasets"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py sync_external_datasets && if [ -n "$HC_PING_SYNC_EXTERNAL_DATASETS" ]; then curl -fsS --retry 3 "$HC_PING_SYNC_EXTERNAL_DATASETS" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
@@ -116,12 +137,19 @@ spec:
       backoffLimit: 1
       ttlSecondsAfterFinished: 172800
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           containers:
             - name: run
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "sync_global_question_group_templates"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py sync_global_question_group_templates && if [ -n "$HC_PING_SYNC_GLOBAL_QUESTION_GROUP_TEMPLATES" ]; then curl -fsS --retry 3 "$HC_PING_SYNC_GLOBAL_QUESTION_GROUP_TEMPLATES" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
@@ -145,12 +173,19 @@ spec:
       backoffLimit: 1
       ttlSecondsAfterFinished: 172800
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           containers:
             - name: run
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "prune_unconfirmed_users"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py prune_unconfirmed_users && if [ -n "$HC_PING_PRUNE_UNCONFIRMED_USERS" ]; then curl -fsS --retry 3 "$HC_PING_PRUNE_UNCONFIRMED_USERS" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
@@ -174,12 +209,19 @@ spec:
       backoffLimit: 1
       ttlSecondsAfterFinished: 172800
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           containers:
             - name: run
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "process_expired_subscriptions"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py process_expired_subscriptions && if [ -n "$HC_PING_PROCESS_EXPIRED_SUBSCRIPTIONS" ]; then curl -fsS --retry 3 "$HC_PING_PROCESS_EXPIRED_SUBSCRIPTIONS" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
@@ -203,12 +245,19 @@ spec:
       backoffLimit: 1
       ttlSecondsAfterFinished: 172800
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           containers:
             - name: run
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "process_expiring_subscriptions"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py process_expiring_subscriptions && if [ -n "$HC_PING_PROCESS_EXPIRING_SUBSCRIPTIONS" ]; then curl -fsS --retry 3 "$HC_PING_PROCESS_EXPIRING_SUBSCRIPTIONS" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
@@ -232,12 +281,19 @@ spec:
       backoffLimit: 1
       ttlSecondsAfterFinished: 172800
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           containers:
             - name: run
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "process_promotion_lifecycle"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py process_promotion_lifecycle && if [ -n "$HC_PING_PROCESS_PROMOTION_LIFECYCLE" ]; then curl -fsS --retry 3 "$HC_PING_PROCESS_PROMOTION_LIFECYCLE" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
@@ -261,12 +317,19 @@ spec:
       backoffLimit: 1
       ttlSecondsAfterFinished: 172800
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           containers:
             - name: run
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "process_dsr_deadlines"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py process_dsr_deadlines && if [ -n "$HC_PING_PROCESS_DSR_DEADLINES" ]; then curl -fsS --retry 3 "$HC_PING_PROCESS_DSR_DEADLINES" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
@@ -290,12 +353,19 @@ spec:
       backoffLimit: 1
       ttlSecondsAfterFinished: 172800
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           containers:
             - name: run
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "process_diary_reminders"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py process_diary_reminders && if [ -n "$HC_PING_PROCESS_DIARY_REMINDERS" ]; then curl -fsS --retry 3 "$HC_PING_PROCESS_DIARY_REMINDERS" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
@@ -319,12 +389,19 @@ spec:
       backoffLimit: 1
       ttlSecondsAfterFinished: 172800
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           containers:
             - name: run
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "sync_nhs_dd_datasets"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py sync_nhs_dd_datasets && if [ -n "$HC_PING_SYNC_NHS_DD_DATASETS" ]; then curl -fsS --retry 3 "$HC_PING_SYNC_NHS_DD_DATASETS" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
@@ -349,12 +426,19 @@ spec:
       activeDeadlineSeconds: 240
       ttlSecondsAfterFinished: 86400
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           containers:
             - name: run
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "process_recovery_time_delays"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py process_recovery_time_delays && if [ -n "$HC_PING_PROCESS_RECOVERY_TIME_DELAYS" ]; then curl -fsS --retry 3 "$HC_PING_PROCESS_RECOVERY_TIME_DELAYS" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}
@@ -398,6 +482,9 @@ spec:
       activeDeadlineSeconds: 3600
       ttlSecondsAfterFinished: 172800
       template:
+        metadata:
+          labels:
+            checktick.io/db-client: "true"
         spec:
           restartPolicy: Never
           initContainers:
@@ -436,7 +523,11 @@ spec:
           containers:
             - name: seed
               image: ghcr.io/eatyourpeas-ltd/checktick:0.24.2
-              command: ["python", "manage.py", "seed_snomed_datasets", "--force"]
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py seed_snomed_datasets --force && if [ -n "$HC_PING_IMPORT_SNOMED_DB" ]; then curl -fsS --retry 3 "$HC_PING_IMPORT_SNOMED_DB" > /dev/null; fi
               envFrom:
                 - configMapRef: {name: checktick-config}
                 - configMapRef: {name: checktick-config-local}

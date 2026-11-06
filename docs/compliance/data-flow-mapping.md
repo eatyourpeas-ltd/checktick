@@ -21,9 +21,9 @@ This document outlines how data moves through the {{ platform_name }} platform a
 
 | Asset ID | Asset Name | Description | Location | Owner |
 | :--- | :--- | :--- | :--- | :--- |
-| **ASSET-01** | Production DB | Encrypted survey responses | Northflank (UK) | {{ platform_name }} Admin |
-| **ASSET-02** | App Servers | Containerized Django Environment | Northflank (UK) | {{ platform_name }} Admin |
-| **ASSET-03** | Secret Vault | Production keys and recovery credentials | Northflank Secrets | {{ platform_name }} Admin |
+| **ASSET-01** | Production DB | Encrypted survey responses | Civo Kubernetes — in-cluster CloudNativePG PostgreSQL (UK, London LON1) | {{ platform_name }} Admin |
+| **ASSET-02** | App Servers | Containerized Django Environment | Civo Kubernetes (UK, London LON1) | {{ platform_name }} Admin |
+| **ASSET-03** | Secret Vault | Production keys and recovery credentials | In-cluster HashiCorp Vault (Kubernetes StatefulSet) | {{ platform_name }} Admin |
 | **ASSET-04** | Source Code | Application logic and DSPT documentation | GitHub (Public) | {{ platform_name }} Admin |
 | **ASSET-05** | Admin Laptops | Endpoints used for system management | UK (Encrypted) | 2x Employees |
 
@@ -35,7 +35,7 @@ Survey responses are initiated by patients via a web-native interface. Data is e
 
 ### Internal Storage & Processing
 
-Data is stored on Northflank managed infrastructure within the UK-South region. We utilize database-level encryption (AES-256). Sensitive credentials required for decryption are never stored in the application code; they are injected at runtime via a secure Vault.
+Data is stored on managed Kubernetes infrastructure (Civo) within the UK London (LON1) region. We utilize database-level encryption (AES-256). Sensitive credentials required for decryption are never stored in the application code; they are injected at runtime via a secure in-cluster Vault.
 
 ### Access & Outflow
 
@@ -68,7 +68,7 @@ The {{ platform_name }} API allows for secure, programmatic integration with ext
 ### API Security Controls
 
 1. **Appropriate Scoping:** API keys are restricted using the "Principle of Least Privilege." A key generated for a specific survey cannot access data from other surveys or organisation settings.
-2. **Rate Limiting:** To prevent brute-force attacks and ensure service availability, the API implements strict rate limiting at the Northflank ingress layer.
+2. **Rate Limiting:** To prevent brute-force attacks and ensure service availability, the API implements strict rate limiting at the application layer, behind the Traefik ingress.
 3. **Audit Logging:** Every API request is logged, including the timestamp, the identity of the API key used, the endpoint accessed, and the IP address.
 4. **IP Whitelisting (Optional):** For high-sensitivity healthcare integrations, we support restricting API access to specific trusted IP ranges.
 
@@ -76,4 +76,4 @@ The {{ platform_name }} API allows for secure, programmatic integration with ext
 
 | Asset ID | Asset Name | Description | Location |
 | :--- | :--- | :--- | :--- |
-| **ASSET-06** | API Gateway | The entry point for programmatic data access. | Northflank Ingress |
+| **ASSET-06** | API Gateway | The entry point for programmatic data access. | Traefik ingress (Civo Kubernetes) |

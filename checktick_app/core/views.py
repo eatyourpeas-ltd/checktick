@@ -289,7 +289,7 @@ def healthz(request):
 
     Returns 200 OK with JSON when all critical services are operational.
     Returns 503 Service Unavailable when any critical service is degraded,
-    so that Northflank / load balancers mark the instance as unhealthy and
+    so that load balancers / the platform mark the instance as unhealthy and
     alert the platform owner.
 
     Checks:

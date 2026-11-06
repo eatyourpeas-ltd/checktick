@@ -21,7 +21,8 @@ category: dspt-10-suppliers
 
 | Supplier | Data Category | Clause Mechanism | Article 28 Verified? |
 | :--- | :--- | :--- | :--- |
-| **Northflank** | Patient/Application Data | Northflank Data Processing Agreement | Yes |
+| **Civo** | Patient/Application Data | Civo Data Processing Agreement (UK data residency) | Yes |
+| **Northflank** (to 2026-11-05) | Patient/Application Data | Northflank Data Processing Agreement | Yes — terminated at migration close-out; account closed |
 | **Microsoft 365 (Exchange Online)** | User Contact Data (Email Metadata) | Microsoft Online Services Data Protection Addendum (DPA) | Yes |
 | **GitHub** | Developer Account Data | GitHub Global Data Protection Agreement | Yes |
 

@@ -7,7 +7,7 @@ category: dspt-9-it-protection
 
 ## 1. Infrastructure DNS (Production)
 
-* **Resolver:** Northflank default secure resolvers (UK-based).
+* **Resolver:** Civo-managed cluster DNS with secure UK-based upstream resolvers.
 * **Policy:** Our production containers are restricted from making outbound requests to the general internet except for a whitelist of known-good API endpoints (e.g., UK Government OIDC providers).
 * **NCSC PDNS:** We have registered our primary domains with the NCSC PDNS to monitor for and block resolution of known malicious domains.
 
@@ -22,5 +22,5 @@ category: dspt-9-it-protection
 
 ## 3. Browser-Level Protection
 
-* **Safe Browsing:** All browsers used for {{ platform_name }} administrative work (GitHub, Northflank) must have 'Safe Browsing' technology enabled.
+* **Safe Browsing:** All browsers used for {{ platform_name }} administrative work (GitHub, Civo) must have 'Safe Browsing' technology enabled.
 * **Ad-Blocking:** We utilize reputable content-filtering extensions (e.g., uBlock Origin) to mitigate 'Malvertising' risks.

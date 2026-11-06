@@ -23,6 +23,6 @@ category: dspt-6-incidents
 
 ## 3. Triage Process
 
-1. **Verification:** CTO verifies the alert against Northflank logs and GitHub security dashboards.
+1. **Verification:** CTO verifies the alert against platform logs (Civo/Kubernetes) and GitHub security dashboards.
 2. **Remediation:** If valid, the CTO applies the necessary patch or rotates compromised credentials immediately.
 3. **Reporting:** Any confirmed incident identified via NCSC Early Warning is reported to the SIRO ({{ cto_name }}) and logged in the *Cyber Incident Log*.

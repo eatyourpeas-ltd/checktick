@@ -19,7 +19,7 @@ Every three months, the following checks are performed:
 
 1. **GitHub Audit:** Scan `requirements.txt` and `package.json` for deprecated libraries.
 2. **Local Device Audit:** Check macOS versions on founder laptops to ensure they are within the 'Current - 2' support window.
-3. **Northflank Audit:** Review container logs for "deprecated image" warnings.
+3. **Platform Audit:** Review container logs for "deprecated image" warnings.
 
 ## 3. Removal & Isolation
 

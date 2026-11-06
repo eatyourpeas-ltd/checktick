@@ -777,14 +777,14 @@ The minimum required task for GDPR compliance:
 0 2 * * * cd /path/to/checktick && docker compose exec -T web python manage.py process_data_governance >> /var/log/checktick-cron.log 2>&1
 ```
 
-**For complete setup instructions** including all five tasks with platform-specific guides (Northflank, Docker Compose, Kubernetes, AWS ECS, Heroku), see:
+**For complete setup instructions** including all five tasks with platform-specific guides (Docker Compose, Kubernetes, AWS ECS, Heroku), see:
 
 👉 **[Scheduled Tasks Documentation](/docs/self-hosting-scheduled-tasks/)**
 
 This comprehensive guide covers:
 
 - Detailed task descriptions and requirements
-- Platform-specific setup (Northflank, Docker, Kubernetes, AWS, Heroku, Railway)
+- Platform-specific setup (Docker, Kubernetes, AWS, Heroku, Railway)
 - Initial setup and maintenance commands
 - Command reference with dry-run options
 - Testing and monitoring procedures

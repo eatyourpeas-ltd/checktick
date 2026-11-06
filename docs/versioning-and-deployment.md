@@ -42,8 +42,8 @@ If none of these conditions are met, publish is skipped.
 1. Bump version in `pyproject.toml` (semver).
 2. Merge PR to `main`.
 3. Publish workflow applies versioned tags to GHCR.
-4. Publish workflow calls the Northflank deployment webhook with the versioned tag.
-5. The Northflank `checktick-deployment` workflow runs the pre-deploy migration job, then deploys the versioned image with zero downtime.
+4. Publish workflow triggers the [Deploy (Civo)](../.github/workflows/deploy-civo.yml) workflow with the versioned tag (deploy trigger swapped from the previous platform's webhook at migration close-out — runbook Phase 6).
+5. The Deploy workflow runs the pre-deploy Job (migrations + idempotent syncs) pinned to the same tag, then rolls the web Deployment to the versioned image with zero downtime — `/healthz` readiness gates traffic.
 
 ## Accidental No-Bump Merges
 

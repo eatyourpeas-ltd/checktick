@@ -64,8 +64,7 @@ spec:
   instances: 2 # primary + one streaming replica; operator handles failover
   # Pin a specific 17.x tag from the CNPG image releases.
   # The 16 -> 17 major upgrade happens via the cutover pg_dump/restore
-  # (docs/migration-northflank-to-civo.md, safety rule 3) — never via
-  # pg_upgrade-in-place on the first migration.
+  # — never via pg_upgrade-in-place on the first migration.
   imageName: ghcr.io/cloudnative-pg/postgresql:17
   # Civo's object store rejects the default payload-checksum mode of modern
   # S3 clients (boto3 >= 1.36 / aws-cli v2): every upload fails with
@@ -110,7 +109,8 @@ spec:
   # in CNPG 1.31. Works fully in 1.30.x; before any operator upgrade past
   # 1.30, migrate to the Barman Cloud Plugin (runbook Phase 6 backlog).
   backup:
-    retentionPolicy: 30d
+    # 120-day retention per docs/compliance/backup-policy.md (DSPT evidence retention).
+    retentionPolicy: 120d
     barmanObjectStore:
       # One shared bucket, CNPG under the /db prefix (SNOMED builds and logs
       # will use /snomed and /logs). Barman lays out base/ + wals/ inside.

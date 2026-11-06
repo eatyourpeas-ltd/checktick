@@ -73,5 +73,5 @@ During the Q1 Security Review, the SIRO will:
 ## 6. Current Application
 
 - Microsoft 365 is approved for all CheckTick transactional and health/care email and is configured to meet DCB1596
-- Northflank and GitHub are approved as critical infrastructure providers
+- Civo and GitHub are approved as critical infrastructure providers
 - Proton Mail is approved for corporate use only and is not used for DSPT-scoped data

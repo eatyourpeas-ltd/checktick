@@ -425,7 +425,7 @@ python manage.py process_dsr_deadlines --verbose
 
 ### 13.2 Scheduling
 
-Add to cron or Northflank scheduled job to run daily:
+Add to cron or a Kubernetes CronJob to run daily:
 
 ```
 0 8 * * * python manage.py process_dsr_deadlines

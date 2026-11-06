@@ -16,7 +16,8 @@ values are applied out-of-band.
 | :--- | :--- |
 | `namespace.yaml` | `checktick` namespace |
 | `web-configmap.yaml` | Non-sensitive config (hostnames, Vault addr, defaults) |
-| `vault.yaml` | Vault StatefulSet (file storage, manual unseal), Service, airgap NetworkPolicy |
+| `vault.yaml` | Vault StatefulSet (integrated Raft storage, manual unseal), Service, airgap NetworkPolicy |
+| `vault-snapshot.yaml` | Nightly ENCRYPTED Vault snapshot CronJob — deliberately NOT in kustomization.yaml (out-of-band prerequisites: AppRole ceremony + operator age key; see the file header) |
 | `web.yaml` | Web Deployment (probes, rolling update, anti-affinity), Service, PVCs, PDB |
 | `migrate-job.yaml` | Pre-deploy Job: migrations + idempotent syncs |
 | `cronjobs.yaml` | All 13 scheduled tasks (docs/self-hosting-scheduled-tasks.md); SNOMED arrives as a small object-store import — the 8 GiB in-cluster build is replaced by the CI workflow |
@@ -40,9 +41,7 @@ from the Secret.
 
 Either way the 16 → 17 major upgrade happens during the cutover
 `pg_dump`/`pg_restore` (dump with the target's binaries — never the
-reverse). See
-[docs/migration-northflank-to-civo.md](../docs/migration-northflank-to-civo.md)
-safety rule 3.
+reverse).
 
 ## Secrets
 
@@ -95,7 +94,7 @@ export KUBECONFIG=~/.kube/civo-checktick.yaml   # per Civo working session
 kubectl config current-context                   # glance before any apply/delete
 ```
 
-Any other cluster config (e.g. the Northflank `~/.kube/config`) stays
+Any other cluster config (e.g. a previous platform's `~/.kube/config`) stays
 untouched; a fresh terminal without the export falls back to it. After the
 migration completes (runbook Phase 6), consolidate at will. The deploy
 workflow's kubeconfig is separate again — a base64-encoded GitHub secret
@@ -103,9 +102,10 @@ workflow's kubeconfig is separate again — a base64-encoded GitHub secret
 
 ## POC walkthrough (throwaway Vault + synthetic data)
 
-Applies to a fresh Civo cluster (3 nodes, London). For the production cutover,
-follow [docs/migration-northflank-to-civo.md](../docs/migration-northflank-to-civo.md)
-instead — the Vault step differs critically (storage restore, **never** `init`).
+Applies to a fresh Civo cluster (3 nodes, London). For a production migration
+the Vault step differs critically: restore the existing storage and unseal
+with the EXISTING shares — **never** `vault operator init` (a fresh init
+makes every encrypted survey permanently undecryptable).
 
 ```bash
 # 0. Prereqs: cluster with Longhorn + Traefik, cert-manager installed,
@@ -189,11 +189,14 @@ kubectl apply -f k8s/cronjobs.yaml
   sct ndjson step peaks above 4 GiB and cannot run on 4 GB nodes) and the
   importer CronJob swaps it in with an atomic rename; the seed runs
   in-cluster where the database lives.
-- **Vault** runs file storage with manual unseal behind a NetworkPolicy that
-  denies all egress and only accepts ingress from web pods on 8200. There is
+- **Vault** runs integrated Raft storage (migrated from file storage
+  2026-11-06) with manual unseal behind a NetworkPolicy that denies all
+  egress except its own cluster port (8201) and accepts ingress from web
+  pods and the nightly snapshot CronJob on 8200. There is
   deliberately no liveness probe. A node drain re-seals Vault and 503s the
   app until the ceremony — pin Vault's node and drain it manually, or move
-  Vault to a dedicated small cluster (see migration runbook, Phase 6).
+  Vault to a dedicated small cluster (hardening backlog — see
+  docs/civo-kubernetes-operations.md).
 - **Rolling updates**: `maxUnavailable: 0`, `maxSurge: 1`, anti-affinity across
   nodes, PDB `minAvailable: 1`, `preStop` sleep 10s for endpoint convergence.
 
@@ -232,6 +235,6 @@ Dispatch it from the Actions tab (the `image-tag` input is required — pass
 the released tag, e.g. `0.24.2`). Add protection rules (required reviewers)
 to the `civo` GitHub environment to make dispatch a gated production deploy.
 
-Until the cutover completes, `docker-publish.yml` still calls the
-Northflank webhook on main publishes — swapping that step for this
-workflow is runbook Phase 6 work, deliberately not done in advance.
+On main publishes, `docker-publish.yml` dispatches this workflow with the
+newly published image tag (swapped from the previous platform's deployment
+webhook at migration close-out — runbook Phase 6).

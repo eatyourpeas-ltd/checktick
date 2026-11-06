@@ -7,7 +7,7 @@ category: dspt-9-it-protection
 
 ## 1. Network Architecture
 
-{{ platform_name }} is deployed on Northflank using a multi-tier architecture:
+{{ platform_name }} is deployed on managed Kubernetes (Civo) using a multi-tier architecture:
 
 * **Public Tier:** Only the Load Balancer/Ingress is public-facing, accepting traffic only on Port 443 (HTTPS).
 * **Application Tier:** Django containers reside in a private network. They handle logic and authentication.
@@ -22,7 +22,7 @@ category: dspt-9-it-protection
 
 **Cloud Infrastructure:**
 
-* **Ingress Rules:** Northflank manages our firewall rules. All ports except 443 are blocked by default.
+* **Ingress Rules:** Ingress is via Traefik; all ports except 443 are blocked by default.
 * **Egress Rules:** Our containers are restricted to communicating only with verified external services (e.g., OIDC providers, SendGrid) via secure encrypted channels.
 
 **Local Network (Development/Administrative Access):**

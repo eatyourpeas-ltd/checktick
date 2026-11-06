@@ -155,14 +155,17 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
 
     def _parse_branch_line(line: str, line_number: int) -> Dict[str, Any]:
         # Target may be {question-id} or #section-name. The 'end' action has no target.
-        section_match = re.search(r"#([A-Za-z0-9][\w\s-]*)\s*$", line)
+        # ReDoS note: the capture classes must not overlap the whitespace
+        # consumed by an adjacent quantifier (CodeQL py/polynomial-redos) —
+        # trailing whitespace is absorbed by the class and stripped below.
+        section_match = re.search(r"#([A-Za-z0-9][\w\s-]*)$", line)
         target_match = re.search(r"\{([^{}]+)\}\s*$", line)
 
         if not section_match and not target_match:
             # No target at all — only valid for the 'end' action.
             stripped = line.strip()
             # Check for an 'end when ...' line with no target.
-            end_no_target = re.match(r"^end\s+when\s+.+$", stripped, re.IGNORECASE)
+            end_no_target = re.match(r"^end\s+when\s+\S", stripped, re.IGNORECASE)
             if end_no_target:
                 condition_part = re.sub(
                     r"^end\s+when\s+", "", stripped, flags=re.IGNORECASE
@@ -210,7 +213,11 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
             target_kind = "question"
             condition_part = line[: target_match.start()].strip()  # type: ignore[union-attr]
 
-        condition_part = re.sub(r"\s*->\s*$", "", condition_part)
+        # Strip a trailing '->' (with surrounding whitespace) without a
+        # regex — the old `\s*->\s*$` pattern was ReDoS-prone (CodeQL).
+        stripped_arrow = condition_part.rstrip()
+        if stripped_arrow.endswith("->"):
+            condition_part = stripped_arrow[:-2].rstrip()
 
         # Optional action keyword before 'when': show/hide/end/jump_to/jump.
         action = SurveyQuestionCondition.Action.JUMP_TO
@@ -1083,7 +1090,7 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
 
         # SECTION_MENU config lines (indented under the block header).
         if in_section_menu_block and (depth > 0 or raw[:1].isspace()):
-            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(\S.*)$", stripped)
             if cfg_match and section_menu is not None:
                 key = cfg_match.group(1).lower()
                 val_raw = cfg_match.group(2).strip()
@@ -1147,7 +1154,7 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
 
         # RANDOMISED config lines (indented under the block header).
         if in_randomised_block and (depth > 0 or raw[:1].isspace()):
-            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(\S.*)$", stripped)
             if cfg_match and randomised is not None:
                 key = cfg_match.group(1).lower()
                 val_raw = cfg_match.group(2).strip()
@@ -1188,7 +1195,7 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
         #   anchor: enrolment|survey_open
         #   phase <name>: <start> [.. <end>]   (day offsets; end optional)
         if in_staged_block and (depth > 0 or raw[:1].isspace()):
-            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(\S.*)$", stripped)
             if cfg_match and staged is not None:
                 key = cfg_match.group(1).lower()
                 val_raw = cfg_match.group(2).strip()
@@ -1198,13 +1205,13 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 continue
             # Phase window definition: ``phase <name>: <start> [.. <end>]``.
             phase_match = _re.match(
-                r"^phase\s+([\w\s-]+?)\s*:\s*(.+)$", stripped, flags=_re.IGNORECASE
+                r"^phase\s+(\S[\w\s-]*?):\s*(\S.*)$", stripped, flags=_re.IGNORECASE
             )
             if phase_match and staged is not None:
                 pname = phase_match.group(1).strip()
                 window_raw = phase_match.group(2).strip()
                 # ``<start>`` or ``<start> .. <end>``.
-                range_match = _re.match(r"^(\d+)\s*(?:\.\.)?\s*(\d*)$", window_raw)
+                range_match = _re.match(r"^(\d+)(?:\s*\.\.\s*(\d+))?$", window_raw)
                 if range_match:
                     start_off = int(range_match.group(1))
                     end_off_raw = range_match.group(2)
@@ -1249,7 +1256,7 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
         #   order: authored|participant
         #   allow_revisit: true|false
         if in_matrix_block and (depth > 0 or raw[:1].isspace()):
-            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(\S.*)$", stripped)
             if cfg_match and matrix is not None:
                 key = cfg_match.group(1).lower()
                 val_raw = cfg_match.group(2).strip()
@@ -1301,7 +1308,7 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
         #   allow_revision: true|false
         #   round <name>: <start> [.. <end>]   (day offsets; end optional)
         if in_delphi_block and (depth > 0 or raw[:1].isspace()):
-            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(\S.*)$", stripped)
             if cfg_match and delphi is not None:
                 key = cfg_match.group(1).lower()
                 val_raw = cfg_match.group(2).strip()
@@ -1333,13 +1340,13 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 continue
             # Round window definition: ``round <name>: <start> [.. <end>]``.
             round_match = _re.match(
-                r"^round\s+([\w\s-]+?)\s*:\s*(.+)$", stripped, flags=_re.IGNORECASE
+                r"^round\s+(\S[\w\s-]*?):\s*(\S.*)$", stripped, flags=_re.IGNORECASE
             )
             if round_match and delphi is not None:
                 rname = round_match.group(1).strip()
                 window_raw = round_match.group(2).strip()
                 # ``<start>`` or ``<start> .. <end>``.
-                range_match = _re.match(r"^(\d+)\s*(?:\.\.)?\s*(\d*)$", window_raw)
+                range_match = _re.match(r"^(\d+)(?:\s*\.\.\s*(\d+))?$", window_raw)
                 if range_match:
                     start_off = int(range_match.group(1))
                     end_off_raw = range_match.group(2)
@@ -1392,7 +1399,7 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
         #   grace_minutes: 30
         #   show_progress: true|false
         if in_diary_block and (depth > 0 or raw[:1].isspace()):
-            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(\S.*)$", stripped)
             if cfg_match and diary is not None:
                 key = cfg_match.group(1).lower()
                 val_raw = cfg_match.group(2).strip()
@@ -1483,7 +1490,7 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 )
                 continue
             # Property line: ``key: value``
-            cfg_match = _re.match(r"^(\w+)\s*:\s*(.+)$", stripped)
+            cfg_match = _re.match(r"^(\w+)\s*:\s*(\S.*)$", stripped)
             if (
                 cfg_match
                 and categories is not None
@@ -1555,7 +1562,7 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 heading_content = heading_content[:tilde_idx].rstrip()
                 # Extract all cat:<dim>:<value> tokens (comma-separated).
                 cat_matches = _re.findall(
-                    r"cat:([\w]+):([^,]+?)(?:,|$)",
+                    r"cat:(\w+):([^,]+)",
                     suffix,
                     flags=_re.IGNORECASE,
                 )
@@ -1593,9 +1600,19 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 heading_content = heading_content[:tilde_idx].rstrip()
                 is_pickable = True
                 estimated_minutes = None
-                min_match = _re.search(r"(\d+)\s*min", suffix, flags=_re.IGNORECASE)
-                if min_match:
-                    estimated_minutes = int(min_match.group(1))
+                # ``N min`` — extracted without a backtracking-prone regex
+                # (CodeQL py/polynomial-redos): scan each "min" occurrence
+                # and take the first preceded by a digit run.
+                for min_match in _re.finditer(r"min", suffix, flags=_re.IGNORECASE):
+                    end = min_match.start()
+                    while end > 0 and suffix[end - 1].isspace():
+                        end -= 1
+                    start = end
+                    while start > 0 and suffix[start - 1].isdigit():
+                        start -= 1
+                    if start < end:
+                        estimated_minutes = int(suffix[start:end])
+                        break
                 # Extract group name from the cleaned heading
                 heading_text = heading_content.strip()[2:]  # remove "# "
                 ref_match = _re.search(r"\{([^{}]+)\}\s*$", heading_text)
@@ -1612,7 +1629,7 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 heading_content = heading_content[:tilde_idx].rstrip()
                 # Extract all arm: tokens (comma-separated).
                 arm_matches = _re.findall(
-                    r"arm:([\w\s-]+?)\s*(?:,|$)", suffix, flags=_re.IGNORECASE
+                    r"arm:([\w\s-]+?)(?:,|$)", suffix, flags=_re.IGNORECASE
                 )
                 arm_names = [a.strip() for a in arm_matches if a.strip()]
                 # Extract group name from the cleaned heading
@@ -1631,7 +1648,7 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 heading_content = heading_content[:tilde_idx].rstrip()
                 # Extract all phase: tokens (comma-separated).
                 phase_matches = _re.findall(
-                    r"phase:([\w\s-]+?)\s*(?:,|$)", suffix, flags=_re.IGNORECASE
+                    r"phase:([\w\s-]+?)(?:,|$)", suffix, flags=_re.IGNORECASE
                 )
                 phase_names = [p.strip() for p in phase_matches if p.strip()]
                 # Extract group name from the cleaned heading
@@ -1650,7 +1667,7 @@ def parse_bulk_markdown_with_collections(md_text: str) -> Dict[str, Any]:
                 heading_content = heading_content[:tilde_idx].rstrip()
                 # Extract all round: tokens (comma-separated).
                 round_matches = _re.findall(
-                    r"round:([\w\s-]+?)\s*(?:,|$)", suffix, flags=_re.IGNORECASE
+                    r"round:([\w\s-]+?)(?:,|$)", suffix, flags=_re.IGNORECASE
                 )
                 round_names = [r.strip() for r in round_matches if r.strip()]
                 # Extract group name from the cleaned heading

@@ -778,7 +778,7 @@ Configure alerts for unusual activity:
 
 ### Setting Up Elasticsearch (Self-Hosted)
 
-For self-hosted SIEM on Northflank:
+For self-hosted SIEM on Kubernetes:
 
 1. Deploy Elasticsearch addon (see [Vault Setup Guide](/docs/vault/))
 2. Configure Vault audit backend to forward logs

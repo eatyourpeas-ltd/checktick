@@ -86,7 +86,7 @@ The `update_snomed_db` management command can be run either manually or on a sch
 
 **Optional**: If `TRUD_API_KEY` is not set the command exits cleanly.
 
-**Frequency**: SNOMED CT UK is published roughly monthly. A daily or weekly scheduled run is reasonable — the preflight check makes most runs no-ops. See the Northflank / Kubernetes sections below for cron job setup.
+**Frequency**: SNOMED CT UK is published roughly monthly. A daily or weekly scheduled run is reasonable — the preflight check makes most runs no-ops. See the platform-specific sections below for cron job setup (Kubernetes is the production reference; Docker Compose is the default self-hosting path).
 
 > **Memory**: the `sct ndjson` step loads the full RF2 release into memory before writing NDJSON. UK Monolith's peak RSS during this step exceeds 4 GiB in practice — 4 GiB is *not* enough and the job will be OOM-killed (exit `-9`) partway through `sct ndjson`. Allocate **8 GiB** to the update job. The volume size is not the relevant resource for this failure.
 
@@ -343,181 +343,6 @@ python manage.py process_diary_reminders --verbose
 
 ## Platform-Specific Setup
 
-### Northflank (Recommended)
-
-Northflank provides native cron job support, making this the simplest option.
-
-#### 1. Create Data Governance Cron Job
-
-1. Go to your Northflank project
-2. Click **"Add Service"** → **"Cron Job"**
-3. Configure the job:
-   - **Name**: `checktick-data-governance`
-   - **Docker Image**: Use the same image as your web service (e.g., `ghcr.io/eatyourpeas-ltd/checktick:latest`)
-   - **Schedule**: `0 2 * * *` (runs at 2 AM UTC daily)
-   - **Command**: `python manage.py process_data_governance`
-
-#### 2. Create Survey Progress Cleanup Cron Job
-
-1. Click **"Add Service"** → **"Cron Job"** again
-2. Configure the job:
-   - **Name**: `checktick-progress-cleanup`
-   - **Docker Image**: Use the same image as your web service
-   - **Schedule**: `0 3 * * *` (runs at 3 AM UTC daily, after data governance)
-   - **Command**: `python manage.py cleanup_survey_progress`
-
-#### 3. Create External Dataset Sync Cron Job
-
-1. Click **"Add Service"** → **"Cron Job"** again
-2. Configure the job:
-   - **Name**: `checktick-dataset-sync`
-   - **Docker Image**: Use the same image as your web service
-   - **Schedule**: `0 4 * * *` (runs at 4 AM UTC daily)
-   - **Command**: `python manage.py sync_external_datasets`
-
-#### 4. Create NHS DD Sync Cron Job
-
-1. Click **"Add Service"** → **"Cron Job"** again
-2. Configure the job:
-   - **Name**: `checktick-nhs-dd-sync`
-   - **Docker Image**: Use the same image as your web service
-   - **Schedule**: `0 5 * * 0` (runs at 5 AM UTC every Sunday - weekly)
-   - **Command**: `python manage.py sync_nhs_dd_datasets`
-
-#### 5. SNOMED CT Update Cron Job (Optional — requires TRUD API key)
-
-`update_snomed_db` is safe to run on a schedule because the rebuild writes to a temp file and atomically swaps it into place (no exclusive SQLite lock against the live `snomed.db`), and the preflight `sct trud check` makes most runs no-ops when there is no new release.
-
-1. Click **"Add Service"** → **"Cron Job"**
-2. Configure the job:
-   - **Name**: `checktick-snomed-update`
-   - **Docker Image**: Use the same image as your web service
-   - **Schedule**: `0 9 * * 1` (runs at 9 AM UTC every Monday — weekly is plenty; SNOMED CT UK publishes roughly monthly)
-   - **Command**: `python manage.py update_snomed_db --prune`
-   - **Volumes**: Mount the same `snomed-data` volume used by the web service, RW
-   - **Environment**: `TRUD_API_KEY` and `SNOMED_DB_PATH` (same values as the web service)
-   - **Resources**: Set the memory limit to **8 GiB** — the `sct ndjson` step's peak RSS exceeds 4 GiB in practice on UK Monolith, and a 4 GiB limit will OOM-kill the job (exit `-9`) partway through `sct ndjson`. The job pod is short-lived (only runs during a build), so this is a peak limit, not a steady-state cost.
-3. **Concurrency policy**: set to Forbid (a second run while one is in progress would contend for the volume).
-
-Run a one-off `--force --prune` job the first time to build `snomed.db`, then let the cron keep it current.
-
-```bash
-# First-time build (run as a one-off job, not the cron)
-python manage.py update_snomed_db --force --prune
-```
-
-#### 6. Create Global Templates Sync Cron Job
-
-1. Click **"Add Service"** → **"Cron Job"** again
-2. Configure the job:
-   - **Name**: `checktick-templates-sync`
-   - **Docker Image**: Use the same image as your web service
-   - **Schedule**: `0 6 * * *` (runs at 6 AM UTC daily)
-   - **Command**: `python manage.py sync_global_question_group_templates`
-
-#### 7. Create Recovery Time Delay Cron Job
-
-1. Click **"Add Service"** → **"Cron Job"** again
-2. Configure the job:
-   - **Name**: `checktick-recovery-time-delays`
-   - **Docker Image**: Use the same image as your web service
-   - **Schedule**: `*/5 * * * *` (runs every 5 minutes)
-   - **Command**: `python manage.py process_recovery_time_delays`
-
-#### 8. Remaining Daily Jobs
-
-The following daily jobs follow the same Northflank cron job pattern as the sections above (same Docker image, same environment variables). Create one cron job per row:
-
-| Job name | Schedule | Command | Required for |
-| --- | --- | --- | --- |
-| `checktick-subscription-expiry` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py process_expired_subscriptions` | Billing (hosted only) |
-| `checktick-subscription-warnings` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py process_expiring_subscriptions` | Billing (hosted only) |
-| `checktick-promotion-lifecycle` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py process_promotion_lifecycle` | Billing (hosted only) |
-| `checktick-dsr-deadlines` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py process_dsr_deadlines` | GDPR (DSR requests) |
-| `checktick-prune-unconfirmed` | `0 3 * * *` (daily 3 AM UTC) | `python manage.py prune_unconfirmed_users` | Account hygiene |
-| `checktick-diary-reminders` | `0 7 * * *` (daily 7 AM UTC) | `python manage.py process_diary_reminders` | Diary/EMA surveys |
-
-> **Self-hosted note:** The three billing jobs (`process_expired_subscriptions`, `process_expiring_subscriptions`, `process_promotion_lifecycle`) are no-ops when `SELF_HOSTED=True` — skip them if you're self-hosting without billing. `process_dsr_deadlines`, `prune_unconfirmed_users`, and `process_diary_reminders` apply to all deployments.
-
-#### 9. Copy Environment Variables
-
-All cron jobs need the same environment variables as your web service:
-
-1. In Northflank, go to your web service → **Environment**
-2. Copy all environment variables
-3. Go to each cron job service → **Environment**
-4. Paste the variables
-
-**Critical variables needed:**
-
-- `DATABASE_URL`
-- `SECRET_KEY`
-- `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` (for data governance)
-- `DEFAULT_FROM_EMAIL` (for data governance)
-- `SITE_URL` (for email links in data governance)
-- `EXTERNAL_DATASET_API_URL`, `EXTERNAL_DATASET_API_KEY` (for dataset sync - optional, defaults to RCPCH API)
-- `TRUD_API_KEY`, `SNOMED_DB_PATH` (optional — required only if you use SNOMED CT)
-
-#### 10. Deploy and Test
-
-1. Deploy all cron job services
-2. Test them manually via Northflank dashboard: **Jobs** → **Run Now**
-3. Check logs to verify successful execution
-4. Monitor the **History** tab for scheduled runs
-
-**Important**: For external dataset sync, run the initial setup command once:
-
-```bash
-# In your web service terminal (via Northflank shell or kubectl exec)
-python manage.py sync_external_datasets
-```
-
-#### 11. Set Up Job Failure Alerts (Recommended)
-
-Northflank does not send email alerts for cron job failures. Use [healthchecks.io](https://healthchecks.io) (free tier covers 20 checks with email alerts) to get notified when a job fails or doesn't run at all.
-
-**Setup:**
-
-1. Create a free account at [healthchecks.io](https://healthchecks.io)
-2. For each cron job, create a new check:
-   - Set the **name** to match the Northflank job name
-   - Set the **schedule** to match the job's cron expression
-   - Copy the generated ping URL (e.g. `https://hc-ping.com/<uuid>`)
-3. Update each Northflank job's command to ping on success:
-
-```bash
-python manage.py <command> && curl -fsS --retry 3 https://hc-ping.com/<your-uuid> > /dev/null
-```
-
-The `&&` ensures the ping only fires if the management command exits successfully. If the command fails or the job never runs, healthchecks.io emails you.
-
-**Example commands with heartbeat ping:**
-
-| Job | Command |
-| --- | --- |
-| census-data-governance | `python manage.py process_data_governance && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
-| checktick-progress-cleanup | `python manage.py cleanup_survey_progress && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
-| checktick-data-sync | `python manage.py sync_external_datasets && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
-| checktick-nhsdd-sync | `python manage.py sync_nhs_dd_datasets && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
-| checktick-templates-sync | `python manage.py sync_global_question_group_templates && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
-| checktick-subscription-expiry | `python manage.py process_expired_subscriptions && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
-| checktick-subscription-warnings | `python manage.py process_expiring_subscriptions && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
-| checktick-promotion-lifecycle | `python manage.py process_promotion_lifecycle && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
-| checktick-dsr-deadlines | `python manage.py process_dsr_deadlines && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
-| checktick-prune-unconfirmed | `python manage.py prune_unconfirmed_users && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
-| checktick-diary-reminders | `python manage.py process_diary_reminders && curl -fsS --retry 3 https://hc-ping.com/<uuid> > /dev/null` |
-
-> **App and Vault uptime:** Use an external uptime monitor (e.g. StatusCake, UptimeRobot) pointing at `https://your-domain/healthz`. This endpoint returns `503` if Vault is sealed, the database is unreachable, or SNOMED CT is misconfigured — giving you a single URL to monitor for all critical service health.
-
-**Northflank Advantages:**
-
-- ✅ No extra containers running 24/7
-- ✅ Easy manual testing via UI
-- ✅ Built-in logging and monitoring
-- ✅ No additional cost (same compute as web service, but only active for ~1-5 minutes daily)
-
----
-
 ### Docker Compose (Local/VPS)
 
 If you're self-hosting with Docker Compose on a VPS or dedicated server, use the system's cron.
@@ -762,9 +587,9 @@ docker compose exec web python manage.py update_snomed_db --force --prune
 
 ---
 
-### Kubernetes
+### Kubernetes (recommended for production)
 
-If you're running CheckTick in Kubernetes, use a CronJob resource.
+The production reference is the CronJob manifest set in [`k8s/cronjobs.yaml`](../k8s/cronjobs.yaml) (managed Kubernetes on Civo since 2026-11-03). If you're running CheckTick in Kubernetes, use a CronJob resource.
 
 #### Create a CronJob manifest
 
@@ -895,6 +720,45 @@ The remaining daily jobs follow the same CronJob manifest pattern as `checktick-
 | `checktick-diary-reminders` | `0 7 * * *` | `python manage.py process_diary_reminders` | Diary/EMA surveys |
 
 > **Self-hosted note:** The three billing jobs are no-ops when `SELF_HOSTED=True` — skip them if you're self-hosting without billing. `process_dsr_deadlines`, `prune_unconfirmed_users`, and `process_diary_reminders` apply to all deployments.
+
+#### Environment Variables
+
+All CronJobs need the same environment variables as the web Deployment. The production manifests in `k8s/cronjobs.yaml` use `envFrom` with the same ConfigMaps (`checktick-config`, plus the git-ignored `checktick-config-local`) and the `checktick-secrets` Secret as the web pods, so an environment change for web applies to the jobs too.
+
+**Critical variables needed:**
+
+- `DATABASE_URL`
+- `SECRET_KEY`
+- `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` (for data governance)
+- `DEFAULT_FROM_EMAIL` (for data governance)
+- `SITE_URL` (for email links in data governance)
+- `EXTERNAL_DATASET_API_URL`, `EXTERNAL_DATASET_API_KEY` (for dataset sync - optional, defaults to RCPCH API)
+- `TRUD_API_KEY`, `SNOMED_DB_PATH` (optional — required only if you use SNOMED CT)
+
+#### Job Failure Alerts (healthchecks.io — recommended)
+
+Use [healthchecks.io](https://healthchecks.io) (free tier covers 20 checks with email alerts) to get notified when a job fails or doesn't run at all.
+
+**Setup:**
+
+1. Create a free account at [healthchecks.io](https://healthchecks.io)
+2. For each CronJob, create a new check:
+   - Set the **name** to match the CronJob name
+   - Set the **schedule** to match the job's cron expression
+   - Copy the generated ping URL (e.g. `https://hc-ping.com/<uuid>`)
+3. Update each CronJob to ping on success. Keep the ping URLs OUT of any public repo — they are capability URLs. The production pattern keeps them in the git-ignored `k8s/config.env` (loaded into the `checktick-config-local` ConfigMap); each CronJob command pings only if configured:
+
+   ```yaml
+   command:
+     - sh
+     - -c
+     - >-
+       python manage.py <command> && if [ -n "$HC_PING_<NAME>" ]; then curl -fsS --retry 3 "$HC_PING_<NAME>" > /dev/null; fi
+   ```
+
+   Unset `HC_PING_<NAME>` = no ping (self-hosters are not broken by default). The `HC_PING_*` keys and exact var names live in `k8s/config.env`. Update each check's **schedule and grace period** in the healthchecks.io dashboard to the Kubernetes run times (daily 02:00–04:00 UTC staggered, `*/5` for recovery-time-delays, weekly Tuesday 14:00 UTC for the SNOMED import).
+
+> **App and Vault uptime:** Use an external uptime monitor (e.g. StatusCake, UptimeRobot) pointing at `https://your-domain/healthz`. This endpoint returns `503` if Vault is sealed, the database is unreachable, or SNOMED CT is misconfigured — giving you a single URL to monitor for all critical service health.
 
 ---
 
@@ -1308,9 +1172,15 @@ docker compose exec web python manage.py process_diary_reminders --verbose
 
 ### Check Execution Logs
 
-**Northflank:**
+**Kubernetes:**
 
-- Go to your cron job service → **History** → View logs
+```bash
+# List recent CronJob runs
+kubectl get jobs -n checktick
+
+# View a job's logs
+kubectl logs -n checktick job/<job-name>
+```
 
 **Docker Compose:**
 

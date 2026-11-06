@@ -18,6 +18,7 @@ as a mandatory pre-launch action.
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | CT-01 | March 2026 | Partial — Vault unseal & key reconstruction | Simulated Vault loss requiring unseal and platform master key reconstruction from Shamir custodian shares via YubiKey hardware tokens | Development | ✅ Pass | < 30 mins | {{ cto_name }} |
 | CT-02 | Pre-launch TBC | Full system restore | Simulated complete infrastructure loss — DB + Vault + App redeployment | Staging | ⏳ Pending | — | — |
+| CT-03 | 2026-11-06 | Partial — Vault nightly snapshot restoration | Nightly encrypted raft snapshot restored to a scratch Vault; unsealed with production 3-of-4 shares; production AppRole login + platform master key verified | Scratch in-cluster (production snapshot) | ✅ Pass | ~45 mins | {{ cto_name }} |
 
 ---
 
@@ -51,6 +52,53 @@ prerequisite for any encrypted data recovery.
 **Limitations:** Development environment only, against test data.
 Full end-to-end test including database restoration and survey
 decryption is planned pre-launch (CT-02).
+
+---
+
+## CT-03 Detail: Vault Nightly Snapshot Restoration
+**Date:** 2026-11-06
+**Environment:** Scratch in-cluster Vault (production snapshot)
+**Conducted by:** {{ cto_name }} (CTO)
+
+**Scope:** First restoration test of the nightly encrypted Vault raft
+snapshot pipeline (live since 2026-11-06 — see the infrastructure change
+log, 06/11/2026). Proves the off-cluster backup chain is genuinely
+recoverable end to end: object store → age decryption → raft snapshot
+restore → production barrier unseal → escrow material readable.
+
+**Chain exercised:**
+
+1. Newest `vault-raft-*.tar.age` downloaded from
+   `s3://checktick-backups/vault/` (sha256-verified)
+2. Decrypted on the operator laptop with the Bitwarden-held age private
+   key (the key never entered the cluster)
+3. `vault operator raft snapshot inspect` — full key inventory present
+   (core/master, seal-config, policies, auth, both KV mounts)
+4. Restored into a fresh scratch Vault (`vault operator raft snapshot
+   restore -force` — `-force` is required for a cross-cluster restore;
+   the default hash check correctly rejects a snapshot sealed under
+   different unseal keys, which is itself a custody property)
+5. Unsealed with the PRODUCTION 3-of-4 Shamir shares — the restored
+   barrier is the production one
+6. Verified: production cluster identity (`vault-cluster-978f63d7`),
+   `checktick-app` AppRole login with the production credentials, and a
+   count-only read of `secret/data/platform/master-key` (values never
+   printed)
+
+**Result:** ✅ Pass. The stored object requires BOTH the Shamir shares AND
+the operator's age private key — the custody model held at every layer.
+
+**Operational findings:**
+
+- A fresh raft Vault does not create its own storage path — `mkdir` first
+- Post-restore, the running process serves its OLD in-memory seal config;
+  a process restart is required before the restored 4-of-3 config is
+  served (unsealing before the restart fails with `invalid key size`)
+- `snapshot restore` needs `-force` for cross-cluster restores
+
+**Teardown:** the scratch StatefulSet + PVC (which held a copy of
+production Vault data) were deleted in the same session; laptop working
+files deleted.
 
 ---
 

@@ -20,8 +20,8 @@ The annual review covers Eatyourpeas Ltd and CheckTick and assesses the effectiv
 ## 2. Assurance Methodology
 
 1. **Automated Evidence:** Review of the last 12 months of GitHub Action logs and `pip-audit` history to confirm zero unpatched 'Critical' vulnerabilities in production.
-2. **Configuration Audit:** Manual spot-check of Northflank project settings to ensure "Zero-Default" passwords and no unauthorized port exposure.
-3. **Third-Party Health:** Confirmation that Northflank and other sub-processors have maintained their security certifications (ISO/SOC2).
+2. **Configuration Audit:** Manual spot-check of Civo cluster and Kubernetes manifest settings to ensure "Zero-Default" passwords and no unauthorized port exposure.
+3. **Third-Party Health:** Confirmation that Civo and other sub-processors have maintained their security certifications. Civo's ISO 27001 / SOC 2 certificates were requested on 04/11/2026 — obtain, verify currency, and record them at the next review.
 
 ## 3. 2026 Validation & Action Plan
 

@@ -1,0 +1,129 @@
+# OpenObserve — self-hosted infrastructure log store.
+#
+# This is hardening-backlog item 4 (log retention) made real: the app emits
+# structured JSON to stdout only (docs/infrastructure-logging.md) and this
+# Deployment is the retention layer the Logging & Audit Policy requires for
+# operational logs (docs/compliance/logging-policy.md §3.1). The compliance
+# system of record is the `AuditLog` model in PostgreSQL — this is the
+# debugging/observability layer, deliberately separate.
+#
+# Design notes:
+# - ClusterIP only. The UI/API is deliberately NOT exposed through the
+#   ingress; access it with:
+#     kubectl -n checktick port-forward svc/openobserve 5080:5080
+# - Single replica on a Longhorn PVC (Longhorn keeps 3 replicas at the
+#   storage layer, so a node loss does not lose log data). strategy Recreate:
+#   RWO volume, never two writers.
+# - Image pinned to a published release tag, never `latest` (same rule as
+#   web.yaml).
+# - Credentials live in the `openobserve-auth` Secret, created from the
+#   git-ignored k8s/openobserve.env (see k8s/openobserve.example.env) —
+#   never committed. ZO_ROOT_USER_* only takes effect on an EMPTY data dir:
+#   with the restored Northflank-era metadata db the EXISTING root user
+#   governs — rotate that password in the UI after first login.
+# - The data dir was seeded from the Northflank OpenObserve volume (the
+#   NF-era operational logs, org `default` / stream `default`) BEFORE first
+#   boot via a one-shot scratch helper pod; OpenObserve migrates the
+#   metadata db forward on startup. The collector continues the SAME stream,
+#   so NF-era history and live Civo logs are one continuous timeline.
+# - Retention: set per-stream in the UI (Stream Settings → Data Retention
+#   Days). Suggested: 180 on the live `default` stream per the 6–12 month
+#   policy band.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openobserve-data
+  namespace: checktick
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openobserve
+  namespace: checktick
+  labels:
+    app: openobserve
+spec:
+  selector:
+    app: openobserve
+  ports:
+    - name: http
+      port: 5080
+      targetPort: 5080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openobserve
+  namespace: checktick
+  labels:
+    app: openobserve
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: openobserve
+  template:
+    metadata:
+      labels:
+        app: openobserve
+    spec:
+      containers:
+        - name: openobserve
+          image: openobserve/openobserve:v1.1.2
+          env:
+            - name: ZO_DATA_DIR
+              value: /data
+            # Bound the memory cache; this instance is small (a few MB/day).
+            - name: ZO_MEMORY_CACHE_MAX_SIZE
+              value: "256"
+            # Only effective on an empty data dir (first init).
+            - name: ZO_ROOT_USER_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: openobserve-auth
+                  key: OPENOBSERVE_USER
+            - name: ZO_ROOT_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openobserve-auth
+                  key: OPENOBSERVE_PASSWORD
+          ports:
+            - name: http
+              containerPort: 5080
+          # tcpSocket probes: the image is distroless (no shell) and the
+          # HTTP health endpoints require authentication.
+          readinessProbe:
+            tcpSocket:
+              port: 5080
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 5080
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: openobserve-data

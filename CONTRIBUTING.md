@@ -155,7 +155,7 @@ These settings are in `docker-compose.yml` and will be picked up automatically w
 
 ### Production Deployment
 
-For production environments (Northflank, Heroku, etc.), ensure these environment variables are set in your platform's configuration:
+For production environments (Kubernetes, Heroku, etc.), ensure these environment variables are set in your platform's configuration:
 
 - `EXTERNAL_DATASET_API_URL=https://api.rcpch.ac.uk/nhs-organisations/v1`
 - `EXTERNAL_DATASET_API_KEY=` (leave empty unless using a private API)

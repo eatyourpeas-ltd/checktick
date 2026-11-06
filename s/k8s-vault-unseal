@@ -1,0 +1,91 @@
+#!/bin/bash
+# k8s_vault_unseal — unseal the PRODUCTION HashiCorp Vault on the Civo
+# Kubernetes cluster.
+#
+# NOTE: this is a KUBERNETES (Civo production) operational script. For the
+# local Docker Compose development Vault use `s/dev --init-vault` and the
+# vault/ helpers instead.
+#
+# The production Vault seals itself on every pod restart (node recycle,
+# reboot, deploy). Unsealing needs 3 of the 4 unseal shares. Shares are
+# accepted ONLY via hidden interactive prompts — never as arguments, env
+# vars, or files (custody model: shares never touch a command line or
+# persistent storage).
+#
+# Usage: ./s/k8s-vault-unseal [--help]
+
+set -euo pipefail
+
+if [[ "${1:-}" == "--help" ]]; then
+    head -16 "$0" | tail -14
+    exit 0
+fi
+
+NS=checktick
+VPOD=vault-0
+
+# Kubeconfig resolution: explicit KUBECONFIG wins; else the Civo kubeconfig
+# if present; else the default config.
+if [ -z "${KUBECONFIG:-}" ] && [ -f "${HOME}/.kube/civo-checktick.yaml" ]; then
+    export KUBECONFIG="${HOME}/.kube/civo-checktick.yaml"
+fi
+
+vault_status() { # output is CAPTURED by callers — never `cmd | grep -q`
+    kubectl -n "$NS" exec "$VPOD" -- \
+        env VAULT_ADDR=http://127.0.0.1:8200 vault status 2>&1 || true
+}
+
+is_unsealed() { # counts, so no grep -q SIGPIPE false-negatives under pipefail
+    local status="$1"
+    local n
+    n="$(printf '%s\n' "$status" | grep -c 'Sealed.*false' || true)"
+    [ "$n" -ge 1 ]
+}
+
+STATUS="$(vault_status)"
+if is_unsealed "$STATUS"; then
+    echo "✓ Vault ($VPOD, namespace $NS) is already unsealed — nothing to do."
+    exit 0
+fi
+
+echo "=========================================="
+echo "  Production Vault unseal (Kubernetes/Civo)"
+echo "=========================================="
+echo "Cluster context : $(kubectl config current-context)"
+echo "Pod             : $NS/$VPOD"
+echo "You need 3 of the 4 unseal shares (held out-of-band by custodians)."
+echo "Shares are read from hidden prompts and are never stored or printed."
+echo ""
+read -p "Press Enter to continue (Ctrl-C to abort)..."
+
+ROUND=0
+while :; do
+    ROUND=$((ROUND + 1))
+    printf "Unseal key %s (input hidden): " "$ROUND"
+    IFS= read -rs SHARE
+    echo ""
+    if [ -z "$SHARE" ]; then
+        echo "No key entered — aborting (Vault remains sealed; re-run to resume)."
+        exit 1
+    fi
+    if ! printf '%s\n' "$SHARE" | kubectl exec -i -n "$NS" "$VPOD" -- \
+        env VAULT_ADDR=http://127.0.0.1:8200 vault operator unseal >/dev/null 2>&1; then
+        unset SHARE
+        echo ""
+        echo "✗ Unseal submission failed (wrong key, or stdin piping unavailable)."
+        echo "  If piping is the problem, run the interactive form and paste the keys:"
+        echo "    kubectl -n $NS exec -it $VPOD -- vault operator unseal"
+        exit 1
+    fi
+    unset SHARE
+    STATUS="$(vault_status)"
+    if is_unsealed "$STATUS"; then
+        break
+    fi
+    echo "  Still sealed — next key."
+done
+
+echo ""
+echo "✓ Vault is unsealed (after $ROUND key(s))."
+echo "  Verify the app is fully healthy:"
+echo "    curl -s https://checktick.uk/healthz | jq"

@@ -180,7 +180,7 @@ python manage.py update_snomed_db --dry-run  # check for new release only
 python manage.py update_snomed_db --force --prune  # free space before rebuild
 ```
 
-The command's preflight step (`sct trud check`) is a lightweight API call that returns "up to date" without downloading anything when there is no new release. This makes the command cheap to run on a schedule — most invocations are no-ops. SNOMED CT UK is published roughly monthly, so a daily or weekly scheduled run is reasonable. See [Scheduled Tasks](self-hosting-scheduled-tasks.md) for Northflank setup.
+The command's preflight step (`sct trud check`) is a lightweight API call that returns "up to date" without downloading anything when there is no new release. This makes the command cheap to run on a schedule — most invocations are no-ops. SNOMED CT UK is published roughly monthly, so a daily or weekly scheduled run is reasonable. See [Scheduled Tasks](self-hosting-scheduled-tasks.md) for scheduled job setup.
 
 > **Memory note:** the `sct ndjson` step loads the full RF2 release into memory before writing NDJSON. UK Monolith's peak RSS during this step exceeds 4 GiB in practice — 4 GiB is *not* enough and the job will be OOM-killed (exit `-9`) partway through `sct ndjson`. Allocate **8 GiB** to the update job. The volume size is not the relevant resource for this failure.
 

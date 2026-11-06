@@ -1,0 +1,94 @@
+# Longhorn nightly off-cluster backups for the volumes that need them
+# (openobserve-data, checktick-media).
+#
+# Scope decision (2026-11-06): checktick-snomed-data is deliberately NOT
+# backed up — it is a derived, reconstructible artifact. The built
+# snomed.db already lives in the same bucket under /snomed (uploaded by
+# .github/workflows/build-snomed-db.yml), and the import-snomed-db CronJob
+# rebuilds the PVC from it (download + atomic rename + seed). Backing up the
+# PVC duplicated that artifact nightly for no recovery value. Longhorn's
+# 3-replica replication still covers the PVC for node loss.
+#
+# This is hardening-backlog item 6 (recurring snapshots / PVC backups)
+# realised: before this, only PostgreSQL had an off-cluster backup
+# (CNPG → object store). Backups go to the SAME Civo object-store bucket
+# the CNPG backups use, under the /longhorn prefix.
+#
+# Applied OUT-OF-BAND (like postgres-cnpg.yaml) — self-hosters may not run
+# Longhorn, and `kubectl apply -k k8s/` must stay self-hoster-safe:
+#   kubectl apply -f k8s/longhorn-backup.yaml
+#
+# One-time prerequisite — the Longhorn S3 credential Secret, created from
+# the same S3 keys the CNPG backups use (values never printed or committed):
+#   kubectl -n checktick get secret checktick-db-backup-creds -o json \
+#     | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"];
+#        import base64; s=lambda k: base64.b64decode(d[k]).decode();
+#        print(json.dumps({"apiVersion":"v1","kind":"Secret",
+#          "metadata":{"name":"civo-object-store-creds","namespace":"longhorn-system"},
+#          "type":"Opaque",
+#          "stringData":{"AWS_ACCESS_KEY_ID":s("ACCESS_KEY_ID"),
+#                        "AWS_SECRET_ACCESS_KEY":s("SECRET_ACCESS_KEY"),
+#                        "AWS_ENDPOINTS":"https://objectstore.lon1.civo.com"}}))' \
+#     | kubectl apply -f -
+#
+# Then point the BackupTarget at the bucket. NOTE: this Longhorn moved the
+# backup target from the old `settings.longhorn.io backup-target` key to a
+# dedicated BackupTarget CRD (the Settings key no longer exists), and the
+# CRD rejects strategic-merge patches — use --type=merge:
+#   kubectl -n longhorn-system patch backuptargets.longhorn.io default \
+#     --type=merge \
+#     -p '{"spec":{"backupTargetURL":"s3://checktick-backups@lon1/longhorn","credentialSecret":"civo-object-store-creds"}}'
+#
+# Verify with `kubectl -n longhorn-system get backuptargets.longhorn.io default`
+# → status.available: true. The credential Secret must live in the
+# longhorn-system namespace (Longhorn resolves it there).
+#
+# Design notes:
+# - group "checktick-backup" (NOT the catch-all "default"): only volumes
+#   carrying the group label are backed up. ⚠ The label prefix is
+#   `recurring-job-group.longhorn.io/` (Longhorn ALSO has a
+#   `recurringjob.longhorn.io/<job-name>` prefix for by-job association —
+#   using the wrong prefix fails silently with no volumes matched, found
+#   2026-11-06). Label each volume to include, by PV name:
+#     kubectl -n longhorn-system label volume <pv-name> \
+#       recurring-job-group.longhorn.io/checktick-backup=enabled
+#   Currently labelled: openobserve-data (pvc-24f8df59-…),
+#   checktick-media (pvc-f8d234a0-…).
+# - Consequence of the named group: NEW Longhorn PVCs are NOT auto-backed-up
+#   (the "default" group would have covered them). When adding a PVC that
+#   matters, add the label in the same change.
+# - 03:30 UTC: clear of the 02:00 CNPG base-backup window so the object store
+#   never absorbs two large upload streams at once.
+# - retain 14: two weeks of nightly off-cluster backups, enough to cover any
+#   incident-response gap; the object-store lifecycle policy governs beyond that.
+# - Longhorn backups are crash-consistent block snapshots — the right tool for
+#   the OpenObserve data dir (a live tar of a running OpenObserve would risk
+#   a torn sqlite/parquet state, and a stop-copy would need a daily outage).
+# - The Civo object store rejects AWS-SDK-style payload checksums
+#   (XAmzContentSHA256Mismatch — see postgres-cnpg.yaml). Longhorn's S3
+#   client is minio-based and does not send them — proven 2026-11-05: a
+#   live-fire test (recurring job fired early once) backed up all three
+#   volumes to the bucket, all Completed, and the BackupVolume listing
+#   synced back from the object store (live-fire verified 2026-11-06).
+# - One-time test trigger that did NOT work: annotating the PVC with
+#   longhorn.io/backup was consumed silently but created no Backup CR on
+#   this Longhorn version — to test, patch the RecurringJob cron to a couple
+#   of minutes ahead instead, then revert.
+# - This does NOT cover the Vault: its PVC is on civo-volume, not Longhorn,
+#   and its backup path is the nightly encrypted raft snapshot CronJob
+#   (k8s/vault-snapshot.yaml — see docs/civo-kubernetes-operations.md,
+#   Vault Operations).
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: nightly-backup
+  namespace: longhorn-system
+spec:
+  name: nightly-backup
+  groups:
+    - checktick-backup
+  task: backup
+  cron: "30 3 * * *"
+  retain: 14
+  concurrency: 2

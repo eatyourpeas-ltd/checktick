@@ -2,7 +2,7 @@
 """
 Django management command to process data subject request deadlines.
 
-This command should be run daily (e.g., via cron or Northflank scheduled job) to:
+This command should be run daily (e.g., via cron or a Kubernetes CronJob) to:
 1. Send reminder emails at 7 days and 28 days after DSR notification
 2. Automatically freeze responses at 30 days if controller hasn't acted
 3. Mark surveys with pending DSRs for admin visibility

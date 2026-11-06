@@ -9,7 +9,7 @@ category: dspt-2-staff-responsibilities
 
 As a System Administrator for {{ platform_name }}, I acknowledge that I have 'Privileged Access' to environments containing sensitive health data. I agree to the following enhanced standards:
 
-1. **Identity Integrity:** I will never share administrative credentials. I will use individual accounts for all tasks on Northflank, GitHub, and PostgreSQL.
+1. **Identity Integrity:** I will never share administrative credentials. I will use individual accounts for all tasks on Civo, GitHub, and PostgreSQL.
 2. **MFA Mandate:** I will maintain active Multi-Factor Authentication on all devices and services used to access {{ platform_name }} infrastructure.
 3. **Least Privilege:** I will only use administrative rights when necessary for a specific task and will 'drop' privileges for routine activities.
 4. **Secure Environment:** I will only perform administrative actions from encrypted, company-authorized hardware.

@@ -1,8 +1,8 @@
 """
 Hosting provider API integration for fetching container logs.
 
-This service integrates with hosting provider APIs (e.g., Northflank, Railway,
-Render, Fly.io) to retrieve application logs for the Platform Admin dashboard.
+This service integrates with hosting provider APIs (e.g., Railway, Render,
+Fly.io) to retrieve application logs for the Platform Admin dashboard.
 Only accessible to superusers.
 
 The implementation uses a generic interface that can be adapted for different
@@ -34,13 +34,11 @@ class HostingConfig:
     def from_settings(cls) -> Optional["HostingConfig"]:
         """Create config from Django settings."""
         token = getattr(settings, "HOSTING_API_TOKEN", "")
-        base_url = getattr(
-            settings, "HOSTING_API_BASE_URL", "https://api.northflank.com/v1"
-        )
+        base_url = getattr(settings, "HOSTING_API_BASE_URL", "")
         project = getattr(settings, "HOSTING_PROJECT_ID", "")
         service = getattr(settings, "HOSTING_SERVICE_ID", "")
 
-        if not all([token, project, service]):
+        if not all([token, base_url, project, service]):
             return None
         return cls(
             api_token=token,
@@ -74,7 +72,6 @@ class HostingLogsService:
     Service for fetching logs from hosting provider APIs.
 
     Supports multiple hosting providers through configuration:
-    - Northflank: Set HOSTING_API_BASE_URL to https://api.northflank.com/v1
     - Railway: Set HOSTING_API_BASE_URL to https://backboard.railway.app
     - Render: Set HOSTING_API_BASE_URL to https://api.render.com/v1
     - Custom: Set HOSTING_API_BASE_URL to your provider's API endpoint

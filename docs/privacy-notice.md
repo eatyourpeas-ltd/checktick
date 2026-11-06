@@ -97,7 +97,7 @@ We never sell personal data.
 
 We use the following processors:
 
-* **Northflank** – hosting and infrastructure (UK)
+* **Civo** – managed Kubernetes hosting and infrastructure (UK, London region)
 * **Microsoft 365** – CheckTick email and identity services
 * **Proton Mail** – corporate communications
 * **GoCardless** – payment processing
@@ -121,7 +121,7 @@ All primary service data is hosted within UK data centres. Where limited interna
 Encryption keys are managed using a split architecture:
 
 * **HashiCorp Vault (self-hosted, air-gapped)** – master key management
-* **Northflank environment variables** – runtime secrets only
+* **Kubernetes Secrets (in-cluster)** – runtime secrets only
 
 This ensures no single system can decrypt data independently.
 
