@@ -1,0 +1,61 @@
+#!/bin/bash
+# k8s_shell — open a Django shell in a PRODUCTION CheckTick web pod on the
+# Civo Kubernetes cluster.
+#
+# NOTE: this is a KUBERNETES (Civo production) operational script. For local
+# development use `docker compose exec -T web python manage.py shell` instead.
+#
+# The shell inherits the pod's full environment (Vault AppRole credentials,
+# database access) and can therefore READ AND DECRYPT survey responses.
+# Project logging rules apply to interactive sessions too: never log patient
+# data, request bodies, or decrypted survey objects. Prefer read-only
+# inspection — anything heavier belongs in a one-off Job from the same image
+# (see k8s/migrate-job.yaml for the pattern).
+#
+# Usage: ./s/k8s-shell [--help] [-c "<python code>"]
+
+set -euo pipefail
+
+if [[ "${1:-}" == "--help" ]]; then
+    head -16 "$0" | tail -14
+    exit 0
+fi
+
+NS=checktick
+CONTAINER=web
+
+# Kubeconfig resolution: explicit KUBECONFIG wins; else the Civo kubeconfig
+# if present; else the default config.
+if [ -z "${KUBECONFIG:-}" ] && [ -f "${HOME}/.kube/civo-checktick.yaml" ]; then
+    export KUBECONFIG="${HOME}/.kube/civo-checktick.yaml"
+fi
+
+# Resolve a running pod explicitly so the session target is visible
+# (`kubectl exec deploy/...` would silently pick one for us).
+POD="$(kubectl get pods -n "$NS" -l app=checktick-web \
+    --field-selector=status.phase=Running \
+    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+if [ -z "$POD" ]; then
+    echo "✗ No running checktick-web pod in namespace $NS — is the deployment up?"
+    echo "  Check: kubectl -n $NS get pods -l app=checktick-web"
+    exit 1
+fi
+
+echo "=========================================="
+echo "  Django shell (Kubernetes/Civo production)"
+echo "=========================================="
+echo "Cluster context : $(kubectl config current-context)"
+echo "Pod             : $NS/$POD"
+echo "Reminder        : production data — never log patient data or"
+echo "                  decrypted survey objects."
+echo ""
+
+if [ "$#" -gt 0 ]; then
+    # One-liner passthrough, e.g.:
+    #   ./s/k8s-shell -c "from checktick_app.surveys.models import Survey; print(Survey.objects.count())"
+    exec kubectl exec -n "$NS" "$POD" -c "$CONTAINER" -- \
+        python manage.py shell "$@"
+else
+    exec kubectl exec -n "$NS" "$POD" -c "$CONTAINER" -it -- \
+        python manage.py shell
+fi
