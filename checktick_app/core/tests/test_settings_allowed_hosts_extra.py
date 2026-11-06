@@ -33,9 +33,10 @@ def test_extra_appends_without_replacing_base(monkeypatch):
 
     try:
         mod = _import_settings()
-        assert "checktick.uk" in mod.ALLOWED_HOSTS
-        assert "www.checktick.uk" in mod.ALLOWED_HOSTS
         # The in-cluster hosts survive — probes depend on them.
+        # (Exact list equality below also proves the public domains are
+        # present — substring-style `in` checks on domain strings trip
+        # CodeQL's py/incomplete-url-substring-sanitization.)
         assert "10.0.0.5" in mod.ALLOWED_HOSTS
         assert "checktick-web" in mod.ALLOWED_HOSTS
         assert "localhost" in mod.ALLOWED_HOSTS
