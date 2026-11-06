@@ -62,6 +62,13 @@ For a walkthrough of the manifests and day-to-day validation commands, see
    lockstep, including the primary. Stabilisation that worked: cordon → CNPG
    auto-switchover → move Deployment pods off. Verify `kubectl top node`
    headroom before adding any per-node workload (found live 2026-11-05).
+   **Standing decision (2026-11-06, CTO — k8s/POC-STATUS.md session 15): pool
+   resize to `g4s.kube.large` is DEFERRED** while real users number 1–2
+   ($65→$130/mo not justified; the tolerated risk is availability, never
+   data). All three nodes are back in service (`8ciwh` uncordoned). Ladder if
+   it bites again: bump ONE node to Large via a second pool (~$87/mo), then
+   3× Large at sustained growth. **No per-node DaemonSet (the log collector)
+   until at least the one-node bump.**
 6. Public hostnames are owned by the **config overlay** via `ALLOWED_HOSTS_EXTRA`
    (k8s/config.env → checktick-config-local), which settings.py appends on top
    of the in-cluster ALLOWED_HOSTS. The web Deployment's env entry carries only
@@ -201,6 +208,43 @@ Moved from the migration runbook's Phase 6 list; in rough priority order
    non-urgent given the init-container conversion)
 9. Quarterly restore rehearsal — step-by-step procedure in
    [docs/restore-rehearsal.md](restore-rehearsal.md)
+
+## Open Items from the Retired Migration Records (2026-11-06)
+
+The migration session records (`k8s/POC-STATUS.md`, the Northflank→Civo runbook,
+`docs/vault-raft-migration.md`) were retired at close-out — the durable posture
+lives in this document and the compliance folder, full history in git. Items
+they left **open**, carried here so nothing is lost with them:
+
+1. **Vault rekey** — `vault operator rekey` on the migrated Vault (Shamir 3-of-4,
+   operator ceremony; also decide the share medium) + revoke the drill API token.
+   Nothing records it as done; keys were minted pre-migration.
+2. **Clinical-safety docs review** — `docs/clinical-safety/*` still carry
+   Northflank-era live-state claims ("hosted on Northflank infrastructure",
+   "Northflank SLA 99.9%") that are now factually wrong; assessment records, so
+   they need a deliberate review pass, not an automated sweep.
+3. **OpenObserve root password** is still the Northflank-era credential — rotate
+   in the UI (`kubectl -n checktick port-forward svc/openobserve 5080:5080`)
+   and update the `openobserve-auth` Secret.
+4. **Graph email 403s** — `sendMail` returns Forbidden for admin@checktick.uk;
+   pre-existing and unrelated to the migration, surfaced by the alert storms.
+5. **AdminEmailHandler emails on every ERROR log** — an outage (a healthz 503
+   loop) turns into an outbound-email storm that amplifies load; consider
+   logging `requirement` filters or rate limiting.
+6. **Traefik access logging is OFF** — no request-level logs, only internal
+   CRD-watch noise; a monitoring gap worth a deliberate decision.
+7. **`s/k8s-vault-unseal` stdin piping is broken** on this kubectl ("Unseal
+   submission failed") — use the interactive form
+   `kubectl -n checktick exec -it vault-0 -- vault operator unseal`; port the
+   captured-output verification pattern (see the ceremony scripts) into it
+   before relying on the non-interactive path.
+8. **Nothing schedules `s/k8s-backup-verify`** — a stuck non-terminal Backup
+   silently blocks the nightly schedule (the 2026-11-04 outage); the runner is
+   read-only and exit-coded, so wire it to cron/CI for the "phase != completed
+   after 02:10 UTC" check, and keep running it after any cluster intervention.
+9. **The raft peer registers as `127.0.0.1:8201`** — the migrate helper's
+   loopback `cluster_addr`; harmless while single-node, revisit if a raft peer
+   is ever added.
 
 ## Related
 
