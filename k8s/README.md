@@ -207,6 +207,13 @@ The manifests pin released image tags — never `latest` — in `web.yaml` (web
 tags in the release PR so `kubectl apply -k k8s/` cannot regress the live
 deployment to an older image.
 
+CI deploys additionally run `kubectl set image` over **every CronJob in the
+namespace** after the smoke check. CronJobs are not part of the Deployment
+rollout and would otherwise keep their manifest pin indefinitely — before
+this they sat on `0.24.2` while the web Deployment was rolled to `0.25.x`
+(found 2026-11-07). The manifest pins remain the bootstrap default for a
+fresh `kubectl apply -k k8s/` and a manual-apply safety net.
+
 1. `kubectl apply -f k8s/migrate-job.yaml` → wait for completion
 2. `kubectl set image -n checktick deploy/checktick-web web=ghcr.io/eatyourpeas-ltd/checktick:X.Y.Z`
    (pin released version tags — docs/versioning-and-deployment.md)
@@ -221,7 +228,11 @@ automates the sequence above with the same zero-downtime semantics:
 1. re-runs the pre-deploy Job pinned to the same tag
 2. `kubectl set image` + `rollout status` (readiness-gated)
 3. smoke-checks `/healthz` through the service
-4. auto-rollbacks (`rollout undo`) if anything fails after the image changed
+4. rolls every CronJob in the namespace to the same tag (CronJobs are not
+   part of the Deployment rollout — see the note above)
+5. auto-rollbacks (`rollout undo`) if anything fails after the image changed
+   (the CronJob roll runs after the smoke check, so a failed deploy leaves
+   CronJobs on their previous tag)
 
 One-time setup:
 

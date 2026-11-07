@@ -216,11 +216,17 @@ The `process_dsr_deadlines` management command runs daily to:
 
 ### 10. Prune Unconfirmed Users (Required)
 
-The `prune_unconfirmed_users` management command removes fake or phishing accounts that sign up with non-existent email addresses and never confirm their email. It runs daily and performs three actions:
+The `prune_unconfirmed_users` management command removes fake or phishing accounts that sign up with non-existent email addresses and never confirm their email. It runs daily and performs five actions:
 
-1. **Send pre-removal warnings** — 7 days and 1 day before the grace period expires, a warning email is sent to the unconfirmed user. The email signposts them to their profile page to resend the confirmation email, and to the platform support email (`DEFAULT_FROM_EMAIL`) if they need help.
-2. **Deactivate existing users** — Users created before the email confirmation feature who never confirm are deactivated after the grace period (default: 30 days). Their data is preserved.
-3. **Delete new signups with no data** — Users created after the feature who never confirm and have no surveys, memberships, or audit history are deleted after the grace period. This removes fake/phishing accounts that cannot access protected features.
+1. **Prune hard-bounced signups** — Delivery-failure notifications (NDRs) are read back from the M365 sending mailbox (`EMAIL_HOST_USER`) via the Graph API. A hard bounce is the only authoritative evidence that a *mailbox* does not exist on an otherwise valid domain (e.g. `nonsense@gmail.com`) — the DNS check in step 2 can only reject undeliverable *domains*, and the Graph `sendMail` API accepts mail to any address, so the signup flow can never see the failure synchronously. Only explicit permanent 5xx rejections that are NOT 5.7.x policy/SPF blocks prune (a misconfigured SPF on the sending domain must not delete real users); 4xx soft bounces (greylisting, full mailbox) are never acted on. Only unconfirmed, active, non-privileged accounts are pruned, with no minimum age (the receiving server itself rejected the mailbox). This phase **fails gracefully**: a missing Mail.Read permission (401/403), a network outage, or any other error is logged with actionable guidance and the rest of the prune run continues. Requires the `Mail.Read` application permission (admin consent) on the Azure app registration used for sending — because that permission covers all tenant mailboxes, scope it to the sending mailbox with an Exchange Online ApplicationAccessPolicy.
+2. **Prune undeliverable signup emails** — Before any warnings are sent, each unconfirmed account's email domain is checked via DNS (MX record, falling back to the RFC 5321 implicit-MX A record). Accounts whose domain provably cannot receive mail (the domain does not exist, or has neither an MX nor an address record) are pruned on the next run — after a 24-hour minimum account age — without waiting out the grace period, because the confirmation and warning emails could never reach them. The same deactivate-or-delete policy applies as for grace-period expiry (see below). Only definitive DNS evidence triggers removal: resolver timeouts, SERVFAIL, and other lookup failures leave the account in the normal warning/grace flow (fail open), so a flaky DNS server can never cause a real user to be removed. Every removal is audit-logged with reason `invalid_signup_email` and the DNS evidence.
+3. **Send pre-removal warnings** — 7 days and 1 day before the grace period expires, a warning email is sent to the unconfirmed user. The email signposts them to their profile page to resend the confirmation email, and to the platform support email (`DEFAULT_FROM_EMAIL`) if they need help. Accounts removed in steps 1–2 are excluded, so warnings are never sent to addresses that would bounce.
+4. **Deactivate existing users** — Users created before the email confirmation feature who never confirm are deactivated after the grace period (default: 30 days). Their data is preserved.
+5. **Delete new signups with no data** — Users created after the feature who never confirm and have no surveys, memberships, or audit history are deleted after the grace period. This removes fake/phishing accounts that cannot access protected features.
+
+**Limitation**: bounce evidence is asynchronous, so a bot account with a made-up mailbox on a valid domain survives until the next daily run (at most ~24h) rather than being blocked at signup. Soft bounces (4xx) are never pruned. Bounces for *confirmed* accounts are logged as warnings (the account can no longer receive password resets) but the account is never touched.
+
+**Signup door**: the DNS check also runs in `SignupForm` (gated by the same `EMAIL_VALIDATION_ENABLED` setting). A signup whose email domain provably cannot receive mail is rejected with a form error before any account is created — no confirmation email is sent, no account to prune later. DNS timeouts fail open there too, and the signup-time synchronous bounce handling (delete account + error message when the email backend rejects the recipient outright) remains in place for SMTP backends that report it.
 
 **Safety fallback**: If a new signup somehow has data (surveys, memberships, etc.), they are deactivated instead of deleted to prevent accidental data loss.
 
@@ -245,16 +251,22 @@ python manage.py prune_unconfirmed_users --verbose
 
 # Tighten grace period for faster cleanup
 python manage.py prune_unconfirmed_users --grace-days=14 --verbose
+
+# Skip the DNS deliverability check (e.g. no outbound DNS)
+python manage.py prune_unconfirmed_users --skip-email-validation
 ```
 
 **What happens:**
 
+- Unconfirmed signup whose email HARD-BOUNCED (explicit permanent 5xx, not 5.7.x policy) → pruned on the next daily run, regardless of account age
+- Unconfirmed account whose email domain does not exist / has no mail exchanger → pruned on the next run (after 24h), no warning email sent
 - 7 days before removal → 1-week warning email (with profile + support links)
 - 1 day before removal → 1-day warning email (with profile + support links)
 - Existing users (pre-feature) → deactivated, data preserved
 - New signups with no data → deleted (fake/phishing accounts)
 - New signups with data → deactivated (safety fallback)
-- Confirmed users, staff, and superusers → never touched
+- Confirmed users, staff, and superusers → never touched (a hard bounce for a confirmed account is logged as a warning, not acted on)
+- Missing Mail.Read permission / network outage during the bounce read → logged, the rest of the run continues (never aborts)
 
 **Configuration:**
 
@@ -266,6 +278,18 @@ EMAIL_CONFIRMATION_CUTOFF = timezone.make_aware(timezone.datetime(2025, 6, 25))
 ```
 
 The warning email signposts users to the platform support email (`DEFAULT_FROM_EMAIL`) if they need help confirming their account.
+
+The DNS deliverability check and the bounce phase can be disabled per deployment (e.g. an airgapped install with no outbound DNS, or a deployment where the Mail.Read permission is deliberately not granted):
+
+```bash
+# .env
+EMAIL_VALIDATION_ENABLED=False          # default: True — DNS domain check (signup form + prune cron)
+EMAIL_VALIDATION_DNS_TIMEOUT=3.0         # per-query DNS timeout in seconds
+EMAIL_BOUNCE_PROCESSING_ENABLED=False    # default: True — NDR bounce reading phase (Graph backend only)
+EMAIL_BOUNCE_LOOKBACK_HOURS=168          # how far back each run reads bounces (default: 7 days)
+```
+
+The DNS check can also be skipped per run with `python manage.py prune_unconfirmed_users --skip-email-validation`.
 
 ### 11. Pre-expiry Subscription Warnings (Required for Billing)
 
@@ -978,6 +1002,9 @@ python manage.py prune_unconfirmed_users --verbose
 
 # Custom grace period
 python manage.py prune_unconfirmed_users --grace-days=14 --verbose
+
+# Skip the DNS deliverability check on signup emails
+python manage.py prune_unconfirmed_users --skip-email-validation
 ```
 
 **Example Output:**
@@ -986,6 +1013,29 @@ python manage.py prune_unconfirmed_users --grace-days=14 --verbose
 Starting unconfirmed user pruning at 2026-06-25 10:00:00+00:00
   Grace period: 30 days
   Feature cutoff: 2025-06-25
+  Email validation: on
+  Bounce processing: on
+
+Reading bounces from mailbox noreply@checktick.uk (lookback 168h)
+Found 1 bounce(s) in the lookback window (1 hard)
+
+  Hard bounce: botmailbox@valid-domain.example (status 550 5.1.1)
+    Reason: signup email hard-bounced (status 550 5.1.1)
+    Joined: 2026-06-24
+    Existing user: False
+    Has data: False
+    Action: DELETE
+    Deleted: botmailbox
+
+Found 2 unconfirmed users for email validation
+
+  User: botfake123 (bot@nonexistentdomain.invalid)
+    Reason: invalid signup email (email domain does not exist)
+    Joined: 2026-06-20
+    Existing user: False
+    Has data: False
+    Action: DELETE
+    Deleted: botfake123
 
 Found 2 unconfirmed users in warning window
 
@@ -999,6 +1049,7 @@ Found 2 unconfirmed users past grace period
 
   User: fakeuser123 (fake@example.com)
     Joined: 2026-04-01
+    Reason: unconfirmed email after 30 days
     Existing user: False
     Has data: False
     Action: DELETE
@@ -1006,12 +1057,15 @@ Found 2 unconfirmed users past grace period
 
   User: olduser (old@example.com)
     Joined: 2024-01-15
+    Reason: unconfirmed email after 30 days
     Existing user: True
     Has data: False
     Action: DEACTIVATE
     Deactivated: olduser
 
 Pruning completed at 2026-06-25 10:00:02+00:00
+  - Bounce pruned: 1 (deactivated: 0, deleted: 1)
+  - Invalid email pruned: 1 (deactivated: 0, deleted: 1)
   - Warnings sent: 1
   - Deactivated:   1
   - Deleted:       1
@@ -1019,12 +1073,15 @@ Pruning completed at 2026-06-25 10:00:02+00:00
 
 **What happens:**
 
+- Unconfirmed signup whose email HARD-BOUNCED (explicit permanent 5xx, not 5.7.x policy) → pruned on the next daily run, regardless of account age
+- Unconfirmed account whose email domain does not exist / has no mail exchanger → pruned on the next run (after 24h), no warning email sent
 - 7 days before removal → 1-week warning email (with profile + support links)
 - 1 day before removal → 1-day warning email (with profile + support links)
 - Existing users (joined before `EMAIL_CONFIRMATION_CUTOFF`) → deactivated, data preserved
 - New signups with no surveys/memberships/audit history → deleted
 - New signups with data → deactivated (safety fallback)
-- Confirmed users, staff, and superusers → never touched
+- Confirmed users, staff, and superusers → never touched (a hard bounce for a confirmed account is logged as a warning, not acted on)
+- Missing Mail.Read permission / network outage during the bounce read → logged, the rest of the run continues (never aborts)
 
 ### Pre-expiry Subscription Warnings Command
 
