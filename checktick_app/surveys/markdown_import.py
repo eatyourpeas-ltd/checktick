@@ -14,6 +14,20 @@ class BulkParseError(Exception):
 _LIKERT_RENDER_MODES = {"slider", "radio"}
 
 
+def _question_followup_marker(kv: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Build the question-level follow-up marker from a ``followup:`` kv line.
+
+    Appended to ``final_options`` for mc_single / mc_multi / dropdown (the
+    builder's question-level follow-up parity set) and consumed by the survey
+    renderer and exports exactly like the builder's own configure panel
+    (``survey_extras.question_followup`` / ``export_service``).
+    """
+    label = _unquote_value(str(kv.get("followup") or "").strip())
+    if not label:
+        return None
+    return {"type": "question_followup", "enabled": True, "label": label}
+
+
 def _normalise_likert_render(raw: Any) -> Optional[str]:
     """Return a normalised ``render`` value for a Likert question.
 
@@ -496,7 +510,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                         )
                 else:
                     m = re.match(
-                        r"^(min|max|left|right|na|dataset|address_lookup|render_once|render|heading|subtitle|consent|consent_required):(.*)$",
+                        r"^(min|max|left|right|na|dataset|address_lookup|render_once|render|heading|subtitle|consent|consent_required|followup):(.*)$",
                         line,
                         re.IGNORECASE,
                     )
@@ -556,12 +570,21 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
             elif t in {"mc_single", "single", "radio"}:
                 q["final_type"] = "mc_single"
                 q["final_options"] = _convert_options_to_dicts(q["options"])
+                marker = _question_followup_marker(q["kv"])
+                if marker:
+                    q["final_options"].append(marker)
             elif t in {"mc_multi", "multi", "checkbox"}:
                 q["final_type"] = "mc_multi"
                 q["final_options"] = _convert_options_to_dicts(q["options"])
+                marker = _question_followup_marker(q["kv"])
+                if marker:
+                    q["final_options"].append(marker)
             elif t in {"dropdown", "select"}:
                 q["final_type"] = "dropdown"
                 q["final_options"] = _convert_options_to_dicts(q["options"])
+                marker = _question_followup_marker(q["kv"])
+                if marker:
+                    q["final_options"].append(marker)
                 if q["kv"].get("dataset"):
                     q["dataset_key"] = q["kv"]["dataset"].strip()
             elif t in {"orderable", "rank", "ranking"}:

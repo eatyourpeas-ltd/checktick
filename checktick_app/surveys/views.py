@@ -15828,6 +15828,44 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
     return render(request, "surveys/bulk_upload.html", context)
 
 
+def _option_followup_label(option: Any) -> str | None:
+    """Return the follow-up label for a question option, if configured.
+
+    Options store follow-ups as ``followup_text: {enabled, label}`` (the shape
+    written by both the builder form and the outline importer). Legacy rows
+    used ``has_followup_text`` / ``followup_text_label`` — both shapes are
+    read so existing surveys export their follow-ups to the outline.
+    """
+    if not isinstance(option, dict):
+        return None
+    fu = option.get("followup_text")
+    if isinstance(fu, dict) and fu.get("enabled") and fu.get("label"):
+        return str(fu["label"])
+    if option.get("has_followup_text"):
+        return str(option.get("followup_text_label") or "Please specify")
+    return None
+
+
+def _question_followup_kv_line(question: Any) -> str | None:
+    """Return the ``followup: <label>`` outline line for a question-level follow-up.
+
+    The marker lives inside ``question.options`` as
+    ``{type: question_followup, enabled, label}`` (see
+    ``survey_extras.QUESTION_FOLLOWUP_TYPE``); it is emitted as a kv line so
+    export → import round-trips keep the single follow-up box.
+    """
+    if not isinstance(question.options, list):
+        return None
+    for option in question.options:
+        if (
+            isinstance(option, dict)
+            and option.get("type") == "question_followup"
+            and option.get("enabled")
+        ):
+            return str(option.get("label") or "Please specify")
+    return None
+
+
 def _export_survey_to_markdown(survey: Survey) -> str:
     """Export existing survey questions to markdown format."""
     from collections import defaultdict
@@ -15863,6 +15901,20 @@ def _export_survey_to_markdown(survey: Survey) -> str:
 
     # Build markdown
     lines = []
+
+    # Dropdown dataset links round-trip as a ``dataset: <key>`` kv line
+    # (see docs/import.md). One query for the whole survey — ``dataset_id``
+    # is on the question row so the prefetch above already loaded it.
+    dataset_keys_by_id: dict[int, str] = {}
+    _dataset_ids = {
+        q.dataset_id for g in groups for q in g.surveyquestion_set.all() if q.dataset_id
+    }
+    if _dataset_ids:
+        from .models import DataSet
+
+        dataset_keys_by_id = {
+            d.id: d.key for d in DataSet.objects.filter(id__in=_dataset_ids)
+        }
 
     # SECTION_MENU block (see docs/survey-layouts.md §Outline syntax).
     # Emitted at the top when the survey uses the section_menu layout.
@@ -16168,6 +16220,12 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                         "type"
                     ) in ["number", "number-scale"]:
                         export_type = "likert number"
+                    elif isinstance(first_option, str):
+                        # The builder stores slider-mode category labels as a
+                        # plain string list — that is still `likert categories`
+                        # (emitting a bare `(likert)` would re-import as a
+                        # number scale and lose the labels).
+                        export_type = "likert categories"
             elif question.type == "grid" and isinstance(question.options, dict):
                 # Grid: export the full scale so the round-trip keeps it.
                 grid_scale = (question.options or {}).get("scale") or {}
@@ -16179,6 +16237,26 @@ def _export_survey_to_markdown(survey: Survey) -> str:
 
             # Question type
             lines.append(f"{indent}({export_type})")
+
+            # Dropdown dataset link: round-trips as a `dataset: <key>` line
+            # (see docs/import.md) so the re-import re-attaches the dataset.
+            if (
+                question.type == "dropdown"
+                and question.dataset_id
+                and question.dataset_id in dataset_keys_by_id
+            ):
+                lines.append(
+                    f"{indent}dataset: {dataset_keys_by_id[question.dataset_id]}"
+                )
+
+            # Professional details template: the address lookup toggle
+            # round-trips as an `address_lookup: true` line.
+            if (
+                question.type == "template_professional"
+                and isinstance(question.options, dict)
+                and question.options.get("address_lookup")
+            ):
+                lines.append(f"{indent}address_lookup: true")
 
             # Optional min/max range for date/time/datetime text questions
             if (
@@ -16275,6 +16353,12 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                         render_val = first_option.get("render")
                         if render_val:
                             lines.append(f"{indent}render: {render_val}")
+                    elif isinstance(first_option, str):
+                        # Builder slider-mode shape: a plain list of category
+                        # labels. Emit them as `-` lines so the outline keeps
+                        # `likert categories` on re-import.
+                        for label in question.options:
+                            lines.append(f"{indent}- {label}")
 
             # Options for question types that need them
             elif question.type in [
@@ -16305,12 +16389,18 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                             # Option is a plain string
                             option_text = str(option)
                         lines.append(f"{indent}- {option_text}")
-                        # Check for follow-up text (only for dict options)
-                        if isinstance(option, dict) and option.get("has_followup_text"):
-                            followup_label = option.get(
-                                "followup_text_label", "Please specify"
-                            )
+                        # Per-option follow-up text (both stored shapes — see
+                        # _option_followup_label).
+                        followup_label = _option_followup_label(option)
+                        if followup_label:
                             lines.append(f"{indent}  + {followup_label}")
+                    # Question-level follow-up: a single text box offered after
+                    # all options (dataset-backed dropdowns). Emits as a
+                    # `followup:` kv line so export → import round-trips.
+                    if question.type in {"mc_single", "mc_multi", "dropdown"}:
+                        qfu_label = _question_followup_kv_line(question)
+                        if qfu_label:
+                            lines.append(f"{indent}followup: {qfu_label}")
 
             # Likert number settings
             elif question.type == "likert number":
@@ -17659,7 +17749,10 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
             # Check if it's text number/date/time
             if isinstance(question.options, list) and len(question.options) > 0:
                 first_option = question.options[0]
-                if first_option.get("type") == "text":
+                if (
+                    isinstance(first_option, dict)
+                    and first_option.get("type") == "text"
+                ):
                     fmt = first_option.get("format")
                     export_type = {
                         "number": "text number",
@@ -17671,7 +17764,10 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
             # Check if it's categories or number
             if isinstance(question.options, list) and len(question.options) > 0:
                 first_option = question.options[0]
-                if first_option.get("type") == "categories":
+                if isinstance(first_option, str):
+                    # Builder slider-mode shape: plain category labels.
+                    export_type = "likert categories"
+                elif first_option.get("type") == "categories":
                     export_type = "likert categories"
                 elif first_option.get("type") in ["number", "number-scale"]:
                     export_type = "likert number"
@@ -17734,7 +17830,13 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
             # Check if it's categories or number type
             if isinstance(question.options, list) and len(question.options) > 0:
                 first_option = question.options[0]
-                if (
+                if isinstance(first_option, str):
+                    # Builder slider-mode shape: a plain list of category
+                    # labels. Emit them as `-` lines so the outline keeps
+                    # `likert categories` on re-import.
+                    for label in question.options:
+                        lines.append(f"- {label}")
+                elif (
                     first_option.get("type") == "categories"
                     and "labels" in first_option
                 ):
@@ -17785,17 +17887,20 @@ def _export_question_group_to_markdown(group: QuestionGroup, survey: Survey) -> 
                         # Question-level follow-up marker; not an option
                         continue
                     # Options can have 'text', 'label', or 'value' keys
-                    option_text = (
-                        option.get("text")
-                        or option.get("label")
-                        or option.get("value", "")
-                    )
-                    lines.append(f"- {option_text}")
-                    # Check for follow-up text
-                    if option.get("has_followup_text"):
-                        followup_label = option.get(
-                            "followup_text_label", "Please specify"
+                    if isinstance(option, dict):
+                        option_text = (
+                            option.get("text")
+                            or option.get("label")
+                            or option.get("value", "")
                         )
+                    else:
+                        # Option is a plain string
+                        option_text = str(option)
+                    lines.append(f"- {option_text}")
+                    # Check for follow-up text (both stored shapes — see
+                    # _option_followup_label).
+                    followup_label = _option_followup_label(option)
+                    if followup_label:
                         lines.append(f"  + {followup_label}")
 
         # Likert number settings
