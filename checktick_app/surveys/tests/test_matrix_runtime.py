@@ -96,6 +96,39 @@ def matrix_survey(owner, org):
 # --- landing page ---
 
 
+@pytest.fixture
+def public_matrix_survey(matrix_survey):
+    """The same matrix survey opened to anonymous participants."""
+    matrix_survey.visibility = Survey.Visibility.PUBLIC
+    matrix_survey.save(update_fields=["visibility"])
+    return matrix_survey
+
+
+@pytest.mark.django_db
+def test_anonymous_repeated_landing_gets_reuse_session_progress_row(
+    client, public_matrix_survey
+):
+    """Regression: a second anonymous GET of the matrix landing page must
+    reuse the session's SurveyProgress row.
+
+    A blind create() raised IntegrityError on the
+    one_progress_per_session_per_survey unique constraint on every
+    request after the first from the same anonymous session.
+    """
+    url = reverse("surveys:take", kwargs={"slug": public_matrix_survey.slug})
+    res1 = client.get(url)
+    assert res1.status_code == 200
+    # Second GET from the same session must not 500.
+    res2 = client.get(url)
+    assert res2.status_code == 200
+    assert (
+        SurveyProgress.objects.filter(
+            survey=public_matrix_survey, session_key__isnull=False
+        ).count()
+        == 1
+    )
+
+
 @pytest.mark.django_db
 def test_get_renders_landing_page(client, matrix_survey, participant):
     client.force_login(participant)
