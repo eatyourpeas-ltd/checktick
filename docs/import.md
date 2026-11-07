@@ -14,12 +14,22 @@ The survey builder supports multiple ways to create survey content: Outline (imp
 >
 > **Also new:** If you already have the survey as a Word document or pasted text, the [Import from document](#import-from-document) tab converts it into the outline format for you.
 
+## Canonical notation reference
+
+This document is the **canonical and complete** reference for the outline notation. Every survey feature the visual builder can author — every question type, follow-up, branch action, repeat, layout (section menu, randomised/RCT, staged, guided, matrix, Delphi, diary), and respondent category — has an equivalent notation described here, so **any survey, however complicated, can be expressed as plain text**. This is what makes the notation suitable for LLM training: the document converter and the AI Assistant use exactly this grammar, and a model can be trained on this page alone.
+
+The reverse direction works too: opening a survey in the Outline tab shows the survey **translated into this notation** (see [Opening a builder survey in the Outline](#opening-a-builder-survey-in-the-outline)), so surveys can be shared and re-imported as text.
+
 This document covers:
 
 - [Import from document](#import-from-document) - AI-assisted conversion of an existing document
 - [Bulk survey import](#bulk-survey-import) - Complete markdown syntax for importing surveys
 - [Follow-up questions](#follow-up-questions) - Adding conditional text inputs to question options
 - [Repeats](#repeats-nested-repeatable-sections) - Creating nested, repeatable sections
+- [Content blocks](#content-blocks) and [special templates](#special-templates) - Information blocks and patient/professional detail templates
+- Survey layouts via the outline - [section menu](#section-menu-layout), [randomised (RCT)](#randomised-rct-layout), [staged](#staged-longitudinal-layout), [matrix](#matrix-free-navigation-layout), [Delphi](#delphi-consensus-rounds-layout), [diary](#diary-ema-layout), and [respondent categories](#respondent-categories)
+- [Opening a builder survey in the Outline](#opening-a-builder-survey-in-the-outline) - exporting an existing survey to the notation
+- [Complete example](#complete-example) - a kitchen-sink outline exercising the whole grammar
 
 For more details on repeats, see [Repeats (Nested, Repeatable Sections)](/docs/collections/).
 
@@ -96,20 +106,25 @@ Spacing is flexible, but keep the relative order (heading → optional descripti
 | `text datetime` | Date and time picker (aliases: `datetime`, `date/time`). Optional `min:` / `max:` range lines |
 | `mc_single` | Multiple choice (single answer) |
 | `mc_multi` | Multiple choice (multiple answers) |
-| `dropdown` | Select menu |
+| `dropdown` | Select menu. Optional `dataset:` line links a standardised option set |
 | `orderable` | Rank the provided items |
-| `yesno` | Yes/No toggle |
-| `image` | Image choice |
+| `yesno` | Yes/No toggle, with optional custom labels and a third "Don't know" answer |
+| `image` | Image choice (images are uploaded in the builder after import) |
 | `long_text` | Long text (textarea). Aliases: `textarea`, `paragraph` |
 | `likert categories` | Likert scale with category labels (one per `-` line) |
 | `likert number` | Likert scale defined by number range |
 | `grid likert number` | Grid of sub-questions sharing a numbered scale — one `###` line per row (aliases: `grid`, `matrix`) |
 | `grid likert categories` | Grid of sub-questions sharing a labelled scale — one `###` line per row |
+| `content_block` | Rich information block (heading, body Markdown, links, optional consent) — no answer |
+| `template_patient` | Patient details template (encrypted fields; tier-gated) |
+| `template_professional` | Professional details template. Optional `address_lookup: true` |
 
 ### Options and Likert metadata
 
 - For option-based questions, supply each option on its own line starting with `-` (hyphen + space).
 - **Follow-up text inputs**: To add a follow-up text field for any option, add an indented line starting with `+` (plus + space) immediately after the option. The text after `+` becomes the label for the follow-up input field that appears when the participant selects that option.
+- **Question-level follow-up**: For `mc_single`, `mc_multi` and `dropdown`, a `followup: <label>` line after the options adds a single text box offered after all options. This is intended for long (often dataset-backed) option lists where a follow-up on one specific option does not make sense.
+- **Datasets**: For `dropdown` questions, `dataset: <key>` links the question to a standardised option set (NHS trusts, medical specialities, …). The dataset key is verified against the datasets available to your survey at import time — unknown keys are dropped with a warning. Use this instead of hand-writing long option lists when a dataset exists.
 - For `likert number`, add key-value metadata lines after the type:
   - `min: 1`
   - `max: 5`
@@ -120,6 +135,37 @@ Spacing is flexible, but keep the relative order (heading → optional descripti
   - `min: 2026-01-01` / `max: 2026-12-31` for dates
   - `min: 09:00` / `max: 17:00` for times
   - `min: 2026-01-01T09:00` / `max: 2026-01-31T17:00` for date & time
+- For `template_professional`, `address_lookup: true` enables the address lookup service in the rendered template.
+
+### Hidden by default
+
+A line reading `HIDDEN` under the `(type)` line marks the question as hidden unless a `show` branching condition reveals it (see [Conditional branching](#conditional-branching)). Respondents only see it when a preceding answer triggers the show condition.
+
+```markdown
+## Extra detail {extra-detail}
+(text)
+HIDDEN
+? when exists -> {extra-detail-trigger}
+```
+
+### Yes/No labels and "Don't know"
+
+`yesno` questions default to **Yes** / **No** (stored values `yes` / `no`). You can override the display labels — and add a third "Don't know" answer — by supplying option lines in order:
+
+- 1st option line — the **Yes** label (with optional `+` follow-up)
+- 2nd option line — the **No** label (with optional `+` follow-up)
+- 3rd option line — adds a **"Don't know"** answer (stored value `dont_know`) with its label
+
+```markdown
+## Do you agree to take part? {consent}
+(yesno)
+- I agree
+- I do not agree
+- Not sure
+  + Please tell us why
+```
+
+The stored values stay `yes` / `no` / `dont_know` regardless of the display labels, so branching, exports, and aggregation are unaffected.
 
 ### Likert render mode
 
@@ -230,7 +276,8 @@ card with its rows listed inline; rows cannot be branching targets (jumping
 - Follow-up lines must start with `+` and be indented (at least 2 spaces or a tab)
 - The text after `+` becomes the label for the follow-up input field
 - Works with `mc_single`, `mc_multi`, `dropdown`, `orderable`, and `yesno` question types
-- For `yesno` questions, you can optionally provide 2 options (for Yes and No) with follow-up labels
+- For `yesno` questions, option lines override the answer labels: 1st line = Yes, 2nd line = No, 3rd line (optional) adds a "Don't know" answer — each may carry a `+` follow-up (see [Yes/No labels and "Don't know"](#yesno-labels-and-dont-know))
+- `mc_single`, `mc_multi` and `dropdown` may also carry a `followup: <label>` line for a single question-level follow-up box (see [Options and Likert metadata](#options-and-likert-metadata))
 - Not all options need follow-ups—only add them where additional context is needed
 - Follow-up responses are stored alongside the selected option in the survey response
 
@@ -250,11 +297,13 @@ Follow-up text inputs work with:
 
 ### Configuration methods
 
-You can add follow-up text inputs in three ways:
+You can add follow-up text inputs in four ways:
 
-1. **Outline** (this document) - Use the `+` syntax shown above
-2. **Visual builder** - Check "Enable follow-up text" for each option in the question editor
+1. **Outline** (this document) - Use the `+` syntax shown above for a follow-up on a specific option, or a `followup: <label>` line for a single follow-up box after all options (`mc_single`, `mc_multi`, `dropdown`)
+2. **Visual builder** - Check "Enable follow-up text" for each option in the question editor, or the question-level "Follow-up text" toggle for dataset-backed dropdowns
 3. **API** - Include `followup_text` in the options structure
+
+Both outline forms round-trip: the exported outline emits `+` lines for per-option follow-ups and a `followup:` line for question-level follow-ups.
 
 ### How it works for respondents
 
@@ -307,9 +356,55 @@ Please provide your email
 **Guidelines:**
 
 - Place the asterisk directly after the question title, before any identifier in curly braces
-- Works with all question types
+- Works with all question types (except `content_block` — information blocks have no answer)
 - Required questions are validated on form submission
 - The asterisk will appear in red in the preview
+
+## Content blocks
+
+A `content_block` question carries information instead of collecting an answer: study information, contact details, instructions. It is rendered as rich Markdown with a heading, subtitle, links, and an optional consent checkbox.
+
+```markdown
+## Study information {study-info}
+(content_block)
+heading: About this study
+subtitle: University of Example
+render_once: false
+link: Privacy notice|https://example.org/privacy
+consent: I have read and understood the study information.
+consent_required: true
+
+This study collects information about your recent visits to the clinic.
+You can withdraw at any time.
+```
+
+Config lines under the type:
+
+- `heading:` / `subtitle:` — block heading and subtitle text
+- `render_once:` — `true` (default): render on every page load; `false`: only the first time
+- `link: Label|URL` — a content link (repeat the line for more than one). The URL is sanitised at parse time — only safe schemes persist.
+- `consent: <statement>` — adds a Yes/No consent checkbox under the block and stores the answer on a linked yesno question
+- `consent_required: true` — marks the consent checkbox required
+
+After a blank line, all remaining lines under the question are the block **body** as Markdown (blank lines preserved as paragraph breaks). Content blocks are never `*`-required — they have no answer of their own.
+
+## Special templates
+
+Two template questions render a structured, field-validated form instead of free options:
+
+```markdown
+## Patient details {patient}
+(template_patient)
+
+## Professional details {professional}
+(template_professional)
+address_lookup: true
+```
+
+- `(template_patient)` — collects patient identity details with encrypted fields (aliases: `patient details`, `patient_details`, `patient template`). Tier-gated: free accounts cannot collect patient data.
+- `(template_professional)` — collects professional details (aliases: `professional details`, `professional_details`, `professional template`). `address_lookup: true` enables the address lookup service on the rendered form.
+
+Field selection and defaults are configured in the builder after import.
 
 ## Preview Viewer
 
@@ -341,7 +436,7 @@ Guidelines:
 
 ### Conditional branching
 
-Branching rules let you jump respondents to other questions or groups based on their answers. They follow this pattern, placed under the `(type)` line:
+Branching rules let you jump respondents to other questions or sections, show or hide questions, or end the survey based on their answers. They follow this pattern, placed under the `(type)` line:
 
 ```markdown
 ? when <operator> <value> -> {target-id}
@@ -352,17 +447,43 @@ Example:
 ```markdown
 # Intro {intro}
 ## Consent {intro-consent}
-(text)
+(yesno)
 ? when equals "Yes" -> {follow-up}
 ? when equals "No" -> {intro-exit}
 ```
 
 Notes:
 
-- Operators match the in-app condition builder: `equals`, `not_equals`, `contains`, `greater_than`, `greater_equal`, `less_than`, `exists`, and their `not_` variants.
-- Values may be quoted. Operators like `exists` do not take a value.
-- The target in curly braces can reference a group ID (jump to that group) or a question ID (jump directly to the question).
+- Operators match the in-app condition builder: `equals`, `not_equals`, `contains`, `not_contains`, `greater_than`, `greater_equal`, `less_than`, `less_equal`, `exists`, `not_exists`. Short aliases `eq`, `neq`, `gt`, `gte`, `lt`, `lte` are also accepted (the exported outline uses these short forms).
+- Values may be quoted. Operators like `exists` and `not_exists` do not take a value.
+- The default action is **jump to** the target. Prefix the line with an action keyword to choose another action:
+  - `? jump_to when …` (default) — skip ahead to the target
+  - `? show when …` — reveal a `HIDDEN` question
+  - `? hide when …` — hide the target question
+  - `? end when …` — end the survey (no target)
+- The target can be:
+  - `{question-id}` — jump directly to a question
+  - `#section-name` — jump to a section (only valid for `jump_to`; resolves to the first question in that section)
+  - `{group-id}` — jump to a group (resolved to the group's first question at import)
 - IDs are normalised to lowercase slugs; ensure each ID is unique across all groups and questions.
+
+```markdown
+## Consent {consent}
+(yesno)
+? when eq "Yes" -> #medical-history
+? when eq "No" -> {exit}
+
+## Side effects {side-effects}
+HIDDEN
+? show when exists -> {symptoms}
+
+## Symptoms {symptoms}
+(long_text)
+
+## Exit {exit}
+(yesno)
+? end when not_exists
+```
 
 ### Section menu layout
 
@@ -510,6 +631,83 @@ The grammar is **optional** — the Organise page UI is the primary config path.
 
 See [Survey Layouts](survey-layouts.md) for the full guide to when to use the Matrix (free navigation) layout.
 
+### Delphi (consensus rounds) layout
+
+Add a `DELPHI` block at the top of the outline to switch the survey to the Delphi layout, which runs multi-round consensus workflows: participants complete a round, see anonymised aggregate feedback, and revise their answers in the next round. Mark which sections belong to which round with `~ round:<name>` on the section heading; a section can be in multiple rounds (e.g. a demographics section repeated in every round).
+
+```markdown
+DELPHI
+  anchor: enrolment
+  min_rounds: 2
+  max_rounds: 3
+  show_progress: true
+  allow_revision: true
+  round Round 1: 0 .. 14
+  round Round 2: 14 .. 28
+
+# Demographics {demographics}    ~ round:Round 1, round:Round 2
+## Name {name}
+(text)
+
+# Round 1 questions {r1}    ~ round:Round 1
+## Importance {importance}
+(likert number)
+min: 1
+max: 5
+
+# Round 2 questions {r2}    ~ round:Round 2
+## Revised importance {revised-importance}
+(likert number)
+min: 1
+max: 5
+```
+
+Config lines are indented under `DELPHI`:
+
+- `anchor` — `enrolment` (default) or `survey_open` (same calendar schedule for every participant, offset from `Survey.start_at`).
+- `min_rounds` / `max_rounds` — the round range (defaults 2 / 3).
+- `show_progress` — `true` / `false`; show a round-progress indicator.
+- `allow_revision` — `true` / `false`; whether participants may revise previous-round answers.
+- `round <name>: <start> [.. <end>]` — a round window in integer days from the anchor (`<end>` optional, blank = open-ended). Rounds may also be opened/closed manually on the Organise page; manual open/close overrides the window.
+- Place `~ round:<name>` after the section heading (and after the `{id}` if present). Comma-separate multiple rounds.
+- Rounds are created in the order their names first appear; rounds referenced only via `~ round:` suffixes default to `start=0, end=None`.
+- Sections without `~ round:` are in no round (unreachable; warned on the Organise page).
+- A blank line ends the config block.
+
+See [Survey Layouts](survey-layouts.md) and [Delphi](delphi.md) for the full guide to when to use the Delphi layout.
+
+### Diary (EMA) layout
+
+Add a `DIARY` block at the top of the outline to switch the survey to the diary layout, which runs high-frequency repeated-measures schedules (Ecological Momentary Assessment): the same entry is answered many times on a schedule.
+
+```markdown
+DIARY
+  schedule: fixed_interval
+  interval_hours: 6
+  anchor: enrolment
+  compliance_threshold: 80
+  grace_minutes: 30
+  show_progress: true
+
+# Daily check-in {daily-check-in}
+## Pain level {pain}
+(likert number)
+min: 0
+max: 10
+```
+
+Config lines are indented under `DIARY`:
+
+- `schedule` — `fixed_interval` (default; one entry every `interval_hours`), `event_triggered` (one entry per triggering event), or `burst` (a burst of entries on `burst_on_days` days, off on `burst_off_days` days).
+- `interval_hours` / `burst_on_days` / `burst_off_days` — the schedule parameters (only the ones matching the schedule type are used).
+- `anchor` — `enrolment` (default) or `survey_open`.
+- `compliance_threshold` — percentage of entries that must be answered for a reporting period to count as compliant.
+- `grace_minutes` — how long after the scheduled time an entry may still be answered.
+- `show_progress` — `true` / `false`.
+- No `~` suffixes — a diary entry uses the full group set. A blank line ends the config block.
+
+See [Survey Layouts](survey-layouts.md) and [Diary & EMA](diary-ema.md) for the full guide to when to use the Diary layout.
+
 ### Respondent categories
 
 Add a `CATEGORIES` block at the top of the outline to categorise respondents along one or more author-defined dimensions (rater role, recruitment site, cohort, …) within a single published survey, so different respondents see different subsets of the same survey without cloning it. This is a **cross-cutting feature, not a layout** — it works with any layout. Mark which sections are visible to which category values with `~ cat:<dim>:<value>` on the section heading; sections without `~ cat:` are visible to all.
@@ -552,6 +750,91 @@ Each dimension is a `<dim>:` header with indented property lines:
 The export side emits the `CATEGORIES` block and `~ cat:` suffixes, and the config survives export → import round-trips.
 
 See [Survey Layouts](survey-layouts.md) for the full guide to respondent categories and the 360° / multi-rater assessment pattern.
+
+## Opening a builder survey in the Outline
+
+The notation is a two-way format. When you open the **Outline (Add questions)** page for a survey that already has questions, the current survey — every group, question, option, follow-up, branch, repeat, and layout block — is **translated into the notation** and shown in the Outline tab. This means:
+
+- You can **share a survey as text**: copy the outline out of the textarea and send it to a colleague, paste it into a document, or hand it to an LLM.
+- You can **re-import** the outline into a new survey (or the same one) and get the same structure back — layouts, arms, phases, rounds, repeats, and branching rules round-trip.
+- The AI Assistant and the document converter use the same grammar, so an outline pasted into any of them behaves identically.
+
+Round-trip notes:
+
+- The imported outline **replaces** the survey's existing groups and questions (the standard overwrite warning applies).
+- Branch operators are exported in their short form (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`) — both forms are accepted on import.
+- Image choice questions export their option labels; the **images themselves are builder-only** (files cannot travel in text) — re-upload them in the builder after importing.
+- `template_patient` / `template_professional` round-trip; the linked consent yesno question of a content block round-trips through the block's `consent:` config line, not as a separate question.
+
+## Complete example
+
+A kitchen-sink example exercising most of the notation — useful as training material for the LLM and as a copy-paste starting point:
+
+```markdown
+SECTION_MENU
+  prompt: "Which areas would you like to cover?"
+  min: 1
+  max: 4
+  order: authored
+  select_all: true
+  estimated_time: true
+
+# About you {about-you}
+## Consent to participate* {consent}
+(yesno)
+- I agree
+- I do not agree
+- Not sure
+  + Please tell us why
+
+## Date of birth* {dob}
+(text date)
+min: 1930-01-01
+max: 2026-12-31
+
+# Medical history {medical-history}    ~ pickable, 5 min
+## Do you have a long-term condition? {ltc}
+(yesno)
+? when eq "yes" -> #conditions
+
+## Your specialty {specialty}
+(dropdown)
+dataset: main_specialty
+followup: Anything else?
+
+# Conditions {conditions}
+## Condition details {condition-details}
+(long_text)
+
+## Overall satisfaction {satisfaction}
+(likert number)
+min: 1
+max: 5
+left: Very dissatisfied
+right: Very satisfied
+render: radio
+
+## Agreement with each statement {agreement}
+(grid likert number)
+min: 1
+max: 5
+na: Does not apply
+### I can manage my day-to-day activities*
+### I feel supported by my care team
+
+# Final comments {final-comments}
+## Rank what matters most to you {rank}
+(orderable)
+- Waiting times
+- Continuity of care
+- Communication
+  + Please say more
+- Cost
+
+## Anything else? {anything-else}
+HIDDEN
+(long_text)
+```
 
 ## Error handling and validation
 
