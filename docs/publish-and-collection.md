@@ -17,7 +17,7 @@ From your survey dashboard, click **Publish Settings** to configure:
 - **Who can access it**: Choose a visibility mode (see below)
 - **Security features**: Enable CAPTCHA for anonymous surveys
 - **Progress saving**: Allow participants to save progress and resume later (default: enabled)
-- **Response redaction**: Offer public-survey participants an opt-out token after submission so they can request deletion later (default: enabled)
+- **Response redaction**: Show participants a one-time redaction token after submission so they can request deletion later (default: enabled)
 
 ### Progress Saving Toggle
 
@@ -28,12 +28,12 @@ The **"Allow participants to save progress and resume later"** toggle controls w
 
 ### Response Redaction Toggle
 
-The **"Offer participants a redaction token after submission"** toggle controls whether public-survey participants are offered an opt-out token on the thank-you page:
+The **"Show participants a redaction token after submission"** toggle controls whether every participant is shown a one-time redaction token on the thank-you page:
 
-- **Enabled (default)**: after submitting, participants can opt to receive a token that lets them request deletion of their response later. If they decline, their response is fully anonymous.
-- **Disabled**: no opt-out token is offered. Responses are fully anonymous and cannot be redacted. The original anonymity promise stands.
+- **Enabled (default)**: every participant is shown a one-time token after submitting, which they can quote back to you to request deletion of their response later.
+- **Disabled**: no token is issued; responses from public or unlisted links are fully anonymous and cannot be linked for redaction.
 
-This toggle only affects public and unlisted surveys. Authenticated and token surveys already issue a receipt token automatically (where pseudonymous).
+This toggle gates anonymous (public/unlisted) responses. Pseudonymous responses (authenticated/token surveys) receive a receipt token regardless, matching the original data-subject-rights design.
 
 See [Data Governance](/docs/data-governance/) for the privacy implications of disabling redaction.
 

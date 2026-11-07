@@ -131,14 +131,15 @@ The hybrid encryption process (per response):
 
 **Which surveys encrypt (the Option C predicate):**
 
-`Survey.requires_whole_response_encryption()` returns `True` if ANY of:
+**Every survey encrypts responses at rest.** `Survey.requires_whole_response_encryption()` returns `True` for all surveys, with a single legacy exception checked before the universal default:
 
-1. The survey collects patient data (a `patient_details_encrypted` question group), OR
-2. The declared `respondent_audience` is `patient` or `public`, OR
-3. The survey owner authenticates via SSO / OIDC, OR
-4. The survey has a submission keypair.
+1. The survey collects patient data (a `patient_details_encrypted` question group) → encrypted
+2. The declared `respondent_audience` is `patient` or `public` → encrypted
+3. The survey owner authenticates via SSO / OIDC → encrypted
+4. The survey has a submission keypair → encrypted
+5. **Legacy exception:** the survey holds a historical opt-out declaration (see below) → plaintext retained
 
-It returns `False` **only** for surveys holding a historical opt-out declaration. The creator-facing opt-out mechanism was removed once encryption became the universal default: the publish flow requires encryption setup for every first publish, and the declaration checkbox no longer exists. Rows recorded before the removal (explicit `1.0` declarations and grandfathered `legacy-1.0` entries from surveys that predated the upgrade — both audit-logged) remain honoured by the predicate solely so their owners keep access to data stored plaintext under the old policy. Draft surveys may still store plaintext answers regardless of the predicate.
+It returns `False` **only** for surveys holding a historical opt-out declaration. The creator-facing opt-out mechanism was removed once encryption became the universal default: the publish flow requires encryption setup for every first publish, and the declaration checkbox no longer exists. Rows recorded before the removal (explicit `1.0` declarations and grandfathered `legacy-1.0` entries from surveys that predated the upgrade — both audit-logged) remain honoured by the predicate solely so their owners keep access to data stored plaintext under the old policy; they cannot be created any more. Draft surveys may still store plaintext answers regardless of the predicate.
 
 **Legacy compatibility:**
 
@@ -2445,6 +2446,54 @@ def get_encryption_strategy(user: User, survey: Survey) -> str:
 **Phase 3**: Enhanced features for OIDC-authenticated users
 
 **Migration preserves all existing encryption** - users keep current survey access
+
+### `migrate_survey_encryption` — one-off re-encryption of legacy plaintext surveys
+
+Re-encrypts responses on surveys that predate the submission-keypair layer (or held a historical encryption opt-out declaration). Responses are re-encrypted with a freshly generated survey submission keypair whose private key is wrapped under the survey's existing KEK, so **every existing unlock path keeps working** — owners decrypt with whatever credentials they already use.
+
+```bash
+docker compose exec web python manage.py migrate_survey_encryption \
+    --slug <survey-slug> --method <method> [--dry-run] [--batch-size 200]
+```
+
+**Unlock methods** (how the KEK is obtained — determines automation):
+
+| Method | Automated | Requirement |
+|---|---|---|
+| `oidc` | Yes | SSO owner — KEK derived from their sign-in identity |
+| `org` | Yes | survey belongs to an organisation with an organisation key |
+| `password` | No | the survey passphrase, entered at run time (owner present) |
+| `recovery` | No | the survey recovery phrase (owner present) |
+
+`--all` sweeps every survey but requires an automated method (`oidc`/`org`).
+
+**Critical constraint:** the private key can only be wrapped under key material the **owner** controls. A survey whose owner cannot provide a passphrase/recovery phrase and has no SSO/org key material **cannot be migrated** — attempting it with a platform-chosen secret would encrypt the data away from its owner. Never force it.
+
+**Migration is a no-op for surveys with no responses or no legacy demographics** — nothing to protect, nothing to do.
+
+**Round-trip verification:** each response is decrypted and compared before its plaintext is cleared (responses failing verification are left untouched and reported). The whole run is audit-logged (`responses_encrypted_backfill`).
+
+**Legacy encryption opt-out surveys (post opt-out removal):**
+
+The creator-facing encryption opt-out was removed — every survey now encrypts at rest — but a small number of historical surveys hold opt-out declarations (explicit `1.0` or grandfathered `legacy-1.0`) and store plaintext. The predicate honours those rows so their owners keep access; migrating them is **optional**. Runbook:
+
+1. Inventory the candidates (owner type, response count, status):
+
+   ```python
+   from checktick_app.surveys.models import Survey, SurveyResponse
+   for s in Survey.objects.filter(encryption_opt_out_at__isnull=False):
+       print(s.slug, "| status:", s.status, "| visibility:", s.visibility,
+             "| SSO owner:", hasattr(s.owner, "oidc"),
+             "| org:", bool(s.organization),
+             "| responses:", SurveyResponse.objects.filter(survey=s).count())
+   ```
+
+2. Migrate per survey, choosing the method by owner type:
+   - SSO owner → `--method oidc` (automated; owner decrypts via their sign-in)
+   - Organisation survey → `--method org` (automated)
+   - Password owner → arrange for the owner to be present and run `--method password`
+   - Owner unreachable → **leave the survey as-is**; it stays grandfathered plaintext, usable and audit-logged as legacy. New responses to it remain plaintext until a keypair exists, so prefer migrating published, active surveys.
+3. Surveys with zero responses need no action — the command no-ops, and the survey will be forced through encryption setup if it is ever re-published or edited.
 
 ## Technical Reference
 

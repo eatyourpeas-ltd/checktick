@@ -844,9 +844,10 @@ class Survey(models.Model):
         """Who fills this survey in, as declared by the creator.
 
         Drives the whole-response encryption decision (see
-        requires_whole_response_encryption): patient/public audience surveys
-        are always encrypted; staff-audience surveys owned by password users
-        may opt out via a logged declaration.
+        requires_whole_response_encryption): every survey encrypts
+        responses at rest; historical opt-out declarations (staff-audience
+        rows recorded before the mechanism's removal) remain honoured for
+        legacy data access only.
         """
 
         STAFF = "staff", "Staff / colleagues"
@@ -881,14 +882,16 @@ class Survey(models.Model):
         default=False,
         help_text="True once the creator has explicitly confirmed the respondent audience",
     )
-    # Creator opt-out declaration (§3.2 of the encryption planning doc):
-    # the only path to plaintext storage for published surveys. Password-user
-    # owners of staff-audience surveys without patient identifiers may opt out
-    # by making an explicit, audit-logged declaration.
+    # Historical encryption opt-out declarations (retained as audit
+    # evidence). The creator-facing opt-out mechanism was removed — every
+    # survey now encrypts responses at rest — but pre-removal rows remain
+    # honoured by requires_whole_response_encryption() so owners keep
+    # access to data stored plaintext under the old policy. New rows
+    # cannot be created.
     encryption_opt_out_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="When the creator declared the encryption opt-out for this survey",
+        help_text="HISTORICAL: when the creator declared the encryption opt-out (mechanism removed; honoured only for legacy data access)",
     )
     encryption_opt_out_by = models.ForeignKey(
         User,
@@ -896,12 +899,12 @@ class Survey(models.Model):
         null=True,
         blank=True,
         related_name="encryption_opt_out_surveys",
-        help_text="User who made the encryption opt-out declaration",
+        help_text="HISTORICAL: user who made the encryption opt-out declaration",
     )
     encryption_opt_out_declaration_version = models.CharField(
         max_length=20,
         blank=True,
-        help_text="Version of the opt-out declaration text acknowledged by the creator",
+        help_text="HISTORICAL: version of the opt-out declaration text acknowledged by the creator",
     )
     allow_any_authenticated = models.BooleanField(
         default=False,

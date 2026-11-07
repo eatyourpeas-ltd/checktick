@@ -43,7 +43,7 @@ The Response Insights section displays horizontal bar charts showing how respond
 
 ### Unlock Gate
 
-When any response in the survey has encrypted answers (`enc_answers` set), the dashboard insights are unlock-gated: you must unlock the survey with your encryption password or recovery phrase before the charts render. This avoids decrypting patient data without authentication. Plaintext-only surveys (draft, legacy, or staff-audience surveys with a recorded encryption opt-out) render the insights without unlock.
+When any response in the survey has encrypted answers (`enc_answers` set), the dashboard insights are unlock-gated: you must unlock the survey with your encryption password or recovery phrase before the charts render. This avoids decrypting patient data without authentication. Plaintext-only surveys (draft, or legacy surveys with a historical encryption opt-out declaration) render the insights without unlock.
 
 ---
 
@@ -295,7 +295,7 @@ Response Insights only appear if:
 
 ### Summary Report shows "Responses are encrypted"
 
-The Summary Report is unlock-gated when any response has `enc_answers` set. Unlock the survey with your encryption password or recovery phrase to view the report. Plaintext-only surveys (draft, legacy, or staff-audience surveys with a recorded encryption opt-out) render the summary without unlock.
+The Summary Report is unlock-gated when any response has `enc_answers` set. Unlock the survey with your encryption password or recovery phrase to view the report. Plaintext-only surveys (draft, or legacy surveys with a historical encryption opt-out declaration) render the summary without unlock.
 
 ### Rate limit exceeded
 
