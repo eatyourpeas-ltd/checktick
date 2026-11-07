@@ -128,32 +128,6 @@ jobs:
             postgres.log
             web.log
 
-  mirror-codeberg:
-    # Mirror main to Codeberg after CI passes. Requires repository secrets:
-    #   CODEBERG_REPO: owner/repo, e.g. eatyourpeas-ltd/checktick (a full URL
-    #     is also accepted; create the repo on Codeberg first, do NOT
-    #     initialise it with a README — it must be empty)
-    #   CODEBERG_TOKEN: Codeberg access token with write repository scope
-    #     (Codeberg -> Settings -> Applications -> Manage Access Tokens)
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Mirror main to Codeberg
-        env:
-          CODEBERG_REPO: ${{ secrets.CODEBERG_REPO }}
-          CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
-        run: |
-          if [ -z "$CODEBERG_REPO" ] || [ -z "$CODEBERG_TOKEN" ]; then
-            echo "CODEBERG_REPO and/or CODEBERG_TOKEN not configured, skipping mirror"
-            exit 0
-          fi
-          # Accept either owner/repo or a full Codeberg URL
-          CODEBERG_PATH=$(echo "$CODEBERG_REPO" | sed -E 's#^https?://codeberg\.org/##; s#\.git$##')
-          echo "Mirroring to codeberg.org/$CODEBERG_PATH"
-          git clone --bare "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" mirror.git
-          cd mirror.git
-          # Push only main (force-update, no ref deletions). A full `--mirror`
-          # would try to delete stale refs on Codeberg, which Forgejo rejects
-          # if any of them is the repo's default branch.
-          git push --force "https://x-access-token:${CODEBERG_TOKEN}@codeberg.org/${CODEBERG_PATH}.git" "refs/heads/main:refs/heads/main"
+  # Codeberg mirroring moved to .github/workflows/mirror-codeberg.yml so a
+  # red build never blocks it and ops-only merges (no pyproject bump) mirror
+  # even though docker-publish skips them.

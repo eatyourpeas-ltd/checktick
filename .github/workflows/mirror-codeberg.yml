@@ -1,0 +1,64 @@
+name: Mirror to Codeberg
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Back-to-back merges: let the newest push win; the runner re-clones fresh
+# state anyway, so cancelling a superseded in-flight push loses nothing.
+concurrency:
+  group: mirror-codeberg
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    # Mirror main to Codeberg on every merge to main. Formerly a job inside
+    # ci.yml (needs: build) — moved out because:
+    #   1. A red CI build must not block the mirror (needs: build skipped it).
+    #   2. Ops-only merges deliberately skip the pyproject bump, so
+    #      docker-publish's decide-release skips them entirely — the mirror
+    #      cannot live there either (release-coupled).
+    # Observed failure mode this replaces: the 2026-11-02 run died on a
+    # transient Codeberg HTTP 504 mid-push and left Codeberg ~4h stale until
+    # the next merge; this job retries transient push errors.
+    #
+    # Requires repository secrets:
+    #   CODEBERG_REPO: owner/repo, e.g. eatyourpeas-ltd/checktick (a full URL
+    #     is also accepted; create the repo on Codeberg first, do NOT
+    #     initialise it with a README — it must be empty)
+    #   CODEBERG_TOKEN: Codeberg access token with write repository scope
+    #     (Codeberg -> Settings -> Applications -> Manage Access Tokens)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mirror main to Codeberg
+        env:
+          CODEBERG_REPO: ${{ secrets.CODEBERG_REPO }}
+          CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
+        run: |
+          if [ -z "$CODEBERG_REPO" ] || [ -z "$CODEBERG_TOKEN" ]; then
+            echo "CODEBERG_REPO and/or CODEBERG_TOKEN not configured, skipping mirror"
+            exit 0
+          fi
+          # Accept either owner/repo or a full Codeberg URL
+          CODEBERG_PATH=$(echo "$CODEBERG_REPO" | sed -E 's#^https?://codeberg\.org/##; s#\.git$##')
+          echo "Mirroring to codeberg.org/$CODEBERG_PATH"
+          git clone --bare "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" mirror.git
+          cd mirror.git
+          # Push only main (force-update, no ref deletions). A full `--mirror`
+          # would try to delete stale refs on Codeberg, which Forgejo rejects
+          # if any of them is the repo's default branch.
+          # Retry transient gateway errors (the 2026-11-02 HTTP 504).
+          for attempt in 1 2 3; do
+            if git push --force "https://x-access-token:${CODEBERG_TOKEN}@codeberg.org/${CODEBERG_PATH}.git" "refs/heads/main:refs/heads/main"; then
+              echo "✓ Mirror push succeeded (attempt $attempt)"
+              exit 0
+            fi
+            echo "✗ Attempt $attempt failed; retrying in 30s..."
+            sleep 30
+          done
+          echo "✗ Mirror push failed after 3 attempts"
+          exit 1

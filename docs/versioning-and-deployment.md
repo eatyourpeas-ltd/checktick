@@ -31,6 +31,22 @@ The Docker publish workflow runs under controlled conditions:
 
 If none of these conditions are met, publish is skipped.
 
+## When to bump (and when not to)
+
+The version names the **shipped container image**. `Dockerfile.registry` copies
+`checktick_app`, `docs`, `locale`, and the packaging files — nothing else — so:
+
+- **Bump** when the merge must ship: application code, templates, static
+  assets, dependencies, locale.
+- **Don't bump** for maintainer-only surface that never enters the image:
+  `s/` ops scripts, `k8s/` manifests, `.github/` workflows. Docs are in the
+  image but inert; let them ride the next release unless they must ship now.
+
+`decide-release` keys on a `pyproject.toml` diff, so an unbumped merge
+publishes nothing and deploys nothing. That absence **is** the deployment
+flag — there is no separate one to set. If an unbumped change later needs
+to ship, bump on its own or use the manual dispatch.
+
 ## Why This Policy Exists
 
 - Allows maintenance/docs merges to `main` without forcing a new container image.

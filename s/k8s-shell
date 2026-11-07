@@ -1,28 +1,43 @@
 #!/bin/bash
-# k8s_shell — open a Django shell in a PRODUCTION CheckTick web pod on the
-# Civo Kubernetes cluster.
+# k8s_shell — open a shell in a PRODUCTION CheckTick web pod on the Civo
+# Kubernetes cluster: the Django shell by default, or the OS command line
+# with --bash.
 #
 # NOTE: this is a KUBERNETES (Civo production) operational script. For local
 # development use `docker compose exec -T web python manage.py shell` instead.
 #
 # The shell inherits the pod's full environment (Vault AppRole credentials,
-# database access) and can therefore READ AND DECRYPT survey responses.
-# Project logging rules apply to interactive sessions too: never log patient
-# data, request bodies, or decrypted survey objects. Prefer read-only
-# inspection — anything heavier belongs in a one-off Job from the same image
-# (see k8s/migrate-job.yaml for the pattern).
+# database access) and can therefore READ AND DECRYPT survey responses — bash
+# mode additionally has the full OS toolchain of the image. Project logging
+# rules apply to interactive sessions too: never log patient data, request
+# bodies, or decrypted survey objects. Prefer read-only inspection — anything
+# heavier belongs in a one-off Job from the same image (see
+# k8s/migrate-job.yaml for the pattern).
 #
-# Usage: ./s/k8s-shell [--help] [-c "<python code>"]
+# Usage:
+#   ./s/k8s-shell                        # interactive Django shell (default)
+#   ./s/k8s-shell -c "<python code>"     # Django one-liner, then exit
+#   ./s/k8s-shell --bash                 # interactive OS command line
+#   ./s/k8s-shell --bash -c "<cmd>"      # one bash command, then exit
+#
+# (--bash must come first; everything after it is passed to bash.)
 
 set -euo pipefail
 
 if [[ "${1:-}" == "--help" ]]; then
-    head -16 "$0" | tail -14
+    head -23 "$0" | tail -22
     exit 0
 fi
 
 NS=checktick
 CONTAINER=web
+MODE=django
+
+# --bash selects the OS command line; the default is the Django shell.
+if [[ "${1:-}" == "--bash" ]]; then
+    MODE=bash
+    shift
+fi
 
 # Kubeconfig resolution: explicit KUBECONFIG wins; else the Civo kubeconfig
 # if present; else the default config.
@@ -41,21 +56,40 @@ if [ -z "$POD" ]; then
     exit 1
 fi
 
+if [ "$MODE" = bash ]; then
+    MODE_DESC="OS command line (bash)"
+else
+    MODE_DESC="Django shell"
+fi
+
 echo "=========================================="
-echo "  Django shell (Kubernetes/Civo production)"
+echo "  Shell (Kubernetes/Civo production)"
 echo "=========================================="
 echo "Cluster context : $(kubectl config current-context)"
 echo "Pod             : $NS/$POD"
+echo "Mode            : $MODE_DESC"
 echo "Reminder        : production data — never log patient data or"
 echo "                  decrypted survey objects."
 echo ""
 
-if [ "$#" -gt 0 ]; then
-    # One-liner passthrough, e.g.:
-    #   ./s/k8s-shell -c "from checktick_app.surveys.models import Survey; print(Survey.objects.count())"
-    exec kubectl exec -n "$NS" "$POD" -c "$CONTAINER" -- \
-        python manage.py shell "$@"
+if [ "$MODE" = bash ]; then
+    # The web image is python:3.12-slim (Debian), which ships bash alongside
+    # the sh used by the container CMD.
+    if [ "$#" -gt 0 ]; then
+        # One-liner passthrough, e.g.:
+        #   ./s/k8s-shell --bash -c "ps aux"
+        exec kubectl exec -n "$NS" "$POD" -c "$CONTAINER" -- bash "$@"
+    else
+        exec kubectl exec -n "$NS" "$POD" -c "$CONTAINER" -it -- bash
+    fi
 else
-    exec kubectl exec -n "$NS" "$POD" -c "$CONTAINER" -it -- \
-        python manage.py shell
+    if [ "$#" -gt 0 ]; then
+        # One-liner passthrough, e.g.:
+        #   ./s/k8s-shell -c "from checktick_app.surveys.models import Survey; print(Survey.objects.count())"
+        exec kubectl exec -n "$NS" "$POD" -c "$CONTAINER" -- \
+            python manage.py shell "$@"
+    else
+        exec kubectl exec -n "$NS" "$POD" -c "$CONTAINER" -it -- \
+            python manage.py shell
+    fi
 fi
