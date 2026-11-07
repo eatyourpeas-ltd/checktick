@@ -183,7 +183,15 @@ def send_token_email(to_email, survey_name, token_url, token_type) -> bool:
 Accepts `email`, `token_type` ("resume" or "opt_out"), and looks up the token:
 
 - For resume tokens: looks up `SurveyProgress` by `session_key`.
-- For opt-out tokens: reads `receipt_token` from the session.
+- For opt-out tokens: reads the token from the POST body (the thank-you
+  page's "Email this token to myself" form passes the displayed value —
+  the one-time display has already popped it from the session), falling
+  back to the session for compatibility. The value must match a
+  `SurveyResponse` of this survey, otherwise 400.
+
+The thank-you form is rendered only alongside the token itself, so a
+participant can only email a token that was shown to them. The POST is
+rate-limited with the take URL (10/min per IP).
 
 ## Publication Workflow Toggles
 

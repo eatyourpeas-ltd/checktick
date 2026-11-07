@@ -600,7 +600,7 @@ class TestRedactionToken:
         assert token is not None
         assert len(token) == 8
         assert token == token.upper()
-        assert not any(c in "ILO U" for c in token)
+        assert not any(c in "ILOU" for c in token)
         assert token.isalnum()
 
     def test_no_token_when_redaction_disabled(self, client, public_survey_for_resume):
@@ -825,6 +825,72 @@ class TestEmailTokenDelivery:
         assert response.json()["success"] is True
         assert len(mail.outbox) == 1
         assert "participant@example.com" in mail.outbox[0].to
+
+    def test_email_opt_out_token_from_displayed_value(
+        self, client, public_survey_for_resume
+    ):
+        """The thank-you page's email form passes the displayed token in the
+        POST body — the one-time display has already popped it from the
+        session, so the endpoint must accept (and validate) the token value."""
+        from django.core import mail
+        from django.urls import reverse
+
+        from checktick_app.surveys.models import SurveyResponse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+        client.post(url, {f"q_{q_id}": "Answer"})
+        token = SurveyResponse.objects.get(
+            survey=public_survey_for_resume
+        ).receipt_token
+
+        # Viewing the thank-you page pops the token from the session.
+        client.get(
+            reverse("surveys:thank_you", kwargs={"slug": public_survey_for_resume.slug})
+        )
+        assert (
+            client.session.get(f"receipt_token_{public_survey_for_resume.slug}") is None
+        )
+
+        response = client.post(
+            url,
+            {
+                "action": "email_token",
+                "token_type": "opt_out",
+                "token": token,
+                "email": "participant@example.com",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        assert len(mail.outbox) == 1
+        assert token in mail.outbox[0].body
+
+    def test_email_opt_out_token_unknown_token_rejected(
+        self, client, public_survey_for_resume
+    ):
+        """A POSTed token that does not belong to this survey is rejected
+        (no email is sent for a value the participant could not have)."""
+        from django.core import mail
+        from django.urls import reverse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        response = client.post(
+            url,
+            {
+                "action": "email_token",
+                "token_type": "opt_out",
+                "token": "AAAA2222",
+                "email": "participant@example.com",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        assert response.status_code == 400
+        assert response.json()["error"] == "No redaction token available."
+        assert len(mail.outbox) == 0
 
     def test_email_token_invalid_email_rejected(self, client, public_survey_for_resume):
         """An invalid email address is rejected."""

@@ -219,7 +219,7 @@ Receipt tokens are used to identify responses without revealing identity. They a
 - **Pseudonymous surveys** (authenticated or invite token): a receipt token is issued automatically after submission. The participant can use it to request access to, correction of, or deletion of their response.
 - **Public/unlisted surveys**: a receipt token (called an opt-out token) is issued automatically after submission when the survey creator has enabled it at publication — there is no separate opt-in step. The token is a short code (8 characters, like a 2FA code) shown once with a copy button. Participants who keep it can later request deletion of their response using the token; participants who discard it leave their response effectively anonymous.
 
-Tokens are shown once on the thank-you page after submission. If the participant loses the token, we cannot identify their response for deletion. Participants can optionally email the token to themselves — the email address is used only to send the email and is not stored on our servers.
+Tokens are shown once on the thank-you page after submission. If the participant loses the token, we cannot identify their response for deletion. Participants can optionally email the token to themselves — the email address is used only to send that one email and is not stored on our servers: it never appears in our logs and no copy of the sent email is kept (our sending mailbox is configured not to save sent items). Delivery is handled by Microsoft 365, which processes the message to deliver it and may retain transport metadata for a limited period under its standard service terms.
 
 ### 11.5 Saving Progress
 

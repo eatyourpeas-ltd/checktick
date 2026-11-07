@@ -45,6 +45,30 @@
           <p class="text-xs opacity-70 mt-2">{% blocktrans %}This token will not be shown again. Please store it in a safe place.{% endblocktrans %}</p>
         </div>
       </div>
+
+      {# Email the token to the participant (issue #376). The address is used
+         only to send this one email: it is never stored server-side and the
+         RedactionFilter keeps it out of logs. The token value travels in the
+         form because the one-time display already popped it from the session. #}
+      <div class="card bg-base-200 shadow-sm mt-4 text-left">
+        <div class="card-body p-4">
+          <h3 class="font-semibold text-sm">{% trans "Email this token to myself" %}</h3>
+          <p class="text-sm opacity-80">{% trans "We will send you an email containing this token, straight away." %}</p>
+          <form id="email-token-form" method="post" action="{% url 'surveys:take' survey.slug %}" class="mt-2">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="email_token" />
+            <input type="hidden" name="token_type" value="opt_out" />
+            <input type="hidden" name="token" value="{{ receipt_token }}" />
+            <div class="flex flex-col sm:flex-row gap-2">
+              <label class="sr-only" for="email-token-input">{% trans "Your email address" %}</label>
+              <input type="email" id="email-token-input" name="email" class="input input-bordered input-sm grow" required autocomplete="email" placeholder="you@example.com" />
+              <button type="submit" class="btn btn-primary btn-sm" id="email-token-btn">{% trans "Send" %}</button>
+            </div>
+            <p id="email-token-status" class="text-sm mt-2" role="status" aria-live="polite"></p>
+            <p class="text-xs opacity-70 mt-2">{% blocktrans %}Declaration: your email address is used only to send you this token, once. It is not stored on CheckTick's servers, it never appears in our logs, and we keep no copy of the sent email. Delivery is handled by Microsoft 365.{% endblocktrans %}</p>
+          </form>
+        </div>
+      </div>
       {% endif %}
 
       {% if category_echo %}
@@ -73,13 +97,44 @@
 <script nonce="{{ request.csp_nonce }}">
 (function() {
   var btn = document.getElementById('copy-receipt-btn');
-  if (!btn) return;
   var token = document.getElementById('receipt-token').textContent.trim();
-  var originalHTML = btn.innerHTML;
-  btn.addEventListener('click', function() {
-    navigator.clipboard.writeText(token).then(function() {
-      btn.textContent = '{% trans "Copied!" %}';
-      setTimeout(function() { btn.innerHTML = originalHTML; }, 2000);
+  if (btn) {
+    var originalHTML = btn.innerHTML;
+    btn.addEventListener('click', function() {
+      navigator.clipboard.writeText(token).then(function() {
+        btn.textContent = '{% trans "Copied!" %}';
+        setTimeout(function() { btn.innerHTML = originalHTML; }, 2000);
+      });
+    });
+  }
+
+  var form = document.getElementById('email-token-form');
+  if (!form) return;
+  var status = document.getElementById('email-token-status');
+  var sendBtn = document.getElementById('email-token-btn');
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var data = new FormData(form);
+    data.set('token', token);
+    sendBtn.disabled = true;
+    status.textContent = '';
+    fetch(form.action, {
+      method: 'POST',
+      body: data,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(function(res) {
+      return res.json().then(function(json) { return { ok: res.ok, json: json }; });
+    }).then(function(r) {
+      if (r.ok && r.json.success) {
+        status.textContent = '{% trans "Email sent. Please check your inbox and store the token somewhere safe." %}';
+        form.querySelector('input[name="email"]').value = '';
+      } else {
+        status.textContent = (r.json && r.json.error) || '{% trans "Could not send the email. Please try again." %}';
+        sendBtn.disabled = false;
+      }
+    }).catch(function() {
+      status.textContent = '{% trans "Could not send the email. Please try again." %}';
+      sendBtn.disabled = false;
     });
   });
 })();

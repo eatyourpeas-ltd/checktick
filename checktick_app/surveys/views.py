@@ -7606,8 +7606,19 @@ def _handle_participant_submission(
                     )
                 )
             else:  # opt_out
-                receipt_token = request.session.get(f"receipt_token_{survey.slug}")
-                if not receipt_token:
+                # The token comes from the POST body (the thank-you page
+                # passes the displayed token value — the session no longer
+                # holds it because the one-time display pops it on first
+                # view), falling back to the session for compatibility.
+                receipt_token = request.POST.get(
+                    "token", ""
+                ).strip() or request.session.get(f"receipt_token_{survey.slug}")
+                if (
+                    not receipt_token
+                    or not SurveyResponse.objects.filter(
+                        survey=survey, receipt_token=receipt_token
+                    ).exists()
+                ):
                     return JsonResponse(
                         {"success": False, "error": "No redaction token available."},
                         status=400,

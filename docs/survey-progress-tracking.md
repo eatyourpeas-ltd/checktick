@@ -68,8 +68,17 @@ After you submit a public survey, you may be shown an **opt-out token** on the t
 
 1. When you submit, a token is generated automatically if the survey creator has enabled opt-out tokens at publication
 2. The token is shown once on the thank-you page, with a copy button and a warning that it will not be shown again
-3. Copy the token and keep it safe — it cannot be recovered if you lose it
-4. If you later want your response deleted (redacted), contact the survey creator and quote the token
+3. You can choose to email the token to yourself from the same page (see below)
+4. Copy the token or keep the email and store it somewhere safe — it cannot be recovered if you lose it
+5. If you later want your response deleted (redacted), contact the survey creator and quote the token
+
+### Emailing the token to yourself
+
+The thank-you page offers to email the token to the address you enter, once, straight away. Before sending, CheckTick asks you to agree to this declaration:
+
+> Your email address is used only to send you this token, once. It is not stored on CheckTick's servers, it never appears in our logs, and we keep no copy of the sent email. Delivery is handled by Microsoft 365.
+
+The email contains only the token and the survey name — no answers, no question text.
 
 ### If you're not shown a token
 
