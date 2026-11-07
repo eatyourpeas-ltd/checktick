@@ -3308,17 +3308,31 @@ class SurveyResponse(models.Model):
                 return None
 
         if not self.receipt_token:
+            import logging
+
+            logger = logging.getLogger(__name__)
             for _ in range(5):
+                candidate = self._new_receipt_token()
                 try:
                     with transaction.atomic():
-                        self.receipt_token = self._new_receipt_token()
+                        self.receipt_token = candidate
                         self.save(update_fields=["receipt_token"])
                     break
                 except IntegrityError:
                     # 40-bit space — a collision means a concurrent code
                     # took it; regenerate. The savepoint keeps the outer
-                    # transaction usable after the failed insert.
+                    # transaction usable after the failed save, and the
+                    # in-memory candidate is discarded so a later failure
+                    # can never leave a token that belongs to another
+                    # response.
+                    self.receipt_token = None
                     continue
+            else:
+                logger.warning(
+                    "Receipt token generation exhausted retries; "
+                    "response left without a token",
+                    extra={"survey_id": self.survey_id},
+                )
 
         return self.receipt_token
 

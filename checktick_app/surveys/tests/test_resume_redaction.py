@@ -633,6 +633,64 @@ class TestRedactionToken:
             client.session.get(f"receipt_token_{public_survey_for_resume.slug}") is None
         )
 
+    def test_token_collision_retries_with_fresh_code(self, public_survey_for_resume):
+        """Uniqueness is guaranteed by a DB UNIQUE constraint; when the
+        generator draws an already-taken code, the savepoint retries with a
+        fresh draw and the response ends up with its own distinct token."""
+        from unittest.mock import patch
+
+        from checktick_app.surveys.models import SurveyResponse
+
+        a = SurveyResponse.objects.create(
+            survey=public_survey_for_resume, answers={"q1": "a"}
+        )
+        t1 = a.generate_receipt_token()
+        b = SurveyResponse.objects.create(
+            survey=public_survey_for_resume, answers={"q1": "b"}
+        )
+
+        codes = iter([t1, "NEWCODE1"])
+        with patch.object(
+            SurveyResponse, "_new_receipt_token", staticmethod(lambda: next(codes))
+        ):
+            t2 = b.generate_receipt_token()
+
+        assert t2 == "NEWCODE1"
+        assert t2 != t1
+        b.refresh_from_db()
+        assert b.receipt_token == "NEWCODE1"
+        a.refresh_from_db()
+        assert a.receipt_token == t1
+
+    def test_token_collision_exhaustion_never_returns_foreign_token(
+        self, public_survey_for_resume
+    ):
+        """If every retry collides (astronomically unlikely at 40 bits), the
+        response is left with NO token rather than a code that belongs to
+        another response."""
+        from unittest.mock import patch
+
+        from checktick_app.surveys.models import SurveyResponse
+
+        a = SurveyResponse.objects.create(
+            survey=public_survey_for_resume, answers={"q1": "a"}
+        )
+        t1 = a.generate_receipt_token()
+        b = SurveyResponse.objects.create(
+            survey=public_survey_for_resume, answers={"q1": "b"}
+        )
+
+        with patch.object(
+            SurveyResponse, "_new_receipt_token", staticmethod(lambda: t1)
+        ):
+            result = b.generate_receipt_token()
+
+        assert result is None
+        b.refresh_from_db()
+        assert b.receipt_token is None
+        a.refresh_from_db()
+        assert a.receipt_token == t1
+
     def test_receipt_token_round_trips_through_dsr_lookup(
         self, client, public_survey_for_resume
     ):
