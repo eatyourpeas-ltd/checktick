@@ -18,7 +18,11 @@
 #   2. rolling update of the web Deployment (maxUnavailable: 0)
 #   3. rollout must pass readiness (/healthz gates traffic)
 #   4. smoke check against the service
-#   5. automatic rollback if anything fails after the image changed
+#   5. roll every CronJob in the namespace to the deployed tag
+#      (CronJobs are NOT part of the Deployment rollout — without this
+#      they keep the tag pinned in k8s/cronjobs.yaml and drift; they sat
+#      on 0.24.2 while the web Deployment ran 0.25.x)
+#   6. automatic rollback if anything fails after the image changed
 #
 # Migration discipline: if step 1 succeeds but the rollout is rolled back,
 # the PREVIOUS image briefly runs against the NEW schema. Migrations must
@@ -128,6 +132,32 @@ jobs:
             --command -- curl -fsS --max-time 10 \
             "http://checktick-web.${NS}.svc.cluster.local:8000/healthz"
           echo "OK: /healthz healthy after deploy"
+
+      - name: Roll CronJobs to new image
+        env:
+          NS: ${{ inputs.namespace }}
+          TAG: ${{ inputs.image-tag }}
+        run: |
+          # CronJobs are NOT part of the Deployment rollout above. Without
+          # this step they keep running the tag pinned in k8s/cronjobs.yaml
+          # until the next manual apply — they sat on 0.24.2 while the web
+          # Deployment was rolled to 0.25.x (found 2026-11-07). Runs AFTER the
+          # smoke check so CronJobs only move once the tag is verified live.
+          # Set every container of every CronJob in the namespace (handles
+          # the `run`/`seed` naming mix); each next scheduled pod runs the tag.
+          for cj in $(kubectl -n "$NS" get cronjobs -o name); do
+            args=""
+            for c in $(kubectl -n "$NS" get "$cj" \
+              -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[*].name}'); do
+              args="$args $c=${IMAGE}:${TAG}"
+            done
+            echo "Setting $cj -> ${IMAGE}:${TAG}"
+            # shellcheck disable=SC2086 — args is deliberately word-split
+            kubectl -n "$NS" set image "$cj" $args
+          done
+          echo "CronJob images now:"
+          kubectl -n "$NS" get cronjobs \
+            -o custom-columns='NAME:.metadata.name,IMAGES:.spec.jobTemplate.spec.template.spec.containers[*].image'
 
       - name: Diagnose failure
         if: failure()
