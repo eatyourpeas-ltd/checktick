@@ -87,7 +87,7 @@ Regression tests cover accepted and rejected destinations and the unconfirmed-em
 
 #### Data Encryption at Rest
 
-- **Survey data**: responses on keypair surveys are encrypted at rest at submission time using public-key submission encryption (hybrid: random per-response 32-byte DEK, AES-256-GCM payload, DEK wrapped via ephemeral X25519 ECDH + HKDF-SHA256). This applies to all surveys covered by the encryption predicate (`Survey.requires_whole_response_encryption()`), including non-patient surveys; demographics collected from respondents are encrypted inside the same payload. The only exception is the narrow opt-out path: staff-audience, password-user surveys where the creator (Data Controller) has made an explicit, audit-logged opt-out declaration
+- **Survey data**: responses are encrypted at rest at submission time using public-key submission encryption (hybrid: random per-response 32-byte DEK, AES-256-GCM payload, DEK wrapped via ephemeral X25519 ECDH + HKDF-SHA256). This applies to **all** surveys — encryption at rest is universal and there is no creator-facing opt-out; demographics collected from respondents are encrypted inside the same payload. Historical declaration rows from before the mechanism's removal remain honoured for owner data access (see `docs/compliance/opt-out.md`).
 - **Key derivation**: Argon2id with memory-hard parameters
 - **Key hierarchy**: Per-survey X25519 keypair (public key encrypts at submission; private key wrapped under the owner's key material) → per-response DEK → payload encryption
 

@@ -9,7 +9,11 @@ category: dspt-1-confidential-data
 
 ## Encryption and the Controller's Declaration
 
-The same controller-responsibility principle applies to response encryption. The platform provides the technical capability: responses are encrypted at rest by default on surveys covered by the encryption predicate (patient data, patient/public audience, SSO-authenticated owners, or surveys with a submission keypair). For staff-audience, password-user surveys, the **survey creator (Data Controller) decides whether to opt out** of whole-response encryption by making an explicit declaration. That declaration is the controller-side record: it is stored on the survey (`encryption_opt_out_at` / `_by` / declaration version) and written to the audit log (`encryption_opt_out_declared`).
+Responses are encrypted at rest on **every** survey — patient, public, and staff alike. The publish flow requires encryption setup before any first publish, and there is no mechanism to store responses in plaintext. This is the platform's security posture: encryption cannot be waived by survey creators.
+
+Historically (before the opt-out's removal), staff-audience password-user surveys could store plaintext when the creator recorded an explicit, audit-logged opt-out declaration, and surveys predating the encryption upgrade were grandfathered (`legacy-1.0`). Those rows remain honoured by the encryption predicate solely so their owners keep access to data stored plaintext under the old policy; the fields and audit records are retained as historical evidence. Owners of such surveys can migrate them to encryption at any time via `migrate_survey_encryption` (per-slug, using the owner's credentials).
+
+The remaining creator declaration in the publication workflow is the **no-patient-data confirmation** (required for Public, Unlisted, and Token visibility): the creator asserts the survey is not patient-facing and gathers no patient-identifiable data — patient-facing surveys must not be published on a public or unlisted link. It is audit-logged at publication (`no_patient_data_declared`).
 
 See [Individual Rights Procedure](/docs/compliance/individual-rights-procedure/) for how encrypted data is handled in rights requests, and [Encryption for Users](/docs/encryption-for-users/) for the technical detail.
 

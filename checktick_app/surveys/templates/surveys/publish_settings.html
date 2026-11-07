@@ -142,18 +142,17 @@
               </div>
             </div>
           </div>
-          {% if opt_out_eligible %}
-          <div id="opt-out-block" class="mt-4">
-            <label class="label cursor-pointer justify-start gap-3">
-              <input type="checkbox" name="encryption_opt_out" id="encryption-opt-out" class="checkbox checkbox-warning" />
-              <span class="label-text">
-                <strong>{% trans "Opt out of response encryption" %}</strong>
-              </span>
-            </label>
-            <p class="text-sm opacity-70 ml-9">
-              {% blocktrans %}By ticking this box I declare that this survey is not patient-facing and does not gather data that could identify respondents. Patient-facing surveys must not be published on a public or unlisted link. This declaration is recorded in the audit trail.{% endblocktrans %}
-            </p>
+          {% if is_sso_user %}
+          <div id="encrypt-note" class="mt-4">
+            <div class="alert alert-success">
+              <div>
+                <p class="text-sm">
+                  {% trans "Responses will be encrypted at rest. For SSO accounts the encryption key is bound to your sign-in, so no passphrase setup is needed; viewing answer distributions and exporting data requires unlocking the survey." %}
+                </p>
+              </div>
+            </div>
           </div>
+          {% else %}
           <div id="encrypt-note" class="mt-4 hidden">
             <div class="alert alert-success">
               <div>
@@ -422,9 +421,7 @@
   const allowAnyAuthenticatedCheckbox = document.querySelector('input[name="allow_any_authenticated"]');
   const audienceSelect = document.getElementById('respondent-audience');
   const encryptionExplainer = document.getElementById('encryption-explainer');
-  const optOutBlock = document.getElementById('opt-out-block');
   const encryptNote = document.getElementById('encrypt-note');
-  const optOutEligible = {% if opt_out_eligible %}true{% else %}false{% endif %};
 
   function updateEncryptionUI() {
     if (!audienceSelect) return;
@@ -432,13 +429,8 @@
     if (encryptionExplainer) {
       encryptionExplainer.classList.toggle('hidden', audience === 'staff');
     }
-    if (optOutEligible) {
-      if (optOutBlock) {
-        optOutBlock.classList.toggle('hidden', audience !== 'staff');
-      }
-      if (encryptNote) {
-        encryptNote.classList.toggle('hidden', audience === 'staff');
-      }
+    if (encryptNote) {
+      encryptNote.classList.toggle('hidden', audience !== 'staff');
     }
   }
   if (audienceSelect) {

@@ -138,7 +138,7 @@ The hybrid encryption process (per response):
 3. The survey owner authenticates via SSO / OIDC, OR
 4. The survey has a submission keypair.
 
-It returns `False` **only** for password-user, staff-audience surveys without patient identifiers where the creator has recorded an explicit, audit-logged opt-out declaration (`encryption_opt_out_declared` audit event). Surveys that existed before this upgrade were grandfathered with a `legacy-1.0` declaration (audit-logged, metadata only) so their plaintext responses remain readable without owner keys. Draft surveys may still store plaintext answers regardless of the predicate.
+It returns `False` **only** for surveys holding a historical opt-out declaration. The creator-facing opt-out mechanism was removed once encryption became the universal default: the publish flow requires encryption setup for every first publish, and the declaration checkbox no longer exists. Rows recorded before the removal (explicit `1.0` declarations and grandfathered `legacy-1.0` entries from surveys that predated the upgrade — both audit-logged) remain honoured by the predicate solely so their owners keep access to data stored plaintext under the old policy. Draft surveys may still store plaintext answers regardless of the predicate.
 
 **Legacy compatibility:**
 

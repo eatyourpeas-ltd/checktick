@@ -1506,7 +1506,15 @@ class Survey(models.Model):
         return UserOIDC.objects.filter(user_id=self.owner_id).exists()
 
     def has_encryption_opt_out(self) -> bool:
-        """Check if a valid creator opt-out declaration has been recorded."""
+        """Check if a historical encryption opt-out declaration is recorded.
+
+        The creator-facing opt-out mechanism was removed: every survey now
+        encrypts responses at rest and new declarations cannot be created.
+        Rows recorded before the removal (explicit "1.0" declarations and
+        pre-upgrade "legacy-1.0" grandfathering) are honoured solely so
+        their owners keep access to data that was stored plaintext under
+        the old policy — see requires_whole_response_encryption().
+        """
         return bool(
             self.encryption_opt_out_at
             and self.encryption_opt_out_declaration_version
@@ -1521,17 +1529,13 @@ class Survey(models.Model):
             True if all response data (not just demographics) should be
             encrypted with store_complete_response()
 
-        The predicate returns True if ANY of:
-        1. The survey collects patient data (schema check), OR
-        2. The declared respondent audience is patient or public, OR
-        3. The survey owner authenticates via SSO / OIDC (default-on).
-
-        It returns False only when ALL of:
-        - the owner is a password (non-SSO) user, AND
-        - the declared audience is staff, AND
-        - the survey collects no patient identifiers, AND
-        - the creator has recorded an explicit, audit-logged opt-out
-          declaration.
+        The predicate returns True for every survey, with one legacy
+        exception: surveys holding a historical opt-out declaration
+        (password owner, staff audience, no patient identifiers) store
+        plaintext so their owners retain access to data collected under
+        the pre-removal policy. New declarations cannot be created — the
+        publish-flow opt-out was removed once encryption became the
+        universal default.
 
         Draft surveys may still store plaintext answers regardless of this
         predicate (enforced at the submission layer, not here).
@@ -1549,8 +1553,8 @@ class Survey(models.Model):
             return True
         if self.owner_is_sso():
             return True
-        # Only remaining path to plaintext: password user, staff audience,
-        # no patient identifiers, with a recorded opt-out declaration.
+        # Legacy path: historical declaration rows keep their plaintext
+        # storage so owners never lose access to pre-removal data.
         return not self.has_encryption_opt_out()
 
     def sso_user_needs_passphrase(self) -> bool:
@@ -5069,6 +5073,10 @@ class AuditLog(models.Model):
         RESPONSES_ENCRYPTED_BACKFILL = (
             "responses_encrypted_backfill",
             "Responses Encrypted (Backfill Migration)",
+        )
+        NO_PATIENT_DATA_DECLARED = (
+            "no_patient_data_declared",
+            "No Patient Data Declared",
         )
 
     class Severity(models.TextChoices):

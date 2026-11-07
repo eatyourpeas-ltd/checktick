@@ -227,11 +227,18 @@ class TestPublishWorkflowToggle:
     """The allow_resume and allow_response_redaction toggles are wired into
     the publication workflow (publish_settings view)."""
 
+    @staticmethod
+    def _preencrypted(s):
+        """Existing encryption skips the first-publish setup redirect."""
+        s.encrypted_kek_password = b"w" * 32
+        s.save()
+        return s
+
     def test_publish_preserves_default_toggles(self, client, survey_owner):
         """Publishing with the toggle checkboxes checked keeps them True.
 
-        Uses staff audience + opt-out declaration to avoid the encryption
-        setup redirect — the toggles are independent of audience/encryption.
+        Pre-existing encryption avoids the encryption setup redirect — the
+        toggles are independent of audience/encryption.
         """
         from django.urls import reverse
 
@@ -242,6 +249,7 @@ class TestPublishWorkflowToggle:
             status=Survey.Status.DRAFT,
             visibility=Survey.Visibility.PUBLIC,
         )
+        self._preencrypted(s)
         client.force_login(survey_owner)
         client.post(
             reverse("surveys:publish_settings", args=[s.slug]),
@@ -249,7 +257,6 @@ class TestPublishWorkflowToggle:
                 "action": "publish",
                 "visibility": "public",
                 "respondent_audience": "staff",
-                "encryption_opt_out": "on",
                 "no_patient_data_ack": "on",
                 "allow_resume": "on",
                 "allow_response_redaction": "on",
@@ -270,6 +277,7 @@ class TestPublishWorkflowToggle:
             status=Survey.Status.DRAFT,
             visibility=Survey.Visibility.PUBLIC,
         )
+        self._preencrypted(s)
         client.force_login(survey_owner)
         client.post(
             reverse("surveys:publish_settings", args=[s.slug]),
@@ -277,7 +285,6 @@ class TestPublishWorkflowToggle:
                 "action": "publish",
                 "visibility": "public",
                 "respondent_audience": "staff",
-                "encryption_opt_out": "on",
                 "no_patient_data_ack": "on",
                 "allow_resume": "",  # unchecked
                 "allow_response_redaction": "on",
@@ -297,6 +304,7 @@ class TestPublishWorkflowToggle:
             status=Survey.Status.DRAFT,
             visibility=Survey.Visibility.PUBLIC,
         )
+        self._preencrypted(s)
         client.force_login(survey_owner)
         client.post(
             reverse("surveys:publish_settings", args=[s.slug]),
@@ -304,7 +312,6 @@ class TestPublishWorkflowToggle:
                 "action": "publish",
                 "visibility": "public",
                 "respondent_audience": "staff",
-                "encryption_opt_out": "on",
                 "no_patient_data_ack": "on",
                 "allow_resume": "on",
                 "allow_response_redaction": "",  # unchecked
