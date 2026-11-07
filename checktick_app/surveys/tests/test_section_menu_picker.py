@@ -381,3 +381,95 @@ def test_change_sections_link_in_progress_bar(client, section_menu_survey, parti
     assert res.status_code == 200
     html = res.content.decode()
     assert "Change sections" in html
+
+
+# --- Anonymous public participants: session progress row reuse ---
+
+
+@pytest.fixture
+def public_section_menu_survey(section_menu_survey):
+    """The same survey opened to anonymous participants."""
+    section_menu_survey.visibility = Survey.Visibility.PUBLIC
+    section_menu_survey.save(update_fields=["visibility"])
+    return section_menu_survey
+
+
+@pytest.mark.django_db
+def test_select_sections_repeated_post_reuses_session_row(
+    client, public_section_menu_survey
+):
+    """Regression: a second select_sections POST from the same anonymous
+    session must reuse the session's SurveyProgress row.
+
+    A blind create() raised IntegrityError on the
+    one_progress_per_session_per_survey unique constraint whenever the
+    participant re-submitted the picker (back-button resubmit, double
+    click, changing their selection).
+    """
+    url = reverse("surveys:take", kwargs={"slug": public_section_menu_survey.slug})
+    res1 = client.post(
+        url,
+        {
+            "action": "select_sections",
+            "selected_groups": [str(public_section_menu_survey._g2.id)],
+        },
+    )
+    assert res1.status_code == 302
+    # Second POST from the same session must not 500.
+    res2 = client.post(
+        url,
+        {
+            "action": "select_sections",
+            "selected_groups": [str(public_section_menu_survey._g3.id)],
+        },
+    )
+    assert res2.status_code == 302
+    rows = SurveyProgress.objects.filter(
+        survey=public_section_menu_survey, session_key__isnull=False
+    )
+    assert rows.count() == 1
+    progress = rows.get()
+    assert progress.user is None
+    # Latest selection wins; mandatory g1 still unioned in.
+    assert public_section_menu_survey._g1.id in progress.selected_group_ids
+    assert public_section_menu_survey._g3.id in progress.selected_group_ids
+    assert public_section_menu_survey._g2.id not in progress.selected_group_ids
+
+
+@pytest.mark.django_db
+def test_select_sections_below_min_repeated_post_reuses_session_row(
+    client, public_section_menu_survey
+):
+    """Same regression for the validation-failure path: the picker
+    re-renders with an error, and a corrected re-submit must reuse the
+    row created by the failed attempt."""
+    public_section_menu_survey.section_menu.min_selected = 2
+    public_section_menu_survey.section_menu.save(update_fields=["min_selected"])
+    url = reverse("surveys:take", kwargs={"slug": public_section_menu_survey.slug})
+    # Too few sections: row created, validation error, picker re-renders.
+    res1 = client.post(
+        url,
+        {
+            "action": "select_sections",
+            "selected_groups": [str(public_section_menu_survey._g2.id)],
+        },
+    )
+    assert res1.status_code == 302
+    # Corrected re-submit from the same session must not 500.
+    res2 = client.post(
+        url,
+        {
+            "action": "select_sections",
+            "selected_groups": [
+                str(public_section_menu_survey._g2.id),
+                str(public_section_menu_survey._g3.id),
+            ],
+        },
+    )
+    assert res2.status_code == 302
+    assert (
+        SurveyProgress.objects.filter(
+            survey=public_section_menu_survey, session_key__isnull=False
+        ).count()
+        == 1
+    )

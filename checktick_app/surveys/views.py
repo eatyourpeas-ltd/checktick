@@ -7187,6 +7187,36 @@ def _diary_submit_entry(
     return redirect("surveys:thank_you", slug=survey.slug)
 
 
+def _get_or_create_session_progress(
+    request: HttpRequest, survey: Survey
+) -> SurveyProgress:
+    """
+    Get or create the session-keyed SurveyProgress row used as an anonymous
+    participant's throwaway progress record (matrix completion tracking,
+    section-menu picker selections, save-resume).
+
+    Reuses the existing row on repeat requests: the
+    one_progress_per_session_per_survey unique constraint means a bare
+    create() raises IntegrityError whenever the same session hits the
+    picker or matrix landing page a second time. get_or_create also
+    recovers from the concurrent-request create race.
+    """
+    from datetime import timedelta
+
+    if not request.session.session_key:
+        request.session.create()
+    progress, _created = SurveyProgress.objects.get_or_create(
+        survey=survey,
+        session_key=request.session.session_key,
+        defaults={
+            "user": request.user if request.user.is_authenticated else None,
+            "total_questions": survey.questions.count(),
+            "expires_at": timezone.now() + timedelta(days=30),
+        },
+    )
+    return progress
+
+
 def _handle_participant_submission(
     request: HttpRequest,
     survey: Survey,
@@ -7225,17 +7255,7 @@ def _handle_participant_submission(
     # session-based row so matrix can track section states. This mirrors
     # the section_menu picker's throwaway progress row handling.
     if progress is None and survey.layout == Survey.Layout.MATRIX:
-        from datetime import timedelta
-
-        if not request.session.session_key:
-            request.session.create()
-        progress = SurveyProgress.objects.create(
-            survey=survey,
-            user=request.user if request.user.is_authenticated else None,
-            session_key=request.session.session_key,
-            total_questions=survey.questions.count(),
-            expires_at=timezone.now() + timedelta(days=30),
-        )
+        progress = _get_or_create_session_progress(request, survey)
 
     # Section menu picker submission (see docs/survey-layouts.md step 5).
     # The picker is a pre-step: the participant's chosen group IDs (plus
@@ -7247,21 +7267,12 @@ def _handle_participant_submission(
         and survey.layout == Survey.Layout.SECTION_MENU
     ):
         if progress is None:
-            # Public/unlisted without a credential: create a throwaway
-            # progress row to hold the selection. This mirrors the
-            # save_resume path's session-key handling.
-            from datetime import timedelta
-
-            if not request.session.session_key:
-                request.session.create()
-            session_key = request.session.session_key
-            progress = SurveyProgress.objects.create(
-                survey=survey,
-                user=request.user if request.user.is_authenticated else None,
-                session_key=session_key,
-                total_questions=survey.questions.count(),
-                expires_at=timezone.now() + timedelta(days=30),
-            )
+            # Public/unlisted without a credential: use the throwaway
+            # session-keyed progress row to hold the selection. Reuses the
+            # existing row on repeat submissions (see
+            # _get_or_create_session_progress) instead of crashing on the
+            # one_progress_per_session_per_survey constraint.
+            progress = _get_or_create_session_progress(request, survey)
         chosen_raw = request.POST.getlist("selected_groups")
         chosen_ids = {int(x) for x in chosen_raw if str(x).isdigit()}
         # Union with mandatory sections from the SectionMenu config.
@@ -7505,15 +7516,12 @@ def _handle_participant_submission(
                 # Check for an existing row by session_key (public surveys)
                 # before creating a new one, so a second "save and come back
                 # later" reuses the same resume token.
-                from datetime import timedelta
-
                 if not request.session.session_key:
                     request.session.create()
-                session_key = request.session.session_key
 
                 existing = SurveyProgress.objects.filter(
                     survey=survey,
-                    session_key=session_key,
+                    session_key=request.session.session_key,
                     status=SurveyProgress.Status.IN_PROGRESS,
                 ).first()
                 if request.user.is_authenticated:
@@ -7528,19 +7536,12 @@ def _handle_participant_submission(
 
                 if existing:
                     progress = existing
-                    progress.update_progress(answers)
                 else:
-                    progress = SurveyProgress.objects.create(
-                        survey=survey,
-                        user=request.user if request.user.is_authenticated else None,
-                        session_key=session_key,
-                        partial_answers=answers,
-                        answered_count=len([v for v in answers.values() if v]),
-                        total_questions=survey.questions.count(),
-                        expires_at=timezone.now() + timedelta(days=30),
-                    )
-            else:
-                progress.update_progress(answers)
+                    # No in-progress row, but a completed/abandoned row may
+                    # already occupy the session's unique slot — reuse it
+                    # instead of failing the insert.
+                    progress = _get_or_create_session_progress(request, survey)
+            progress.update_progress(answers)
             resume_url = request.build_absolute_uri(
                 reverse(
                     "surveys:take_resume",
