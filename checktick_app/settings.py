@@ -715,6 +715,41 @@ EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 
+# Email deliverability validation (DNS MX/A lookups) used by
+# prune_unconfirmed_users to prune bot signups whose email domains cannot
+# receive mail, and by SignupForm to reject such signups at the door.
+# Email bounce (NDR) processing: a phase of the daily prune_unconfirmed_users
+# command that reads delivery-failure notifications from the M365 sending
+# mailbox (EMAIL_HOST_USER) via the Graph API and prunes unconfirmed accounts
+# whose signup email hard-bounced. Requires the Mail.Read application
+# permission (admin consent) on the Azure app registration used for sending —
+# scope it to the sending mailbox with an Exchange Online ApplicationAccessPolicy.
+# The phase fails gracefully (permission missing / network outage → logged,
+# prune run continues) and only runs when EMAIL_BACKEND is the Graph backend.
+# See checktick_app/core/email_bounces.py and email_validation.py.
+#
+# NOTE: "pytest" in sys.modules is the reliable test detection here —
+# PYTEST_CURRENT_TEST is NOT set when pytest-django imports this module at
+# session start, so gating on it silently never applies (the existing
+# PYTEST_CURRENT_TEST blocks above are no-ops for the same reason). Under
+# pytest both flags are FORCED off regardless of .env/docker overlays:
+# tests must never do real DNS/Graph lookups via a developer's local .env.
+# Test classes opt in explicitly with override_settings(EMAIL_VALIDATION_ENABLED=True)
+# etc. Deployments read the env vars normally: disable on deployments with no
+# outbound DNS (EMAIL_VALIDATION_ENABLED=False) or no readable sending
+# mailbox (EMAIL_BOUNCE_PROCESSING_ENABLED=False).
+_UNDER_PYTEST = "pytest" in sys.modules
+if _UNDER_PYTEST:
+    EMAIL_VALIDATION_ENABLED = False
+    EMAIL_BOUNCE_PROCESSING_ENABLED = False
+else:
+    EMAIL_VALIDATION_ENABLED = env.bool("EMAIL_VALIDATION_ENABLED", default=True)
+    EMAIL_BOUNCE_PROCESSING_ENABLED = env.bool(
+        "EMAIL_BOUNCE_PROCESSING_ENABLED", default=True
+    )
+EMAIL_VALIDATION_DNS_TIMEOUT = env.float("EMAIL_VALIDATION_DNS_TIMEOUT", default=3.0)
+EMAIL_BOUNCE_LOOKBACK_HOURS = env.int("EMAIL_BOUNCE_LOOKBACK_HOURS", default=168)
+
 # Microsoft Graph API email settings
 # Used when EMAIL_BACKEND=checktick_app.core.graph_email_backend.GraphEmailBackend
 # Requires an Azure AD App Registration with Mail.Send application permission.

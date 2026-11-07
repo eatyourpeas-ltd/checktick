@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.utils.translation import gettext_lazy as _
 
+from .email_validation import check_email_deliverability
 from .models import SiteBranding, UserEmailPreferences, UserLanguagePreference
 
 User = get_user_model()
@@ -37,6 +38,22 @@ class SignupForm(UserCreationForm):
             raise forms.ValidationError(
                 "This email address cannot be used. Please use a different address or sign in."
             )
+        # Reject emails whose domain provably cannot receive mail (no MX and
+        # no address record, or the domain does not exist). The confirmation
+        # email could never be delivered, so no account is created. DNS
+        # timeouts and other lookup failures fail open — the signup proceeds
+        # and the prune cron's validation phase handles any later evidence.
+        if getattr(settings, "EMAIL_VALIDATION_ENABLED", True):
+            try:
+                result = check_email_deliverability(email)
+            except Exception:
+                # A resolver crash must never block a real signup.
+                return email
+            if result.is_invalid:
+                raise forms.ValidationError(
+                    "This email address cannot be used: its domain cannot "
+                    "receive email. Please check the address or contact support."
+                )
         return email
 
     def clean(self):
