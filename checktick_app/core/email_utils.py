@@ -404,9 +404,10 @@ def send_token_email(
     else:  # opt_out
         subject = f"Your redaction token for {survey_name}"
         markdown_content = (
-            f"You submitted a response to **{survey_name}** and requested "
-            f"a redaction token. Keep this link safe — you can use it to "
-            f"request deletion of your response later.\n\n"
+            f"You asked us to email you the redaction token for your "
+            f"response to **{survey_name}**. Keep this link safe — quote "
+            f"it to the survey organiser if you want your response "
+            f"deleted later.\n\n"
             f"[Your redaction token]({token_url})\n\n"
             f"If you lose this link, we cannot identify your response to "
             f"delete it. This link is valid for as long as the survey "

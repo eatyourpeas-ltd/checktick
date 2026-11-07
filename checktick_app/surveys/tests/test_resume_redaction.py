@@ -227,11 +227,18 @@ class TestPublishWorkflowToggle:
     """The allow_resume and allow_response_redaction toggles are wired into
     the publication workflow (publish_settings view)."""
 
+    @staticmethod
+    def _preencrypted(s):
+        """Existing encryption skips the first-publish setup redirect."""
+        s.encrypted_kek_password = b"w" * 32
+        s.save()
+        return s
+
     def test_publish_preserves_default_toggles(self, client, survey_owner):
         """Publishing with the toggle checkboxes checked keeps them True.
 
-        Uses staff audience + opt-out declaration to avoid the encryption
-        setup redirect — the toggles are independent of audience/encryption.
+        Pre-existing encryption avoids the encryption setup redirect — the
+        toggles are independent of audience/encryption.
         """
         from django.urls import reverse
 
@@ -242,6 +249,7 @@ class TestPublishWorkflowToggle:
             status=Survey.Status.DRAFT,
             visibility=Survey.Visibility.PUBLIC,
         )
+        self._preencrypted(s)
         client.force_login(survey_owner)
         client.post(
             reverse("surveys:publish_settings", args=[s.slug]),
@@ -249,7 +257,6 @@ class TestPublishWorkflowToggle:
                 "action": "publish",
                 "visibility": "public",
                 "respondent_audience": "staff",
-                "encryption_opt_out": "on",
                 "no_patient_data_ack": "on",
                 "allow_resume": "on",
                 "allow_response_redaction": "on",
@@ -270,6 +277,7 @@ class TestPublishWorkflowToggle:
             status=Survey.Status.DRAFT,
             visibility=Survey.Visibility.PUBLIC,
         )
+        self._preencrypted(s)
         client.force_login(survey_owner)
         client.post(
             reverse("surveys:publish_settings", args=[s.slug]),
@@ -277,7 +285,6 @@ class TestPublishWorkflowToggle:
                 "action": "publish",
                 "visibility": "public",
                 "respondent_audience": "staff",
-                "encryption_opt_out": "on",
                 "no_patient_data_ack": "on",
                 "allow_resume": "",  # unchecked
                 "allow_response_redaction": "on",
@@ -297,6 +304,7 @@ class TestPublishWorkflowToggle:
             status=Survey.Status.DRAFT,
             visibility=Survey.Visibility.PUBLIC,
         )
+        self._preencrypted(s)
         client.force_login(survey_owner)
         client.post(
             reverse("surveys:publish_settings", args=[s.slug]),
@@ -304,7 +312,6 @@ class TestPublishWorkflowToggle:
                 "action": "publish",
                 "visibility": "public",
                 "respondent_audience": "staff",
-                "encryption_opt_out": "on",
                 "no_patient_data_ack": "on",
                 "allow_resume": "on",
                 "allow_response_redaction": "",  # unchecked
@@ -549,36 +556,28 @@ class TestResumeRoute:
 
 
 @pytest.mark.django_db
-class TestOptOutToken:
-    """The opt-out (receipt) token for public surveys.
+class TestRedactionToken:
+    """The redaction token issued on submission (issue #376).
 
-    Public-survey participants can opt in to receive a receipt token at
-    submission time, so they can request deletion of their response later.
-    This extends the existing receipt_token pattern (which was pseudonymous-
-    only) to anonymous responses on an opt-in basis.
+    Every participant of a survey with allow_response_redaction enabled at
+    publication is issued a token on submission — no opt-in step — so they
+    can request deletion (redaction) of their response later.
     """
 
-    def test_opt_in_generates_receipt_token_for_public_survey(
+    def test_public_survey_participant_gets_redaction_token(
         self, client, public_survey_for_resume
     ):
-        """A public-survey participant who opts in gets a receipt token."""
+        """An anonymous public-survey participant gets a token on submit."""
         from django.urls import reverse
 
         url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
         q_id = public_survey_for_resume._test_q1_id
 
-        response = client.post(
-            url,
-            {
-                f"q_{q_id}": "My answer",
-                "opt_in_redaction": "on",
-            },
-        )
+        response = client.post(url, {f"q_{q_id}": "My answer"})
 
         assert response.status_code == 302
         assert "/thank-you/" in response.url
 
-        # A SurveyResponse was created with a receipt token
         from checktick_app.surveys.models import SurveyResponse
 
         resp = SurveyResponse.objects.get(survey=public_survey_for_resume)
@@ -589,37 +588,31 @@ class TestOptOutToken:
             f"receipt_token_{public_survey_for_resume.slug}"
         )
         assert token_in_session is not None
-        assert token_in_session == str(resp.receipt_token)
+        assert token_in_session == resp.receipt_token
 
-    def test_no_opt_in_no_receipt_token_for_public_survey(
-        self, client, public_survey_for_resume
-    ):
-        """A public-survey participant who does not opt in gets no receipt
-        token — the original anonymity promise stands."""
+    def test_token_is_short_and_unambiguous(self, client, public_survey_for_resume):
+        """The token is an 8-character uppercase code from the Crockford
+        base32 alphabet — short and copyable like a 2FA code, with no
+        easily-confused characters (no I/L/O/U)."""
         from django.urls import reverse
 
         url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
         q_id = public_survey_for_resume._test_q1_id
-
-        response = client.post(
-            url,
-            {
-                f"q_{q_id}": "My answer",
-                # no opt_in_redaction
-            },
-        )
-
-        assert response.status_code == 302
+        client.post(url, {f"q_{q_id}": "My answer"})
 
         from checktick_app.surveys.models import SurveyResponse
 
         resp = SurveyResponse.objects.get(survey=public_survey_for_resume)
-        assert resp.receipt_token is None
+        token = resp.receipt_token
+        assert token is not None
+        assert len(token) == 8
+        assert token == token.upper()
+        assert not any(c in "ILOU" for c in token)
+        assert token.isalnum()
 
-    def test_opt_in_ignored_when_redaction_disabled(
-        self, client, public_survey_for_resume
-    ):
-        """When allow_response_redaction is False, opting in does nothing."""
+    def test_no_token_when_redaction_disabled(self, client, public_survey_for_resume):
+        """When allow_response_redaction is disabled at publication, no
+        token is issued and responses cannot be linked for redaction."""
         from django.urls import reverse
 
         public_survey_for_resume.allow_response_redaction = False
@@ -628,13 +621,7 @@ class TestOptOutToken:
         url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
         q_id = public_survey_for_resume._test_q1_id
 
-        response = client.post(
-            url,
-            {
-                f"q_{q_id}": "My answer",
-                "opt_in_redaction": "on",
-            },
-        )
+        response = client.post(url, {f"q_{q_id}": "My answer"})
 
         assert response.status_code == 302
 
@@ -642,11 +629,72 @@ class TestOptOutToken:
 
         resp = SurveyResponse.objects.get(survey=public_survey_for_resume)
         assert resp.receipt_token is None
+        assert (
+            client.session.get(f"receipt_token_{public_survey_for_resume.slug}") is None
+        )
+
+    def test_token_collision_retries_with_fresh_code(self, public_survey_for_resume):
+        """Uniqueness is guaranteed by a DB UNIQUE constraint; when the
+        generator draws an already-taken code, the savepoint retries with a
+        fresh draw and the response ends up with its own distinct token."""
+        from unittest.mock import patch
+
+        from checktick_app.surveys.models import SurveyResponse
+
+        a = SurveyResponse.objects.create(
+            survey=public_survey_for_resume, answers={"q1": "a"}
+        )
+        t1 = a.generate_receipt_token()
+        b = SurveyResponse.objects.create(
+            survey=public_survey_for_resume, answers={"q1": "b"}
+        )
+
+        codes = iter([t1, "NEWCODE1"])
+        with patch.object(
+            SurveyResponse, "_new_receipt_token", staticmethod(lambda: next(codes))
+        ):
+            t2 = b.generate_receipt_token()
+
+        assert t2 == "NEWCODE1"
+        assert t2 != t1
+        b.refresh_from_db()
+        assert b.receipt_token == "NEWCODE1"
+        a.refresh_from_db()
+        assert a.receipt_token == t1
+
+    def test_token_collision_exhaustion_never_returns_foreign_token(
+        self, public_survey_for_resume
+    ):
+        """If every retry collides (astronomically unlikely at 40 bits), the
+        response is left with NO token rather than a code that belongs to
+        another response."""
+        from unittest.mock import patch
+
+        from checktick_app.surveys.models import SurveyResponse
+
+        a = SurveyResponse.objects.create(
+            survey=public_survey_for_resume, answers={"q1": "a"}
+        )
+        t1 = a.generate_receipt_token()
+        b = SurveyResponse.objects.create(
+            survey=public_survey_for_resume, answers={"q1": "b"}
+        )
+
+        with patch.object(
+            SurveyResponse, "_new_receipt_token", staticmethod(lambda: t1)
+        ):
+            result = b.generate_receipt_token()
+
+        assert result is None
+        b.refresh_from_db()
+        assert b.receipt_token is None
+        a.refresh_from_db()
+        assert a.receipt_token == t1
 
     def test_receipt_token_round_trips_through_dsr_lookup(
         self, client, public_survey_for_resume
     ):
-        """The opt-out token round-trips through
+        """The redaction token round-trips through
         DataSubjectRequest.find_by_receipt_token — the existing DSR
         workflow can locate the response for redaction."""
         from django.urls import reverse
@@ -656,10 +704,7 @@ class TestOptOutToken:
         url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
         q_id = public_survey_for_resume._test_q1_id
 
-        client.post(
-            url,
-            {f"q_{q_id}": "My answer", "opt_in_redaction": "on"},
-        )
+        client.post(url, {f"q_{q_id}": "My answer"})
 
         resp = SurveyResponse.objects.get(survey=public_survey_for_resume)
         token = resp.receipt_token
@@ -674,11 +719,11 @@ class TestOptOutToken:
         # uses this lookup).
         assert SurveyResponse.objects.filter(receipt_token=token).exists()
 
-    def test_pseudonymous_survey_still_gets_receipt_token_without_opt_in(
+    def test_pseudonymous_survey_still_gets_receipt_token_automatically(
         self, client, survey, survey_owner, django_user_model
     ):
-        """Authenticated (pseudonymous) surveys still issue a receipt token
-        automatically, without the participant opting in."""
+        """Authenticated (pseudonymous) surveys issue a receipt token
+        automatically, as before."""
         from django.urls import reverse
 
         # Allow any authenticated user to take this survey
@@ -701,6 +746,83 @@ class TestOptOutToken:
 
         resp = SurveyResponse.objects.get(survey=survey, submitted_by=participant)
         assert resp.receipt_token is not None
+
+
+@pytest.mark.django_db
+class TestRedactionTokenDisplay:
+    """The token renders once on the thank-you page (issue #376).
+
+    Regression tests for the reported bug: public-survey completion never
+    rendered a token because the opt-in checkbox it depended on did not
+    exist. The token is now issued automatically and displayed on the
+    thank-you page with a copy button and a one-time warning.
+    """
+
+    def test_thank_you_shows_redaction_token(self, client, public_survey_for_resume):
+        """The token value, its purpose, and the one-time warning are all
+        rendered on the thank-you page after submission."""
+        from django.urls import reverse
+
+        from checktick_app.surveys.models import SurveyResponse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+
+        response = client.post(url, {f"q_{q_id}": "My answer"}, follow=True)
+
+        assert response.status_code == 200
+        html = response.content.decode()
+        resp = SurveyResponse.objects.get(survey=public_survey_for_resume)
+        assert resp.receipt_token is not None
+        # The token itself is rendered...
+        assert resp.receipt_token in html
+        # ...with the copy affordance, an explanation of what it is for,
+        # and the one-time warning.
+        assert "copy-receipt-btn" in html
+        assert "redaction token" in html
+        assert "will not be shown again" in html
+
+    def test_thank_you_shows_no_token_when_redaction_disabled(
+        self, client, public_survey_for_resume
+    ):
+        """With the publication toggle off, no token block is rendered."""
+        from django.urls import reverse
+
+        public_survey_for_resume.allow_response_redaction = False
+        public_survey_for_resume.save(update_fields=["allow_response_redaction"])
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+
+        response = client.post(url, {f"q_{q_id}": "My answer"}, follow=True)
+
+        assert response.status_code == 200
+        assert "receipt-token" not in response.content.decode()
+
+    def test_thank_you_token_display_is_one_time(
+        self, client, public_survey_for_resume
+    ):
+        """A second visit to the thank-you page does not show the token
+        again (one-time display)."""
+        from django.urls import reverse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+
+        response = client.post(url, {f"q_{q_id}": "My answer"}, follow=True)
+        first_html = response.content.decode()
+        from checktick_app.surveys.models import SurveyResponse
+
+        token = SurveyResponse.objects.get(
+            survey=public_survey_for_resume
+        ).receipt_token
+        assert token in first_html
+
+        second = client.get(
+            reverse("surveys:thank_you", kwargs={"slug": public_survey_for_resume.slug})
+        )
+        assert second.status_code == 200
+        assert token not in second.content.decode()
 
 
 @pytest.mark.django_db
@@ -747,10 +869,11 @@ class TestEmailTokenDelivery:
         from django.core import mail
         from django.urls import reverse
 
-        # Submit with opt-in to get a receipt token
+        # Submit to get a receipt token (issued automatically when the
+        # redaction toggle is enabled at publication)
         url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
         q_id = public_survey_for_resume._test_q1_id
-        client.post(url, {f"q_{q_id}": "Answer", "opt_in_redaction": "on"})
+        client.post(url, {f"q_{q_id}": "Answer"})
 
         # The receipt token is in the session — email it
         response = client.post(
@@ -767,6 +890,72 @@ class TestEmailTokenDelivery:
         assert response.json()["success"] is True
         assert len(mail.outbox) == 1
         assert "participant@example.com" in mail.outbox[0].to
+
+    def test_email_opt_out_token_from_displayed_value(
+        self, client, public_survey_for_resume
+    ):
+        """The thank-you page's email form passes the displayed token in the
+        POST body — the one-time display has already popped it from the
+        session, so the endpoint must accept (and validate) the token value."""
+        from django.core import mail
+        from django.urls import reverse
+
+        from checktick_app.surveys.models import SurveyResponse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        q_id = public_survey_for_resume._test_q1_id
+        client.post(url, {f"q_{q_id}": "Answer"})
+        token = SurveyResponse.objects.get(
+            survey=public_survey_for_resume
+        ).receipt_token
+
+        # Viewing the thank-you page pops the token from the session.
+        client.get(
+            reverse("surveys:thank_you", kwargs={"slug": public_survey_for_resume.slug})
+        )
+        assert (
+            client.session.get(f"receipt_token_{public_survey_for_resume.slug}") is None
+        )
+
+        response = client.post(
+            url,
+            {
+                "action": "email_token",
+                "token_type": "opt_out",
+                "token": token,
+                "email": "participant@example.com",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        assert len(mail.outbox) == 1
+        assert token in mail.outbox[0].body
+
+    def test_email_opt_out_token_unknown_token_rejected(
+        self, client, public_survey_for_resume
+    ):
+        """A POSTed token that does not belong to this survey is rejected
+        (no email is sent for a value the participant could not have)."""
+        from django.core import mail
+        from django.urls import reverse
+
+        url = reverse("surveys:take", kwargs={"slug": public_survey_for_resume.slug})
+        response = client.post(
+            url,
+            {
+                "action": "email_token",
+                "token_type": "opt_out",
+                "token": "AAAA2222",
+                "email": "participant@example.com",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        assert response.status_code == 400
+        assert response.json()["error"] == "No redaction token available."
+        assert len(mail.outbox) == 0
 
     def test_email_token_invalid_email_rejected(self, client, public_survey_for_resume):
         """An invalid email address is rejected."""

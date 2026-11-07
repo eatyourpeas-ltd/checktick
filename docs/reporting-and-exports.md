@@ -43,7 +43,7 @@ The Response Insights section displays horizontal bar charts showing how respond
 
 ### Unlock Gate
 
-When any response in the survey has encrypted answers (`enc_answers` set), the dashboard insights are unlock-gated: you must unlock the survey with your encryption password or recovery phrase before the charts render. This avoids decrypting patient data without authentication. Plaintext-only surveys (draft, legacy, or staff-audience surveys with a recorded encryption opt-out) render the insights without unlock.
+When any response in the survey has encrypted answers (`enc_answers` set), the dashboard insights are unlock-gated: you must unlock the survey with your encryption password or recovery phrase before the charts render. This avoids decrypting patient data without authentication. Plaintext-only surveys (draft, or legacy surveys with a historical encryption opt-out declaration) render the insights without unlock.
 
 ---
 
@@ -76,7 +76,7 @@ Nobody else can reach the report. Anonymous visitors are redirected to log in; n
 
 **When responses are encrypted** (which is the default for any survey collecting patient data, any patient- or public-audience survey, and any survey owned by an SSO user — see `docs/encryption-technical-reference.md`), the report is **unlock-gated**: you must unlock the survey with your encryption password or recovery phrase before any answer content is decrypted and shown. SSO users unlock automatically with their identity. The server holds no key that can decrypt your responses without you — the unlock re-derives the key from your credentials on each request, and it expires after 30 minutes. Until you unlock, the report shows a single "Responses are encrypted" panel with an unlock button and no answer content at all.
 
-For the small set of plaintext-only surveys (draft surveys, legacy surveys, or staff-audience surveys where the creator has made an explicit, audit-logged opt-out declaration), the report renders without unlock — matching the existing `load_answers` behaviour.
+For the small set of plaintext-only surveys (draft surveys, or legacy surveys holding a historical opt-out declaration retained for owner data access — the creator-facing opt-out mechanism has been removed), the report renders without unlock — matching the existing `load_answers` behaviour.
 
 ### Is it safe for patient data?
 
@@ -295,7 +295,7 @@ Response Insights only appear if:
 
 ### Summary Report shows "Responses are encrypted"
 
-The Summary Report is unlock-gated when any response has `enc_answers` set. Unlock the survey with your encryption password or recovery phrase to view the report. Plaintext-only surveys (draft, legacy, or staff-audience surveys with a recorded encryption opt-out) render the summary without unlock.
+The Summary Report is unlock-gated when any response has `enc_answers` set. Unlock the survey with your encryption password or recovery phrase to view the report. Plaintext-only surveys (draft, or legacy surveys with a historical encryption opt-out declaration) render the summary without unlock.
 
 ### Rate limit exceeded
 

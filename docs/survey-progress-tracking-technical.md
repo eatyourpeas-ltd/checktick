@@ -69,7 +69,11 @@ class Survey(models.Model):
 
 ### `SurveyResponse.receipt_token`
 
-The existing `receipt_token` field (UUID, nullable) is extended to public surveys on an opt-in basis. See `generate_receipt_token()` below.
+The `receipt_token` field (nullable, indexed, unique) holds a short,
+participant-friendly code (8-character Crockford base32 — no I/L/O/U) so
+it can be copied or read out like a 2FA token. The column was migrated
+from UUIDField to CharField (0075); pre-existing UUID values remain valid
+strings. See `generate_receipt_token()` below.
 
 ## Resume Model by Access Tier
 
@@ -119,39 +123,43 @@ When a public-survey participant clicks "Save and come back later", the `save_re
 
 ## Opt-Out Tokens
 
-### `generate_receipt_token(opt_in=False)`
+### `generate_receipt_token()`
 
 ```python
-def generate_receipt_token(self, opt_in: bool = False) -> uuid.UUID | None:
+def generate_receipt_token(self) -> str | None:
     if not self.is_pseudonymous:
-        # Anonymous response — only issue a token if the participant
-        # explicitly opted in and the survey allows redaction.
-        if not opt_in:
-            return None
+        # Anonymous response — only issue a token when the survey
+        # allows redaction (publication-time toggle).
         if not getattr(self.survey, "allow_response_redaction", True):
             return None
     if not self.receipt_token:
-        self.receipt_token = uuid.uuid4()
+        self.receipt_token = self._new_receipt_token()
         self.save(update_fields=["receipt_token"])
     return self.receipt_token
 ```
 
-- Pseudonymous responses (authenticated/token): token issued automatically, no opt-in needed.
-- Anonymous responses (public/unlisted): token issued only when `opt_in=True` AND `survey.allow_response_redaction=True`.
-- The token is stored on `SurveyResponse.receipt_token` and used with the existing `DataSubjectRequest.find_by_receipt_token()` workflow.
+- Pseudonymous responses (authenticated/token): token issued automatically.
+- Anonymous responses (public/unlisted): token issued automatically when
+  `survey.allow_response_redaction=True` — no opt-in step (issue #376:
+  every participant of a redaction-enabled survey is shown the token on
+  the thank-you page).
+- The token is a short code (`_new_receipt_token`, 8 chars, unique) shown
+  once on the thank-you page and used with the existing
+  `DataSubjectRequest.find_by_receipt_token()` workflow.
 
 ### Submit handler
 
-The submit handler reads `opt_in_redaction` from the POST body and passes it to `generate_receipt_token`:
+The submit handlers (linear, matrix final submit, diary entry) call
+`generate_receipt_token()` on the saved response:
 
 ```python
-opted_in_redaction = bool(request.POST.get("opt_in_redaction"))
-token = resp.generate_receipt_token(opt_in=opted_in_redaction)
+token = resp.generate_receipt_token()
 if token:
     request.session[f"receipt_token_{survey.slug}"] = str(token)
 ```
 
-The thank-you page displays the token from the session (one-time display).
+The thank-you page displays the token from the session (one-time display)
+with a copy button and a warning that it will not be shown again.
 
 ## Email Delivery of Tokens
 
@@ -175,14 +183,22 @@ def send_token_email(to_email, survey_name, token_url, token_type) -> bool:
 Accepts `email`, `token_type` ("resume" or "opt_out"), and looks up the token:
 
 - For resume tokens: looks up `SurveyProgress` by `session_key`.
-- For opt-out tokens: reads `receipt_token` from the session.
+- For opt-out tokens: reads the token from the POST body (the thank-you
+  page's "Email this token to myself" form passes the displayed value —
+  the one-time display has already popped it from the session), falling
+  back to the session for compatibility. The value must match a
+  `SurveyResponse` of this survey, otherwise 400.
+
+The thank-you form is rendered only alongside the token itself, so a
+participant can only email a token that was shown to them. The POST is
+rate-limited with the take URL (10/min per IP).
 
 ## Publication Workflow Toggles
 
 Two checkboxes in the publish settings page control the feature:
 
 - **`allow_resume`** (default True): when False, no `SurveyProgress` row is created for any access tier, no resume token is issued, and the participant must complete in a single session.
-- **`allow_response_redaction`** (default True): when False, public-survey participants are not offered an opt-out token on the thank-you page. Authenticated/token surveys are unaffected (they issue a `receipt_token` where pseudonymous regardless of this toggle).
+- **`allow_response_redaction`** (default True): when False, anonymous public/unlisted responses get no token at submission and the thank-you page shows no token block, so they cannot be linked for redaction. Pseudonymous responses are unaffected (they issue a `receipt_token` regardless of this toggle, matching the original DSR design).
 
 Both are wired into:
 - `survey_publish_settings` view (publish and save actions)
@@ -245,7 +261,7 @@ Key test scenarios:
 - Public survey behaviour change (no auto-save, server_save_disabled response)
 - Save and come back later (token creation, reuse, disabled when allow_resume=False)
 - Resume route (valid token, invalid token, expired token, completed token, authenticated survey rejection)
-- Opt-out token (opt-in generates token, no opt-in means no token, disabled toggle ignores opt-in, pseudonymous still gets token)
+- Opt-out/redaction token (issued automatically for anonymous responses when the toggle is on, None when disabled, pseudonymous responses still get a token, short 8-character code format, thank-you page one-time display)
 - Email delivery (sends email, invalid email rejected, no token available error, address not stored in any model)
 - Submit marks completed (not deleted), resume token invalidated
 

@@ -62,19 +62,27 @@ When you click the resume link, your saved answers are restored and you continue
 
 ## Opt-Out Tokens (After Submission)
 
-After you submit a public survey, you may be offered an **opt-out token** on the thank-you page. This is a unique code that lets you request deletion of your response later.
+After you submit a public survey, you may be shown an **opt-out token** on the thank-you page. This is a short, unique code (8 characters, like a 2FA code) that lets you request deletion of your response later.
 
 ### How it works
 
-1. After submitting, you see a checkbox: "Give me a token so I can request deletion later"
-2. If you tick it, a token is generated and shown once
-3. Copy the token and keep it safe — it will not be shown again
-4. You can also choose to email the token to yourself (same privacy contract as the resume link: your email address is not stored)
-5. If you later want your response deleted, contact the survey creator and give them the token
+1. When you submit, a token is generated automatically if the survey creator has enabled opt-out tokens at publication
+2. The token is shown once on the thank-you page, with a copy button and a warning that it will not be shown again
+3. You can choose to email the token to yourself from the same page (see below)
+4. Copy the token or keep the email and store it somewhere safe — it cannot be recovered if you lose it
+5. If you later want your response deleted (redacted), contact the survey creator and quote the token
 
-### If you're not offered a token
+### Emailing the token to yourself
 
-The survey creator may have disabled opt-out tokens for this survey. In that case, your response is fully anonymous and cannot be linked to you for redaction. This is the original anonymity promise: if no token is offered, your response cannot be identified for deletion.
+The thank-you page offers to email the token to the address you enter, once, straight away. Before sending, CheckTick asks you to agree to this declaration:
+
+> Your email address is used only to send you this token, once. It is not stored on CheckTick's servers, it never appears in our logs, and we keep no copy of the sent email. Delivery is handled by Microsoft 365.
+
+The email contains only the token and the survey name — no answers, no question text.
+
+### If you're not shown a token
+
+The survey creator may have disabled opt-out tokens for this survey. In that case, your response is fully anonymous and cannot be linked to you for redaction. This is the original anonymity promise: if no token is issued, your response cannot be identified for deletion.
 
 ### If you lose your token
 
@@ -90,9 +98,9 @@ If you lose your opt-out token, we cannot identify your response to delete it. T
 
 ### Opt-out tokens
 
-- Opt-out tokens persist for as long as the survey retains your response (the survey's retention period, typically 6 months after closure)
-- The token is a UUID stored on your response record — it does not contain any personal information
-- If you submit without opting in, no token is stored and your response is fully anonymous
+- Tokens are stored for as long as the survey retains your response (the survey's retention period, typically 6 months after closure)
+- The token is a short random code stored on your response record — it does not contain any personal information
+- If the survey creator disabled opt-out tokens, no token is stored and your response is fully anonymous
 
 ### Email addresses
 

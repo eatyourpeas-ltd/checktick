@@ -64,9 +64,10 @@ and F6 in `docs/compliance/security-review-august-2026.md`.
   split-knowledge platform recovery above; if the owner loses their password
   and recovery phrase and there is no organisation or platform escrow, the
   responses are unrecoverable.
-* **Surveys with a recorded encryption opt-out** (staff-audience,
-  password-user surveys where the creator declared an opt-out) — responses
-  are stored in plaintext and remain recoverable by a database administrator.
+* **Surveys with a historical encryption opt-out declaration** (grandfathered,
+  audit-logged rows from before the creator-facing opt-out was removed —
+  every survey now encrypts at rest) — responses on those surveys are stored
+  in plaintext and remain recoverable by a database administrator.
 * **Grandfathered legacy surveys** — pre-existing password-user, non-patient
   surveys were migrated with a recorded legacy opt-out declaration
   (audit-logged), so their existing plaintext responses stay readable without

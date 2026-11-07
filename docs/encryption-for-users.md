@@ -34,7 +34,7 @@ Every response collected by an encrypted survey is now sealed with **your survey
 - **The platform cannot read your responses.** Responses are encrypted with your survey's *public* key; only the matching *private* key — which is wrapped with your password, recovery phrase, or SSO identity — can open them.
 - **Demographics are included.** Any demographics your survey collects are encrypted inside the same sealed response.
 - **Viewing requires unlock.** Dashboard distribution charts, summary reports, and CSV exports show answer content only after you unlock the survey. Response counts and timestamps remain visible without unlocking.
-- **Staff-audience opt-out.** If your survey is for staff/colleagues only, collects no patient identifiers, and you use a password account, you may explicitly opt out of response encryption at publish time by making a signed declaration (logged to the audit trail). Surveys created before this upgrade were automatically grandfathered as plaintext and remain readable without your key.
+- **No opt-out.** Every survey encrypts responses at rest — there is no way to publish an unencrypted survey. (Historically, a few staff-audience surveys were grandfathered as plaintext before the 2026 upgrade; those remain readable without your key and predate this rule.)
 
 ---
 

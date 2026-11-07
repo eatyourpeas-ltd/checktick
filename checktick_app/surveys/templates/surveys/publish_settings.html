@@ -142,18 +142,17 @@
               </div>
             </div>
           </div>
-          {% if opt_out_eligible %}
-          <div id="opt-out-block" class="mt-4">
-            <label class="label cursor-pointer justify-start gap-3">
-              <input type="checkbox" name="encryption_opt_out" id="encryption-opt-out" class="checkbox checkbox-warning" />
-              <span class="label-text">
-                <strong>{% trans "Opt out of response encryption" %}</strong>
-              </span>
-            </label>
-            <p class="text-sm opacity-70 ml-9">
-              {% blocktrans %}By ticking this box I declare that this survey is not patient-facing and does not gather data that could identify respondents. I understand responses will be stored in readable form and that this declaration is recorded in the audit trail.{% endblocktrans %}
-            </p>
+          {% if is_sso_user %}
+          <div id="encrypt-note" class="mt-4">
+            <div class="alert alert-success">
+              <div>
+                <p class="text-sm">
+                  {% trans "Responses will be encrypted at rest. For SSO accounts the encryption key is bound to your sign-in, so no passphrase setup is needed; viewing answer distributions and exporting data requires unlocking the survey." %}
+                </p>
+              </div>
+            </div>
           </div>
+          {% else %}
           <div id="encrypt-note" class="mt-4 hidden">
             <div class="alert alert-success">
               <div>
@@ -333,8 +332,8 @@
             <label class="cursor-pointer flex items-start gap-3">
               <input type="checkbox" class="checkbox mt-0.5" name="allow_response_redaction" {% if survey.allow_response_redaction %}checked{% endif %} />
               <div>
-                <span class="label-text font-medium">{% trans "Offer participants a redaction token after submission" %}</span>
-                <p class="text-sm opacity-70 mt-1">{% trans "When enabled, public-survey participants can opt to receive a token after submitting so they can request deletion of their response later. If disabled, responses are fully anonymous and cannot be redacted." %}</p>
+                <span class="label-text font-medium">{% trans "Show participants a redaction token after submission" %}</span>
+                <p class="text-sm opacity-70 mt-1">{% trans "When enabled, every participant is shown a one-time redaction token after submitting, which they can quote back to you to request deletion of their response later. If disabled, responses from public or unlisted links are fully anonymous and cannot be linked for redaction." %}</p>
               </div>
             </label>
           </div>
@@ -351,7 +350,7 @@
                   {# Hidden input to preserve value when checkbox is disabled #}
                   <input type="hidden" name="no_patient_data_ack" value="on" />
                   {% endif %}
-                  <span class="text-sm">{% blocktrans %}I confirm no <strong>patient-identifiable data</strong> is collected in this survey. This is required when using Public, Unlisted, or Token visibility to prevent unauthorised access.{% endblocktrans %}{% if survey.status == 'published' and survey.no_patient_data_ack %} <span class="text-xs opacity-70">({% trans "Cannot be changed after publication" %})</span>{% endif %}</span>
+                  <span class="text-sm">{% blocktrans %}I confirm no <strong>patient-identifiable data</strong> is collected in this survey — patient-facing surveys must not be published on a public or unlisted link. This is required when using Public, Unlisted, or Token visibility.{% endblocktrans %}{% if survey.status == 'published' and survey.no_patient_data_ack %} <span class="text-xs opacity-70">({% trans "Cannot be changed after publication" %})</span>{% endif %}</span>
                 </label>
               </div>
             </div>
@@ -422,9 +421,7 @@
   const allowAnyAuthenticatedCheckbox = document.querySelector('input[name="allow_any_authenticated"]');
   const audienceSelect = document.getElementById('respondent-audience');
   const encryptionExplainer = document.getElementById('encryption-explainer');
-  const optOutBlock = document.getElementById('opt-out-block');
   const encryptNote = document.getElementById('encrypt-note');
-  const optOutEligible = {% if opt_out_eligible %}true{% else %}false{% endif %};
 
   function updateEncryptionUI() {
     if (!audienceSelect) return;
@@ -432,13 +429,8 @@
     if (encryptionExplainer) {
       encryptionExplainer.classList.toggle('hidden', audience === 'staff');
     }
-    if (optOutEligible) {
-      if (optOutBlock) {
-        optOutBlock.classList.toggle('hidden', audience !== 'staff');
-      }
-      if (encryptNote) {
-        encryptNote.classList.toggle('hidden', audience === 'staff');
-      }
+    if (encryptNote) {
+      encryptNote.classList.toggle('hidden', audience !== 'staff');
     }
   }
   if (audienceSelect) {

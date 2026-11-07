@@ -1171,8 +1171,8 @@ Participants have the right to request deletion of their data if:
 2. Verify identity (ensure request is genuine)
 3. Locate response:
    - **Pseudonymous surveys** (authenticated/token): locate using the participant's receipt token, account, or invite token
-   - **Public surveys with opt-out token**: locate using the opt-out (receipt) token the participant received at submission time. Only participants who opted in to receiving a token can be identified this way.
-   - **Public surveys without opt-out token**: if the participant did not opt in to a token, the response is fully anonymous and cannot be identified for deletion. Inform the participant that their response cannot be located.
+   - **Public surveys with opt-out token**: locate using the opt-out (receipt) token the participant received at submission time. The token is issued automatically when the survey's `allow_response_redaction` toggle is enabled at publication (issue #376); participants without a token (toggle disabled, or token discarded) cannot be identified this way.
+   - **Public surveys without opt-out token**: if the toggle is disabled (or the participant discarded their token), the response is effectively anonymous and cannot be identified for deletion. Inform the participant that their response cannot be located.
 4. Delete specific response:
    - Navigate to survey responses
    - Find participant's response
@@ -1182,7 +1182,7 @@ Participants have the right to request deletion of their data if:
 
 #### Opt-Out Tokens
 
-Survey creators can control whether public-survey participants are offered an opt-out token via the `allow_response_redaction` toggle in the publication workflow (default: enabled). When enabled, participants can opt to receive a token after submission that lets them request deletion later. When disabled, responses are fully anonymous and cannot be redacted.
+Survey creators can control whether public-survey participants receive an opt-out token via the `allow_response_redaction` toggle in the publication workflow (default: enabled). When enabled, every participant is shown a one-time token after submission that lets them request deletion later (issue #376). When disabled, responses from public/unlisted links are fully anonymous and cannot be redacted.
 
 See [Survey Progress Tracking](/docs/survey-progress-tracking/) for the user-facing guide and [Data Subject Request Procedure](/docs/compliance/data-subject-request-procedure/) for the DSR workflow.
 

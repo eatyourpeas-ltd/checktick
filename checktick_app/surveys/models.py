@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import decimal
 import json
+import secrets
 import uuid
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -843,9 +844,10 @@ class Survey(models.Model):
         """Who fills this survey in, as declared by the creator.
 
         Drives the whole-response encryption decision (see
-        requires_whole_response_encryption): patient/public audience surveys
-        are always encrypted; staff-audience surveys owned by password users
-        may opt out via a logged declaration.
+        requires_whole_response_encryption): every survey encrypts
+        responses at rest; historical opt-out declarations (staff-audience
+        rows recorded before the mechanism's removal) remain honoured for
+        legacy data access only.
         """
 
         STAFF = "staff", "Staff / colleagues"
@@ -880,14 +882,16 @@ class Survey(models.Model):
         default=False,
         help_text="True once the creator has explicitly confirmed the respondent audience",
     )
-    # Creator opt-out declaration (§3.2 of the encryption planning doc):
-    # the only path to plaintext storage for published surveys. Password-user
-    # owners of staff-audience surveys without patient identifiers may opt out
-    # by making an explicit, audit-logged declaration.
+    # Historical encryption opt-out declarations (retained as audit
+    # evidence). The creator-facing opt-out mechanism was removed — every
+    # survey now encrypts responses at rest — but pre-removal rows remain
+    # honoured by requires_whole_response_encryption() so owners keep
+    # access to data stored plaintext under the old policy. New rows
+    # cannot be created.
     encryption_opt_out_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="When the creator declared the encryption opt-out for this survey",
+        help_text="HISTORICAL: when the creator declared the encryption opt-out (mechanism removed; honoured only for legacy data access)",
     )
     encryption_opt_out_by = models.ForeignKey(
         User,
@@ -895,12 +899,12 @@ class Survey(models.Model):
         null=True,
         blank=True,
         related_name="encryption_opt_out_surveys",
-        help_text="User who made the encryption opt-out declaration",
+        help_text="HISTORICAL: user who made the encryption opt-out declaration",
     )
     encryption_opt_out_declaration_version = models.CharField(
         max_length=20,
         blank=True,
-        help_text="Version of the opt-out declaration text acknowledged by the creator",
+        help_text="HISTORICAL: version of the opt-out declaration text acknowledged by the creator",
     )
     allow_any_authenticated = models.BooleanField(
         default=False,
@@ -984,9 +988,11 @@ class Survey(models.Model):
     allow_response_redaction = models.BooleanField(
         default=True,
         help_text=(
-            "Offer public-survey participants an opt-out token after submission "
-            "so they can request deletion later. Authenticated/token surveys "
-            "already issue a receipt_token where pseudonymous."
+            "Show every participant a one-time redaction token on the "
+            "thank-you page after submission so they can request deletion "
+            "of their response later (issue #376). When disabled, anonymous "
+            "public/unlisted responses get no token and cannot be linked "
+            "for redaction; pseudonymous responses still receive theirs."
         ),
     )
     # One-time survey key: store only hash + salt for verification
@@ -1503,7 +1509,15 @@ class Survey(models.Model):
         return UserOIDC.objects.filter(user_id=self.owner_id).exists()
 
     def has_encryption_opt_out(self) -> bool:
-        """Check if a valid creator opt-out declaration has been recorded."""
+        """Check if a historical encryption opt-out declaration is recorded.
+
+        The creator-facing opt-out mechanism was removed: every survey now
+        encrypts responses at rest and new declarations cannot be created.
+        Rows recorded before the removal (explicit "1.0" declarations and
+        pre-upgrade "legacy-1.0" grandfathering) are honoured solely so
+        their owners keep access to data that was stored plaintext under
+        the old policy — see requires_whole_response_encryption().
+        """
         return bool(
             self.encryption_opt_out_at
             and self.encryption_opt_out_declaration_version
@@ -1518,17 +1532,13 @@ class Survey(models.Model):
             True if all response data (not just demographics) should be
             encrypted with store_complete_response()
 
-        The predicate returns True if ANY of:
-        1. The survey collects patient data (schema check), OR
-        2. The declared respondent audience is patient or public, OR
-        3. The survey owner authenticates via SSO / OIDC (default-on).
-
-        It returns False only when ALL of:
-        - the owner is a password (non-SSO) user, AND
-        - the declared audience is staff, AND
-        - the survey collects no patient identifiers, AND
-        - the creator has recorded an explicit, audit-logged opt-out
-          declaration.
+        The predicate returns True for every survey, with one legacy
+        exception: surveys holding a historical opt-out declaration
+        (password owner, staff audience, no patient identifiers) store
+        plaintext so their owners retain access to data collected under
+        the pre-removal policy. New declarations cannot be created — the
+        publish-flow opt-out was removed once encryption became the
+        universal default.
 
         Draft surveys may still store plaintext answers regardless of this
         predicate (enforced at the submission layer, not here).
@@ -1546,8 +1556,8 @@ class Survey(models.Model):
             return True
         if self.owner_is_sso():
             return True
-        # Only remaining path to plaintext: password user, staff audience,
-        # no patient identifiers, with a recorded opt-out declaration.
+        # Legacy path: historical declaration rows keep their plaintext
+        # storage so owners never lose access to pre-removal data.
         return not self.has_encryption_opt_out()
 
     def sso_user_needs_passphrase(self) -> bool:
@@ -3054,14 +3064,23 @@ class SurveyResponse(models.Model):
         related_name="response",
     )
 
-    # Receipt token for data subject rights requests
-    # Only populated for pseudonymous surveys (token/authenticated visibility)
-    # NOT populated for anonymous surveys (public/unlisted) to preserve anonymity
-    receipt_token = models.UUIDField(
+    # Receipt token for data subject rights requests — a short, participant-
+    # friendly code shown once on the thank-you page (issue #376). Populated
+    # for pseudonymous responses (token/authenticated visibility) always, and
+    # for anonymous responses (public/unlisted) when the survey's
+    # allow_response_redaction toggle is on at publication. The code contains
+    # no personal information; a participant who discards it leaves their
+    # response effectively anonymous.
+    receipt_token = models.CharField(
+        max_length=64,
         null=True,
         blank=True,
+        unique=True,
         db_index=True,
-        help_text="Receipt token for data subject requests (pseudonymous surveys only)",
+        help_text=(
+            "Receipt token for data subject requests — short code shown "
+            "once after submission"
+        ),
     )
 
     # Data subject request freeze fields
@@ -3254,39 +3273,66 @@ class SurveyResponse(models.Model):
             Survey.Visibility.TOKEN,
         ]
 
-    def generate_receipt_token(self, opt_in: bool = False) -> uuid.UUID | None:
+    @staticmethod
+    def _new_receipt_token() -> str:
+        """Short participant-friendly redaction code (issue #376).
+
+        8 characters from the Crockford base32 alphabet (no I/L/O/U) —
+        long enough to resist guessing, short enough to read aloud or
+        copy by hand, like a 2FA code. Generated uppercase; lookups by
+        copy-paste are exact.
+        """
+        alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+        return "".join(secrets.choice(alphabet) for _ in range(8))
+
+    def generate_receipt_token(self) -> str | None:
         """
         Generate a receipt token for data subject rights requests.
 
-        Only generates token for pseudonymous responses by default.
-        Anonymous responses do not get tokens to preserve anonymity.
-
-        For public/unlisted surveys (anonymous responses), a token is only
-        generated when the participant explicitly opts in at submission
-        time (opt_in=True) AND the survey has allow_response_redaction=True.
-        This extends the original anonymity-preserving design with an
-        opt-in path to redaction (see docs/survey-progress-tracking.md
-        §Opt-out token).
-
-        Args:
-            opt_in: True when the participant explicitly requested a
-                redaction token at submission time (public surveys only).
+        Pseudonymous responses (authenticated/token visibility, or any
+        response with a submitted_by/access_token) always get a token.
+        Anonymous responses (public/unlisted without a credential) get a
+        token only when the survey has allow_response_redaction=True —
+        the publication-time toggle (issue #376: every participant of a
+        redaction-enabled survey is shown the token once on the
+        thank-you page).
 
         Returns:
-            UUID receipt token if generated, None if anonymous and not
-            opted in.
+            The receipt token (short code string) if generated or already
+            present, else None.
         """
         if not self.is_pseudonymous:
-            # Anonymous response — only issue a token if the participant
-            # explicitly opted in and the survey allows redaction.
-            if not opt_in:
-                return None
+            # Anonymous response — only issue a token when the creator
+            # enabled redaction at publication.
             if not getattr(self.survey, "allow_response_redaction", True):
                 return None
 
         if not self.receipt_token:
-            self.receipt_token = uuid.uuid4()
-            self.save(update_fields=["receipt_token"])
+            import logging
+
+            logger = logging.getLogger(__name__)
+            for _ in range(5):
+                candidate = self._new_receipt_token()
+                try:
+                    with transaction.atomic():
+                        self.receipt_token = candidate
+                        self.save(update_fields=["receipt_token"])
+                    break
+                except IntegrityError:
+                    # 40-bit space — a collision means a concurrent code
+                    # took it; regenerate. The savepoint keeps the outer
+                    # transaction usable after the failed save, and the
+                    # in-memory candidate is discarded so a later failure
+                    # can never leave a token that belongs to another
+                    # response.
+                    self.receipt_token = None
+                    continue
+            else:
+                logger.warning(
+                    "Receipt token generation exhausted retries; "
+                    "response left without a token",
+                    extra={"survey_id": self.survey_id},
+                )
 
         return self.receipt_token
 
@@ -3493,7 +3539,8 @@ class DataSubjectRequest(models.Model):
     respondent_email = models.EmailField(
         help_text="Email address of the person making the request",
     )
-    receipt_token = models.UUIDField(
+    receipt_token = models.CharField(
+        max_length=64,
         null=True,
         blank=True,
         help_text="Receipt token provided by respondent (if available)",
@@ -3703,9 +3750,7 @@ class DataSubjectRequest(models.Model):
         return delta.days
 
     @classmethod
-    def find_by_receipt_token(
-        cls, receipt_token: uuid.UUID
-    ) -> "DataSubjectRequest | None":
+    def find_by_receipt_token(cls, receipt_token: str) -> "DataSubjectRequest | None":
         """Find a data subject request by receipt token."""
         return cls.objects.filter(receipt_token=receipt_token).first()
 
@@ -5045,6 +5090,10 @@ class AuditLog(models.Model):
         RESPONSES_ENCRYPTED_BACKFILL = (
             "responses_encrypted_backfill",
             "Responses Encrypted (Backfill Migration)",
+        )
+        NO_PATIENT_DATA_DECLARED = (
+            "no_patient_data_declared",
+            "No Patient Data Declared",
         )
 
     class Severity(models.TextChoices):

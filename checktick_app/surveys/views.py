@@ -4835,21 +4835,13 @@ def _parse_email_addresses(text: str) -> list[str]:
     return email_list
 
 
-DECLARATION_VERSION = "1.0"
-
-
-def _parse_audience_and_declaration(
-    survey: Survey, request: HttpRequest, collects_patient: bool
-) -> dict:
-    """Parse the respondent-audience selection and opt-out declaration from
-    a publish POST, applying the audience to the survey.
+def _parse_respondent_audience(survey: Survey, request: HttpRequest) -> dict:
+    """Parse the respondent-audience selection from a publish POST, applying
+    it to the survey.
 
     Returns a dict with:
         audience: the effective audience (POST value or the survey's current)
         audience_provided: whether the POST explicitly chose an audience
-        opt_out_eligible: True when this survey may store plaintext (password
-            user, staff audience, no patient identifiers, no keypair)
-        declared: True when a valid opt-out declaration was submitted
     """
     audience = request.POST.get("respondent_audience")
     audience_provided = bool(audience)
@@ -4860,54 +4852,34 @@ def _parse_audience_and_declaration(
             # Persist immediately: the caller may return early (e.g. redirect
             # to encryption setup) before its own survey.save()
             survey.save(update_fields=["respondent_audience", "audience_confirmed"])
-    is_sso = hasattr(request.user, "oidc")
-    opt_out_eligible = (
-        not is_sso
-        and survey.respondent_audience == Survey.RespondentAudience.STAFF
-        and not collects_patient
-        and not survey.has_submission_keypair()
-    )
-    declared = opt_out_eligible and bool(request.POST.get("encryption_opt_out"))
     return {
         "audience": survey.respondent_audience,
         "audience_provided": audience_provided,
-        "opt_out_eligible": opt_out_eligible,
-        "declared": declared,
     }
 
 
-def _record_opt_out_declaration(survey: Survey, user) -> None:
-    """Record the creator's encryption opt-out declaration, audit-logged.
+def _audit_patient_data_declaration(survey: Survey, user) -> None:
+    """Audit-log the creator's no-patient-data declaration at publication.
 
-    Idempotent: an existing unrevoked declaration is left untouched.
+    The declaration (required for public/unlisted/token visibility) is the
+    platform owner's defensive record that the creator asserted the survey
+    is not patient-facing and gathers no patient-identifiable data. The
+    declaration text recorded here matches the publish-page wording.
     """
-    if survey.encryption_opt_out_at and not survey.has_encryption_opt_out():
-        pass  # stale/invalid declaration (e.g. audience changed) — overwrite
-    survey.encryption_opt_out_at = timezone.now()
-    survey.encryption_opt_out_by = user
-    survey.encryption_opt_out_declaration_version = DECLARATION_VERSION
-    survey.save(
-        update_fields=[
-            "encryption_opt_out_at",
-            "encryption_opt_out_by",
-            "encryption_opt_out_declaration_version",
-        ]
-    )
+    if not survey.no_patient_data_ack:
+        return
     AuditLog.objects.create(
         actor=user,
         scope=AuditLog.Scope.SURVEY,
         survey=survey,
-        action=AuditLog.Action.ENCRYPTION_OPT_OUT_DECLARED,
+        action=AuditLog.Action.NO_PATIENT_DATA_DECLARED,
         severity=AuditLog.Severity.INFO,
         message=(
-            "Creator declared this survey is not patient-facing and does not "
-            "gather data that could identify respondents; response encryption "
-            "opted out."
+            "Creator confirmed no patient-identifiable data is collected; "
+            "patient-facing surveys must not be published on a public or "
+            "unlisted link."
         ),
-        metadata={
-            "declaration_version": DECLARATION_VERSION,
-            "survey_id": survey.pk,
-        },
+        metadata={"survey_id": survey.pk},
     )
 
 
@@ -4999,13 +4971,10 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
             # Publishing for the first time
             prev_status = survey.status
 
-            # Respondent audience + opt-out declaration (encryption planning
-            # doc §5.2): the creator must confirm who fills the survey in;
-            # the declaration is the only path to plaintext storage for
-            # eligible (password-user, staff-audience) surveys.
-            audience_info = _parse_audience_and_declaration(
-                survey, request, collects_patient
-            )
+            # Respondent audience confirmation (encryption planning doc §5.2):
+            # the creator must confirm who fills the survey in before
+            # publishing.
+            audience_info = _parse_respondent_audience(survey, request)
             if prev_status != Survey.Status.PUBLISHED and not (
                 survey.audience_confirmed and audience_info["audience_provided"]
             ):
@@ -5017,8 +4986,6 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
                 return render(
                     request, "surveys/publish_settings.html", {"survey": survey}
                 )
-            if audience_info["declared"]:
-                _record_opt_out_declaration(survey, request.user)
 
             # Require at least one recipient email for token/authenticated (invite-only) surveys.
             allow_any_authenticated = (
@@ -5041,13 +5008,11 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
                 )
 
             # Check if encryption setup is needed
-            # Encryption is required unless the creator made a valid opt-out
-            # declaration (password-user, staff-audience, no patient data).
+            # Every survey encrypts responses at rest; there is no opt-out.
             # Note: Survey count limits are already enforced at survey creation time
             needs_encryption_setup = (
                 prev_status != Survey.Status.PUBLISHED
                 and not survey.has_any_encryption()
-                and not audience_info["declared"]
             )
 
             if needs_encryption_setup:
@@ -5109,6 +5074,12 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
                 survey.unlisted_key = secrets.token_urlsafe(24)
 
             survey.save()
+
+            # Audit-record the creator's no-patient-data declaration on first
+            # publish (the platform owner's defensive record — the ack cannot
+            # change after publication).
+            if prev_status != Survey.Status.PUBLISHED:
+                _audit_patient_data_declaration(survey, request.user)
 
             # Publish selected translations if any are checked
             published_count = 0
@@ -5330,12 +5301,6 @@ def survey_publish_settings(request: HttpRequest, slug: str) -> HttpResponse:
         "supported_languages": supported_languages,
         "is_sso_user": hasattr(request.user, "oidc"),
         "collects_patient_data": _survey_collects_patient_data(survey),
-        "opt_out_eligible": (
-            not hasattr(request.user, "oidc")
-            and survey.respondent_audience == Survey.RespondentAudience.STAFF
-            and not _survey_collects_patient_data(survey)
-            and not survey.has_submission_keypair()
-        ),
     }
 
     return render(request, "surveys/publish_settings.html", context)
@@ -5913,8 +5878,10 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
     # Check if encryption setup is needed
     prev_status = survey.status
 
-    # Respondent audience + opt-out declaration (encryption planning doc §5.2)
-    audience_info = _parse_audience_and_declaration(survey, request, collects_patient)
+    # Respondent audience (encryption planning doc §5.2): the creator must
+    # confirm who fills the survey in before publishing. The call applies
+    # the POSTed audience (side effect); the return is not needed here.
+    _parse_respondent_audience(survey, request)
     if (
         prev_status != Survey.Status.PUBLISHED
         and status == Survey.Status.PUBLISHED
@@ -5926,12 +5893,10 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
             "(Respondents section).",
         )
         return redirect("surveys:publish_settings", slug=slug)
-    if audience_info["declared"]:
-        _record_opt_out_declaration(survey, request.user)
 
     # Determine if we need to redirect to encryption setup
-    # Encryption is required unless the creator made a valid opt-out
-    # declaration (password-user, staff-audience, no patient data).
+    # Encryption is required for every survey — responses are always
+    # encrypted at rest.
     # Organization + SSO users: auto-encrypt without setup page
     # Organization + Password users: need setup if no encryption yet
     # Individual + SSO users: need to choose SSO-only vs SSO+recovery
@@ -5982,9 +5947,9 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
         )
 
     # All other cases: check if encryption setup is needed
-    # Redirect to setup if survey has no encryption on first publish,
-    # unless the creator made a valid opt-out declaration
-    elif is_first_publish and not has_encryption and not audience_info["declared"]:
+    # Redirect to setup if survey has no encryption on first publish —
+    # every survey encrypts responses at rest; there is no opt-out.
+    elif is_first_publish and not has_encryption:
         # Store pending publish settings in session
         request.session["pending_publish"] = {
             "slug": slug,
@@ -6027,6 +5992,9 @@ def survey_publish_update(request: HttpRequest, slug: str) -> HttpResponse:
     if survey.visibility == Survey.Visibility.UNLISTED and not survey.unlisted_key:
         survey.unlisted_key = secrets.token_urlsafe(24)
     survey.save()
+    # Audit-record the creator's no-patient-data declaration on first publish.
+    if prev_status != Survey.Status.PUBLISHED and status == Survey.Status.PUBLISHED:
+        _audit_patient_data_declaration(survey, request.user)
     messages.success(request, "Publish settings updated.")
     return redirect("surveys:dashboard", slug=slug)
 
@@ -6974,9 +6942,11 @@ def _matrix_final_submit(
         token_obj.save(update_fields=["used_at", "used_by"])
     # Mark progress as completed.
     progress.mark_completed()
-    # Store receipt token in session.
-    opted_in_redaction = bool(request.POST.get("opt_in_redaction"))
-    token = resp.generate_receipt_token(opt_in=opted_in_redaction)
+    # Store the receipt token in session for the one-time thank-you
+    # display. Anonymous responses (public/unlisted) get a token when the
+    # creator enabled redaction at publication; pseudonymous ones always
+    # do (issue #376).
+    token = resp.generate_receipt_token()
     if token:
         request.session[f"receipt_token_{survey.slug}"] = str(token)
     _stash_category_snapshot(request, survey, progress)
@@ -7177,9 +7147,9 @@ def _diary_submit_entry(
         token_obj.save(update_fields=["used_at", "used_by"])
     # Mark progress as completed for this entry.
     progress.mark_completed()
-    # Store receipt token in session.
-    opted_in_redaction = bool(request.POST.get("opt_in_redaction"))
-    token = resp.generate_receipt_token(opt_in=opted_in_redaction)
+    # Store the receipt token in session for the one-time thank-you
+    # display (issue #376 — see _matrix_final_submit).
+    token = resp.generate_receipt_token()
     if token:
         request.session[f"receipt_token_{survey.slug}"] = str(token)
     _stash_category_snapshot(request, survey, progress)
@@ -7604,8 +7574,19 @@ def _handle_participant_submission(
                     )
                 )
             else:  # opt_out
-                receipt_token = request.session.get(f"receipt_token_{survey.slug}")
-                if not receipt_token:
+                # The token comes from the POST body (the thank-you page
+                # passes the displayed token value — the session no longer
+                # holds it because the one-time display pops it on first
+                # view), falling back to the session for compatibility.
+                receipt_token = request.POST.get(
+                    "token", ""
+                ).strip() or request.session.get(f"receipt_token_{survey.slug}")
+                if (
+                    not receipt_token
+                    or not SurveyResponse.objects.filter(
+                        survey=survey, receipt_token=receipt_token
+                    ).exists()
+                ):
                     return JsonResponse(
                         {"success": False, "error": "No redaction token available."},
                         status=400,
@@ -7723,12 +7704,12 @@ def _handle_participant_submission(
         if progress:
             progress.mark_completed()
 
-        # Store receipt token in session for pseudonymous responses, or for
-        # anonymous (public/unlisted) responses when the participant opted
-        # in and the survey allows redaction. This allows showing it on the
-        # thank-you page (the only opportunity to share it).
-        opted_in_redaction = bool(request.POST.get("opt_in_redaction"))
-        token = resp.generate_receipt_token(opt_in=opted_in_redaction)
+        # Store the receipt token in session for the one-time thank-you
+        # display. Anonymous responses (public/unlisted) get a token when
+        # the creator enabled redaction at publication; pseudonymous ones
+        # always do (issue #376: the token is shown to every participant
+        # of a redaction-enabled survey — no opt-in step).
+        token = resp.generate_receipt_token()
         if token:
             request.session[f"receipt_token_{survey.slug}"] = str(token)
         # One-time category echo on the thank-you page (issue #349
