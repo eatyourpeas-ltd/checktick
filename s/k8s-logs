@@ -1,0 +1,127 @@
+#!/bin/bash
+# k8s_logs — tail logs from PRODUCTION CheckTick pods on the Civo Kubernetes
+# cluster. Defaults to the web Deployment; other targets below.
+#
+# NOTE: this is a KUBERNETES (Civo production) operational script. For local
+# development use `docker compose logs -f web` instead.
+#
+# Streams every running replica of the target (a bare `kubectl logs` would
+# only follow one pod), prefixing each line with its pod name. Extra arguments
+# pass straight through to `kubectl logs` after the defaults — later flags
+# win, so any default below can be overridden:
+#   ./s/k8s-logs                        # web pods (default), tail 200 + follow
+#   ./s/k8s-logs db                     # postgres pods (primary + replica)
+#   ./s/k8s-logs --since=10m            # replay the last 10 minutes, then follow
+#   ./s/k8s-logs --pod NAME -c backup   # one pod, a different container
+#
+# Targets:
+#   web          web Deployment pods    (app=checktick-web, container web)
+#   db           CNPG PostgreSQL pods   (cnpg.io/cluster=checktick-db,
+#                                       container postgres)
+#   vault        Vault StatefulSet pod  (app=vault, container vault)
+#   openobserve  OpenObserve log store  (app=openobserve, container openobserve)
+#   --pod NAME   any explicit pod by name (default: its first container)
+#
+# Usage: ./s/k8s-logs [--help] [--pod NAME] [target] [extra kubectl logs flags]
+
+set -euo pipefail
+
+if [[ "${1:-}" == "--help" ]]; then
+    head -25 "$0" | tail -23
+    exit 0
+fi
+
+NS=checktick
+
+# Kubeconfig resolution: explicit KUBECONFIG wins; else the Civo kubeconfig
+# if present; else the default config.
+if [ -z "${KUBECONFIG:-}" ] && [ -f "${HOME}/.kube/civo-checktick.yaml" ]; then
+    export KUBECONFIG="${HOME}/.kube/civo-checktick.yaml"
+fi
+
+# Target resolution: an optional leading target name or --pod NAME; anything
+# else passes straight through to `kubectl logs` (target before flags).
+TARGET="web"
+POD_NAME=""
+if [ $# -gt 0 ]; then
+    case "$1" in
+        --pod)
+            if [ $# -lt 2 ]; then
+                echo "✗ --pod needs a pod name — see ./s/k8s-logs --help"
+                exit 1
+            fi
+            POD_NAME="$2"
+            shift 2
+            ;;
+        --pod=*)
+            POD_NAME="${1#--pod=}"
+            shift
+            ;;
+        -*)
+            # A flag first: target stays 'web'; everything (including it)
+            # passes through below.
+            ;;
+        *)
+            TARGET="$1"
+            shift
+            ;;
+    esac
+fi
+
+case "$TARGET" in
+    web)          SELECTOR="app=checktick-web";           CONTAINER="web" ;;
+    db)           SELECTOR="cnpg.io/cluster=checktick-db"; CONTAINER="postgres" ;;
+    vault)        SELECTOR="app=vault";                   CONTAINER="vault" ;;
+    openobserve)  SELECTOR="app=openobserve";             CONTAINER="openobserve" ;;
+    *)
+        echo "✗ Unknown target '$TARGET' — valid: web, db, vault, openobserve, or --pod NAME"
+        echo "  See: ./s/k8s-logs --help"
+        exit 1
+        ;;
+esac
+
+if [ -n "$POD_NAME" ]; then
+    # Explicit pod: verify it exists and default to its first container
+    # (override with a trailing -c <name>).
+    if ! kubectl get pod -n "$NS" "$POD_NAME" >/dev/null 2>&1; then
+        echo "✗ Pod $NS/$POD_NAME not found — check: kubectl -n $NS get pods"
+        exit 1
+    fi
+    CONTAINER="$(kubectl get pod -n "$NS" "$POD_NAME" \
+        -o jsonpath='{.spec.containers[0].name}')"
+    PODS="$POD_NAME"
+else
+    # Resolve running pods for the target explicitly so the session target is
+    # visible (`kubectl logs deploy/...` would silently pick one for us).
+    PODS="$(kubectl get pods -n "$NS" -l "$SELECTOR" \
+        --field-selector=status.phase=Running \
+        -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)"
+    if [ -z "$PODS" ]; then
+        echo "✗ No running pods for target '$TARGET' ($SELECTOR) in namespace $NS — is it deployed?"
+        echo "  Check: kubectl -n $NS get pods -l $SELECTOR"
+        exit 1
+    fi
+fi
+
+echo "=========================================="
+echo "  Pod logs (Kubernetes/Civo production)"
+echo "=========================================="
+echo "Cluster context : $(kubectl config current-context)"
+echo "Target          : $TARGET${POD_NAME:+ (pod: $POD_NAME)}"
+echo "Pods            : $PODS"
+echo "Container       : $CONTAINER (override with a trailing -c <name>)"
+echo "Reminder        : production log stream — never log or paste patient"
+echo "                  data or decrypted survey objects."
+echo ""
+
+# --prefix tags every line with its pod/container so replica streams stay
+# distinguishable; --tail=200 seeds the view with recent history before -f
+# follows. Passthrough flags come last, so user values (--since, --tail, -c)
+# override the defaults above.
+if [ -n "$POD_NAME" ]; then
+    exec kubectl logs -n "$NS" "$POD_NAME" -c "$CONTAINER" \
+        --prefix --tail=200 -f "$@"
+else
+    exec kubectl logs -n "$NS" -l "$SELECTOR" -c "$CONTAINER" \
+        --prefix --tail=200 -f "$@"
+fi
