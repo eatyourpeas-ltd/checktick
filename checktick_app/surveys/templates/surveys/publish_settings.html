@@ -151,7 +151,7 @@
               </span>
             </label>
             <p class="text-sm opacity-70 ml-9">
-              {% blocktrans %}By ticking this box I declare that this survey is not patient-facing and does not gather data that could identify respondents. I understand responses will be stored in readable form and that this declaration is recorded in the audit trail.{% endblocktrans %}
+              {% blocktrans %}By ticking this box I declare that this survey is not patient-facing and does not gather data that could identify respondents. Patient-facing surveys must not be published on a public or unlisted link. This declaration is recorded in the audit trail.{% endblocktrans %}
             </p>
           </div>
           <div id="encrypt-note" class="mt-4 hidden">
@@ -351,7 +351,7 @@
                   {# Hidden input to preserve value when checkbox is disabled #}
                   <input type="hidden" name="no_patient_data_ack" value="on" />
                   {% endif %}
-                  <span class="text-sm">{% blocktrans %}I confirm no <strong>patient-identifiable data</strong> is collected in this survey. This is required when using Public, Unlisted, or Token visibility to prevent unauthorised access.{% endblocktrans %}{% if survey.status == 'published' and survey.no_patient_data_ack %} <span class="text-xs opacity-70">({% trans "Cannot be changed after publication" %})</span>{% endif %}</span>
+                  <span class="text-sm">{% blocktrans %}I confirm no <strong>patient-identifiable data</strong> is collected in this survey — patient-facing surveys must not be published on a public or unlisted link. This is required when using Public, Unlisted, or Token visibility.{% endblocktrans %}{% if survey.status == 'published' and survey.no_patient_data_ack %} <span class="text-xs opacity-70">({% trans "Cannot be changed after publication" %})</span>{% endif %}</span>
                 </label>
               </div>
             </div>

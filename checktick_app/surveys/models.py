@@ -3275,7 +3275,7 @@ class SurveyResponse(models.Model):
         copy by hand, like a 2FA code. Generated uppercase; lookups by
         copy-paste are exact.
         """
-        alphabet = "0123456789ABCDEFGHJKMNPQRSTUVWXYZ"
+        alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
         return "".join(secrets.choice(alphabet) for _ in range(8))
 
     def generate_receipt_token(self) -> str | None:
