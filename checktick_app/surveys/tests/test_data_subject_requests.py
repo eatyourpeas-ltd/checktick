@@ -2,15 +2,15 @@
 Tests for data subject request handling and response freeze mechanism.
 
 These tests ensure:
-1. Receipt tokens are only generated for pseudonymous surveys
-2. Anonymous surveys do NOT receive receipt tokens
+1. Receipt tokens are generated for pseudonymous surveys, and for
+   anonymous surveys when the publication-time redaction toggle is on
+2. Anonymous surveys get no receipt token when the toggle is disabled
 3. Frozen responses are excluded from exports
 4. DataSubjectRequest workflow functions correctly
 5. Freeze permissions are enforced correctly
 """
 
 from datetime import timedelta
-import uuid
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -171,11 +171,32 @@ class TestReceiptTokenGeneration:
         )
         token = response.generate_receipt_token()
         assert token is not None
-        assert isinstance(token, uuid.UUID)
+        assert isinstance(token, str)
+        assert len(token) == 8
         assert response.receipt_token == token
 
-    def test_receipt_token_not_generated_for_anonymous(self, public_survey):
-        """Receipt tokens should NOT be generated for anonymous responses."""
+    def test_receipt_token_generated_for_anonymous_when_redaction_enabled(
+        self, public_survey
+    ):
+        """Anonymous responses get a token when the survey's redaction
+        toggle (allow_response_redaction, on by default) is enabled at
+        publication (issue #376: no opt-in needed)."""
+        response = SurveyResponse.objects.create(
+            survey=public_survey,
+            answers={"q1": "answer1"},
+        )
+        token = response.generate_receipt_token()
+        assert token is not None
+        assert response.receipt_token == token
+
+    def test_receipt_token_not_generated_for_anonymous_when_redaction_disabled(
+        self, public_survey
+    ):
+        """With the redaction toggle disabled at publication, anonymous
+        responses get no token and cannot be linked for redaction."""
+        public_survey.allow_response_redaction = False
+        public_survey.save(update_fields=["allow_response_redaction"])
+
         response = SurveyResponse.objects.create(
             survey=public_survey,
             answers={"q1": "answer1"},

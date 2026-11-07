@@ -280,7 +280,7 @@ class Survey(models.Model):
 Both are set in the publication workflow (`survey_publish_settings` view) and persisted via `_apply_pending_publish_settings`. They default to `True`.
 
 - **`allow_resume`**: when `False`, `_get_or_create_progress` returns `(None, False)` for all access tiers — no `SurveyProgress` row is created, no resume token is issued.
-- **`allow_response_redaction`**: when `False`, `generate_receipt_token()` returns `None` for public/unlisted surveys even if the participant opts in. Authenticated/token surveys are unaffected.
+- **`allow_response_redaction`**: when `False`, `generate_receipt_token()` returns `None` for public/unlisted (anonymous) surveys, so no token is issued or displayed. Authenticated/token surveys are unaffected (pseudonymous responses still receive a receipt token).
 
 See [Data Governance](/docs/data-governance/) for the privacy implications of disabling redaction.
 

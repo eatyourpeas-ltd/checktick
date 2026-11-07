@@ -333,8 +333,8 @@
             <label class="cursor-pointer flex items-start gap-3">
               <input type="checkbox" class="checkbox mt-0.5" name="allow_response_redaction" {% if survey.allow_response_redaction %}checked{% endif %} />
               <div>
-                <span class="label-text font-medium">{% trans "Offer participants a redaction token after submission" %}</span>
-                <p class="text-sm opacity-70 mt-1">{% trans "When enabled, public-survey participants can opt to receive a token after submitting so they can request deletion of their response later. If disabled, responses are fully anonymous and cannot be redacted." %}</p>
+                <span class="label-text font-medium">{% trans "Show participants a redaction token after submission" %}</span>
+                <p class="text-sm opacity-70 mt-1">{% trans "When enabled, every participant is shown a one-time redaction token after submitting, which they can quote back to you to request deletion of their response later. If disabled, responses from public or unlisted links are fully anonymous and cannot be linked for redaction." %}</p>
               </div>
             </label>
           </div>

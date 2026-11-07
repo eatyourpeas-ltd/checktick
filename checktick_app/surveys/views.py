@@ -6974,9 +6974,11 @@ def _matrix_final_submit(
         token_obj.save(update_fields=["used_at", "used_by"])
     # Mark progress as completed.
     progress.mark_completed()
-    # Store receipt token in session.
-    opted_in_redaction = bool(request.POST.get("opt_in_redaction"))
-    token = resp.generate_receipt_token(opt_in=opted_in_redaction)
+    # Store the receipt token in session for the one-time thank-you
+    # display. Anonymous responses (public/unlisted) get a token when the
+    # creator enabled redaction at publication; pseudonymous ones always
+    # do (issue #376).
+    token = resp.generate_receipt_token()
     if token:
         request.session[f"receipt_token_{survey.slug}"] = str(token)
     _stash_category_snapshot(request, survey, progress)
@@ -7177,9 +7179,9 @@ def _diary_submit_entry(
         token_obj.save(update_fields=["used_at", "used_by"])
     # Mark progress as completed for this entry.
     progress.mark_completed()
-    # Store receipt token in session.
-    opted_in_redaction = bool(request.POST.get("opt_in_redaction"))
-    token = resp.generate_receipt_token(opt_in=opted_in_redaction)
+    # Store the receipt token in session for the one-time thank-you
+    # display (issue #376 — see _matrix_final_submit).
+    token = resp.generate_receipt_token()
     if token:
         request.session[f"receipt_token_{survey.slug}"] = str(token)
     _stash_category_snapshot(request, survey, progress)
@@ -7723,12 +7725,12 @@ def _handle_participant_submission(
         if progress:
             progress.mark_completed()
 
-        # Store receipt token in session for pseudonymous responses, or for
-        # anonymous (public/unlisted) responses when the participant opted
-        # in and the survey allows redaction. This allows showing it on the
-        # thank-you page (the only opportunity to share it).
-        opted_in_redaction = bool(request.POST.get("opt_in_redaction"))
-        token = resp.generate_receipt_token(opt_in=opted_in_redaction)
+        # Store the receipt token in session for the one-time thank-you
+        # display. Anonymous responses (public/unlisted) get a token when
+        # the creator enabled redaction at publication; pseudonymous ones
+        # always do (issue #376: the token is shown to every participant
+        # of a redaction-enabled survey — no opt-in step).
+        token = resp.generate_receipt_token()
         if token:
             request.session[f"receipt_token_{survey.slug}"] = str(token)
         # One-time category echo on the thank-you page (issue #349

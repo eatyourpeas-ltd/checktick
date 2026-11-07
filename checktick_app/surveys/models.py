@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import decimal
 import json
+import secrets
 import uuid
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -984,9 +985,11 @@ class Survey(models.Model):
     allow_response_redaction = models.BooleanField(
         default=True,
         help_text=(
-            "Offer public-survey participants an opt-out token after submission "
-            "so they can request deletion later. Authenticated/token surveys "
-            "already issue a receipt_token where pseudonymous."
+            "Show every participant a one-time redaction token on the "
+            "thank-you page after submission so they can request deletion "
+            "of their response later (issue #376). When disabled, anonymous "
+            "public/unlisted responses get no token and cannot be linked "
+            "for redaction; pseudonymous responses still receive theirs."
         ),
     )
     # One-time survey key: store only hash + salt for verification
@@ -3054,14 +3057,23 @@ class SurveyResponse(models.Model):
         related_name="response",
     )
 
-    # Receipt token for data subject rights requests
-    # Only populated for pseudonymous surveys (token/authenticated visibility)
-    # NOT populated for anonymous surveys (public/unlisted) to preserve anonymity
-    receipt_token = models.UUIDField(
+    # Receipt token for data subject rights requests — a short, participant-
+    # friendly code shown once on the thank-you page (issue #376). Populated
+    # for pseudonymous responses (token/authenticated visibility) always, and
+    # for anonymous responses (public/unlisted) when the survey's
+    # allow_response_redaction toggle is on at publication. The code contains
+    # no personal information; a participant who discards it leaves their
+    # response effectively anonymous.
+    receipt_token = models.CharField(
+        max_length=64,
         null=True,
         blank=True,
+        unique=True,
         db_index=True,
-        help_text="Receipt token for data subject requests (pseudonymous surveys only)",
+        help_text=(
+            "Receipt token for data subject requests — short code shown "
+            "once after submission"
+        ),
     )
 
     # Data subject request freeze fields
@@ -3254,39 +3266,52 @@ class SurveyResponse(models.Model):
             Survey.Visibility.TOKEN,
         ]
 
-    def generate_receipt_token(self, opt_in: bool = False) -> uuid.UUID | None:
+    @staticmethod
+    def _new_receipt_token() -> str:
+        """Short participant-friendly redaction code (issue #376).
+
+        8 characters from the Crockford base32 alphabet (no I/L/O/U) —
+        long enough to resist guessing, short enough to read aloud or
+        copy by hand, like a 2FA code. Generated uppercase; lookups by
+        copy-paste are exact.
+        """
+        alphabet = "0123456789ABCDEFGHJKMNPQRSTUVWXYZ"
+        return "".join(secrets.choice(alphabet) for _ in range(8))
+
+    def generate_receipt_token(self) -> str | None:
         """
         Generate a receipt token for data subject rights requests.
 
-        Only generates token for pseudonymous responses by default.
-        Anonymous responses do not get tokens to preserve anonymity.
-
-        For public/unlisted surveys (anonymous responses), a token is only
-        generated when the participant explicitly opts in at submission
-        time (opt_in=True) AND the survey has allow_response_redaction=True.
-        This extends the original anonymity-preserving design with an
-        opt-in path to redaction (see docs/survey-progress-tracking.md
-        §Opt-out token).
-
-        Args:
-            opt_in: True when the participant explicitly requested a
-                redaction token at submission time (public surveys only).
+        Pseudonymous responses (authenticated/token visibility, or any
+        response with a submitted_by/access_token) always get a token.
+        Anonymous responses (public/unlisted without a credential) get a
+        token only when the survey has allow_response_redaction=True —
+        the publication-time toggle (issue #376: every participant of a
+        redaction-enabled survey is shown the token once on the
+        thank-you page).
 
         Returns:
-            UUID receipt token if generated, None if anonymous and not
-            opted in.
+            The receipt token (short code string) if generated or already
+            present, else None.
         """
         if not self.is_pseudonymous:
-            # Anonymous response — only issue a token if the participant
-            # explicitly opted in and the survey allows redaction.
-            if not opt_in:
-                return None
+            # Anonymous response — only issue a token when the creator
+            # enabled redaction at publication.
             if not getattr(self.survey, "allow_response_redaction", True):
                 return None
 
         if not self.receipt_token:
-            self.receipt_token = uuid.uuid4()
-            self.save(update_fields=["receipt_token"])
+            for _ in range(5):
+                try:
+                    with transaction.atomic():
+                        self.receipt_token = self._new_receipt_token()
+                        self.save(update_fields=["receipt_token"])
+                    break
+                except IntegrityError:
+                    # 40-bit space — a collision means a concurrent code
+                    # took it; regenerate. The savepoint keeps the outer
+                    # transaction usable after the failed insert.
+                    continue
 
         return self.receipt_token
 
@@ -3493,7 +3518,8 @@ class DataSubjectRequest(models.Model):
     respondent_email = models.EmailField(
         help_text="Email address of the person making the request",
     )
-    receipt_token = models.UUIDField(
+    receipt_token = models.CharField(
+        max_length=64,
         null=True,
         blank=True,
         help_text="Receipt token provided by respondent (if available)",
@@ -3703,9 +3729,7 @@ class DataSubjectRequest(models.Model):
         return delta.days
 
     @classmethod
-    def find_by_receipt_token(
-        cls, receipt_token: uuid.UUID
-    ) -> "DataSubjectRequest | None":
+    def find_by_receipt_token(cls, receipt_token: str) -> "DataSubjectRequest | None":
         """Find a data subject request by receipt token."""
         return cls.objects.filter(receipt_token=receipt_token).first()
 

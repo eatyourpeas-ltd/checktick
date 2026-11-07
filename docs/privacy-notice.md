@@ -208,16 +208,16 @@ If unresolved, contact: <dpo@checktick.uk>
 
 ### 11.3 Anonymous vs Pseudonymous
 
-Anonymous responses cannot be linked to individuals and rights cannot be exercised — unless the survey creator has enabled opt-out tokens and the participant chooses to receive one at submission time (see §11.4). In that case, the participant's response can be linked to them via the token for the sole purpose of redaction.
+Anonymous responses cannot be linked to individuals and rights cannot be exercised — unless the survey creator has enabled opt-out tokens at publication, in which case every participant receives one at submission (see §11.4). The participant can then have their response linked to them via the token for the sole purpose of redaction.
 
-If a participant in a public survey is not offered a token, the original anonymity promise stands: the response cannot be linked to them and cannot be redacted.
+If a participant is not issued a token (the creator disabled the toggle, or they discarded it), the original anonymity promise stands: the response cannot be linked to them and cannot be redacted.
 
 ### 11.4 Receipt Tokens
 
 Receipt tokens are used to identify responses without revealing identity. They are issued in two circumstances:
 
 - **Pseudonymous surveys** (authenticated or invite token): a receipt token is issued automatically after submission. The participant can use it to request access to, correction of, or deletion of their response.
-- **Public/unlisted surveys**: a receipt token (called an opt-out token) is offered on an opt-in basis after submission, but only if the survey creator has enabled it. The participant chooses whether to accept the token. If they accept, they can later request deletion of their response using the token. If they decline, the response is fully anonymous and cannot be redacted.
+- **Public/unlisted surveys**: a receipt token (called an opt-out token) is issued automatically after submission when the survey creator has enabled it at publication — there is no separate opt-in step. The token is a short code (8 characters, like a 2FA code) shown once with a copy button. Participants who keep it can later request deletion of their response using the token; participants who discard it leave their response effectively anonymous.
 
 Tokens are shown once on the thank-you page after submission. If the participant loses the token, we cannot identify their response for deletion. Participants can optionally email the token to themselves — the email address is used only to send the email and is not stored on our servers.
 

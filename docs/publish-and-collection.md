@@ -339,7 +339,7 @@ See [Survey Progress Tracking](/docs/survey-progress-tracking/) for full details
 
 ### Opt-Out Tokens for Public Surveys
 
-After submitting a public or unlisted survey, participants may be offered an **opt-out token** — a unique code that lets them request deletion of their response later. This is opt-in: the participant chooses whether to accept the token. If they decline, their response is fully anonymous and cannot be redacted.
+After submitting a public or unlisted survey, participants are shown an **opt-out token** — a short, unique code (8 characters, like a 2FA token) that lets them request deletion of their response later. It is issued automatically when the survey's `allow_response_redaction` toggle is enabled at publication, and is displayed once on the thank-you page with a copy button and a warning that it will not be shown again. Participants who keep the token can have their response redacted later; participants who discard it leave their response effectively anonymous.
 
 Survey creators can disable opt-out tokens for a survey via the publication workflow (see below).
 

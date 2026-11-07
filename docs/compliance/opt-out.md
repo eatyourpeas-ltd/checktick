@@ -15,10 +15,11 @@ See [Individual Rights Procedure](/docs/compliance/individual-rights-procedure/)
 
 ## Opt-Out Tokens for Public Surveys
 
-In addition to the encryption opt-out declaration above, CheckTick provides an **opt-out token** mechanism for participants in public and unlisted surveys. This extends the existing receipt token pattern (used for pseudonymous surveys) to anonymous responses on an opt-in basis.
+In addition to the encryption opt-out declaration above, CheckTick provides an **opt-out token** mechanism for participants in public and unlisted surveys. This extends the existing receipt token pattern (used for pseudonymous surveys) to anonymous responses.
 
-- **Survey creator control:** The `allow_response_redaction` toggle (default: True) in the publication workflow controls whether opt-out tokens are offered. If disabled, public-survey responses are fully anonymous and cannot be redacted.
-- **Participant opt-in:** On the thank-you page after submission, the participant can choose to receive a token. If they accept, the token is stored on the response and can be used to locate it for deletion via the DSR workflow. If they decline, the response remains anonymous.
+- **Survey creator control:** The `allow_response_redaction` toggle (default: True) in the publication workflow controls whether opt-out tokens are issued. If disabled, public-survey responses are fully anonymous and cannot be redacted.
+- **Automatic issue (issue #376):** When the toggle is enabled, every participant is shown a one-time token on the thank-you page after submission — a short, random code (8 characters, like a 2FA token) with a copy button and a warning that it will not be shown again. No opt-in step is required. The token is stored on the response and can be used to locate it for deletion via the DSR workflow.
+- **Effective anonymity preserved:** The token contains no personal information and is not linked to any identity. A participant who discards their token leaves their response effectively anonymous.
 - **Token delivery:** The participant can optionally email the token to themselves. The email address is not stored on CheckTick's servers — it is used to send the email and then discarded.
 - **Lost tokens:** If the participant loses their token, the response cannot be identified for deletion. This is the privacy trade-off for not collecting participant identity.
 
