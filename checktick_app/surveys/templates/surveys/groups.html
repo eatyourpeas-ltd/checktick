@@ -1166,7 +1166,7 @@
               <span class="text-sm text-base-content/70">{{ cat.display_name }}</span>
               <input type="text" name="label_{{ cat.id }}" value="{{ cat.label }}" placeholder="{% trans 'Display label' %}" aria-label="{% trans 'Display label' %}" class="input input-bordered input-xs flex-1 min-w-32" />
               <button type="submit" class="btn btn-xs btn-ghost">{% trans 'Save' %}</button>
-              <button type="submit" name="action" value="remove_respondent_category" formaction="/surveys/{{ survey.slug }}/groups/" class="btn btn-xs btn-ghost text-error" onclick="return confirm('{% trans 'Remove this category?' %}')">{% trans 'Remove' %}</button>
+              <button type="submit" name="action" value="remove_respondent_category" formaction="/surveys/{{ survey.slug }}/groups/" class="btn btn-xs btn-ghost text-error" data-confirm="{% trans 'Remove this category?' %}">{% trans 'Remove' %}</button>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>

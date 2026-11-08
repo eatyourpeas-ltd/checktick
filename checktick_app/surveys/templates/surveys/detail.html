@@ -413,7 +413,7 @@
         {# Free-text dimension (issue #353): simulate any typed value. #}
         <input type="text" name="simulate_category_{{ cat.name }}" value="{{ category_preview.values|get_item:cat.name }}" class="input input-bordered input-xs ml-2" placeholder="{% trans 'Type a value' %}" />
         {% else %}
-        <select name="simulate_category" class="select select-bordered select-xs ml-2" onchange="this.form.submit()">
+        <select name="simulate_category" class="select select-bordered select-xs ml-2" data-auto-submit-form>
           <option value="">—</option>
           {% for val in cat.allowed_values %}
           <option value="{{ cat.name }}:{{ val }}" {% if request.GET.simulate_category and cat.name|add:':'|add:val in request.GET.simulate_category %}selected{% endif %}>{{ val }}</option>
@@ -899,53 +899,77 @@
             {% endif %}
           </div>
         {% elif q.type == 'grid' %}
-          {# Grid: the stem has no answer of its own — rows render inline, each
-             a labelled radiogroup named q_<row id> so answers stay flat. Rows
-             always render as radios (one per column cell) — a slider cannot
-             express a table cell or an explicit "does not apply" choice. #}
+          {% comment %} Grid: the stem has no answer of its own — rows render as
+             table rows sharing one scale, so the answer columns line up. Each
+             radio is still named q_<row id> so answers stay flat, and is
+             labelled by its row and column headers (the WCAG pattern for radio
+             matrices). Rows always render as radios — a slider cannot express
+             a table cell or an explicit "does not apply" choice. {% endcomment %}
           {% with scale=q.options.scale %}
             <div role="group" aria-labelledby="q_label_{{ q.id }}">
-              {% if scale.type == 'number-scale' %}
-                {% if scale.left or scale.right %}
-                  <p class="text-sm opacity-70 flex flex-wrap justify-between gap-2 mb-2">
-                    {% if scale.left %}<span id="grid_left_{{ q.id }}">{{ scale.left }}</span>{% endif %}
-                    {% if scale.right %}<span id="grid_right_{{ q.id }}">{{ scale.right }}</span>{% endif %}
-                  </p>
-                {% endif %}
-              {% elif scale.labels %}
+              {% if scale.labels %}
                 <p class="text-xs opacity-70 mb-2">{{ scale.labels|join:', ' }}</p>
               {% endif %}
-              <div class="space-y-3">
-                {% for row in q.grid_rows %}
-                  <div class="flex flex-col sm:flex-row sm:items-center sm:gap-4">
-                    <span class="text-sm font-medium sm:min-w-40 mb-1 sm:mb-0" id="grid_row_label_{{ row.id }}">
-                      {{ row.text }}{% if row.required %}<span class="text-error ml-1">*</span>{% endif %}
-                    </span>
-                    <div role="radiogroup" aria-labelledby="grid_row_label_{{ row.id }}{% if scale.type == 'number-scale' and scale.left %} grid_left_{{ q.id }}{% endif %}{% if scale.type == 'number-scale' and scale.right %} grid_right_{{ q.id }}{% endif %}"{% if row.required %} aria-required="true"{% endif %} class="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div class="overflow-x-auto">
+                <table class="table table-sm w-full min-w-[32rem] border-collapse">
+                  <thead>
+                    {% if scale.type == 'number-scale' and scale.left or scale.type == 'number-scale' and scale.right %}
+                    {# Scale end labels sit above the min/max column headers #}
+                    <tr>
+                      <td class="border-b-0"></td>
+                      {% for n in q.grid_scale_values %}
+                        <td class="text-center align-bottom pb-0 border-b-0 text-xs font-normal leading-tight whitespace-normal">
+                          {% if forloop.first and scale.left %}<span id="grid_left_{{ q.id }}">{{ scale.left }}</span>{% endif %}
+                          {% if forloop.last and scale.right %}<span id="grid_right_{{ q.id }}">{{ scale.right }}</span>{% endif %}
+                        </td>
+                      {% endfor %}
+                      <td class="border-b-0"></td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                      <th scope="col" class="text-left"><span class="sr-only">{% trans "Question" %}</span></th>
                       {% if scale.type == 'number-scale' %}
                         {% for n in q.grid_scale_values %}
-                          <label class="flex items-center gap-1.5 cursor-pointer">
-                            <input type="radio" name="q_{{ row.id }}" value="{{ n }}" class="radio radio-primary"{% if row.required %} required{% endif %} />
-                            <span class="text-sm">{{ n }}</span>
-                          </label>
+                          <th scope="col" id="grid_col_{{ q.id }}_{{ n }}" class="text-center font-medium whitespace-nowrap w-14">{{ n }}</th>
                         {% endfor %}
                       {% else %}
                         {% for l in scale.labels %}
-                          <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" name="q_{{ row.id }}" value="{{ l }}" class="radio radio-primary"{% if row.required %} required{% endif %} />
-                            <span class="text-sm">{{ l }}</span>
-                          </label>
+                          <th scope="col" id="grid_col_{{ q.id }}_{{ forloop.counter0 }}" class="text-center font-medium whitespace-nowrap">{{ l }}</th>
                         {% endfor %}
                       {% endif %}
                       {% if scale.na_label %}
-                        <label class="flex items-center gap-2 cursor-pointer opacity-80 sm:ml-4">
-                          <input type="radio" name="q_{{ row.id }}" value="na" class="radio radio-primary"{% if row.required %} required{% endif %} />
-                          <span class="text-sm">{{ scale.na_label }}</span>
-                        </label>
+                        <th scope="col" id="grid_col_{{ q.id }}_na" class="text-center font-medium whitespace-nowrap border-l border-l-base-content/30">{{ scale.na_label }}</th>
                       {% endif %}
-                    </div>
-                  </div>
-                {% endfor %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in q.grid_rows %}
+                      <tr>
+                        <th scope="row" class="text-left font-medium" id="grid_row_label_{{ row.id }}">
+                          {{ row.text }}{% if row.required %}<span class="text-error ml-1">*</span>{% endif %}
+                        </th>
+                        {% if scale.type == 'number-scale' %}
+                          {% for n in q.grid_scale_values %}
+                            <td class="text-center align-middle">
+                              <input type="radio" name="q_{{ row.id }}" value="{{ n }}" class="radio radio-primary" aria-labelledby="grid_row_label_{{ row.id }} grid_col_{{ q.id }}_{{ n }}"{% if row.required %} aria-required="true" required{% endif %} />
+                            </td>
+                          {% endfor %}
+                        {% else %}
+                          {% for l in scale.labels %}
+                            <td class="text-center align-middle">
+                              <input type="radio" name="q_{{ row.id }}" value="{{ l }}" class="radio radio-primary" aria-labelledby="grid_row_label_{{ row.id }} grid_col_{{ q.id }}_{{ forloop.counter0 }}"{% if row.required %} aria-required="true" required{% endif %} />
+                            </td>
+                          {% endfor %}
+                        {% endif %}
+                        {% if scale.na_label %}
+                          <td class="text-center align-middle border-l border-l-base-content/30">
+                            <input type="radio" name="q_{{ row.id }}" value="na" class="radio radio-primary" aria-labelledby="grid_row_label_{{ row.id }} grid_col_{{ q.id }}_na"{% if row.required %} aria-required="true" required{% endif %} />
+                          </td>
+                        {% endif %}
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
               </div>
             </div>
           {% endwith %}
@@ -1073,7 +1097,7 @@
     <button class="btn btn-primary" type="submit">{% trans "Complete Preview" %}</button>
     {% else %}
     <button class="btn btn-primary" type="submit" name="action" value="complete_section">{% trans "Save and complete section" %}</button>
-    <button class="btn btn-outline" type="button" onclick="window.location.href='/surveys/{{ survey.slug }}/take/'">{% trans "Back to overview" %}</button>
+    <a class="btn btn-outline" href="/surveys/{{ survey.slug }}/take/">{% trans "Back to overview" %}</a>
     {% endif %}
   </div>
   {% elif is_preview %}
@@ -1342,6 +1366,13 @@
       }
     })();
     {% endif %}
+
+    // Simulate-category selects submit their form on change. Replaces the
+    // inline onchange handler, which the CSP (script-src without unsafe-inline)
+    // blocks.
+    document.querySelectorAll('select[data-auto-submit-form]').forEach(function(select) {
+      select.addEventListener('change', function() { select.form.submit(); });
+    });
   });
 </script>
 
