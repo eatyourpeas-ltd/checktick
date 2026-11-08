@@ -345,7 +345,9 @@ HCAPTCHA_SECRET=your_secret_key
 **Server-side Verification:**
 
 `checktick_app/core/captcha.py::verify_captcha` posts the
-`h-captcha-response` token to `https://hcaptcha.com/siteverify` and returns
+`h-captcha-response` token to `https://hcaptcha.com/siteverify` — together
+with the configured `sitekey`, so a token issued on another sitekey in the
+same account cannot be redeemed against CheckTick — and returns
 `True` only on `success` (or when no secret is configured, which disables the
 captcha for self-hosters and tests). The helper is shared with the signup
 flow, which fails closed while `HCAPTCHA_SECRET` is set — see

@@ -327,7 +327,8 @@ No new credentials are needed for staging — the OIDC client IDs/secrets,
   hCaptcha, Vault AppRole and `SECRET_KEY` are all shared via
   `checktick-config-local` + `checktick-secrets`. Console-side, beyond the
   M365/Google redirect URIs (`https://staging.checktick.uk/oidc/callback/`),
-  only the hCaptcha sitekey's hostname list (sitekeys are hostname-bound).
+  nothing hCaptcha-side: the shared sitekey covers staging too (its
+  hostname list is organisational, not an enforcement mechanism).
   Billing selects the GoCardless API by `ENVIRONMENT` — only `production`
   uses the live API; development AND staging use the sandbox (settings.py —
   shipped in 0.27.1, verified live: staging resolves

@@ -41,13 +41,18 @@ def verify_captcha(request: HttpRequest) -> bool:
     if not token:
         return False
     try:
-        data = urllib.parse.urlencode(
-            {
-                "secret": secret,
-                "response": token,
-                "remoteip": request.META.get("REMOTE_ADDR", ""),
-            }
-        ).encode()
+        payload = {
+            "secret": secret,
+            "response": token,
+            "remoteip": request.META.get("REMOTE_ADDR", ""),
+        }
+        # Bind the token to this sitekey so a token issued on another
+        # sitekey in the same account cannot be redeemed here (hCaptcha
+        # recommendation). Optional parameter — only sent when configured.
+        sitekey = getattr(settings, "HCAPTCHA_SITEKEY", "")
+        if sitekey:
+            payload["sitekey"] = sitekey
+        data = urllib.parse.urlencode(payload).encode()
         req = urllib.request.Request(SITEVERIFY_URL, data=data)
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected

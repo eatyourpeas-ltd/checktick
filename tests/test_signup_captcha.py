@@ -7,6 +7,7 @@ survey-response flow (checktick_app/core/captcha.py).
 """
 
 import json
+import urllib.parse
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -149,3 +150,25 @@ def test_verify_captcha_fails_closed_on_siteverify_error(rf, settings, monkeypat
 
     monkeypatch.setattr("urllib.request.urlopen", _unreachable)
     assert verify_captcha(rf.post("/", {"h-captcha-response": "some-token"})) is False
+
+
+def test_verify_captcha_sends_sitekey_when_configured(rf, settings, monkeypatch):
+    """siteverify receives the configured sitekey so a token issued on
+    another sitekey in the same account cannot be redeemed against
+    CheckTick (hCaptcha-recommended hardening).
+    """
+    settings.HCAPTCHA_SECRET = "dummy-secret"
+    settings.HCAPTCHA_SITEKEY = "dummy-sitekey"
+    captured = {}
+
+    def _fake_urlopen(req, *args, **kwargs):
+        captured["data"] = req.data
+        return _FakeSiteverifyResponse({"success": True})
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    assert verify_captcha(rf.post("/", {"h-captcha-response": "some-token"})) is True
+
+    body = urllib.parse.parse_qs(captured["data"].decode())
+    assert body["sitekey"] == ["dummy-sitekey"]
+    assert body["secret"] == ["dummy-secret"]
+    assert body["response"] == ["some-token"]
