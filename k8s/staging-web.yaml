@@ -36,7 +36,9 @@
 # staging pods can never authenticate to the SHARED Vault and readiness
 # never goes green.
 #
-# Staging deploys are manual initially:
+# Staging deploys are automated by the Deploy (Civo) workflow's
+# deploy-staging job (staging migrate Job -> set image -> rollout -> smoke).
+# Manual fallback:
 #   kubectl set image -n checktick deploy/checktick-staging-web \
 #     web=ghcr.io/eatyourpeas-ltd/checktick:X.Y.Z
 #   (after re-running k8s/staging-migrate-job.yaml against the same tag)

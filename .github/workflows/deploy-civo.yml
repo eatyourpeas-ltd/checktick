@@ -1,6 +1,6 @@
 # Deploys a published CheckTick image from GHCR to the Civo cluster.
 #
-# This is the production deployment workflow. The image itself is built
+# This is the production + staging deployment workflow. The image itself is built
 # and published by docker-publish.yml; this workflow deploys a tag that
 # already exists in GHCR.
 #
@@ -18,11 +18,17 @@
 #   2. rolling update of the web Deployment (maxUnavailable: 0)
 #   3. rollout must pass readiness (/healthz gates traffic)
 #   4. smoke check against the service
-#   5. roll every CronJob in the namespace to the deployed tag
+#   5. roll every prod CronJob in the namespace to the deployed tag
 #      (CronJobs are NOT part of the Deployment rollout — without this
 #      they keep the tag pinned in k8s/cronjobs.yaml and drift; they sat
 #      on 0.24.2 while the web Deployment ran 0.25.x)
 #   6. automatic rollback if anything fails after the image changed
+#   7. deploy-staging job (needs: deploy): the SAME sequence against the
+#      staging environment — staging migrate Job, staging web rollout,
+#      staging smoke check, then the one staging CronJob. A staging
+#      failure never rolls back prod (separate job); with
+#      maxUnavailable: 0 a failed staging rollout leaves the previous
+#      tag serving.
 #
 # Migration discipline: if step 1 succeeds but the rollout is rolled back,
 # the PREVIOUS image briefly runs against the NEW schema. Migrations must
@@ -157,6 +163,10 @@ jobs:
                 echo "Skipping $cj (out-of-band, non-app images)"
                 continue
                 ;;
+              cronjob/prune-unconfirmed-users-staging)
+                echo "Skipping $cj (rolled by the deploy-staging job, after the staging DB is migrated)"
+                continue
+                ;;
             esac
             args=""
             for c in $(kubectl -n "$NS" get "$cj" \
@@ -197,3 +207,114 @@ jobs:
         run: |
           kubectl -n "$NS" get deploy checktick-web \
             -o jsonpath='{.spec.template.spec.containers[0].image} is live'
+
+  # Staging deploy — runs AFTER the prod job succeeds (needs: deploy), so
+  # one dispatch deploys both environments in the correct order.
+  #
+  # Separate job on purpose: a staging failure must NEVER trigger the prod
+  # rollback step (which lives in the deploy job). Staging is disposable,
+  # and with maxUnavailable: 0 a failed staging rollout simply leaves the
+  # previous tag serving while the surge pod never goes ready.
+  #
+  # No `environment:` gate: the `civo` environment approval on the deploy
+  # job already gates this dispatch (one approval per release, not two),
+  # and CIVO_KUBECONFIG is a repo-level secret.
+  deploy-staging:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Configure kubectl
+        run: |
+          printf '%s' "${{ secrets.CIVO_KUBECONFIG }}" | base64 -d > "$KUBECONFIG"
+          chmod 600 "$KUBECONFIG"
+          kubectl version --client=false  # fail fast if the kubeconfig is bad
+
+      - name: Pre-flight check (staging)
+        env:
+          NS: ${{ inputs.namespace }}
+        run: |
+          kubectl -n "$NS" get deploy checktick-staging-web
+          kubectl -n "$NS" get secret checktick-secrets
+
+      - name: Pre-deploy job (staging migrations + syncs)
+        env:
+          NS: ${{ inputs.namespace }}
+          TAG: ${{ inputs.image-tag }}
+        run: |
+          # Job specs are immutable — clear any previous run first. Distinct
+          # name from the prod pre-deploy job the deploy job manages.
+          kubectl -n "$NS" delete job checktick-staging-predeploy --ignore-not-found
+          # Same tag-substitution rule as prod: the manifest pins a released
+          # tag (never `latest`) — substitute the dispatched one so the
+          # migration always runs with the code it belongs to.
+          sed "s|checktick:[^ ]*|checktick:${TAG}|" k8s/staging-migrate-job.yaml \
+            | kubectl apply -f -
+          kubectl -n "$NS" wait --for=condition=complete \
+            job/checktick-staging-predeploy --timeout=300s
+
+      - name: Roll out new image (staging)
+        env:
+          NS: ${{ inputs.namespace }}
+          TAG: ${{ inputs.image-tag }}
+        run: |
+          kubectl -n "$NS" set image deployment/checktick-staging-web \
+            web="${IMAGE}:${TAG}"
+
+      - name: Wait for staging rollout (readiness-gated)
+        env:
+          NS: ${{ inputs.namespace }}
+        run: |
+          kubectl -n "$NS" rollout status deployment/checktick-staging-web \
+            --timeout=300s
+
+      - name: Smoke check (staging /healthz via the service)
+        env:
+          NS: ${{ inputs.namespace }}
+          TAG: ${{ inputs.image-tag }}
+        run: |
+          # Same pattern as the prod smoke: the app image itself (curl is
+          # installed in it); tests staging service DNS + a ready pod.
+          kubectl -n "$NS" run "deploy-smoke-staging-${GITHUB_RUN_ID}" \
+            --restart=Never -i --rm \
+            --image="${IMAGE}:${TAG}" \
+            --command -- curl -fsS --max-time 10 \
+            "http://checktick-staging-web.${NS}.svc.cluster.local:8000/healthz"
+          echo "OK: staging /healthz healthy after deploy"
+
+      - name: Roll the staging CronJob to new image
+        env:
+          NS: ${{ inputs.namespace }}
+          TAG: ${{ inputs.image-tag }}
+        run: |
+          # The deploy job's roll-every-CronJob step skips this one so it
+          # moves ONLY after the staging DB is migrated and the staging
+          # web rollout is verified — the cron must never run a tag the
+          # staging schema has not migrated to.
+          args=""
+          for c in $(kubectl -n "$NS" get cronjob/prune-unconfirmed-users-staging \
+            -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[*].name}'); do
+            args="$args $c=${IMAGE}:${TAG}"
+          done
+          # shellcheck disable=SC2086 — args is deliberately word-split
+          kubectl -n "$NS" set image cronjob/prune-unconfirmed-users-staging $args
+
+      - name: Diagnose failure (staging)
+        if: failure()
+        env:
+          NS: ${{ inputs.namespace }}
+        run: |
+          kubectl -n "$NS" describe job checktick-staging-predeploy || true
+          kubectl -n "$NS" logs job/checktick-staging-predeploy --tail=100 || true
+          kubectl -n "$NS" get pods -l app=checktick-staging-web -o wide || true
+
+      - name: Report deployed image (staging)
+        if: success()
+        env:
+          NS: ${{ inputs.namespace }}
+        run: |
+          kubectl -n "$NS" get deploy checktick-staging-web \
+            -o jsonpath='{.spec.template.spec.containers[0].image} is live on staging'

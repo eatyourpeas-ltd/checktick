@@ -43,8 +43,9 @@ For a walkthrough of the manifests and day-to-day validation commands, see
   Vault Operations below)
 - Deploys: GitHub Actions *Deploy (Civo)* workflow (pre-deploy Job runs migrations +
   idempotent syncs pinned to the same tag, then a `maxUnavailable: 0` rolling update
-  gated on `/healthz`). Migrations must stay expansion/contract — a rolled-back
-  rollout briefly runs the previous image against the new schema.
+  gated on `/healthz`; the `deploy-staging` job then repeats the sequence against
+  staging — see Staging environment). Migrations must stay expansion/contract — a
+  rolled-back rollout briefly runs the previous image against the new schema.
 
 ## Staging environment
 
@@ -59,8 +60,10 @@ Staging environment:
 - **Web**: `deploy/checktick-staging-web` — 1 replica, **no PDB** (a
   single-replica PDB would veto every voluntary drain) and **no topology
   spread** (pointless at 1 replica; a stale `app=checktick-web` selector
-  would count PROD pods). Deployed manually via `kubectl set image` after
-  re-running the staging migrate Job at the same tag. `DATABASE_URL` comes
+  would count PROD pods). Deployed by the Deploy (Civo) workflow's
+  `deploy-staging` job (staging migrate Job → `set image` → rollout → smoke);
+  manual `kubectl set image` after re-running the staging migrate Job at the
+  same tag remains the fallback. `DATABASE_URL` comes
   from the `STAGING_DATABASE_URL` key of `checktick-secrets` (an `env`
   entry overrides the shared `envFrom`); `ENVIRONMENT=staging` labels the
   JSON logs (kept OUT of OpenObserve — see Logs below); `SITE_URL` comes
@@ -76,8 +79,10 @@ Staging environment:
   (same 02:40 slot as prod, different database). `EMAIL_BOUNCE_PROCESSING_ENABLED=false`
   keeps the shared prod mailbox out of staging's pruning, and it has **no
   healthchecks.io ping** (a staging run must never mark prod's check seen).
-  The Deploy workflow's roll-every-CronJob step DOES re-image it on prod
-  releases — intended: it runs the app image, exactly like its prod twin.
+  Re-imaged by the `deploy-staging` job AFTER the staging migrate Job and
+  web rollout are verified — the prod job's roll-every-CronJob step skips
+  it (ordering: the cron must never run a tag the staging schema has not
+  migrated to).
 - **Seeding**: `k8s/staging-migrate-job.yaml` (Job `checktick-staging-predeploy` —
   a distinct name from the prod pre-deploy Job the workflow manages) run
   once per staging release.

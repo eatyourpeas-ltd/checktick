@@ -1,5 +1,7 @@
 # STAGING pre-deploy Job — the k8s/migrate-job.yaml pattern, pointed at the
-# staging database. Run ONCE per staging release (manual deploys initially):
+# staging database. Run once per staging release — the Deploy (Civo)
+# workflow's deploy-staging job does this automatically (tag-substituted);
+# the commands below remain the manual fallback:
 #
 #   kubectl delete job checktick-staging-predeploy -n checktick --ignore-not-found
 #   kubectl apply -f k8s/staging-migrate-job.yaml

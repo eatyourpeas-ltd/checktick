@@ -16,10 +16,10 @@
 #   - label checktick.io/staging-db-client (the STAGING DB grant), never
 #     checktick.io/db-client (the PROD one, carried by every prod CronJob).
 #
-# The Deploy (Civo) workflow's roll-every-CronJob step WILL re-image this
-# job to each released app tag (it enumerates every CronJob in the
-# namespace except vault-snapshot) — that is fine and intended: this job
-# runs the app image, exactly like its prod twin.
+# The Deploy (Civo) workflow's deploy-staging job re-images this cron to
+# each released tag AFTER the staging migrate Job and web rollout are
+# verified; the prod job's roll-every-CronJob step skips it (ordering: the
+# cron must never run a tag the staging schema has not migrated to).
 #
 # Out-of-band apply (NOT in kustomization.yaml):
 #   kubectl apply -f k8s/staging-cronjobs.yaml

@@ -238,11 +238,16 @@ automates the sequence above with the same zero-downtime semantics:
 1. re-runs the pre-deploy Job pinned to the same tag
 2. `kubectl set image` + `rollout status` (readiness-gated)
 3. smoke-checks `/healthz` through the service
-4. rolls every CronJob in the namespace to the same tag (CronJobs are not
+4. rolls every prod CronJob in the namespace to the same tag (CronJobs are not
    part of the Deployment rollout — see the note above)
 5. auto-rollbacks (`rollout undo`) if anything fails after the image changed
    (the CronJob roll runs after the smoke check, so a failed deploy leaves
    CronJobs on their previous tag)
+6. deploys STAGING (separate `deploy-staging` job, `needs: deploy`): the same
+   sequence against the staging environment — staging migrate Job, staging
+   web rollout, staging smoke check, then the one staging CronJob. A staging
+   failure never rolls back prod; with `maxUnavailable: 0` a failed staging
+   rollout leaves the previous tag serving.
 
 One-time setup:
 
@@ -334,9 +339,13 @@ No new credentials are needed for staging — the OIDC client IDs/secrets,
   base from `SITE_URL`/`STAGING_SITE_URL` (settings.py — effective from the
   next image release; older images hardcode `https://checktick.uk`).
 
-Staging deploys are manual `kubectl set image` initially. The Deploy (Civo)
-workflow only rolls `deploy/checktick-web` — but its roll-every-CronJob
-step DOES re-image `prune-unconfirmed-users-staging` to each released tag
-(intended: it runs the app image, exactly like its prod twin). Capacity
-(2026-11-08, 2× `g4s.kube.large`): staging adds ~600 Mi steady / 1.5 GiB
-requests against ~2–2.8 GiB actually free per node — comfortable.
+Staging deploys are automated: the Deploy (Civo) workflow's `deploy-staging`
+job (`needs: deploy`) runs the staging migrate Job, rolls
+`deploy/checktick-staging-web`, smoke-checks it, then re-images
+`prune-unconfirmed-users-staging` (the prod job's CronJob roll skips it, so
+the cron only moves once the staging schema is migrated). A staging failure
+never rolls back prod; with `maxUnavailable: 0` a failed staging rollout
+leaves the previous tag serving. Manual `kubectl set image` (after re-running
+`k8s/staging-migrate-job.yaml` at the same tag) remains the fallback.
+Capacity (2026-11-08, 2× `g4s.kube.large`): staging adds ~600 Mi steady /
+1.5 GiB requests against ~2–2.8 GiB actually free per node — comfortable.
