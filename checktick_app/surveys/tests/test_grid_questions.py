@@ -796,8 +796,9 @@ class TestGridTakePage:
         assert res.status_code == 200
         html = res.content.decode()
 
-        # Rows render as labelled radiogroups named q_<row id> — answers
-        # stay flat, exactly like a standalone question.
+        # Rows render as table rows sharing the scale header — each radio is
+        # named q_<row id> (answers stay flat, exactly like a standalone
+        # question) and labelled by its row + column headers.
         for row in self.rows:
             assert f'name="q_{row.id}"' in html
             assert f'id="grid_row_label_{row.id}"' in html
@@ -805,9 +806,10 @@ class TestGridTakePage:
         # Required rows enforce one answer per row (any required radio in
         # a named group makes the group required).
         assert html.count('name="q_%s"' % self.rows[0].id) >= 5
-        # Every row offers the numbers 1-5 and the Does-not-apply answer.
-        assert html.count(">1</span>") >= 2
-        assert html.count(">5</span>") >= 2
+        # The shared scale renders once as column headers (1-5) and every
+        # row offers the Does-not-apply answer.
+        assert html.count(">1</th>") >= 1
+        assert html.count(">5</th>") >= 1
         assert html.count('value="na"') == 2
         assert "Does not apply" in html
         # The shared scale labels render once for the whole grid.
