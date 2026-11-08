@@ -24,9 +24,11 @@
       <p class="py-4 opacity-80">{% trans "Your response has been recorded." %}</p>
 
       {% if receipt_token %}
-      {# One-time redaction token (issue #376): lets the participant request
-         redaction of their response later. Also serves as the receipt token
-         for pseudonymous surveys' data subject rights. #}
+      {% comment %}
+      One-time redaction token (issue #376): lets the participant request
+      redaction of their response later. Also serves as the receipt token
+      for pseudonymous surveys' data subject rights.
+      {% endcomment %}
       <div class="alert alert-info mt-6 text-left">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="h-6 w-6 shrink-0 stroke-current" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -46,10 +48,12 @@
         </div>
       </div>
 
-      {# Email the token to the participant (issue #376). The address is used
-         only to send this one email: it is never stored server-side and the
-         RedactionFilter keeps it out of logs. The token value travels in the
-         form because the one-time display already popped it from the session. #}
+      {% comment %}
+      Email the token to the participant (issue #376). The address is used
+      only to send this one email: it is never stored server-side and the
+      RedactionFilter keeps it out of logs. The token value travels in the
+      form because the one-time display already popped it from the session.
+      {% endcomment %}
       <div class="card bg-base-200 shadow-sm mt-4 text-left">
         <div class="card-body p-4">
           <h3 class="font-semibold text-sm">{% trans "Email this token to myself" %}</h3>
