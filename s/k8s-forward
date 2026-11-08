@@ -1,0 +1,119 @@
+#!/bin/bash
+# k8s_forward — port-forward a ClusterIP-only PRODUCTION service to localhost.
+#
+# NOTE: this is a KUBERNETES (Civo production) operational script. For local
+# development use `docker compose logs -f web` instead.
+#
+# OpenObserve and Vault are deliberately ClusterIP-only (never exposed via
+# the ingress), so their UI/API is reached through a temporary kubectl
+# tunnel. The tunnel runs in the FOREGROUND — Ctrl-C tears it down.
+#   ./s/k8s-forward                    # OpenObserve → http://localhost:5080
+#   ./s/k8s-forward openobserve 5081   # busy local port? pick another
+#   ./s/k8s-forward vault              # Vault UI    → http://localhost:8200
+#
+# Pre-flight checks cover the three ways a port-forward usually fails
+# silently: Service missing, no READY endpoints behind it, local port busy.
+#
+# OpenObserve login: the root user from the `openobserve-auth` Secret
+# (git-ignored k8s/openobserve.env) — or the NF-era root user if the
+# restored metadata db predates the Secret. Never paste credentials into
+# tickets or chats.
+#
+# Usage: ./s/k8s-forward [--help] [target] [local-port]
+
+set -euo pipefail
+
+if [[ "${1:-}" == "--help" ]]; then
+    head -21 "$0" | tail -19
+    exit 0
+fi
+
+NS=checktick
+
+# Kubeconfig resolution: explicit KUBECONFIG wins; else the Civo kubeconfig
+# if present; else the default config.
+if [ -z "${KUBECONFIG:-}" ] && [ -f "${HOME}/.kube/civo-checktick.yaml" ]; then
+    export KUBECONFIG="${HOME}/.kube/civo-checktick.yaml"
+fi
+
+# Target resolution: optional leading target name, optional local port.
+TARGET="openobserve"
+LOCAL_PORT=""
+if [ $# -gt 0 ]; then
+    case "$1" in
+        -*) echo "✗ Unknown flag '$1' — see ./s/k8s-forward --help"; exit 1 ;;
+        *)  TARGET="$1"; shift ;;
+    esac
+fi
+if [ $# -gt 0 ]; then
+    LOCAL_PORT="$1"
+    shift
+fi
+if [ $# -gt 0 ]; then
+    echo "✗ Too many arguments — see ./s/k8s-forward --help"
+    exit 1
+fi
+
+case "$TARGET" in
+    openobserve) SVC="openobserve"; REMOTE_PORT=5080 ;;
+    vault)       SVC="vault";       REMOTE_PORT=8200 ;;
+    *)
+        echo "✗ Unknown target '$TARGET' — valid: openobserve, vault"
+        echo "  See: ./s/k8s-forward --help"
+        exit 1
+        ;;
+esac
+LOCAL_PORT="${LOCAL_PORT:-$REMOTE_PORT}"
+if ! [[ "$LOCAL_PORT" =~ ^[0-9]+$ ]] || [ "$LOCAL_PORT" -lt 1 ] || [ "$LOCAL_PORT" -gt 65535 ]; then
+    echo "✗ Invalid local port '$LOCAL_PORT' — must be 1-65535"
+    exit 1
+fi
+
+# --- pre-flight -------------------------------------------------------------
+
+if ! kubectl get svc -n "$NS" "$SVC" >/dev/null 2>&1; then
+    echo "✗ Service $NS/$SVC not found — check: kubectl -n $NS get svc"
+    exit 1
+fi
+
+# No ready endpoints = the tunnel binds but every request hangs/fails. The
+# most common cause: the pod is crash-looping or still starting.
+ENDPOINTS="$(kubectl get endpoints -n "$NS" "$SVC" \
+    -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null || true)"
+if [ -z "$ENDPOINTS" ]; then
+    echo "✗ Service $NS/$SVC has NO ready endpoints — the backing pod is not Ready."
+    echo "  Check: kubectl -n $NS get pods -l app=$SVC"
+    echo "  Logs:  ./s/k8s-logs $TARGET"
+    exit 1
+fi
+
+# A stale tunnel from a previous session is the usual reason this fires.
+if command -v lsof >/dev/null 2>&1 && \
+   lsof -nP -iTCP:"$LOCAL_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "✗ Local port $LOCAL_PORT is already in use:"
+    lsof -nP -iTCP:"$LOCAL_PORT" -sTCP:LISTEN || true
+    echo "  Kill the stale tunnel: lsof -ti tcp:$LOCAL_PORT | xargs kill"
+    echo "  Or pick another port:  ./s/k8s-forward $TARGET $((LOCAL_PORT + 1))"
+    exit 1
+fi
+
+echo "=========================================="
+echo "  Port-forward (Kubernetes/Civo production)"
+echo "=========================================="
+echo "Cluster context : $(kubectl config current-context)"
+echo "Service         : $NS/$SVC (ready pod ip(s): $ENDPOINTS)"
+echo "Tunnel          : http://localhost:$LOCAL_PORT → svc port $REMOTE_PORT"
+if [ "$TARGET" = "openobserve" ]; then
+    echo "Login           : root user from the openobserve-auth Secret"
+    echo "                  (git-ignored k8s/openobserve.env) — never paste"
+    echo "                  credentials into tickets or chats."
+else
+    echo "Hint            : for unseal/init ceremonies use ./s/k8s-vault-unseal"
+fi
+echo "Stop            : Ctrl-C (tears the tunnel down)"
+echo ""
+
+# Bound to loopback explicitly — the tunnel must never listen on all
+# interfaces of this machine.
+exec kubectl port-forward -n "$NS" --address 127.0.0.1 \
+    "svc/$SVC" "$LOCAL_PORT:$REMOTE_PORT"

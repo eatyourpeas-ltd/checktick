@@ -193,6 +193,11 @@ For long-term retention or advanced analytics:
 
 These are connected via log shipping agents (Vector, Fluent Bit, etc.), not by the application.
 
+> CheckTick's production deployment (Civo Kubernetes) ships stdout to a
+> self-hosted OpenObserve via Fluent Bit — see
+> [Civo Kubernetes Operations → Monitoring & Alerting](civo-kubernetes-operations.md)
+> for access, record shapes and cut-and-paste queries.
+
 ### Does this work on Azure / AWS / other platforms?
 
 Yes — fully.

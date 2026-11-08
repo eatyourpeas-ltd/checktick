@@ -27,8 +27,11 @@
 #   metadata db forward on startup. The collector continues the SAME stream,
 #   so NF-era history and live Civo logs are one continuous timeline.
 # - Retention: set per-stream in the UI (Stream Settings → Data Retention
-#   Days). Suggested: 180 on the live `default` stream per the 6–12 month
-#   policy band.
+#   Days). SET: `default` is at 180 days (verified via the stream-settings
+#   API 2026-11-08) per the 6–12 month policy band. Note: the NF-era
+#   archive (~2026-06-19) crosses the 180-day boundary ~mid-Dec 2026 and
+#   will age out — expected, not data loss; extended_retention_days can
+#   keep it longer if ever needed.
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
