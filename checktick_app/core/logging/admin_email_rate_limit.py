@@ -28,14 +28,19 @@ class AdminEmailRateLimitFilter(logging.Filter):
     per worker per window instead of one email per ERROR record.
     """
 
-    _last_sent: float = 0.0
+    _last_sent: float | None = None
 
     def filter(self, record: logging.LogRecord) -> bool:
         window = getattr(settings, "ADMIN_EMAIL_RATE_LIMIT_SECONDS", 900)
         if window <= 0:
             return True
         now = time.monotonic()
-        if now - type(self)._last_sent >= window:
+        last = type(self)._last_sent
+        # None = never sent. A 0.0 sentinel is WRONG here: monotonic clocks
+        # have an arbitrary zero point, and on a freshly-booted machine
+        # (e.g. a CI runner) time.monotonic() can read BELOW the window,
+        # making the filter drop the very first record (found in CI).
+        if last is None or now - last >= window:
             type(self)._last_sent = now
             return True
         return False

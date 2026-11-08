@@ -31,9 +31,9 @@ def _record() -> logging.LogRecord:
 @pytest.fixture(autouse=True)
 def _reset_window():
     """Isolate the class-level window state between tests."""
-    AdminEmailRateLimitFilter._last_sent = 0.0
+    AdminEmailRateLimitFilter._last_sent = None
     yield
-    AdminEmailRateLimitFilter._last_sent = 0.0
+    AdminEmailRateLimitFilter._last_sent = None
 
 
 class TestAdminEmailRateLimitFilter:
@@ -68,5 +68,17 @@ class TestAdminEmailRateLimitFilter:
     def test_window_shared_across_instances(self, settings):
         """One window per process, not per filter instance."""
         settings.ADMIN_EMAIL_RATE_LIMIT_SECONDS = 900
+        assert AdminEmailRateLimitFilter().filter(_record()) is True
+        assert AdminEmailRateLimitFilter().filter(_record()) is False
+
+    def test_first_record_passes_on_fresh_boot_clock(self, settings, monkeypatch):
+        """Regression: a fresh machine's monotonic clock can read BELOW
+        the window (CI runners boot minutes before the tests) — the first
+        record must still pass (found in CI 2026-11-08)."""
+        settings.ADMIN_EMAIL_RATE_LIMIT_SECONDS = 900
+        monkeypatch.setattr(
+            "checktick_app.core.logging.admin_email_rate_limit.time.monotonic",
+            lambda: 60.0,
+        )
         assert AdminEmailRateLimitFilter().filter(_record()) is True
         assert AdminEmailRateLimitFilter().filter(_record()) is False
