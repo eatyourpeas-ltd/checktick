@@ -29,6 +29,7 @@ from checktick_app.surveys.models import (
     TeamMembership,
 )
 
+from .captcha import verify_captcha
 from .email_confirmation import EmailConfirmationManager
 from .forms import (
     BrandingConfigForm,
@@ -788,7 +789,10 @@ def signup(request):
 
     if request.method == "POST":
         form = SignupForm(request.POST)
-        if form.is_valid():
+        # Fail closed while HCAPTCHA_SECRET is configured (issue #382): no
+        # verified captcha token, no account. An unset secret disables the
+        # check — the same convention as the survey-response flow.
+        if form.is_valid() and verify_captcha(request):
             user = form.save()
             # With multiple AUTHENTICATION_BACKENDS configured (e.g., ModelBackend + Axes),
             # login() requires an explicit backend unless the user was authenticated via authenticate().
@@ -908,6 +912,14 @@ def signup(request):
                 )
 
             return redirect("core:home")
+        if form.is_valid():
+            # The form data was valid but captcha verification failed (or
+            # hCaptcha could not be reached). Fail closed — no account is
+            # created — and re-render so the user can re-solve the challenge.
+            messages.error(
+                request,
+                "CAPTCHA verification failed. Please complete the verification and try again.",
+            )
     else:
         form = SignupForm()
     context = {

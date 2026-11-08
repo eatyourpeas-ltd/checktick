@@ -135,7 +135,7 @@ def survey_take(request, slug):
     survey = get_object_or_404(Survey, slug=slug)
 
     if request.method == "POST" and not request.user.is_authenticated and survey.captcha_required:
-        if not _verify_captcha(request):
+        if not verify_captcha(request):
             messages.error(request, "CAPTCHA verification failed.")
             return redirect("surveys:take", slug=slug)
 
@@ -343,25 +343,13 @@ HCAPTCHA_SECRET=your_secret_key
 ```
 
 **Server-side Verification:**
-```python
-def _verify_captcha(request):
-    response = request.POST.get("h-captcha-response")
-    if not response:
-        return False
 
-    data = {
-        "secret": settings.HCAPTCHA_SECRET,
-        "response": response,
-    }
-
-    verify_response = requests.post(
-        "https://hcaptcha.com/siteverify",
-        data=data,
-    )
-
-    result = verify_response.json()
-    return result.get("success", False)
-```
+`checktick_app/core/captcha.py::verify_captcha` posts the
+`h-captcha-response` token to `https://hcaptcha.com/siteverify` and returns
+`True` only on `success` (or when no secret is configured, which disables the
+captcha for self-hosters and tests). The helper is shared with the signup
+flow, which fails closed while `HCAPTCHA_SECRET` is set — see
+`checktick_app/core/views.py::signup`.
 
 **Template:**
 ```html

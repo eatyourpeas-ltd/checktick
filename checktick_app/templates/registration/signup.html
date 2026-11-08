@@ -231,6 +231,12 @@
               </label>
             </div>
 
+            {# Bot-gating on signup (issue #382) — rendered only when hCaptcha is configured and verified server-side in core.views.signup #}
+            {% if settings.HCAPTCHA_SITEKEY %}
+            <div class="h-captcha" data-sitekey="{{ settings.HCAPTCHA_SITEKEY }}"></div>
+            <script src="https://js.hcaptcha.com/1/api.js" async defer nonce="{{ request.csp_nonce }}"></script>
+            {% endif %}
+
             <button type="submit" class="btn btn-primary w-full">{% trans 'Create account' %}</button>
           </form>
         </div>
