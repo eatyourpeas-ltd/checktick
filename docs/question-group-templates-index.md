@@ -31,6 +31,17 @@ This appendix lists validated questionnaires and instruments available as global
 
 [View PHQ-9 Template →](/docs/question-group-templates-phq9/)
 
+### Ethnic group (GSS harmonised)
+
+**UK census / GSS harmonised ethnic group question**
+
+- **Citation**: Office for National Statistics / Government Statistical Service. Ethnic group, national identity and religion question design (harmonised standard, 2021 census). Crown copyright / Open Government Licence v3.0.
+- **License**: Open Government Licence v3.0
+- **Questions**: 1 grouped single-choice question — five category groups (White; Mixed or multiple; Asian or Asian British; Black, Black British, Caribbean or African; Other) with census sub-categories and "please state" follow-ups for the "any other" options
+- **Tags**: demographics, ethnicity, equality-monitoring, census
+
+[View Ethnic Group Template →](/docs/question-group-templates-gss-ethnicity/)
+
 ---
 
 ## Template File Format

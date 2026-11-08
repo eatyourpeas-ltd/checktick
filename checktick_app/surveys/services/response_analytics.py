@@ -533,6 +533,10 @@ def _reorder_by_question_options(question, options: list[dict]) -> list[dict]:
     flat_labels: list[str] = []
     for opt in q_options:
         if isinstance(opt, dict):
+            if opt.get("type") == "option_group":
+                # Grouped single-choice heading — presentation only, never an
+                # answer value.
+                continue
             if opt.get("type") == "categories" and isinstance(opt.get("labels"), list):
                 flat_labels.extend(str(label) for label in opt["labels"])
             elif (

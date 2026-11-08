@@ -9,7 +9,8 @@
   // builder_question_pane.html.
   const TYPE_EXPLAINERS = {
     text: "One line of free text. Formats: free text, number, date, time, or date & time.",
-    mc_single: "Pick exactly one answer from your list of options.",
+    mc_single:
+      "Pick exactly one answer from your list of options. Use [Square brackets] on their own line for a category group — its options become a second level (dependent dropdowns or a radio grid).",
     mc_multi: "Tick any number of answers from your list of options.",
     dropdown:
       "Pick one answer from a dropdown menu \u2014 best for long lists. You can load standardised option sets (Datasets) below.",
@@ -389,6 +390,18 @@
             catsField.value = "";
           }
         }
+      }
+    }
+
+    // Grouped single-choice display mode (mc_single with [group] headings).
+    if (payload.type === "mc_single") {
+      const groupedMode =
+        payload.grouped_render || payload.groupedRender || "expanded";
+      const groupedRadio = form.querySelector(
+        `input[name="grouped_render"][value="${groupedMode}"]`,
+      );
+      if (groupedRadio) {
+        groupedRadio.checked = true;
       }
     }
 
@@ -1091,6 +1104,24 @@
           !showFollowup || hasDataset,
         );
       }
+      // Grouped single-choice display mode: only meaningful for mc_single
+      // (and only when the options include [group] headings).
+      // Grouped single-choice: hint text always visible for mc_single; the
+      // display-mode toggle only once [group] headings exist.
+      const groupsHint = form.querySelector("[data-groups-hint]");
+      if (groupsHint) {
+        groupsHint.classList.toggle("hidden", type !== "mc_single");
+      }
+      const groupedRenderContainer = form.querySelector(
+        "[data-grouped-render-container]",
+      );
+      if (groupedRenderContainer) {
+        const hasGroups =
+          type === "mc_single" &&
+          optionsTextarea &&
+          /^\[.+\]$/m.test(optionsTextarea.value);
+        groupedRenderContainer.classList.toggle("hidden", !hasGroups);
+      }
       if (questionFollowupContainer) {
         const qfActive =
           showFollowup &&
@@ -1193,6 +1224,11 @@
     }
 
     // Function to populate follow-up options based on textarea content
+    function isOptionGroupLine(line) {
+      // Grouped single-choice heading: [Square brackets] on their own line.
+      return /^\[.+\]$/.test(line);
+    }
+
     function populateFollowupOptions(optionsText, followupConfig) {
       if (!followupList) return;
 
@@ -1206,8 +1242,15 @@
         return;
       }
 
+      // Group headings ([Brackets]) cannot carry a follow-up input and never
+      // consume a follow-up index — the server keys follow-up config by the
+      // position among renderable options.
       const html = lines
-        .map((line, idx) => {
+        .map((line, lineIdx) => {
+          if (isOptionGroupLine(line)) return "";
+          const idx = lines
+            .slice(0, lineIdx)
+            .filter((l) => !isOptionGroupLine(l)).length;
           const isEnabled =
             followupConfig &&
             followupConfig[idx] &&
@@ -1238,6 +1281,15 @@
     if (refreshFollowupBtn && optionsTextarea) {
       refreshFollowupBtn.addEventListener("click", function () {
         populateFollowupOptions(optionsTextarea.value, null);
+      });
+    }
+
+    // Re-evaluate section visibility as options are typed — the grouped
+    // single-choice display-mode toggle only applies once [group] headings
+    // appear in the list.
+    if (optionsTextarea) {
+      optionsTextarea.addEventListener("input", function () {
+        refresh();
       });
     }
 

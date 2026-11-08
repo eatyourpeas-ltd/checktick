@@ -71,6 +71,8 @@ def int_range(start: int, end: int):
 
 
 QUESTION_FOLLOWUP_TYPE = "question_followup"
+OPTION_GROUP_TYPE = "option_group"
+OPTION_GROUP_RENDER_TYPE = "option_group_render"
 
 
 def _is_question_followup_marker(opt) -> bool:
@@ -81,6 +83,18 @@ def _is_question_followup_marker(opt) -> bool:
     rather than per-option ``followup_text`` config.
     """
     return isinstance(opt, dict) and opt.get("type") == QUESTION_FOLLOWUP_TYPE
+
+
+def _is_option_group_marker(opt) -> bool:
+    """Return True if an options-list entry is an option-group heading marker.
+
+    Grouped single-choice questions (e.g. the census ethnic-group question)
+    store visual group headings as marker entries in the options list:
+    ``{"type": "option_group", "label": "White"}``. Markers are
+    configuration/presentation, not answerable options — every consumer
+    except the grouped ``mc_single`` renderer skips them.
+    """
+    return isinstance(opt, dict) and opt.get("type") == OPTION_GROUP_TYPE
 
 
 @register.filter(name="as_list")
@@ -157,6 +171,90 @@ def as_list(value):
     return []
 
 
+@register.filter(name="grouped_options")
+def grouped_options(value):
+    """Group an options list into labelled chunks for grouped single-choice
+    rendering.
+
+    Returns a list of ``{"label": str, "options": [{"opt": opt, "idx": i}]}``
+    chunks. ``option_group`` markers start a new chunk (their label becomes
+    the chunk heading); options before the first marker land in a chunk with
+    an empty label. Question-level follow-up markers are dropped. ``idx`` is
+    the position among renderable options (both marker types excluded) — the
+    same index space the follow-up input names and CSV export use.
+
+    Unlike ``as_list`` this keeps ``option_group`` markers, so it must only be
+    used by the grouped ``mc_single`` renderer. Ungrouped questions return a
+    single chunk with an empty label, so the template uses one code path.
+    """
+
+    def _normalise(v):
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except Exception:
+                return []
+        if not isinstance(v, list):
+            return []
+        # Unwrap a single-dict wrapper (same shapes as ``as_list``).
+        if len(v) == 1 and isinstance(v[0], dict):
+            first = v[0]
+            for key in ("labels", "values", "options", "categories"):
+                if isinstance(first.get(key), list):
+                    return first[key]
+        return v
+
+    try:
+        chunks: list[dict] = []
+        current: dict | None = None
+        idx = 0
+        for opt in _normalise(value):
+            if _is_question_followup_marker(opt):
+                continue
+            if isinstance(opt, dict) and opt.get("type") == OPTION_GROUP_RENDER_TYPE:
+                continue
+            if _is_option_group_marker(opt):
+                current = {"label": str(opt.get("label") or ""), "options": []}
+                chunks.append(current)
+                continue
+            if current is None:
+                current = {"label": "", "options": []}
+                chunks.append(current)
+            current["options"].append({"opt": opt, "idx": idx})
+            idx += 1
+        return chunks
+    except Exception:
+        return []
+
+
+@register.filter(name="group_render_mode")
+def group_render_mode(question):
+    """Return how a grouped ``mc_single`` question displays its option groups.
+
+    ``expanded`` (default) shows every group heading with its options visible
+    at once (census paper style, radio grid). ``cascading`` shows dependent
+    dropdowns — pick a top-level group, then a second select of its
+    sub-options. ``cascading_radios`` reveals the selected group's sub-options
+    as radio buttons. The mode is stored as a config marker in the options
+    list and only takes effect when the question actually has group headings.
+    """
+    try:
+        options = getattr(question, "options", None)
+        if not isinstance(options, list):
+            return "expanded"
+        has_groups = any(_is_option_group_marker(opt) for opt in options)
+        if not has_groups:
+            return "expanded"
+        for opt in options:
+            if isinstance(opt, dict) and opt.get("type") == OPTION_GROUP_RENDER_TYPE:
+                mode = opt.get("mode")
+                if mode in ("cascading", "cascading_radios"):
+                    return mode
+        return "expanded"
+    except Exception:
+        return "expanded"
+
+
 @register.filter(name="label_for_value")
 def label_for_value(options, value):
     """Return the display label of the option with the given value.
@@ -181,10 +279,20 @@ def label_for_value(options, value):
 
 
 def _strip_followup_markers(options):
-    """Drop question-level follow-up marker entries from an options list."""
+    """Drop configuration marker entries (question-level follow-up,
+    option-group headings, and the group render-mode switch) from an
+    options list."""
     if not isinstance(options, list):
         return options
-    return [opt for opt in options if not _is_question_followup_marker(opt)]
+    return [
+        opt
+        for opt in options
+        if not (
+            isinstance(opt, dict)
+            and opt.get("type")
+            in (QUESTION_FOLLOWUP_TYPE, OPTION_GROUP_TYPE, OPTION_GROUP_RENDER_TYPE)
+        )
+    ]
 
 
 def _find_question_followup(options):

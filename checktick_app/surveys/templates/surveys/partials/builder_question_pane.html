@@ -132,9 +132,23 @@
                     <label class="label">Options (one per line)</label>
                     <textarea name="options" class="textarea textarea-bordered w-full" placeholder="Option A
 Option B" data-options-textarea></textarea>
+                    <p class="text-xs opacity-60 mt-1 hidden" data-groups-hint>
+                      Tip: a line in [square brackets] starts a category group — the options under it become its second level (e.g. the census ethnic-group categories). Use the display selector below to choose how the groups appear.
+                    </p>
                     <div class="mt-2 hidden items-center gap-3" data-startover-container>
                       <span class="text-xs opacity-60">Options loaded from a dataset — edit them above, or</span>
                       <button type="button" class="btn btn-xs btn-outline" data-start-over>Start over</button>
+                    </div>
+                    <div class="mt-3 hidden" data-grouped-render-container>
+                      <fieldset>
+                        <legend class="label">Grouped options display</legend>
+                        <div class="flex flex-col gap-1">
+                          <label class="label cursor-pointer justify-start gap-2"><input type="radio" name="grouped_render" value="expanded" class="radio radio-primary" checked> <span>Radio grid — all groups visible</span></label>
+                          <label class="label cursor-pointer justify-start gap-2"><input type="radio" name="grouped_render" value="cascading" class="radio radio-primary"> <span>Dependent dropdowns — pick a category, then a sub-option</span></label>
+                          <label class="label cursor-pointer justify-start gap-2"><input type="radio" name="grouped_render" value="cascading_radios" class="radio radio-primary"> <span>Reveal on selection — radio buttons per level</span></label>
+                        </div>
+                        <p class="text-xs opacity-60 mt-1">Applies when the options include [group] headings, e.g. the census ethnic-group categories.</p>
+                      </fieldset>
                     </div>
                     <div class="mt-3" data-options-followup-container>
                       <div class="flex items-center justify-between mb-2">

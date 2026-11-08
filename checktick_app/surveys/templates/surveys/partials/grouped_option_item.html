@@ -1,0 +1,23 @@
+{% load survey_extras %}
+{% comment %} One radio option (plus its optional follow-up input) for a grouped
+   mc_single question. Shared by the expanded and cascading render modes.
+   Expects ``q`` (the question) and ``item`` ({"opt": opt, "idx": i}) from
+   the ``grouped_options`` filter — ``item.idx`` is the renderable option
+   index used in follow-up input names. {% endcomment %}
+{% with opt=item.opt %}
+{% with opt|option_value as opt_value %}
+{% with opt|option_label as opt_label %}
+<div class="space-y-2">
+  <label class="label cursor-pointer justify-start gap-2">
+    <input type="radio" class="radio" name="q_{{ q.id }}" value="{{ opt_value }}" data-followup-trigger="q_{{ q.id }}_{{ item.idx }}"{% if q.required %} required{% endif %} />
+    <span>{{ opt_label }}</span>
+  </label>
+  {% if opt.followup_text and opt.followup_text.enabled %}
+    <div class="ml-7 hidden" data-followup-field="q_{{ q.id }}_{{ item.idx }}">
+      <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_{{ item.idx }}" placeholder="{{ opt.followup_text.label|default:'Please elaborate' }}" />
+    </div>
+  {% endif %}
+</div>
+{% endwith %}
+{% endwith %}
+{% endwith %}

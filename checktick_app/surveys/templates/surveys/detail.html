@@ -561,25 +561,122 @@
         {% elif q.type == 'long_text' %}
           <textarea class="textarea textarea-bordered w-full" name="q_{{ q.id }}" id="q_{{ q.id }}" rows="4" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true" required{% endif %}></textarea>
         {% elif q.type == 'mc_single' %}
-          <div role="radiogroup" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true"{% endif %}>
-          {% for opt in q.options|as_list %}
-            {% with opt|option_value as opt_value %}
-            {% with opt|option_label as opt_label %}
-            <div class="space-y-2">
-              <label class="label cursor-pointer justify-start gap-2">
-                <input type="radio" class="radio" name="q_{{ q.id }}" value="{{ opt_value }}" data-followup-trigger="q_{{ q.id }}_{{ forloop.counter0 }}"{% if q.required %} required{% endif %} />
-                <span>{{ opt_label }}</span>
-              </label>
-              {% if opt.followup_text and opt.followup_text.enabled %}
-                <div class="ml-7 hidden" data-followup-field="q_{{ q.id }}_{{ forloop.counter0 }}">
-                  <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_{{ forloop.counter0 }}" placeholder="{{ opt.followup_text.label|default:'Please elaborate' }}" />
+          {% comment %} Grouped single-choice: ``option_group`` markers in the
+             options list define category groups (the census ethnic-group
+             pattern). Three display modes: ``expanded`` renders every group
+             heading with its options visible at once (radio grid);
+             ``cascading`` shows dependent dropdowns — pick a top-level
+             group, then a second select of its sub-options;
+             ``cascading_radios`` reveals the selected group's sub-options as
+             radio buttons. Item indices come from the ``grouped_options``
+             filter so follow-up input names keep matching the CSV export.
+             The stored answer is always the leaf selection — the top-level
+             pick is transient UI state (``q_<id>_group``), never saved.
+             Hidden level-2 selects are disabled so they never submit a
+             stale value; the reveal JS enables the visible one. {% endcomment %}
+          {% with chunks=q.options|grouped_options %}
+          {% with mode=q|group_render_mode %}
+          {% if mode == 'cascading' %}
+            <div data-cascading-dropdown="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}">
+            {# Options before the first group heading have no parent category — they stay visible as top-level answers. #}
+            {% for chunk in chunks %}
+              {% if not chunk.label %}
+                {% for item in chunk.options %}
+                  {% include "surveys/partials/grouped_option_item.html" with q=q item=item %}
+                {% endfor %}
+              {% endif %}
+            {% endfor %}
+            {# Level 1: the category groups (transient selection). #}
+            <select class="select select-bordered w-full" name="q_{{ q.id }}_group" data-group-select="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true" required{% endif %}>
+              <option value="">{% trans "-- Select a category --" %}</option>
+              {% for chunk in chunks %}
+                {% if chunk.label %}
+                  <option value="{{ chunk.label }}" data-group-target="q_{{ q.id }}_{{ forloop.counter0 }}">{{ chunk.label }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            {% comment %} Level 2: the selected group's sub-options. Disabled while
+               hidden so they never submit; a group with no sub-options
+               renders a single-option select the JS auto-answers. {% endcomment %}
+            {% for chunk in chunks %}
+              {% if chunk.label %}
+                <div class="mt-2 hidden" data-group-panel="q_{{ q.id }}_{{ forloop.counter0 }}">
+                  <select class="select select-bordered w-full" name="q_{{ q.id }}" data-followup-select="q_{{ q.id }}" aria-labelledby="q_label_{{ q.id }}" disabled{% if q.required %} aria-required="true" required{% endif %}>
+                    {% if chunk.options %}
+                      <option value="">{% trans "-- Select --" %}</option>
+                      {% for item in chunk.options %}
+                        <option value="{{ item.opt|option_value }}" data-followup-target="q_{{ q.id }}_{{ item.idx }}">{{ item.opt|option_label }}</option>
+                      {% endfor %}
+                    {% else %}
+                      <option value="{{ chunk.label }}">{{ chunk.label }}</option>
+                    {% endif %}
+                  </select>
+                  {% for item in chunk.options %}
+                    {% if item.opt.followup_text and item.opt.followup_text.enabled %}
+                      <div class="mt-2 hidden" data-followup-field="q_{{ q.id }}_{{ item.idx }}">
+                        <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_{{ item.idx }}" placeholder="{{ item.opt.followup_text.label|default:'Please elaborate' }}" aria-label="{{ item.opt.followup_text.label|default:'Please elaborate' }}" />
+                      </div>
+                    {% endif %}
+                  {% endfor %}
                 </div>
               {% endif %}
+            {% endfor %}
             </div>
-            {% endwith %}
-            {% endwith %}
-          {% endfor %}
-          </div>
+          {% elif mode == 'cascading_radios' %}
+            <div role="radiogroup" aria-labelledby="q_label_{{ q.id }}" data-cascading="q_{{ q.id }}"{% if q.required %} aria-required="true"{% endif %}>
+            {# Options before the first group heading have no parent category — they stay visible as top-level answers. #}
+            {% for chunk in chunks %}
+              {% if not chunk.label %}
+                {% for item in chunk.options %}
+                  {% include "surveys/partials/grouped_option_item.html" with q=q item=item %}
+                {% endfor %}
+              {% endif %}
+            {% endfor %}
+            {# Level 1: the category groups (transient selection). #}
+            {% for chunk in chunks %}
+              {% if chunk.label %}
+                <div class="space-y-2">
+                  <label class="label cursor-pointer justify-start gap-2">
+                    <input type="radio" class="radio" name="q_{{ q.id }}_group" value="{{ chunk.label }}" data-group-trigger="q_{{ q.id }}_{{ forloop.counter0 }}" />
+                    <span class="font-medium">{{ chunk.label }}</span>
+                  </label>
+                </div>
+              {% endif %}
+            {% endfor %}
+            {% comment %} Level 2: the selected group's sub-options. A group with no
+               sub-options renders a single auto-selected leaf equal to the
+               group itself, so every group can produce an answer. {% endcomment %}
+            {% for chunk in chunks %}
+              {% if chunk.label %}
+                <div class="ml-7 mt-1 mb-2 hidden" data-group-panel="q_{{ q.id }}_{{ forloop.counter0 }}">
+                  {% for item in chunk.options %}
+                    {% include "surveys/partials/grouped_option_item.html" with q=q item=item %}
+                  {% empty %}
+                    <div class="space-y-2">
+                      <label class="label cursor-pointer justify-start gap-2">
+                        <input type="radio" class="radio" name="q_{{ q.id }}" value="{{ chunk.label }}"{% if q.required %} required{% endif %} />
+                        <span>{{ chunk.label }}</span>
+                      </label>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% endfor %}
+            </div>
+          {% else %}
+            <div role="radiogroup" aria-labelledby="q_label_{{ q.id }}"{% if q.required %} aria-required="true"{% endif %}>
+            {% for chunk in chunks %}
+              {% if chunk.label %}
+                <p class="text-sm font-semibold mt-3 mb-1 first:mt-0" data-option-group>{{ chunk.label }}</p>
+              {% endif %}
+              {% for item in chunk.options %}
+                {% include "surveys/partials/grouped_option_item.html" with q=q item=item %}
+              {% endfor %}
+            {% endfor %}
+            </div>
+          {% endif %}
+          {% endwith %}
+          {% endwith %}
           {% with q|question_followup as qfu %}
             {% if qfu %}
               <div class="ml-7 mt-2 hidden" data-followup-any="q_{{ q.id }}">
@@ -1087,10 +1184,10 @@
   {% endif %}
 
   {% if is_matrix %}
-  {# Matrix layout: per-section navigation. The participant completes one
+  {% comment %} Matrix layout: per-section navigation. The participant completes one
      section at a time and returns to the landing page. "Complete section"
      validates required questions and marks the section done. "Back to
-     overview" returns to the landing page without marking complete. #}
+     overview" returns to the landing page without marking complete. {% endcomment %}
   <input type="hidden" name="section_id" value="{{ matrix_section_id }}" />
   <div class="flex flex-wrap gap-2 mt-4">
     {% if is_preview %}
@@ -1107,9 +1204,9 @@
   {% endif %}
 
   {% if is_guided %}
-  {# Guided nav bar — Back / step indicator / Next. On the last step the Next
+  {% comment %} Guided nav bar — Back / step indicator / Next. On the last step the Next
      button is hidden and the real Submit button (data-guided-submit) is
-     revealed so native form validation runs. #}
+     revealed so native form validation runs. {% endcomment %}
   <div class="guided-nav" data-guided-nav role="navigation" aria-label="{% trans 'Survey navigation' %}">
     <button type="button" class="btn btn-ghost btn-sm" data-guided-back disabled>{% trans "Back" %}</button>
     <span class="text-sm text-base-content/70" data-guided-step-indicator aria-live="polite"></span>
@@ -1135,9 +1232,9 @@
 {# Load repeating sections script #}
 <script src="{% static 'js/repeats.js' %}" nonce="{{ request.csp_nonce }}"></script>
 {% if is_guided %}
-{# Load guided one-question-at-a-time script (see docs/survey-layouts-technical.md
+{% comment %} Load guided one-question-at-a-time script (see docs/survey-layouts-technical.md
    §Guided layout). Loaded after branching/repeats so it can observe their
-   DOM mutations. #}
+   DOM mutations. {% endcomment %}
 <script src="{% static 'js/guided.js' %}" nonce="{{ request.csp_nonce }}"></script>
 {% endif %}
 <script nonce="{{ request.csp_nonce }}">

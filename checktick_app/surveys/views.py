@@ -2944,14 +2944,29 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
 
         # Parse follow-up text configuration for each option
         # Format: option_N_followup=on, option_N_followup_label="custom label"
+        # N is the index among *renderable* options: for mc_single, lines in
+        # [square brackets] are group headings (census-style grouped choice),
+        # stored as marker entries that never consume a follow-up index.
         options = []
-        for idx, opt_text in enumerate(option_lines):
+        renderable_idx = 0
+        for _, opt_text in enumerate(option_lines):
             opt_text = _strip_tags(opt_text)
+            if (
+                qtype == SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE
+                and opt_text.startswith("[")
+                and opt_text.endswith("]")
+                and len(opt_text) > 2
+            ):
+                options.append(
+                    {"type": "option_group", "label": opt_text[1:-1].strip()}
+                )
+                continue
             opt_dict: dict[str, Any] = {"label": opt_text, "value": opt_text}
 
             # Check if this option should have a follow-up text input
-            followup_key = f"option_{idx}_followup"
-            followup_label_key = f"option_{idx}_followup_label"
+            followup_key = f"option_{renderable_idx}_followup"
+            followup_label_key = f"option_{renderable_idx}_followup_label"
+            renderable_idx += 1
 
             if data.get(followup_key) in {"on", "true", "1", "yes"}:
                 followup_label = (data.get(followup_label_key) or "").strip()
@@ -2960,6 +2975,18 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
                 opt_dict["followup_text"] = {"enabled": True, "label": followup_label}
 
             options.append(opt_dict)
+
+        # Grouped single-choice display mode: ``cascading`` = dependent
+        # dropdowns, ``cascading_radios`` = reveal the selected group's
+        # sub-options as radios. Stored as a config marker; absence means
+        # the expanded default. Only meaningful when the options include
+        # [group] headings.
+        grouped_render_mode = (data.get("grouped_render") or "").strip()
+        if (
+            qtype == SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE
+            and grouped_render_mode in {"cascading", "cascading_radios"}
+        ):
+            options.append({"type": "option_group_render", "mode": grouped_render_mode})
 
         # Question-level follow-up: a single text box offered after all options.
         # Intended for dataset-backed option lists where per-option follow-ups
@@ -3495,6 +3522,9 @@ def _serialize_question_for_builder(
         option_followup_config: dict[str, dict[str, Any]] = {}
         prefilled_dataset: str | None = None
         question_followup_cfg: dict[str, Any] | None = None
+        # Follow-up config keys are indexed by position among renderable
+        # options — group headings never consume an index.
+        renderable_idx = 0
 
         # Check if options is a prefilled dataset dict
         if isinstance(options, dict) and options.get("type") == "prefilled":
@@ -3526,12 +3556,18 @@ def _serialize_question_for_builder(
                                 )
                             }
         elif isinstance(options, list):
-            for idx, opt in enumerate(options):
+            for opt in options:
                 if isinstance(opt, dict) and opt.get("type") == "question_followup":
                     if opt.get("enabled"):
                         question_followup_cfg = {
                             "label": opt.get("label", "Please specify")
                         }
+                    continue
+                if isinstance(opt, dict) and opt.get("type") == "option_group":
+                    # Grouped single-choice heading — round-trips to the
+                    # builder textarea as a [bracketed] line, never consumes
+                    # a follow-up index.
+                    values.append(f"[{opt.get('label', '')}]")
                     continue
                 if isinstance(opt, str):
                     val = opt.strip()
@@ -3543,17 +3579,31 @@ def _serialize_question_for_builder(
                         values.append(str(candidate).strip())
                     # Check for follow-up text configuration
                     if opt.get("followup_text") and opt["followup_text"].get("enabled"):
-                        option_followup_config[str(idx)] = {
+                        option_followup_config[str(renderable_idx)] = {
                             "label": opt["followup_text"].get(
                                 "label", "Please elaborate"
                             )
                         }
+                renderable_idx += 1
 
         payload["options"] = values
         if option_followup_config:
             payload["followup_config"] = option_followup_config
         if question_followup_cfg:
             payload["question_followup"] = question_followup_cfg
+        if question.type == SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE and isinstance(
+            options, list
+        ):
+            payload["grouped_render"] = next(
+                (
+                    opt.get("mode")
+                    for opt in options
+                    if isinstance(opt, dict)
+                    and opt.get("type") == "option_group_render"
+                    and opt.get("mode") in ("cascading", "cascading_radios")
+                ),
+                "expanded",
+            )
         # Include dataset key if linked to a dataset
         if question.dataset:
             payload["prefilled_dataset"] = question.dataset.key
@@ -16343,6 +16393,14 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                         ):
                             # Question-level follow-up marker; not an option
                             continue
+                        if (
+                            isinstance(option, dict)
+                            and option.get("type") == "option_group"
+                        ):
+                            # Grouped single-choice heading — emits as a
+                            # [bracketed] line so export → import round-trips.
+                            lines.append(f"{indent}- [{option.get('label', '')}]")
+                            continue
                         if isinstance(option, dict):
                             # Options can have 'text', 'label', or 'value' keys
                             option_text = (
@@ -16366,6 +16424,19 @@ def _export_survey_to_markdown(survey: Survey) -> str:
                         qfu_label = _question_followup_kv_line(question)
                         if qfu_label:
                             lines.append(f"{indent}followup: {qfu_label}")
+                    # Grouped single-choice display mode: emit the kv line so
+                    # export → import round-trips (absence = expanded default).
+                    if question.type == "mc_single" and isinstance(
+                        question.options, list
+                    ):
+                        for opt in question.options:
+                            if (
+                                isinstance(opt, dict)
+                                and opt.get("type") == "option_group_render"
+                                and opt.get("mode") in ("cascading", "cascading_radios")
+                            ):
+                                lines.append(f"{indent}render: {opt.get('mode')}")
+                                break
 
             # Likert number settings
             elif question.type == "likert number":
