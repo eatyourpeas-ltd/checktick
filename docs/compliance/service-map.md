@@ -16,6 +16,7 @@ category: dspt-4-managing-access
 {{ platform_name }} provides the following primary service to health and care providers:
 
 * **Clinical Survey Platform:** An end-to-end digital service for collecting patient-reported outcome measures (PROMs) and clinical survey responses. This service is used by clinicians to monitor patient health and inform care decisions.
+* **Staging environment:** A pre-production mirror at `staging.checktick.uk` — same Civo London (LON1) cluster, separate database, disposable data, GoCardless sandbox billing — used to validate releases and configuration changes before they reach the production service.
 
 ---
 

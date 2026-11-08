@@ -24,7 +24,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
           # Same tag as the web Deployment — keep them in lockstep on deploy.
           # Deploy (Civo) substitutes the dispatched tag when it applies this
           # manifest; bump the pin in the release PR.

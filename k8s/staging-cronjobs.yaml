@@ -1,0 +1,74 @@
+# STAGING scheduled tasks — exactly ONE CronJob (docs/staging notes):
+# prune-unconfirmed-users, the anti-bot signup hygiene phase. hCaptcha gates
+# signups on staging too, so unconfirmed staging accounts still need pruning.
+# Everything else in k8s/cronjobs.yaml is prod-only.
+#
+# Deltas vs the prod prune-unconfirmed-users:
+#   - DATABASE_URL -> STAGING_DATABASE_URL (checktick-secrets): prunes the
+#     STAGING database, never prod.
+#   - EMAIL_BOUNCE_PROCESSING_ENABLED=false: the bounce phase reads the
+#     SHARED PROD mailbox (Graph credentials are env-wide); without this a
+#     staging run would fetch prod's mailbox and act on it against the
+#     staging DB. The env entry overrides the overlay's True.
+#   - no HC_PING curl: the ping URL (HC_PING_PRUNE_UNCONFIRMED_USERS) is
+#     shared via checktick-secrets envFrom — a staging success must NEVER
+#     mark prod's healthchecks.io check as seen.
+#   - label checktick.io/staging-db-client (the STAGING DB grant), never
+#     checktick.io/db-client (the PROD one, carried by every prod CronJob).
+#
+# The Deploy (Civo) workflow's deploy-staging job re-images this cron to
+# each released tag AFTER the staging migrate Job and web rollout are
+# verified; the prod job's roll-every-CronJob step skips it (ordering: the
+# cron must never run a tag the staging schema has not migrated to).
+#
+# Out-of-band apply (NOT in kustomization.yaml):
+#   kubectl apply -f k8s/staging-cronjobs.yaml
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: prune-unconfirmed-users-staging
+  namespace: checktick
+spec:
+  # Same slot as prod (they prune different databases; no contention).
+  schedule: "40 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        metadata:
+          labels:
+            checktick.io/staging-db-client: "true"
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
+              # Deliberately NO healthchecks.io ping — see the header.
+              command:
+                - sh
+                - -c
+                - >-
+                  python manage.py prune_unconfirmed_users
+              envFrom:
+                - configMapRef: {name: checktick-config}
+                - configMapRef: {name: checktick-config-local}
+                - secretRef: {name: checktick-secrets}
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: checktick-secrets
+                      key: STAGING_DATABASE_URL
+                # Keep the shared prod mailbox out of staging's pruning.
+                - name: EMAIL_BOUNCE_PROCESSING_ENABLED
+                  value: "false"
+                - name: ENVIRONMENT
+                  value: staging
+              resources:
+                requests: {memory: 256Mi, cpu: 250m}
+                limits: {memory: 1Gi}

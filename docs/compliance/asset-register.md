@@ -15,6 +15,7 @@ category: dspt-4-managing-access
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Survey Database** | Software | PostgreSQL 17.x (CloudNativePG) | **Supported** | Art 9(2)(h) | **Highly Confidential** | AES-256, Managed Upgrades | Civo Kubernetes — in-cluster (UK, LON1) |
 | **Web/Worker App** | Software | Containerised Django (python:3.12-slim) | **Supported** | Art 6(1)(b) | **Highly Confidential** | Container Isolation, `pip-audit` | Civo Kubernetes (UK, LON1) |
+| **Staging Environment** | Software | Containerised Django + PostgreSQL 17 (CloudNativePG), `staging.checktick.uk` | **Supported** | Art 6(1)(f) | **Internal** (synthetic/test data only — real patient data must never be entered; enforced by operator process) | Same controls as production (TLS, NetworkPolicy isolation, Vault encryption); GoCardless **sandbox** only; disposable — no backups by design | Civo Kubernetes — same cluster, separate database (UK, LON1) |
 | **Secrets Vault** | Software | HashiCorp Vault (in-cluster StatefulSet) | **Supported** | Art 6(1)(b) | **Highly Confidential** | Scoped Access, MFA | Civo Kubernetes — in-cluster (UK, LON1) |
 | **Staff Laptop 1** | Hardware | macOS 15.x | **Supported** | Art 6(1)(f) | **Confidential** | FileVault, Auto-Update | Physical (UK) |
 | **Staff Laptop 2** | Hardware | macOS 15.x | **Supported** | Art 6(1)(f) | **Confidential** | FileVault, Auto-Update | Physical (UK) |

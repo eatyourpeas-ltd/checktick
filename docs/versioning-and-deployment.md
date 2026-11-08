@@ -59,7 +59,7 @@ to ship, bump on its own or use the manual dispatch.
 2. Merge PR to `main`.
 3. Publish workflow applies versioned tags to GHCR.
 4. Publish workflow triggers the [Deploy (Civo)](../.github/workflows/deploy-civo.yml) workflow with the versioned tag (deploy trigger swapped from the previous platform's webhook at migration close-out — runbook Phase 6).
-5. The Deploy workflow runs the pre-deploy Job (migrations + idempotent syncs) pinned to the same tag, then rolls the web Deployment to the versioned image with zero downtime — `/healthz` readiness gates traffic — and finally rolls every CronJob in the namespace to the same tag (CronJobs are not part of the Deployment rollout and would otherwise keep their manifest pin and drift).
+5. The Deploy workflow runs the pre-deploy Job (migrations + idempotent syncs) pinned to the same tag, then rolls the web Deployment to the versioned image with zero downtime — `/healthz` readiness gates traffic — and finally rolls every prod CronJob in the namespace to the same tag (CronJobs are not part of the Deployment rollout and would otherwise keep their manifest pin and drift). Its `deploy-staging` job (`needs: deploy`) then repeats the sequence against staging — staging migrate Job → staging web rollout → smoke check → the one staging CronJob — so both environments track the release; a staging failure never rolls back prod.
 
 ## Accidental No-Bump Merges
 

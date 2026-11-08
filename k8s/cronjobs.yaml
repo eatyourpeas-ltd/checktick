@@ -36,7 +36,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c
@@ -72,7 +72,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c
@@ -108,7 +108,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c
@@ -144,7 +144,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c
@@ -180,7 +180,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c
@@ -216,7 +216,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c
@@ -252,7 +252,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c
@@ -288,7 +288,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c
@@ -324,7 +324,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c
@@ -360,7 +360,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c
@@ -396,7 +396,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c
@@ -436,7 +436,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c
@@ -525,7 +525,7 @@ spec:
                   mountPath: /app/data
           containers:
             - name: seed
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               command:
                 - sh
                 - -c

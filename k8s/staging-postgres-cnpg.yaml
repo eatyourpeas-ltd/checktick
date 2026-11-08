@@ -1,0 +1,135 @@
+# STAGING in-cluster PostgreSQL via the CloudNativePG operator — a trimmed
+# clone of k8s/postgres-cnpg.yaml (see that file for the full rationale and
+# the operator prerequisite).
+#
+# Trimmed vs production (staging data is disposable):
+#   - instances: 1 (no replica, no operator failover; rebuild via a fresh
+#     k8s/staging-migrate-job.yaml run)
+#   - NO backup block, NO ScheduledBackup, NO WAL archiving — nothing leaves
+#     the cluster, and the prod object-store backup chain stays prod-only
+#   - same storage as prod: storageClassName omitted -> cluster default
+#     (civo-volume on Civo, RWO block storage — correct for Postgres data)
+#
+# The staging web Deployment (k8s/staging-web.yaml) and the one staging
+# CronJob (k8s/staging-cronjobs.yaml) point DATABASE_URL at the generated
+# checktick-staging-db-rw service via the STAGING_DATABASE_URL key of the
+# checktick-secrets Secret (k8s/secrets.env).
+#
+# Prerequisites (out-of-band — deliberately NOT in kustomization.yaml):
+#   1. the CloudNativePG operator (as for prod — see postgres-cnpg.yaml)
+#   2. the bootstrap Secret initdb uses for the `checktick` database owner
+#      (hex avoids percent-encoding in DATABASE_URL; generate with
+#      `openssl rand -hex 24`):
+#      kubectl create secret generic checktick-staging-db-creds -n checktick \
+#        --from-literal=username=checktick \
+#        --from-literal=password='<generated password>'
+#   3. kubectl apply -f k8s/staging-postgres-cnpg.yaml
+#   4. put the SAME password into STAGING_DATABASE_URL in the git-ignored
+#      k8s/secrets.env and update the live Secret (adds one key, touches
+#      nothing else — prod pods never read it):
+#        STAGING_DATABASE_URL=postgresql://checktick:<password>@checktick-staging-db-rw:5432/checktick
+#      kubectl patch secret checktick-secrets -n checktick \
+#        -p '{"stringData":{"STAGING_DATABASE_URL":"postgresql://checktick:<password>@checktick-staging-db-rw:5432/checktick"}}'
+#
+# The NetworkPolicy below is the staging-labelled twin of
+# postgres-networkpolicy.yaml. It is REQUIRED for isolation both ways: the
+# prod policy only grants prod-labelled clients, and a pod with NO policy
+# selecting it is unrestricted — without this policy every pod in the
+# cluster (including the prod CronJobs) could reach the staging database.
+# The staging batch label is checktick.io/staging-db-client, NOT
+# checktick.io/db-client — the latter is the PROD DB grant and is carried
+# by every prod CronJob template.
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: checktick-staging-db
+  namespace: checktick
+spec:
+  # Staging: single instance. The prod anti-affinity is kept so a future
+  # instances: 2 raise still schedules one per node.
+  instances: 1
+  # Same image pin as the prod cluster (major upgrades go via dump/restore
+  # with the target's binaries — see postgres-cnpg.yaml).
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  bootstrap:
+    initdb:
+      database: checktick
+      owner: checktick
+      secret:
+        name: checktick-staging-db-creds
+  postgresql:
+    parameters:
+      shared_buffers: 512MB
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+  storage:
+    size: 10Gi
+    # storageClassName omitted -> cluster default (civo-volume on Civo) —
+    # same as prod. RWO block storage is correct for Postgres data.
+  affinity:
+    # No-op at instances: 1; kept for a future 2-instance raise.
+    podAntiAffinityType: required
+  # NO backup block: staging has no ScheduledBackup, no WAL archiving and
+  # no object-store credentials. Staging data is disposable by design.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: checktick-staging-db-ingress
+  namespace: checktick
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: checktick-staging-db
+  policyTypes:
+    - Ingress
+  ingress:
+    # Postgres 5432: the staging web pods, the staging DB's own instance
+    # pods, the STAGING batch jobs (checktick.io/staging-db-client — never
+    # checktick.io/db-client, the prod grant), and the CNPG operator.
+    - from:
+        - podSelector:
+            matchLabels:
+              app: checktick-staging-web
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: checktick-staging-db
+        - podSelector:
+            matchLabels:
+              checktick.io/staging-db-client: "true"
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+      ports:
+        - protocol: TCP
+          port: 5432
+    # CNPG instance-manager status API — operator only. Same lesson as
+    # prod (2026-11-04): 5432-only leaves the cluster reporting "Instance
+    # Status Extraction Error" (see postgres-networkpolicy.yaml).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Instance-manager API, instance-to-instance (single instance today;
+    # kept for symmetry with prod).
+    - from:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: checktick-staging-db
+      ports:
+        - protocol: TCP
+          port: 8000
