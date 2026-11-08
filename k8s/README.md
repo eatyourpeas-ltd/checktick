@@ -25,6 +25,12 @@ values are applied out-of-band.
 | `secrets.example.env` | Template for the Secret (copy to `secrets.env`, git-ignored) |
 | `config.example.env` | Template for the local config overlay (copy to `config.env`, git-ignored) |
 | `postgres-cnpg.yaml` | **Optional** in-cluster PostgreSQL 17 (CloudNativePG) — budget path |
+| `postgres-networkpolicy.yaml` | `checktick-db-ingress` NetworkPolicy — DB reachable on 5432/8000 only by web pods, the batch CronJobs (label grant), the CNPG operator and the cluster's own instances |
+| `openobserve.yaml` | Self-hosted OpenObserve log store — ClusterIP-only (port-forward 5080), single replica on a Longhorn PVC; the retention layer for the stdout JSON ([Infrastructure Logging](../docs/infrastructure-logging.md)) |
+| `openobserve.example.env` | Template for the `openobserve-auth` Secret (copy to git-ignored `k8s/openobserve.env`) — shared by the OpenObserve root user and collector Basic auth |
+| `log-collector.yaml` | Fluent Bit DaemonSet → OpenObserve stream `default/default` (one timeline with the NF-era archive). **Deliberately NOT in kustomization.yaml** — one fluent-bit per node tipped a node over its memory wall (2026-11-05); apply out-of-band only after the node-pool resize + headroom go/no-go ([Civo ops → Node Pool Resize](../docs/civo-kubernetes-operations.md)) |
+| `longhorn-backup.yaml` | Nightly off-cluster Longhorn volume backups (`openobserve-data`, `checktick-media`) to the Civo object store — out-of-band like `postgres-cnpg.yaml` (hardening-backlog item 6) |
+| `smoke-test.py` | Post-deploy smoke gate (19 checks incl. the encrypt/decrypt round-trip) |
 
 ## Database options
 

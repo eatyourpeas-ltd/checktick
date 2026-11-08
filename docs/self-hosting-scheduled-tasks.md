@@ -153,7 +153,7 @@ The `process_recovery_time_delays` management command runs frequently to:
 
 **Required for Recovery**: If you use the ethical key recovery feature, this command ensures recovery requests proceed after their mandatory waiting period (24-48 hours). Without it, approved recovery requests will remain stuck in the time delay state.
 
-**Schedule**: Run every 5 minutes (`*/5 * * * *`) to ensure timely processing. The command is idempotent and lightweight - it only processes requests whose time delays have expired.
+**Schedule**: Run every 15 minutes (`*/15 * * * *`) — the enforced control is a 24–48 hour delay, so the cadence only bounds how soon the admin notification goes out after expiry (≤15 min) and how fast a stuck job is detected. The command is idempotent and lightweight - it only processes requests whose time delays have expired.
 
 ```bash
 # Check for expired time delays (dry-run)
@@ -780,7 +780,7 @@ Use [healthchecks.io](https://healthchecks.io) (free tier covers 20 checks with 
        python manage.py <command> && if [ -n "$HC_PING_<NAME>" ]; then curl -fsS --retry 3 "$HC_PING_<NAME>" > /dev/null; fi
    ```
 
-   Unset `HC_PING_<NAME>` = no ping (self-hosters are not broken by default). The `HC_PING_*` keys and exact var names live in `k8s/config.env`. Update each check's **schedule and grace period** in the healthchecks.io dashboard to the Kubernetes run times (daily 02:00–04:00 UTC staggered, `*/5` for recovery-time-delays, weekly Tuesday 14:00 UTC for the SNOMED import).
+   Unset `HC_PING_<NAME>` = no ping (self-hosters are not broken by default). The `HC_PING_*` keys and exact var names live in `k8s/config.env`. Update each check's **schedule and grace period** in the healthchecks.io dashboard to the Kubernetes run times (daily 02:00–04:00 UTC staggered, `*/15` for recovery-time-delays, weekly Tuesday 14:00 UTC for the SNOMED import).
 
 > **App and Vault uptime:** Use an external uptime monitor (e.g. StatusCake, UptimeRobot) pointing at `https://your-domain/healthz`. This endpoint returns `503` if Vault is sealed, the database is unreachable, or SNOMED CT is misconfigured — giving you a single URL to monitor for all critical service health.
 

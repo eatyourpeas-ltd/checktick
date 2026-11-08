@@ -416,7 +416,10 @@ metadata:
   name: process-recovery-time-delays
   namespace: checktick
 spec:
-  schedule: "*/5 * * * *"
+  schedule: "*/15 * * * *"  # 2026-11-07: was */5 — the enforced control is a
+  # 24–48 h ethical delay (RecoveryRequest.time_delay_hours); the cadence only
+  # bounds admin-email latency (≤15 min) + stuck-job detection. Keep the
+  # healthchecks.io dashboard check in sync (schedule + grace).
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 3

@@ -760,6 +760,13 @@ GRAPH_TENANT_ID = env("GRAPH_TENANT_ID", default="")
 # Email timeout
 EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=10)
 
+# Admin error-email rate limit (seconds). AdminEmailHandler emails on every
+# ERROR record with no built-in throttle; a transient outage becomes an
+# email storm (found live 2026-11-08 — the cilium-operator lease thrash
+# blipped in-cluster DNS every few minutes, one healthz email per blip).
+# 0 disables the limit. Dropped records still reach stdout/OpenObserve.
+ADMIN_EMAIL_RATE_LIMIT_SECONDS = env.int("ADMIN_EMAIL_RATE_LIMIT_SECONDS", default=900)
+
 # LLM Configuration for AI Survey Generator
 LLM_API_KEY = env("LLM_API_KEY", default="")
 LLM_URL = env("LLM_URL", default="")
@@ -881,6 +888,9 @@ LOGGING = {
         "redaction_filter": {
             "()": "checktick_app.core.logging.redaction_filter.RedactionFilter",
         },
+        "admin_email_rate_limit": {
+            "()": "checktick_app.core.logging.admin_email_rate_limit.AdminEmailRateLimitFilter",
+        },
     },
     "formatters": {
         "json": {
@@ -920,6 +930,7 @@ LOGGING = {
             "filters": [
                 "context_filter",
                 "redaction_filter",
+                "admin_email_rate_limit",
             ],
         },
     },

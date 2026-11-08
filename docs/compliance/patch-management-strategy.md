@@ -46,7 +46,7 @@ In addition to software patching, {{ platform_name }} executes automated mainten
 | Task Name | Frequency | Purpose | Security/Compliance Link |
 | :--- | :--- | :--- | :--- |
 | `process_data_governance` | Daily | Auto-deletion of expired surveys | **GDPR Data Minimization** |
-| `process_recovery_time_delays` | 5 Mins | Processes ethical key recovery | **Resilience & Business Continuity** |
+| `process_recovery_time_delays` | 15 Mins | Processes ethical key recovery | **Resilience & Business Continuity** |
 | `sync_nhs_dd_datasets` | Weekly | Scrapes NHS Data Dictionary | **Clinical Data Accuracy** |
 | `cleanup_survey_progress` | Daily | Purges stale session drafts (>30d) | **Storage Optimization / Security** |
 | `process_expired_subscriptions` | Daily | Downgrades expired/past-due subscriptions to Free | **Billing Accuracy** |

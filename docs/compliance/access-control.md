@@ -224,9 +224,13 @@ Privilege approach for all third-party and privileged access.
   (e.g., 24 hours) and revoked immediately after the activity.
 * **Scoped API Access:** Service-to-service credentials are
   restricted to the absolute minimum permissions required.
-  The Microsoft Graph API application registration is scoped
-  to Mail.Send only — no read, write, or delete permissions
-  are granted.
+  The Microsoft Graph API application registration holds
+  `Mail.Send` (email delivery) and `Mail.Read` (bounce/NDR
+  processing — added 2026-11-08 for the signup bounce-pruning
+  feature; admin consent granted + verified same day; an
+  Exchange Online ApplicationAccessPolicy scoping it to the
+  sending mailbox is REQUIRED and pending). No write, delete,
+  or mailbox-content-modifying permissions are granted.
 * **Audit Trail:** Every action performed by a third-party
   account or API token is captured in the infrastructure
   audit logs and cross-referenced during quarterly spot checks.

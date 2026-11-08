@@ -145,7 +145,19 @@ jobs:
           # smoke check so CronJobs only move once the tag is verified live.
           # Set every container of every CronJob in the namespace (handles
           # the `run`/`seed` naming mix); each next scheduled pod runs the tag.
+          # EXCEPT out-of-band CronJobs: vault-snapshot (k8s/vault-snapshot.yaml,
+          # applied separately) carries purpose-built images (hashicorp/vault,
+          # alpine, amazon/aws-cli), NOT the app image. Rolling it to the app
+          # tag broke the nightly snapshot upload — "aws: not found", the
+          # 03:45 UTC run failed 2026-11-08 (found from the Error pods; the
+          # missed HC_PING alerted via healthchecks.io). Never roll it here.
           for cj in $(kubectl -n "$NS" get cronjobs -o name); do
+            case "$cj" in
+              cronjob/vault-snapshot)
+                echo "Skipping $cj (out-of-band, non-app images)"
+                continue
+                ;;
+            esac
             args=""
             for c in $(kubectl -n "$NS" get "$cj" \
               -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[*].name}'); do
