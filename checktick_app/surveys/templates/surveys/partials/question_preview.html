@@ -1,3 +1,4 @@
+{% load i18n %}
 {% load survey_extras %}
 {# Read-only preview of a question as displayed to participants #}
 
@@ -17,14 +18,47 @@
       {% endif %}
     {% endwith %}
   {% elif q.type == 'mc_single' %}
-    <div class="flex flex-col gap-1">
-      {% for opt in q.options|as_list %}
-        <label class="label cursor-not-allowed justify-start gap-2">
-          <input type="radio" class="radio radio-primary" disabled />
-          <span>{{ opt|option_label }}</span>
-        </label>
-      {% endfor %}
-    </div>
+    {% with mode=q|group_render_mode %}
+    {% if mode == 'cascading' %}
+      <div class="flex flex-col gap-2">
+        <select class="select select-bordered w-full" disabled>
+          <option>{% trans "-- Select a category --" %}</option>
+          {% for chunk in q.options|grouped_options %}
+            {% if chunk.label %}<option>{{ chunk.label }}</option>{% endif %}
+          {% endfor %}
+        </select>
+        <select class="select select-bordered w-full" disabled>
+          <option>{% trans "-- Select -- (appears after choosing a category)" %}</option>
+        </select>
+      </div>
+    {% elif mode == 'cascading_radios' %}
+      <div class="flex flex-col gap-1">
+        {% for chunk in q.options|grouped_options %}
+          {% if chunk.label %}
+            <label class="label cursor-not-allowed justify-start gap-2">
+              <input type="radio" class="radio radio-primary" disabled />
+              <span class="font-medium">{{ chunk.label }}</span>
+            </label>
+          {% endif %}
+        {% endfor %}
+        <p class="text-xs opacity-60">{% trans "The selected category's options appear on selection." %}</p>
+      </div>
+    {% else %}
+      <div class="flex flex-col gap-1">
+        {% for chunk in q.options|grouped_options %}
+          {% if chunk.label %}
+            <p class="text-sm font-semibold mt-2 mb-0.5 first:mt-0">{{ chunk.label }}</p>
+          {% endif %}
+          {% for item in chunk.options %}
+            <label class="label cursor-not-allowed justify-start gap-2">
+              <input type="radio" class="radio radio-primary" disabled />
+              <span>{{ item.opt|option_label }}</span>
+            </label>
+          {% endfor %}
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% endwith %}
   {% elif q.type == 'likert' %}
     {% with q.options|options_meta as meta %}
       {% if meta and meta.type == 'number-scale' %}

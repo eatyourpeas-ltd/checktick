@@ -133,6 +133,85 @@
         controls.forEach((el) => el.addEventListener("change", showIfSelected));
       }
     });
+    // Dependent dropdowns (grouped single-choice, ``cascading`` mode): the
+    // level-1 select (named q_<id>_group) reveals the selected group's
+    // level-2 select (named q_<id> — the stored answer). Hidden level-2
+    // selects are disabled so they never submit a stale value; a panel
+    // whose select has a single option (a group with no sub-options) is
+    // auto-answered when its group is chosen.
+    document.querySelectorAll("[data-cascading-dropdown]").forEach((root) => {
+      const qid = root.dataset.cascadingDropdown; // e.g. "q_123"
+      const groupSelect = root.querySelector("[data-group-select]");
+      if (!groupSelect) return;
+      const panels = root.querySelectorAll("[data-group-panel]");
+      const resetPanel = (panel) => {
+        const select = panel.querySelector("select");
+        if (select) {
+          select.disabled = true;
+          select.value = "";
+        }
+        panel
+          .querySelectorAll(`[data-followup-field^="${qid}_"]`)
+          .forEach((field) => {
+            field.classList.add("hidden");
+            const input = field.querySelector("input");
+            if (input) input.value = "";
+          });
+      };
+      groupSelect.addEventListener("change", function () {
+        const chosen = this.options[this.selectedIndex];
+        const panelId = chosen ? chosen.dataset.groupTarget : null;
+        panels.forEach(resetPanel);
+        if (!panelId) return;
+        const panel = root.querySelector(`[data-group-panel="${panelId}"]`);
+        if (!panel) return;
+        panel.classList.remove("hidden");
+        const select = panel.querySelector("select");
+        if (select) {
+          select.disabled = false;
+          // A single-option select means the group has no sub-options —
+          // selecting the group is itself the answer.
+          if (select.options.length === 1) select.value = select.options[0].value;
+        }
+      });
+    });
+
+    // Cascading grouped single-choice (``cascading_radios`` mode): level-1
+    // group radios (named q_<id>_group) reveal the selected group's
+    // sub-option panel. The stored answer is the leaf radio (named q_<id>)
+    // — the group pick is transient UI state. A panel with exactly one
+    // radio (a group with no sub-options) is auto-selected so every group
+    // yields an answer.
+    document.querySelectorAll("[data-cascading]").forEach((root) => {
+      const qid = root.dataset.cascading; // e.g. "q_123"
+      const panels = root.querySelectorAll("[data-group-panel]");
+      const clearLeaves = () => {
+        root.querySelectorAll(`input[name="${qid}"]`).forEach((leaf) => {
+          if (leaf.type === "radio") leaf.checked = false;
+        });
+        // Clear any visible follow-up inputs too.
+        root
+          .querySelectorAll(`[data-followup-field^="${qid}_"]`)
+          .forEach((field) => {
+            field.classList.add("hidden");
+            const input = field.querySelector("input");
+            if (input) input.value = "";
+          });
+      };
+      root.querySelectorAll("[data-group-trigger]").forEach((trigger) => {
+        trigger.addEventListener("change", function () {
+          if (!this.checked) return;
+          const panelId = this.dataset.groupTrigger;
+          panels.forEach((panel) => panel.classList.add("hidden"));
+          clearLeaves();
+          const panel = root.querySelector(`[data-group-panel="${panelId}"]`);
+          if (!panel) return;
+          panel.classList.remove("hidden");
+          const radios = panel.querySelectorAll('input[type="radio"]');
+          if (radios.length === 1) radios[0].checked = true;
+        });
+      });
+    });
   }
 
   // Initialize on page load

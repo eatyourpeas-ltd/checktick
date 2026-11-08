@@ -475,13 +475,38 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                 elif line == "HIDDEN" or line.upper() == "HIDDEN":
                     current_question["hidden_by_default"] = True
                 elif line.startswith("- "):
-                    current_question["options"].append(line[2:].strip())
+                    option_text = line[2:].strip()
+                    # Grouped single-choice heading: [Square brackets] on
+                    # their own line renders as a group heading (census
+                    # ethnic-group pattern). Only mc_single questions accept
+                    # them; other types keep the literal text.
+                    if current_question["type"] in {
+                        "mc_single",
+                        "single",
+                        "radio",
+                    } and re.match(r"^\[.+\]$", option_text):
+                        current_question["options"].append(
+                            ("__group__", option_text[1:-1].strip())
+                        )
+                    else:
+                        current_question["options"].append(option_text)
                 elif line.startswith("+ "):
                     # Follow-up text for the most recent option
                     if current_question["options"]:
                         # Get the last option and mark it with follow-up metadata
-                        last_idx = len(current_question["options"]) - 1
                         followup_label = line[2:].strip()
+                        # Walk back past any group-heading markers — a `+`
+                        # line always attaches to the most recent real option.
+                        last_idx = len(current_question["options"]) - 1
+                        while (
+                            last_idx >= 0
+                            and isinstance(current_question["options"][last_idx], tuple)
+                            and current_question["options"][last_idx][0] == "__group__"
+                        ):
+                            last_idx -= 1
+                        if last_idx < 0:
+                            i += 1
+                            continue
                         # Store follow-up as tuple (option_text, followup_label)
                         last_option = current_question["options"][last_idx]
                         # If it's already a tuple, update it; otherwise create tuple
@@ -533,8 +558,12 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
         result = []
         for opt in options_list:
             if isinstance(opt, tuple):
-                # (option_text, followup_label)
+                # (option_text, followup_label) — or a group heading marker
+                # ("__group__", label) from a [bracketed] outline line.
                 opt_text, followup_label = opt
+                if opt_text == "__group__":
+                    result.append({"type": "option_group", "label": followup_label})
+                    continue
                 result.append(
                     {
                         "label": opt_text,
@@ -570,6 +599,17 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
             elif t in {"mc_single", "single", "radio"}:
                 q["final_type"] = "mc_single"
                 q["final_options"] = _convert_options_to_dicts(q["options"])
+                # Grouped single-choice display mode: ``render: cascading``
+                # = dependent dropdowns; ``render: cascading_radios`` (or
+                # ``cascading-radios``) reveals the selected group's options
+                # as radio buttons. Absent = expanded (all groups visible).
+                render_mode = (
+                    str(q["kv"].get("render", "")).strip().lower().replace("-", "_")
+                )
+                if render_mode in {"cascading", "cascading_radios"}:
+                    q["final_options"].append(
+                        {"type": "option_group_render", "mode": render_mode}
+                    )
                 marker = _question_followup_marker(q["kv"])
                 if marker:
                     q["final_options"].append(marker)

@@ -122,6 +122,22 @@ Spacing is flexible, but keep the relative order (heading → optional descripti
 ### Options and Likert metadata
 
 - For option-based questions, supply each option on its own line starting with `-` (hyphen + space).
+- **Grouped options (census-style categories)**: For `mc_single`, a line wrapping a category name in square brackets — `- [White]` — starts a group heading. The options that follow it belong to that group, and the respondent still selects exactly one option overall. This encodes hierarchical category questions such as the GSS/census ethnic-group question:
+
+  ```markdown
+  ## What is your ethnic group?* {ethnic-group}
+  (mc_single)
+  - [White]
+  - English or Welsh / Scottish / Northern Irish / British
+  - Irish
+  - Any other White background
+    + Please state your background
+  - [Asian or Asian British]
+  - Indian
+  - Pakistani
+  ```
+
+  By default every group heading is shown with its options visible at once (the census paper layout). Add `render: cascading` after the `(type)` line to show the top-level groups first and reveal the selected group's options — dependent-dropdown style. The stored answer is always the specific option chosen; the group is implied by it.
 - **Follow-up text inputs**: To add a follow-up text field for any option, add an indented line starting with `+` (plus + space) immediately after the option. The text after `+` becomes the label for the follow-up input field that appears when the participant selects that option.
 - **Question-level follow-up**: For `mc_single`, `mc_multi` and `dropdown`, a `followup: <label>` line after the options adds a single text box offered after all options. This is intended for long (often dataset-backed) option lists where a follow-up on one specific option does not make sense.
 - **Datasets**: For `dropdown` questions, `dataset: <key>` links the question to a standardised option set (NHS trusts, medical specialities, …). The dataset key is verified against the datasets available to your survey at import time — unknown keys are dropped with a warning. Use this instead of hand-writing long option lists when a dataset exists.

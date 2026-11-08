@@ -43,17 +43,29 @@ def _question_followup_labels(question: Any) -> dict[str, str] | None:
         if not isinstance(options, list):
             return None
         labels: dict[str, str] = {}
-        for idx, opt in enumerate(options):
+        renderable_idx = 0
+        for opt in options:
             if not isinstance(opt, dict):
+                # Plain-string options are renderable and consume an index.
+                renderable_idx += 1
                 continue
             if opt.get("type") == "question_followup":
                 if opt.get("enabled"):
                     labels["any"] = opt.get("label", "Please specify")
                 continue
+            if opt.get("type") == "option_group":
+                # Grouped single-choice heading — never consumes a follow-up
+                # index (suffixes are positions among renderable options).
+                continue
             fu = opt.get("followup_text")
             if isinstance(fu, dict) and fu.get("enabled"):
-                suffix = opt.get("value") if question.type == "yesno" else str(idx)
+                suffix = (
+                    opt.get("value")
+                    if question.type == "yesno"
+                    else str(renderable_idx)
+                )
                 labels[str(suffix)] = fu.get("label", "Please elaborate")
+            renderable_idx += 1
         return labels or None
     except Exception:
         return None

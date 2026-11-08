@@ -21,3 +21,15 @@ def _hcaptcha_disabled_by_default(settings):
     """Run every test with hCaptcha unconfigured unless the test opts in."""
     settings.HCAPTCHA_SECRET = ""
     settings.HCAPTCHA_SITEKEY = ""
+
+
+@pytest.fixture(autouse=True)
+def _ratelimit_disabled_by_default(settings):
+    """Disable view-level rate limits for every test.
+
+    The ``PYTEST_CURRENT_TEST`` guard in settings.py runs before pytest sets
+    that variable, so ``@ratelimit`` decorators stay active and request-heavy
+    modules (e.g. take-page tests) trip the per-IP limits of later modules —
+    all test clients share 127.0.0.1.
+    """
+    settings.RATELIMIT_ENABLE = False
