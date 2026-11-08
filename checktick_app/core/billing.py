@@ -8,7 +8,8 @@ GoCardless flow:
 2. Complete Redirect Flow (get customer and mandate IDs)
 3. Create Subscription against the mandate
 
-Automatically uses sandbox in DEBUG mode and production otherwise.
+Only ENVIRONMENT=production uses the live GoCardless API; development and
+staging both use the sandbox (see settings.py PAYMENT_ENVIRONMENT).
 """
 
 import logging

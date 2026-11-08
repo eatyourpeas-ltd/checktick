@@ -31,5 +31,13 @@ resources:
   # Apply it out-of-band after the Vault is on Raft storage; before then it
   # would fail nightly at AppRole login.
   # The openobserve-auth Secret is intentionally NOT managed by kustomize —
-  # create it from the local git-ignored env file (see k8s/openobserve.example.env),
+  # create it from the local git-ignored env file (k8s/openobserve.example.env),
   # same pattern as checktick-secrets above.
+  #
+  # NOTE: the k8s/staging-*.yaml files are NOT listed here on purpose. They
+  # are a second (staging) app + database pair in the SAME namespace and
+  # depend on out-of-band prerequisites `kubectl apply -k k8s/` must never
+  # assume: the CNPG operator, the STAGING_DATABASE_URL key in
+  # checktick-secrets, STAGING_SITE_URL in the config overlay, and the
+  # vault-airgap rule for app=checktick-staging-web (k8s/vault.yaml).
+  # Apply them out-of-band in order — see k8s/README.md "Staging environment".

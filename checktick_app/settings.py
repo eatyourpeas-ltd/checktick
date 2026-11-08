@@ -195,25 +195,30 @@ COMPANY_ODS_CODE = env("COMPANY_ODS_CODE", default="ABC123")  # For NHS organisa
 ICO_NUMBER = env("ICO_NUMBER", default="ZB123456")
 
 # Payment Processing Configuration
-# Use sandbox in DEBUG mode, production otherwise
+# Only ENVIRONMENT=production uses the live GoCardless API: development AND
+# staging both use the sandbox (CTO decision 2026-11-08). The former
+# DEBUG-based selection sent staging checkout to the REAL API with real
+# mandates — staging runs DEBUG=False — so the selector is ENVIRONMENT now,
+# with sandbox as the fail-safe default for any other value (a typo'd or
+# unset ENVIRONMENT can never create live Direct Debits).
+PAYMENT_ENVIRONMENT = "production" if ENVIRONMENT == "production" else "sandbox"
 PAYMENT_API_KEY = (
-    env("PAYMENT_PROCESSING_SANDBOX_API_KEY")
-    if DEBUG
-    else env("PAYMENT_PROCESSING_PRODUCTION_API_KEY")
+    env("PAYMENT_PROCESSING_PRODUCTION_API_KEY")
+    if PAYMENT_ENVIRONMENT == "production"
+    else env("PAYMENT_PROCESSING_SANDBOX_API_KEY")
 )
 PAYMENT_BASE_URL = (
-    env("PAYMENT_PROCESSING_SANDBOX_BASE_URL")
-    if DEBUG
-    else env("PAYMENT_PROCESSING_PRODUCTION_BASE_URL")
+    env("PAYMENT_PROCESSING_PRODUCTION_BASE_URL")
+    if PAYMENT_ENVIRONMENT == "production"
+    else env("PAYMENT_PROCESSING_SANDBOX_BASE_URL")
 )
-PAYMENT_ENVIRONMENT = "sandbox" if DEBUG else "production"
 
 # Payment Webhook Secret (for signature verification)
 # Get this from GoCardless dashboard: Developers > Webhooks
 PAYMENT_WEBHOOK_SECRET = (
-    env("PAYMENT_PROCESSING_SANDBOX_WEBHOOK_SECRET")
-    if DEBUG
-    else env("PAYMENT_PROCESSING_PRODUCTION_WEBHOOK_SECRET")
+    env("PAYMENT_PROCESSING_PRODUCTION_WEBHOOK_SECRET")
+    if PAYMENT_ENVIRONMENT == "production"
+    else env("PAYMENT_PROCESSING_SANDBOX_WEBHOOK_SECRET")
 )
 
 # VAT Configuration
@@ -1015,13 +1020,17 @@ OIDC_OP_JWKS_ENDPOINT_AZURE = env("OIDC_OP_JWKS_ENDPOINT_AZURE")
 HCAPTCHA_SITEKEY = env("HCAPTCHA_SITEKEY")
 HCAPTCHA_SECRET = env("HCAPTCHA_SECRET")
 
-# Dynamic base URL for development vs production
-if DEBUG:
-    # Local development with Docker
-    OIDC_BASE_URL = "http://localhost:8000"
-else:
-    # Production
-    OIDC_BASE_URL = "https://checktick.uk"
+# Per-environment base URL for the OIDC redirect_uri (OIDC_REDIRECT_URI
+# below). Follows SITE_URL, which the k8s config overlay owns per
+# environment (prod: SITE_URL=https://checktick.uk; staging:
+# STAGING_SITE_URL=https://staging.checktick.uk in the staging web
+# Deployment) — so the redirect_uri sent to Google/Azure matches the host
+# the browser is actually on. Previously hardcoded to https://checktick.uk
+# in every non-DEBUG environment, which would have bounced staging logins
+# to the PROD callback with a state prod cannot honour (found 2026-11-08
+# when the staging redirect URIs were registered in the Google/Azure
+# consoles). DEBUG keeps the docker-compose localhost default via SITE_URL.
+OIDC_BASE_URL = SITE_URL
 
 # Azure OIDC endpoints are tenant-aware. ``/common/`` works for multitenant
 # org+personal audiences, but using the configured tenant ID makes the

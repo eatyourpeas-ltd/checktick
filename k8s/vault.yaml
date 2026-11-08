@@ -177,6 +177,16 @@ spec:
         - podSelector:
             matchLabels:
               app: checktick-web
+        # Staging web pods (k8s/staging-web.yaml): Vault is SHARED between
+        # environments (same VAULT_ADDR, same AppRole, no extra unseal
+        # ceremony) — without this rule the staging pods can never
+        # authenticate and /healthz never goes green. Purely additive; the
+        # prod web pods are unaffected. Batch jobs do NOT need Vault (the
+        # prod CronJobs have run nightly without it since 2026-11-03), so
+        # the staging CronJob is deliberately absent here.
+        - podSelector:
+            matchLabels:
+              app: checktick-staging-web
         # Nightly snapshot CronJob (k8s/vault-snapshot.yaml): the
         # checktick.io/vault-snapshot label IS the pod's API access grant —
         # same pattern as checktick.io/db-client

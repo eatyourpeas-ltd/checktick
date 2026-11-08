@@ -1,0 +1,224 @@
+# STAGING web application: a 1-replica clone of k8s/web.yaml in the SAME
+# namespace (PVCs are namespace-scoped, so staging mounts the SAME
+# checktick-media + checktick-snomed-data RWX volumes as prod — no
+# SNOMED re-import).
+#
+# Deltas vs k8s/web.yaml:
+#   - name/labels app: checktick-staging-web — deliberately NOT
+#     app: checktick-web: the prod PDB, the prod topology spread selector
+#     and the Deploy workflow's set-image targets all match that label, and
+#     staging pods must stay invisible to them.
+#   - DATABASE_URL env entry -> the STAGING_DATABASE_URL key of
+#     checktick-secrets (k8s/secrets.env): everything else in the Secret is
+#     shared as-is (Vault AppRole, SECRET_KEY, ...). An env entry overrides
+#     envFrom, so this is the only thing that splits staging from prod.
+#   - ENVIRONMENT=staging: labels the JSON log stream correctly in the
+#     shared OpenObserve timeline (prod is ENVIRONMENT=production via the
+#     config overlay) and keeps create_demo_accounts un-blocked on staging.
+#   - SITE_URL from the STAGING_SITE_URL key of the config overlay
+#     (checktick-config-local): emailed links (confirmations, invites) must
+#     point at staging, never prod. Hostnames are environment-identifying
+#     and belong in the git-ignored k8s/config.env, never in this manifest.
+#   - no topologySpreadConstraints: pointless at 1 replica, and a spread
+#     selector is evaluated per-pod — a stale app=checktick-web selector
+#     would count PROD pods. Dropped rather than relabelled.
+#   - no PodDisruptionBudget: a single-replica PDB (minAvailable: 1) would
+#     veto every voluntary eviction and block node drains entirely.
+#
+# Probes and rolling-update rules are identical to prod (readiness = deep
+# /healthz; liveness/startup = trivial /api/health — never point liveness
+# at /healthz, restarts cannot fix a sealed Vault).
+#
+# Out-of-band apply (NOT in kustomization.yaml): requires the staging
+# database (k8s/staging-postgres-cnpg.yaml), the STAGING_DATABASE_URL key
+# in checktick-secrets, and the vault-airgap rule that admits
+# app=checktick-staging-web (k8s/vault.yaml) — without the last one the
+# staging pods can never authenticate to the SHARED Vault and readiness
+# never goes green.
+#
+# Staging deploys are manual initially:
+#   kubectl set image -n checktick deploy/checktick-staging-web \
+#     web=ghcr.io/eatyourpeas-ltd/checktick:X.Y.Z
+#   (after re-running k8s/staging-migrate-job.yaml against the same tag)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checktick-staging-web
+  namespace: checktick
+  labels:
+    app: checktick-staging-web
+spec:
+  replicas: 1
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: checktick-staging-web
+  template:
+    metadata:
+      labels:
+        app: checktick-staging-web
+    spec:
+      terminationGracePeriodSeconds: 45
+      initContainers:
+        # Same shared RWX volumes as prod -> same boot chores. Longhorn RWX
+        # (NFS) does not honour fsGroup, so chown once at boot using the
+        # image's own checktick user (uid is assigned by useradd -r).
+        - name: media-chown
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+          command: ["sh", "-c", "chown -R \"$(id -u checktick):$(id -g checktick)\" /app/media"]
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: media
+              mountPath: /app/media
+        # Copy snomed.db to node-local storage so SQLite is never opened
+        # over NFS — comes free via the shared PVC, no re-import needed.
+        - name: snomed-copy
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+          command:
+            - sh
+            - -c
+            - |
+              if [ -f /snomed-source/snomed.db ]; then
+                cp /snomed-source/snomed.db /app-data/snomed.db
+                # Convert the POD-LOCAL COPY out of WAL mode (a read-only
+                # connection to a WAL database must create a -shm file,
+                # which fails on the web container's readOnly /app/data
+                # mount). The RWX share is never written.
+                python -c "import sqlite3; conn = sqlite3.connect('/app-data/snomed.db'); print('journal_mode:', conn.execute('PRAGMA journal_mode=DELETE').fetchone()[0]); conn.close()"
+              else
+                echo "snomed.db not present on the volume yet; skipping copy"
+              fi
+          volumeMounts:
+            - name: snomed-share
+              mountPath: /snomed-source
+              readOnly: true
+            - name: snomed-local
+              mountPath: /app-data
+      containers:
+        - name: web
+          # Pinned to the released prod tag — bump alongside k8s/web.yaml
+          # in the release PR; staging rolls manually via kubectl set image.
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            # Order is precedence: later sources override earlier
+            # (structural defaults -> local overlay -> credentials).
+            # The staging DATABASE_URL env entry below overrides all three.
+            - configMapRef:
+                name: checktick-config
+            - configMapRef:
+                name: checktick-config-local
+            - secretRef:
+                name: checktick-secrets
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                    fieldPath: status.podIP
+            # In-cluster hosts ONLY (kubelet probes send Host: <pod IP>) —
+            # public domains are appended by settings.py from
+            # ALLOWED_HOSTS_EXTRA in the config overlay (staging.checktick.uk
+            # is already listed there).
+            - name: ALLOWED_HOSTS
+              value: "$(POD_IP),checktick-staging-web,checktick-staging-web.checktick,checktick-staging-web.checktick.svc.cluster.local,localhost,127.0.0.1"
+            # THE staging/prod split: points this pod at the staging CNPG
+            # cluster's read/write service. Key lives in the git-ignored
+            # k8s/secrets.env alongside DATABASE_URL.
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: checktick-secrets
+                  key: STAGING_DATABASE_URL
+            - name: ENVIRONMENT
+              value: staging
+            # Emailed links must point at staging, never prod. The hostname
+            # is environment-identifying: it lives ONLY in the git-ignored
+            # config overlay (STAGING_SITE_URL), never in this manifest.
+            - name: SITE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: checktick-config-local
+                  key: STAGING_SITE_URL
+          # Same probe rules as prod: readiness = deep /healthz (DB + Vault
+          # sealed state + SNOMED); startup/liveness = trivial /api/health.
+          # NEVER point liveness or startup at /healthz — a sealed Vault
+          # would restart-loop the pod, and restarts cannot fix a seal.
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 2
+            successThreshold: 1
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 10"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 500m
+            limits:
+              memory: 2Gi
+              cpu: "2"
+          volumeMounts:
+            - name: media
+              mountPath: /app/media
+            - name: snomed-local
+              mountPath: /app/data
+              readOnly: true
+      volumes:
+        # SHARED with prod (same namespace, same claims) — staging uploads
+        # admin icons and reads snomed.db through these, at no extra cost.
+        - name: media
+          persistentVolumeClaim:
+            claimName: checktick-media
+        - name: snomed-share
+          persistentVolumeClaim:
+            claimName: checktick-snomed-data
+        - name: snomed-local
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checktick-staging-web
+  namespace: checktick
+  labels:
+    app: checktick-staging-web
+spec:
+  selector:
+    app: checktick-staging-web
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

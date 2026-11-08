@@ -27,7 +27,7 @@ For a walkthrough of the manifests and day-to-day validation commands, see
   **LIVE**. **DB + Vault PVCs are on `civo-volume` (provider-managed
   block storage); Longhorn serves only the RWX trio
   (media/SNOMED/OpenObserve) at 2 replicas.**
-- Production namespace `checktick`; staging (`staging.checktick.uk`) runs on the same cluster
+- Production namespace `checktick`; **staging (`staging.checktick.uk`) runs in the SAME namespace** — see [Staging environment](#staging-environment) below
 - Components:
   - web Deployment (image pinned to a published release tag, never `latest`)
   - CloudNativePG PostgreSQL 17 — `checktick-db` cluster (primary + one replica), in-cluster
@@ -45,6 +45,77 @@ For a walkthrough of the manifests and day-to-day validation commands, see
   idempotent syncs pinned to the same tag, then a `maxUnavailable: 0` rolling update
   gated on `/healthz`). Migrations must stay expansion/contract — a rolled-back
   rollout briefly runs the previous image against the new schema.
+
+## Staging environment
+
+Staging (`staging.checktick.uk`) runs in the **same `checktick` namespace** as
+prod — deliberately, so it shares the namespace-scoped `checktick-media` +
+`checktick-snomed-data` RWX PVCs (SNOMED arrives free, no re-import) and the
+Vault (`VAULT_ADDR` + AppRole shared; the `vault-airgap` policy admits
+`app=checktick-staging-web` alongside the prod web pods). Stood up
+2026-11-08 — apply order and runbooks in [`k8s/README.md`](../k8s/README.md) →
+Staging environment:
+
+- **Web**: `deploy/checktick-staging-web` — 1 replica, **no PDB** (a
+  single-replica PDB would veto every voluntary drain) and **no topology
+  spread** (pointless at 1 replica; a stale `app=checktick-web` selector
+  would count PROD pods). Deployed manually via `kubectl set image` after
+  re-running the staging migrate Job at the same tag. `DATABASE_URL` comes
+  from the `STAGING_DATABASE_URL` key of `checktick-secrets` (an `env`
+  entry overrides the shared `envFrom`); `ENVIRONMENT=staging` labels the
+  JSON logs (kept OUT of OpenObserve — see Logs below); `SITE_URL` comes
+  from `STAGING_SITE_URL` in the config overlay so emailed links point at
+  staging, never prod.
+- **DB**: `checktick-staging-db` (CloudNativePG, **1 instance, no
+  ScheduledBackup, no WAL archiving** — staging data is disposable) on
+  `civo-volume`, with its own `checktick-staging-db-ingress` NetworkPolicy.
+  The staging batch label is `checktick.io/staging-db-client`, deliberately
+  NOT the prod `checktick.io/db-client` grant: prod CronJobs must never
+  reach the staging DB, and staging jobs must never reach the prod DB.
+- **Cron**: exactly ONE staging CronJob — `prune-unconfirmed-users-staging`
+  (same 02:40 slot as prod, different database). `EMAIL_BOUNCE_PROCESSING_ENABLED=false`
+  keeps the shared prod mailbox out of staging's pruning, and it has **no
+  healthchecks.io ping** (a staging run must never mark prod's check seen).
+  The Deploy workflow's roll-every-CronJob step DOES re-image it on prod
+  releases — intended: it runs the app image, exactly like its prod twin.
+- **Seeding**: `k8s/staging-migrate-job.yaml` (Job `checktick-staging-predeploy` —
+  a distinct name from the prod pre-deploy Job the workflow manages) run
+  once per staging release.
+- **Ingress**: `staging.checktick.uk` → service `checktick-staging-web`, in
+  the git-ignored `k8s/ingress.local.yaml` (the cert is unchanged since the
+  POC).
+- **SSO**: no new credentials — the same Google/Azure client IDs + secrets
+  are shared (`checktick-config-local` + `checktick-secrets`); the only
+  console-side addition is the redirect URI
+  `https://staging.checktick.uk/oidc/callback/` in both consoles.
+  `settings.py` derives the OIDC redirect base from `SITE_URL`/
+  `STAGING_SITE_URL` (previously hardcoded to `https://checktick.uk` in
+  every non-DEBUG env — fixed 2026-11-08; effective from the next image
+  release, since settings ship inside the image). hCaptcha sitekeys are
+  hostname-bound — add `staging.checktick.uk` to the sitekey's hostnames in
+  hCaptcha console if signup captcha will be exercised on staging.
+  **Billing**: `settings.py` selects the GoCardless API by `ENVIRONMENT` —
+  only `production` uses the live API; development AND staging use the
+  sandbox (CTO decision 2026-11-08; the former `DEBUG`-based rule sent
+  staging checkout to the live API, since staging runs `DEBUG=False`).
+  Effective from the next image release — the deployed 0.27.0 still
+  carries the old rule, so do not test billing on staging until it ships.
+  Sandbox checkout needs `PAYMENT_PROCESSING_SANDBOX_API_KEY` (+
+  `PAYMENT_PROCESSING_SANDBOX_WEBHOOK_SECRET`) in `checktick-secrets`.
+- **Logs**: staging stdout is deliberately NOT shipped to OpenObserve —
+  the collector's `Exclude_Path` drops every `*staging*` container log
+  (web, cron and the staging CNPG pod) so the prod `default/default`
+  stream stays unmixed (CTO decision 2026-11-08: separate streams; a
+  dedicated staging stream was considered and skipped — it would need a
+  second tail input + output on every node). Staging logs stay viewable
+  via `kubectl logs`; containerd keeps them on the node. The records
+  shipped between staging going live (~11:45 UTC) and the exclusion
+  applying (~12:50 UTC) remain in the stream — purge via the OpenObserve
+  UI (search `kubernetes.pod_name` matches `*staging*`, then Delete) if
+  wanted.
+- **Capacity** (measured 2026-11-08): staging adds ~600 Mi steady / 1.5 GiB
+  requests (web 512 Mi + db 1 Gi) against ~2–2.8 GiB actually free per node
+  on the 2× `g4s.kube.large` layout — comfortable, no resize.
 
 ## Critical Safety Rules
 

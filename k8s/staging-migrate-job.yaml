@@ -1,0 +1,69 @@
+# STAGING pre-deploy Job — the k8s/migrate-job.yaml pattern, pointed at the
+# staging database. Run ONCE per staging release (manual deploys initially):
+#
+#   kubectl delete job checktick-staging-predeploy -n checktick --ignore-not-found
+#   kubectl apply -f k8s/staging-migrate-job.yaml
+#   kubectl wait --for=condition=complete \
+#     job/checktick-staging-predeploy -n checktick --timeout=300s
+#
+# Distinct name from the prod job on purpose: the Deploy (Civo) workflow
+# deletes/re-creates `checktick-predeploy` on every prod deploy — a shared
+# name would collide (and prod deploys must never run migrations against
+# the staging DB, or vice versa).
+#
+# Same trims as the staging CronJob: DATABASE_URL from STAGING_DATABASE_URL
+# (checktick-secrets), the STAGING db-client label (the prod
+# checktick.io/db-client label is the PROD DB grant), ENVIRONMENT=staging.
+# Migrations never run at container start (image CMD is gunicorn-only).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: checktick-staging-predeploy
+  namespace: checktick
+spec:
+  # Fail fast against the staging database rather than retrying blindly.
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        checktick.io/staging-db-client: "true"
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          # Keep in lockstep with the staging web Deployment's pin —
+          # bump both in the release PR.
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+          command:
+            - sh
+            - -c
+            - |
+              python manage.py migrate --noinput &&
+              python manage.py createcachetable &&
+              python manage.py sync_branding &&
+              python manage.py sync_nhs_dd_datasets &&
+              python manage.py sync_global_question_group_templates
+          envFrom:
+            # Order is precedence: structural -> local overlay -> credentials
+            # (the DATABASE_URL env entry below overrides all three).
+            - configMapRef:
+                name: checktick-config
+            - configMapRef:
+                name: checktick-config-local
+            - secretRef:
+                name: checktick-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: checktick-secrets
+                  key: STAGING_DATABASE_URL
+            - name: ENVIRONMENT
+              value: staging
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 500m
+            limits:
+              memory: 1Gi

@@ -96,7 +96,14 @@ data:
         # PLUS the CNPG pods' chatty triple-logs (postgres emits every line
         # 3x) — excluded for footprint; the compliance record is AuditLog in
         # PostgreSQL anyway, and db logs stay on the node via containerd.
-        Exclude_Path      /var/log/containers/*log-collector*.log,/var/log/containers/*checktick-db*.log
+        # STAGING exclusion (2026-11-08, CTO): every *staging* container log —
+        # web, cron AND the staging CNPG pod (the *checktick-db* glob does
+        # NOT match checktick-staging-db-1) — is dropped so the prod
+        # default/default stream stays unmixed. Deliberate alternative to a
+        # second staging stream (needs a second tail input + output on every
+        # node); staging logs stay viewable via `kubectl logs` / containerd
+        # files on the node.
+        Exclude_Path      /var/log/containers/*log-collector*.log,/var/log/containers/*checktick-db*.log,/var/log/containers/*staging*.log
         Parser            containerd
         Tag               kube.*
         DB                /flb-state/tail.db

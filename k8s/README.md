@@ -26,6 +26,10 @@ values are applied out-of-band.
 | `config.example.env` | Template for the local config overlay (copy to `config.env`, git-ignored) |
 | `postgres-cnpg.yaml` | **Optional** in-cluster PostgreSQL 17 (CloudNativePG) — budget path |
 | `postgres-networkpolicy.yaml` | `checktick-db-ingress` NetworkPolicy — DB reachable on 5432/8000 only by web pods, the batch CronJobs (label grant), the CNPG operator and the cluster's own instances |
+| `staging-postgres-cnpg.yaml` | **Optional** staging PostgreSQL (CloudNativePG) — trimmed clone of `postgres-cnpg.yaml`: 1 instance, no backups, no WAL archiving + its own DB-ingress NetworkPolicy |
+| `staging-web.yaml` | **Optional** staging web Deployment (1 replica) + Service — same namespace and PVCs as prod, `DATABASE_URL` from the `STAGING_DATABASE_URL` secret key |
+| `staging-migrate-job.yaml` | Staging pre-deploy Job (migrations + idempotent syncs against the staging DB) — run once per staging release |
+| `staging-cronjobs.yaml` | Staging scheduled tasks — exactly ONE CronJob (`prune-unconfirmed-users-staging`); everything else is prod-only |
 | `openobserve.yaml` | Self-hosted OpenObserve log store — ClusterIP-only (port-forward 5080), single replica on a Longhorn PVC; the retention layer for the stdout JSON ([Infrastructure Logging](../docs/infrastructure-logging.md)) |
 | `openobserve.example.env` | Template for the `openobserve-auth` Secret (copy to git-ignored `k8s/openobserve.env`) — shared by the OpenObserve root user and collector Basic auth |
 | `log-collector.yaml` | Fluent Bit DaemonSet → OpenObserve stream `default/default` (one timeline with the NF-era archive). **Deliberately NOT in kustomization.yaml** — one fluent-bit per node tipped a node over its memory wall (2026-11-05); apply out-of-band only after the node-pool resize + headroom go/no-go ([Civo ops → Node Pool Resize](../docs/civo-kubernetes-operations.md)) |
@@ -255,3 +259,84 @@ to the `civo` GitHub environment to make dispatch a gated production deploy.
 On main publishes, `docker-publish.yml` dispatches this workflow with the
 newly published image tag (swapped from the previous platform's deployment
 webhook at migration close-out — runbook Phase 6).
+
+## Staging environment
+
+A second (staging) app + database pair runs in the **same namespace** as
+production — same namespace on purpose: the `checktick-media` /
+`checktick-snomed-data` RWX PVCs are namespace-scoped and are deliberately
+**shared**, so SNOMED arrives for free with no re-import. Vault is shared
+too (same `VAULT_ADDR`, same AppRole). The `staging-*.yaml` manifests are
+NOT in `kustomization.yaml` — they have out-of-band prerequisites and are
+applied in order:
+
+1. Bootstrap Secret + staging CNPG cluster (operator required, as for
+   `postgres-cnpg.yaml`; 1 instance, **no backups / WAL archiving** —
+   staging data is disposable) with its own DB-ingress NetworkPolicy:
+
+   ```bash
+   openssl rand -hex 24   # -> <staging-db-password>\n   kubectl create secret generic checktick-staging-db-creds -n checktick \
+     --from-literal=username=checktick \
+     --from-literal=password='<staging-db-password>'
+   kubectl apply -f k8s/staging-postgres-cnpg.yaml
+   kubectl -n checktick wait --for=condition=ready \
+     cluster.postgresql.cnpg.io/checktick-staging-db --timeout=300s
+   ```
+
+2. `STAGING_DATABASE_URL` (same password) into `checktick-secrets`, and
+   `STAGING_SITE_URL` into the config overlay (`k8s/config.env` →
+   `checktick-config-local`) — both git-ignored:
+
+   ```bash
+   kubectl patch secret checktick-secrets -n checktick \
+     -p '{"stringData":{"STAGING_DATABASE_URL":"postgresql://checktick:<staging-db-password>@checktick-staging-db-rw:5432/checktick"}}'
+   kubectl create configmap checktick-config-local -n checktick \
+     --from-env-file=k8s/config.env --dry-run=client -o yaml | kubectl apply -f -
+   ```
+
+3. `kubectl apply -f k8s/vault.yaml` — the airgap must admit
+   `app=checktick-staging-web` (staging shares the Vault).
+4. Seed once per release (migrations + idempotent syncs against the staging
+   DB; SNOMED needs nothing — shared PVC):
+
+   ```bash
+   kubectl delete job checktick-staging-predeploy -n checktick --ignore-not-found
+   kubectl apply -f k8s/staging-migrate-job.yaml
+   kubectl wait --for=condition=complete \
+     job/checktick-staging-predeploy -n checktick --timeout=300s
+   ```
+
+5. Web + the ONE staging CronJob:
+
+   ```bash
+   kubectl apply -f k8s/staging-web.yaml
+   kubectl -n checktick rollout status deploy/checktick-staging-web
+   kubectl apply -f k8s/staging-cronjobs.yaml
+   ```
+
+6. Route the public staging hostname in the git-ignored
+   `k8s/ingress.local.yaml` at service `checktick-staging-web` (the cert
+   already exists).
+
+No new credentials are needed for staging — the OIDC client IDs/secrets,
+  hCaptcha, Vault AppRole and `SECRET_KEY` are all shared via
+  `checktick-config-local` + `checktick-secrets`. Console-side, beyond the
+  M365/Google redirect URIs (`https://staging.checktick.uk/oidc/callback/`),
+  only the hCaptcha sitekey's hostname list (sitekeys are hostname-bound).
+  Billing selects the GoCardless API by `ENVIRONMENT` — only `production`
+  uses the live API; development AND staging use the sandbox (settings.py —
+  effective from the next image release; older images select by `DEBUG`
+  and would hit the live API from staging). Staging logs are deliberately
+  NOT shipped to OpenObserve — the log-collector excludes every `*staging*`
+  container log so the prod stream stays unmixed; view them with
+  `kubectl logs` (see docs/civo-kubernetes-operations.md → Staging
+  environment → Logs). The app derives the OIDC redirect
+  base from `SITE_URL`/`STAGING_SITE_URL` (settings.py — effective from the
+  next image release; older images hardcode `https://checktick.uk`).
+
+Staging deploys are manual `kubectl set image` initially. The Deploy (Civo)
+workflow only rolls `deploy/checktick-web` — but its roll-every-CronJob
+step DOES re-image `prune-unconfirmed-users-staging` to each released tag
+(intended: it runs the app image, exactly like its prod twin). Capacity
+(2026-11-08, 2× `g4s.kube.large`): staging adds ~600 Mi steady / 1.5 GiB
+requests against ~2–2.8 GiB actually free per node — comfortable.
