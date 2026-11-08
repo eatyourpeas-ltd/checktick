@@ -47,7 +47,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: run
-              image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+              image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
               # Deliberately NO healthchecks.io ping — see the header.
               command:
                 - sh

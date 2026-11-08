@@ -70,7 +70,7 @@ spec:
         # (NFS) does not honour fsGroup, so chown once at boot using the
         # image's own checktick user (uid is assigned by useradd -r).
         - name: media-chown
-          image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
           command: ["sh", "-c", "chown -R \"$(id -u checktick):$(id -g checktick)\" /app/media"]
           securityContext:
             runAsUser: 0
@@ -80,7 +80,7 @@ spec:
         # Copy snomed.db to node-local storage so SQLite is never opened
         # over NFS — comes free via the shared PVC, no re-import needed.
         - name: snomed-copy
-          image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
           command:
             - sh
             - -c
@@ -105,7 +105,7 @@ spec:
         - name: web
           # Pinned to the released prod tag — bump alongside k8s/web.yaml
           # in the release PR; staging rolls manually via kubectl set image.
-          image: ghcr.io/eatyourpeas-ltd/checktick:0.25.3
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
           imagePullPolicy: Always
           ports:
             - name: http
