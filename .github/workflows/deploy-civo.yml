@@ -157,13 +157,23 @@ jobs:
           # tag broke the nightly snapshot upload — "aws: not found", the
           # 03:45 UTC run failed 2026-11-08 (found from the Error pods; the
           # missed HC_PING alerted via healthchecks.io). Never roll it here.
+          # `kubectl get cronjobs -o name` yields `cronjob.batch/<name>`
+          # (resource.group format), so the skip patterns MUST glob the
+          # prefix. The original `cronjob/<name>` patterns never matched and
+          # the skips silently no-op'd — found live 2026-11-08 when the
+          # 0.27.1 deploy (the first since the vault-snapshot skip was
+          # added) rolled vault-snapshot's upload container to the app image
+          # AGAIN, recreating the 03:45 "aws: not found" incident. Live
+          # image restored the same hour. A skip that has never fired is
+          # untested — verify the "Skipping" log lines on the first deploy
+          # after adding one.
           for cj in $(kubectl -n "$NS" get cronjobs -o name); do
             case "$cj" in
-              cronjob/vault-snapshot)
+              */vault-snapshot)
                 echo "Skipping $cj (out-of-band, non-app images)"
                 continue
                 ;;
-              cronjob/prune-unconfirmed-users-staging)
+              */prune-unconfirmed-users-staging)
                 echo "Skipping $cj (rolled by the deploy-staging job, after the staging DB is migrated)"
                 continue
                 ;;
