@@ -330,14 +330,14 @@ No new credentials are needed for staging — the OIDC client IDs/secrets,
   only the hCaptcha sitekey's hostname list (sitekeys are hostname-bound).
   Billing selects the GoCardless API by `ENVIRONMENT` — only `production`
   uses the live API; development AND staging use the sandbox (settings.py —
-  effective from the next image release; older images select by `DEBUG`
-  and would hit the live API from staging). Staging logs are deliberately
+  shipped in 0.27.1, verified live: staging resolves
+  `PAYMENT_ENVIRONMENT: sandbox`). Staging logs are deliberately
   NOT shipped to OpenObserve — the log-collector excludes every `*staging*`
   container log so the prod stream stays unmixed; view them with
   `kubectl logs` (see docs/civo-kubernetes-operations.md → Staging
   environment → Logs). The app derives the OIDC redirect
-  base from `SITE_URL`/`STAGING_SITE_URL` (settings.py — effective from the
-  next image release; older images hardcode `https://checktick.uk`).
+  base from `SITE_URL`/`STAGING_SITE_URL` (settings.py — shipped in 0.27.1,
+  verified live: staging sends `https://staging.checktick.uk/oidc/callback/`).
 
 Staging deploys are automated: the Deploy (Civo) workflow's `deploy-staging`
 job (`needs: deploy`) runs the staging migrate Job, rolls

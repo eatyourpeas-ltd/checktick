@@ -95,16 +95,17 @@ Staging environment:
   `https://staging.checktick.uk/oidc/callback/` in both consoles.
   `settings.py` derives the OIDC redirect base from `SITE_URL`/
   `STAGING_SITE_URL` (previously hardcoded to `https://checktick.uk` in
-  every non-DEBUG env — fixed 2026-11-08; effective from the next image
-  release, since settings ship inside the image). hCaptcha sitekeys are
-  hostname-bound — add `staging.checktick.uk` to the sitekey's hostnames in
-  hCaptcha console if signup captcha will be exercised on staging.
+  every non-DEBUG env — fixed 2026-11-08, shipped in 0.27.1 and verified
+  live: staging sends `https://staging.checktick.uk/oidc/callback/`).
+  hCaptcha sitekeys are hostname-bound — add `staging.checktick.uk` to
+  the sitekey's hostnames in the hCaptcha console if signup captcha will
+  be exercised on staging.
   **Billing**: `settings.py` selects the GoCardless API by `ENVIRONMENT` —
   only `production` uses the live API; development AND staging use the
   sandbox (CTO decision 2026-11-08; the former `DEBUG`-based rule sent
   staging checkout to the live API, since staging runs `DEBUG=False`).
-  Effective from the next image release — the deployed 0.27.0 still
-  carries the old rule, so do not test billing on staging until it ships.
+  Shipped in 0.27.1 and verified live: staging resolves
+  `PAYMENT_ENVIRONMENT: sandbox`.
   Sandbox checkout needs `PAYMENT_PROCESSING_SANDBOX_API_KEY` (+
   `PAYMENT_PROCESSING_SANDBOX_WEBHOOK_SECRET`) in `checktick-secrets`.
 - **Logs**: staging stdout is deliberately NOT shipped to OpenObserve —
@@ -418,6 +419,16 @@ already ingested); live logs appear in the stream once the remaining
   `vault-snapshot` in the roll. The init containers (hashicorp/vault,
   alpine) were untouched — the roll only covers `containers`, which is
   why the job reached the upload step before dying.
+  **RECURRENCE 08/11 13:19 UTC, found + fixed within the hour: the skip's
+  case pattern (`cronjob/vault-snapshot`) never matched `kubectl get
+  cronjobs -o name` output (`cronjob.batch/vault-snapshot` — resource.group
+  format), so the skip silently no-op'd. The 0.27.1 deploy — the FIRST since
+  the skip was added — rolled `upload` to the app image again. Live image
+  restored to `amazon/aws-cli:latest` before the 03:45 run; both skip
+  patterns fixed to globs (`*/vault-snapshot`,
+  `*/prune-unconfirmed-users-staging`). Lesson: a skip that has never
+  fired is untested — grep the roll step's log for the `Skipping` lines on
+  the first deploy after adding one.**
 - `tls_disable = true` in-cluster is the migration baseline; the backlog adds
   cert-manager TLS on the in-cluster endpoint + `VAULT_TLS_VERIFY=true`.
 - The Vault container image defaults to root — pin `runAsUser: 100` (backlog).
