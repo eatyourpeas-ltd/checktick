@@ -450,8 +450,9 @@ already ingested); live logs appear in the stream once the remaining
 - **OpenObserve** (self-hosted, `k8s/openobserve.yaml`): log retention layer
   for the app's structured stdout JSON
   ([Infrastructure Logging](infrastructure-logging.md)). ClusterIP only —
-  reach the UI with `kubectl -n checktick port-forward svc/openobserve
-  5080:5080`; credentials in the `openobserve-auth` Secret
+  reach the UI with `./s/k8s-forward` (or `kubectl -n checktick
+  port-forward svc/openobserve 5080:5080`); credentials in the
+  `openobserve-auth` Secret
   (see `k8s/openobserve.example.env`). Org `default` / stream `default`
   carries the exported Northflank-era archive (June 2026 week — the
   in-app exporter only ran that long) and would carry live logs; 180-day
@@ -467,6 +468,99 @@ already ingested); live logs appear in the stream once the remaining
   Pool Resize). It stays out of `kustomization.yaml` so `kubectl apply
   -k k8s/` can never silently recreate it. The Platform Admin log-viewer
   API (`HOSTING_*`) is an unrelated opt-in feature.
+
+### OpenObserve log queries (cut-and-paste)
+
+Access: `./s/k8s-forward` port-forwards `svc/openobserve` 5080 to
+localhost. In the Logs page select stream `default`, switch the editor
+to **SQL mode**, paste. Saved views are per-user metadata in
+OpenObserve's internal DB on the `openobserve-data` PVC (covered by the
+nightly Longhorn backup; not a k8s object) — an `ERR_CONNECTION_REFUSED`
+toast mid-session just means the tunnel dropped: rerun
+`./s/k8s-forward`, hard-refresh the tab, retry.
+
+One timeline, three record shapes:
+
+- **Northflank archive** (June 2026 week, seeded into the data dir):
+  NF shipper schema — `dt` / `entity` / `host` / `job`; no app fields.
+- **Civo, pre-fix** (everything the collector shipped before the
+  2026-11-08 parser fix, ~15:24 UTC): the whole CRI line sits flat in
+  `log`, no app fields. Immutable — ages out via retention; exclude
+  with `AND message IS NOT NULL`.
+- **Civo, current** (since the fix): the CRI parser + `Merge_Log`
+  unwrap the app JSON into top-level fields — `level`, `logger`,
+  `message`, `request_id`, `user_id`, `remote_addr`, `service`
+  (`django`), `environment` (`production`), `module`, `funcName`,
+  `line`.
+
+Scope: the collector ships EVERY container log except its own, the CNPG
+`checktick-db` pods and `*staging*` — kube-system (coredns, traefik,
+metrics-server…) and the CNPG operator are in the stream too. Filter by
+`kubernetes_container_name`: `web` = Django app container, `run` =
+every CronJob (same JSON shape), `media-chown` / `snomed-copy` = init
+containers, `vault` / `openobserve` = infra.
+
+Django web logs — time, level, message:
+
+```sql
+SELECT _timestamp, level, message
+FROM "default"
+WHERE kubernetes_container_name = 'web'
+ORDER BY _timestamp DESC
+LIMIT 200
+```
+
+Errors only — the 3am view:
+
+```sql
+SELECT _timestamp, level, logger, message
+FROM "default"
+WHERE kubernetes_container_name = 'web'
+  AND level IN ('ERROR', 'CRITICAL')
+ORDER BY _timestamp DESC
+LIMIT 200
+```
+
+One request end-to-end, any container, chronological:
+
+```sql
+SELECT _timestamp, kubernetes_container_name, level, logger, message
+FROM "default"
+WHERE request_id = '<request_id>'
+ORDER BY _timestamp ASC
+```
+
+All Django JSON including CronJobs (`service` comes from
+LoggingContextFilter):
+
+```sql
+SELECT _timestamp, kubernetes_container_name, level, message
+FROM "default"
+WHERE service = 'django'
+ORDER BY _timestamp DESC
+LIMIT 200
+```
+
+Volume by level (set the UI time range first):
+
+```sql
+SELECT level, count(*) AS n
+FROM "default"
+WHERE kubernetes_container_name = 'web'
+GROUP BY level ORDER BY n DESC
+```
+
+Ingestion health check — newest records in the stream. `_timestamp` is
+microseconds since epoch (`date -r $(( TS / 1000000 ))` converts on
+macOS). If the newest is stale while pods are logging, the collector is
+down — the query is fine:
+
+```sql
+SELECT _timestamp, kubernetes_container_name
+FROM "default"
+ORDER BY _timestamp DESC
+LIMIT 5
+```
 
 ## Hardening Backlog
 

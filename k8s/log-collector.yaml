@@ -42,6 +42,13 @@
 # into stalls on 2026-11-05 — do NOT restore it without re-running the
 # headroom gate. Still deliberately absent from kustomization.yaml
 # (self-hoster safety).
+#
+# PARSER FIX 2026-11-08 (later): first Civo-era records landed with the
+# whole CRI line flat in `log` (no merged app fields) — the `containerd`
+# parser was the docker-JSON parser, which cannot read CRI text lines.
+# Replaced with a proper CRI regex parser (`cri`); Merge_Log now unwraps
+# the app JSON into top-level fields (message/level/logger/...). Records
+# ingested before the fix keep the old shape and age out via retention.
 # History: NOT APPLIED 2026-11-05 (storm) → resize 2026-11-07 → applied
 # trimmed 2026-11-08 08:41 → rolled back 09:02 (f985n engine drift,
 # second web-pod liveness kill) → engines moved to the large node 09:00 →
@@ -104,7 +111,7 @@ data:
         # node); staging logs stay viewable via `kubectl logs` / containerd
         # files on the node.
         Exclude_Path      /var/log/containers/*log-collector*.log,/var/log/containers/*checktick-db*.log,/var/log/containers/*staging*.log
-        Parser            containerd
+        Parser            cri
         Tag               kube.*
         DB                /flb-state/tail.db
         Mem_Buf_Limit     10MB
@@ -139,15 +146,22 @@ data:
         Compress        gzip
         Retry_Limit     False
         Tls             Off
-  # Copy of the standard `docker` parser (containerd emits the same
-  # {"log":...,"stream":...,"time":...} wrapper). [PARSER] sections belong
-  # in the Parsers_File, not the main config.
+  # CRI (containerd) log-line parser. /var/log/containers/*.log lines are
+  # "<rfc3339-nanos> <stdout|stderr> <F|P> <payload>" — NOT the docker JSON
+  # wrapper {"log":...} the previous parser assumed. That mismatch is why
+  # records landed with the whole CRI line flat in `log` and Merge_Log could
+  # not unwrap the app JSON (root-caused 2026-11-08, see history above).
+  # Defined here rather than relying on Fluent Bit's built-in `cri` parser
+  # because the config mount replaces /fluent-bit/etc wholesale, taking the
+  # image's stock parsers.conf with it. [PARSER] sections belong in the
+  # Parsers_File, not the main config.
   parsers.conf: |
     [PARSER]
-        Name        containerd
-        Format      json
+        Name        cri
+        Format      regex
+        Regex       ^(?<time>[^ ]+) (?<stream>stdout|stderr) (?<logtag>[FP]) (?<log>.*)$
         Time_Key    time
-        Time_Format %Y-%m-%dT%H:%M:%S.%L
+        Time_Format %Y-%m-%dT%H:%M:%S.%L%z
         Time_Keep   On
 ---
 apiVersion: apps/v1

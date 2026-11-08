@@ -61,9 +61,9 @@
       }
     </style>
     {% block icon_link %}
-      {# Tab icon precedence: per-survey icon (survey.style.icon_url) wins over
+      {% comment %} Tab icon precedence: per-survey icon (survey.style.icon_url) wins over
          the brand icon; otherwise fall back to the platform icon served from
-         the components/icons/checktick.html component (core:platform_favicon). #}
+         the components/icons/checktick.html component (core:platform_favicon). {% endcomment %}
       {% if survey and survey.style_icon_url %}
         <link rel="icon" href="{{ survey.style_icon_url }}" />
       {% elif brand.icon_url %}
