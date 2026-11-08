@@ -6,6 +6,7 @@ app_name = "core"
 
 urlpatterns = [
     path("home", views.home, name="home"),
+    path("favicon.svg", views.platform_favicon, name="platform_favicon"),
     path("hosting", views.hosting, name="hosting"),
     path("pricing", views.pricing, name="pricing"),
     path("healthz", views.healthz, name="healthz"),

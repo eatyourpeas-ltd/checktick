@@ -97,9 +97,14 @@ Staging environment:
   `STAGING_SITE_URL` (previously hardcoded to `https://checktick.uk` in
   every non-DEBUG env — fixed 2026-11-08, shipped in 0.27.1 and verified
   live: staging sends `https://staging.checktick.uk/oidc/callback/`).
-  hCaptcha sitekeys are hostname-bound — add `staging.checktick.uk` to
-  the sitekey's hostnames in the hCaptcha console if signup captcha will
-  be exercised on staging.
+  hCaptcha needs no further console-side change for staging: the
+  sitekey's hostname list is organisational in hCaptcha, not an
+  enforcement mechanism (the siteverify `hostname` field is a
+  statistical metric). `checktick.uk`/`www.checktick.uk` and
+  `staging.checktick.uk`/`www.staging.checktick.uk` are listed for
+  hygiene; verification binds to the account `HCAPTCHA_SECRET`, and
+  `verify_captcha` also sends the `sitekey` parameter so a token issued
+  on another sitekey in the same account cannot be redeemed here.
   **Billing**: `settings.py` selects the GoCardless API by `ENVIRONMENT` —
   only `production` uses the live API; development AND staging use the
   sandbox (CTO decision 2026-11-08; the former `DEBUG`-based rule sent

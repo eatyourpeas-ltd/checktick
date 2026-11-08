@@ -2588,6 +2588,20 @@ Return the translation as JSON following the exact structure specified in the sy
         return self.status == self.Status.CLOSED or self.closed_at is not None
 
     @property
+    def style_icon_url(self) -> str:
+        """Sanitised per-survey icon URL for <link rel="icon"> favicons.
+
+        Read-time defence in depth (same policy as _sanitise_brand_overrides):
+        style values written via admin, import, or legacy data can bypass the
+        write-time validator, so schemes are re-checked before the URL reaches
+        a template attribute. Returns "" when unset or unsafe.
+        """
+        from checktick_app.core.theme_utils import is_safe_url
+
+        icon_url = (self.style or {}).get("icon_url", "")
+        return icon_url if is_safe_url(icon_url) else ""
+
+    @property
     def is_closed_early(self) -> bool:
         """Check if survey is closed before its end date."""
         return (

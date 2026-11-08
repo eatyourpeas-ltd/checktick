@@ -1,6 +1,7 @@
 # STAGING scheduled tasks — exactly ONE CronJob (docs/staging notes):
-# prune-unconfirmed-users, the anti-bot signup hygiene phase. hCaptcha gates
-# signups on staging too, so unconfirmed staging accounts still need pruning.
+# prune-unconfirmed-users, the anti-bot signup hygiene mopup. hCaptcha gates
+# signups only while HCAPTCHA_SECRET is set, and the captcha is not
+# foolproof either way, so unconfirmed staging accounts still need pruning.
 # Everything else in k8s/cronjobs.yaml is prod-only.
 #
 # Deltas vs the prod prune-unconfirmed-users:

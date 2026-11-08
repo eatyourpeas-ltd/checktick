@@ -44,6 +44,7 @@ from django_ratelimit.core import is_ratelimited
 from django_ratelimit.decorators import ratelimit
 
 from checktick_app.context_processors import branding as platform_branding
+from checktick_app.core.captcha import verify_captcha
 from checktick_app.core.decorators import email_confirmed_required
 from checktick_app.core.theme_utils import is_safe_url, sanitize_font_family
 
@@ -623,42 +624,6 @@ def _get_professional_dataset_options() -> dict[str, list[dict[str, str]]]:
 def _survey_collects_patient_data(survey: Survey) -> bool:
     grp, fields = _get_patient_group_and_fields(survey)
     return bool(grp and fields)
-
-
-def _verify_captcha(request: HttpRequest) -> bool:
-    """Server-side hCaptcha verification.
-
-    Expects POST token in 'h-captcha-response'. Uses settings.HCAPTCHA_SECRET.
-    Returns True if verification passes or if not configured (fails closed only when required upstream).
-    """
-    secret = getattr(settings, "HCAPTCHA_SECRET", None)
-    if not secret:
-        # Not configured; treat as pass. Enforcement happens in views based on survey.captcha_required.
-        return True
-    token = request.POST.get("h-captcha-response")
-    if not token:
-        return False
-    try:
-        import urllib.parse
-        import urllib.request
-
-        data = urllib.parse.urlencode(
-            {
-                "secret": secret,
-                "response": token,
-                "remoteip": request.META.get("REMOTE_ADDR", ""),
-            }
-        ).encode()
-        req = urllib.request.Request("https://hcaptcha.com/siteverify", data=data)
-        req.add_header("Content-Type", "application/x-www-form-urlencoded")
-        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310
-            import json as _json
-
-            payload = _json.loads(resp.read().decode("utf-8"))
-            return bool(payload.get("success"))
-    except Exception:
-        return False
 
 
 @login_required
@@ -6527,7 +6492,7 @@ def survey_take(request: HttpRequest, slug: str) -> HttpResponse:
         and not request.user.is_authenticated
         and survey.captcha_required
     ):
-        if not _verify_captcha(request):
+        if not verify_captcha(request):
             messages.error(request, "CAPTCHA verification failed.")
             return redirect("surveys:take", slug=slug)
 
@@ -6567,7 +6532,7 @@ def survey_take_unlisted(request: HttpRequest, slug: str, key: str) -> HttpRespo
         and not request.user.is_authenticated
         and survey.captcha_required
     ):
-        if not _verify_captcha(request):
+        if not verify_captcha(request):
             messages.error(request, "CAPTCHA verification failed.")
             return redirect("surveys:take_unlisted", slug=slug, key=key)
     return _handle_participant_submission(request, survey, token_obj=None)
@@ -6605,7 +6570,7 @@ def survey_take_token(request: HttpRequest, slug: str, token: str) -> HttpRespon
         and not request.user.is_authenticated
         and survey.captcha_required
     ):
-        if not _verify_captcha(request):
+        if not verify_captcha(request):
             messages.error(request, "CAPTCHA verification failed.")
             return redirect("surveys:take_token", slug=slug, token=token)
     return _handle_participant_submission(request, survey, token_obj=tok)

@@ -6,7 +6,6 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}{{ brand.title }}{% endblock %}</title>
-    <link rel="icon" href="{% static 'icons/checktick_brand_favicon.svg' %}" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     {% if brand.font_css_url %}<link href="{{ brand.font_css_url }}" rel="stylesheet">{% endif %}
@@ -38,9 +37,15 @@
       body, .font-body { font-family: var(--font-body) !important; }
     </style>
     {% block icon_link %}
-      {# Only render favicon link when an explicit icon URL is provided #}
-      {% if brand.icon_url %}
+      {# Tab icon precedence: per-survey icon (survey.style.icon_url) wins over
+         the brand icon; otherwise fall back to the platform icon served from
+         the components/icons/checktick.html component (core:platform_favicon). #}
+      {% if survey and survey.style_icon_url %}
+        <link rel="icon" href="{{ survey.style_icon_url }}" />
+      {% elif brand.icon_url %}
         <link rel="icon" href="{{ brand.icon_url }}" />
+      {% else %}
+        <link rel="icon" href="{% url 'core:platform_favicon' %}" type="image/svg+xml" />
       {% endif %}
     {% endblock %}
   </head>
