@@ -15,25 +15,37 @@
 #   least-privilege ingestion user in the OpenObserve UI later and swap the
 #   secret; the root user works but is broader than needed.
 # - The collector excludes its own log files to avoid feedback loops.
-# - Filesystem buffering (storage.type + storage.path) plus Retry_Limit
-#   False: if OpenObserve is briefly down, logs buffer on the node and are
-#   flushed on recovery instead of being dropped.
+# - Retry_Limit False: if OpenObserve is briefly down, chunks retry
+#   indefinitely; with the trimmed (memory-only) buffering the input
+#   pauses at Mem_Buf_Limit until the sink returns — recent container
+#   logs remain on the node's disk either way (containerd keeps them
+#   under /var/log/pods).
 # - The kubernetes filter enriches each line with namespace/pod/container
 #   names read from the kube API (read-only, least-privilege ClusterRole
 #   below) — this is what makes the logs searchable by workload.
 # - The tail DB (byte positions) lives on a hostPath so a collector restart
 #   resumes where it left off instead of re-shipping (and duplicating) logs.
 #
-# ⚠ NOT APPLIED (2026-11-05, found live): one fluent-bit per node
-# pushed the smallest node (~2 GiB, hosting the CNPG primary + operator +
-# traefik + longhorn) past its memory wall; every pod on it restart-looped
-# until the collector was deleted and the primary/operator moved off. It is
-# deliberately absent from kustomization.yaml. Before re-applying:
-#   1. resize the node pool (proper fix), or
-#   2. add a nodeSelector pinning the collector to the roomier nodes, or
-#   3. shrink the footprint (Mem_Buf_Limit 10MB, no filesystem buffering,
-#      Exclude_Path the CNPG pods' chatty triple-logs: *checktick-db*)
-# and watch `kubectl top node` for a night before trusting it.
+# ⚠ APPLIED 2026-11-08 (trimmed profile) → **ROLLED BACK the same
+# morning**: the go/no-go passed (every node ≥ ~400 Mi free) but f985n
+# had quietly gained ~250 Mi overnight — BOTH RWX volume engines (media +
+# SNOMED) + their share-managers drifted onto it — and was already
+# liveness-killing its web pod BEFORE the collector existed (08:38,
+# pre-apply); with the collector (+86 Mi → 89%) it killed the pod again
+# → the documented rollback fired. The collector itself WORKED:
+# 526,717 records / ~324 MB shipped to OpenObserve in ~20 min; the ~2-day
+# container-log backlog was still draining (oldest-first) when the DS was
+# deleted — hence the stream ends at 11-05 21:35 with nothing "live" yet.
+# RE-APPLIED 09:06 UTC 2026-11-08 after the engine move — LIVE and
+# shipping (steady state: large 53% / f985n 82% / hwp2f 78%). The FULL
+# footprint (50MB buffer + filesystem buffering) tipped a ~2 GiB node
+# into stalls on 2026-11-05 — do NOT restore it without re-running the
+# headroom gate. Still deliberately absent from kustomization.yaml
+# (self-hoster safety).
+# History: NOT APPLIED 2026-11-05 (storm) → resize 2026-11-07 → applied
+# trimmed 2026-11-08 08:41 → rolled back 09:02 (f985n engine drift,
+# second web-pod liveness kill) → engines moved to the large node 09:00 →
+# re-applied 09:06 — LIVE.
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -80,13 +92,16 @@ data:
     [INPUT]
         Name              tail
         Path              /var/log/containers/*.log
-        Exclude_Path      /var/log/containers/*log-collector*.log
+        # Trimmed profile (2026-11-08): self-exclusion (no feedback loop)
+        # PLUS the CNPG pods' chatty triple-logs (postgres emits every line
+        # 3x) — excluded for footprint; the compliance record is AuditLog in
+        # PostgreSQL anyway, and db logs stay on the node via containerd.
+        Exclude_Path      /var/log/containers/*log-collector*.log,/var/log/containers/*checktick-db*.log
         Parser            containerd
         Tag               kube.*
         DB                /flb-state/tail.db
-        Mem_Buf_Limit     50MB
+        Mem_Buf_Limit     10MB
         Skip_Long_Lines   On
-        storage.type      filesystem
 
     [FILTER]
         Name              kubernetes
