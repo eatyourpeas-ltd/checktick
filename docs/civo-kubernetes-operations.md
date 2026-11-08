@@ -157,12 +157,19 @@ Staging environment:
    (k8s/config.env → checktick-config-local), which settings.py appends on top
    of the in-cluster ALLOWED_HOSTS. The web Deployment's env entry carries only
    the in-cluster hosts (pod IP + service names), so `kubectl apply -f
-   k8s/web.yaml` / `-k k8s/` can never 400 the public site. *(Shipped in 0.25.0;
-   until that release is deployed, a live Deployment env patch —
-   `k8s/scratch-allowhosts-patch.yaml`, git-ignored — still carries the public
-   hosts and any manifest re-apply must be followed by re-applying the patch.)*
-   Post-release retirement: apply the overlay, re-apply web.yaml, verify
-   checktick.uk + staging respond, then delete the scratch patch.
+   k8s/web.yaml` / `-k k8s/` can never 400 the public site. (Shipped in 0.25.0.)
+   **Interim live env patch RETIRED 2026-11-08** — the documented sequence
+   executed: overlay verified → `web.yaml` re-applied → both hostnames
+   verified green through the ingress → `k8s/scratch-allowhosts-patch.yaml`
+   deleted. Two lessons from the retirement: (a) re-applying `web.yaml`
+   against a rolled-forward deployment needs the LIVE tag sed-substituted —
+   the manifest pin (`0.25.3`) vs the last-applied annotation (`0.24.2`)
+   would have three-way-merged the image BACKWARDS (live was `0.27.0`);
+   (b) the "apply wipes scratch patches" rule is precise only for patches
+   that modify apply-managed fields (the env VALUE — reverted); affinity
+   patches added via `kubectl patch` SURVIVE applies (verified live — the
+   web large-pool preference came through the re-apply untouched). Re-applying
+   the affinity patches after a manifest re-apply remains the safe habit.
 
 ## Node Maintenance (kernel / node-image upgrades)
 
