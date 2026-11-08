@@ -9,8 +9,9 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.template.loader import render_to_string
 from django.utils import timezone, translation
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
@@ -217,6 +218,22 @@ def _get_public_pricing_context() -> dict:
         "active_public_promotions": promotion_summaries,
         "homepage_promotion": homepage_promotion,
     }
+
+
+def platform_favicon(request):
+    """Serve the platform icon as a standalone SVG favicon.
+
+    Renders the same components/icons/checktick.html component used inline
+    across the UI, so the browser tab icon can never drift from the platform
+    icon. Respondent survey pages fall back to this when the survey has no
+    icon (survey.style.icon_url) and no brand icon (brand.icon_url) is
+    configured.
+    """
+    svg = render_to_string("components/icons/checktick.html")
+    resp = HttpResponse(svg, content_type="image/svg+xml")
+    # The icon can change with component/branding updates; cache for an hour.
+    resp["Cache-Control"] = "public, max-age=3600"
+    return resp
 
 
 def home(request):
