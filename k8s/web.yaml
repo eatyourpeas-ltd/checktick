@@ -3,6 +3,14 @@
 # Zero-downtime design notes:
 # - RollingUpdate maxUnavailable: 0 / maxSurge: 1 — a new pod only receives
 #   traffic once /healthz passes; old pods keep serving during the overlap.
+# - 3 replicas (raised from 2 after the 2026-11-08 outage): a roll converged
+#   BOTH replicas onto one node — topology spread constrains scheduling, not
+#   the end state — and node turbulence there removed all serving capacity.
+#   The max-weight anti-affinity PREFERENCE below biases new pods onto the
+#   lighter node; it cannot re-balance AFTER a roll, so verify spread
+#   post-deploy (kubectl get pods -o wide). Hard anti-affinity was rejected:
+#   with maxSurge 1 on 2 nodes a surge pod would have nowhere to schedule
+#   and rollouts would stall.
 # - readinessProbe = /healthz (deep: DB + Vault sealed state + SNOMED).
 # - livenessProbe = /api/health (trivial). NEVER point liveness at /healthz:
 #   a sealed Vault would cause restart loops, and restarts cannot fix it.
@@ -50,7 +58,11 @@ metadata:
   labels:
     app: checktick-web
 spec:
-  replicas: 2 # POC; raise to 3 for production (survives a node failure + a rollout simultaneously)
+  # 3 (not 2): a roll can legally converge 2 replicas onto one node (seen
+  # live 2026-11-08), and 3 × spread keeps serving through a node loss plus
+  # a simultaneous rollout. Memory-verified 2026-11-08: busiest node ~63%
+  # actual / 74% requests with 2 web pods, ~2.0Gi actual free.
+  replicas: 3
   minReadySeconds: 10
   strategy:
     type: RollingUpdate
@@ -72,6 +84,19 @@ spec:
           labelSelector:
             matchLabels:
               app: checktick-web
+      affinity:
+        # Max-weight PREFERENCE (see design note above for why not hard):
+        # pushes a scheduling pod towards the node with fewer web pods, so a
+        # roll's surge/replacement pods stop double-parking on the busy node
+        # (the 2026-11-08 convergence). Best-effort — check spread post-deploy.
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: checktick-web
+                topologyKey: kubernetes.io/hostname
       terminationGracePeriodSeconds: 45
       initContainers:
         # Longhorn RWX (NFS) does not honour fsGroup, so the media share starts
@@ -79,7 +104,7 @@ spec:
         # using the image's own checktick user (uid is assigned by useradd -r,
         # so resolve it rather than hardcoding).
         - name: media-chown
-          image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.29.0
           command: ["sh", "-c", "chown -R \"$(id -u checktick):$(id -g checktick)\" /app/media"]
           securityContext:
             runAsUser: 0
@@ -90,7 +115,7 @@ spec:
         # NFS. Tolerates absence: healthz reports snomed degraded, not fatal,
         # until the first update-snomed-db run builds it.
         - name: snomed-copy
-          image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.29.0
           command:
             - sh
             - -c
@@ -121,7 +146,10 @@ spec:
           # — never `latest`. Bump this pin (and the initContainer pins above)
           # in the release PR so `kubectl apply -k k8s/` cannot regress the live
           # image; CI deploys roll it forward with `kubectl set image`.
-          image: ghcr.io/eatyourpeas-ltd/checktick:0.27.1
+          # (Re-bumped to 0.29.0 in the 2026-11-08 resilience PR — the pin had
+          # drifted to 0.27.1 while 0.29.0 was live, so an apply would have
+          # regressed the image.)
+          image: ghcr.io/eatyourpeas-ltd/checktick:0.29.0
           imagePullPolicy: Always
           ports:
             - name: http

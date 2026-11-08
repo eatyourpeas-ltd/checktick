@@ -167,29 +167,61 @@ jobs:
           # image restored the same hour. A skip that has never fired is
           # untested — verify the "Skipping" log lines on the first deploy
           # after adding one.
-          for cj in $(kubectl -n "$NS" get cronjobs -o name); do
-            case "$cj" in
-              */vault-snapshot)
-                echo "Skipping $cj (out-of-band, non-app images)"
-                continue
-                ;;
-              */prune-unconfirmed-users-staging)
-                echo "Skipping $cj (rolled by the deploy-staging job, after the staging DB is migrated)"
-                continue
-                ;;
-            esac
-            args=""
-            for c in $(kubectl -n "$NS" get "$cj" \
-              -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[*].name}'); do
-              args="$args $c=${IMAGE}:${TAG}"
+          # 2026-11-08: the Civo API server dropped connections mid-deploy
+          # (http2 client connection lost / dial tcp i/o timeout). This step
+          # failing fired the rollback step — rolling back a HEALTHY web
+          # deployment because CronJob tag housekeeping hit a transient API
+          # error. Every kubectl call below now retries 3× / 15s; persistent
+          # failure degrades to a loud WARNING and continues. Worst case is
+          # CronJobs keeping their previous tag until the next deploy (drift,
+          # not downtime) — the web rollback path stays reserved for genuine
+          # rollout/smoke failures.
+          kubectl_retry() {
+            local attempt
+            for attempt in 1 2 3; do
+              if kubectl "$@"; then
+                return 0
+              fi
+              echo "  kubectl attempt ${attempt}/3 failed — retrying in 15s"
+              sleep 15
             done
-            echo "Setting $cj -> ${IMAGE}:${TAG}"
-            # shellcheck disable=SC2086 — args is deliberately word-split
-            kubectl -n "$NS" set image "$cj" $args
-          done
+            return 1
+          }
+          CRONJOBS="$(kubectl_retry -n "$NS" get cronjobs -o name)" || true
+          if [ -z "${CRONJOBS:-}" ]; then
+            echo "!! WARNING: could not list CronJobs after retries — skipping the CronJob roll (web deploy unaffected; the next deploy re-rolls them)"
+          else
+            for cj in $CRONJOBS; do
+              case "$cj" in
+                */vault-snapshot)
+                  echo "Skipping $cj (out-of-band, non-app images)"
+                  continue
+                  ;;
+                */prune-unconfirmed-users-staging)
+                  echo "Skipping $cj (rolled by the deploy-staging job, after the staging DB is migrated)"
+                  continue
+                  ;;
+              esac
+              CNAMES="$(kubectl_retry -n "$NS" get "$cj" \
+                -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[*].name}')" || true
+              if [ -z "${CNAMES:-}" ]; then
+                echo "!! WARNING: could not read containers of $cj — skipping it (web deploy unaffected)"
+                continue
+              fi
+              args=""
+              for c in $CNAMES; do
+                args="$args $c=${IMAGE}:${TAG}"
+              done
+              echo "Setting $cj -> ${IMAGE}:${TAG}"
+              # shellcheck disable=SC2086 — args is deliberately word-split
+              kubectl_retry -n "$NS" set image "$cj" $args \
+                || echo "!! WARNING: $cj not rolled to ${TAG} after retries — leaving its current tag (web deploy unaffected; the next deploy re-rolls it)"
+            done
+          fi
           echo "CronJob images now:"
           kubectl -n "$NS" get cronjobs \
-            -o custom-columns='NAME:.metadata.name,IMAGES:.spec.jobTemplate.spec.template.spec.containers[*].image'
+            -o custom-columns='NAME:.metadata.name,IMAGES:.spec.jobTemplate.spec.template.spec.containers[*].image' \
+            || echo "(listing skipped — API error; verify CronJob tags manually)"
 
       - name: Diagnose failure
         if: failure()
