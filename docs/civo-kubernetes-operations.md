@@ -326,7 +326,9 @@ DB + Vault are on `civo-volume`, not Longhorn**). **CLI RULE: verify with
 `node-pool ls` before AND after every `civo` pool operation; prefer the
 Civo dashboard for pool deletions; three CLI ID bugs are now documented
 (create panic on <6-char names, scale rejecting <6-char IDs, delete
-hitting the wrong pool).** Also this window: cilium-operator lease
+hitting the wrong pool).** CLI upgraded to v1.6.0 on 09/11 — the
+wrong-pool delete did NOT reproduce there (v1.5.5 remains the
+suspected version; its empty-parens response is the tell). Also this window: cilium-operator lease
 patched 15s→90s (item 12); Longhorn volumes set to 2 replicas (2-node
 reality); web re-spread one-per-node after a rollout left both replicas
 collapsed on one node (topology spread is evaluated at scheduling time,
@@ -692,6 +694,18 @@ they left **open**, carried here so nothing is lost with them:
      every 5–15 min); the DNS blips and their error-email storms
      stopped. The Civo ticket should cover BOTH the lease root cause
      AND the CLI's wrong-pool delete (see Node Pool Resize).
+     **RESOLVED 09/11 (Civo support): root cause was an UNDERSIZED
+     CONTROL PLANE.** Civo updated the control-plane spec (~03:30 UTC
+     09/11 — visible as a single bounce of every controller) and the
+     lease thrash stopped: 15+ h of ZERO restarts across the patched
+     cilium operators AND the unpatched cnpg-controller-manager /
+     civo-ccm (previously every 10–30 min), zero DNS blips since, first
+     night's scheduled jobs all green. The 90s lease patch is now
+     redundant but harmless — keep it as belt-and-braces (Civo
+     reconciliation may revert it; either way is fine). CLI upgraded to
+     v1.6.0: the wrong-pool delete was v1.5.5 — its response printed an
+     EMPTY pool name ("The node pool () has been deleted"), unlike
+     1.6.0's correct output; Civo could not reproduce on 1.6.0.
 
 ## Related
 
