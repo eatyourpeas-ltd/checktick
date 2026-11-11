@@ -100,6 +100,44 @@ def _format_promotion_value(value: Decimal) -> str:
     return f"{value:.2f}"
 
 
+def _to_pounds(pence: int) -> str:
+    pounds = pence / 100
+    return f"£{int(pounds)}" if pounds == int(pounds) else f"£{pounds:.2f}"
+
+
+def _apply_promotion_to_amount(promotion, amount_pence: int) -> int | None:
+    """Apply a price-bearing promotion effect to an amount in pence.
+
+    Mirrors the checkout maths in promotion_resolver._apply_effect so the
+    displayed discounted price matches what will actually be charged.
+    Returns None for effects without a price (for example tier overrides).
+    """
+    if promotion.effect_type == "percent_discount":
+        ratio = max(
+            Decimal("0"), min(Decimal("100"), promotion.effect_value)
+        ) / Decimal("100")
+        discount = int(Decimal(amount_pence) * ratio)
+        return max(0, amount_pence - discount)
+    if promotion.effect_type == "fixed_discount":
+        discount = int((promotion.effect_value * Decimal("100")).quantize(Decimal("1")))
+        return max(0, amount_pence - max(0, discount))
+    if promotion.effect_type == "set_price":
+        return max(
+            0, int((promotion.effect_value * Decimal("100")).quantize(Decimal("1")))
+        )
+    return None
+
+
+def _months_remaining(ends_at, now) -> int | None:
+    """Whole calendar months between now and ends_at (None if open-ended)."""
+    if not ends_at:
+        return None
+    months = (ends_at.year - now.year) * 12 + (ends_at.month - now.month)
+    if ends_at.day < now.day:
+        months -= 1
+    return max(0, months)
+
+
 def _promotion_short_text(promotion) -> str:
     effect_type = promotion.effect_type
     value_text = _format_promotion_value(promotion.effect_value)
@@ -134,10 +172,6 @@ def _get_public_pricing_context() -> dict:
 
     effective_tiers = PricingOverride.get_effective_tiers()
     effective_tiers_annual = get_effective_tiers(billing_cycle="annual")
-
-    def _to_pounds(pence: int) -> str:
-        pounds = pence / 100
-        return f"£{int(pounds)}" if pounds == int(pounds) else f"£{pounds:.2f}"
 
     tier_display = {
         key: _to_pounds(cfg["amount"])
@@ -186,14 +220,47 @@ def _get_public_pricing_context() -> dict:
     seen_promotions = set()
     for tier in PUBLIC_PROMOTION_TIERS:
         promotion = tier_promotion_lookup.get(tier) or platform_promotion
-        if promotion is None:
+        if promotion is None or tier == "free":
+            # Free is free: a discount carries no price change there, so the
+            # public pricing/signup pages never display a promotion against it.
             promotions_by_tier[tier] = None
             continue
+
+        base_monthly = effective_tiers.get(tier, {}).get("amount", 0)
+        base_annual = effective_tiers_annual.get(tier, {}).get("amount", 0)
+        discounted_monthly = _apply_promotion_to_amount(promotion, base_monthly)
+        discounted_annual = _apply_promotion_to_amount(promotion, base_annual)
+        pricing = None
+        if discounted_monthly is not None:
+            months_left = _months_remaining(promotion.ends_at, now)
+            if months_left is None:
+                months_text = ""
+            elif months_left == 0:
+                months_text = "ends soon"
+            else:
+                months_text = f"{months_left} mth{'s' if months_left != 1 else ''} left"
+            pricing = {
+                "monthly": {
+                    "original": _to_pounds(base_monthly),
+                    "discounted": _to_pounds(discounted_monthly),
+                },
+                "annual": {
+                    "original": _to_pounds(base_annual),
+                    "discounted": _to_pounds(discounted_annual),
+                },
+                "months_left": months_left,
+            }
+            short_text = _promotion_short_text(promotion)
+            promo_note = f"{short_text} · {months_text}" if months_text else short_text
+        else:
+            promo_note = _promotion_short_text(promotion)
 
         info = {
             "id": promotion.id,
             "name": promotion.name,
             "short_text": _promotion_short_text(promotion),
+            "promo_note": promo_note,
+            "pricing": pricing,
             "ends_at": promotion.ends_at,
             "scope_type": promotion.scope_type,
         }
