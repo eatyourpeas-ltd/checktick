@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 import pytest
 
 from checktick_app.core.models import Promotion, UserOIDC
@@ -524,3 +527,50 @@ def test_profile_shows_different_encryption_badges_for_password_and_oidc_users(c
     html = resp.content.decode("utf-8")
     assert "Encrypted with User key" in html
     assert "Automatically encrypted" in html
+
+
+@pytest.mark.django_db
+class TestProfilePromotionSignpost:
+    """Profile should signpost any promotion currently applied to the account."""
+
+    def test_profile_shows_applied_promotion(self, client):
+        from decimal import Decimal
+
+        user = get_user_model().objects.create_user(
+            username="promo-profile@example.com",
+            email="promo-profile@example.com",
+            password=TEST_PASSWORD,
+        )
+        user.profile.account_tier = "pro"
+        user.profile.save()
+        Promotion.objects.create(
+            name="Profile Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=Decimal("50.00"),
+            is_active=True,
+            ends_at=timezone.now() + timedelta(days=30),
+        )
+
+        client.force_login(user)
+        resp = client.get(reverse("core:profile"))
+
+        assert resp.status_code == 200
+        html = resp.content.decode("utf-8")
+        assert "Discount Applied" in html
+        assert "50% off" in html
+        assert "Profile Promo" in resp.context["active_promotion"]["name"]
+
+    def test_profile_without_promotion_has_no_signpost(self, client):
+        user = get_user_model().objects.create_user(
+            username="plain-profile@example.com",
+            email="plain-profile@example.com",
+            password=TEST_PASSWORD,
+        )
+
+        client.force_login(user)
+        resp = client.get(reverse("core:profile"))
+
+        assert resp.status_code == 200
+        assert "Discount Applied" not in resp.content.decode("utf-8")
+        assert resp.context["active_promotion"] is None

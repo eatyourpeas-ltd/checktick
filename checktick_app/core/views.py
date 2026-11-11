@@ -751,6 +751,19 @@ def profile(request):
         "subscription_current_period_end": profile.subscription_current_period_end,
     }
 
+    # Signpost any promotion currently applied to this account's pricing
+    # (same resolution used at checkout and by the lifecycle cron).
+    from .services.promotion_resolver import resolve_effective_pricing_for_user
+
+    applied_promotion = resolve_effective_pricing_for_user(user).applied_promotion
+    active_promotion = None
+    if applied_promotion is not None:
+        active_promotion = {
+            "name": applied_promotion.name,
+            "short_text": _promotion_short_text(applied_promotion),
+            "ends_at": applied_promotion.ends_at,
+        }
+
     # 2FA status for password users
     from .views_2fa import check_2fa_required, is_password_user
 
@@ -771,6 +784,7 @@ def profile(request):
             "light_theme_choices": light_theme_choices,
             "dark_theme_choices": dark_theme_choices,
             "subscription_info": subscription_info,
+            "active_promotion": active_promotion,
             "is_password_user": is_password_user_flag,
             "has_2fa": has_2fa,
         },
