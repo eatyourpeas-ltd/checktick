@@ -82,8 +82,13 @@ kubectl create configmap checktick-config-local -n checktick \
   --from-env-file=k8s/config.env --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-Rules: no quoting (kubectl stores values raw), and DELETE lines you don't
-want set — a blank `KEY=` overrides the default with an empty string.
+Rules: no quoting (kubectl stores values raw), no inline trailing comments
+after a value (`--from-env-file` strips full-line `#` comments only — a
+trailing `# note` becomes part of the value; found live 2026-11-10 when
+`HC_PING_IMPORT_SNOMED_DB=<url> # (weekly Tue 14:00 UTC)` made the import
+CronJob's success ping fail with `curl: (3) URL rejected` after the seed
+itself had succeeded), and DELETE lines you don't want set — a blank `KEY=`
+overrides the default with an empty string.
 Precedence is the `envFrom` order in every workload: `checktick-config`
 (structural defaults, committed) → `checktick-config-local` (this overlay)
 → `checktick-secrets`. The overlay ConfigMap must exist before web pods
