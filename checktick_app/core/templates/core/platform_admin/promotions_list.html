@@ -7,7 +7,11 @@
 <div class="flex items-center justify-between flex-wrap gap-3 mb-6">
   <div>
     <h2 class="text-2xl font-bold">{% trans "Promotions" %}</h2>
+    {% if mode == 'tier' %}
+    <p class="text-base-content/70">{% blocktrans with tier=scope_label %}Promotions affecting the {{ tier }} tier, including platform-wide rules.{% endblocktrans %}</p>
+    {% else %}
     <p class="text-base-content/70">{% trans "Manage platform, tier, and account-level promotion rules." %}</p>
+    {% endif %}
   </div>
   <a href="{% url 'core:platform_admin_promotion_create' %}?mode={{ mode }}{% if mode == 'tier' %}&scope={{ scope }}{% endif %}" class="btn btn-primary">+ {% trans "Create Promotion" %}</a>
 </div>
@@ -119,14 +123,7 @@
                     {% if promotion.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}
                   </button>
                 </form>
-                <form method="post" action="{% url 'core:platform_admin_promotion_revoke' promotion_id=promotion.id %}">
-                  {% csrf_token %}
-                  <input type="hidden" name="mode" value="{{ mode }}">
-                  {% if mode == 'tier' %}
-                  <input type="hidden" name="scope" value="{{ scope }}">
-                  {% endif %}
-                  <button type="submit" class="btn btn-xs btn-error btn-outline">{% trans "Revoke" %}</button>
-                </form>
+                <button type="button" class="btn btn-xs btn-error btn-outline end-promotion-btn" data-action="{% url 'core:platform_admin_promotion_revoke' promotion_id=promotion.id %}">{% trans "End Promotion" %}</button>
               </div>
             </td>
           </tr>
@@ -138,4 +135,54 @@
     </div>
   </div>
 </div>
+
+<dialog id="end-promotion-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold">{% trans "End promotion early" %}</h3>
+    <p class="py-2 text-sm">
+      {% trans "The promotion will be deactivated immediately and its end date set to now. Affected accounts return to standard pricing." %}
+    </p>
+    <form method="post" id="end-promotion-form">
+      {% csrf_token %}
+      <input type="hidden" name="mode" value="{{ mode }}">
+      {% if mode == 'tier' %}
+      <input type="hidden" name="scope" value="{{ scope }}">
+      {% endif %}
+      <div class="form-control mt-2">
+        <label class="label" for="id_end_reason"><span class="label-text">{% trans "Reason" %} *</span></label>
+        <textarea id="id_end_reason" name="end_reason" class="textarea textarea-bordered w-full" rows="2" required></textarea>
+        <div class="label w-full"><span class="label-text-alt break-words whitespace-normal">{% trans "Recorded in the audit log for finance and support reference." %}</span></div>
+      </div>
+      <div class="modal-action">
+        <button type="button" id="end-promotion-cancel" class="btn">{% trans "Cancel" %}</button>
+        <button type="submit" class="btn btn-error">{% trans "End Promotion" %}</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button aria-label="{% trans "Close" %}">close</button>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ request.csp_nonce }}">
+  (function () {
+    var modal = document.getElementById('end-promotion-modal');
+    var form = document.getElementById('end-promotion-form');
+    var cancel = document.getElementById('end-promotion-cancel');
+    if (!modal || !form) return;
+    document.querySelectorAll('.end-promotion-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        form.action = btn.dataset.action;
+        modal.showModal();
+      });
+    });
+    if (cancel) {
+      cancel.addEventListener('click', function () {
+        modal.close();
+      });
+    }
+  })();
+</script>
 {% endblock %}
