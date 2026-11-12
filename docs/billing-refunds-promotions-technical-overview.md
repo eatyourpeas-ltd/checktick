@@ -60,9 +60,16 @@ Effective promotion resolution is deterministic:
 
 Within a scope, priority and recency determine the winner.
 
+### Scope vs effect tier
+
+Two similarly named fields are easy to confuse:
+
+1. **Scope / target** (`scope_type` plus `target_tier`, `target_user`, `target_team`, or `target_organization`) decides **who the promotion applies to**. `platform` scope means all tiers; `tier` scope targets one tier; `account` scope targets a single user, team, or organisation.
+2. **Effect tier** (`effect_tier`) is only used with the `tier_override` effect: it names the single tier whose pricing/features the account is switched to. Model validation requires it for `tier_override` and rejects it for every other effect type, so discount and set-price effects must leave it empty. There is deliberately no "all tiers" option here — targeting all tiers is expressed via `platform` scope.
+
 ## Public pricing/signup integration
 
-Public pages surface resolved active offers for eligible tiers while preserving baseline pricing as canonical fallback.
+Public pages surface resolved active offers for eligible tiers while preserving baseline pricing as canonical fallback. Concretely, `_get_public_pricing_context` collects active `platform`- and `tier`-scoped promotions (account-scoped promotions never surface publicly), and templates render them as short-text notes (for example "50% off · ends 12 May") in an "Active offers" banner and under each eligible tier card. The headline prices shown remain the base/override amounts; the discounted amount is only computed at checkout.
 
 ## Billing Integration
 

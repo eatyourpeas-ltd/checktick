@@ -56,11 +56,6 @@
                     <p class="text-sm text-base-content">
                         {% trans "Up to 3 surveys" %}
                     </p>
-                    {% if promotions_by_tier.free %}
-                    <p class="text-xs text-warning mt-1">
-                        {{ promotions_by_tier.free.short_text }}
-                    </p>
-                    {% endif %}
                 </div>
 
                 <div class="divider"></div>
@@ -318,6 +313,26 @@
                     {% trans "Individual Pro" %}
                 </h2>
                 <div class="mb-4">
+                    {% if promotions_by_tier.pro.pricing %}
+                    <span
+                        class="text-xl line-through text-base-content/50"
+                        id="pro-price-original"
+                        >{{ promotions_by_tier.pro.pricing.monthly.original }}</span
+                    >
+                    <span class="text-3xl font-bold text-warning" id="pro-price-display"
+                        >{{ promotions_by_tier.pro.pricing.monthly.discounted }}</span
+                    >
+                    <span class="text-base-content" id="pro-period">/{% trans "month" %}</span>
+                    <p class="text-sm text-base-content">
+                        {% trans "Unlimited surveys" %}
+                    </p>
+                    <p class="text-xs text-base-content" id="pro-billing-note">
+                        {% trans "inc. VAT" %}
+                    </p>
+                    <p class="text-xs text-warning mt-1">
+                        {{ promotions_by_tier.pro.promo_note }}
+                    </p>
+                    {% else %}
                     <span class="text-3xl font-bold" id="pro-price-display"
                         >{{ tier_display.pro }}</span
                     >
@@ -330,9 +345,10 @@
                     </p>
                     {% if promotions_by_tier.pro %}
                     <p class="text-xs text-warning mt-1">
-                        {{ promotions_by_tier.pro.short_text }}
+                        {{ promotions_by_tier.pro.promo_note }}
                         {% if promotions_by_tier.pro.ends_at %} · {% trans "ends" %} {{ promotions_by_tier.pro.ends_at|date:'d M' }}{% endif %}
                     </p>
+                    {% endif %}
                     {% endif %}
                 </div>
 
@@ -592,6 +608,9 @@
                             data-price="{{ tier_pounds.team_small }}"
                             data-members="{{ subscription_tiers.team_small.max_members }}"
                             data-price-id="{{ price_ids.team_small }}"
+                            data-promo-monthly="{{ promotions_by_tier.team_small.pricing.monthly.discounted }}"
+                            data-promo-annual="{{ promotions_by_tier.team_small.pricing.annual.discounted }}"
+                            data-promo-note="{{ promotions_by_tier.team_small.promo_note }}"
                         >
                             {% trans "Small" %} - {{ subscription_tiers.team_small.max_members }} {% trans "members" %}
                         </option>
@@ -600,6 +619,9 @@
                             data-price="{{ tier_pounds.team_medium }}"
                             data-members="{{ subscription_tiers.team_medium.max_members }}"
                             data-price-id="{{ price_ids.team_medium }}"
+                            data-promo-monthly="{{ promotions_by_tier.team_medium.pricing.monthly.discounted }}"
+                            data-promo-annual="{{ promotions_by_tier.team_medium.pricing.annual.discounted }}"
+                            data-promo-note="{{ promotions_by_tier.team_medium.promo_note }}"
                         >
                             {% trans "Medium" %} - {{ subscription_tiers.team_medium.max_members }} {% trans "members" %}
                         </option>
@@ -608,6 +630,9 @@
                             data-price="{{ tier_pounds.team_large }}"
                             data-members="{{ subscription_tiers.team_large.max_members }}"
                             data-price-id="{{ price_ids.team_large }}"
+                            data-promo-monthly="{{ promotions_by_tier.team_large.pricing.monthly.discounted }}"
+                            data-promo-annual="{{ promotions_by_tier.team_large.pricing.annual.discounted }}"
+                            data-promo-note="{{ promotions_by_tier.team_large.promo_note }}"
                         >
                             {% trans "Large" %} - {{ subscription_tiers.team_large.max_members }} {% trans "members" %}
                         </option>
@@ -615,9 +640,22 @@
                 </div>
 
                 <div class="mb-4">
+                    {% if promotions_by_tier.team_small.pricing %}
+                    <span
+                        class="text-xl line-through text-base-content/50"
+                        id="team-price-strike"
+                        >{{ promotions_by_tier.team_small.pricing.monthly.original }}</span
+                    >
+                    <span
+                        class="text-3xl font-bold text-warning"
+                        id="team-price-display"
+                        >{{ promotions_by_tier.team_small.pricing.monthly.discounted }}</span
+                    >
+                    {% else %}
                     <span class="text-3xl font-bold" id="team-price-display"
                         >{{ tier_display.team_small }}</span
                     >
+                    {% endif %}
                     <span class="text-base-content" id="team-period">/{% trans "month" %}</span>
                     <p
                         class="text-sm text-base-content"
@@ -628,12 +666,10 @@
                     <p class="text-xs text-base-content">
                         {% trans "inc. VAT" %}
                     </p>
-                    {% if promotions_by_tier.team_small or promotions_by_tier.team_medium or promotions_by_tier.team_large %}
-                    <p class="text-xs text-warning mt-1">
-                        {% if promotions_by_tier.team_small %}{% trans "Small"%}: {{ promotions_by_tier.team_small.short_text }}{% endif %}
-                        {% if promotions_by_tier.team_medium %} · {%trans "Medium" %}: {{ promotions_by_tier.team_medium.short_text }}{% endif %}
-                        {% if promotions_by_tier.team_large %} · {% trans "Large" %}: {{ promotions_by_tier.team_large.short_text }}{% endif %}
-                    </p>
+                    {% if promotions_by_tier.team_small %}
+                    <p class="text-xs text-warning mt-1" id="team-promo-note"
+                        >{{ promotions_by_tier.team_small.promo_note }}</p
+                    >
                     {% endif %}
                 </div>
 
@@ -1420,15 +1456,13 @@
             teamSelector.addEventListener("change", function () {
                 const selected = this.options[this.selectedIndex];
                 const tier = selected.value;
-                const price = selected.dataset.price;
                 const members = selected.dataset.members;
 
-                // Update display
-                if (teamPriceDisplay)
-                    teamPriceDisplay.textContent = "£" + price;
+                // Update display (promotion-aware)
                 if (teamMembersDisplay)
                     teamMembersDisplay.textContent =
                         "Up to " + members + " team members";
+                updateTeamPromo(billingIsAnnual);
 
                 // Update hidden tier input for form submission
                 if (teamTierInput) teamTierInput.value = tier;
@@ -1459,13 +1493,60 @@
             team_large: "{{ tier_display_annual.team_large }}",
         };
 
+        // Promotion-discounted prices per tier (empty string when no promotion
+        // applies). The strike-through element shows the original price.
+        const promoMonthly = {
+            pro: "{{ promotions_by_tier.pro.pricing.monthly.discounted }}",
+            team_small: "{{ promotions_by_tier.team_small.pricing.monthly.discounted }}",
+            team_medium: "{{ promotions_by_tier.team_medium.pricing.monthly.discounted }}",
+            team_large: "{{ promotions_by_tier.team_large.pricing.monthly.discounted }}",
+        };
+        const promoAnnual = {
+            pro: "{{ promotions_by_tier.pro.pricing.annual.discounted }}",
+            team_small: "{{ promotions_by_tier.team_small.pricing.annual.discounted }}",
+            team_medium: "{{ promotions_by_tier.team_medium.pricing.annual.discounted }}",
+            team_large: "{{ promotions_by_tier.team_large.pricing.annual.discounted }}",
+        };
+        let billingIsAnnual = false;
+
+        function updateTeamPromo(isAnnual) {
+            if (!teamSelector) return;
+            const selected = teamSelector.options[teamSelector.selectedIndex];
+            if (!selected) return;
+            const promo =
+                (isAnnual ? selected.dataset.promoAnnual : selected.dataset.promoMonthly) ||
+                "";
+            const note = selected.dataset.promoNote || "";
+            const base = isAnnual ? annualPrices[selected.value] : monthlyPrices[selected.value];
+            const strike = document.getElementById("team-price-strike");
+            const noteEl = document.getElementById("team-promo-note");
+            if (strike) {
+                strike.textContent = base;
+                strike.classList.toggle("hidden", !promo);
+            }
+            if (teamPriceDisplay) {
+                teamPriceDisplay.textContent = promo || base;
+                teamPriceDisplay.classList.toggle("text-warning", !!promo);
+            }
+            if (noteEl) {
+                noteEl.textContent = note;
+                noteEl.classList.toggle("hidden", !note);
+            }
+        }
+
         function setBillingCycle(isAnnual) {
             const cycle = isAnnual ? "annual" : "monthly";
             const prices = isAnnual ? annualPrices : monthlyPrices;
+            const promoPrices = isAnnual ? promoAnnual : promoMonthly;
             const period = isAnnual ? "{% trans 'year' %}" : "{% trans 'month' %}";
+            billingIsAnnual = isAnnual;
 
-            // Update Pro price display
-            if (proPriceDisplay) proPriceDisplay.textContent = prices.pro;
+            // Update Pro price display: main element shows the promotional
+            // price when one applies, with the base price struck through.
+            const proStrike = document.getElementById("pro-price-original");
+            if (proPriceDisplay)
+                proPriceDisplay.textContent = promoPrices.pro || prices.pro;
+            if (proStrike) proStrike.textContent = prices.pro;
             if (proPeriod) proPeriod.textContent = "/" + period;
             if (proBillingNote) {
                 proBillingNote.textContent = isAnnual
@@ -1478,12 +1559,8 @@
             if (teamBillingInput) teamBillingInput.value = cycle;
 
             // Update team price display if a team tier is selected
-            if (teamSelector && teamPriceDisplay) {
-                const selected = teamSelector.options[teamSelector.selectedIndex];
-                if (selected) {
-                    const tier = selected.value;
-                    teamPriceDisplay.textContent = prices[tier];
-                }
+            if (teamSelector) {
+                updateTeamPromo(isAnnual);
             }
             if (teamPeriod) teamPeriod.textContent = "/" + period;
 
@@ -1512,6 +1589,9 @@
                 setBillingCycle(true);
             });
         }
+
+        // Sync the initial promotion display for the default team size
+        updateTeamPromo(billingIsAnnual);
 
         // Auto-open checkout for users redirected from signup with a pending tier
         const container = document.querySelector("[data-auto-open-checkout]");

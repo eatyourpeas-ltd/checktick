@@ -1565,6 +1565,253 @@ class TestPlatformPromotionsAccess:
         assert response.status_code == 302
         assert Promotion.objects.filter(name="Summer Promo").exists()
 
+    def test_create_form_guidance_for_scope_and_effect_tier(self, client, superuser):
+        """Create form should clarify scope targeting and effect tier usage."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.get(url)
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Platform applies to all tiers" in content
+        assert "effect-tier-control" in content
+        assert "Only used with the Tier Override effect" in content
+        assert "no-end-date-warning" in content
+
+    def test_tier_mode_create_form_locks_target_tier_to_scope(self, client, superuser):
+        """Tier mode create form should only allow the selected tier as target."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.get(f"{url}?mode=tier&scope=pro")
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        target_select = content.split('name="target_tier"')[1].split("</select>")[0]
+        options = target_select.split("<option")
+        assert all(
+            'value=""' not in opt for opt in options
+        ), "tier mode should not offer a None target tier"
+        assert any('value="pro"' in opt and "selected" in opt for opt in options)
+        assert any('value="free"' in opt and "disabled" in opt for opt in options)
+
+    def test_tier_mode_create_form_defaults_to_tier_scope(self, client, superuser):
+        """Tier mode create form should default to the selected tier's scope."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.get(f"{url}?mode=tier&scope=pro")
+
+        assert response.status_code == 200
+        assert response.context["form_data"]["scope_type"] == "tier"
+
+    def test_platform_mode_create_form_defaults_to_platform_scope(
+        self, client, superuser
+    ):
+        """Platform mode create form should default to platform scope."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert response.context["form_data"]["scope_type"] == "platform"
+        assert b"hidden disabled" not in response.content
+
+    def test_account_target_prefill_overrides_mode_default(self, client, superuser):
+        """Apply-promotion links prefill account scope, overriding the default."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.get(
+            f"{url}?mode=tier&scope=pro"
+            "&scope_type=account&target_user_email=prefill@example.com"
+        )
+
+        assert response.status_code == 200
+        assert response.context["form_data"]["scope_type"] == "account"
+        assert (
+            response.context["form_data"]["target_user_email"] == "prefill@example.com"
+        )
+
+    def test_tier_mode_hides_platform_scope_option_for_new_promotions(
+        self, client, superuser
+    ):
+        """Tier mode should discourage platform scope when creating from scratch."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.get(f"{url}?mode=tier&scope=pro")
+
+        assert response.status_code == 200
+        assert b"hidden disabled" in response.content
+
+    def test_create_without_active_field_defaults_to_active(self, client, superuser):
+        """Fresh creates post no is_active field and must default to active."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.post(
+            url,
+            {
+                "name": "Default Active Promo",
+                "scope_type": "platform",
+                "effect_type": "percent_discount",
+                "effect_value": "10.00",
+            },
+        )
+
+        assert response.status_code == 302
+        promotion = Promotion.objects.get(name="Default Active Promo")
+        assert promotion.is_active is True
+
+    def test_duplicate_submission_stays_inactive(self, client, superuser):
+        """Duplicate submissions post an empty is_active and start inactive."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.post(
+            url,
+            {
+                "name": "Copied Promo",
+                "scope_type": "platform",
+                "effect_type": "percent_discount",
+                "effect_value": "10.00",
+                "duplicate_of": "1",
+                "is_active": "",
+            },
+        )
+
+        assert response.status_code == 302
+        promotion = Promotion.objects.get(name="Copied Promo")
+        assert promotion.is_active is False
+
+    def test_duplicate_form_opens_inactive(self, client, superuser):
+        """Duplicates intentionally start inactive; the checkbox must reflect that."""
+        promotion = Promotion.objects.create(
+            name="Source Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            is_active=True,
+        )
+        client.force_login(superuser)
+        url = reverse(
+            "core:platform_admin_promotion_duplicate",
+            kwargs={"promotion_id": promotion.id},
+        )
+        response = client.get(url)
+
+        assert response.status_code == 200
+        checkbox = response.content.decode().split('name="is_active"')[1].split(">")[0]
+        assert "checked" not in checkbox
+
+    def test_end_promotion_requires_reason(self, client, superuser):
+        """Ending a promotion early must record a reason."""
+        promotion = Promotion.objects.create(
+            name="End Me Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            is_active=True,
+            ends_at=timezone.now() + timedelta(days=7),
+        )
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_promotion_revoke",
+                kwargs={"promotion_id": promotion.id},
+            ),
+            {"mode": "platform", "end_reason": ""},
+        )
+
+        assert response.status_code == 302
+        promotion.refresh_from_db()
+        assert promotion.is_active is True
+
+    def test_end_promotion_records_reason(self, client, superuser):
+        """Ending a promotion deactivates it, closes the window, and logs the reason."""
+        promotion = Promotion.objects.create(
+            name="End Early Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            is_active=True,
+            ends_at=timezone.now() + timedelta(days=7),
+        )
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_promotion_revoke",
+                kwargs={"promotion_id": promotion.id},
+            ),
+            {"mode": "platform", "end_reason": "Campaign finished early"},
+        )
+
+        assert response.status_code == 302
+        promotion.refresh_from_db()
+        assert promotion.is_active is False
+        assert promotion.ends_at is not None
+        assert promotion.ends_at <= timezone.now()
+        log = (
+            AuditLog.objects.filter(
+                action=AuditLog.Action.REMOVE,
+                metadata__promotion_id=str(promotion.id),
+            )
+            .order_by("-id")
+            .first()
+        )
+        assert log is not None
+        assert log.metadata["end_reason"] == "Campaign finished early"
+
+    def test_create_promotion_without_end_date_shows_warning(self, client, superuser):
+        """Creating a promotion with no end date should warn the operator."""
+        client.force_login(superuser)
+        url = reverse("core:platform_admin_promotion_create")
+        response = client.post(
+            url,
+            {
+                "name": "No End Promo",
+                "scope_type": "platform",
+                "effect_type": "percent_discount",
+                "effect_value": "50.00",
+                "is_active": "on",
+            },
+            follow=True,
+        )
+
+        assert response.status_code == 200
+        assert Promotion.objects.filter(name="No End Promo").exists()
+        messages_list = [str(m) for m in response.context["messages"]]
+        assert any("no end date" in m for m in messages_list)
+
+    def test_edit_promotion_without_end_date_shows_warning(self, client, superuser):
+        """Saving an edit that leaves the promotion open-ended should warn."""
+        promotion = Promotion.objects.create(
+            name="Endless Promo",
+            scope_type=Promotion.ScopeType.PLATFORM,
+            effect_type=Promotion.EffectType.PERCENT_DISCOUNT,
+            effect_value=10,
+            is_active=True,
+        )
+        client.force_login(superuser)
+        response = client.post(
+            reverse(
+                "core:platform_admin_promotion_edit",
+                kwargs={"promotion_id": promotion.id},
+            ),
+            {
+                "name": "Endless Promo Updated",
+                "code": "",
+                "description": "",
+                "scope_type": Promotion.ScopeType.PLATFORM,
+                "target_tier": "",
+                "effect_type": Promotion.EffectType.PERCENT_DISCOUNT,
+                "effect_value": "10.00",
+                "effect_tier": "",
+                "priority": "100",
+                "is_active": "on",
+            },
+            follow=True,
+        )
+
+        assert response.status_code == 200
+        messages_list = [str(m) for m in response.context["messages"]]
+        assert any("no end date" in m for m in messages_list)
+
     def test_superuser_can_toggle_promotion(self, client, superuser):
         """Superusers can activate/deactivate a promotion."""
         promotion = Promotion.objects.create(
@@ -1702,7 +1949,7 @@ class TestPlatformPromotionsAccess:
         assert b"Creating a new promotion based on" in response.content
 
     def test_revoke_promotion_ends_it_immediately(self, client, superuser):
-        """Revoking a promotion should deactivate it and end its window now."""
+        """Ending a promotion should deactivate it and end its window now."""
         promotion = Promotion.objects.create(
             name="Revokable Promo",
             scope_type=Promotion.ScopeType.PLATFORM,
@@ -1716,7 +1963,8 @@ class TestPlatformPromotionsAccess:
             reverse(
                 "core:platform_admin_promotion_revoke",
                 kwargs={"promotion_id": promotion.id},
-            )
+            ),
+            {"end_reason": "Superseded by a new campaign"},
         )
 
         assert response.status_code == 302
@@ -1726,6 +1974,7 @@ class TestPlatformPromotionsAccess:
         assert AuditLog.objects.filter(
             action=AuditLog.Action.REMOVE,
             metadata__promotion_id=str(promotion.id),
+            metadata__end_reason="Superseded by a new campaign",
         ).exists()
 
     def test_tier_mode_filters_promotions_by_selected_scope(self, client, superuser):

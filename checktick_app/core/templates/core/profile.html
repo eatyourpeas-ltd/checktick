@@ -224,6 +224,16 @@
         </div>
         {% endif %}
 
+        {% if active_promotion %}
+        <div>
+          <p class="text-sm text-base-content">{% trans "Discount Applied" %}</p>
+          <p class="text-base">
+            <span class="badge badge-warning badge-outline">{{ active_promotion.short_text }}</span>
+            {% if active_promotion.ends_at %}<span class="text-sm text-base-content/70 ml-1">{% trans "ends" %} {{ active_promotion.ends_at|date:"F j, Y" }}</span>{% endif %}
+          </p>
+        </div>
+        {% endif %}
+
         {% if subscription_info.subscription_current_period_end %}
         <div>
           <p class="text-sm text-base-content">{% trans "Access Valid Until" %}</p>

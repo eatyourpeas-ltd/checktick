@@ -345,13 +345,28 @@ def _promotion_form_context(
     promotion: Promotion | None = None,
     duplicate_source: Promotion | None = None,
 ) -> dict:
+    # Readable target pickers: admins should not need to know raw database IDs.
+    team_choices = [
+        (str(team.id), f"#{team.id} — {team.name} ({team.owner.email})")
+        for team in Team.objects.select_related("owner").order_by("name", "id")
+    ]
+    organization_choices = [
+        (
+            str(org.id),
+            f"#{org.id} — {org.name}" + (f" ({org.owner.email})" if org.owner else ""),
+        )
+        for org in Organization.objects.select_related("owner").order_by("name", "id")
+    ]
     return {
         "mode": mode,
         "scope": scope,
+        "scope_label": dict(TIER_SCOPE_CHOICES).get(scope, scope),
         "form_data": form_data,
         "scope_choices": Promotion.ScopeType.choices,
         "effect_choices": Promotion.EffectType.choices,
         "tier_choices": UserProfile.AccountTier.choices,
+        "team_choices": team_choices,
+        "organization_choices": organization_choices,
         "editing": editing,
         "promotion": promotion,
         "duplicate_source": duplicate_source,
@@ -2027,6 +2042,7 @@ def platform_admin_promotions(request: HttpRequest) -> HttpResponse:
     context = {
         "mode": mode,
         "scope": scope,
+        "scope_label": dict(TIER_SCOPE_CHOICES).get(scope, scope),
         "promotions": promotions,
         "scope_filter": scope_filter,
         "status_filter": status_filter,
@@ -2058,7 +2074,14 @@ def platform_admin_promotion_create(request: HttpRequest) -> HttpResponse:
         effect_value = request.POST.get("effect_value", "0").strip()
         effect_tier = request.POST.get("effect_tier", "").strip()
         priority = request.POST.get("priority", "100").strip()
-        is_active = request.POST.get("is_active") == "on"
+        duplicate_of_raw = request.POST.get("duplicate_of", "").strip()
+        is_duplicate = duplicate_of_raw.isdigit()
+        if is_duplicate:
+            # Duplicates start inactive unless the operator explicitly
+            # activates the copy; fresh creates default to active.
+            is_active = request.POST.get("is_active") == "on"
+        else:
+            is_active = request.POST.get("is_active", "on") == "on"
         starts_at_raw = request.POST.get("starts_at", "").strip()
         ends_at_raw = request.POST.get("ends_at", "").strip()
         reason = request.POST.get("reason", "").strip()
@@ -2193,10 +2216,20 @@ def platform_admin_promotion_create(request: HttpRequest) -> HttpResponse:
         if errors:
             for error in errors:
                 messages.error(request, error)
+            duplicate_source = None
+            if is_duplicate:
+                duplicate_source = Promotion.objects.filter(
+                    id=int(duplicate_of_raw)
+                ).first()
             return render(
                 request,
                 "core/platform_admin/promotion_form.html",
-                _promotion_form_context(mode=mode, scope=scope, form_data=request.POST),
+                _promotion_form_context(
+                    mode=mode,
+                    scope=scope,
+                    form_data=request.POST,
+                    duplicate_source=duplicate_source,
+                ),
             )
 
         if promotion is not None:
@@ -2206,13 +2239,36 @@ def platform_admin_promotion_create(request: HttpRequest) -> HttpResponse:
                 promotion=promotion,
                 message=f"Promotion '{name}' created via platform admin.",
             )
+            if not promotion.ends_at:
+                messages.warning(
+                    request,
+                    f"Promotion '{name}' has no end date and will run until it is "
+                    "manually deactivated or revoked.",
+                )
         messages.success(request, f"Promotion '{name}' created.")
         return redirect(_promotion_return_url(mode, scope))
+
+    form_data = request.GET
+    if not form_data.get("scope_type") or not form_data.get("is_active"):
+        # Explicit form defaults: match the admin tab context for scope and
+        # default new promotions to active so a quick submit cannot save an
+        # inert draft. Explicit query params (for example the account-target
+        # prefill links) are kept.
+        copied = form_data.copy()
+        if not copied.get("scope_type"):
+            copied["scope_type"] = (
+                Promotion.ScopeType.TIER
+                if mode == "tier"
+                else Promotion.ScopeType.PLATFORM
+            )
+        if not copied.get("is_active"):
+            copied["is_active"] = "on"
+        form_data = copied
 
     return render(
         request,
         "core/platform_admin/promotion_form.html",
-        _promotion_form_context(mode=mode, scope=scope, form_data=request.GET),
+        _promotion_form_context(mode=mode, scope=scope, form_data=form_data),
     )
 
 
@@ -2357,6 +2413,12 @@ def platform_admin_promotion_edit(
             promotion=promotion,
             message=f"Promotion '{promotion.name}' updated via platform admin.",
         )
+        if not promotion.ends_at:
+            messages.warning(
+                request,
+                f"Promotion '{promotion.name}' has no end date and will run until it "
+                "is manually deactivated or revoked.",
+            )
         messages.success(request, f"Promotion '{promotion.name}' updated.")
         return redirect(_promotion_return_url(mode, scope))
 
@@ -2442,8 +2504,16 @@ def platform_admin_promotion_toggle(
 def platform_admin_promotion_revoke(
     request: HttpRequest, promotion_id: int
 ) -> HttpResponse:
-    """Revoke a promotion by deactivating it immediately and ending its window now."""
+    """End a promotion early: deactivate it and close its window now."""
     promotion = get_object_or_404(Promotion, id=promotion_id)
+    mode = request.POST.get("mode", "").strip().lower()
+    scope = request.POST.get("scope", "").strip().lower()
+    end_reason = request.POST.get("end_reason", "").strip()
+
+    if not end_reason:
+        messages.error(request, "A reason is required when ending a promotion early.")
+        return redirect(_promotion_return_url(mode, scope))
+
     now = timezone.now()
     promotion.is_active = False
     if promotion.ends_at is None or promotion.ends_at > now:
@@ -2455,11 +2525,12 @@ def platform_admin_promotion_revoke(
         request=request,
         action=AuditLog.Action.REMOVE,
         promotion=promotion,
-        message=f"Promotion '{promotion.name}' revoked.",
-        metadata={"revoked_at": now.isoformat()},
+        message=f"Promotion '{promotion.name}' ended early.",
+        metadata={
+            "revoked_at": now.isoformat(),
+            "end_reason": end_reason,
+        },
     )
-    messages.success(request, f"Promotion '{promotion.name}' revoked.")
+    messages.success(request, f"Promotion '{promotion.name}' ended.")
 
-    mode = request.POST.get("mode", "").strip().lower()
-    scope = request.POST.get("scope", "").strip().lower()
     return redirect(_promotion_return_url(mode, scope))
