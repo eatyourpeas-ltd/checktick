@@ -640,16 +640,22 @@
                 </div>
 
                 <div class="mb-4">
+                    {% if promotions_by_tier.team_small.pricing %}
                     <span
-                        class="text-xl line-through text-base-content/50{% if not promotions_by_tier.team_small.pricing %} hidden{% endif %}"
+                        class="text-xl line-through text-base-content/50"
                         id="team-price-strike"
-                        >{{ promotions_by_tier.team_small.pricing.monthly.original|default:tier_display.team_small }}</span
+                        >{{ promotions_by_tier.team_small.pricing.monthly.original }}</span
                     >
                     <span
-                        class="text-3xl font-bold{% if promotions_by_tier.team_small.pricing %} text-warning{% endif %}"
+                        class="text-3xl font-bold text-warning"
                         id="team-price-display"
-                        >{{ promotions_by_tier.team_small.pricing.monthly.discounted|default:tier_display.team_small }}</span
+                        >{{ promotions_by_tier.team_small.pricing.monthly.discounted }}</span
                     >
+                    {% else %}
+                    <span class="text-3xl font-bold" id="team-price-display"
+                        >{{ tier_display.team_small }}</span
+                    >
+                    {% endif %}
                     <span class="text-base-content" id="team-period">/{% trans "month" %}</span>
                     <p
                         class="text-sm text-base-content"
@@ -660,10 +666,11 @@
                     <p class="text-xs text-base-content">
                         {% trans "inc. VAT" %}
                     </p>
-                    <p
-                        class="text-xs text-warning mt-1{% if not promotions_by_tier.team_small.promo_note %} hidden{% endif %}"
-                        id="team-promo-note"
-                    >{{ promotions_by_tier.team_small.promo_note|default:promotions_by_tier.team_small.short_text }}</p>
+                    {% if promotions_by_tier.team_small %}
+                    <p class="text-xs text-warning mt-1" id="team-promo-note"
+                        >{{ promotions_by_tier.team_small.promo_note }}</p
+                    >
+                    {% endif %}
                 </div>
 
                 <div class="divider"></div>
