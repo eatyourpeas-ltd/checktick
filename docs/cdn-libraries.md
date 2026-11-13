@@ -38,7 +38,7 @@ Templates read SRI values from this manifest via template context (`cdn_assets.*
 | SortableJS | 1.15.7 | `checktick_app/static/js/sortable.min.js` | Drag-and-drop reordering |
 | axe-core | 4.14.0 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
 | ReDoc | 3.1.0 | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation |
-| NHS Frontend | 8.1.0 | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling |
+| NHS Frontend | 10.7.2 | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling |
 <!-- CDN_LIBRARIES_TABLE:END -->
 
 ## SRI hashes
@@ -70,10 +70,10 @@ sha384-lFUXB8tI4BaTE1bqxH9eeAXON2NH1qsdAhs7S5L++nUNP5QOy+hwr0C3TYEJUEl0
 sha384-JeMYOUn7XELj12XQpz8IRcyCi5pih2IAwvXmTcH3IAFVWrAXJVRNa64PuS3MIj9/
 ```
 
-### NHS Frontend 8.1.0
+### NHS Frontend 10.7.2
 
 ```text
-sha384-IDDaUjZThM1cVGH55y4Yzz7YTgr55yuHEQYOnf3Hx0jpArWS5CgFIKTnSl6CHKbx
+sha384-ZQjYWjWKy53T6gOFD0SQimiK30QYd7Kv6sabV1u5zuLvTiywP/ApAefdprYRtB2g
 ```
 <!-- CDN_SRI_HASHES:END -->
 
