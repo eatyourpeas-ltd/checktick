@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "checktick"
-version = "0.31.1"
+version = "0.31.2"
 description = "Secure, server-rendered survey platform for medical audit and research"
 authors = ["CheckTick Maintainers <simon@eatyourpeas.co.uk>"]
 readme = "README.md"
@@ -9,7 +9,8 @@ packages = [
 ]
 
  [tool.poetry.dependencies]
-python = ">=3.11,<3.13"
+# Floor raised to 3.11.5 to permit soupsieve >=4.x (requires >=3.11.5), fixing CVE-2026-126190.
+python = ">=3.11.5,<3.13"
 django = "~5.2.15"
 # Pinned to address pip-audit vulnerabilities (PYSEC-2026-3696/3697/3698/3699 ReDoS/DoS/code-injection).
 # Transitive dep of Django (django.db.backends SQL formatting); constrained here so the lockfile cannot drift back to 0.5.x.
