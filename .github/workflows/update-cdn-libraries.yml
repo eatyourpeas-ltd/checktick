@@ -41,6 +41,7 @@ jobs:
           echo "sortablejs_version=$(jq -r '.assets[] | select(.key=="sortablejs") | .version' "$manifest")" >> $GITHUB_OUTPUT
           echo "axecore_version=$(jq -r '.assets[] | select(.key=="axe_core") | .version' "$manifest")" >> $GITHUB_OUTPUT
           echo "redoc_version=$(jq -r '.assets[] | select(.key=="redoc") | .version' "$manifest")" >> $GITHUB_OUTPUT
+          echo "nhs_version=$(jq -r '.assets[] | select(.key=="nhs_frontend") | .version' "$manifest")" >> $GITHUB_OUTPUT
 
       - name: Check HTMX
         id: check-htmx
@@ -222,6 +223,53 @@ jobs:
             echo "ReDoc is up to date"
           fi
 
+      - name: Check NHS Frontend
+        id: check-nhs
+        run: |
+          # Use npm as source of truth: download package tarball with `npm pack`, extract, find minified file
+          tmpdir=$(mktemp -d)
+          trap 'rm -rf "$tmpdir"' EXIT
+          pushd "$tmpdir"
+          npm pack nhsuk-frontend@${{ steps.cdn-metadata.outputs.nhs_version }} --silent
+          tarball=$(ls *.tgz | head -n1)
+          tar -xzf "$tarball"
+          # v10+ ships the stylesheet at dist/nhsuk/nhsuk-frontend.min.css
+          file=$(find package/dist -type f -name 'nhsuk-frontend.min.css' -print -quit || true)
+          if [ -z "$file" ]; then
+            file=$(find package -type f -name 'nhsuk.min.css' -print -quit || true)
+          fi
+          if [ -z "$file" ]; then
+            echo "No minified NHS Frontend CSS file found in package" >&2
+            exit 1
+          fi
+          src="$tmpdir/$file"
+
+          # Calculate new hash
+          NEW_HASH=$(openssl dgst -sha384 -binary "$src" | openssl base64 -A)
+          echo "new_hash=${NEW_HASH}" >> $GITHUB_OUTPUT
+          popd
+
+          # Calculate current hash
+          if [ -f checktick_app/static/css/nhsuk-frontend.min.css ]; then
+            CURRENT_HASH=$(openssl dgst -sha384 -binary checktick_app/static/css/nhsuk-frontend.min.css | openssl base64 -A)
+            echo "current_hash=${CURRENT_HASH}" >> $GITHUB_OUTPUT
+          else
+            echo "current_hash=" >> $GITHUB_OUTPUT
+          fi
+
+          # Compare hashes
+          if [ "${NEW_HASH}" != "${CURRENT_HASH}" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "NHS Frontend has been updated or is missing"
+            mv -f "$src" checktick_app/static/css/nhsuk-frontend.min.css
+            tmp_json=$(mktemp)
+            jq --arg key "nhs_frontend" --arg sri "sha384-${NEW_HASH}" '.assets |= map(if .key == $key then .sri = $sri else . end)' checktick_app/cdn_assets.json > "$tmp_json"
+            mv "$tmp_json" checktick_app/cdn_assets.json
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "NHS Frontend is up to date"
+          fi
+
       - name: Check versions
         id: check-versions
         run: |
@@ -279,11 +327,25 @@ jobs:
             echo "redoc_update_available=false" >> $GITHUB_OUTPUT
           fi
 
+          # Check NHS Frontend latest version from npm
+          NHS_LATEST=$(curl -s "https://registry.npmjs.org/nhsuk-frontend" | jq -r '.["dist-tags"].latest')
+          echo "NHS Frontend: Current pinned = ${{ steps.cdn-metadata.outputs.nhs_version }}, Latest = ${NHS_LATEST}"
+          echo "nhs_latest=${NHS_LATEST}" >> $GITHUB_OUTPUT
+
+          if [ "${{ steps.cdn-metadata.outputs.nhs_version }}" != "${NHS_LATEST}" ]; then
+            echo "- ⚠️ **NHS Frontend**: Newer version available (${NHS_LATEST} vs ${{ steps.cdn-metadata.outputs.nhs_version }})" >> $GITHUB_STEP_SUMMARY
+            echo "nhs_update_available=true" >> $GITHUB_OUTPUT
+          else
+            echo "- ✅ **NHS Frontend**: Up to date (${{ steps.cdn-metadata.outputs.nhs_version }})" >> $GITHUB_STEP_SUMMARY
+            echo "nhs_update_available=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Sync CDN docs
         if: steps.check-htmx.outputs.changed == 'true' ||
           steps.check-sortablejs.outputs.changed == 'true' ||
           steps.check-axecore.outputs.changed == 'true' ||
-          steps.check-redoc.outputs.changed == 'true'
+          steps.check-redoc.outputs.changed == 'true' ||
+          steps.check-nhs.outputs.changed == 'true'
         run: |
           python3 s/sync-cdn-docs
 
@@ -292,7 +354,8 @@ jobs:
         if: steps.check-htmx.outputs.changed == 'true' ||
           steps.check-sortablejs.outputs.changed == 'true' ||
           steps.check-axecore.outputs.changed == 'true' ||
-          steps.check-redoc.outputs.changed == 'true'
+          steps.check-redoc.outputs.changed == 'true' ||
+          steps.check-nhs.outputs.changed == 'true'
         continue-on-error: true
         uses: peter-evans/create-pull-request@v6
         with:
@@ -305,6 +368,7 @@ jobs:
             - SortableJS ${{ steps.cdn-metadata.outputs.sortablejs_version }}: ${{ steps.check-sortablejs.outputs.changed == 'true' && 'Updated' || 'No change' }}
             - axe-core ${{ steps.cdn-metadata.outputs.axecore_version }}: ${{ steps.check-axecore.outputs.changed == 'true' && 'Updated' || 'No change' }}
             - ReDoc ${{ steps.cdn-metadata.outputs.redoc_version }}: ${{ steps.check-redoc.outputs.changed == 'true' && 'Updated' || 'No change' }}
+            - NHS Frontend ${{ steps.cdn-metadata.outputs.nhs_version }}: ${{ steps.check-nhs.outputs.changed == 'true' && 'Updated' || 'No change' }}
           branch: update-cdn-libraries
           delete-branch: true
           title: "Update CDN libraries with new SRI hashes"
@@ -321,12 +385,14 @@ jobs:
             | SortableJS | ${{ steps.cdn-metadata.outputs.sortablejs_version }} | ${{ steps.check-sortablejs.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-sortablejs.outputs.new_hash }}` |
             | axe-core | ${{ steps.cdn-metadata.outputs.axecore_version }} | ${{ steps.check-axecore.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-axecore.outputs.new_hash }}` |
             | ReDoc | ${{ steps.cdn-metadata.outputs.redoc_version }} | ${{ steps.check-redoc.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-redoc.outputs.new_hash }}` |
+            | NHS Frontend | ${{ steps.cdn-metadata.outputs.nhs_version }} | ${{ steps.check-nhs.outputs.changed == 'true' && '⚠️ Updated' || '✅ No change' }} | `${{ steps.check-nhs.outputs.new_hash }}` |
 
             ### Files Updated
             - `checktick_app/static/js/htmx.min.js`
             - `checktick_app/static/js/sortable.min.js`
             - `checktick_app/static/js/axe-core.min.js`
             - `checktick_app/static/js/redoc.standalone.min.js`
+            - `checktick_app/static/css/nhsuk-frontend.min.css`
             - `checktick_app/cdn_assets.json`
             - `docs/cdn-libraries.md`
 
@@ -336,6 +402,7 @@ jobs:
             - [ ] Question reordering works (SortableJS)
             - [ ] Accessibility testing works (axe-core)
             - [ ] API documentation page renders (ReDoc)
+            - [ ] NHS-styled survey renders correctly (NHS Frontend)
             - [ ] No console errors or CSP violations
             - [ ] Build survey page functions correctly
 
@@ -346,12 +413,14 @@ jobs:
             **SortableJS**: `sha384-${{ steps.check-sortablejs.outputs.new_hash }}`
             **axe-core**: `sha384-${{ steps.check-axecore.outputs.new_hash }}`
             **ReDoc**: `sha384-${{ steps.check-redoc.outputs.new_hash }}`
+            **NHS Frontend**: `sha384-${{ steps.check-nhs.outputs.new_hash }}`
 
       - name: Create per-dependency version issues
         if: steps.check-versions.outputs.htmx_update_available == 'true' ||
           steps.check-versions.outputs.sortablejs_update_available == 'true' ||
           steps.check-versions.outputs.axecore_update_available == 'true' ||
-          steps.check-versions.outputs.redoc_update_available == 'true'
+          steps.check-versions.outputs.redoc_update_available == 'true' ||
+          steps.check-versions.outputs.nhs_update_available == 'true'
         uses: actions/github-script@v6
         with:
           script: |
@@ -386,6 +455,14 @@ jobs:
                 current: process.env.REDOC_CURRENT,
                 latest: process.env.REDOC_LATEST,
                 changelog: 'https://github.com/Redocly/redoc/releases'
+              });
+            }
+            if (process.env.NHS_UPDATE_AVAILABLE === 'true') {
+              deps.push({
+                name: 'NHS Frontend',
+                current: process.env.NHS_CURRENT,
+                latest: process.env.NHS_LATEST,
+                changelog: 'https://github.com/nhsuk/nhsuk-frontend/releases'
               });
             }
 
@@ -432,4 +509,7 @@ jobs:
           REDOC_UPDATE_AVAILABLE: ${{ steps.check-versions.outputs.redoc_update_available }}
           REDOC_CURRENT: ${{ steps.cdn-metadata.outputs.redoc_version }}
           REDOC_LATEST: ${{ steps.check-versions.outputs.redoc_latest }}
+          NHS_UPDATE_AVAILABLE: ${{ steps.check-versions.outputs.nhs_update_available }}
+          NHS_CURRENT: ${{ steps.cdn-metadata.outputs.nhs_version }}
+          NHS_LATEST: ${{ steps.check-versions.outputs.nhs_latest }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

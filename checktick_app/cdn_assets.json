@@ -44,10 +44,10 @@
       "key": "nhs_frontend",
       "name": "NHS Frontend",
       "npm_package": "nhsuk-frontend",
-      "version": "8.1.0",
+      "version": "10.7.2",
       "static_file": "css/nhsuk-frontend.min.css",
-      "source_path": "dist/nhsuk.min.css",
-      "sri": "sha384-IDDaUjZThM1cVGH55y4Yzz7YTgr55yuHEQYOnf3Hx0jpArWS5CgFIKTnSl6CHKbx",
+      "source_path": "dist/nhsuk/nhsuk-frontend.min.css",
+      "sri": "sha384-ZQjYWjWKy53T6gOFD0SQimiK30QYd7Kv6sabV1u5zuLvTiywP/ApAefdprYRtB2g",
       "purpose": "NHS design system styling"
     }
   ]
