@@ -182,6 +182,36 @@ def test_wizard_creates_survey(
 
 
 @pytest.mark.django_db
+def test_wizard_generates_missing_org_master_key(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    """A newly onboarded organisation has no master key (the platform-admin
+    flow never generates one) — the wizard generates it lazily so the
+    org-key wrap (D2) succeeds instead of 500ing."""
+    org.encrypted_master_key = None
+    org.save(update_fields=["encrypted_master_key"])
+    client.force_login(appraiser)
+    resp = client.post(
+        reverse("appraisal:relationship_create"),
+        {
+            "appraisee": appraisee.pk,
+            "instrument": instrument.pk,
+            "cycle_year": 2026,
+        },
+    )
+    assert resp.status_code == 302
+    org.refresh_from_db()
+    assert org.encrypted_master_key
+    rel = AppraisalRelationship.objects.get(appraisee=appraisee)
+    assert rel.survey.has_org_encryption()
+    assert AuditLog.objects.filter(
+        organization=org,
+        action=AuditLog.Action.CREATE,
+        message__contains="master key",
+    ).exists()
+
+
+@pytest.mark.django_db
 def test_wizard_rejects_duplicate_cycle(
     client, org, memberships, appraiser, appraisee, instrument
 ):

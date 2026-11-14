@@ -297,6 +297,32 @@ def relationship_create(request: HttpRequest) -> HttpResponse:
     )
 
 
+def _ensure_org_master_key(org: Organization, actor) -> bool:
+    """Generate the organisation master key if it does not exist yet.
+
+    Orgs onboarded through the platform-admin flow (or self-service
+    signup) have no master key until one is generated — the core survey
+    views silently skip org-key wrap in that case, but the appraisal
+    wizard requires it (D2). Returns True if a key was generated.
+    """
+    if org.encrypted_master_key:
+        return False
+    import os as _os
+
+    org.encrypted_master_key = _os.urandom(32)
+    org.save(update_fields=["encrypted_master_key"])
+    AuditLog.objects.create(
+        actor=actor,
+        scope=AuditLog.Scope.ORGANIZATION,
+        organization=org,
+        action=AuditLog.Action.CREATE,
+        severity=AuditLog.Severity.INFO,
+        message="Organisation master key generated (first appraisal survey).",
+        metadata={"reason": "appraisal_wizard"},
+    )
+    return True
+
+
 def _create_appraisal(
     *, org: Organization, appraiser, appraisee, instrument, cycle_year: int
 ) -> AppraisalRelationship:
@@ -326,6 +352,7 @@ def _create_appraisal(
     # Submission keypair + org-key wrap (D2). The appraiser's personal
     # unlock may be added later as a convenience path; the org key is
     # the recovery and oversight path.
+    _ensure_org_master_key(org, appraiser)
     survey_kek = survey.setup_submission_keypair()
     survey.save()
     survey.set_org_encryption(survey_kek, org)
