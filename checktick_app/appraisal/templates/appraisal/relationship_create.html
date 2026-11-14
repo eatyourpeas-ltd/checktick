@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "New appraisal" %} - CheckTick{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <h1 class="text-2xl font-semibold mb-2">{% trans "New appraisal" %}</h1>
+  <p class="text-sm opacity-70 mb-6">{% trans "Creates the appraisee's appraisal survey from the organisation instrument: subject stamped in, encrypted with the organisation master key, and the appraisee added as a distributor (they can generate tokens and see completion counts — never results)." %}</p>
+
+  {% if orgs.count > 1 %}
+  <form method="get" class="mb-4">
+    <label class="label" for="org-select">{% trans "Organisation" %}</label>
+    <select name="organization" id="org-select" class="select select-bordered select-sm" onchange="this.form.submit()">
+      {% for o in orgs %}
+      <option value="{{ o.pk }}" {% if o == org %}selected{% endif %}>{{ o.name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% endif %}
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div class="form-control w-full">
+      <label class="label"><span class="label-text font-semibold">{% trans "Appraisee" %}</span></label>
+      <select name="appraisee" class="select select-bordered w-full" required>
+        <option value="">—</option>
+        {% for m in org_members %}
+        <option value="{{ m.user.pk }}">{{ m.user.get_full_name|default:m.user.username }}{% if m.user.email %} ({{ m.user.email }}){% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-control w-full">
+      <label class="label"><span class="label-text font-semibold">{% trans "Instrument" %}</span></label>
+      <select name="instrument" class="select select-bordered w-full" required>
+        <option value="">—</option>
+        {% for i in instruments %}
+        <option value="{{ i.pk }}">{{ i.name }}</option>
+        {% endfor %}
+      </select>
+      {% if not instruments %}
+      <label class="label">
+        <span class="label-text-alt text-warning">
+          {% trans "No organisation instruments yet. The Responsible Officer can adopt one from the Question Bank library." %}
+          <a href="{% url 'appraisal:adopt_instrument' %}" class="link underline">{% trans "Adopt an instrument" %}</a>
+        </span>
+      </label>
+      {% endif %}
+    </div>
+
+    <div class="form-control w-full">
+      <label class="label"><span class="label-text font-semibold">{% trans "Appraisal cycle (year)" %}</span></label>
+      <input type="number" name="cycle_year" min="2000" max="2100" value="{{ current_year }}" class="input input-bordered w-full" required />
+    </div>
+
+    <div class="flex gap-3 justify-end">
+      <a href="{% url 'appraisal:caseload' %}" class="btn btn-outline">{% trans "Cancel" %}</a>
+      <button type="submit" class="btn btn-primary">{% trans "Create appraisal survey" %}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

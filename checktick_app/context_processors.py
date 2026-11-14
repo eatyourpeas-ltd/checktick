@@ -123,6 +123,7 @@ def branding(request):
     user = getattr(request, "user", AnonymousUser())
     can_manage_any_users = False
     can_view_datasets_flag = False
+    can_use_appraisal = False
     if user and user.is_authenticated:
         can_manage_any_users = (
             # Organization ownership or admin membership
@@ -140,6 +141,15 @@ def branding(request):
         # Creation is gated separately by permissions.can_create_datasets, which
         # denies org VIEWER / DATA_CUSTODIAN roles.
         can_view_datasets_flag = True
+        # Appraisal vertical: organisation accounts (ADMIN/CREATOR roles
+        # run appraisals; VIEWER/DATA_CUSTODIAN read-only roles do not).
+        can_use_appraisal = OrganizationMembership.objects.filter(
+            user=user,
+            role__in=[
+                OrganizationMembership.Role.ADMIN,
+                OrganizationMembership.Role.CREATOR,
+            ],
+        ).exists()
 
     # All defaults are defined in settings.py - this is the single source of truth
     # font_heading and font_body are marked safe so Django auto-escaping does not
@@ -415,6 +425,7 @@ def branding(request):
         "brand": brand,
         "can_manage_any_users": can_manage_any_users,
         "can_view_datasets": can_view_datasets_flag,
+        "can_use_appraisal": can_use_appraisal,
         "build": build,
         "debug": settings.DEBUG,
         "self_hosted": getattr(settings, "SELF_HOSTED", False),

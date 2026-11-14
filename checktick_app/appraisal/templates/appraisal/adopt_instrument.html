@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Adopt an instrument" %} - CheckTick{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <h1 class="text-2xl font-semibold mb-2">{% trans "Adopt as organisation instrument" %}</h1>
+  <p class="text-sm opacity-70 mb-6">{% trans "Creates an organisation-level copy of a Question Bank library instrument, ready for appraisers to build appraisal surveys from. Attribution is carried forward. You can amend the adopted copy later via the builder — most organisations take the instrument unamended." %}</p>
+
+  {% if orgs.count > 1 %}
+  <form method="get" class="mb-4">
+    <label class="label" for="org-select">{% trans "Organisation" %}</label>
+    <select name="organization" id="org-select" class="select select-bordered select-sm" onchange="this.form.submit()">
+      {% for o in orgs %}
+      <option value="{{ o.pk }}" {% if o == org %}selected{% endif %}>{{ o.name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% endif %}
+
+  {% if library %}
+  <div class="overflow-x-auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>{% trans "Instrument" %}</th>
+          <th>{% trans "Description" %}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in library %}
+        <tr>
+          <td class="font-medium">{{ t.name }}</td>
+          <td class="text-sm opacity-70">{{ t.description|truncatewords:20 }}</td>
+          <td>
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="template" value="{{ t.pk }}" />
+              <button type="submit" class="btn btn-primary btn-xs">{% trans "Adopt" %}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-info">
+    <span>{% trans "The Question Bank library has no instruments available to adopt yet." %}</span>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

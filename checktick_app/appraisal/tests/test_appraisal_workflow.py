@@ -1,0 +1,382 @@
+"""Appraisal vertical — relationship model, creation wizard, caseload,
+RO portfolio, and instrument adoption.
+
+Covers docs/appraisal-implementation-plan.md §3.2, §4, §6 (steps 1–2, 8)
+and §7.2:
+
+- The creation wizard builds the appraisee's survey from the org
+  instrument: subject stamped in, org-key wrapped (D2), appraisee added
+  as DISTRIBUTOR (D1), one survey per appraisee per cycle (D9).
+- The RO portfolio shows every appraisal in the organisation with
+  count-only response figures.
+- 'Adopt as organisation instrument' creates an org-level publication
+  directly from a global library template's markdown — the
+  ``imported_from`` copyright guard is never engaged (§7.2).
+"""
+
+from __future__ import annotations
+
+import os
+
+from django.contrib.auth.models import User
+from django.urls import reverse
+import pytest
+
+from checktick_app.appraisal.models import AppraisalRelationship
+from checktick_app.surveys.models import (
+    AuditLog,
+    Organization,
+    OrganizationMembership,
+    PublishedQuestionGroup,
+    RespondentCategory,
+    Survey,
+    SurveyMembership,
+    SurveyQuestion,
+)
+
+PASSWORD = "x"
+
+
+@pytest.fixture(autouse=True)
+def disable_rate_limiting(settings):
+    settings.RATELIMIT_ENABLE = False
+    settings.AXES_ENABLED = False
+
+
+def _user(username, **kwargs):
+    return User.objects.create_user(
+        username=username, email=f"{username}@example.com", password=PASSWORD, **kwargs
+    )
+
+
+@pytest.fixture
+def ro():
+    """The Responsible Officer: organisation owner."""
+    return _user("ro")
+
+
+@pytest.fixture
+def appraiser():
+    return _user("appraiser")
+
+
+@pytest.fixture
+def appraisee():
+    return _user("appraisee")
+
+
+@pytest.fixture
+def org(ro):
+    o = Organization.objects.create(name="Appraisal Org", owner=ro)
+    o.encrypted_master_key = os.urandom(32)
+    o.save()
+    return o
+
+
+@pytest.fixture
+def memberships(org, ro, appraiser, appraisee):
+    OrganizationMembership.objects.create(
+        organization=org, user=ro, role=OrganizationMembership.Role.ADMIN
+    )
+    OrganizationMembership.objects.create(
+        organization=org, user=appraiser, role=OrganizationMembership.Role.CREATOR
+    )
+    OrganizationMembership.objects.create(
+        organization=org, user=appraisee, role=OrganizationMembership.Role.VIEWER
+    )
+
+
+INSTRUMENT_MARKDOWN = """CATEGORIES
+  rater_role:
+    values: patient, colleague
+
+# Patient feedback {patient}    ~ cat:rater_role:patient
+
+## Overall rating {pr1}
+(text)
+
+# Colleague feedback {colleague}    ~ cat:rater_role:colleague
+
+## Overall rating {cr1}
+(text)
+"""
+
+
+@pytest.fixture
+def instrument(org, ro):
+    return PublishedQuestionGroup.objects.create(
+        publisher=ro,
+        organization=org,
+        publication_level=PublishedQuestionGroup.PublicationLevel.ORGANIZATION,
+        name="Appraisal 360 Battery",
+        description="Test instrument",
+        markdown=INSTRUMENT_MARKDOWN,
+        status=PublishedQuestionGroup.Status.ACTIVE,
+    )
+
+
+@pytest.fixture
+def client_login(client):
+    def _login(user):
+        client.force_login(user)
+        return client
+
+    return _login
+
+
+# ---------------------------------------------------------------------------
+# Creation wizard
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_wizard_creates_survey(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    client.force_login(appraiser)
+    resp = client.post(
+        reverse("appraisal:relationship_create"),
+        {
+            "appraisee": appraisee.pk,
+            "instrument": instrument.pk,
+            "cycle_year": 2026,
+        },
+    )
+    assert resp.status_code == 302
+
+    rel = AppraisalRelationship.objects.get(
+        organization=org, appraisee=appraisee, cycle_year=2026
+    )
+    survey = rel.survey
+
+    # D1: the appraiser owns the survey; org-linked.
+    assert survey.owner == appraiser
+    assert survey.organization == org
+    # Subject stamped in the survey name.
+    assert appraisee.username in survey.name or appraisee.get_full_name() in survey.name
+    # §8: patient sections → whole-response encryption declared.
+    assert survey.respondent_audience == Survey.RespondentAudience.PATIENT
+    assert survey.audience_confirmed
+    # D2: org-key wrap is set.
+    assert survey.has_org_encryption()
+    # The instrument's groups and questions were imported.
+    assert survey.question_groups.count() == 2
+    assert SurveyQuestion.objects.filter(survey=survey).count() == 2
+    # §5: the rater_role dimension separates the two populations.
+    assert survey.respondent_categories.filter(name="rater_role").exists()
+    patient_group = survey.question_groups.get(name="Patient feedback")
+    assert patient_group.required_categories == {"rater_role": ["patient"]}
+    colleague_group = survey.question_groups.get(name="Colleague feedback")
+    assert colleague_group.required_categories == {"rater_role": ["colleague"]}
+    # The subject dimension is stamped in (free text).
+    subject_cat = RespondentCategory.objects.get(survey=survey, name="subject")
+    assert subject_cat.free_text
+    # D1: the appraisee distributes — no key path, no results access.
+    assert SurveyMembership.objects.filter(
+        survey=survey, user=appraisee, role=SurveyMembership.Role.DISTRIBUTOR
+    ).exists()
+    # Audit-logged.
+    assert AuditLog.objects.filter(
+        survey=survey, action=AuditLog.Action.CREATE
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_wizard_rejects_duplicate_cycle(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    client.force_login(appraiser)
+    data = {
+        "appraisee": appraisee.pk,
+        "instrument": instrument.pk,
+        "cycle_year": 2026,
+    }
+    assert (
+        client.post(reverse("appraisal:relationship_create"), data).status_code == 302
+    )
+    resp = client.post(reverse("appraisal:relationship_create"), data)
+    # Re-rendered form with an error, not a second survey.
+    assert resp.status_code == 200
+    assert (
+        AppraisalRelationship.objects.filter(
+            organization=org, appraisee=appraisee, cycle_year=2026
+        ).count()
+        == 1
+    )
+
+
+@pytest.mark.django_db
+def test_wizard_denied_without_org_membership(client, appraiser, instrument):
+    client.force_login(appraiser)
+    resp = client.get(reverse("appraisal:relationship_create"))
+    assert resp.status_code == 302  # redirected back to caseload with an error
+
+
+@pytest.mark.django_db
+def test_wizard_requires_instrument_choice(
+    client, org, memberships, appraiser, appraisee
+):
+    client.force_login(appraiser)
+    resp = client.post(
+        reverse("appraisal:relationship_create"),
+        {"appraisee": appraisee.pk, "instrument": "", "cycle_year": 2026},
+    )
+    assert resp.status_code == 200
+    assert not AppraisalRelationship.objects.exists()
+
+
+# ---------------------------------------------------------------------------
+# Caseload and portfolio
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_caseload_shows_own_appraisals(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    client.force_login(appraiser)
+    resp = client.post(
+        reverse("appraisal:relationship_create"),
+        {"appraisee": appraisee.pk, "instrument": instrument.pk, "cycle_year": 2026},
+    )
+    assert resp.status_code == 302
+    resp = client.get(reverse("appraisal:caseload"))
+    assert resp.status_code == 200
+    html = resp.content.decode()
+    assert "Appraisal 360 Battery" in html
+    assert "2026" in html
+
+
+@pytest.mark.django_db
+def test_caseload_excludes_other_appraisers(
+    client, org, memberships, appraiser, appraisee, instrument, db
+):
+    other_appraiser = _user("other_appraiser")
+    OrganizationMembership.objects.create(
+        organization=org,
+        user=other_appraiser,
+        role=OrganizationMembership.Role.CREATOR,
+    )
+    client.force_login(appraiser)
+    client.post(
+        reverse("appraisal:relationship_create"),
+        {"appraisee": appraisee.pk, "instrument": instrument.pk, "cycle_year": 2026},
+    )
+    client.force_login(other_appraiser)
+    resp = client.get(reverse("appraisal:caseload"))
+    assert resp.status_code == 200
+    assert b"Appraisal 360 Battery" not in resp.content
+
+
+@pytest.mark.django_db
+def test_ro_portfolio_shows_all_org_appraisals(
+    client, org, memberships, ro, appraiser, appraisee, instrument
+):
+    client.force_login(appraiser)
+    client.post(
+        reverse("appraisal:relationship_create"),
+        {"appraisee": appraisee.pk, "instrument": instrument.pk, "cycle_year": 2026},
+    )
+    client.force_login(ro)
+    resp = client.get(reverse("appraisal:portfolio"))
+    assert resp.status_code == 200
+    html = resp.content.decode()
+    assert "appraisee" in html
+    assert "appraiser" in html
+    # Count-only response figures are present.
+    assert "Responses" in html
+
+
+@pytest.mark.django_db
+def test_portfolio_denied_to_non_admin(client, org, memberships, appraiser, instrument):
+    client.force_login(appraiser)  # CREATOR, not ADMIN
+    resp = client.get(reverse("appraisal:portfolio"))
+    assert resp.status_code == 302  # redirected with an error
+
+
+# ---------------------------------------------------------------------------
+# Adopt as organisation instrument (§7.2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_adopt_instrument_creates_org_publication(client, org, memberships, ro, db):
+    global_template = PublishedQuestionGroup.objects.create(
+        publisher=ro,
+        publication_level=PublishedQuestionGroup.PublicationLevel.GLOBAL,
+        name="CheckTick 360° Colleague Battery",
+        description="Global instrument",
+        markdown="# Colleague battery {cb}\n(text)\n",
+        attribution={"authors": "A. Author", "license": "CC-BY-4.0"},
+        status=PublishedQuestionGroup.Status.ACTIVE,
+    )
+    client.force_login(ro)
+    resp = client.post(
+        reverse("appraisal:adopt_instrument"),
+        {"template": global_template.pk},
+    )
+    assert resp.status_code == 302
+    adopted = PublishedQuestionGroup.objects.get(
+        organization=org,
+        publication_level=PublishedQuestionGroup.PublicationLevel.ORGANIZATION,
+    )
+    # Attribution carried forward; markdown copied verbatim.
+    assert adopted.attribution == global_template.attribution
+    assert adopted.markdown == global_template.markdown
+    # No intermediate survey — the imported_from guard is never engaged.
+    assert adopted.source_group is None
+    assert AuditLog.objects.filter(
+        organization=org, action=AuditLog.Action.CREATE
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_adopt_instrument_denied_to_non_admin(client, org, memberships, appraiser, db):
+    global_template = PublishedQuestionGroup.objects.create(
+        publisher=appraiser,
+        publication_level=PublishedQuestionGroup.PublicationLevel.GLOBAL,
+        name="Global Template",
+        markdown="# T {t}\n(text)\n",
+        status=PublishedQuestionGroup.Status.ACTIVE,
+    )
+    client.force_login(appraiser)  # CREATOR, not ADMIN
+    resp = client.post(
+        reverse("appraisal:adopt_instrument"), {"template": global_template.pk}
+    )
+    assert resp.status_code == 302
+    assert not PublishedQuestionGroup.objects.filter(
+        organization=org,
+        publication_level=PublishedQuestionGroup.PublicationLevel.ORGANIZATION,
+    ).exists()
+
+
+# ---------------------------------------------------------------------------
+# Integration: the appraisee distributes (Phase 2 primitives)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_appraisee_distributor_can_access_tokens_not_results(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    client.force_login(appraiser)
+    client.post(
+        reverse("appraisal:relationship_create"),
+        {"appraisee": appraisee.pk, "instrument": instrument.pk, "cycle_year": 2026},
+    )
+    rel = AppraisalRelationship.objects.get(appraisee=appraisee)
+    survey = rel.survey
+
+    client.force_login(appraisee)
+    # Distributor: tokens page works.
+    assert (
+        client.get(reverse("surveys:tokens", kwargs={"slug": survey.slug})).status_code
+        == 200
+    )
+    # Distributor: results are closed (distributor-only membership).
+    assert (
+        client.get(
+            reverse("surveys:survey_summary", kwargs={"slug": survey.slug})
+        ).status_code
+        == 403
+    )

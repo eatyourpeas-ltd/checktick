@@ -91,6 +91,7 @@ urlpatterns = [
     ),
     path("", include("checktick_app.core.urls")),
     path("surveys/", include("checktick_app.surveys.urls")),
+    path("appraisal/", include("checktick_app.appraisal.urls")),
     path("api/", include("checktick_app.api.urls")),
     # OIDC authentication for healthcare SSO - ensure callback is accessible
     path("oidc/", include("checktick_app.core.oidc_urls")),
