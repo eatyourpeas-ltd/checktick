@@ -435,6 +435,15 @@ Organisation owners have access to a recovery management dashboard:
 └─────────────────────────────────────────────────────────┘
 ```
 
+### Appraisal Surveys and the Organisation Key
+
+Appraisal surveys (the appraisal workflow, available on the Organisation tier) are encrypted with the organisation's key by default, rather than with a personal key:
+
+- **Created with the organisation key**: when an appraiser creates an appraisal, the survey is wrapped with the organisation master key. If the organisation does not yet have a master key, one is generated at that point.
+- **The appraisee holds no key**: the appraisee receives the Distributor role to share their feedback link, but this gives no access to the encryption key or to the responses. Appraisees cannot see results.
+- **Oversight stays with the organisation**: the Responsible Officer (organisation owner or admin) can open any appraisal survey through the organisation key. This is the oversight and recovery path.
+- **Appraiser turnover**: if an appraiser leaves, the Responsible Officer unlocks the survey with the organisation key and re-wraps it for the organisation. No responses are orphaned, and the departing appraiser's credentials are not needed.
+
 ---
 
 ## Enterprise Tier

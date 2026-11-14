@@ -77,3 +77,29 @@ The {{ platform_name }} API allows for secure, programmatic integration with ext
 | Asset ID | Asset Name | Description | Location |
 | :--- | :--- | :--- | :--- |
 | **ASSET-06** | API Gateway | The entry point for programmatic data access. | Traefik ingress (Civo Kubernetes) |
+
+## 6. Appraisal Workflow Data Flows
+
+Appraisal surveys (GMC-style 360 appraisal) follow the flow below. Encryption and key handling match Section 1 unless stated.
+
+| Stage | Origin | Destination | Protocol | Encryption |
+| :--- | :--- | :--- | :--- | :--- |
+| **Survey Creation** | Appraiser (from organisation instrument) | {{ platform_name }} App (Django) | HTTPS | TLS 1.2+ (In-transit); survey key wrapped with organisation master key (At-rest) |
+| **Token Distribution** | Appraisee (distributor) | Patients (QR/link) and colleagues (token) | HTTPS | TLS 1.2+; random, single-purpose tokens |
+| **Patient Feedback** | Patient Browser (anonymous, no token) | {{ platform_name }} App | HTTPS | TLS 1.2+ (In-transit); AES-256 (At-rest) |
+| **Colleague and Self Feedback** | Colleague or appraisee (token holder) | {{ platform_name }} App | HTTPS | TLS 1.2+; pseudonymous token-to-response linkage |
+| **Unlock** | Appraiser or Responsible Officer | Organisation master key to survey key | HTTPS | Org-key wrap; unlock logged as `key_recovery` (Critical) |
+| **Report Release** | {{ platform_name }} App | Appraisee and Responsible Officer (immutable JSON snapshot) | HTTPS | TLS 1.2+; AES-256 (At-rest) |
+| **Exception Review Disclosure** | Appraiser (raises) and Responsible Officer (co-signs) | Appraiser and Responsible Officer (linkage view) | HTTPS | Two-party approval; disclosure logged at Warning |
+
+### Collection and Distribution
+
+The appraiser creates the appraisal survey from an organisation-approved instrument. The appraisee, as a distributor, generates token batches and QR codes. Patient respondents answer anonymously through unlisted publication and hold no token. The appraiser approves colleague raters and issues their tokens. The appraisee's self-assessment uses a single `self` token.
+
+### Unlock and Release
+
+The appraiser unlocks results through the organisation master key. Unlocks and results views are audit-logged. Reports are released as immutable, versioned JSON snapshots, visible to the appraisee as released and to the Responsible Officer. A minimum-response threshold (default 5) gates release. Populations below the threshold are suppressed (counts only), except the appraisee's own self-assessment.
+
+### Exception Review Disclosure
+
+A response indicating serious risk prompts the appraiser to raise an exception review, stating the response and a reason. The Responsible Officer co-signs before the token-to-response linkage (token, category values, submission metadata) is shown to the appraiser and the Responsible Officer. The raiser cannot co-sign their own request. The appraisee never sees exception reviews. Released reports record only a count of approved exception reviews, never their content.

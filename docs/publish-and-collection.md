@@ -323,6 +323,16 @@ Three Tokens-page conveniences cover the 360° pattern's edge cases:
   used invitation's values are part of the audit trail and stay
   read-only; edits are recorded in the audit log.
 
+### Distributor access to the tokens page
+
+Users with the Distributor role (see [Surveys](/docs/surveys/#distributors-and-the-distributing-group)) can work on the Invite Tokens page (`/surveys/<slug>/tokens/`) without any other survey access:
+
+- Generate token batches and QR codes
+- See completion counts for each batch (how many responses have been received, not what they contain)
+- Export the token CSV
+
+Distributors cannot edit a token's category values (the per-invitation "Edit" action stays with editors), and they cannot view or export results. Use this role when someone needs to hand out invitations, such as a practice administrator or an appraisee sharing their own feedback link.
+
 ## Participant Experience
 
 ### Progress Saving and Resume
@@ -429,3 +439,4 @@ CheckTick includes enterprise-grade security:
 - [Authentication and Permissions](/docs/authentication-and-permissions/) - User access control
 - [Branding & Theme Settings](/docs/branding-and-theme-settings/) - Customize the look of your surveys
 - [Publishing Surveys (Technical)](/docs/publishing-surveys/) - API and technical details
+- [Surveys](/docs/surveys/#distributors-and-the-distributing-group) - Distributor role and the Distributing group

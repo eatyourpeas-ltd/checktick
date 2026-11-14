@@ -54,6 +54,8 @@ Per-seat pricing for larger organisations requiring flexible user counts.
 |-----------|---------------|
 | **Per user (typical hosted rate)** | £24/user (inc VAT) |
 
+Seats are clinicians only. Patients and colleague raters are respondents and do not use a seat.
+
 #### Included Features
 
 - Unlimited members (based on seats purchased)
@@ -61,6 +63,7 @@ Per-seat pricing for larger organisations requiring flexible user counts.
 - Multiple teams within organisation
 - Private datasets
 - Advanced data governance features
+- Appraisal workflow (`/appraisal/`): one survey per appraisee per cycle, appraiser caseloads, and Responsible Officer oversight
 - Priority email support
 - Hosted on CheckTick shared infrastructure
 

@@ -22,6 +22,10 @@ category: dspt-5-process-reviews
 | **R05** | Loss of Staff Laptop | Physical | 2 | 3 | **6** | Full Disk Encryption; Remote wipe capability; No local DB. | {{ cto_name }} |
 | **R06** | Supply Chain: GoCardless Breach | Financial | 1 | 3 | **3** | No banking data stored locally; Rely on provider PCI-DSS. | {{ siro_name }} |
 | **R07** | Application-Layer Vulnerabilities (Aug 2026 review) | Security | 1 | 4 | **4** | 18 findings (F1–F18) identified in static review: 2 High, 6 Medium, 9 Low, 1 Info. All 18 findings resolved (01–02/08/2026) with regression tests. See `security-review-august-2026.md` and `security-review-log.md`. | {{ cto_name }} |
+| **R08** | Distributor Role Over-Scoping (appraisal mis-scoped access to results) | Security | 2 | 4 | **8** | DISTRIBUTOR membership excluded from `can_view_survey`; appraisee holds no key path (org-key wrap); token and completion-count access only; tier-gated; membership changes audit-logged; RBAC negative tests. | {{ cto_name }} |
+| **R09** | Exception Review Misuse (rater identity disclosed without RO co-signature) | Security | 2 | 4 | **8** | Default reporting never shows token-to-response linkage; RO co-signature by a user other than the raiser required; raise, approve, and reject audit-logged (approval at WARNING); released report records a count only. | {{ siro_name }} |
+| **R10** | Appraiser Turnover: Org-Key Handling on Recovery | Availability | 2 | 3 | **6** | Survey keys wrapped with the organisation master key (no personal-key-only path); RO recovers and re-wraps to the incoming appraiser; key recovery logged at CRITICAL. | {{ cto_name }} |
+| **R11** | Self-Assessment Re-Identification (self token is single-holder and linked to the appraisee) | Security | 2 | 2 | **4** | Report visibility limited to appraisee, appraiser, and RO; self-assessment appears only in released snapshots; no live results access for the appraisee. | {{ cto_name }} |
 
 ## Risk Review Frequency
 

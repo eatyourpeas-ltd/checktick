@@ -323,6 +323,42 @@ The following hazards have been identified through structured review of the syst
 
 ---
 
+### HAZARD-CS11: Identified Rater Disclosure in Appraisal Exception Review
+
+| Field | Detail |
+| :--- | :--- |
+| **Hazard** | In the appraisal workflow, a colleague rater's identity (token-to-response linkage) is revealed without appropriate control, exposing the rater to retaliation or a data protection breach; or, if the control is too strict, action on a serious patient safety or fitness-to-practise concern is delayed. |
+| **Potential Cause** | Exception review raised without serious-risk grounds; requester attempting to self-approve; unmasking performed outside the exception review path; Responsible Officer unavailable, delaying co-sign; control set so strictly that genuine serious-risk concerns are not escalated. |
+| **Clinical Consequence** | Colleague raters deterred from raising patient safety or fitness-to-practise concerns, weakening the safety function of the appraisal; retaliation against a named rater; data protection breach requiring ICO notification assessment; or delayed action on a serious risk to patients. |
+| **Initial Severity** | Medium |
+| **Initial Likelihood** | Medium |
+| **Initial Risk** | ALARP |
+| **Existing Controls** | (1) Two-party control: the appraiser raises an exception review and the Responsible Officer co-signs before the token-to-response linkage is revealed. The raiser cannot co-sign their own request. (2) Every exception review event is recorded in the audit trail at WARNING severity. (3) Disclosed rater identity remains with the appraiser and Responsible Officer; it is not shared with the appraisee and is not included in any report. (4) The released report records only that an exception review occurred (a count of approved reviews), not the rater's identity or response content. (5) Colleague responses are pseudonymous (token-based), so linkage is possible only through the exception review path; aggregate reporting is anonymous and gated by the minimum response threshold (default 5). (6) Design decision D10 (Responsible Officer co-sign) is documented in [Appraisal Implementation Plan](/docs/appraisal-implementation-plan/). |
+| **Residual Severity** | Medium |
+| **Residual Likelihood** | Low |
+| **Residual Risk** | Acceptable |
+| **Action** | Review WARNING-level exception review audit events annually to confirm each approval was grounded in serious risk and no request was self-approved. Establish a documented Responsible Officer cover arrangement so that a co-sign is not delayed by RO absence. |
+
+---
+
+### HAZARD-CS12: Distributor Mis-Scoped Access to Appraisal Responses and Results
+
+| Field | Detail |
+| :--- | :--- |
+| **Hazard** | In the appraisal workflow, the appraisee holds a DISTRIBUTOR membership on their own appraisal survey. If that membership is mis-scoped, the appraisee could view response content or results, or alter responses, compromising rater confidentiality and the integrity of the appraisal. |
+| **Potential Cause** | Role assignment error when creating the appraisal survey membership; permission regression that broadens distributor access (e.g. tokens-page access extended to results or export views); misconfigured `can_view_survey` logic; appraisee attempting to alter survey content or responses. |
+| **Clinical Consequence** | Appraisee sees colleague or patient feedback, undermining rater candour and confidentiality; altered or selectively presented results could mask a concern about fitness to practise or patient safety, leaving risk unrecognised; invalid appraisal outcome affecting revalidation decisions. |
+| **Initial Severity** | Medium |
+| **Initial Likelihood** | Medium |
+| **Initial Risk** | ALARP |
+| **Existing Controls** | (1) Role scoping: the DISTRIBUTOR role can generate token batches and QR codes and see completion counts only; it has no access to results, export, or survey editing. (2) `can_view_survey` excludes distributor-only memberships from results access. (3) Key custody: responses are encrypted at rest and the appraisee holds no decryption path, so the restriction on reading results is enforced cryptographically rather than only by the user interface. (4) Survey ownership sits with the appraiser, so the appraisee cannot amend survey content or results. (5) Automated tests verify that a distributor can access tokens but not results. (6) Membership changes are recorded in the audit log. (7) Role model documented in [Authentication & Permissions](/docs/authentication-and-permissions/) and [Appraisal Implementation Plan](/docs/appraisal-implementation-plan/). |
+| **Residual Severity** | Medium |
+| **Residual Likelihood** | Low |
+| **Residual Risk** | Acceptable |
+| **Action** | Include distributor scoping and key custody checks in the regression suite for every release that changes survey membership, permission, or encryption logic. Review membership audit events for appraisal surveys annually. |
+
+---
+
 ## 6. Hazard Log Summary
 
 | ID | Hazard Summary | Initial Risk | Residual Risk |
@@ -337,6 +373,8 @@ The following hazards have been identified through structured review of the syst
 | CS08 | Use outside intended clinical scope | ALARP | Acceptable |
 | CS09 | Encryption key loss | ALARP | Acceptable |
 | CS10 | Failed clinician notification | Acceptable | Acceptable |
+| CS11 | Identified rater disclosure in appraisal exception review | ALARP | Acceptable |
+| CS12 | Distributor mis-scoped access to appraisal responses and results | ALARP | Acceptable |
 
 All identified hazards have a **residual risk of Acceptable** following application of existing controls.
 
@@ -370,7 +408,7 @@ The safety argument for {{ platform_name }} rests on the following evidence:
 
 ### 7.4 Residual Risk Position
 
-All ten identified hazards have been reduced to the **Acceptable** level following application of existing technical and process controls. No hazards remain at ALARP or Intolerable level. There are no outstanding safety actions with a blocking status.
+All twelve identified hazards have been reduced to the **Acceptable** level following application of existing technical and process controls. No hazards remain at ALARP or Intolerable level. There are no outstanding safety actions with a blocking status.
 
 ---
 
@@ -407,6 +445,8 @@ This Clinical Safety Case will be reviewed:
 | ACT-CS08 | Ensure DCB0160 guidance is included in self-hosting documentation and NHS Trust onboarding | {{ siro_name }} | Next release |
 | ACT-CS09 | Annual key recovery drill; review key holder succession at annual DR test | {{ cto_name }} | Annual (April) |
 | ACT-CS10 | Add documentation guidance that clinicians should not rely solely on email notification for time-critical follow-up | {{ cto_name }} | Next release |
+| ACT-CS11 | Annual review of WARNING-level exception review audit events; establish Responsible Officer cover arrangement so serious-risk co-sign is not delayed | {{ siro_name }} | Annual (April) |
+| ACT-CS12 | Include distributor scoping and key custody checks in regression suite for releases touching membership, permission, or encryption logic; annual review of appraisal membership audit events | {{ cto_name }} | Each release |
 
 ---
 

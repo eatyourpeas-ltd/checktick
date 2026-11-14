@@ -28,6 +28,7 @@ CheckTick implements a security-first approach to data protection, using per-sur
   - [Future Enhancements](#-future-enhancements)
 - [Web Application Integration](#web-application-integration)
   - [Survey Creation via Web Interface](#survey-creation-via-web-interface)
+  - [Appraisal Surveys: Organisation Key Wrap](#appraisal-surveys-organisation-key-wrap)
   - [Key Display Workflow](#key-display-workflow)
   - [Survey Unlocking](#survey-unlocking-via-web-interface)
   - [User Experience Flow](#user-experience-flow)
@@ -317,6 +318,23 @@ def survey_create(request: HttpRequest) -> HttpResponse:
         form = SurveyCreateForm()
     return render(request, "surveys/create.html", {"form": form})
 ```
+
+### Appraisal Surveys: Organisation Key Wrap
+
+Surveys created by the appraisal workflow (`/appraisal/`, Organisation tier) do not use a personal key. They are wrapped with the organisation master key from the start, so the appraisee (who holds the Distributor role) has no key path.
+
+```python
+def _create_appraisal(*, org, appraiser, appraisee, instrument, cycle_year):
+    _ensure_org_master_key(org, actor=appraiser)  # generates the org key lazily
+    survey.setup_submission_keypair()
+    survey.set_org_encryption(kek, org)  # wraps the KEK with the org master key
+    # subject category stamped in; appraisee added as DISTRIBUTOR (D1/D2)
+```
+
+- **Lazy master key**: `_ensure_org_master_key()` generates the 32-byte `Organization.encrypted_master_key` the first time an appraisal is created for an organisation that lacks one. The core survey views skip org-key wrapping when no master key exists; the appraisal wizard requires it, so it generates one. The action is written to the audit log.
+- **Key wrap**: `Survey.set_org_encryption()` wraps the survey KEK with the org master key using `encrypt_kek_with_org_key()` (AES-GCM, see [Encryption Utilities](#encryption-utilities)). The result is stored in `encrypted_kek_org`.
+- **Recovery and turnover**: `Survey.unlock_with_org_key(organization)` unlocks the survey for the Responsible Officer (organisation owner or admin). When the appraiser leaves, the RO unlocks through the org key and re-wraps the KEK, so the survey is not orphaned and does not depend on the departing user's credentials.
+- **Personal unlock is optional**: the appraiser's own unlock path is not part of this flow. It may be added later as a convenience. The org key is the recovery and oversight path.
 
 ### Key Display Workflow
 
@@ -3659,6 +3677,7 @@ docker compose exec web python manage.py test checktick_app.surveys.tests.test_p
 - [User Management](user-management.md)
 - [API Reference](api.md)
 - [Getting Started](getting-started.md)
+- [Appraisal Implementation Plan](appraisal-implementation-plan.md) - Design and phasing for the appraisal workflow
 
 ## Support and Questions
 

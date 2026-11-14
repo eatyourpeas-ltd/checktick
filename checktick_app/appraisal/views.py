@@ -942,6 +942,21 @@ def exception_review_linkage(
 
     response = review.response
     token = response.access_token
+    # Audit the disclosure view (metadata only — never the token string
+    # or the category values; see the AGENTS.md logging rules).
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.SURVEY,
+        organization=rel.organization,
+        survey=rel.survey,
+        action=AuditLog.Action.UPDATE,
+        severity=AuditLog.Severity.WARNING,
+        message="Viewed disclosed rater linkage.",
+        metadata={
+            "exception_review_id": review.pk,
+            "response_id": response.pk,
+        },
+    )
     linkage = {
         "response_id": response.pk,
         "submitted_at": response.submitted_at,

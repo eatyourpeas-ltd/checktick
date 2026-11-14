@@ -8534,6 +8534,22 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
             expires_at=expires_at,
             category_values=category_values,
         )
+        # Audit the batch generation (metadata only — never the token
+        # strings or the category values, which may carry subject names;
+        # see the AGENTS.md logging rules).
+        AuditLog.objects.create(
+            actor=request.user,
+            scope=AuditLog.Scope.SURVEY,
+            survey=survey,
+            action=AuditLog.Action.CREATE,
+            severity=AuditLog.Severity.INFO,
+            message="Generated invitation token batch.",
+            metadata={
+                "count": len(created),
+                "dimensions": sorted(category_values.keys()),
+                "note_present": bool(note),
+            },
+        )
         messages.success(request, f"Created {len(created)} tokens.")
         return redirect("surveys:tokens", slug=slug)
     # Issue #356: filter the flat token list by the subject dimension's
