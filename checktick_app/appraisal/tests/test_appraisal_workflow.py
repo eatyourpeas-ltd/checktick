@@ -90,17 +90,28 @@ def memberships(org, ro, appraiser, appraisee):
 
 INSTRUMENT_MARKDOWN = """CATEGORIES
   rater_role:
-    values: patient, colleague
+    values: self, clinician, patient
+
+# Self-assessment {self-assessment}    ~ cat:rater_role:self
+
+## Communication {self-comm}
+(likert)
+min: 1
+max: 5
+na: Don't know
 
 # Patient feedback {patient}    ~ cat:rater_role:patient
 
 ## Overall rating {pr1}
 (text)
 
-# Colleague feedback {colleague}    ~ cat:rater_role:colleague
+# Colleague feedback {colleague}    ~ cat:rater_role:clinician
 
-## Overall rating {cr1}
-(text)
+## Communication {cr1}
+(likert)
+min: 1
+max: 5
+na: Don't know
 """
 
 
@@ -162,14 +173,14 @@ def test_wizard_creates_survey(
     # D2: org-key wrap is set.
     assert survey.has_org_encryption()
     # The instrument's groups and questions were imported.
-    assert survey.question_groups.count() == 2
-    assert SurveyQuestion.objects.filter(survey=survey).count() == 2
+    assert survey.question_groups.count() == 3
+    assert SurveyQuestion.objects.filter(survey=survey).count() == 3
     # §5: the rater_role dimension separates the two populations.
     assert survey.respondent_categories.filter(name="rater_role").exists()
     patient_group = survey.question_groups.get(name="Patient feedback")
     assert patient_group.required_categories == {"rater_role": ["patient"]}
     colleague_group = survey.question_groups.get(name="Colleague feedback")
-    assert colleague_group.required_categories == {"rater_role": ["colleague"]}
+    assert colleague_group.required_categories == {"rater_role": ["clinician"]}
     # The subject dimension is stamped in (free text).
     subject_cat = RespondentCategory.objects.get(survey=survey, name="subject")
     assert subject_cat.free_text
@@ -438,10 +449,25 @@ def _patient_response(survey):
 
 def _clinician_response(survey, owner):
     """Token-linked response — attributed to the clinician population."""
+    import secrets as _secrets
+
     token = SurveyAccessToken.objects.create(
         survey=survey,
         created_by=owner,
+        token=_secrets.token_urlsafe(24),
         category_values={"rater_role": "clinician"},
+    )
+    return SurveyResponse.objects.create(survey=survey, answers={}, access_token=token)
+
+
+def _self_response(survey, owner):
+    import secrets as _secrets
+
+    token = SurveyAccessToken.objects.create(
+        survey=survey,
+        created_by=owner,
+        token=_secrets.token_urlsafe(24),
+        category_values={"rater_role": "self"},
     )
     return SurveyResponse.objects.create(survey=survey, answers={}, access_token=token)
 
@@ -916,3 +942,100 @@ def test_subject_default_value_surfaces_for_anonymous_patients(
         dim_defaults={"subject": cat.default_value},
     )
     assert "Dr Other" in html
+
+
+# ---------------------------------------------------------------------------
+# Self-assessment: third rater type + self-vs-others comparison (§5/§10)
+# ---------------------------------------------------------------------------
+
+
+def _self_response(survey, owner):
+    import secrets as _secrets
+
+    token = SurveyAccessToken.objects.create(
+        survey=survey,
+        created_by=owner,
+        token=_secrets.token_urlsafe(24),
+        category_values={"rater_role": "self"},
+    )
+    return SurveyResponse.objects.create(survey=survey, answers={}, access_token=token)
+
+
+@pytest.mark.django_db
+def test_self_population_never_suppressed(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    """The appraisee's own self-assessment (n=1) is always included —
+    there is no anonymity to protect (§9/§10). The release gate counts
+    all responses; the self population is below the per-population
+    threshold yet still included."""
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    rel.min_responses = 2
+    rel.save()
+    # Two patient responses open the release gate (total 3 >= 2) and meet
+    # the patient threshold; the single self response is below it but must
+    # still be included.
+    _patient_response(rel.survey)
+    _patient_response(rel.survey)
+    _self_response(rel.survey, appraiser)
+    client.force_login(appraiser)
+    client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+
+    doc = rel.snapshots.get(version=1).document
+    assert doc["populations"]["self"]["responses"] == 1
+    assert doc["populations"]["self"]["threshold_met"] is True
+    assert (
+        doc["sections"]["self"] is not None
+    ), "the self population must never be suppressed"
+
+
+@pytest.mark.django_db
+def test_report_compares_self_with_clinician_items(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    """The self-assessment grid mirrors the colleague grid — the report
+    pairs matching item texts across the two populations."""
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    rel.min_responses = 1
+    rel.save()
+    survey = rel.survey
+
+    # Find the matching grid rows by text (self vs colleague grids).
+    self_grid_row = SurveyQuestion.objects.filter(
+        survey=survey, group__name="Self-assessment", type="likert"
+    ).first()
+    colleague_grid_row = (
+        SurveyQuestion.objects.filter(
+            survey=survey, group__name="Colleague feedback", type="likert"
+        )
+        .filter(text=self_grid_row.text)
+        .first()
+    )
+
+    _self_response(survey, appraiser)
+    last = SurveyResponse.objects.filter(survey=survey).latest("submitted_at")
+    last.answers = {str(self_grid_row.id): "Good"}
+    last.save(update_fields=["answers"])
+
+    _clinician_response(survey, appraiser)
+    last = (
+        SurveyResponse.objects.filter(survey=survey)
+        .exclude(access_token__category_values__rater_role="self")
+        .latest("submitted_at")
+    )
+    last.answers = {str(colleague_grid_row.id): "Very Good"}
+    last.save(update_fields=["answers"])
+
+    client.force_login(appraiser)
+    client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+    doc = rel.snapshots.get(version=1).document
+
+    comparisons = {c["item"]: c for c in doc["comparisons"]}
+    assert (
+        self_grid_row.text in comparisons
+    ), "matching self/colleague items must be paired"
+    cmp = comparisons[self_grid_row.text]
+    assert set(cmp["percentages"].keys()) == {"self", "clinician"}
+    assert cmp["counts"] == {"self": 1, "clinician": 1}
+    assert cmp["percentages"]["self"].get("Good") == 100.0
+    assert cmp["percentages"]["clinician"].get("Very Good") == 100.0

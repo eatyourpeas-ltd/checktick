@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load i18n %}
+{% load i18n survey_extras %}
 {% block title %}{% trans "Appraisal report" %} - CheckTick{% endblock %}
 {% block content %}
 <div class="max-w-4xl mx-auto">
@@ -56,6 +56,40 @@
       </table>
     </div>
   </div>
+
+  {% if doc.comparisons %}
+  <div class="card bg-base-100 shadow mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-lg">{% trans "Self-assessment compared with raters" %}</h2>
+      <p class="text-sm opacity-70">{% trans "The appraisee's own ratings are shown against the other rater populations for each item." %}</p>
+      {% for cmp in doc.comparisons %}
+      <div class="mb-4">
+        <h3 class="font-semibold text-sm">{{ cmp.item }}</h3>
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>{% trans "Response" %}</th>
+              {% for pop, pct in cmp.percentages.items %}
+              <th class="capitalize">{% trans pop %} <span class="opacity-60">({{ cmp.counts|get_item:pop }})</span></th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for opt_label in cmp.options %}
+            <tr>
+              <td>{{ opt_label }}</td>
+              {% for pop, pct in cmp.percentages.items %}
+              <td>{% if pct|get_item:opt_label != None %}{{ pct|get_item:opt_label }}%{% else %}—{% endif %}</td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 
   {% for pop, section in doc.sections.items %}
     {% if section %}

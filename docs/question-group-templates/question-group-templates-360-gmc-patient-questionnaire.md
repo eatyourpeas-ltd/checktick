@@ -18,7 +18,7 @@ attribution:
 CATEGORIES
   rater_role:
     label: Rater Role
-    values: clinician, patient
+    values: self, clinician, patient
     source: token
 
 # Patient Introduction {patient-introduction}    ~ cat:rater_role:patient
@@ -83,6 +83,48 @@ na: Does not apply
 
 ## Please add any other comments you want to make about this doctor. Please note: No patients will be identified when this information is given to the doctor. {please-add-any-other-comments}
 (long_text)
+
+# Self-assessment {self-assessment}    ~ cat:rater_role:self
+Self Assessment
+
+## Content block {content-block-self}
+(content_block)
+heading: Self assessment
+
+Please rate yourself in each of the following areas by ticking one box in each line.
+Your own ratings are compared with the feedback from your colleagues and patients in your appraisal report.
+
+## Please rate yourself in each of the following areas by ticking one box in each line. {please-rate-yourself-in}
+(grid likert categories)
+- Poor
+- Less than Satisfactory
+- Satisfactory
+- Good
+- Very Good
+na: Don't know
+### Clinical Knowledge*
+### Diagnosis*
+### Clinical decision making*
+### Treatment (including practical procedures)*
+### Prescribing*
+### Medical record keeping*
+### Recognising and working within limitations*
+### Keeping knowledge and skills up to date*
+### Reviewing and reflecting on own performance*
+### Teaching (students, trainees, others)*
+### Supervising colleagues*
+### Commitment to care and wellbeing of patients*
+### Communication with patients and relatives*
+### Working effectively with colleagues*
+### Effective time management*
+### I respect patient confidentiality*
+### I am honest and trustworthy*
+### My performance is not impaired by ill health*
+
+## Do you consider yourself fit to practise medicine?* {do-you-consider-yourself-fit}
+(yesno)
+- Yes
+- No
 
 # Colleague Introduction {colleague-introduction}    ~ cat:rater_role:clinician
 Colleague Introduction

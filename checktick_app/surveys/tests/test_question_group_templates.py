@@ -99,7 +99,11 @@ def test_360_template_structure():
     assert parsed.get("categories"), "template must define CATEGORIES"
     dims = {d["name"]: d for d in parsed["categories"]["dimensions"]}
     assert "rater_role" in dims
-    assert set(dims["rater_role"]["allowed_values"]) == {"clinician", "patient"}
+    assert set(dims["rater_role"]["allowed_values"]) == {
+        "self",
+        "clinician",
+        "patient",
+    }
 
     rules = parsed["categories_group_rules"]
     patient_groups = [

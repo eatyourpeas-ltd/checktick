@@ -33,6 +33,7 @@ from .models import AppraisalExceptionReview
 # The rater-role dimension name used by the appraisal instrument
 # families (docs/question-group-templates/).
 RATER_ROLE_DIM = "rater_role"
+SELF_POPULATION = "self"
 PATIENT_POPULATION = "patient"
 CLINICIAN_POPULATION = "clinician"
 
@@ -147,22 +148,36 @@ def build_report_document(rel, survey_key: bytes | None) -> dict[str, Any]:
         pop = population_for_response(response)
         by_population.setdefault(pop, []).append(response)
     for pop, pop_responses in sorted(by_population.items()):
+        # The self population is never suppressed: it is the appraisee's
+        # own single self-assessment (token rater_role=self) — there is
+        # no anonymity to protect and n=1 is by design.
+        met = len(pop_responses) >= rel.min_responses or pop == SELF_POPULATION
         populations[pop] = {
             "responses": len(pop_responses),
-            "threshold_met": len(pop_responses) >= rel.min_responses,
+            "threshold_met": met,
         }
-    # Ensure both canonical populations appear even when empty.
-    for pop in (PATIENT_POPULATION, CLINICIAN_POPULATION):
+    # Ensure the canonical populations appear even when empty.
+    for pop in (SELF_POPULATION, PATIENT_POPULATION, CLINICIAN_POPULATION):
+        populations.setdefault(
+            pop,
+            {
+                "responses": 0,
+                "threshold_met": pop == SELF_POPULATION,
+            },
+        )
         populations.setdefault(pop, {"responses": 0, "threshold_met": False})
 
     # Per-population aggregates. Below-threshold populations are
-    # suppressed entirely (counts only) — anonymity protection (D5).
+    # suppressed entirely (counts only) — anonymity protection (D5) —
+    # except the self population (the appraisee's own assessment).
     sections: dict[str, Any] = {}
     for pop, info in populations.items():
         if info["threshold_met"]:
             summary = compute_survey_summary(
                 survey,
-                responses=responses.filter(pk__in=[r.pk for r in by_population[pop]]),
+                responses=responses.filter(
+                    pk__in=[r.pk for r in by_population.get(pop, [])]
+                ),
                 survey_key=survey_key,
             )
             sections[pop] = _summary_to_dict(summary)
@@ -181,10 +196,57 @@ def build_report_document(rel, survey_key: bytes | None) -> dict[str, Any]:
         "structure": _structure_inventory(survey),
         "populations": populations,
         "sections": sections,
-        # §9: the released report records only that an exception review
-        # occurred (existence) — never its content, which stays with the
-        # appraiser/RO.
+        "comparisons": _build_comparisons(sections),
         "exception_review_count": rel.exception_reviews.filter(
             status=AppraisalExceptionReview.Status.APPROVED
         ).count(),
     }
+
+
+def _build_comparisons(sections: dict[str, Any]) -> list[dict[str, Any]]:
+    """Pair matching question texts across rater populations (GMC-style
+    self-vs-others comparison).
+
+    The self-assessment grid mirrors the colleague grid — same row texts —
+    so distributions with identical question text represent the same item
+    rated by different populations. For each item rated by two or more
+    unsuppressed populations, emit the per-option percentages aligned to
+    the self population's option labels (falling back to the first
+    population that has the item).
+    """
+    if SELF_POPULATION not in sections or not sections.get(SELF_POPULATION):
+        return []
+
+    # text -> {population: distribution}
+    by_text: dict[str, dict[str, dict[str, Any]]] = {}
+    for pop, section in sections.items():
+        if not section:
+            continue
+        for dist in section.get("distributions", []):
+            by_text.setdefault(dist["text"], {})[pop] = dist
+
+    comparisons: list[dict[str, Any]] = []
+    for text, pop_dists in by_text.items():
+        if len(pop_dists) < 2:
+            continue
+        if SELF_POPULATION not in pop_dists:
+            continue
+        self_dist = pop_dists[SELF_POPULATION]
+        option_labels = [o["label"] for o in self_dist["options"]]
+        # Per population: {option label: percent} — aligned lookups in
+        # the template (missing labels render as —).
+        percentages: dict[str, dict[str, float]] = {}
+        counts: dict[str, int] = {}
+        for pop, dist in pop_dists.items():
+            counts[pop] = dist["total_responses"]
+            percentages[pop] = {o["label"]: o["percent"] for o in dist["options"]}
+        comparisons.append(
+            {
+                "item": text,
+                "options": option_labels,
+                "percentages": percentages,
+                "counts": counts,
+            }
+        )
+    comparisons.sort(key=lambda c: c["item"].lower())
+    return comparisons
