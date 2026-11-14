@@ -52,6 +52,11 @@ DOC_CATEGORIES = {
         "order": 2,
         "icon": "✨",
     },
+    "appraisal": {
+        "title": "Appraisal",
+        "order": 2.5,
+        "icon": "🩺",
+    },
     "self-hosting": {
         "title": "Self-Hosting",
         "order": 3,

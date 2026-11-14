@@ -34,6 +34,7 @@ For NHS tips on survey creation check out this [guidance](https://nhsevaluationt
 
 Organisation accounts can run structured clinician appraisal cycles. Each appraisee has one survey per cycle, built from the organisation's instrument, and feedback is gathered from patients, colleagues, and a self-assessment. Reports are only released once a minimum number of responses has been reached, and released reports are versioned.
 
+- [Appraisal Workflow](appraisal.md) - the full guide: what the RO and organisation get, encryption and key custody, governance (two-party rater unmasking, audit logging, role-based access), and what it means for the appraisee
 - [Surveys: the Distributor role](surveys.md#distributors-and-the-distributing-group)
 - [Publish and collect: distributor access to the tokens page](publish-and-collection.md#distributor-access-to-the-tokens-page)
 - [Reporting: appraisal reports](reporting-and-exports.md#appraisal-reports)
@@ -49,4 +50,3 @@ Organisation accounts can run structured clinician appraisal cycles. Each apprai
 - [Getting Started with API](getting-started-api/)
 - [SNOMED CT Integration](snomed-integration.md)
 - [Survey Builder (Technical)](survey-builder-technical.md)
-- [Appraisal Implementation Plan](appraisal-implementation-plan.md)
