@@ -2297,6 +2297,7 @@ def _substitute_category_placeholders(
     known_dims: set[str],
     *,
     escape_values: bool = False,
+    dim_defaults: dict[str, str] | None = None,
 ) -> str:
     """Substitute ``{{<dimension>}}`` placeholders in content block text.
 
@@ -2309,10 +2310,12 @@ def _substitute_category_placeholders(
       typo like ``{{subjekt}}`` renders visibly and the author catches it
       in preview — including when the placeholder carries a ``|default:``
       segment (the default must not mask the typo).
-    - Known but unresolved dimension → the placeholder's optional
-      ``{{dim|default:<text>}}`` fallback when present (issue #351), else
-      an empty string (same semantics as the visibility rules: unresolved
-      = not shown). A resolved value always wins over the default.
+    - Known but unresolved dimension → the dimension's ``default_value``
+      (RespondentCategory.default_value — e.g. the appraisal subject's
+      name for anonymous patients), then the placeholder's optional
+      ``{{dim|default:<text>}}`` fallback (issue #351), else an empty
+      string (same semantics as the visibility rules: unresolved = not
+      shown). A resolved value always wins over both defaults.
     - ``escape_values=True`` inserts ``escape(value)`` — for substitution
       into already-rendered, sanitised HTML (the ``body_md`` path). The
       plain-text fields (heading / subtitle / link labels / consent
@@ -2323,6 +2326,8 @@ def _substitute_category_placeholders(
       on the ``body_md`` path — markdown has already escaped and
       sanitised it with the surrounding body, so it is never re-escaped
       (that would double-encode entities like ``&`` → ``&amp;amp;``).
+      ``dim_defaults`` is author-configured on the Organise page and is
+      substituted like the ``|default:`` text (as typed / as-rendered).
     """
     if not text or category_values is None:
         return text or ""
@@ -2334,14 +2339,11 @@ def _substitute_category_placeholders(
         value = str(category_values.get(dim, ""))
         if value:
             return escape(value) if escape_values else value
-        # Known but unresolved: fall back to the placeholder's optional
-        # ``|default:`` text (issue #351), else render empty (unresolved =
-        # not shown). The default is authored source text, inserted as
-        # typed / as-rendered (see docstring) — it cannot form tags or
-        # attributes: by the time substitution sees it, any ``<`` it
-        # carries is either an allowlisted sanitised tag or an ``&lt;``
-        # entity, and quotes in text content are inert.
-        return match.group(2) or ""
+        # Known but unresolved: the dimension's configured default_value,
+        # then the placeholder's optional ``|default:`` text (issue #351),
+        # else render empty (unresolved = not shown).
+        default = (dim_defaults or {}).get(dim) or match.group(2) or ""
+        return default
 
     return _CATEGORY_PLACEHOLDER_RE.sub(_repl, text)
 
@@ -2350,6 +2352,7 @@ def _substituted_content_block_links(
     links: Any,
     category_values: dict[str, str] | None,
     known_dims: set[str],
+    dim_defaults: dict[str, str] | None = None,
 ) -> list[Any]:
     """Return ``links`` with ``{{<dimension>}}`` labels substituted (issue #352).
 
@@ -2374,6 +2377,7 @@ def _substituted_content_block_links(
                     str(link.get("label") or ""),
                     category_values,
                     known_dims,
+                    dim_defaults=dim_defaults,
                 ),
             }
         )
@@ -2454,8 +2458,10 @@ def _annotate_question_render_sequence(
     # Respondent categories: known dimension names for {{dim}} placeholder
     # substitution in content blocks (lazily populated on the first content
     # block — see docs/content-block-category-substitution-implementation-
-    # plan.md §Substitution contract).
+    # plan.md §Substitution contract). category_dim_defaults carries each
+    # dimension's configured fallback value (lazy, same pattern).
     known_category_dims: set[str] | None = None
+    category_dim_defaults: dict[str, str] | None = None
 
     for i, q in enumerate(questions, start=1):
         setattr(q, "idx", i)
@@ -2511,13 +2517,23 @@ def _annotate_question_render_sequence(
             opts = q.options if isinstance(q.options, dict) else {}
             # Known category dimensions for {{dim}} substitution (fetched
             # once; None category_values is the builder path, which never
-            # substitutes).
+            # substitutes). dim_defaults carries each dimension's
+            # configured fallback (e.g. the appraisal subject's name for
+            # anonymous patients).
             if known_category_dims is None:
                 known_category_dims = (
                     set(survey.respondent_categories.values_list("name", flat=True))
                     if category_values is not None
                     else set()
                 )
+            if category_dim_defaults is None:
+                category_dim_defaults = {
+                    c.name: c.default_value
+                    for c in survey.respondent_categories.filter(
+                        ~models.Q(default_value="")
+                    )
+                    if c.default_value
+                }
             # Delphi aggregate feedback substitution: if this content block is
             # marked as aggregate feedback (``is_delphi_feedback = True``),
             # substitute the body_md with a combined summary of all feedback
@@ -2544,6 +2560,7 @@ def _annotate_question_render_sequence(
                         opts.get("heading", "Inter-round feedback"),
                         category_values,
                         known_category_dims,
+                        dim_defaults=category_dim_defaults,
                     ),
                 )
                 setattr(
@@ -2553,13 +2570,17 @@ def _annotate_question_render_sequence(
                         opts.get("subtitle", ""),
                         category_values,
                         known_category_dims,
+                        dim_defaults=category_dim_defaults,
                     ),
                 )
                 setattr(
                     q,
                     "content_block_links",
                     _substituted_content_block_links(
-                        opts.get("links", []), category_values, known_category_dims
+                        opts.get("links", []),
+                        category_values,
+                        known_category_dims,
+                        dim_defaults=category_dim_defaults,
                     ),
                 )
                 setattr(q, "content_block_image", None)
@@ -2577,6 +2598,7 @@ def _annotate_question_render_sequence(
                         category_values,
                         known_category_dims,
                         escape_values=True,
+                        dim_defaults=category_dim_defaults,
                     )
                 )
             setattr(q, "content_block_html", body_html)
@@ -2587,6 +2609,7 @@ def _annotate_question_render_sequence(
                     opts.get("heading", ""),
                     category_values,
                     known_category_dims,
+                    dim_defaults=category_dim_defaults,
                 ),
             )
             setattr(
@@ -2596,13 +2619,17 @@ def _annotate_question_render_sequence(
                     opts.get("subtitle", ""),
                     category_values,
                     known_category_dims,
+                    dim_defaults=category_dim_defaults,
                 ),
             )
             setattr(
                 q,
                 "content_block_links",
                 _substituted_content_block_links(
-                    opts.get("links", []), category_values, known_category_dims
+                    opts.get("links", []),
+                    category_values,
+                    known_category_dims,
+                    dim_defaults=category_dim_defaults,
                 ),
             )
             # Resolve the image if one is set.
@@ -2633,6 +2660,7 @@ def _annotate_question_render_sequence(
                             consent.get("statement", ""),
                             category_values,
                             known_category_dims,
+                            dim_defaults=category_dim_defaults,
                         ),
                         "required": consent.get("required", False),
                     },
@@ -17787,7 +17815,6 @@ def question_group_publish(request, slug, gid):
 @ratelimit(key="user", rate="50/h", block=True)
 def published_template_import(request, template_id, slug):
     """Import a published template into a survey."""
-    from .markdown_import import parse_bulk_markdown
     from .permissions import require_can_edit, require_can_import_published_template
 
     template = get_object_or_404(PublishedQuestionGroup, pk=template_id)
@@ -17798,8 +17825,14 @@ def published_template_import(request, template_id, slug):
 
     if request.method == "POST":
         try:
-            # Parse markdown
-            groups = parse_bulk_markdown(template.markdown)
+            # Parse markdown with collections so CATEGORIES blocks and
+            # ``~ cat:`` suffixes are honoured (GMC 360 instruments are
+            # multi-population templates — the plain parser would leave
+            # the cat suffix in the group name and drop the rules).
+            from .markdown_import import parse_bulk_markdown_with_collections
+
+            parsed = parse_bulk_markdown_with_collections(template.markdown)
+            groups = parsed["groups"]
 
             if not groups:
                 messages.error(request, "Template has no valid groups to import.")
@@ -17848,6 +17881,39 @@ def published_template_import(request, template_id, slug):
                             required=bool(row.get("required", False)),
                             order=idx + row_idx,
                         )
+
+            # Apply CATEGORIES config: create the dimensions (additively —
+            # unlike bulk upload, an import never wipes existing ones) and
+            # apply the ``~ cat:`` rules to the imported group.
+            categories_cfg = parsed.get("categories")
+            categories_group_rules = parsed.get("categories_group_rules", {})
+            if categories_cfg and categories_cfg.get("dimensions"):
+                existing_dims = set(
+                    survey.respondent_categories.values_list("name", flat=True)
+                )
+                for i, dim in enumerate(categories_cfg["dimensions"]):
+                    if dim["name"] in existing_dims:
+                        continue
+                    RespondentCategory.objects.create(
+                        survey=survey,
+                        name=dim["name"],
+                        label=dim.get("label", ""),
+                        allowed_values=dim.get("allowed_values", []),
+                        free_text=bool(dim.get("free_text", False)),
+                        resolution_source=dim.get(
+                            "resolution_source",
+                            RespondentCategory.ResolutionSource.TOKEN,
+                        ),
+                        profile_field=dim.get("profile_field", ""),
+                        order=i + 1,
+                    )
+                rules_list = categories_group_rules.get(new_group.name, [])
+                if rules_list:
+                    rules: dict[str, list[str]] = {}
+                    for dim_name, val in rules_list:
+                        rules.setdefault(dim_name, []).append(val)
+                    new_group.required_categories = rules
+                    new_group.save(update_fields=["required_categories"])
 
             # Increment import count
             template.increment_import_count()

@@ -383,8 +383,10 @@ def _create_appraisal(
     )
 
     # Stamp the subject dimension (§5): a free-text ``subject``
-    # category whose value is the appraisee's name, used by token
-    # batches and content-block substitution.
+    # category whose value is the appraisee's name — the default_value
+    # surfaces it in {{subject}} content-block placeholders for
+    # anonymous patients (no token to carry it), and token batches can
+    # still carry it explicitly for colleague raters.
     if not survey.respondent_categories.filter(name="subject").exists():
         next_order = (
             survey.respondent_categories.aggregate(m=models.Max("order"))["m"] or 0
@@ -395,6 +397,7 @@ def _create_appraisal(
             label="Subject",
             allowed_values=[],
             free_text=True,
+            default_value=subject,
             order=next_order,
         )
 

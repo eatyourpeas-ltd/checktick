@@ -9,16 +9,17 @@ This appendix lists validated questionnaires and instruments available as global
 
 ## Available Templates
 
-### 360° Colleague Feedback Battery
+### 360° GMC Patient Feedback Questionnaire
 
-**Multi-rater (360°) feedback battery**
+**Multi-rater (360°) feedback for clinician appraisal — patient and colleague (clinician) raters in one instrument**
 
 - **Citation**: CheckTick generic item bank (2026). Original items — no third-party instrument.
 - **License**: MIT (same as the CheckTick project)
-- **Questions**: 9 questions — 3 grids of professional behaviours (4–5 rows each, shared 1–5 scale with a "Does not apply" option), rater context, free-text strengths and development, and an overall recommendation
-- **Tags**: 360, multi-rater, appraisal, feedback, professional-behaviours
+- **Questions**: Patient population — experience-of-consultation grid (9 rows, 1–5 scale), confidence and continuity yes/no items, free-text comments. Colleague population — 19-row professional-behaviours grid (shared scale with "Don't know"), fitness-to-practise item, free-text comments. Shared demographics (ethnic group, sex/gender, age) plus colleague professional role (with a required Yes/No follow-up for doctors in training grades) and familiarity context.
+- **Rater populations**: separated by the `rater_role` respondent category (`patient` / `clinician`, token-resolved) — one survey, one instrument, unified reporting.
+- **Tags**: 360, multi-rater, appraisal, patient, feedback, professional-behaviours
 
-[View 360° Colleague Feedback Battery Template →](/docs/question-group-templates-360-assessment/)
+[View 360° GMC Patient Feedback Questionnaire →](/docs/question-group-templates-360-gmc-patient-questionnaire/)
 
 ### PHQ-9 (Patient Health Questionnaire-9)
 

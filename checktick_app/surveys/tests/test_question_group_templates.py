@@ -33,7 +33,9 @@ TEMPLATE_DIR = (
     / "question-group-templates"
 )
 
-TEMPLATE_360 = TEMPLATE_DIR / "question-group-templates-360-assessment.md"
+TEMPLATE_360 = TEMPLATE_DIR / (
+    "question-group-templates-360-gmc-patient-questionnaire.md"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -81,49 +83,80 @@ def test_all_global_templates_have_frontmatter_and_parse():
         assert questions, f"{f.name}: no questions parsed"
 
 
-# --- The 360° battery template ---
+# --- The 360° GMC patient feedback template ---
 
 
-def test_360_template_grid_structure():
+def test_360_template_structure():
+    """The GMC 360 instrument: two rater populations in one survey,
+    separated by the rater_role category, with typed/required follow-ups."""
     metadata, markdown = _split_frontmatter(TEMPLATE_360.read_text(encoding="utf-8"))
-    assert metadata["title"] == "360° Colleague Feedback Battery"
+    assert metadata["title"] == "360° GMC Patient Feedback Questionnaire"
     parsed = parse_bulk_markdown_with_collections(markdown)
     groups = parsed["groups"]
-    # Template import takes the first group — the battery is one section.
-    assert len(groups) == 1
-    questions = groups[0]["questions"]
 
-    grids = [q for q in questions if q["final_type"] == "grid"]
-    assert len(grids) == 3, "expected the 3 rating grids"
-    for q in grids:
-        assert q["required"] is False, "stems are never required (rows carry it)"
-        scale = q["final_options"]["scale"]
-        assert scale["type"] == "number-scale"
-        assert scale["min"] == 1
-        assert scale["max"] == 5
-        assert scale["render"] == "radio"
-        assert scale["na_label"] == "Does not apply"
-        # The `*` on each stem marks every row required.
-        assert q["grid_rows"], "grid has no rows"
-        assert all(r["required"] for r in q["grid_rows"])
+    # Rater populations: patient and colleague sections separated by
+    # required_categories rules on the rater_role dimension.
+    assert parsed.get("categories"), "template must define CATEGORIES"
+    dims = {d["name"]: d for d in parsed["categories"]["dimensions"]}
+    assert "rater_role" in dims
+    assert set(dims["rater_role"]["allowed_values"]) == {"clinician", "patient"}
 
-    # The user's 360° example items are in the communication grid;
-    # courtesy sits in the professionalism grid.
-    by_ref = {q["ref"]: q for q in questions}
-    comm_rows = [r["title"] for r in by_ref["quality-communication"]["grid_rows"]]
-    assert {
-        "Listening to you",
-        "Making you feel at ease",
-        "Explaining things clearly",
-    } <= set(comm_rows)
-    prof_rows = [r["title"] for r in by_ref["quality-professionalism"]["grid_rows"]]
-    assert "Being polite and courteous" in prof_rows
+    rules = parsed["categories_group_rules"]
+    patient_groups = [
+        name
+        for name, r in rules.items()
+        if any(d == "rater_role" and v == "patient" for d, v in r)
+    ]
+    clinician_groups = [
+        name
+        for name, r in rules.items()
+        if any(d == "rater_role" and v == "clinician" for d, v in r)
+    ]
+    assert patient_groups, "no patient-facing sections"
+    assert clinician_groups, "no colleague-facing sections"
 
-    # Supporting questions around the grids.
-    types = [q["final_type"] for q in questions]
-    assert types.count("mc_single") == 2
-    assert types.count("long_text") == 2
-    assert types.count("likert") == 1
+    # Patient experience grid: 9 rows on a 1-5 scale with NA option.
+    patient_grid = next(
+        q
+        for g in groups
+        for q in g["questions"]
+        if q["final_type"] == "grid"
+        and "Being polite" in [r["title"] for r in q.get("grid_rows", [])]
+    )
+    assert len(patient_grid["grid_rows"]) == 9
+    scale = patient_grid["final_options"]["scale"]
+    assert scale["type"] == "number-scale"
+    assert scale["min"] == 1
+    assert scale["max"] == 5
+    assert scale["na_label"] == "Does not apply"
+
+    # Colleague behaviours grid: 19 rows, categories scale with Don't know.
+    colleague_grid = next(
+        q
+        for g in groups
+        for q in g["questions"]
+        if q["final_type"] == "grid"
+        and "Clinical Knowledge" in [r["title"] for r in q.get("grid_rows", [])]
+    )
+    assert len(colleague_grid["grid_rows"]) == 18
+    cscale = colleague_grid["final_options"]["scale"]
+    assert cscale["type"] == "categories"
+    assert "Don't know" in str(cscale)
+
+    # Typed follow-up: the professional role question's Doctor option
+    # carries a required Yes/No follow-up (training grade).
+    role_q = next(
+        q
+        for g in groups
+        for q in g["questions"]
+        if "professional role" in q["title"].lower()
+    )
+    doctor = next(o for o in role_q["final_options"] if o.get("label") == "Doctor")
+    assert doctor["followup_text"]["type"] == "yesno"
+    assert doctor["followup_text"]["required"] is True
+    assert doctor["followup_text"]["label"] == (
+        "If you are a doctor, are you in a training grade?"
+    )
 
 
 # --- Import through the question bank view ---
@@ -140,7 +173,7 @@ class Test360TemplateImport:
         )
         _, markdown = _split_frontmatter(TEMPLATE_360.read_text(encoding="utf-8"))
         template = PublishedQuestionGroup.objects.create(
-            name="360° Colleague Feedback Battery",
+            name="360° GMC Patient Feedback Questionnaire",
             description="test copy",
             publication_level=PublishedQuestionGroup.PublicationLevel.GLOBAL,
             publisher=user,
@@ -156,18 +189,21 @@ class Test360TemplateImport:
         )
         assert res.status_code == 302
 
+        # Template import takes the FIRST group — the patient introduction
+        # section of the GMC instrument.
         group = QuestionGroup.objects.get(imported_from=template)
+        assert group.name == "Patient Introduction"
         survey_questions = SurveyQuestion.objects.filter(survey=survey, group=group)
         stems = survey_questions.filter(type=SurveyQuestion.Types.GRID).order_by(
             "order"
         )
-        assert stems.count() == 3
+        assert stems.count() == 1
 
         rows = SurveyQuestion.objects.filter(
             survey=survey, group=group, parent__isnull=False
         ).order_by("order", "id")
-        # 4 + 4 + 5 grid rows from the battery.
-        assert rows.count() == 13
+        # The 9-row patient experience grid.
+        assert rows.count() == 9
         for row in rows:
             assert row.parent_id is not None
             assert row.type == SurveyQuestion.Types.LIKERT

@@ -4984,6 +4984,17 @@ class RespondentCategory(models.Model):
             "the value from."
         ),
     )
+    default_value = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text=(
+            "Fallback value for {{dim}} substitution in content blocks when "
+            "the dimension is unresolved for this respondent — e.g. the "
+            "appraisal subject's name, so anonymous patients (no token) "
+            "still see who the feedback is about. Token-borne values always "
+            "win over the default."
+        ),
+    )
     order = models.PositiveIntegerField(
         default=0,
         help_text="Display order on the Organise page.",

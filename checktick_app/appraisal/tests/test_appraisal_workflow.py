@@ -882,3 +882,37 @@ def test_pending_exception_badge_on_caseload_and_portfolio(
     client.force_login(ro)
     html = client.get(reverse("appraisal:portfolio")).content.decode()
     assert "awaiting co-signature" in html
+
+
+@pytest.mark.django_db
+def test_subject_default_value_surfaces_for_anonymous_patients(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    """{{subject}} in a content block resolves to the appraisee's name for
+    anonymous patients (no token) via the dimension's default_value."""
+    from checktick_app.surveys.views import _substitute_category_placeholders
+
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    survey = rel.survey
+    subject_name = appraisee.get_full_name() or appraisee.username
+    cat = survey.respondent_categories.get(name="subject")
+    assert cat.default_value == subject_name
+
+    # Anonymous patient: subject unresolved → default kicks in.
+    html = _substitute_category_placeholders(
+        "Feedback about {{subject}}",
+        {},
+        {"subject"},
+        dim_defaults={"subject": cat.default_value},
+    )
+    assert subject_name in html
+    assert "{{subject}}" not in html
+
+    # Token-borne value wins over the default.
+    html = _substitute_category_placeholders(
+        "Feedback about {{subject}}",
+        {"subject": "Dr Other"},
+        {"subject"},
+        dim_defaults={"subject": cat.default_value},
+    )
+    assert "Dr Other" in html
