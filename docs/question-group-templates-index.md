@@ -80,7 +80,7 @@ python manage.py sync_global_question_group_templates
 ```
 
 This command:
-- Scans `docs/question-group-templates-*.md` files
+- Scans `docs/question-group-templates/*.md` files
 - Extracts YAML frontmatter metadata
 - Validates markdown format
 - Creates/updates global templates in the database

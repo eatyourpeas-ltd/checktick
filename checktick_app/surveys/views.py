@@ -17551,6 +17551,23 @@ def question_group_publish(request, slug, gid):
 
     # Check if group has questions
     questions = SurveyQuestion.objects.filter(survey=survey, group=group)
+
+    # Publishing is organisation-level only (global templates are curated —
+    # see docs/question-group-template-library.md). Non-org surveys have
+    # nothing to publish to, so show guidance instead of the form.
+    if not survey.organization:
+        return render(
+            request,
+            "surveys/question_group_publish.html",
+            {
+                "survey": survey,
+                "group": group,
+                "form": None,
+                "questions": questions,
+                "can_publish": False,
+            },
+        )
+
     if not questions.exists():
         messages.error(request, "Cannot publish an empty question group.")
         return redirect("surveys:group_builder", slug=slug, gid=gid)
@@ -17605,6 +17622,7 @@ def question_group_publish(request, slug, gid):
             "group": group,
             "form": form,
             "questions": questions,
+            "can_publish": True,
         },
     )
 

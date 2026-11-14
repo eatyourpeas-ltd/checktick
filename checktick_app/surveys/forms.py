@@ -54,24 +54,24 @@ class PublishQuestionGroupForm(forms.ModelForm):
         self.question_group = question_group
         self.survey = survey
 
-        # Limit publication level choices based on user permissions
+        # Limit publication level choices based on user permissions.
+        # Global publication is curated (admin-only via the API) — the web
+        # UI offers organisation level only, and only for org-linked surveys.
         if survey and survey.organization:
-            # Survey belongs to organization - can publish to org or global
             choices = [
                 (
                     PublishedQuestionGroup.PublicationLevel.ORGANIZATION,
                     f"Organisation ({survey.organization.name})",
                 ),
-                (PublishedQuestionGroup.PublicationLevel.GLOBAL, "Global (all users)"),
             ]
         else:
-            # Individual survey - can only publish globally
-            choices = [
-                (PublishedQuestionGroup.PublicationLevel.GLOBAL, "Global (all users)")
-            ]
+            # Individual (non-org) survey — there is nothing to publish to.
+            # The view shows guidance to link the survey to an organisation.
+            choices = []
 
         self.fields["publication_level"].choices = choices
-        self.fields["publication_level"].initial = choices[0][0]
+        if choices:
+            self.fields["publication_level"].initial = choices[0][0]
 
         # Pre-fill name and description from source group
         if question_group and not self.instance.pk:

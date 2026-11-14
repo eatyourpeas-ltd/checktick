@@ -1425,12 +1425,21 @@
       </ul>
       <div class="flex flex-wrap gap-2 items-center sticky top-0 z-40 bg-base-200/95 backdrop-blur supports-[backdrop-filter]:bg-base-200/70 py-2">
         {% if can_edit %}
+          {% if survey.organization %}
           <button id="publish-to-bank-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2" type="button" disabled data-survey-slug="{{ survey.slug }}">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
             <span>{% trans 'Publish to Question Bank' %}</span>
           </button>
+          {% else %}
+          <button class="btn btn-sm btn-outline inline-flex items-center gap-2" type="button" disabled title="{% trans 'Link this survey to an organisation to publish templates' %}">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <span>{% trans 'Publish to Question Bank' %}</span>
+          </button>
+          {% endif %}
           <button id="create-repeat-btn" class="btn btn-secondary btn-sm inline-flex items-center gap-2" type="button" disabled>
             <span class="repeat-icon-single">{% include 'components/icons/repeat.html' with classes='w-4 h-4' %}</span>
             <span class="repeat-icon-multi hidden">{% include 'components/icons/repeat_multi.html' with classes='w-4 h-4' %}</span>

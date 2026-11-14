@@ -3,7 +3,7 @@ title: Publishing Question Bank Templates
 category: None
 ---
 
-This guide explains how to publish your sections as reusable templates that can be shared with your organisation or the global CheckTick community.
+This guide explains how to publish your sections as reusable templates that can be shared with your organisation.
 
 > **Note:** For an overview of sections and their features, see [Sections](/docs/groups-view/). To browse and import templates, see [Question Bank Template Library](/docs/question-group-template-library/).
 
@@ -17,31 +17,28 @@ Publish templates visible only to your organisation members:
 - Maintain consistent data collection across projects
 - Available immediately after publishing
 
-### Global Templates
+### Global Templates (curated — admin-only)
 
-Publish templates visible to all Checktick users:
+Global templates are visible to all CheckTick users, but they are **curated, not self-published**. There is no user-facing option to publish globally: global instruments are added by CheckTick and ship with the product from [`docs/question-group-templates/`](/docs/question-group-templates-index/).
 
-- Contribute validated instruments to the community
-- Increase visibility and citations of your work
-- Available immediately after publishing
-
-**Note:** Organisation VIEWER role cannot publish templates (view-only access).
+If you would like an instrument added to the global Question Bank, [submit it for review](/docs/question-group-template-library/#submitting-an-instrument-for-review). Global publication is only possible where copyright already permits it (openly licensed, out of copyright) or where the submitter is the rights holder and happy to share it without restriction. Third-party instruments without permission are rejected at review.
 
 ## Publishing a section
 
 1. Go to your survey's Sections page
 2. Click **Share as template** (labelled **Publish to Question Bank** in some views) next to any section
-3. Choose publication level (Organisation or Global)
-4. Add attribution information:
+3. Add attribution information:
    - Author names and ORCID IDs (optional)
    - Publication title and journal
    - DOI and PubMed ID (if applicable)
    - Copyright and license information
-5. Add tags for discoverability
-6. Preview the markdown representation
-7. Confirm publication
+4. Add tags for discoverability
+5. Preview the markdown representation
+6. Confirm publication
 
 The action still creates a `PublishedQuestionGroup` and uses the `question_group_publish` view — only the user-facing label has changed from "Publish" to "Share as template" / "Publish to Question Bank".
+
+**Note:** Publishing requires the survey to belong to an organisation — templates are published at organisation level only. On a personal (non-organisation) survey the publish action is hidden with guidance to link the survey to an organisation. Importing global templates from the Question Bank is unaffected and available to any authenticated user.
 
 **Rate limit:** 10 publications per day per user
 
@@ -127,25 +124,13 @@ Curated global templates are maintained in the project repository at `docs/quest
 - Automatically synced to all Checktick deployments
 - Version controlled via Git
 
-See the [Global Templates Appendix](/docs/question-group-templates-index/) for the complete list of available templates.
+See the [Global Templates Index](/docs/question-group-templates-index/) for the complete list of available templates.
 
 ### Contributing Global Templates
 
-Community members can contribute validated instruments:
+Global templates are **curated**: they are added by CheckTick after review, not published directly by users. To propose an instrument, see [Submitting an instrument for review](/docs/question-group-template-library/#submitting-an-instrument-for-review).
 
-**Via GitHub Issue:**
-
-1. Create an issue: "New Global Template: [Name]"
-2. Provide complete markdown with YAML frontmatter
-3. Include validation evidence and copyright status
-4. Tag with `template-request`
-
-**Via Pull Request:**
-
-1. Add template file to `docs/question-group-templates/`
-2. Include complete YAML frontmatter with attribution
-3. Test with `sync_global_question_group_templates --dry-run`
-4. Submit PR with questionnaire description
+Open-source contributors who prefer GitHub can [open a template request issue](https://github.com/eatyourpeas-ltd/checktick/issues/new?template=question_group_template_request.yml) (labelled `question-group-template`) with the complete markdown (including YAML frontmatter with attribution) — but note that an issue posts the instrument publicly, so it is only appropriate when the rights position is already clear. CheckTick reviews every submission for rights/licence, attribution completeness, clinical appropriateness, outline-grammar validity, and language/accessibility, and tells submitters why a submission was rejected — no silent drops.
 
 All contributions must meet quality standards for validated instruments. See the [templates index](/docs/question-group-templates-index/) for the file format and requirements.
 
@@ -189,5 +174,5 @@ This should run on deployment to ensure all instances have the latest templates.
 
 - [Outline](/docs/import/) - Text format syntax for questions
 - [Sections](/docs/groups-view/) - Managing sections
-- [Global Templates Appendix](/docs/question-group-templates-index/) - Available templates
+- [Global Templates Index](/docs/question-group-templates-index/) - Available templates
 - [Collections](/docs/collections/) - Repeatable sections

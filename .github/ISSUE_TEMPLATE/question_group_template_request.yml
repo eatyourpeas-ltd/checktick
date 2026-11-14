@@ -273,13 +273,12 @@ body:
         **What happens next?**
 
         1. Maintainers review the request and verify licensing/attribution
-        2. If approved, the template is added to the global repository
-        3. Template becomes available to all users on next deployment
-        4. You'll be notified when it's live
+        2. If approved, the template is added to the global repository (`docs/question-group-templates/`)
+        3. Template becomes available to all users once synced on deployment
+        4. You'll be notified of the outcome either way — rejected submissions are told why
 
-        **Alternative**: If you need this immediately, you can:
-        1. Create the question group in your own survey
-        2. Publish it at organisation level (if you're in an organisation)
-        3. Once reviewed and approved, we can promote it to global level
+        **Note**: The global Question Bank is curated — there is no self-serve path to global publication. If you need an instrument available within your organisation straight away, publish it at organisation level from your own survey; it will not be promoted globally without review.
+
+        **Privacy**: Do not include patient data or personal information in your submission.
 
         **For more information**, see the [Question Group Template documentation](https://checktick.uk/docs/publish-question-groups/).
