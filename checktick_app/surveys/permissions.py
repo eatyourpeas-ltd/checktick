@@ -26,10 +26,51 @@ def can_view_survey(user, survey: Survey) -> bool:
         return True
     if survey.organization_id and is_org_admin(user, survey.organization):
         return True
-    # creators and viewers of the specific survey can view it
-    if SurveyMembership.objects.filter(user=user, survey=survey).exists():
+    # creators and viewers of the specific survey can view it; a
+    # distributor-only membership does not grant results access — the
+    # distributor role can generate tokens and see completion counts only
+    # (docs/appraisal-implementation-plan.md §3.1)
+    if (
+        SurveyMembership.objects.filter(user=user, survey=survey)
+        .exclude(role=SurveyMembership.Role.DISTRIBUTOR)
+        .exists()
+    ):
         return True
     return False
+
+
+def can_distribute_survey(user, survey: Survey) -> bool:
+    """Distribution access: generate token batches / QR codes and see
+    completion counts — but never response content.
+
+    Granted to the survey owner, org owner/admin, and survey-level
+    creator/editor/distributor memberships. Viewers cannot distribute.
+    """
+    if not user.is_authenticated:
+        return False
+    if survey.owner_id == getattr(user, "id", None):
+        return True
+    # Organization owner can distribute all surveys in their organization
+    if survey.organization_id and survey.organization.owner_id == getattr(
+        user, "id", None
+    ):
+        return True
+    if survey.organization_id and is_org_admin(user, survey.organization):
+        return True
+    return SurveyMembership.objects.filter(
+        user=user,
+        survey=survey,
+        role__in=[
+            SurveyMembership.Role.CREATOR,
+            SurveyMembership.Role.EDITOR,
+            SurveyMembership.Role.DISTRIBUTOR,
+        ],
+    ).exists()
+
+
+def require_can_distribute(user, survey: Survey) -> None:
+    if not can_distribute_survey(user, survey):
+        raise PermissionDenied("You do not have permission to distribute this survey.")
 
 
 def can_edit_survey(user, survey: Survey) -> bool:

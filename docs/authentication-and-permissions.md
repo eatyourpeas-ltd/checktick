@@ -74,7 +74,7 @@ There are six key models in `checktick_app.surveys.models`:
   - Roles: ADMIN, CREATOR, VIEWER
 - Survey: owned by a user and optionally associated with an organisation or team.
 - SurveyMembership: links a user to a specific survey with a role.
-  - Roles: CREATOR, EDITOR, VIEWER
+  - Roles: CREATOR, EDITOR, DISTRIBUTOR, VIEWER
 
 ### Account Tiers
 
@@ -124,10 +124,12 @@ Individual surveys within organisations can have collaborators with specific rol
 |------|----------------|-----------------|-----------------|
 | **CREATOR** | Yes | Yes | Yes |
 | **EDITOR** | Yes | No | No |
+| **DISTRIBUTOR** | No | No | No |
 | **VIEWER** | No | No | No |
 
 - **CREATOR**: Full access to survey content and collaborator management. Can edit questions, groups, and manage other users' access to the survey.
 - **EDITOR**: Can modify survey content (questions, groups, settings) but cannot manage collaborators or create new surveys.
+- **DISTRIBUTOR**: One notch below EDITOR. Can generate token batches and QR codes, see completion counts (not response content), and export the token CSV on the tokens page (`/surveys/{slug}/tokens/`). Per-token category-value overrides remain edit-level only. Cannot edit questions, settings, or publication, cannot view or export results, and cannot manage collaborators. Intended for "can distribute, cannot read results" scenarios such as research coordinators and clinic leads, and (in a forthcoming feature) appraisal appraisees. Viewers cannot distribute.
 - **VIEWER**: Read-only access to surveys for monitoring and preview purposes.
 
 Single-organisation admin model:
@@ -160,11 +162,11 @@ Collaboration features are tier-dependent:
 **ORGANISATION & ENTERPRISE Tiers:**
 
 - Full collaboration features available
-- Survey CREATORs can add users by email and assign roles (CREATOR, EDITOR, VIEWER)
+- Survey CREATORs can add users by email and assign roles (CREATOR, EDITOR, DISTRIBUTOR, VIEWER). Adding a distributor is tier-gated like adding a viewer.
 - Unlimited collaborators per survey
 - Role management: CREATORs can change collaborator roles or remove access
 - Dashboard integration: "Manage collaborators" button shows for organisation surveys
-- Permission boundaries: EDITORs can modify content but cannot manage users
+- Permission boundaries: EDITORs can modify content but cannot manage users; DISTRIBUTORs can generate tokens but cannot read results
 
 This enables teams to collaborate on survey design while maintaining clear boundaries between content editing and access control.
 
@@ -174,11 +176,13 @@ The central authorization checks live in `checktick_app/surveys/permissions.py`:
 
 ### Survey Permissions
 
-- `can_view_survey(user, survey)` — True if user is the survey owner, an ADMIN of the survey's organisation, a member of the survey's team, or has survey membership (CREATOR, EDITOR, or VIEWER)
+- `can_view_survey(user, survey)` — True if user is the survey owner, an ADMIN of the survey's organisation, a member of the survey's team, or has survey membership (CREATOR, EDITOR, or VIEWER; a DISTRIBUTOR-only membership does not count)
 - `can_edit_survey(user, survey)` — True if user is the survey owner, an ADMIN of the survey's organisation, a team member with ADMIN or CREATOR role, or has survey membership as CREATOR or EDITOR
 - `can_manage_survey_users(user, survey)` — True if the survey belongs to an organisation or team AND user is the survey owner, an ADMIN of the survey's organisation, a team ADMIN, or has survey membership as CREATOR. Returns False for individual user surveys (surveys without organisation or team).
 - `require_can_view(user, survey)` — Raises 403 if not allowed
+- `can_distribute_survey(user, survey)` — True if user is the survey owner, the organisation owner or an ADMIN of the survey's organisation, or has survey membership as CREATOR, EDITOR, or DISTRIBUTOR. Viewers cannot distribute.
 - `require_can_edit(user, survey)` — Raises 403 if not allowed
+- `require_can_distribute(user, survey)` — Raises 403 if not allowed
 
 ### Team Permissions
 
@@ -432,7 +436,7 @@ For detailed encryption documentation, see:
 
 **Organisation Roles**: Owner, Admin, Creator, Viewer
 **Team Roles**: Owner, Admin, Creator, Viewer
-**Survey Roles**: Creator, Editor, Viewer
+**Survey Roles**: Creator, Editor, Distributor, Viewer
 
 See [Account Types & Tiers](getting-started-account-types.md) for tier-specific permissions.
 
@@ -445,6 +449,7 @@ Core permission checks in `checktick_app/surveys/permissions.py`:
 | `can_view_survey` | View access to surveys |
 | `can_edit_survey` | Edit access to surveys |
 | `can_manage_survey_users` | Manage survey collaborators |
+| `can_distribute_survey` | Generate token batches / QR codes and see completion counts (not response content) |
 | `can_manage_org_users` | Manage organisation members |
 | `can_create_datasets` | Create new datasets |
 | `can_edit_dataset` | Edit existing datasets |

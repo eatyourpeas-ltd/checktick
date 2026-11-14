@@ -56,6 +56,8 @@ There are three membership scopes with separate roles:
 **Only available for organisation surveys**
 
 - **creator**: Can manage members for that specific survey and edit the survey.
+- **editor**: Can modify survey content (questions, groups, settings) but cannot manage survey members or create new surveys.
+- **distributor**: One notch below editor. Can generate token batches and QR codes and see completion counts, but cannot edit the survey or view or export results. Cannot manage survey members. A distributor-only membership does not grant results access.
 - **viewer**: Can view the survey content and results according to app policy; cannot manage survey members.
 
 ## Additional Implicit Authorities
@@ -75,7 +77,8 @@ There are three membership scopes with separate roles:
 - **Manage org members** (add/update/remove): Organisation admin only
 - **Manage team members** (add/update/remove): Team admin OR organisation admin (if team is in their org)
 - **Manage survey members** (add/update/remove): **Organisation/team surveys only** - Survey owner, organisation admin (if applicable), team admin (if applicable), or survey creator for that survey
-- **View survey**: Owner, org admin (if applicable), team admin (if applicable), any survey member (creator/viewer)
+- **Distribute survey** (token batches / QR codes, completion counts): Survey owner, organisation owner or admin, or survey creator, editor, or distributor for that survey. Viewers cannot distribute.
+- **View survey**: Owner, org admin (if applicable), team admin (if applicable), any survey member except distributor-only (creator/editor/viewer)
 - **Individual users**: Cannot share surveys or manage survey members
 
 ## Guardrails
@@ -175,6 +178,7 @@ Actions:
 - **Only available for organisation surveys**. Individual users cannot access this page.
 - Owners, org admins (if the survey belongs to their org), and survey creators can add/update/remove survey members.
 - Survey viewers see a read-only list.
+- The add form offers Creator, Editor, Distributor, and Viewer. Adding a distributor is tier-gated like adding a viewer (Organisation tier).
 - Actions are audit-logged.
 
 ## API

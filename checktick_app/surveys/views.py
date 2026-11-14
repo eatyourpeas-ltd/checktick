@@ -123,6 +123,7 @@ from .permissions import (
     can_manage_survey_users,
     require_can_change_survey_style,
     require_can_create_datasets,
+    require_can_distribute,
     require_can_edit,
     require_can_edit_dataset,
     require_can_view,
@@ -666,11 +667,19 @@ def survey_list(request: HttpRequest) -> HttpResponse:
             )
             pending_invitations.append({"token": _tok, "survey": _s, "is_live": _live})
 
-        # Auto-redirect pure participants (no owned surveys) to their first live invite.
+        # Auto-redirect pure participants (no owned surveys and no
+        # distributor memberships) to their first live invite. A
+        # distributor membership is real survey access — the appraisee
+        # distributing their appraisal survey must not be swallowed by
+        # the participant redirect (docs/appraisal-implementation-plan.md
+        # §11).
         live_invites = [pi for pi in pending_invitations if pi["is_live"]]
         if live_invites:
             owns_any = Survey.objects.filter(owner=user).exists()
-            if not owns_any:
+            distributes_any = SurveyMembership.objects.filter(
+                user=user, role=SurveyMembership.Role.DISTRIBUTOR
+            ).exists()
+            if not owns_any and not distributes_any:
                 return redirect("surveys:take", slug=live_invites[0]["survey"].slug)
 
     if not user.is_authenticated:
@@ -763,18 +772,32 @@ def survey_list(request: HttpRequest) -> HttpResponse:
         if not survey.is_original:
             continue
         if survey.id not in survey_access:  # Don't override higher access
-            can_edit = sm.role in [
-                SurveyMembership.Role.CREATOR,
-                SurveyMembership.Role.EDITOR,
-            ]
-            survey_access[survey.id] = {
-                "survey": survey,
-                "role": sm.role,
-                "source": "shared",
-                "source_name": None,
-                "can_edit": can_edit,
-                "can_manage": sm.role == SurveyMembership.Role.CREATOR,
-            }
+            if sm.role == SurveyMembership.Role.DISTRIBUTOR:
+                # Distributors get their own honest display group: they
+                # distribute (tokens, QR, completion counts) but cannot
+                # edit or read results (docs/appraisal-implementation-plan.md
+                # §11).
+                survey_access[survey.id] = {
+                    "survey": survey,
+                    "role": sm.role,
+                    "source": "distributing",
+                    "source_name": None,
+                    "can_edit": False,
+                    "can_manage": False,
+                }
+            else:
+                can_edit = sm.role in [
+                    SurveyMembership.Role.CREATOR,
+                    SurveyMembership.Role.EDITOR,
+                ]
+                survey_access[survey.id] = {
+                    "survey": survey,
+                    "role": sm.role,
+                    "source": "shared",
+                    "source_name": None,
+                    "can_edit": can_edit,
+                    "can_manage": sm.role == SurveyMembership.Role.CREATOR,
+                }
 
     # Group surveys by source for display
     grouped_surveys = {
@@ -782,6 +805,7 @@ def survey_list(request: HttpRequest) -> HttpResponse:
         "team": {},  # team_name -> [surveys]
         "organisation": {},  # org_name -> [surveys]
         "shared": [],
+        "distributing": [],
     }
 
     for access_info in survey_access.values():
@@ -827,10 +851,13 @@ def survey_list(request: HttpRequest) -> HttpResponse:
             grouped_surveys["organisation"][org_name].append(survey_data)
         elif source == "shared":
             grouped_surveys["shared"].append(survey_data)
+        elif source == "distributing":
+            grouped_surveys["distributing"].append(survey_data)
 
     # Sort within each group by survey name
     grouped_surveys["owned"].sort(key=lambda x: x["survey"].name.lower())
     grouped_surveys["shared"].sort(key=lambda x: x["survey"].name.lower())
+    grouped_surveys["distributing"].sort(key=lambda x: x["survey"].name.lower())
     for team_name in grouped_surveys["team"]:
         grouped_surveys["team"][team_name].sort(key=lambda x: x["survey"].name.lower())
     for org_name in grouped_surveys["organisation"]:
@@ -8329,7 +8356,11 @@ def _survey_tokens_generate_360_set(
 @require_http_methods(["GET", "POST"])
 def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
-    require_can_edit(request.user, survey)
+    # Distributors can generate token batches / QR codes and see completion
+    # counts (used_at) — the tokens page is their surface. Response content
+    # is never shown here. Edit-level actions on this page (per-token
+    # category overrides) stay gated by can_edit below.
+    require_can_distribute(request.user, survey)
     if request.method == "POST":
         # Issue #355: the "Generate full 360 set" action posts with
         # action=generate_360_set; the plain batch form posts without it.
@@ -8394,6 +8425,7 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
             "subject_choices": subject_choices,
             "subject_category": subject_category,
             "role_category": role_category,
+            "can_edit": can_edit_survey(request.user, survey),
         },
     )
 
@@ -8465,7 +8497,9 @@ def survey_token_categories_edit(
 @login_required
 def survey_tokens_export_csv(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
-    require_can_edit(request.user, survey)
+    # Token strings are distribution material, not results — distributors
+    # need the CSV to send tokens to raters.
+    require_can_distribute(request.user, survey)
     output = io.StringIO()
     writer = csv.writer(output)
     cats = list(survey.respondent_categories.order_by("order", "id"))

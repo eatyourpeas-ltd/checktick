@@ -3026,6 +3026,11 @@ class SurveyMembership(models.Model):
     class Role(models.TextChoices):
         CREATOR = "creator", "Creator"
         EDITOR = "editor", "Editor"
+        # One notch below EDITOR: can generate token batches / QR codes and
+        # see completion counts, but never edit the survey or read results.
+        # Survey-type-agnostic (appraisal is one consumer — see
+        # docs/appraisal-implementation-plan.md §3.1).
+        DISTRIBUTOR = "distributor", "Distributor"
         VIEWER = "viewer", "Viewer"
 
     survey = models.ForeignKey(
