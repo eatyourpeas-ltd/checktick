@@ -163,6 +163,7 @@ def test_export_per_option_followup_dict_shape(survey):
         "enabled": True,
         "label": "What type of business?",
         "type": "text",
+        "required": False,
     }
 
 

@@ -17,7 +17,7 @@ Introduced for the GMC 360 instruments: "Your professional role" →
 {% endcomment %}
 {% if fu.type == 'yesno' %}
   <fieldset class="mt-1">
-    <legend class="text-sm font-medium">{{ fu.label }}</legend>
+    <legend class="text-sm font-medium">{{ fu.label }}{% if fu.required %} <span class="text-error" title="{% trans 'Required' %}">*</span>{% endif %}</legend>
     <div class="flex gap-4">
       <label class="label cursor-pointer justify-start gap-2">
         <input type="radio" class="radio radio-sm" name="q_{{ q.id }}_followup_{{ suffix }}" value="yes" />
@@ -30,5 +30,5 @@ Introduced for the GMC 360 instruments: "Your professional role" →
     </div>
   </fieldset>
 {% else %}
-  <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_{{ suffix }}" placeholder="{{ fu.label|default:'Please elaborate' }}" aria-label="{{ fu.label|default:'Please elaborate' }}" />
+  <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_{{ suffix }}" placeholder="{{ fu.label|default:'Please elaborate' }}{% if fu.required %} ({% trans 'required' %}){% endif %}" aria-label="{{ fu.label|default:'Please elaborate' }}{% if fu.required %} ({% trans 'required' %}){% endif %}" {% if fu.required %}aria-required="true"{% endif %} />
 {% endif %}

@@ -47,6 +47,7 @@ ETHNICITY_OPTIONS = [
             "enabled": True,
             "label": "Please state your background",
             "type": "text",
+            "required": False,
         },
     },
     {"type": "option_group", "label": "Asian or Asian British"},
@@ -156,6 +157,7 @@ def test_parse_builder_form_grouped_options():
             "enabled": True,
             "label": "Please state your background",
             "type": "text",
+            "required": False,
         },
     }
     assert options[4] == {"type": "option_group", "label": "Asian or Asian British"}
@@ -243,7 +245,11 @@ def test_question_payload_round_trips_groups():
     ]
     # Follow-up config keyed by renderable index.
     assert payload["followup_config"] == {
-        "2": {"label": "Please state your background", "type": "text"}
+        "2": {
+            "label": "Please state your background",
+            "type": "text",
+            "required": False,
+        }
     }
     assert payload["grouped_render"] == "expanded"
 
@@ -292,6 +298,7 @@ def test_markdown_import_grouped_options():
             "enabled": True,
             "label": "Please state your background",
             "type": "text",
+            "required": False,
         },
     }
     assert options[4] == {"type": "option_group", "label": "Asian or Asian British"}

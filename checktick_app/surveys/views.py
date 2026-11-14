@@ -2020,6 +2020,84 @@ def _collect_question_answer(
     return post.getlist(f"q_{q.id}") if is_multi else post.get(f"q_{q.id}")
 
 
+def _option_followup_requirements(q: SurveyQuestion) -> list[dict[str, Any]]:
+    """Follow-up requirements for a question's options.
+
+    Returns one entry per option with an enabled follow-up:
+    ``{value, label, fu, answer_key}`` where ``value`` is the option's
+    submitted value, ``label`` its display text, ``fu`` the
+    followup_text dict, and ``answer_key`` the suffix used in the
+    stored follow-up answers (renderable option index for choice
+    questions — group-heading markers never consume an index — or the
+    yes/no/dont_know value for yes/no questions).
+    """
+    requirements: list[dict[str, Any]] = []
+    options = q.options if isinstance(q.options, list) else []
+    idx = 0
+    for opt in options:
+        if not isinstance(opt, dict):
+            continue
+        if opt.get("type") in {"option_group", "question_followup"}:
+            continue
+        fu = opt.get("followup_text")
+        if isinstance(fu, dict) and fu.get("enabled"):
+            answer_key = (
+                str(opt.get("value") or "")
+                if q.type == SurveyQuestion.Types.YESNO
+                else str(idx)
+            )
+            requirements.append(
+                {
+                    "value": opt.get("value"),
+                    "label": str(opt.get("label") or ""),
+                    "fu": fu,
+                    "answer_key": answer_key,
+                }
+            )
+        idx += 1
+    return requirements
+
+
+def _validate_required_followups(survey: Survey, answers: dict) -> list[str]:
+    """Validate required option follow-ups on final submission.
+
+    A follow-up marked required must be answered whenever its option
+    was selected — the follow-up is only shown, and only enforced, when
+    the parent option is chosen. Returns human-readable error messages.
+    """
+    errors: list[str] = []
+    for q in survey.questions.all():
+        if q.type not in {
+            SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE,
+            SurveyQuestion.Types.MULTIPLE_CHOICE_MULTI,
+            SurveyQuestion.Types.DROPDOWN,
+            SurveyQuestion.Types.YESNO,
+        }:
+            continue
+        requirements = _option_followup_requirements(q)
+        if not any(req["fu"].get("required") for req in requirements):
+            continue
+        followup_answers = answers.get(f"{q.id}_followup") or {}
+        if not isinstance(followup_answers, dict):
+            continue
+        selected = answers.get(str(q.id))
+        if q.type == SurveyQuestion.Types.MULTIPLE_CHOICE_MULTI:
+            selected_values = selected if isinstance(selected, list) else []
+        else:
+            selected_values = [selected] if selected else []
+        for req in requirements:
+            if not req["fu"].get("required"):
+                continue
+            if req["value"] not in selected_values:
+                continue
+            if followup_answers.get(req["answer_key"]):
+                continue
+            errors.append(
+                f"'{q.text}': the follow-up for '{req['label']}' is required."
+            )
+    return errors
+
+
 def _collect_question_followups(q: SurveyQuestion, post: QueryDict) -> dict[str, str]:
     """Collect follow-up text inputs for a question from POST data.
 
@@ -2994,6 +3072,7 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
             followup_key = f"option_{renderable_idx}_followup"
             followup_label_key = f"option_{renderable_idx}_followup_label"
             followup_type_key = f"option_{renderable_idx}_followup_type"
+            followup_required_key = f"option_{renderable_idx}_followup_required"
             renderable_idx += 1
 
             if data.get(followup_key) in {"on", "true", "1", "yes"}:
@@ -3002,14 +3081,22 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
                     followup_label = f"Please elaborate on '{opt_text}'"
                 # Typed follow-ups (GMC 360): the follow-up can be a
                 # free-text box (default) or a Yes/No question shown
-                # when this option is selected.
+                # when this option is selected, and can be required
+                # when shown.
                 fu_type = (data.get(followup_type_key) or "text").strip()
                 if fu_type not in {"text", "yesno"}:
                     fu_type = "text"
+                fu_required = data.get(followup_required_key) in {
+                    "on",
+                    "true",
+                    "1",
+                    "yes",
+                }
                 opt_dict["followup_text"] = {
                     "enabled": True,
                     "label": followup_label,
                     "type": fu_type,
+                    "required": fu_required,
                 }
 
             options.append(opt_dict)
@@ -3593,6 +3680,7 @@ def _serialize_question_for_builder(
                                     "label", "Please elaborate"
                                 ),
                                 "type": opt["followup_text"].get("type", "text"),
+                                "required": bool(opt["followup_text"].get("required")),
                             }
         elif isinstance(options, list):
             for opt in options:
@@ -3623,6 +3711,7 @@ def _serialize_question_for_builder(
                                 "label", "Please elaborate"
                             ),
                             "type": opt["followup_text"].get("type", "text"),
+                            "required": bool(opt["followup_text"].get("required")),
                         }
                 renderable_idx += 1
 
@@ -7680,6 +7769,14 @@ def _handle_participant_submission(
                 messages.error(request, msg)
             # Redirect back to the same participant-facing URL (validated;
             # see _safe_participant_redirect).
+            return _safe_participant_redirect(request, survey)
+
+        # Validate required option follow-ups (GMC 360): a follow-up
+        # marked required must be answered when its option was selected.
+        followup_errors = _validate_required_followups(survey, answers)
+        if followup_errors:
+            for msg in followup_errors:
+                messages.error(request, msg)
             return _safe_participant_redirect(request, survey)
 
         # Validate date/time/datetime answers (parseable + within range).
@@ -15905,10 +16002,15 @@ def _option_followup_label(option: Any) -> str | None:
     fu = option.get("followup_text")
     if isinstance(fu, dict) and fu.get("enabled") and fu.get("label"):
         label = str(fu["label"])
-        # Typed follow-ups round-trip through the outline: the type
-        # marker is appended so import restores the Yes/No widget.
+        # Typed/required follow-ups round-trip through the outline: the
+        # markers are appended so import restores the configuration.
+        markers = []
         if fu.get("type") == "yesno":
-            label = f"{label} (yesno)"
+            markers.append("yesno")
+        if fu.get("required"):
+            markers.append("required")
+        if markers:
+            label = f"{label} ({', '.join(markers)})"
         return label
     if option.get("has_followup_text"):
         return str(option.get("followup_text_label") or "Please specify")

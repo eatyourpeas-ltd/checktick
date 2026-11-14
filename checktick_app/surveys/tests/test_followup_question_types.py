@@ -192,3 +192,134 @@ def test_builder_form_parses_followup_type(django_user_model):
     parsed = _parse_builder_question_form(data)
     assert parsed["options"][0]["followup_text"]["type"] == "yesno"
     assert parsed["options"][1]["followup_text"]["type"] == "text"
+
+
+@pytest.mark.django_db
+def test_markdown_import_parses_required_marker():
+    parsed = parse_bulk_markdown("""# Role {role}
+
+## Your professional role:* {prof}
+(mc_single)
+- Doctor
+  + If you are a doctor, are you in a training grade? (yesno, required)
+- Other
+  + Please specify (required)
+""")
+    options = parsed[0]["questions"][0]["final_options"]
+    doctor = next(o for o in options if o.get("label") == "Doctor")
+    other = next(o for o in options if o.get("label") == "Other")
+    assert doctor["followup_text"]["type"] == "yesno"
+    assert doctor["followup_text"]["required"] is True
+    assert other["followup_text"]["type"] == "text"
+    assert other["followup_text"]["required"] is True
+    # A label that genuinely ends with bracketed text is preserved.
+    parsed2 = parse_bulk_markdown("""# Q {q}
+
+## Pick {pick}
+(mc_single)
+- Option A
+  + See appendix (see page 12)
+""")
+    opt_a = parsed2[0]["questions"][0]["final_options"][0]
+    assert opt_a["followup_text"]["label"] == "See appendix (see page 12)"
+    assert opt_a["followup_text"]["type"] == "text"
+
+
+@pytest.mark.django_db
+def test_export_round_trips_required_marker(django_user_model):
+    _user, survey, _question = _make_survey_with_question(django_user_model)
+    # Mark the Doctor follow-up required.
+    question = SurveyQuestion.objects.get(survey=survey)
+    doctor = question.options[0]
+    doctor["followup_text"]["required"] = True
+    question.options = question.options
+    question.save(update_fields=["options"])
+    question.refresh_from_db()
+
+    markdown = _export_survey_to_markdown(survey)
+    assert (
+        "+ If you are a doctor, are you in a training grade? (yesno, required)"
+        in markdown
+    )
+    parsed = parse_bulk_markdown(markdown)
+    doc_opt = next(
+        o
+        for o in parsed[0]["questions"][0]["final_options"]
+        if o.get("label") == "Doctor"
+    )
+    assert doc_opt["followup_text"]["type"] == "yesno"
+    assert doc_opt["followup_text"]["required"] is True
+
+
+@pytest.mark.django_db
+def test_required_followup_blocks_submission(client, django_user_model):
+    """Selecting the option without answering a required follow-up is
+    refused; answering it passes."""
+    user, survey, question = _make_survey_with_question(django_user_model)
+    doctor = question.options[0]
+    doctor["followup_text"]["required"] = True
+    question.save(update_fields=["options"])
+
+    from django.test import Client
+
+    anon = Client()
+    # Missing follow-up answer → refused.
+    resp = anon.post(
+        reverse("surveys:take", kwargs={"slug": survey.slug}),
+        {f"q_{question.id}": "Doctor"},
+    )
+    assert resp.status_code in (200, 302)
+    assert not SurveyResponse.objects.filter(survey=survey).exists()
+
+    # Answered → accepted.
+    resp = anon.post(
+        reverse("surveys:take", kwargs={"slug": survey.slug}),
+        {
+            f"q_{question.id}": "Doctor",
+            f"q_{question.id}_followup_0": "no",
+        },
+    )
+    assert resp.status_code in (200, 302)
+    response = SurveyResponse.objects.filter(survey=survey).latest("submitted_at")
+    assert response.answers[f"{question.id}_followup"] == {"0": "no"}
+
+
+@pytest.mark.django_db
+def test_required_followup_not_enforced_when_option_unselected(
+    client, django_user_model
+):
+    user, survey, question = _make_survey_with_question(django_user_model)
+    doctor = question.options[0]
+    doctor["followup_text"]["required"] = True
+    question.save(update_fields=["options"])
+
+    from django.test import Client
+
+    anon = Client()
+    resp = anon.post(
+        reverse("surveys:take", kwargs={"slug": survey.slug}),
+        {f"q_{question.id}": "Registered Nurse"},
+    )
+    assert resp.status_code in (200, 302)
+    assert SurveyResponse.objects.filter(survey=survey).exists()
+
+
+@pytest.mark.django_db
+def test_builder_form_parses_required_flag(django_user_model):
+    from checktick_app.surveys.views import _parse_builder_question_form
+
+    _user, _survey, _question = _make_survey_with_question(django_user_model)
+    data = {
+        "text": "Role",
+        "type": "mc_single",
+        "options": "Doctor\nOther",
+        "option_0_followup": "on",
+        "option_0_followup_label": "In a training grade?",
+        "option_0_followup_type": "yesno",
+        "option_0_followup_required": "on",
+        "option_1_followup": "on",
+        "option_1_followup_label": "Please specify",
+    }
+    parsed = _parse_builder_question_form(data)
+    assert parsed["options"][0]["followup_text"]["required"] is True
+    assert parsed["options"][1]["followup_text"]["required"] is False

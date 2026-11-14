@@ -564,16 +564,27 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                 if opt_text == "__group__":
                     result.append({"type": "option_group", "label": followup_label})
                     continue
-                # Typed follow-ups (GMC 360): a trailing "(yesno)" marker
-                # makes the follow-up a Yes/No question instead of a
-                # free-text box. "(text)" is the default and optional.
+                # Typed follow-ups (GMC 360): a trailing parenthesised
+                # marker configures the follow-up — ``(yesno)`` makes it
+                # a Yes/No question instead of a free-text box,
+                # ``(required)`` makes it mandatory when shown,
+                # ``(yesno, required)`` combines both. "(text)" is the
+                # default and optional.
                 fu_type = "text"
-                type_match = re.match(
-                    r"^(.*?)\s*\((yesno|text)\)\s*$", followup_label, re.IGNORECASE
-                )
+                fu_required = False
+                type_match = re.match(r"^(.*?)\s*\(([^)]*)\)\s*$", followup_label)
                 if type_match:
-                    followup_label = type_match.group(1).strip()
-                    fu_type = type_match.group(2).lower()
+                    markers = [
+                        m.strip().lower() for m in type_match.group(2).split(",")
+                    ]
+                    if markers and all(
+                        m in {"yesno", "text", "required"} for m in markers
+                    ):
+                        followup_label = type_match.group(1).strip()
+                        if "yesno" in markers:
+                            fu_type = "yesno"
+                        if "required" in markers:
+                            fu_required = True
                 result.append(
                     {
                         "label": opt_text,
@@ -582,6 +593,7 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                             "enabled": True,
                             "label": followup_label,
                             "type": fu_type,
+                            "required": fu_required,
                         },
                     }
                 )
